@@ -18,6 +18,8 @@ if (!process.env.SESSION_SECRET) {
 const app = express()
 const PORT = process.env.SERVER_PORT || 3002
 
+app.set('trust proxy', 1)
+
 const PgSession = connectPgSimple(session)
 
 app.use(cors({

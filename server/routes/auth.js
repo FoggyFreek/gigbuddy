@@ -18,10 +18,7 @@ router.get('/login', async (req, res, next) => {
 
 router.get('/callback', async (req, res, next) => {
   try {
-    const currentUrl = new URL(
-      req.originalUrl,
-      `${req.protocol}://${req.hostname}:${process.env.SERVER_PORT || 3002}`,
-    )
+    const currentUrl = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`)
     const claims = await oidc.handleCallback(req.session, currentUrl)
 
     const { rows: adminCheck } = await pool.query(
