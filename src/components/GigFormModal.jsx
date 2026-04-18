@@ -15,10 +15,26 @@ import MenuItem from '@mui/material/MenuItem'
 import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import { TimePicker } from '@mui/x-date-pickers/TimePicker'
+import dayjs from 'dayjs'
+import customParseFormat from 'dayjs/plugin/customParseFormat'
 import GigTasks from './GigTasks.jsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { createGig, getGig, updateGig } from '../api/gigs.js'
+
+dayjs.extend(customParseFormat)
+
+function timeStringToDayjs(val) {
+  if (!val) return null
+  const d = dayjs(val, 'HH:mm')
+  return d.isValid() ? d : null
+}
+
+function dayjsToTimeString(d) {
+  if (!d || !d.isValid()) return ''
+  return d.format('HH:mm')
+}
 
 const STATUSES = ['option', 'confirmed', 'announced']
 
@@ -65,7 +81,7 @@ export default function GigFormModal({ mode, gigId, onClose }) {
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
   const [initialTasks, setInitialTasks] = useState([])
-  const [focused, setFocused] = useState({ event_date: false, start_time: false, end_time: false })
+  const [focused, setFocused] = useState({ event_date: false })
 
   const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
   const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
@@ -210,29 +226,21 @@ export default function GigFormModal({ mode, gigId, onClose }) {
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField
+              <TimePicker
                 label="Start time"
-                type="time"
-                fullWidth
-                value={form.start_time}
-                onChange={(e) => handleChange('start_time', e.target.value)}
-                onFocus={onFocus('start_time')}
-                onBlur={onBlur('start_time')}
-                InputLabelProps={{ shrink: focused.start_time || !!form.start_time }}
-                sx={maskSx('start_time')}
+                ampm={false}
+                value={timeStringToDayjs(form.start_time)}
+                onChange={(v) => handleChange('start_time', dayjsToTimeString(v))}
+                slotProps={{ textField: { fullWidth: true } }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField
+              <TimePicker
                 label="End time"
-                type="time"
-                fullWidth
-                value={form.end_time}
-                onChange={(e) => handleChange('end_time', e.target.value)}
-                onFocus={onFocus('end_time')}
-                onBlur={onBlur('end_time')}
-                InputLabelProps={{ shrink: focused.end_time || !!form.end_time }}
-                sx={maskSx('end_time')}
+                ampm={false}
+                value={timeStringToDayjs(form.end_time)}
+                onChange={(v) => handleChange('end_time', dayjsToTimeString(v))}
+                slotProps={{ textField: { fullWidth: true } }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>

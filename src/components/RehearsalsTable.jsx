@@ -1,29 +1,29 @@
 import { useState } from 'react'
+import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
+import Collapse from '@mui/material/Collapse'
+import IconButton from '@mui/material/IconButton'
+import LinearProgress from '@mui/material/LinearProgress'
+import Paper from '@mui/material/Paper'
+import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
-import Paper from '@mui/material/Paper'
-import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
-import Collapse from '@mui/material/Collapse'
-import ChecklistIcon from '@mui/icons-material/Checklist'
+import DeleteIcon from '@mui/icons-material/Delete'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
-import MemberAvatarStack from './MemberAvatarStack.jsx'
 
 const STATUS_COLORS = {
   option: 'default',
-  confirmed: 'primary',
-  announced: 'success',
+  planned: 'primary',
 }
 
-const COLUMN_COUNT = 9
+const COLUMN_COUNT = 7
 
 function formatDate(val) {
   if (!val) return '—'
@@ -44,9 +44,39 @@ function isPastDate(val) {
   return d < today
 }
 
-function GigCard({ gig, onClick }) {
-  const taskCount = gig.open_task_count ?? 0
-  const metaParts = [gig.event_description, gig.venue, gig.city].filter(Boolean)
+function tallyCounts(participants) {
+  const total = participants?.length ?? 0
+  const yes = participants?.filter((p) => p.vote === 'yes').length ?? 0
+  return { yes, total }
+}
+
+function ParticipantProgress({ participants }) {
+  const { yes, total } = tallyCounts(participants)
+  if (!total) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        no required participants
+      </Typography>
+    )
+  }
+  const pct = (yes / total) * 100
+  const complete = yes === total
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 140 }}>
+      <LinearProgress
+        variant="determinate"
+        value={pct}
+        color={complete ? 'success' : 'primary'}
+        sx={{ flexGrow: 1, height: 8, borderRadius: 4 }}
+      />
+      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 32, textAlign: 'right' }}>
+        {yes}/{total}
+      </Typography>
+    </Box>
+  )
+}
+
+function RehearsalCard({ rehearsal, onClick, onDelete }) {
   return (
     <Box
       onClick={onClick}
@@ -59,28 +89,30 @@ function GigCard({ gig, onClick }) {
         '&:hover': { bgcolor: 'action.hover' },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          {formatDate(gig.event_date)}
+          {formatDate(rehearsal.proposed_date)}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          ({formatTime(gig.start_time)} – {formatTime(gig.end_time)})
+          ({formatTime(rehearsal.start_time)} – {formatTime(rehearsal.end_time)})
         </Typography>
-        {taskCount > 0 && (
-          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.25, color: 'text.secondary' }}>
-            <ChecklistIcon fontSize="small" />
-            <Typography variant="caption">{taskCount}</Typography>
-          </Box>
-        )}
+        <IconButton
+          size="small"
+          aria-label="delete rehearsal"
+          onClick={(e) => { e.stopPropagation(); onDelete?.(rehearsal) }}
+          sx={{ ml: 'auto', mt: -0.5, mr: -0.5 }}
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-        {metaParts.length ? metaParts.join(' · ') : '—'}
+        {rehearsal.location || '—'}
       </Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-        <MemberAvatarStack members={gig.members_availability} />
+        <ParticipantProgress participants={rehearsal.participants} />
         <Chip
-          label={gig.status}
-          color={STATUS_COLORS[gig.status] || 'default'}
+          label={rehearsal.status}
+          color={STATUS_COLORS[rehearsal.status] || 'default'}
           size="small"
           sx={{ ml: 'auto' }}
         />
@@ -89,26 +121,32 @@ function GigCard({ gig, onClick }) {
   )
 }
 
-function DesktopRow({ gig, onClick }) {
+function DesktopRow({ rehearsal, onClick, onDelete }) {
   return (
     <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
-      <TableCell>{formatDate(gig.event_date)}</TableCell>
-      <TableCell>{gig.event_description}</TableCell>
-      <TableCell>{gig.venue || '—'}</TableCell>
-      <TableCell>{gig.city || '—'}</TableCell>
-      <TableCell>{formatTime(gig.start_time)}</TableCell>
-      <TableCell>{formatTime(gig.end_time)}</TableCell>
+      <TableCell>{formatDate(rehearsal.proposed_date)}</TableCell>
+      <TableCell>{formatTime(rehearsal.start_time)}</TableCell>
+      <TableCell>{formatTime(rehearsal.end_time)}</TableCell>
+      <TableCell>{rehearsal.location || '—'}</TableCell>
       <TableCell>
         <Chip
-          label={gig.status}
-          color={STATUS_COLORS[gig.status] || 'default'}
+          label={rehearsal.status}
+          color={STATUS_COLORS[rehearsal.status] || 'default'}
           size="small"
         />
       </TableCell>
-      <TableCell>
-        <MemberAvatarStack members={gig.members_availability} />
+      <TableCell sx={{ minWidth: 180 }}>
+        <ParticipantProgress participants={rehearsal.participants} />
       </TableCell>
-      <TableCell align="center">{gig.open_task_count ?? 0}</TableCell>
+      <TableCell align="right" padding="none" sx={{ pr: 1 }}>
+        <IconButton
+          size="small"
+          aria-label="delete rehearsal"
+          onClick={(e) => { e.stopPropagation(); onDelete?.(rehearsal) }}
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </TableCell>
     </TableRow>
   )
 }
@@ -118,20 +156,18 @@ function DesktopHead() {
     <TableHead>
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
         <TableCell>Date</TableCell>
-        <TableCell>Event</TableCell>
-        <TableCell>Venue</TableCell>
-        <TableCell>City</TableCell>
         <TableCell>Start</TableCell>
         <TableCell>End</TableCell>
+        <TableCell>Location</TableCell>
         <TableCell>Status</TableCell>
-        <TableCell>Band</TableCell>
-        <TableCell align="center">Open tasks</TableCell>
+        <TableCell>Votes</TableCell>
+        <TableCell />
       </TableRow>
     </TableHead>
   )
 }
 
-function PastGigsHeader({ open, count, onToggle }) {
+function PastHeader({ open, count, onToggle }) {
   return (
     <Box
       onClick={onToggle}
@@ -153,21 +189,20 @@ function PastGigsHeader({ open, count, onToggle }) {
         }}
       />
       <Typography variant="body2" fontWeight={600}>
-        Past gigs ({count})
+        Past rehearsals ({count})
       </Typography>
     </Box>
   )
 }
 
-export default function GigsTable({ gigs, onRowClick }) {
+export default function RehearsalsTable({ rehearsals, onRowClick, onDelete }) {
   const [pastOpen, setPastOpen] = useState(false)
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
 
-  const upcoming = gigs.filter((g) => !isPastDate(g.event_date))
-  const past = gigs.filter((g) => isPastDate(g.event_date))
-
-  const emptyAll = gigs.length === 0
+  const upcoming = rehearsals.filter((r) => !isPastDate(r.proposed_date))
+  const past = rehearsals.filter((r) => isPastDate(r.proposed_date))
+  const emptyAll = rehearsals.length === 0
 
   if (isCompact) {
     return (
@@ -175,29 +210,29 @@ export default function GigsTable({ gigs, onRowClick }) {
         <Paper variant="outlined">
           {emptyAll ? (
             <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No gigs yet — add one to get started.
+              No rehearsals yet — propose one to get started.
             </Box>
           ) : upcoming.length === 0 ? (
             <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No upcoming gigs.
+              No upcoming rehearsals.
             </Box>
           ) : (
-            upcoming.map((gig) => (
-              <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} />
+            upcoming.map((r) => (
+              <RehearsalCard key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} />
             ))
           )}
         </Paper>
         {past.length > 0 && (
           <Paper variant="outlined">
-            <PastGigsHeader
+            <PastHeader
               open={pastOpen}
               count={past.length}
               onToggle={() => setPastOpen((v) => !v)}
             />
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-                {past.map((gig) => (
-                  <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} />
+                {past.map((r) => (
+                  <RehearsalCard key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} />
                 ))}
               </Box>
             </Collapse>
@@ -216,26 +251,26 @@ export default function GigsTable({ gigs, onRowClick }) {
             {emptyAll && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  No gigs yet — add one to get started.
+                  No rehearsals yet — propose one to get started.
                 </TableCell>
               </TableRow>
             )}
             {!emptyAll && upcoming.length === 0 && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  No upcoming gigs.
+                  No upcoming rehearsals.
                 </TableCell>
               </TableRow>
             )}
-            {upcoming.map((gig) => (
-              <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} />
+            {upcoming.map((r) => (
+              <DesktopRow key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} />
             ))}
           </TableBody>
         </Table>
       </TableContainer>
       {past.length > 0 && (
         <Paper variant="outlined">
-          <PastGigsHeader
+          <PastHeader
             open={pastOpen}
             count={past.length}
             onToggle={() => setPastOpen((v) => !v)}
@@ -245,8 +280,8 @@ export default function GigsTable({ gigs, onRowClick }) {
               <Table size="small">
                 <DesktopHead />
                 <TableBody>
-                  {past.map((gig) => (
-                    <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} />
+                  {past.map((r) => (
+                    <DesktopRow key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} />
                   ))}
                 </TableBody>
               </Table>

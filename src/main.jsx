@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import theme from './theme.js'
 import App from './App.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
@@ -13,13 +15,15 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <BrowserRouter>
-        <AuthProvider>
-          <ProfileProvider>
-            <App />
-          </ProfileProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <BrowserRouter>
+          <AuthProvider>
+            <ProfileProvider>
+              <App />
+            </ProfileProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </LocalizationProvider>
     </ThemeProvider>
   </StrictMode>,
 )

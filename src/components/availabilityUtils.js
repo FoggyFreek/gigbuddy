@@ -4,6 +4,11 @@ export const GIG_STATUS_COLORS = {
   announced: 'success.main',
 }
 
+export const REHEARSAL_STATUS_COLORS = {
+  option: 'grey.400',
+  planned: 'secondary.main',
+}
+
 export function toIsoDate(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')

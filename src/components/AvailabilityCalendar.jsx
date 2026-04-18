@@ -8,6 +8,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import {
   GIG_STATUS_COLORS,
+  REHEARSAL_STATUS_COLORS,
   toIsoDate,
   normalizeIsoDate,
   getMemberColor,
@@ -50,6 +51,7 @@ export default function AvailabilityCalendar({
   month,
   slots,
   gigs = [],
+  rehearsals = [],
   members,
   selectionStart,
   selectedDay,
@@ -57,6 +59,7 @@ export default function AvailabilityCalendar({
   onDayClick,
   onSlotClick,
   onGigClick,
+  onRehearsalClick,
   onPrev,
   onNext,
 }) {
@@ -65,6 +68,12 @@ export default function AvailabilityCalendar({
     const key = normalizeIsoDate(g.event_date)
     if (!key) return acc
     ;(acc[key] ||= []).push(g)
+    return acc
+  }, {})
+  const rehearsalsByDate = rehearsals.reduce((acc, r) => {
+    const key = normalizeIsoDate(r.proposed_date)
+    if (!key) return acc
+    ;(acc[key] ||= []).push(r)
     return acc
   }, {})
   const monthLabel = new Date(year, month - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' })
@@ -97,6 +106,7 @@ export default function AvailabilityCalendar({
           const isRowStart = idx % 7 === 0
           const cellSlots = slots.filter((s) => inRange(iso, s.start_date, s.end_date))
           const cellGigs = gigsByDate[iso] || []
+          const cellRehearsals = rehearsalsByDate[iso] || []
           const isSelected = selectionStart === iso || (mobile && selectedDay === iso)
           const dow = date.getDay()
           const isWeekend = dow === 0 || dow === 6
@@ -195,6 +205,19 @@ export default function AvailabilityCalendar({
                       }}
                     />
                   ))}
+                  {cellRehearsals.map((reh) => (
+                    <Box
+                      key={`r-${reh.id}`}
+                      data-rehearsal-id={reh.id}
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        bgcolor: REHEARSAL_STATUS_COLORS[reh.status] || 'grey.400',
+                        opacity: reh.status === 'option' ? 0.7 : 1,
+                      }}
+                    />
+                  ))}
                   {cellSlots.map((slot) => (
                     <Box
                       key={`s-${slot.id}`}
@@ -244,6 +267,46 @@ export default function AvailabilityCalendar({
                         </Box>
                       </Tooltip>
                     ))}
+                    {cellRehearsals.map((reh) => {
+                      const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
+                      const total = reh.participants?.length ?? 0
+                      const isOption = reh.status === 'option'
+                      return (
+                        <Tooltip
+                          key={`reh-${reh.id}`}
+                          title={[
+                            `Rehearsal — ${reh.status}`,
+                            reh.location,
+                            `${yes}/${total} yes`,
+                          ].filter(Boolean).join(' — ')}
+                        >
+                          <Box
+                            data-rehearsal-id={reh.id}
+                            onClick={(e) => { e.stopPropagation(); onRehearsalClick?.(reh) }}
+                            sx={{
+                              minHeight: 20,
+                              width: '100%',
+                              px: 0.5,
+                              py: 0.25,
+                              borderRadius: 0.5,
+                              bgcolor: isOption ? 'transparent' : (REHEARSAL_STATUS_COLORS[reh.status] || 'grey.400'),
+                              border: isOption ? '1px dashed' : 'none',
+                              borderColor: isOption ? 'grey.500' : 'transparent',
+                              color: isOption ? 'text.primary' : 'common.white',
+                              cursor: onRehearsalClick ? 'pointer' : 'default',
+                              fontSize: '0.7rem',
+                              lineHeight: 1.2,
+                              fontWeight: 600,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {`Reh ${yes}/${total}`}
+                          </Box>
+                        </Tooltip>
+                      )
+                    })}
                   </Stack>
                   <Stack spacing={0.375} sx={{ mt: 0.375 }}>
                     {cellSlots.map((slot) => {

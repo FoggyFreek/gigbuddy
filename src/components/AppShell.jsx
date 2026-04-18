@@ -31,6 +31,7 @@ const BASE_NAV_ITEMS = [
   { to: '/', label: 'Profile', icon: PersonIcon },
   { to: '/gigs', label: 'Gigs', icon: EventIcon },
   { to: '/tasks', label: 'Tasks', icon: ChecklistIcon },
+  { to: '/rehearsals', label: 'Rehearsals', icon: MusicNoteIcon },
   { to: '/availability', label: 'Availability', icon: EventAvailableIcon },
 ]
 
