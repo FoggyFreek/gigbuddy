@@ -84,12 +84,13 @@ export default function GigTasks({ gigId, initialTasks = [] }) {
       )}
 
       {tasks.map((task) => (
-        <Stack
+        <Box
           key={task.id}
-          direction="row"
-          alignItems="center"
-          spacing={0.5}
           sx={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: { xs: 'wrap', sm: 'nowrap' },
+            gap: 0.5,
             py: 0.5,
             textDecoration: task.done ? 'line-through' : 'none',
             color: task.done ? 'text.disabled' : 'text.primary',
@@ -105,15 +106,13 @@ export default function GigTasks({ gigId, initialTasks = [] }) {
             variant="body2"
             component="div"
             sx={{
-              flexGrow: 1,
+              flex: '1 1 0',
               minWidth: 0,
-              display: 'flex',
-              alignItems: 'center',
-              alignSelf: 'stretch',
-              overflow: 'hidden',
-              whiteSpace: 'nowrap',
-              textOverflow: 'ellipsis',
+              whiteSpace: 'normal',
+              wordBreak: 'break-word',
+              overflowWrap: 'anywhere',
               lineHeight: 1.2,
+              order: 1,
             }}
           >
             {task.title}
@@ -127,17 +126,23 @@ export default function GigTasks({ gigId, initialTasks = [] }) {
             onBlur={() => setFocusedDueTaskId(null)}
             slotProps={{ htmlInput: { 'aria-label': `Due date for ${task.title}` } }}
             sx={{
-              width: 150,
               flexShrink: 0,
+              width: { xs: '100%', sm: 150 },
+              order: { xs: 3, sm: 2 },
+              pl: { xs: 4, sm: 0 },
               '& input::-webkit-datetime-edit': {
                 opacity: task.due_date || focusedDueTaskId === task.id ? 1 : 0,
               },
             }}
           />
-          <IconButton size="small" onClick={() => handleDelete(task.id)} sx={{ flexShrink: 0 }}>
+          <IconButton
+            size="small"
+            onClick={() => handleDelete(task.id)}
+            sx={{ flexShrink: 0, order: { xs: 2, sm: 3 } }}
+          >
             <DeleteIcon fontSize="small" />
           </IconButton>
-        </Stack>
+        </Box>
       ))}
     </Box>
   )

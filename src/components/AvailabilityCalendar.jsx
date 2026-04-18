@@ -6,6 +6,12 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import {
+  GIG_STATUS_COLORS,
+  toIsoDate,
+  normalizeIsoDate,
+  getMemberColor,
+} from './availabilityUtils.js'
 
 const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -17,29 +23,6 @@ function getISOWeek(date) {
   return Math.ceil(((d - yearStart) / 86400000 + 1) / 7)
 }
 
-const GIG_STATUS_COLORS = {
-  option: 'grey.500',
-  confirmed: 'primary.main',
-  announced: 'success.main',
-}
-
-function toIsoDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-function normalizeIsoDate(val) {
-  if (!val) return ''
-  if (typeof val === 'string') {
-    if (val.length >= 10 && val[4] === '-' && val[7] === '-' && !val.includes('T')) {
-      return val.slice(0, 10)
-    }
-  }
-  return toIsoDate(new Date(val))
-}
-
 function addDays(date, n) {
   const d = new Date(date)
   d.setDate(d.getDate() + n)
@@ -48,12 +31,6 @@ function addDays(date, n) {
 
 function inRange(dateStr, start, end) {
   return dateStr >= start && dateStr <= end
-}
-
-function getMemberColor(slot, members) {
-  if (slot.band_member_id === null) return '#9e9e9e'
-  const m = members.find((m) => m.id === slot.band_member_id)
-  return m?.color || '#9e9e9e'
 }
 
 function buildCalendarCells(year, month) {
@@ -75,6 +52,8 @@ export default function AvailabilityCalendar({
   gigs = [],
   members,
   selectionStart,
+  selectedDay,
+  mobile = false,
   onDayClick,
   onSlotClick,
   onGigClick,
@@ -118,12 +97,14 @@ export default function AvailabilityCalendar({
           const isRowStart = idx % 7 === 0
           const cellSlots = slots.filter((s) => inRange(iso, s.start_date, s.end_date))
           const cellGigs = gigsByDate[iso] || []
-          const isSelected = selectionStart === iso
+          const isSelected = selectionStart === iso || (mobile && selectedDay === iso)
           const dow = date.getDay()
           const isWeekend = dow === 0 || dow === 6
 
           let bgcolor = 'background.paper'
-          if (isSelected) bgcolor = 'action.selected'
+          if (mobile) {
+            bgcolor = 'transparent'
+          } else if (isSelected) bgcolor = 'action.selected'
           else if (!inMonth) bgcolor = 'action.hover'
           else if (isWeekend) bgcolor = 'grey.200'
 
@@ -137,9 +118,9 @@ export default function AvailabilityCalendar({
                   color="text.disabled"
                   sx={{
                     display: 'flex',
-                    alignItems: 'flex-start',
+                    alignItems: mobile ? 'center' : 'flex-start',
                     justifyContent: 'center',
-                    pt: 0.5,
+                    pt: mobile ? 0 : 0.5,
                     fontSize: '0.65rem',
                   }}
                 >
@@ -153,103 +134,164 @@ export default function AvailabilityCalendar({
                 aspectRatio: '1 / 1',
                 borderRadius: 0,
                 bgcolor,
-                border: '1px solid',
+                border: mobile ? 'none' : '1px solid',
                 borderColor: 'divider',
-                mr: '-1px',
-                mb: '-1px',
+                mr: mobile ? 0 : '-1px',
+                mb: mobile ? 0 : '-1px',
                 cursor: 'pointer',
-                p: 0.5,
+                p: mobile ? 0 : 0.5,
                 minWidth: 0,
                 overflow: 'hidden',
-                '&:hover': { bgcolor: 'action.hover' },
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: mobile ? 'center' : 'stretch',
+                justifyContent: 'flex-start',
+                pt: 0.5,
+                '&:hover': { bgcolor: mobile ? 'transparent' : 'action.hover' },
               }}
             >
-              <Typography
-                variant="caption"
-                sx={{ display: 'block', color: inMonth ? 'text.primary' : 'text.disabled' }}
-              >
-                {date.getDate()}
-              </Typography>
-              <Stack spacing={0.375} sx={{ mt: 0.25 }}>
-                {cellGigs.map((gig) => (
-                  <Tooltip
-                    key={gig.id}
-                    title={[
-                      gig.event_description,
-                      gig.venue,
-                      gig.status,
-                    ].filter(Boolean).join(' — ')}
-                  >
+              {mobile ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    bgcolor: isSelected ? 'primary.main' : 'transparent',
+                    color: isSelected
+                      ? 'primary.contrastText'
+                      : (inMonth ? 'text.primary' : 'text.disabled'),
+                  }}
+                >
+                  <Typography variant="caption" sx={{ lineHeight: 1, color: 'inherit' }}>
+                    {date.getDate()}
+                  </Typography>
+                </Box>
+              ) : (
+                <Typography
+                  variant="caption"
+                  sx={{ display: 'block', color: inMonth ? 'text.primary' : 'text.disabled' }}
+                >
+                  {date.getDate()}
+                </Typography>
+              )}
+              {mobile ? (
+                <Stack
+                  direction="row"
+                  spacing={0.5}
+                  sx={{ mt: 0.5, justifyContent: 'center', flexWrap: 'wrap', gap: 0.5, rowGap: 0.25 }}
+                >
+                  {cellGigs.map((gig) => (
                     <Box
+                      key={`g-${gig.id}`}
                       data-gig-id={gig.id}
-                      onClick={(e) => { e.stopPropagation(); onGigClick?.(gig) }}
                       sx={{
-                        minHeight: 20,
-                        width: '100%',
-                        px: 0.5,
-                        py: 0.25,
-                        borderRadius: 0.5,
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
                         bgcolor: GIG_STATUS_COLORS[gig.status] || 'grey.500',
-                        color: 'common.white',
-                        cursor: onGigClick ? 'pointer' : 'default',
-                        fontSize: '0.7rem',
-                        lineHeight: 1.2,
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
                       }}
-                    >
-                      {gig.event_description || gig.venue || 'Gig'}
-                    </Box>
-                  </Tooltip>
-                ))}
-              </Stack>
-              <Stack spacing={0.375} sx={{ mt: 0.375 }}>
-                {cellSlots.map((slot) => {
-                  const color = getMemberColor(slot, members)
-                  const isUnavailable = slot.status === 'unavailable'
-                  const memberName = slot.band_member_id === null
-                    ? 'Band'
-                    : members.find((m) => m.id === slot.band_member_id)?.name || ''
-                  return (
-                    <Tooltip
-                      key={slot.id}
-                      title={[
-                        slot.band_member_id === null ? 'Band-wide' : memberName,
-                        slot.status,
-                        slot.reason,
-                      ].filter(Boolean).join(' — ')}
-                    >
-                      <Box
-                        data-slot-id={slot.id}
-                        onClick={(e) => { e.stopPropagation(); onSlotClick(slot) }}
-                        sx={{
-                          minHeight: 20,
-                          width: '100%',
-                          px: 0.5,
-                          py: 0.25,
-                          borderRadius: 0.5,
-                          bgcolor: color,
-                          color: 'common.white',
-                          fontSize: '0.7rem',
-                          lineHeight: 1.2,
-                          fontWeight: 600,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          cursor: 'pointer',
-                          backgroundImage: isUnavailable
-                            ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.35) 3px, rgba(0,0,0,0.35) 6px)'
-                            : 'none',
-                        }}
+                    />
+                  ))}
+                  {cellSlots.map((slot) => (
+                    <Box
+                      key={`s-${slot.id}`}
+                      data-slot-id={slot.id}
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        bgcolor: getMemberColor(slot, members),
+                      }}
+                    />
+                  ))}
+                </Stack>
+              ) : (
+                <>
+                  <Stack spacing={0.375} sx={{ mt: 0.25 }}>
+                    {cellGigs.map((gig) => (
+                      <Tooltip
+                        key={gig.id}
+                        title={[
+                          gig.event_description,
+                          gig.venue,
+                          gig.status,
+                        ].filter(Boolean).join(' — ')}
                       >
-                        {memberName}
-                      </Box>
-                    </Tooltip>
-                  )
-                })}
-              </Stack>
+                        <Box
+                          data-gig-id={gig.id}
+                          onClick={(e) => { e.stopPropagation(); onGigClick?.(gig) }}
+                          sx={{
+                            minHeight: 20,
+                            width: '100%',
+                            px: 0.5,
+                            py: 0.25,
+                            borderRadius: 0.5,
+                            bgcolor: GIG_STATUS_COLORS[gig.status] || 'grey.500',
+                            color: 'common.white',
+                            cursor: onGigClick ? 'pointer' : 'default',
+                            fontSize: '0.7rem',
+                            lineHeight: 1.2,
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {gig.event_description || gig.venue || 'Gig'}
+                        </Box>
+                      </Tooltip>
+                    ))}
+                  </Stack>
+                  <Stack spacing={0.375} sx={{ mt: 0.375 }}>
+                    {cellSlots.map((slot) => {
+                      const color = getMemberColor(slot, members)
+                      const isUnavailable = slot.status === 'unavailable'
+                      const memberName = slot.band_member_id === null
+                        ? 'Band'
+                        : members.find((m) => m.id === slot.band_member_id)?.name || ''
+                      return (
+                        <Tooltip
+                          key={slot.id}
+                          title={[
+                            slot.band_member_id === null ? 'Band-wide' : memberName,
+                            slot.status,
+                            slot.reason,
+                          ].filter(Boolean).join(' — ')}
+                        >
+                          <Box
+                            data-slot-id={slot.id}
+                            onClick={(e) => { e.stopPropagation(); onSlotClick(slot) }}
+                            sx={{
+                              minHeight: 20,
+                              width: '100%',
+                              px: 0.5,
+                              py: 0.25,
+                              borderRadius: 0.5,
+                              bgcolor: color,
+                              color: 'common.white',
+                              fontSize: '0.7rem',
+                              lineHeight: 1.2,
+                              fontWeight: 600,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              cursor: 'pointer',
+                              backgroundImage: isUnavailable
+                                ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.35) 3px, rgba(0,0,0,0.35) 6px)'
+                                : 'none',
+                            }}
+                          >
+                            {memberName}
+                          </Box>
+                        </Tooltip>
+                      )
+                    })}
+                  </Stack>
+                </>
+              )}
             </Box>
             </React.Fragment>
           )

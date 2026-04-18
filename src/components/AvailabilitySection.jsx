@@ -1,7 +1,21 @@
 import { useEffect, useState } from 'react'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
+import Box from '@mui/material/Box'
+import List from '@mui/material/List'
+import ListItemButton from '@mui/material/ListItemButton'
+import ListItemText from '@mui/material/ListItemText'
+import Fab from '@mui/material/Fab'
+import AddIcon from '@mui/icons-material/Add'
+import useMediaQuery from '@mui/material/useMediaQuery'
+import { useTheme } from '@mui/material/styles'
 import AvailabilityCalendar from './AvailabilityCalendar.jsx'
+import {
+  GIG_STATUS_COLORS,
+  getMemberColor,
+  normalizeIsoDate,
+  toIsoDate,
+} from './availabilityUtils.js'
 import AvailabilitySlotDialog from './AvailabilitySlotDialog.jsx'
 import GigFormModal from './GigFormModal.jsx'
 import { listMembers } from '../api/bandMembers.js'
@@ -20,6 +34,8 @@ function monthBounds(year, month) {
 }
 
 export default function AvailabilitySection() {
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const now = new Date()
   const [viewYear, setViewYear] = useState(now.getFullYear())
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1)
@@ -27,6 +43,7 @@ export default function AvailabilitySection() {
   const [slots, setSlots] = useState([])
   const [gigs, setGigs] = useState([])
   const [selectionStart, setSelectionStart] = useState(null)
+  const [selectedDay, setSelectedDay] = useState(null)
   const [dialog, setDialog] = useState(null) // null | { slot }
   const [gigModalId, setGigModalId] = useState(null)
 
@@ -51,6 +68,10 @@ export default function AvailabilitySection() {
   }
 
   function handleDayClick(dateStr, shiftKey) {
+    if (isMobile) {
+      setSelectedDay(dateStr)
+      return
+    }
     if (shiftKey && selectionStart && dateStr >= selectionStart) {
       setDialog({ slot: { band_member_id: null, start_date: selectionStart, end_date: dateStr, status: 'available', reason: '' } })
       setSelectionStart(null)
@@ -62,6 +83,11 @@ export default function AvailabilitySection() {
 
   function handleSlotClick(slot) {
     setDialog({ slot })
+  }
+
+  function handleAddClick() {
+    const day = selectedDay || toIsoDate(new Date())
+    setDialog({ slot: { band_member_id: null, start_date: day, end_date: day, status: 'available', reason: '' } })
   }
 
   async function handleSave(data) {
@@ -83,18 +109,23 @@ export default function AvailabilitySection() {
     setDialog(null)
   }
 
+  const dayGigs = selectedDay
+    ? gigs.filter((g) => normalizeIsoDate(g.event_date) === selectedDay)
+    : []
+  const daySlots = selectedDay
+    ? slots.filter((s) => selectedDay >= s.start_date && selectedDay <= s.end_date)
+    : []
+
   return (
     <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-        Availability
-      </Typography>
-
       <AvailabilityCalendar
         year={viewYear}
         month={viewMonth}
         slots={slots}
         gigs={gigs}
         members={members}
+        mobile={isMobile}
+        selectedDay={selectedDay}
         selectionStart={selectionStart}
         onDayClick={handleDayClick}
         onSlotClick={handleSlotClick}
@@ -102,6 +133,77 @@ export default function AvailabilitySection() {
         onPrev={handlePrev}
         onNext={handleNext}
       />
+
+      {isMobile && selectedDay && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {new Date(selectedDay + 'T00:00:00').toLocaleDateString('en', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+          </Typography>
+          {dayGigs.length === 0 && daySlots.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">No events.</Typography>
+          ) : (
+            <List dense disablePadding>
+              {dayGigs.map((gig) => (
+                <ListItemButton key={`g-${gig.id}`} onClick={() => setGigModalId(gig.id)}>
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      bgcolor: GIG_STATUS_COLORS[gig.status] || 'grey.500',
+                      mr: 1.5,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <ListItemText
+                    primary={gig.event_description || gig.venue || 'Gig'}
+                    secondary={[gig.venue, gig.status].filter(Boolean).join(' — ')}
+                  />
+                </ListItemButton>
+              ))}
+              {daySlots.map((slot) => {
+                const member = slot.band_member_id === null
+                  ? null
+                  : members.find((m) => m.id === slot.band_member_id)
+                const name = slot.band_member_id === null ? 'Band' : member?.name || ''
+                return (
+                  <ListItemButton key={`s-${slot.id}`} onClick={() => handleSlotClick(slot)}>
+                    <Box
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        bgcolor: getMemberColor(slot, members),
+                        mr: 1.5,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <ListItemText
+                      primary={name}
+                      secondary={[slot.status, slot.reason].filter(Boolean).join(' — ')}
+                    />
+                  </ListItemButton>
+                )
+              })}
+            </List>
+          )}
+        </Box>
+      )}
+
+      {isMobile && (
+        <Fab
+          color="primary"
+          aria-label="add availability"
+          onClick={handleAddClick}
+          sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: (t) => t.zIndex.fab }}
+        >
+          <AddIcon />
+        </Fab>
+      )}
 
       {gigModalId && (
         <GigFormModal

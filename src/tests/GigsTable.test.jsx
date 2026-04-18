@@ -1,7 +1,13 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+let mockIsMobile = false
+vi.mock('@mui/material/useMediaQuery', () => ({
+  default: () => mockIsMobile,
+}))
+
 import GigsTable from '../components/GigsTable.jsx'
 import theme from '../theme.js'
 
@@ -81,5 +87,46 @@ describe('GigsTable', () => {
     // Summer Festival has no venue or times — expect em-dashes
     const dashes = screen.getAllByText('—')
     expect(dashes.length).toBeGreaterThanOrEqual(3)
+  })
+
+  describe('mobile (compact card layout)', () => {
+    beforeEach(() => { mockIsMobile = true })
+    afterEach(() => { mockIsMobile = false })
+
+    it('does not render the desktop table header', () => {
+      wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+      expect(screen.queryByText('Date')).not.toBeInTheDocument()
+      expect(screen.queryByText('Event')).not.toBeInTheDocument()
+      expect(screen.queryByText('Open tasks')).not.toBeInTheDocument()
+    })
+
+    it('renders each gig as a card with description and status chip', () => {
+      wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+      // Meta line combines description · venue · city in one span — use a regex.
+      expect(screen.getByText(/Jazz Night/)).toBeInTheDocument()
+      expect(screen.getByText(/Summer Festival/)).toBeInTheDocument()
+      expect(screen.getByText('confirmed')).toBeInTheDocument()
+      expect(screen.getByText('option')).toBeInTheDocument()
+    })
+
+    it('only shows the task-count badge when there are open tasks', () => {
+      wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+      // Jazz Night has 2 open tasks → badge visible; Summer Festival has 0 → no badge.
+      expect(screen.getByText('2')).toBeInTheDocument()
+      expect(screen.queryByText('0')).not.toBeInTheDocument()
+    })
+
+    it('clicking a card calls onRowClick with the gig', async () => {
+      const user = userEvent.setup()
+      const onRowClick = vi.fn()
+      wrap(<GigsTable gigs={GIGS} onRowClick={onRowClick} />)
+      await user.click(screen.getByText(/Summer Festival/))
+      expect(onRowClick).toHaveBeenCalledWith(GIGS[1])
+    })
+
+    it('shows empty state when no gigs', () => {
+      wrap(<GigsTable gigs={[]} onRowClick={() => {}} />)
+      expect(screen.getByText(/No gigs yet/i)).toBeInTheDocument()
+    })
   })
 })

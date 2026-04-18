@@ -6,6 +6,11 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Paper from '@mui/material/Paper'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
+import ChecklistIcon from '@mui/icons-material/Checklist'
+import useMediaQuery from '@mui/material/useMediaQuery'
+import { useTheme } from '@mui/material/styles'
 import MemberAvatarStack from './MemberAvatarStack.jsx'
 
 const STATUS_COLORS = {
@@ -24,7 +29,71 @@ function formatTime(val) {
   return val.slice(0, 5)
 }
 
+function GigCard({ gig, onClick }) {
+  const taskCount = gig.open_task_count ?? 0
+  const metaParts = [gig.event_description, gig.venue, gig.city].filter(Boolean)
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        p: 1.25,
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        cursor: 'pointer',
+        '&:last-of-type': { borderBottom: 'none' },
+        '&:hover': { bgcolor: 'action.hover' },
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          {formatDate(gig.event_date)}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          ({formatTime(gig.start_time)} – {formatTime(gig.end_time)})
+        </Typography>
+        {taskCount > 0 && (
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.25, color: 'text.secondary' }}>
+            <ChecklistIcon fontSize="small" />
+            <Typography variant="caption">{taskCount}</Typography>
+          </Box>
+        )}
+      </Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+        {metaParts.length ? metaParts.join(' · ') : '—'}
+      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+        <MemberAvatarStack members={gig.members_availability} />
+        <Chip
+          label={gig.status}
+          color={STATUS_COLORS[gig.status] || 'default'}
+          size="small"
+          sx={{ ml: 'auto' }}
+        />
+      </Box>
+    </Box>
+  )
+}
+
 export default function GigsTable({ gigs, onRowClick }) {
+  const theme = useTheme()
+  const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
+
+  if (isCompact) {
+    return (
+      <Paper variant="outlined">
+        {gigs.length === 0 ? (
+          <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+            No gigs yet — add one to get started.
+          </Box>
+        ) : (
+          gigs.map((gig) => (
+            <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} />
+          ))
+        )}
+      </Paper>
+    )
+  }
+
   return (
     <TableContainer component={Paper} variant="outlined">
       <Table size="small">

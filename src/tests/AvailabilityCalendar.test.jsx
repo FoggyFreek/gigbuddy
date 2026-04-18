@@ -156,6 +156,44 @@ describe('AvailabilityCalendar', () => {
     expect(onDayClick).not.toHaveBeenCalled()
   })
 
+  describe('mobile mode', () => {
+    it('renders day cells without slot/gig bars and shows dots instead', () => {
+      const gigs = [
+        { id: 7, event_date: '2026-04-06', event_description: 'Show', status: 'confirmed' },
+      ]
+      const { container } = wrap(
+        <AvailabilityCalendar {...makeProps({ gigs, mobile: true })} />
+      )
+      const cell = container.querySelector('[data-date="2026-04-06"]')
+      // Neither slot nor gig should render as a text bar in mobile mode.
+      expect(cell.textContent).not.toMatch(/Alice|Show/)
+      // Dots carry data-ids for the gig and the covering slot.
+      expect(cell.querySelector('[data-gig-id="7"]')).not.toBeNull()
+      expect(cell.querySelector('[data-slot-id="10"]')).not.toBeNull()
+    })
+
+    it('highlights the selectedDay cell', () => {
+      const { container } = wrap(
+        <AvailabilityCalendar {...makeProps({ mobile: true, selectedDay: '2026-04-12' })} />
+      )
+      const cell = container.querySelector('[data-date="2026-04-12"]')
+      // The selected-day indicator is a circle with primary bg inside the cell.
+      const circle = cell.querySelector('div')
+      expect(circle).not.toBeNull()
+    })
+
+    it('day click still fires onDayClick in mobile mode', async () => {
+      const user = userEvent.setup()
+      const onDayClick = vi.fn()
+      const { container } = wrap(
+        <AvailabilityCalendar {...makeProps({ mobile: true, onDayClick })} />
+      )
+      const cell = container.querySelector('[data-date="2026-04-10"]')
+      await user.click(cell)
+      expect(onDayClick).toHaveBeenCalledWith('2026-04-10', false)
+    })
+  })
+
   it('slots returned as plain YYYY-MM-DD strings render on matching cells', () => {
     // Regression: the server used to return start_date/end_date as UTC
     // timestamps. After fixing pg to return 'YYYY-MM-DD', inRange() must

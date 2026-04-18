@@ -37,20 +37,41 @@ export default function GigAvailabilityPanel({ eventDate }) {
           Band-wide: {data.bandWide.status}{data.bandWide.reason ? ` — ${data.bandWide.reason}` : ''}
         </Typography>
       )}
-      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+      <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', minWidth: 0 }}>
         {visible.map((m) => {
           if (m.status === 'available') {
-            return <Chip key={m.member_id} label={m.name} color="success" size="small" />
+            return (
+              <Chip
+                key={m.member_id}
+                label={m.name}
+                color="success"
+                size="small"
+                sx={{ maxWidth: '100%' }}
+              />
+            )
           }
           if (m.status === 'unavailable') {
             const label = m.reason ? `${m.name} — ${m.reason}` : m.name
             return (
               <Tooltip key={m.member_id} title={label}>
-                <Chip label={label} color="error" size="small" sx={{ maxWidth: 200 }} />
+                <Chip
+                  label={label}
+                  color="error"
+                  size="small"
+                  sx={{ maxWidth: { xs: '100%', sm: 200 } }}
+                />
               </Tooltip>
             )
           }
-          return <Chip key={m.member_id} label={m.name} variant="outlined" size="small" />
+          return (
+            <Chip
+              key={m.member_id}
+              label={m.name}
+              variant="outlined"
+              size="small"
+              sx={{ maxWidth: '100%' }}
+            />
+          )
         })}
       </Stack>
     </Stack>
