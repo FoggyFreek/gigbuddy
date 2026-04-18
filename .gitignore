@@ -17,6 +17,10 @@ dist-ssr
 *.dump
 *.sql.gz
 
+#deployment manual and log
+DEPLOY.md
+INSTALL_LOG.md
+
 # Claude Code local settings
 .claude/settings.local.json
 
