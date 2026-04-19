@@ -16,7 +16,7 @@ import {
   getMemberColor,
   normalizeIsoDate,
   toIsoDate,
-} from './availabilityUtils.js'
+} from '../utils/availabilityUtils.js'
 import AvailabilitySlotDialog from './AvailabilitySlotDialog.jsx'
 import GigFormModal from './GigFormModal.jsx'
 import RehearsalFormModal from './RehearsalFormModal.jsx'

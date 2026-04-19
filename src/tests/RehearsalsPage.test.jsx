@@ -37,7 +37,7 @@ vi.mock('../api/bandMembers.js', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
 }))
 
-import RehearsalsPage from '../components/RehearsalsPage.jsx'
+import RehearsalsPage from '../pages/RehearsalsPage.jsx'
 import { listRehearsals } from '../api/rehearsals.js'
 import theme from '../theme.js'
 

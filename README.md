@@ -1,16 +1,53 @@
-# React + Vite
+# GigBuddy
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Band management app for tracking gigs, rehearsals, tasks, and member availability.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+**Gigs** — Create and manage live performances. Each gig stores venue, date, status, booking fee (in euros), and notes. Fields auto-save while editing. Attach a task checklist to any gig.
 
-## React Compiler
+**Rehearsals** — Schedule rehearsal sessions with a date, time, and location. Band members can vote yes/no/maybe on proposed rehearsals.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**Availability** — Monthly calendar showing member availability slots alongside gigs and rehearsals. Click or shift-click to create date ranges. Each slot tracks a status (available/unavailable) and an optional reason.
 
-## Expanding the ESLint configuration
+**Tasks** — Standalone to-do list for band admin work, independent of gigs.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+**Profile** — Band identity (name, bio), social handles (Instagram, Facebook, TikTok, YouTube, Spotify), and a free-form link list for press kits and other resources.
+
+**Members** — Admin-only view. Approve or reject user sign-ups and link each user account to a band member profile.
+
+## Authentication
+
+Login is via Google OAuth. New accounts are held in a pending state until an admin approves them.
+
+## Tech stack
+
+- Frontend: React 19, MUI v9, Vite
+- Backend: Express 5, PostgreSQL (via `pg`)
+- Auth: OpenID Connect (Google), `express-session` with a Postgres session store
+
+## Development
+
+Copy `.env.example` to `.env` and fill in your PostgreSQL credentials.
+
+Run both processes concurrently:
+
+```
+npm run server:dev
+```
+
+```
+npm run dev
+```
+
+Apply pending database migrations:
+
+```
+npm run migrate
+```
+
+Run tests:
+
+```
+npm test
+```

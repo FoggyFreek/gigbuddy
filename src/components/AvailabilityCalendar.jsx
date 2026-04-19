@@ -12,7 +12,7 @@ import {
   toIsoDate,
   normalizeIsoDate,
   getMemberColor,
-} from './availabilityUtils.js'
+} from '../utils/availabilityUtils.js'
 
 const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 

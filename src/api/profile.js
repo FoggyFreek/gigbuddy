@@ -1,20 +1,13 @@
-async function request(path, options = {}) {
-  const res = await fetch(`/api/profile${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
-  if (res.status === 204) return null
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Request failed')
-  return data
-}
+import { request } from './_client.js'
 
-export const getProfile = () => request('/')
-export const updateProfile = (body) => request('/', { method: 'PATCH', body: JSON.stringify(body) })
+const api = (path, options) => request(`/api/profile${path}`, options)
+
+export const getProfile = () => api('/')
+export const updateProfile = (body) => api('/', { method: 'PATCH', body: JSON.stringify(body) })
 
 export const createLink = (body) =>
-  request('/links', { method: 'POST', body: JSON.stringify(body) })
+  api('/links', { method: 'POST', body: JSON.stringify(body) })
 export const updateLink = (linkId, body) =>
-  request(`/links/${linkId}`, { method: 'PATCH', body: JSON.stringify(body) })
+  api(`/links/${linkId}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteLink = (linkId) =>
-  request(`/links/${linkId}`, { method: 'DELETE' })
+  api(`/links/${linkId}`, { method: 'DELETE' })

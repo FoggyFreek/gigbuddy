@@ -1,20 +1,8 @@
-async function request(path, options = {}) {
-  const res = await fetch(`/api/users${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
-  if (res.status === 204) return null
-  if (res.status === 401) {
-    window.dispatchEvent(new Event('auth:unauthorized'))
-    const data = await res.json().catch(() => ({}))
-    throw Object.assign(new Error(data.error || 'Unauthorized'), { status: 401 })
-  }
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Request failed')
-  return data
-}
+import { request } from './_client.js'
 
-export const listUsers = () => request('/')
+const api = (path, options) => request(`/api/users${path}`, options)
+
+export const listUsers = () => api('/')
 export const updateUser = (id, patch) =>
-  request(`/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
-export const deleteUser = (id) => request(`/${id}`, { method: 'DELETE' })
+  api(`/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+export const deleteUser = (id) => api(`/${id}`, { method: 'DELETE' })

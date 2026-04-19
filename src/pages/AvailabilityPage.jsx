@@ -1,6 +1,6 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import AvailabilitySection from './AvailabilitySection.jsx'
+import AvailabilitySection from '../components/AvailabilitySection.jsx'
 
 export default function AvailabilityPage() {
   return (

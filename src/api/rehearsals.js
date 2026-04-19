@@ -1,32 +1,25 @@
-async function request(path, options = {}) {
-  const res = await fetch(`/api/rehearsals${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
-  if (res.status === 204) return null
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Request failed')
-  return data
-}
+import { request } from './_client.js'
 
-export const listRehearsals = () => request('/')
-export const getRehearsal = (id) => request(`/${id}`)
+const api = (path, options) => request(`/api/rehearsals${path}`, options)
+
+export const listRehearsals = () => api('/')
+export const getRehearsal = (id) => api(`/${id}`)
 export const createRehearsal = (body) =>
-  request('/', { method: 'POST', body: JSON.stringify(body) })
+  api('/', { method: 'POST', body: JSON.stringify(body) })
 export const updateRehearsal = (id, body) =>
-  request(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
+  api(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteRehearsal = (id) =>
-  request(`/${id}`, { method: 'DELETE' })
+  api(`/${id}`, { method: 'DELETE' })
 
 export const addParticipant = (id, bandMemberId) =>
-  request(`/${id}/participants`, {
+  api(`/${id}/participants`, {
     method: 'POST',
     body: JSON.stringify({ band_member_id: bandMemberId }),
   })
 export const removeParticipant = (id, bandMemberId) =>
-  request(`/${id}/participants/${bandMemberId}`, { method: 'DELETE' })
+  api(`/${id}/participants/${bandMemberId}`, { method: 'DELETE' })
 export const setVote = (id, bandMemberId, vote) =>
-  request(`/${id}/participants/${bandMemberId}`, {
+  api(`/${id}/participants/${bandMemberId}`, {
     method: 'PATCH',
     body: JSON.stringify({ vote }),
   })

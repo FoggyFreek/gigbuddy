@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AvailabilityPage from '../components/AvailabilityPage.jsx'
+import AvailabilityPage from '../pages/AvailabilityPage.jsx'
 import { listAvailability } from '../api/availability.js'
 import { listGigs } from '../api/gigs.js'
 import theme from '../theme.js'

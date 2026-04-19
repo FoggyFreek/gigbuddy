@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ProfilePage from '../components/ProfilePage.jsx'
+import ProfilePage from '../pages/ProfilePage.jsx'
 import theme from '../theme.js'
 
 vi.mock('../api/bandMembers.js', () => ({

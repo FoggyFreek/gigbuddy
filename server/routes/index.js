@@ -8,12 +8,15 @@ import rehearsalsRouter from './rehearsals.js'
 import authRouter from './auth.js'
 import usersRouter from './users.js'
 import { requireApproved, requireAdmin } from '../middleware/auth.js'
+import { csrf } from '../middleware/csrf.js'
 
 const router = Router()
 
 router.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
+
+router.use(csrf)
 
 router.use('/auth', authRouter)
 router.use('/users', requireAdmin, usersRouter)

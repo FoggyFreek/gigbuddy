@@ -21,11 +21,11 @@ import InstagramIcon from '@mui/icons-material/Instagram'
 import LaunchIcon from '@mui/icons-material/Launch'
 import LinkIcon from '@mui/icons-material/Link'
 import YouTubeIcon from '@mui/icons-material/YouTube'
-import SpotifyIcon from './icons/SpotifyIcon.jsx'
-import TikTokIcon from './icons/TikTokIcon.jsx'
+import SpotifyIcon from '../components/icons/SpotifyIcon.jsx'
+import TikTokIcon from '../components/icons/TikTokIcon.jsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { useProfile } from '../contexts/profileContext.js'
-import BandMembersSection from './BandMembersSection.jsx'
+import BandMembersSection from '../components/BandMembersSection.jsx'
 import {
   createLink,
   deleteLink,

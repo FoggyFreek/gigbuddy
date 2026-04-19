@@ -1,15 +1,8 @@
-async function request(path, options = {}) {
-  const res = await fetch(`/api/band-members${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
-  if (res.status === 204) return null
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Request failed')
-  return data
-}
+import { request } from './_client.js'
 
-export const listMembers = () => request('/')
-export const createMember = (body) => request('/', { method: 'POST', body: JSON.stringify(body) })
-export const updateMember = (id, body) => request(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
-export const deleteMember = (id) => request(`/${id}`, { method: 'DELETE' })
+const api = (path, options) => request(`/api/band-members${path}`, options)
+
+export const listMembers = () => api('/')
+export const createMember = (body) => api('/', { method: 'POST', body: JSON.stringify(body) })
+export const updateMember = (id, body) => api(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const deleteMember = (id) => api(`/${id}`, { method: 'DELETE' })

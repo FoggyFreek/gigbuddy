@@ -4,8 +4,8 @@ import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
-import RehearsalsTable from './RehearsalsTable.jsx'
-import RehearsalFormModal from './RehearsalFormModal.jsx'
+import RehearsalsTable from '../components/RehearsalsTable.jsx'
+import RehearsalFormModal from '../components/RehearsalFormModal.jsx'
 import { deleteRehearsal, listRehearsals } from '../api/rehearsals.js'
 
 export default function RehearsalsPage() {

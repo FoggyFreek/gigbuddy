@@ -4,8 +4,8 @@ import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
-import GigsTable from './GigsTable.jsx'
-import GigFormModal from './GigFormModal.jsx'
+import GigsTable from '../components/GigsTable.jsx'
+import GigFormModal from '../components/GigFormModal.jsx'
 import { listGigs } from '../api/gigs.js'
 
 export default function GigsPage() {

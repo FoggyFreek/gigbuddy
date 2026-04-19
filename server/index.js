@@ -25,6 +25,7 @@ const PgSession = connectPgSimple(session)
 app.use(cors({
   origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   credentials: true,
+  exposedHeaders: ['X-CSRF-Token'],
 }))
 app.use(express.json())
 app.use(
