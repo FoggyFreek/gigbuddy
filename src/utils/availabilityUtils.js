@@ -9,6 +9,8 @@ export const REHEARSAL_STATUS_COLORS = {
   planned: 'secondary.main',
 }
 
+export const BAND_EVENT_COLOR = 'warning.main'
+
 export function toIsoDate(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
