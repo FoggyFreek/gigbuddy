@@ -13,6 +13,7 @@ import AvailabilityCalendar from './AvailabilityCalendar.jsx'
 import {
   GIG_STATUS_COLORS,
   REHEARSAL_STATUS_COLORS,
+  BAND_EVENT_COLOR,
   getMemberColor,
   normalizeIsoDate,
   toIsoDate,
@@ -20,10 +21,12 @@ import {
 import AvailabilitySlotDialog from './AvailabilitySlotDialog.jsx'
 import GigFormModal from './GigFormModal.jsx'
 import RehearsalFormModal from './RehearsalFormModal.jsx'
+import BandEventFormModal from './BandEventFormModal.jsx'
 import { listMembers } from '../api/bandMembers.js'
 import { createSlot, deleteSlot, listAvailability, updateSlot } from '../api/availability.js'
 import { listGigs } from '../api/gigs.js'
 import { listRehearsals } from '../api/rehearsals.js'
+import { listBandEvents } from '../api/bandEvents.js'
 
 function pad(n) {
   return String(n).padStart(2, '0')
@@ -46,20 +49,27 @@ export default function AvailabilitySection() {
   const [slots, setSlots] = useState([])
   const [gigs, setGigs] = useState([])
   const [rehearsals, setRehearsals] = useState([])
+  const [bandEvents, setBandEvents] = useState([])
   const [selectionStart, setSelectionStart] = useState(null)
   const [selectedDay, setSelectedDay] = useState(null)
   const [dialog, setDialog] = useState(null) // null | { slot }
   const [gigModalId, setGigModalId] = useState(null)
   const [rehearsalModalId, setRehearsalModalId] = useState(null)
+  const [bandEventModalId, setBandEventModalId] = useState(null)
 
   function loadRehearsals() {
     listRehearsals().then(setRehearsals).catch(() => {})
+  }
+
+  function loadBandEvents() {
+    listBandEvents().then(setBandEvents).catch(() => {})
   }
 
   useEffect(() => {
     listMembers().then(setMembers).catch(() => {})
     listGigs().then(setGigs).catch(() => {})
     loadRehearsals()
+    loadBandEvents()
   }, [])
 
   useEffect(() => {
@@ -125,6 +135,9 @@ export default function AvailabilitySection() {
   const dayRehearsals = selectedDay
     ? rehearsals.filter((r) => normalizeIsoDate(r.proposed_date) === selectedDay)
     : []
+  const dayBandEvents = selectedDay
+    ? bandEvents.filter((ev) => normalizeIsoDate(ev.event_date) === selectedDay)
+    : []
   const daySlots = selectedDay
     ? slots.filter((s) => selectedDay >= s.start_date && selectedDay <= s.end_date)
     : []
@@ -137,6 +150,7 @@ export default function AvailabilitySection() {
         slots={slots}
         gigs={gigs}
         rehearsals={rehearsals}
+        bandEvents={bandEvents}
         members={members}
         mobile={isMobile}
         selectedDay={selectedDay}
@@ -145,6 +159,7 @@ export default function AvailabilitySection() {
         onSlotClick={handleSlotClick}
         onGigClick={(gig) => setGigModalId(gig.id)}
         onRehearsalClick={(reh) => setRehearsalModalId(reh.id)}
+        onBandEventClick={(ev) => setBandEventModalId(ev.id)}
         onPrev={handlePrev}
         onNext={handleNext}
       />
@@ -158,7 +173,7 @@ export default function AvailabilitySection() {
               month: 'long',
             })}
           </Typography>
-          {dayGigs.length === 0 && dayRehearsals.length === 0 && daySlots.length === 0 ? (
+          {dayGigs.length === 0 && dayRehearsals.length === 0 && dayBandEvents.length === 0 && daySlots.length === 0 ? (
             <Typography variant="body2" color="text.secondary">No events.</Typography>
           ) : (
             <List dense disablePadding>
@@ -202,6 +217,24 @@ export default function AvailabilitySection() {
                   </ListItemButton>
                 )
               })}
+              {dayBandEvents.map((ev) => (
+                <ListItemButton key={`be-${ev.id}`} onClick={() => setBandEventModalId(ev.id)}>
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      bgcolor: BAND_EVENT_COLOR,
+                      mr: 1.5,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <ListItemText
+                    primary={ev.title}
+                    secondary={ev.location || null}
+                  />
+                </ListItemButton>
+              ))}
               {daySlots.map((slot) => {
                 const member = slot.band_member_id === null
                   ? null
@@ -255,6 +288,14 @@ export default function AvailabilitySection() {
           mode="edit"
           rehearsalId={rehearsalModalId}
           onClose={() => { setRehearsalModalId(null); loadRehearsals() }}
+        />
+      )}
+
+      {bandEventModalId && (
+        <BandEventFormModal
+          mode="edit"
+          bandEventId={bandEventModalId}
+          onClose={() => { setBandEventModalId(null); loadBandEvents() }}
         />
       )}
 

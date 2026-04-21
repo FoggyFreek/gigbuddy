@@ -9,6 +9,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import {
   GIG_STATUS_COLORS,
   REHEARSAL_STATUS_COLORS,
+  BAND_EVENT_COLOR,
   toIsoDate,
   normalizeIsoDate,
   getMemberColor,
@@ -52,6 +53,7 @@ export default function AvailabilityCalendar({
   slots,
   gigs = [],
   rehearsals = [],
+  bandEvents = [],
   members,
   selectionStart,
   selectedDay,
@@ -60,6 +62,7 @@ export default function AvailabilityCalendar({
   onSlotClick,
   onGigClick,
   onRehearsalClick,
+  onBandEventClick,
   onPrev,
   onNext,
 }) {
@@ -74,6 +77,12 @@ export default function AvailabilityCalendar({
     const key = normalizeIsoDate(r.proposed_date)
     if (!key) return acc
     ;(acc[key] ||= []).push(r)
+    return acc
+  }, {})
+  const bandEventsByDate = bandEvents.reduce((acc, ev) => {
+    const key = normalizeIsoDate(ev.event_date)
+    if (!key) return acc
+    ;(acc[key] ||= []).push(ev)
     return acc
   }, {})
   const monthLabel = new Date(year, month - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' })
@@ -107,6 +116,7 @@ export default function AvailabilityCalendar({
           const cellSlots = slots.filter((s) => inRange(iso, s.start_date, s.end_date))
           const cellGigs = gigsByDate[iso] || []
           const cellRehearsals = rehearsalsByDate[iso] || []
+          const cellBandEvents = bandEventsByDate[iso] || []
           const isSelected = selectionStart === iso || (mobile && selectedDay === iso)
           const dow = date.getDay()
           const isWeekend = dow === 0 || dow === 6
@@ -218,6 +228,18 @@ export default function AvailabilityCalendar({
                       }}
                     />
                   ))}
+                  {cellBandEvents.map((ev) => (
+                    <Box
+                      key={`be-${ev.id}`}
+                      data-band-event-id={ev.id}
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        bgcolor: BAND_EVENT_COLOR,
+                      }}
+                    />
+                  ))}
                   {cellSlots.map((slot) => (
                     <Box
                       key={`s-${slot.id}`}
@@ -307,6 +329,35 @@ export default function AvailabilityCalendar({
                         </Tooltip>
                       )
                     })}
+                    {cellBandEvents.map((ev) => (
+                      <Tooltip
+                        key={`be-${ev.id}`}
+                        title={[ev.title, ev.location].filter(Boolean).join(' — ')}
+                      >
+                        <Box
+                          data-band-event-id={ev.id}
+                          onClick={(e) => { e.stopPropagation(); onBandEventClick?.(ev) }}
+                          sx={{
+                            minHeight: 20,
+                            width: '100%',
+                            px: 0.5,
+                            py: 0.25,
+                            borderRadius: 0.5,
+                            bgcolor: BAND_EVENT_COLOR,
+                            color: 'common.white',
+                            cursor: onBandEventClick ? 'pointer' : 'default',
+                            fontSize: '0.7rem',
+                            lineHeight: 1.2,
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {ev.title}
+                        </Box>
+                      </Tooltip>
+                    ))}
                   </Stack>
                   <Stack spacing={0.375} sx={{ mt: 0.375 }}>
                     {cellSlots.map((slot) => {

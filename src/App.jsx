@@ -3,6 +3,7 @@ import AppShell from './components/AppShell.jsx'
 import RequireAuth from './components/RequireAuth.jsx'
 import RequireAdmin from './components/RequireAdmin.jsx'
 import AvailabilityPage from './pages/AvailabilityPage.jsx'
+import BandEventsPage from './pages/BandEventsPage.jsx'
 import GigsPage from './pages/GigsPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
 import RehearsalsPage from './pages/RehearsalsPage.jsx'
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/gigs" element={<GigsPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/rehearsals" element={<RehearsalsPage />} />
+          <Route path="/events" element={<BandEventsPage />} />
           <Route path="/availability" element={<AvailabilityPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="/members" element={<MembersPage />} />

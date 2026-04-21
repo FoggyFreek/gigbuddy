@@ -17,6 +17,7 @@ import { useTheme } from '@mui/material/styles'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import EventIcon from '@mui/icons-material/Event'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
+import EventNoteIcon from '@mui/icons-material/EventNote'
 import GroupIcon from '@mui/icons-material/Group'
 import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
@@ -32,6 +33,7 @@ const BASE_NAV_ITEMS = [
   { to: '/gigs', label: 'Gigs', icon: EventIcon },
   { to: '/tasks', label: 'Tasks', icon: ChecklistIcon },
   { to: '/rehearsals', label: 'Rehearsals', icon: MusicNoteIcon },
+  { to: '/events', label: 'Band Events', icon: EventNoteIcon },
   { to: '/availability', label: 'Availability', icon: EventAvailableIcon },
 ]
 
