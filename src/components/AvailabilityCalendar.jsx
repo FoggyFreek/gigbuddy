@@ -156,12 +156,6 @@ export default function AvailabilityCalendar({
     ;(acc[key] ||= []).push(r)
     return acc
   }, {})
-  const bandEventsByDate = bandEvents.reduce((acc, ev) => {
-    const key = normalizeIsoDate(ev.event_date)
-    if (!key) return acc
-    ;(acc[key] ||= []).push(ev)
-    return acc
-  }, {})
   return (
     <Box sx={{ maxWidth: 1024, mx: 'auto' }}>
       <Stack direction="column" alignItems="center" sx={{ mb: 1 }}>
@@ -196,7 +190,9 @@ export default function AvailabilityCalendar({
           const cellSlots = slots.filter((s) => inRange(iso, s.start_date, s.end_date))
           const cellGigs = gigsByDate[iso] || []
           const cellRehearsals = rehearsalsByDate[iso] || []
-          const cellBandEvents = bandEventsByDate[iso] || []
+          const cellBandEvents = bandEvents.filter((ev) =>
+            inRange(iso, normalizeIsoDate(ev.start_date), normalizeIsoDate(ev.end_date) || normalizeIsoDate(ev.start_date))
+          )
           const isSelected = selectionStart === iso || (mobile && selectedDay === iso)
           const dow = date.getDay()
           const isWeekend = dow === 0 || dow === 6

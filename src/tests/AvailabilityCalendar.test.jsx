@@ -50,7 +50,8 @@ function makeProps(overrides = {}) {
 describe('AvailabilityCalendar', () => {
   it('renders month label', () => {
     wrap(<AvailabilityCalendar {...makeProps()} />)
-    expect(screen.getByText(/april 2026/i)).toBeInTheDocument()
+    expect(screen.getByText('2026')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'April' })).toBeInTheDocument()
   })
 
   it('renders day headers', () => {
@@ -76,7 +77,7 @@ describe('AvailabilityCalendar', () => {
     const { container } = wrap(<AvailabilityCalendar {...makeProps({ onDayClick })} />)
     const cell = container.querySelector('[data-date="2026-04-10"]')
     await user.click(cell)
-    expect(onDayClick).toHaveBeenCalledWith('2026-04-10', false)
+    expect(onDayClick).toHaveBeenCalledWith('2026-04-10', false, expect.any(HTMLElement))
   })
 
   it('slot bars only appear on covered dates', () => {
@@ -190,8 +191,51 @@ describe('AvailabilityCalendar', () => {
       )
       const cell = container.querySelector('[data-date="2026-04-10"]')
       await user.click(cell)
-      expect(onDayClick).toHaveBeenCalledWith('2026-04-10', false)
+      expect(onDayClick).toHaveBeenCalledWith('2026-04-10', false, expect.any(HTMLElement))
     })
+  })
+
+  it('renders a single-day band event on its start_date cell', () => {
+    const bandEvents = [
+      { id: 20, title: 'Band photo shoot', start_date: '2026-04-10', end_date: '2026-04-10' },
+    ]
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ bandEvents })} />)
+    const cell = container.querySelector('[data-date="2026-04-10"]')
+    expect(cell.querySelector('[data-band-event-id="20"]')).not.toBeNull()
+    // Should NOT appear on adjacent dates
+    const before = container.querySelector('[data-date="2026-04-09"]')
+    expect(before.querySelector('[data-band-event-id="20"]')).toBeNull()
+    const after = container.querySelector('[data-date="2026-04-11"]')
+    expect(after.querySelector('[data-band-event-id="20"]')).toBeNull()
+  })
+
+  it('renders a multi-day band event on every date in its range', () => {
+    const bandEvents = [
+      { id: 21, title: 'Tour weekend', start_date: '2026-04-17', end_date: '2026-04-19' },
+    ]
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ bandEvents })} />)
+    for (const iso of ['2026-04-17', '2026-04-18', '2026-04-19']) {
+      const cell = container.querySelector(`[data-date="${iso}"]`)
+      expect(cell.querySelector('[data-band-event-id="21"]')).not.toBeNull()
+    }
+    const outside = container.querySelector('[data-date="2026-04-16"]')
+    expect(outside.querySelector('[data-band-event-id="21"]')).toBeNull()
+  })
+
+  it('fires onBandEventClick with the event when a band event bar is clicked', async () => {
+    const user = userEvent.setup()
+    const onBandEventClick = vi.fn()
+    const onDayClick = vi.fn()
+    const bandEvents = [
+      { id: 22, title: 'Rehearsal weekend', start_date: '2026-04-22', end_date: '2026-04-22' },
+    ]
+    const { container } = wrap(
+      <AvailabilityCalendar {...makeProps({ bandEvents, onBandEventClick, onDayClick })} />
+    )
+    const bar = container.querySelector('[data-band-event-id="22"]')
+    await user.click(bar)
+    expect(onBandEventClick).toHaveBeenCalledWith(bandEvents[0])
+    expect(onDayClick).not.toHaveBeenCalled()
   })
 
   it('slots returned as plain YYYY-MM-DD strings render on matching cells', () => {

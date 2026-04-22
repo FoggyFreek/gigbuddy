@@ -162,7 +162,11 @@ export default function AvailabilitySection() {
     ? rehearsals.filter((r) => normalizeIsoDate(r.proposed_date) === selectedDay)
     : []
   const dayBandEvents = selectedDay
-    ? bandEvents.filter((ev) => normalizeIsoDate(ev.event_date) === selectedDay)
+    ? bandEvents.filter((ev) => {
+        const start = normalizeIsoDate(ev.start_date)
+        const end = normalizeIsoDate(ev.end_date) || start
+        return selectedDay >= start && selectedDay <= end
+      })
     : []
   const daySlots = selectedDay
     ? slots.filter((s) => selectedDay >= s.start_date && selectedDay <= s.end_date)
