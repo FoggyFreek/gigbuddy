@@ -31,10 +31,10 @@ const DRAWER_WIDTH = 220
 const BASE_NAV_ITEMS = [
   { to: '/', label: 'Profile', icon: PersonIcon },
   { to: '/gigs', label: 'Gigs', icon: EventIcon },
-  { to: '/tasks', label: 'Tasks', icon: ChecklistIcon },
   { to: '/rehearsals', label: 'Rehearsals', icon: MusicNoteIcon },
   { to: '/events', label: 'Band Events', icon: EventNoteIcon },
-  { to: '/availability', label: 'Availability', icon: EventAvailableIcon },
+  { to: '/tasks', label: 'Tasks', icon: ChecklistIcon },
+  { to: '/availability', label: 'Calendar', icon: EventAvailableIcon },
 ]
 
 const ADMIN_NAV_ITEMS = [

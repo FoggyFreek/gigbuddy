@@ -1,12 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
+import ListItemIcon from '@mui/material/ListItemIcon'
 import Fab from '@mui/material/Fab'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import AddIcon from '@mui/icons-material/Add'
+import EventAvailableIcon from '@mui/icons-material/EventAvailable'
+import MicIcon from '@mui/icons-material/Mic'
+import MusicNoteIcon from '@mui/icons-material/MusicNote'
+import GroupIcon from '@mui/icons-material/Group'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import AvailabilityCalendar from './AvailabilityCalendar.jsx'
@@ -52,10 +59,17 @@ export default function AvailabilitySection() {
   const [bandEvents, setBandEvents] = useState([])
   const [selectionStart, setSelectionStart] = useState(null)
   const [selectedDay, setSelectedDay] = useState(null)
-  const [dialog, setDialog] = useState(null) // null | { slot }
+  const [dialog, setDialog] = useState(null)
   const [gigModalId, setGigModalId] = useState(null)
   const [rehearsalModalId, setRehearsalModalId] = useState(null)
   const [bandEventModalId, setBandEventModalId] = useState(null)
+  const [addMenu, setAddMenu] = useState(null) // { anchorEl, date }
+  const [createModal, setCreateModal] = useState(null) // { type, date }
+  const fabRef = useRef(null)
+
+  function loadGigs() {
+    listGigs().then(setGigs).catch(() => {})
+  }
 
   function loadRehearsals() {
     listRehearsals().then(setRehearsals).catch(() => {})
@@ -67,7 +81,7 @@ export default function AvailabilitySection() {
 
   useEffect(() => {
     listMembers().then(setMembers).catch(() => {})
-    listGigs().then(setGigs).catch(() => {})
+    loadGigs()
     loadRehearsals()
     loadBandEvents()
   }, [])
@@ -87,7 +101,7 @@ export default function AvailabilitySection() {
     else setViewMonth((m) => m + 1)
   }
 
-  function handleDayClick(dateStr, shiftKey) {
+  function handleDayClick(dateStr, shiftKey, targetEl) {
     if (isMobile) {
       setSelectedDay(dateStr)
       return
@@ -95,9 +109,11 @@ export default function AvailabilitySection() {
     if (shiftKey && selectionStart && dateStr >= selectionStart) {
       setDialog({ slot: { band_member_id: null, start_date: selectionStart, end_date: dateStr, status: 'available', reason: '' } })
       setSelectionStart(null)
+    } else if (shiftKey) {
+      setSelectionStart(dateStr)
     } else {
       setSelectionStart(dateStr)
-      setDialog({ slot: { band_member_id: null, start_date: dateStr, end_date: dateStr, status: 'available', reason: '' } })
+      setAddMenu({ anchorEl: targetEl, date: dateStr })
     }
   }
 
@@ -105,9 +121,19 @@ export default function AvailabilitySection() {
     setDialog({ slot })
   }
 
-  function handleAddClick() {
+  function handleFabClick(e) {
     const day = selectedDay || toIsoDate(new Date())
-    setDialog({ slot: { band_member_id: null, start_date: day, end_date: day, status: 'available', reason: '' } })
+    setAddMenu({ anchorEl: e.currentTarget, date: day })
+  }
+
+  function handleMenuSelect(type) {
+    const date = addMenu?.date
+    setAddMenu(null)
+    if (type === 'availability') {
+      setDialog({ slot: { band_member_id: null, start_date: date, end_date: date, status: 'available', reason: '' } })
+    } else {
+      setCreateModal({ type, date })
+    }
   }
 
   async function handleSave(data) {
@@ -162,6 +188,7 @@ export default function AvailabilitySection() {
         onBandEventClick={(ev) => setBandEventModalId(ev.id)}
         onPrev={handlePrev}
         onNext={handleNext}
+        onMonthJump={(y, m) => { setViewYear(y); setViewMonth(m) }}
       />
 
       {isMobile && selectedDay && (
@@ -266,14 +293,46 @@ export default function AvailabilitySection() {
 
       {isMobile && (
         <Fab
+          ref={fabRef}
           color="primary"
-          aria-label="add availability"
-          onClick={handleAddClick}
+          aria-label="add event"
+          onClick={handleFabClick}
           sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: (t) => t.zIndex.fab }}
         >
           <AddIcon />
         </Fab>
       )}
+
+      <Menu
+        open={Boolean(addMenu)}
+        anchorEl={addMenu?.anchorEl}
+        onClose={() => setAddMenu(null)}
+        anchorOrigin={isMobile
+          ? { vertical: 'top', horizontal: 'center' }
+          : { vertical: 'center', horizontal: 'center' }
+        }
+        transformOrigin={isMobile
+          ? { vertical: 'bottom', horizontal: 'center' }
+          : { vertical: 'center', horizontal: 'center' }
+        }
+      >
+        <MenuItem onClick={() => handleMenuSelect('availability')}>
+          <ListItemIcon><EventAvailableIcon fontSize="small" /></ListItemIcon>
+          Availability
+        </MenuItem>
+        <MenuItem onClick={() => handleMenuSelect('gig')}>
+          <ListItemIcon><MicIcon fontSize="small" /></ListItemIcon>
+          Gig
+        </MenuItem>
+        <MenuItem onClick={() => handleMenuSelect('rehearsal')}>
+          <ListItemIcon><MusicNoteIcon fontSize="small" /></ListItemIcon>
+          Rehearsal
+        </MenuItem>
+        <MenuItem onClick={() => handleMenuSelect('bandEvent')}>
+          <ListItemIcon><GroupIcon fontSize="small" /></ListItemIcon>
+          Band Event
+        </MenuItem>
+      </Menu>
 
       {gigModalId && (
         <GigFormModal
@@ -296,6 +355,30 @@ export default function AvailabilitySection() {
           mode="edit"
           bandEventId={bandEventModalId}
           onClose={() => { setBandEventModalId(null); loadBandEvents() }}
+        />
+      )}
+
+      {createModal?.type === 'gig' && (
+        <GigFormModal
+          mode="create"
+          initialDate={createModal.date}
+          onClose={() => { setCreateModal(null); loadGigs() }}
+        />
+      )}
+
+      {createModal?.type === 'rehearsal' && (
+        <RehearsalFormModal
+          mode="create"
+          initialDate={createModal.date}
+          onClose={() => { setCreateModal(null); loadRehearsals() }}
+        />
+      )}
+
+      {createModal?.type === 'bandEvent' && (
+        <BandEventFormModal
+          mode="create"
+          initialDate={createModal.date}
+          onClose={() => { setCreateModal(null); loadBandEvents() }}
         />
       )}
 

@@ -5,7 +5,7 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { getAvailabilityOn } from '../api/availability.js'
 
-export default function GigAvailabilityPanel({ eventDate }) {
+export default function GigAvailabilityPanel({ eventDate, onDataLoad }) {
   const [data, setData] = useState(null)
   const timerRef = useRef(null)
 
@@ -15,12 +15,12 @@ export default function GigAvailabilityPanel({ eventDate }) {
     clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
       getAvailabilityOn(eventDate)
-        .then(setData)
-        .catch(() => setData(null))
+        .then((d) => { setData(d); onDataLoad?.(d) })
+        .catch(() => { setData(null); onDataLoad?.(null) })
     }, 300)
 
     return () => clearTimeout(timerRef.current)
-  }, [eventDate])
+  }, [eventDate, onDataLoad])
 
   if (!eventDate || !data || !data.members?.length) return null
 

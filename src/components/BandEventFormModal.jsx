@@ -30,7 +30,8 @@ function dayjsToTimeString(d) {
 
 const EMPTY_FORM = {
   title: '',
-  event_date: '',
+  start_date: '',
+  end_date: '',
   start_time: '',
   end_time: '',
   location: '',
@@ -42,11 +43,15 @@ function toDateInput(val) {
   return String(val).slice(0, 10)
 }
 
-export default function BandEventFormModal({ mode, bandEventId, onClose }) {
-  const [form, setForm] = useState(EMPTY_FORM)
+export default function BandEventFormModal({ mode, bandEventId, onClose, initialDate }) {
+  const [form, setForm] = useState(() =>
+    mode === 'create' && initialDate
+      ? { ...EMPTY_FORM, start_date: initialDate, end_date: initialDate }
+      : EMPTY_FORM
+  )
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
-  const [focused, setFocused] = useState({ event_date: false })
+  const [focused, setFocused] = useState({ start_date: false, end_date: false })
 
   const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
   const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
@@ -68,7 +73,8 @@ export default function BandEventFormModal({ mode, bandEventId, onClose }) {
       .then((ev) => {
         setForm({
           title: ev.title || '',
-          event_date: toDateInput(ev.event_date),
+          start_date: toDateInput(ev.start_date),
+          end_date: toDateInput(ev.end_date),
           start_time: ev.start_time ? String(ev.start_time).slice(0, 5) : '',
           end_time: ev.end_time ? String(ev.end_time).slice(0, 5) : '',
           location: ev.location || '',
@@ -87,11 +93,13 @@ export default function BandEventFormModal({ mode, bandEventId, onClose }) {
   async function handleCreate() {
     const errs = {}
     if (!form.title.trim()) errs.title = 'Required'
-    if (!form.event_date) errs.event_date = 'Required'
+    if (!form.start_date) errs.start_date = 'Required'
+    if (form.end_date && form.end_date < form.start_date) errs.end_date = 'Must be on or after start date'
     if (Object.keys(errs).length) { setErrors(errs); return }
     await createBandEvent({
       title: form.title.trim(),
-      event_date: form.event_date,
+      start_date: form.start_date,
+      end_date: form.end_date || null,
       start_time: form.start_time || null,
       end_time: form.end_time || null,
       location: form.location || null,
@@ -138,21 +146,36 @@ export default function BandEventFormModal({ mode, bandEventId, onClose }) {
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label="Date"
+                label="Start date"
                 type="date"
                 fullWidth
                 required
-                value={form.event_date}
-                onChange={(e) => handleChange('event_date', e.target.value)}
-                onFocus={onFocus('event_date')}
-                onBlur={onBlur('event_date')}
-                error={!!errors.event_date}
-                helperText={errors.event_date}
-                InputLabelProps={{ shrink: focused.event_date || !!form.event_date }}
-                sx={maskSx('event_date')}
+                value={form.start_date}
+                onChange={(e) => handleChange('start_date', e.target.value)}
+                onFocus={onFocus('start_date')}
+                onBlur={onBlur('start_date')}
+                error={!!errors.start_date}
+                helperText={errors.start_date}
+                InputLabelProps={{ shrink: focused.start_date || !!form.start_date }}
+                sx={maskSx('start_date')}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                label="End date"
+                type="date"
+                fullWidth
+                value={form.end_date}
+                onChange={(e) => handleChange('end_date', e.target.value)}
+                onFocus={onFocus('end_date')}
+                onBlur={onBlur('end_date')}
+                error={!!errors.end_date}
+                helperText={errors.end_date || 'Leave blank for single day'}
+                InputLabelProps={{ shrink: focused.end_date || !!form.end_date }}
+                sx={maskSx('end_date')}
+              />
+            </Grid>
+            <Grid size={12}>
               <TextField
                 label="Location"
                 fullWidth

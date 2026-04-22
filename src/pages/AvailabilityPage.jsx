@@ -6,7 +6,7 @@ export default function AvailabilityPage() {
   return (
     <Box>
       <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }}>
-        Availability
+        Calendar
       </Typography>
       <AvailabilitySection />
     </Box>

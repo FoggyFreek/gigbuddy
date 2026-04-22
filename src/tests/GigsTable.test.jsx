@@ -82,6 +82,18 @@ describe('GigsTable', () => {
     expect(onRowClick).toHaveBeenCalledWith(GIGS[0])
   })
 
+  it('renders a delete icon per row and calls onDelete without triggering row click', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn()
+    const onRowClick = vi.fn()
+    wrap(<GigsTable gigs={GIGS} onRowClick={onRowClick} onDelete={onDelete} />)
+    const buttons = screen.getAllByRole('button', { name: /delete gig/i })
+    expect(buttons.length).toBe(GIGS.length)
+    await user.click(buttons[0])
+    expect(onDelete).toHaveBeenCalledWith(GIGS[0])
+    expect(onRowClick).not.toHaveBeenCalled()
+  })
+
   it('shows dashes for missing venue/time', () => {
     wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
     // Summer Festival has no venue or times — expect em-dashes
@@ -122,6 +134,18 @@ describe('GigsTable', () => {
       wrap(<GigsTable gigs={GIGS} onRowClick={onRowClick} />)
       await user.click(screen.getByText(/Summer Festival/))
       expect(onRowClick).toHaveBeenCalledWith(GIGS[1])
+    })
+
+    it('renders a delete icon per card and calls onDelete without triggering card click', async () => {
+      const user = userEvent.setup()
+      const onDelete = vi.fn()
+      const onRowClick = vi.fn()
+      wrap(<GigsTable gigs={GIGS} onRowClick={onRowClick} onDelete={onDelete} />)
+      const buttons = screen.getAllByRole('button', { name: /delete gig/i })
+      expect(buttons.length).toBe(GIGS.length)
+      await user.click(buttons[1])
+      expect(onDelete).toHaveBeenCalledWith(GIGS[1])
+      expect(onRowClick).not.toHaveBeenCalled()
     })
 
     it('shows empty state when no gigs', () => {

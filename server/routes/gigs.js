@@ -4,6 +4,7 @@ import pool from '../db/index.js'
 const router = Router()
 
 const VALID_STATUSES = ['option', 'confirmed', 'announced']
+const VALID_VOTES = ['yes', 'no']
 
 function parseId(val) {
   const n = Number(val)
@@ -26,6 +27,40 @@ function requireTaskId(req, res) {
     return null
   }
   return taskId
+}
+
+function requireMemberId(req, res) {
+  const id = parseId(req.params.bandMemberId)
+  if (id === null) {
+    res.status(400).json({ error: 'Invalid bandMemberId' })
+    return null
+  }
+  return id
+}
+
+async function loadParticipants(gigIds) {
+  if (!gigIds.length) return new Map()
+  const { rows } = await pool.query(
+    `SELECT gp.gig_id, gp.band_member_id, gp.vote,
+            bm.name, bm.color, bm.position
+     FROM gig_participants gp
+     JOIN band_members bm ON bm.id = gp.band_member_id
+     WHERE gp.gig_id = ANY($1)
+     ORDER BY bm.sort_order ASC, bm.id ASC`,
+    [gigIds]
+  )
+  const byGig = new Map()
+  for (const id of gigIds) byGig.set(id, [])
+  for (const row of rows) {
+    byGig.get(row.gig_id).push({
+      band_member_id: row.band_member_id,
+      name: row.name,
+      color: row.color,
+      position: row.position,
+      vote: row.vote,
+    })
+  }
+  return byGig
 }
 
 function toDateStr(val) {
@@ -89,7 +124,7 @@ router.get('/', async (_req, res) => {
   res.json(result)
 })
 
-// Get single gig with tasks
+// Get single gig with tasks and participants
 router.get('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const { rows: gigs } = await pool.query('SELECT * FROM gigs WHERE id = $1', [id])
@@ -99,7 +134,8 @@ router.get('/:id', async (req, res) => {
     'SELECT * FROM gig_tasks WHERE gig_id = $1 ORDER BY created_at ASC',
     [id]
   )
-  res.json({ ...gigs[0], tasks })
+  const byGig = await loadParticipants([id])
+  res.json({ ...gigs[0], tasks, participants: byGig.get(id) || [] })
 })
 
 // Create gig
@@ -114,20 +150,44 @@ router.post('/', async (req, res) => {
   }
   const finalStatus = VALID_STATUSES.includes(status) ? status : 'option'
 
-  const { rows } = await pool.query(
-    `INSERT INTO gigs (event_date, event_description, venue, city, start_time, end_time, status,
-                       contact_name, contact_email, contact_phone,
-                       has_pa_system, has_drumkit)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-     RETURNING *`,
-    [
-      event_date, event_description, venue || null, city || null,
-      start_time || null, end_time || null, finalStatus,
-      contact_name || null, contact_email || null, contact_phone || null,
-      !!has_pa_system, !!has_drumkit,
-    ]
-  )
-  res.status(201).json(rows[0])
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const { rows } = await client.query(
+      `INSERT INTO gigs (event_date, event_description, venue, city, start_time, end_time, status,
+                         contact_name, contact_email, contact_phone,
+                         has_pa_system, has_drumkit)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING *`,
+      [
+        event_date, event_description, venue || null, city || null,
+        start_time || null, end_time || null, finalStatus,
+        contact_name || null, contact_email || null, contact_phone || null,
+        !!has_pa_system, !!has_drumkit,
+      ]
+    )
+    const gig = rows[0]
+
+    const { rows: leadRows } = await client.query(
+      `SELECT id FROM band_members WHERE position = 'lead'`
+    )
+    for (const { id: memberId } of leadRows) {
+      await client.query(
+        `INSERT INTO gig_participants (gig_id, band_member_id, updated_by_user_id)
+         VALUES ($1, $2, $3)`,
+        [gig.id, memberId, req.user.id]
+      )
+    }
+
+    await client.query('COMMIT')
+    res.status(201).json(gig)
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
 })
 
 // Update gig (partial)
@@ -223,6 +283,86 @@ router.delete('/:id/tasks/:taskId', async (req, res) => {
   )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
   res.status(204).end()
+})
+
+// --- Participants ---
+
+// Add participant
+router.post('/:id/participants', async (req, res) => {
+  const gigId = requireId(req, res); if (gigId === null) return
+  const memberId = parseId(req.body.band_member_id)
+  if (memberId === null) return res.status(400).json({ error: 'Invalid band_member_id' })
+
+  const { rows: memberRows } = await pool.query(
+    'SELECT id FROM band_members WHERE id = $1', [memberId]
+  )
+  if (!memberRows.length) return res.status(404).json({ error: 'band_member not found' })
+
+  const { rows: gigRows } = await pool.query('SELECT id FROM gigs WHERE id = $1', [gigId])
+  if (!gigRows.length) return res.status(404).json({ error: 'Not found' })
+
+  try {
+    await pool.query(
+      `INSERT INTO gig_participants (gig_id, band_member_id, updated_by_user_id)
+       VALUES ($1, $2, $3)`,
+      [gigId, memberId, req.user.id]
+    )
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Already a participant' })
+    throw err
+  }
+
+  await pool.query('UPDATE gigs SET updated_at = NOW() WHERE id = $1', [gigId])
+  const { rows } = await pool.query('SELECT * FROM gigs WHERE id = $1', [gigId])
+  const { rows: tasks } = await pool.query(
+    'SELECT * FROM gig_tasks WHERE gig_id = $1 ORDER BY created_at ASC', [gigId]
+  )
+  const byGig = await loadParticipants([gigId])
+  res.status(201).json({ ...rows[0], tasks, participants: byGig.get(gigId) || [] })
+})
+
+// Remove participant
+router.delete('/:id/participants/:bandMemberId', async (req, res) => {
+  const gigId = requireId(req, res); if (gigId === null) return
+  const memberId = requireMemberId(req, res); if (memberId === null) return
+
+  const { rowCount } = await pool.query(
+    'DELETE FROM gig_participants WHERE gig_id = $1 AND band_member_id = $2',
+    [gigId, memberId]
+  )
+  if (!rowCount) return res.status(404).json({ error: 'Not found' })
+
+  await pool.query('UPDATE gigs SET updated_at = NOW() WHERE id = $1', [gigId])
+  res.status(204).end()
+})
+
+// Update participant vote
+router.patch('/:id/participants/:bandMemberId', async (req, res) => {
+  const gigId = requireId(req, res); if (gigId === null) return
+  const memberId = requireMemberId(req, res); if (memberId === null) return
+
+  if (!('vote' in req.body)) return res.status(400).json({ error: 'vote is required' })
+  const vote = req.body.vote
+  if (vote !== null && !VALID_VOTES.includes(vote)) {
+    return res.status(400).json({ error: 'Invalid vote value' })
+  }
+
+  const { rows } = await pool.query(
+    `UPDATE gig_participants
+     SET vote = $1, updated_by_user_id = $2, updated_at = NOW()
+     WHERE gig_id = $3 AND band_member_id = $4
+     RETURNING *`,
+    [vote, req.user.id, gigId, memberId]
+  )
+  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+
+  await pool.query('UPDATE gigs SET updated_at = NOW() WHERE id = $1', [gigId])
+  const { rows: gigRows } = await pool.query('SELECT * FROM gigs WHERE id = $1', [gigId])
+  const { rows: tasks } = await pool.query(
+    'SELECT * FROM gig_tasks WHERE gig_id = $1 ORDER BY created_at ASC', [gigId]
+  )
+  const byGig = await loadParticipants([gigId])
+  res.json({ ...gigRows[0], tasks, participants: byGig.get(gigId) || [] })
 })
 
 export default router

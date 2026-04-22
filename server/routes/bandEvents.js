@@ -19,7 +19,7 @@ function requireId(req, res) {
 
 router.get('/', async (_req, res) => {
   const { rows } = await pool.query(
-    'SELECT * FROM band_events ORDER BY event_date ASC, id ASC'
+    'SELECT * FROM band_events ORDER BY start_date ASC, id ASC'
   )
   res.json(rows)
 })
@@ -32,22 +32,23 @@ router.get('/:id', async (req, res) => {
 })
 
 router.post('/', async (req, res) => {
-  const { title, event_date, start_time, end_time, location, notes } = req.body
-  if (!title || !event_date) {
-    return res.status(400).json({ error: 'title and event_date are required' })
+  const { title, start_date, end_date, start_time, end_time, location, notes } = req.body
+  if (!title || !start_date) {
+    return res.status(400).json({ error: 'title and start_date are required' })
   }
+  const resolvedEnd = end_date || start_date
   const { rows } = await pool.query(
-    `INSERT INTO band_events (title, event_date, start_time, end_time, location, notes)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO band_events (title, start_date, end_date, start_time, end_time, location, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [title, event_date, start_time || null, end_time || null, location || null, notes || null]
+    [title, start_date, resolvedEnd, start_time || null, end_time || null, location || null, notes || null]
   )
   res.status(201).json(rows[0])
 })
 
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const allowed = ['title', 'event_date', 'start_time', 'end_time', 'location', 'notes']
+  const allowed = ['title', 'start_date', 'end_date', 'start_time', 'end_time', 'location', 'notes']
   const fields = []
   const values = []
   let idx = 1

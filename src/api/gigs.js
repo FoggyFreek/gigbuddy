@@ -14,3 +14,10 @@ export const updateTask = (gigId, taskId, body) =>
   api(`/${gigId}/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteTask = (gigId, taskId) =>
   api(`/${gigId}/tasks/${taskId}`, { method: 'DELETE' })
+
+export const addGigParticipant = (gigId, bandMemberId) =>
+  api(`/${gigId}/participants`, { method: 'POST', body: JSON.stringify({ band_member_id: bandMemberId }) })
+export const removeGigParticipant = (gigId, bandMemberId) =>
+  api(`/${gigId}/participants/${bandMemberId}`, { method: 'DELETE' })
+export const setGigVote = (gigId, bandMemberId, vote) =>
+  api(`/${gigId}/participants/${bandMemberId}`, { method: 'PATCH', body: JSON.stringify({ vote }) })

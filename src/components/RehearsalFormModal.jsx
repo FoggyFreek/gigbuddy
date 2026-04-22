@@ -85,8 +85,10 @@ function VoteToggle({ vote, onChange }) {
   )
 }
 
-export default function RehearsalFormModal({ mode, rehearsalId, onClose }) {
-  const [form, setForm] = useState(EMPTY_FORM)
+export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }) {
+  const [form, setForm] = useState(() =>
+    mode === 'create' && initialDate ? { ...EMPTY_FORM, proposed_date: initialDate } : EMPTY_FORM
+  )
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
   const [rehearsal, setRehearsal] = useState(null)

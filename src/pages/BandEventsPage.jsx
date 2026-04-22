@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import BandEventsTable from '../components/BandEventsTable.jsx'
@@ -13,6 +18,7 @@ export default function BandEventsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [modal, setModal] = useState(null) // null | { mode: 'create' } | { mode: 'edit', bandEventId: number }
+  const [confirmDelete, setConfirmDelete] = useState(null) // null | event object
 
   const load = useCallback(async () => {
     try {
@@ -34,10 +40,13 @@ export default function BandEventsPage() {
     load()
   }
 
-  async function handleDelete(event) {
-    const label = event.title || 'this event'
-    if (!window.confirm(`Delete "${label}"?`)) return
-    await deleteBandEvent(event.id)
+  function handleDelete(event) {
+    setConfirmDelete(event)
+  }
+
+  async function handleConfirmDelete() {
+    await deleteBandEvent(confirmDelete.id)
+    setConfirmDelete(null)
     load()
   }
 
@@ -83,6 +92,25 @@ export default function BandEventsPage() {
           onClose={handleClose}
         />
       )}
+
+      <Dialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)}>
+        <DialogTitle>Delete event?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {confirmDelete && (
+              <>
+                Delete &ldquo;{confirmDelete.title || 'this event'}&rdquo;? This cannot be undone.
+              </>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(null)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={handleConfirmDelete}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   )
 }

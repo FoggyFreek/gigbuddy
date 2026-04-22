@@ -28,12 +28,20 @@ function formatDate(val) {
   })
 }
 
+function formatDateRange(start, end) {
+  if (!start) return '—'
+  const s = formatDate(start)
+  if (!end || end === start) return s
+  return `${s} – ${formatDate(end)}`
+}
+
 function formatTime(val) {
   if (!val) return '—'
   return String(val).slice(0, 5)
 }
 
-function isPastDate(val) {
+function isPastEvent(event) {
+  const val = event.end_date || event.start_date
   if (!val) return false
   const d = new Date(val + 'T00:00:00')
   const today = new Date()
@@ -60,7 +68,7 @@ function EventCard({ event, onClick, onDelete }) {
             {event.title}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {formatDate(event.event_date)}
+            {formatDateRange(event.start_date, event.end_date)}
             {event.start_time ? ` · ${formatTime(event.start_time)}` : ''}
             {event.end_time ? ` – ${formatTime(event.end_time)}` : ''}
           </Typography>
@@ -86,7 +94,7 @@ function EventCard({ event, onClick, onDelete }) {
 function DesktopRow({ event, onClick, onDelete }) {
   return (
     <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
-      <TableCell>{formatDate(event.event_date)}</TableCell>
+      <TableCell>{formatDateRange(event.start_date, event.end_date)}</TableCell>
       <TableCell>
         <Chip label={event.title} size="small" color="warning" />
       </TableCell>
@@ -154,8 +162,8 @@ export default function BandEventsTable({ events, onRowClick, onDelete }) {
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
 
-  const upcoming = events.filter((e) => !isPastDate(e.event_date))
-  const past = events.filter((e) => isPastDate(e.event_date))
+  const upcoming = events.filter((e) => !isPastEvent(e))
+  const past = events.filter((e) => isPastEvent(e))
   const emptyAll = events.length === 0
 
   if (isCompact) {

@@ -3,7 +3,6 @@ import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Collapse from '@mui/material/Collapse'
 import IconButton from '@mui/material/IconButton'
-import LinearProgress from '@mui/material/LinearProgress'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
@@ -47,11 +46,13 @@ function isPastDate(val) {
 function tallyCounts(participants) {
   const total = participants?.length ?? 0
   const yes = participants?.filter((p) => p.vote === 'yes').length ?? 0
-  return { yes, total }
+  const no = participants?.filter((p) => p.vote === 'no').length ?? 0
+  const pending = total - yes - no
+  return { yes, no, pending, total }
 }
 
 function ParticipantProgress({ participants }) {
-  const { yes, total } = tallyCounts(participants)
+  const { yes, no, pending, total } = tallyCounts(participants)
   if (!total) {
     return (
       <Typography variant="caption" color="text.secondary">
@@ -59,18 +60,22 @@ function ParticipantProgress({ participants }) {
       </Typography>
     )
   }
-  const pct = (yes / total) * 100
-  const complete = yes === total
+  const yesPct = (yes / total) * 100
+  const noPct = (no / total) * 100
+  const pendingPct = (pending / total) * 100
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 140 }}>
-      <LinearProgress
-        variant="determinate"
-        value={pct}
-        color={complete ? 'success' : 'primary'}
-        sx={{ flexGrow: 1, height: 8, borderRadius: 4 }}
-      />
-      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 32, textAlign: 'right' }}>
-        {yes}/{total}
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 160 }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: 'grey.300' }}>
+        {yes > 0 && <Box sx={{ width: `${yesPct}%`, bgcolor: 'success.main' }} />}
+        {no > 0 && <Box sx={{ width: `${noPct}%`, bgcolor: 'error.main' }} />}
+        {pending > 0 && <Box sx={{ width: `${pendingPct}%`, bgcolor: 'grey.300' }} />}
+      </Box>
+      <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
+        <Box component="span" sx={{ color: 'success.main' }}>{yes}</Box>
+        {' · '}
+        <Box component="span" sx={{ color: 'error.main' }}>{no}</Box>
+        {' · '}
+        <Box component="span" sx={{ color: 'text.disabled' }}>{pending}</Box>
       </Typography>
     </Box>
   )

@@ -1,4 +1,6 @@
-import React from 'react'
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
+import '@material/web/menu/menu.js'
+import '@material/web/menu/menu-item.js'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
@@ -47,6 +49,80 @@ function buildCalendarCells(year, month) {
   })
 }
 
+const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>
+  new Date(2000, i, 1).toLocaleString('en', { month: 'long' })
+)
+
+function MonthMenu({ year, month, onMonthJump }) {
+  const anchorRef = useRef(null)
+  const menuRef = useRef(null)
+  const [open, setOpen] = useState(false)
+  const uid = useId().replace(/:/g, '')
+
+  const toggle = useCallback(() => setOpen((v) => !v), [])
+
+  useEffect(() => {
+    const menu = menuRef.current
+    if (!menu) return
+    const onClosed = () => setOpen(false)
+    menu.addEventListener('closed', onClosed)
+    return () => menu.removeEventListener('closed', onClosed)
+  }, [])
+
+  useEffect(() => {
+    const menu = menuRef.current
+    if (!menu) return
+    menu.open = open
+  }, [open])
+
+  const handleSelect = useCallback((e) => {
+    const idx = Number(e.currentTarget.dataset.idx)
+    setOpen(false)
+    onMonthJump(year, idx + 1)
+  }, [year, onMonthJump])
+
+  return (
+    <Box sx={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <button
+        ref={anchorRef}
+        id={uid}
+        onClick={toggle}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          fontSize: '1rem',
+          fontWeight: 600,
+          padding: '4px 8px',
+          borderRadius: 4,
+          minWidth: 140,
+          textAlign: 'center',
+        }}
+      >
+        {MONTH_NAMES[month - 1]}
+      </button>
+      <md-menu
+        ref={menuRef}
+        anchor={uid}
+        positioning="absolute"
+        quick
+      >
+        {MONTH_NAMES.map((name, i) => (
+          <md-menu-item
+            key={i}
+            data-idx={i}
+            selected={i === month - 1}
+            onClick={handleSelect}
+          >
+            <div slot="headline">{name}</div>
+          </md-menu-item>
+        ))}
+      </md-menu>
+    </Box>
+  )
+}
+
 export default function AvailabilityCalendar({
   year,
   month,
@@ -65,6 +141,7 @@ export default function AvailabilityCalendar({
   onBandEventClick,
   onPrev,
   onNext,
+  onMonthJump,
 }) {
   const cells = buildCalendarCells(year, month)
   const gigsByDate = gigs.reduce((acc, g) => {
@@ -85,20 +162,23 @@ export default function AvailabilityCalendar({
     ;(acc[key] ||= []).push(ev)
     return acc
   }, {})
-  const monthLabel = new Date(year, month - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' })
-
   return (
     <Box sx={{ maxWidth: 1024, mx: 'auto' }}>
-      <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
-        <IconButton size="small" onClick={onPrev} aria-label="previous month">
-          <ChevronLeftIcon />
-        </IconButton>
-        <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1, textAlign: 'center' }}>
-          {monthLabel}
+      <Stack direction="column" alignItems="center" sx={{ mb: 1 }}>
+        <Typography variant="caption" fontWeight={600} color="text.secondary">
+          {year}
         </Typography>
-        <IconButton size="small" onClick={onNext} aria-label="next month">
-          <ChevronRightIcon />
-        </IconButton>
+        <Stack direction="row" alignItems="center" sx={{ width: '100%' }}>
+          <IconButton size="small" onClick={onPrev} aria-label="previous month">
+            <ChevronLeftIcon />
+          </IconButton>
+          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+            <MonthMenu year={year} month={month} onMonthJump={onMonthJump} />
+          </Box>
+          <IconButton size="small" onClick={onNext} aria-label="next month">
+            <ChevronRightIcon />
+          </IconButton>
+        </Stack>
       </Stack>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}>
@@ -149,7 +229,7 @@ export default function AvailabilityCalendar({
               )}
             <Box
               data-date={iso}
-              onClick={(e) => onDayClick(iso, e.shiftKey)}
+              onClick={(e) => onDayClick(iso, e.shiftKey, e.currentTarget)}
               sx={{
                 aspectRatio: '1 / 1',
                 borderRadius: 0,

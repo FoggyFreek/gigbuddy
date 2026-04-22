@@ -8,10 +8,12 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
+import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import Collapse from '@mui/material/Collapse'
 import ChecklistIcon from '@mui/icons-material/Checklist'
+import DeleteIcon from '@mui/icons-material/Delete'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
@@ -23,7 +25,7 @@ const STATUS_COLORS = {
   announced: 'success',
 }
 
-const COLUMN_COUNT = 9
+const COLUMN_COUNT = 8
 
 function formatDate(val) {
   if (!val) return '—'
@@ -44,7 +46,7 @@ function isPastDate(val) {
   return d < today
 }
 
-function GigCard({ gig, onClick }) {
+function GigCard({ gig, onClick, onDelete }) {
   const taskCount = gig.open_task_count ?? 0
   const metaParts = [gig.event_description, gig.venue, gig.city].filter(Boolean)
   return (
@@ -72,6 +74,14 @@ function GigCard({ gig, onClick }) {
             <Typography variant="caption">{taskCount}</Typography>
           </Box>
         )}
+        <IconButton
+          size="small"
+          aria-label="delete gig"
+          onClick={(e) => { e.stopPropagation(); onDelete?.(gig) }}
+          sx={{ ml: taskCount > 0 ? 0.5 : 'auto', mt: -0.5, mr: -0.5 }}
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
         {metaParts.length ? metaParts.join(' · ') : '—'}
@@ -89,15 +99,18 @@ function GigCard({ gig, onClick }) {
   )
 }
 
-function DesktopRow({ gig, onClick }) {
+function DesktopRow({ gig, onClick, onDelete }) {
   return (
     <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
       <TableCell>{formatDate(gig.event_date)}</TableCell>
       <TableCell>{gig.event_description}</TableCell>
-      <TableCell>{gig.venue || '—'}</TableCell>
-      <TableCell>{gig.city || '—'}</TableCell>
-      <TableCell>{formatTime(gig.start_time)}</TableCell>
-      <TableCell>{formatTime(gig.end_time)}</TableCell>
+      <TableCell>
+        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+          <span>{gig.venue || ' '}</span>
+          <Typography variant="caption" color="text.secondary">{gig.city || ' '}</Typography>
+        </Box>
+      </TableCell>
+      <TableCell>{formatTime(gig.start_time)}–{formatTime(gig.end_time)}</TableCell>
       <TableCell>
         <Chip
           label={gig.status}
@@ -109,6 +122,15 @@ function DesktopRow({ gig, onClick }) {
         <MemberAvatarStack members={gig.members_availability} />
       </TableCell>
       <TableCell align="center">{gig.open_task_count ?? 0}</TableCell>
+      <TableCell align="right" padding="none" sx={{ pr: 1 }}>
+        <IconButton
+          size="small"
+          aria-label="delete gig"
+          onClick={(e) => { e.stopPropagation(); onDelete?.(gig) }}
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </TableCell>
     </TableRow>
   )
 }
@@ -119,13 +141,12 @@ function DesktopHead() {
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
         <TableCell>Date</TableCell>
         <TableCell>Event</TableCell>
-        <TableCell>Venue</TableCell>
-        <TableCell>City</TableCell>
-        <TableCell>Start</TableCell>
-        <TableCell>End</TableCell>
+        <TableCell>Venue / City</TableCell>
+        <TableCell>Duration</TableCell>
         <TableCell>Status</TableCell>
         <TableCell>Band</TableCell>
         <TableCell align="center">Open tasks</TableCell>
+        <TableCell />
       </TableRow>
     </TableHead>
   )
@@ -159,7 +180,7 @@ function PastGigsHeader({ open, count, onToggle }) {
   )
 }
 
-export default function GigsTable({ gigs, onRowClick }) {
+export default function GigsTable({ gigs, onRowClick, onDelete }) {
   const [pastOpen, setPastOpen] = useState(false)
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
@@ -183,7 +204,7 @@ export default function GigsTable({ gigs, onRowClick }) {
             </Box>
           ) : (
             upcoming.map((gig) => (
-              <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} />
+              <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} />
             ))
           )}
         </Paper>
@@ -197,7 +218,7 @@ export default function GigsTable({ gigs, onRowClick }) {
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((gig) => (
-                  <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} />
+                  <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} />
                 ))}
               </Box>
             </Collapse>
@@ -228,7 +249,7 @@ export default function GigsTable({ gigs, onRowClick }) {
               </TableRow>
             )}
             {upcoming.map((gig) => (
-              <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} />
+              <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} />
             ))}
           </TableBody>
         </Table>
@@ -246,7 +267,7 @@ export default function GigsTable({ gigs, onRowClick }) {
                 <DesktopHead />
                 <TableBody>
                   {past.map((gig) => (
-                    <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} />
+                    <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} />
                   ))}
                 </TableBody>
               </Table>
