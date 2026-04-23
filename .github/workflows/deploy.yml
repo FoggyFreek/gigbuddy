@@ -31,6 +31,9 @@ jobs:
             OIDC_REDIRECT_URI=${{ secrets.OIDC_REDIRECT_URI }}
             APP_URL=${{ secrets.APP_URL }}
             ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}
+            VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
+            VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
+            VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
             NODE_ENV=production
             EOF
             docker compose up -d --build
