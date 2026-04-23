@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/rehearsals.js', () => ({
@@ -41,11 +42,13 @@ import RehearsalsPage from '../pages/RehearsalsPage.jsx'
 import { listRehearsals } from '../api/rehearsals.js'
 import theme from '../theme.js'
 
-function wrap(ui) {
+function wrap(ui, { initialEntries = ['/'] } = {}) {
   return render(
-    <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
-    </ThemeProvider>
+    <MemoryRouter initialEntries={initialEntries}>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </ThemeProvider>
+    </MemoryRouter>
   )
 }
 
@@ -71,5 +74,18 @@ describe('RehearsalsPage', () => {
     wrap(<RehearsalsPage />)
     await user.click(screen.getByRole('button', { name: /propose rehearsal/i }))
     expect(screen.getByText('Propose rehearsal', { selector: 'h2' })).toBeInTheDocument()
+  })
+
+  it('opens the edit modal for ?open=1 and returns to the page on close', async () => {
+    const user = userEvent.setup()
+    wrap(<RehearsalsPage />, { initialEntries: ['/rehearsals?open=1'] })
+
+    await waitFor(() => expect(screen.getByText('Rehearsal details')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /^close$/i }))
+
+    await waitFor(() => expect(listRehearsals).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText('Rehearsal details')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /rehearsals/i })).toBeInTheDocument()
   })
 })

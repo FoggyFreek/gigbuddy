@@ -10,9 +10,18 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     getCurrentUser()
-      .then(setUser)
+      .then((u) => {
+        setUser(u)
+        if (u?.status === 'approved') {
+          const intended = localStorage.getItem('gigbuddy:redirectAfterLogin')
+          if (intended) {
+            localStorage.removeItem('gigbuddy:redirectAfterLogin')
+            navigate(intended, { replace: true })
+          }
+        }
+      })
       .catch(() => setUser(null))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUnauthorized = useCallback(() => {
     setUser(null)

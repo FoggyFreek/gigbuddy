@@ -9,6 +9,14 @@ import ListItemIcon from '@mui/material/ListItemIcon'
 import Fab from '@mui/material/Fab'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import Button from '@mui/material/Button'
+import Checkbox from '@mui/material/Checkbox'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import FormGroup from '@mui/material/FormGroup'
 import AddIcon from '@mui/icons-material/Add'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import MicIcon from '@mui/icons-material/Mic'
@@ -34,6 +42,7 @@ import { createSlot, deleteSlot, listAvailability, updateSlot } from '../api/ava
 import { listGigs } from '../api/gigs.js'
 import { listRehearsals } from '../api/rehearsals.js'
 import { listBandEvents } from '../api/bandEvents.js'
+import { exportMonthToICS } from '../utils/shareUtils.js'
 
 function pad(n) {
   return String(n).padStart(2, '0')
@@ -65,6 +74,8 @@ export default function AvailabilitySection() {
   const [bandEventModalId, setBandEventModalId] = useState(null)
   const [addMenu, setAddMenu] = useState(null) // { anchorEl, date }
   const [createModal, setCreateModal] = useState(null) // { type, date }
+  const [exportModal, setExportModal] = useState(false)
+  const [exportOptions, setExportOptions] = useState({ gigs: true, rehearsals: true, bandEvents: true })
   const fabRef = useRef(null)
 
   function loadGigs() {
@@ -193,6 +204,7 @@ export default function AvailabilitySection() {
         onPrev={handlePrev}
         onNext={handleNext}
         onMonthJump={(y, m) => { setViewYear(y); setViewMonth(m) }}
+        onExport={() => setExportModal(true)}
       />
 
       {isMobile && selectedDay && (
@@ -396,6 +408,67 @@ export default function AvailabilitySection() {
           onClose={() => { setDialog(null); setSelectionStart(null) }}
         />
       )}
+
+      <Dialog open={exportModal} onClose={() => setExportModal(false)}>
+        <DialogTitle>Export calendar</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Choose which events to include in the .ics export for{' '}
+            {new Date(viewYear, viewMonth - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' })}.
+          </Typography>
+          <FormGroup>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={exportOptions.gigs}
+                  onChange={(e) => setExportOptions((o) => ({ ...o, gigs: e.target.checked }))}
+                />
+              }
+              label="Gigs"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={exportOptions.rehearsals}
+                  onChange={(e) => setExportOptions((o) => ({ ...o, rehearsals: e.target.checked }))}
+                />
+              }
+              label="Rehearsals"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={exportOptions.bandEvents}
+                  onChange={(e) => setExportOptions((o) => ({ ...o, bandEvents: e.target.checked }))}
+                />
+              }
+              label="Band events"
+            />
+          </FormGroup>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+            Only confirmed and announced gigs and planned rehearsals are exported. Options are excluded.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExportModal(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={!exportOptions.gigs && !exportOptions.rehearsals && !exportOptions.bandEvents}
+            onClick={() => {
+              exportMonthToICS(
+                exportOptions.gigs ? gigs.filter((g) => g.status !== 'option') : [],
+                exportOptions.rehearsals ? rehearsals.filter((r) => r.status !== 'option') : [],
+                exportOptions.bandEvents ? bandEvents : [],
+                viewYear,
+                viewMonth,
+              )
+              setExportModal(false)
+            }}
+          >
+            Export
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   )
 }

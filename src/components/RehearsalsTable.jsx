@@ -13,6 +13,8 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
+import ShareIcon from '@mui/icons-material/Share'
+import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
@@ -22,7 +24,7 @@ const STATUS_COLORS = {
   planned: 'primary',
 }
 
-const COLUMN_COUNT = 7
+const COLUMN_COUNT = 6
 
 function formatDate(val) {
   if (!val) return '—'
@@ -64,24 +66,15 @@ function ParticipantProgress({ participants }) {
   const noPct = (no / total) * 100
   const pendingPct = (pending / total) * 100
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 160 }}>
-      <Box sx={{ flexGrow: 1, display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: 'grey.300' }}>
-        {yes > 0 && <Box sx={{ width: `${yesPct}%`, bgcolor: 'success.main' }} />}
-        {no > 0 && <Box sx={{ width: `${noPct}%`, bgcolor: 'error.main' }} />}
-        {pending > 0 && <Box sx={{ width: `${pendingPct}%`, bgcolor: 'grey.300' }} />}
-      </Box>
-      <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
-        <Box component="span" sx={{ color: 'success.main' }}>{yes}</Box>
-        {' · '}
-        <Box component="span" sx={{ color: 'error.main' }}>{no}</Box>
-        {' · '}
-        <Box component="span" sx={{ color: 'text.disabled' }}>{pending}</Box>
-      </Typography>
+    <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: 'grey.300' }}>
+      {yes > 0 && <Box sx={{ width: `${yesPct}%`, bgcolor: 'success.main' }} />}
+      {no > 0 && <Box sx={{ width: `${noPct}%`, bgcolor: 'error.main' }} />}
+      {pending > 0 && <Box sx={{ width: `${pendingPct}%`, bgcolor: 'grey.300' }} />}
     </Box>
   )
 }
 
-function RehearsalCard({ rehearsal, onClick, onDelete }) {
+function RehearsalCard({ rehearsal, onClick, onDelete, onShare }) {
   return (
     <Box
       onClick={onClick}
@@ -103,9 +96,17 @@ function RehearsalCard({ rehearsal, onClick, onDelete }) {
         </Typography>
         <IconButton
           size="small"
+          aria-label="share rehearsal"
+          onClick={(e) => { e.stopPropagation(); onShare?.(rehearsal) }}
+          sx={{ ml: 'auto', mt: -0.5 }}
+        >
+          <ShareIcon fontSize="small" />
+        </IconButton>
+        <IconButton
+          size="small"
           aria-label="delete rehearsal"
           onClick={(e) => { e.stopPropagation(); onDelete?.(rehearsal) }}
-          sx={{ ml: 'auto', mt: -0.5, mr: -0.5 }}
+          sx={{ mt: -0.5, mr: -0.5 }}
         >
           <DeleteIcon fontSize="small" />
         </IconButton>
@@ -126,12 +127,11 @@ function RehearsalCard({ rehearsal, onClick, onDelete }) {
   )
 }
 
-function DesktopRow({ rehearsal, onClick, onDelete }) {
+function DesktopRow({ rehearsal, onClick, onDelete, onShare }) {
   return (
     <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
       <TableCell>{formatDate(rehearsal.proposed_date)}</TableCell>
-      <TableCell>{formatTime(rehearsal.start_time)}</TableCell>
-      <TableCell>{formatTime(rehearsal.end_time)}</TableCell>
+      <TableCell>{formatTime(rehearsal.start_time)} – {formatTime(rehearsal.end_time)}</TableCell>
       <TableCell>{rehearsal.location || '—'}</TableCell>
       <TableCell>
         <Chip
@@ -144,6 +144,15 @@ function DesktopRow({ rehearsal, onClick, onDelete }) {
         <ParticipantProgress participants={rehearsal.participants} />
       </TableCell>
       <TableCell align="right" padding="none" sx={{ pr: 1 }}>
+        <Tooltip title="Share via WhatsApp">
+          <IconButton
+            size="small"
+            aria-label="share rehearsal"
+            onClick={(e) => { e.stopPropagation(); onShare?.(rehearsal) }}
+          >
+            <ShareIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <IconButton
           size="small"
           aria-label="delete rehearsal"
@@ -161,8 +170,7 @@ function DesktopHead() {
     <TableHead>
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
         <TableCell>Date</TableCell>
-        <TableCell>Start</TableCell>
-        <TableCell>End</TableCell>
+        <TableCell>Time</TableCell>
         <TableCell>Location</TableCell>
         <TableCell>Status</TableCell>
         <TableCell>Votes</TableCell>
@@ -200,7 +208,7 @@ function PastHeader({ open, count, onToggle }) {
   )
 }
 
-export default function RehearsalsTable({ rehearsals, onRowClick, onDelete }) {
+export default function RehearsalsTable({ rehearsals, onRowClick, onDelete, onShare }) {
   const [pastOpen, setPastOpen] = useState(false)
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
@@ -223,7 +231,7 @@ export default function RehearsalsTable({ rehearsals, onRowClick, onDelete }) {
             </Box>
           ) : (
             upcoming.map((r) => (
-              <RehearsalCard key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} />
+              <RehearsalCard key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
             ))
           )}
         </Paper>
@@ -237,7 +245,7 @@ export default function RehearsalsTable({ rehearsals, onRowClick, onDelete }) {
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((r) => (
-                  <RehearsalCard key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} />
+                  <RehearsalCard key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
                 ))}
               </Box>
             </Collapse>
@@ -268,7 +276,7 @@ export default function RehearsalsTable({ rehearsals, onRowClick, onDelete }) {
               </TableRow>
             )}
             {upcoming.map((r) => (
-              <DesktopRow key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} />
+              <DesktopRow key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
             ))}
           </TableBody>
         </Table>
@@ -286,7 +294,7 @@ export default function RehearsalsTable({ rehearsals, onRowClick, onDelete }) {
                 <DesktopHead />
                 <TableBody>
                   {past.map((r) => (
-                    <DesktopRow key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} />
+                    <DesktopRow key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
                   ))}
                 </TableBody>
               </Table>

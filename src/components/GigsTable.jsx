@@ -15,6 +15,8 @@ import Collapse from '@mui/material/Collapse'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ShareIcon from '@mui/icons-material/Share'
+import Tooltip from '@mui/material/Tooltip'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import MemberAvatarStack from './MemberAvatarStack.jsx'
@@ -46,7 +48,7 @@ function isPastDate(val) {
   return d < today
 }
 
-function GigCard({ gig, onClick, onDelete }) {
+function GigCard({ gig, onClick, onDelete, onShare }) {
   const taskCount = gig.open_task_count ?? 0
   const metaParts = [gig.event_description, gig.venue, gig.city].filter(Boolean)
   return (
@@ -76,9 +78,17 @@ function GigCard({ gig, onClick, onDelete }) {
         )}
         <IconButton
           size="small"
+          aria-label="share gig"
+          onClick={(e) => { e.stopPropagation(); onShare?.(gig) }}
+          sx={{ ml: taskCount > 0 ? 0.5 : 'auto', mt: -0.5 }}
+        >
+          <ShareIcon fontSize="small" />
+        </IconButton>
+        <IconButton
+          size="small"
           aria-label="delete gig"
           onClick={(e) => { e.stopPropagation(); onDelete?.(gig) }}
-          sx={{ ml: taskCount > 0 ? 0.5 : 'auto', mt: -0.5, mr: -0.5 }}
+          sx={{ mt: -0.5, mr: -0.5 }}
         >
           <DeleteIcon fontSize="small" />
         </IconButton>
@@ -99,7 +109,7 @@ function GigCard({ gig, onClick, onDelete }) {
   )
 }
 
-function DesktopRow({ gig, onClick, onDelete }) {
+function DesktopRow({ gig, onClick, onDelete, onShare }) {
   return (
     <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
       <TableCell>{formatDate(gig.event_date)}</TableCell>
@@ -123,6 +133,15 @@ function DesktopRow({ gig, onClick, onDelete }) {
       </TableCell>
       <TableCell align="center">{gig.open_task_count ?? 0}</TableCell>
       <TableCell align="right" padding="none" sx={{ pr: 1 }}>
+        <Tooltip title="Share via WhatsApp">
+          <IconButton
+            size="small"
+            aria-label="share gig"
+            onClick={(e) => { e.stopPropagation(); onShare?.(gig) }}
+          >
+            <ShareIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <IconButton
           size="small"
           aria-label="delete gig"
@@ -142,7 +161,7 @@ function DesktopHead() {
         <TableCell>Date</TableCell>
         <TableCell>Event</TableCell>
         <TableCell>Venue / City</TableCell>
-        <TableCell>Duration</TableCell>
+        <TableCell>Time</TableCell>
         <TableCell>Status</TableCell>
         <TableCell>Band</TableCell>
         <TableCell align="center">Open tasks</TableCell>
@@ -180,7 +199,7 @@ function PastGigsHeader({ open, count, onToggle }) {
   )
 }
 
-export default function GigsTable({ gigs, onRowClick, onDelete }) {
+export default function GigsTable({ gigs, onRowClick, onDelete, onShare }) {
   const [pastOpen, setPastOpen] = useState(false)
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
@@ -204,7 +223,7 @@ export default function GigsTable({ gigs, onRowClick, onDelete }) {
             </Box>
           ) : (
             upcoming.map((gig) => (
-              <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} />
+              <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} onShare={onShare} />
             ))
           )}
         </Paper>
@@ -218,7 +237,7 @@ export default function GigsTable({ gigs, onRowClick, onDelete }) {
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((gig) => (
-                  <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} />
+                  <GigCard key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} onShare={onShare} />
                 ))}
               </Box>
             </Collapse>
@@ -249,7 +268,7 @@ export default function GigsTable({ gigs, onRowClick, onDelete }) {
               </TableRow>
             )}
             {upcoming.map((gig) => (
-              <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} />
+              <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} onShare={onShare} />
             ))}
           </TableBody>
         </Table>
@@ -267,7 +286,7 @@ export default function GigsTable({ gigs, onRowClick, onDelete }) {
                 <DesktopHead />
                 <TableBody>
                   {past.map((gig) => (
-                    <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} />
+                    <DesktopRow key={gig.id} gig={gig} onClick={() => onRowClick(gig)} onDelete={onDelete} onShare={onShare} />
                   ))}
                 </TableBody>
               </Table>

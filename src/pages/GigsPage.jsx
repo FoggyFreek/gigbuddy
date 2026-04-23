@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -15,8 +16,10 @@ import AddIcon from '@mui/icons-material/Add'
 import GigsTable from '../components/GigsTable.jsx'
 import GigFormModal from '../components/GigFormModal.jsx'
 import { deleteGig, listGigs } from '../api/gigs.js'
+import { gigShareUrl } from '../utils/shareUtils.js'
 
 export default function GigsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [gigs, setGigs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -39,7 +42,16 @@ export default function GigsPage() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    if (loading) return
+    const id = Number(searchParams.get('open'))
+    if (id) setModal({ mode: 'edit', gigId: id })
+  }, [loading, searchParams])
+
   function handleClose() {
+    if (searchParams.has('open')) {
+      setSearchParams((p) => { p.delete('open'); return p }, { replace: true })
+    }
     setModal(null)
     load()
   }
@@ -99,6 +111,7 @@ export default function GigsPage() {
           gigs={statusFilter === 'all' ? gigs : gigs.filter((g) => g.status === statusFilter)}
           onRowClick={(gig) => setModal({ mode: 'edit', gigId: gig.id })}
           onDelete={handleDelete}
+          onShare={(gig) => window.open(gigShareUrl(gig), '_blank')}
         />
       )}
 

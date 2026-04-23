@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -12,8 +13,10 @@ import AddIcon from '@mui/icons-material/Add'
 import RehearsalsTable from '../components/RehearsalsTable.jsx'
 import RehearsalFormModal from '../components/RehearsalFormModal.jsx'
 import { deleteRehearsal, listRehearsals } from '../api/rehearsals.js'
+import { rehearsalShareUrl } from '../utils/shareUtils.js'
 
 export default function RehearsalsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [rehearsals, setRehearsals] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -35,7 +38,16 @@ export default function RehearsalsPage() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    if (loading) return
+    const id = Number(searchParams.get('open'))
+    if (id) setModal({ mode: 'edit', rehearsalId: id })
+  }, [loading, searchParams])
+
   function handleClose() {
+    if (searchParams.has('open')) {
+      setSearchParams((p) => { p.delete('open'); return p }, { replace: true })
+    }
     setModal(null)
     load()
   }
@@ -82,6 +94,7 @@ export default function RehearsalsPage() {
           rehearsals={rehearsals}
           onRowClick={(r) => setModal({ mode: 'edit', rehearsalId: r.id })}
           onDelete={handleDelete}
+          onShare={(r) => window.open(rehearsalShareUrl(r), '_blank')}
         />
       )}
 

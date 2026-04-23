@@ -8,6 +8,7 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import {
   GIG_STATUS_COLORS,
   REHEARSAL_STATUS_COLORS,
@@ -142,6 +143,7 @@ export default function AvailabilityCalendar({
   onPrev,
   onNext,
   onMonthJump,
+  onExport,
 }) {
   const cells = buildCalendarCells(year, month)
   const gigsByDate = gigs.reduce((acc, g) => {
@@ -172,6 +174,13 @@ export default function AvailabilityCalendar({
           <IconButton size="small" onClick={onNext} aria-label="next month">
             <ChevronRightIcon />
           </IconButton>
+          {onExport && (
+            <Tooltip title="Export month to calendar (.ics)">
+              <IconButton size="small" onClick={onExport} aria-label="export to calendar">
+                <FileDownloadIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Stack>
       </Stack>
 

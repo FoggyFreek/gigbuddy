@@ -1,10 +1,11 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import CircularProgress from '@mui/material/CircularProgress'
 import Box from '@mui/material/Box'
 import { useAuth } from '../contexts/authContext.js'
 
 export default function RequireAuth() {
   const { user } = useAuth()
+  const location = useLocation()
 
   if (user === undefined) {
     return (
@@ -13,7 +14,13 @@ export default function RequireAuth() {
       </Box>
     )
   }
-  if (user === null) return <Navigate to="/login" replace />
+  if (user === null) {
+    const intended = location.pathname + location.search
+    if (intended !== '/login' && intended !== '/') {
+      localStorage.setItem('gigbuddy:redirectAfterLogin', intended)
+    }
+    return <Navigate to="/login" replace />
+  }
   if (user.status === 'pending') return <Navigate to="/pending" replace />
   if (user.status === 'rejected') return <Navigate to="/pending" replace />
 

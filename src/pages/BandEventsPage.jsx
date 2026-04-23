@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -12,8 +13,10 @@ import AddIcon from '@mui/icons-material/Add'
 import BandEventsTable from '../components/BandEventsTable.jsx'
 import BandEventFormModal from '../components/BandEventFormModal.jsx'
 import { deleteBandEvent, listBandEvents } from '../api/bandEvents.js'
+import { bandEventShareUrl } from '../utils/shareUtils.js'
 
 export default function BandEventsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -35,7 +38,16 @@ export default function BandEventsPage() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    if (loading) return
+    const id = Number(searchParams.get('open'))
+    if (id) setModal({ mode: 'edit', bandEventId: id })
+  }, [loading, searchParams])
+
   function handleClose() {
+    if (searchParams.has('open')) {
+      setSearchParams((p) => { p.delete('open'); return p }, { replace: true })
+    }
     setModal(null)
     load()
   }
@@ -82,6 +94,7 @@ export default function BandEventsPage() {
           events={events}
           onRowClick={(e) => setModal({ mode: 'edit', bandEventId: e.id })}
           onDelete={handleDelete}
+          onShare={(e) => window.open(bandEventShareUrl(e), '_blank')}
         />
       )}
 

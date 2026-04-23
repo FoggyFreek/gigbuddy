@@ -188,7 +188,7 @@ router.post('/', async (req, res) => {
       body: [gig.venue, gig.city, toDateStr(gig.event_date)].filter(Boolean).join(' · '),
       tag: 'gig-new',
       url: '/gigs',
-    })
+    }).catch((err) => console.error('[push] sendPushToAll failed', err))
   } catch (err) {
     await client.query('ROLLBACK')
     throw err
@@ -234,7 +234,7 @@ router.patch('/:id', async (req, res) => {
       body: [updated.venue, updated.city, toDateStr(updated.event_date)].filter(Boolean).join(' · '),
       tag: 'gig-confirmed',
       url: '/gigs',
-    })
+    }).catch((err) => console.error('[push] sendPushToAll failed', err))
   }
 })
 

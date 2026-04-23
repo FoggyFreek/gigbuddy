@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/bandEvents.js', () => ({
   listBandEvents: vi.fn(),
@@ -28,11 +29,13 @@ import {
 } from '../api/bandEvents.js'
 import theme from '../theme.js'
 
-function wrap(ui) {
+function wrap(ui, { initialEntries = ['/'] } = {}) {
   return render(
-    <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
-    </ThemeProvider>
+    <MemoryRouter initialEntries={initialEntries}>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </ThemeProvider>
+    </MemoryRouter>
   )
 }
 
@@ -99,5 +102,20 @@ describe('BandEventsPage', () => {
 
     expect(deleteBandEvent).not.toHaveBeenCalled()
     expect(listBandEvents).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens the edit modal for ?open=1 and returns to the page on close', async () => {
+    const user = userEvent.setup()
+    wrap(<BandEventsPage />, { initialEntries: ['/events?open=1'] })
+
+    await waitFor(() => expect(screen.getByText('Band event')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /^close$/i }))
+
+    // Wait for the reload triggered by close to finish — only then can we confirm
+    // the modal hasn't been reopened by the ?open= effect re-firing.
+    await waitFor(() => expect(listBandEvents).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText('Band event')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /band events/i })).toBeInTheDocument()
   })
 })

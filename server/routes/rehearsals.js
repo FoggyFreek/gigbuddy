@@ -181,7 +181,7 @@ router.post('/', async (req, res) => {
       body: [rehearsal.proposed_date?.toISOString?.().slice(0, 10) ?? rehearsal.proposed_date, rehearsal.location].filter(Boolean).join(' · '),
       tag: 'rehearsal-new',
       url: '/rehearsals',
-    })
+    }).catch((err) => console.error('[push] sendPushToAll failed', err))
   } catch (err) {
     await client.query('ROLLBACK')
     throw err
@@ -241,7 +241,7 @@ router.patch('/:id', async (req, res) => {
       body: updated.proposed_date?.toISOString?.().slice(0, 10) ?? String(updated.proposed_date),
       tag: 'rehearsal-confirmed',
       url: '/rehearsals',
-    })
+    }).catch((err) => console.error('[push] sendPushToAll failed', err))
   }
 })
 

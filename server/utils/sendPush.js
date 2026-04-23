@@ -1,13 +1,24 @@
 import webpush from 'web-push'
 import pool from '../db/index.js'
 
-webpush.setVapidDetails(
+const configured = Boolean(
+  process.env.VAPID_PUBLIC_KEY &&
+  process.env.VAPID_PRIVATE_KEY &&
   process.env.VAPID_SUBJECT,
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY,
 )
 
+if (configured) {
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT,
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  )
+} else {
+  console.warn('[push] VAPID_* env vars not set — push notifications disabled')
+}
+
 export async function sendPushToAll(payload) {
+  if (!configured) return
   const { rows } = await pool.query('SELECT * FROM push_subscriptions')
   if (!rows.length) return
 
@@ -29,6 +40,12 @@ export async function sendPushToAll(payload) {
       const status = result.reason?.statusCode
       if (status === 410 || status === 404) {
         stale.push(rows[i].endpoint)
+      } else {
+        console.error('[push] send failed', {
+          endpoint: rows[i].endpoint,
+          status,
+          message: result.reason?.message,
+        })
       }
     }
   }

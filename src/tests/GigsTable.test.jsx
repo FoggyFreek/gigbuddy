@@ -96,7 +96,7 @@ describe('GigsTable', () => {
 
   it('shows dashes for missing time values', () => {
     wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
-    // Summer Festival has no start/end time — duration cell renders as "—–—"
+    // Summer Festival has no start/end time — time cell renders as "—–—"
     expect(screen.getByText('—–—')).toBeInTheDocument()
   })
 

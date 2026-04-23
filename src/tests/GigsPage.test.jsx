@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/gigs.js', () => ({
   listGigs: vi.fn(),
@@ -19,16 +20,21 @@ vi.mock('../api/availability.js', () => ({
   updateSlot: vi.fn(),
   deleteSlot: vi.fn(),
 }))
+vi.mock('../api/bandMembers.js', () => ({
+  listMembers: vi.fn().mockResolvedValue([]),
+}))
 
 import GigsPage from '../pages/GigsPage.jsx'
-import { deleteGig, listGigs } from '../api/gigs.js'
+import { deleteGig, getGig, listGigs } from '../api/gigs.js'
 import theme from '../theme.js'
 
-function wrap(ui) {
+function wrap(ui, { initialEntries = ['/'] } = {}) {
   return render(
-    <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
-    </ThemeProvider>
+    <MemoryRouter initialEntries={initialEntries}>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </ThemeProvider>
+    </MemoryRouter>
   )
 }
 
@@ -99,5 +105,40 @@ describe('GigsPage — delete flow', () => {
     const dialog = screen.getByRole('dialog')
     expect(dialog.textContent).not.toContain('this gig')
     expect(dialog.textContent).toMatch(/delete/i)
+  })
+})
+
+describe('GigsPage — ?open= query param', () => {
+  const GIG_DETAIL = {
+    ...GIGS[0],
+    booking_fee_cents: null,
+    notes: '',
+    contact_name: '',
+    contact_email: '',
+    contact_phone: '',
+    has_pa_system: false,
+    has_drumkit: false,
+    tasks: [],
+    participants: [],
+  }
+
+  beforeEach(() => {
+    listGigs.mockClear()
+    listGigs.mockResolvedValue(GIGS)
+    getGig.mockClear()
+    getGig.mockResolvedValue(GIG_DETAIL)
+  })
+
+  it('opens the edit modal for the given id and returns to the page on close', async () => {
+    const user = userEvent.setup()
+    wrap(<GigsPage />, { initialEntries: ['/gigs?open=42'] })
+
+    await waitFor(() => expect(screen.getByText('Gig details')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /^close$/i }))
+
+    await waitFor(() => expect(listGigs).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText('Gig details')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
   })
 })

@@ -27,6 +27,11 @@ export function usePushNotifications() {
 
   async function subscribe() {
     try {
+      const perm = await Notification.requestPermission()
+      if (perm !== 'granted') {
+        setStatus(perm === 'denied' ? 'denied' : 'unsubscribed')
+        return
+      }
       const reg = await navigator.serviceWorker.ready
       const { publicKey } = await getVapidPublicKey()
       const sub = await reg.pushManager.subscribe({
@@ -35,7 +40,8 @@ export function usePushNotifications() {
       })
       await saveSubscription(sub)
       setStatus('subscribed')
-    } catch {
+    } catch (err) {
+      console.error('[push] subscribe failed', err)
       setStatus(Notification.permission === 'denied' ? 'denied' : 'unsubscribed')
     }
   }
@@ -49,8 +55,8 @@ export function usePushNotifications() {
         await sub.unsubscribe()
       }
       setStatus('unsubscribed')
-    } catch {
-      // leave status as-is
+    } catch (err) {
+      console.error('[push] unsubscribe failed', err)
     }
   }
 

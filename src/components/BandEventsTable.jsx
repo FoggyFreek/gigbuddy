@@ -13,11 +13,13 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
+import ShareIcon from '@mui/icons-material/Share'
+import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 
-const COLUMN_COUNT = 6
+const COLUMN_COUNT = 5
 
 function formatDate(val) {
   if (!val) return '—'
@@ -40,6 +42,15 @@ function formatTime(val) {
   return String(val).slice(0, 5)
 }
 
+function formatTimeRange(start, end) {
+  if (!start && !end) return '—'
+  const s = formatTime(start)
+  const e = formatTime(end)
+  if (!end) return s
+  if (!start) return e
+  return `${s} – ${e}`
+}
+
 function isPastEvent(event) {
   const val = event.end_date || event.start_date
   if (!val) return false
@@ -49,7 +60,7 @@ function isPastEvent(event) {
   return d < today
 }
 
-function EventCard({ event, onClick, onDelete }) {
+function EventCard({ event, onClick, onDelete, onShare }) {
   return (
     <Box
       onClick={onClick}
@@ -69,8 +80,7 @@ function EventCard({ event, onClick, onDelete }) {
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {formatDateRange(event.start_date, event.end_date)}
-            {event.start_time ? ` · ${formatTime(event.start_time)}` : ''}
-            {event.end_time ? ` – ${formatTime(event.end_time)}` : ''}
+            {event.start_time || event.end_time ? ` (${formatTimeRange(event.start_time, event.end_time)})` : ''}
           </Typography>
           {event.location && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
@@ -78,6 +88,14 @@ function EventCard({ event, onClick, onDelete }) {
             </Typography>
           )}
         </Box>
+        <IconButton
+          size="small"
+          aria-label="share event"
+          onClick={(e) => { e.stopPropagation(); onShare?.(event) }}
+          sx={{ mt: -0.5 }}
+        >
+          <ShareIcon fontSize="small" />
+        </IconButton>
         <IconButton
           size="small"
           aria-label="delete event"
@@ -91,17 +109,23 @@ function EventCard({ event, onClick, onDelete }) {
   )
 }
 
-function DesktopRow({ event, onClick, onDelete }) {
+function DesktopRow({ event, onClick, onDelete, onShare }) {
   return (
     <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
       <TableCell>{formatDateRange(event.start_date, event.end_date)}</TableCell>
-      <TableCell>
-        <Chip label={event.title} size="small" color="warning" />
-      </TableCell>
-      <TableCell>{formatTime(event.start_time)}</TableCell>
-      <TableCell>{formatTime(event.end_time)}</TableCell>
+      <TableCell>{event.title}</TableCell>
+      <TableCell>{formatTimeRange(event.start_time, event.end_time)}</TableCell>
       <TableCell>{event.location || '—'}</TableCell>
       <TableCell align="right" padding="none" sx={{ pr: 1 }}>
+        <Tooltip title="Share via WhatsApp">
+          <IconButton
+            size="small"
+            aria-label="share event"
+            onClick={(e) => { e.stopPropagation(); onShare?.(event) }}
+          >
+            <ShareIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <IconButton
           size="small"
           aria-label="delete event"
@@ -120,8 +144,7 @@ function DesktopHead() {
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
         <TableCell>Date</TableCell>
         <TableCell>Title</TableCell>
-        <TableCell>Start</TableCell>
-        <TableCell>End</TableCell>
+        <TableCell>Time</TableCell>
         <TableCell>Location</TableCell>
         <TableCell />
       </TableRow>
@@ -157,7 +180,7 @@ function PastHeader({ open, count, onToggle }) {
   )
 }
 
-export default function BandEventsTable({ events, onRowClick, onDelete }) {
+export default function BandEventsTable({ events, onRowClick, onDelete, onShare }) {
   const [pastOpen, setPastOpen] = useState(false)
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
@@ -180,7 +203,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete }) {
             </Box>
           ) : (
             upcoming.map((e) => (
-              <EventCard key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} />
+              <EventCard key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
             ))
           )}
         </Paper>
@@ -190,7 +213,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete }) {
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((e) => (
-                  <EventCard key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} />
+                  <EventCard key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
                 ))}
               </Box>
             </Collapse>
@@ -221,7 +244,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete }) {
               </TableRow>
             )}
             {upcoming.map((e) => (
-              <DesktopRow key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} />
+              <DesktopRow key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
             ))}
           </TableBody>
         </Table>
@@ -235,7 +258,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete }) {
                 <DesktopHead />
                 <TableBody>
                   {past.map((e) => (
-                    <DesktopRow key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} />
+                    <DesktopRow key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
                   ))}
                 </TableBody>
               </Table>
