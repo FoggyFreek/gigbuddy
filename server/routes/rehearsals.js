@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { sendPushToAll } from '../utils/sendPush.js'
 
 const router = Router()
 
@@ -173,7 +174,14 @@ router.post('/', async (req, res) => {
     await client.query('COMMIT')
 
     const byRehearsal = await loadParticipants([rehearsal.id])
-    res.status(201).json({ ...rehearsal, participants: byRehearsal.get(rehearsal.id) || [] })
+    const result = { ...rehearsal, participants: byRehearsal.get(rehearsal.id) || [] }
+    res.status(201).json(result)
+    sendPushToAll({
+      title: 'New rehearsal option',
+      body: [rehearsal.proposed_date?.toISOString?.().slice(0, 10) ?? rehearsal.proposed_date, rehearsal.location].filter(Boolean).join(' · '),
+      tag: 'rehearsal-new',
+      url: '/rehearsals',
+    })
   } catch (err) {
     await client.query('ROLLBACK')
     throw err
@@ -225,7 +233,16 @@ router.patch('/:id', async (req, res) => {
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
   const byRehearsal = await loadParticipants([id])
-  res.json({ ...rows[0], participants: byRehearsal.get(id) || [] })
+  const updated = rows[0]
+  res.json({ ...updated, participants: byRehearsal.get(id) || [] })
+  if (updated.status === 'planned' && req.body.status === 'planned') {
+    sendPushToAll({
+      title: 'Rehearsal confirmed!',
+      body: updated.proposed_date?.toISOString?.().slice(0, 10) ?? String(updated.proposed_date),
+      tag: 'rehearsal-confirmed',
+      url: '/rehearsals',
+    })
+  }
 })
 
 // Delete rehearsal

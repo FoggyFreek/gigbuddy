@@ -11,6 +11,7 @@ import TasksPage from './pages/TasksPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import PendingApprovalPage from './pages/PendingApprovalPage.jsx'
 import MembersPage from './pages/MembersPage.jsx'
+import EmailTemplatesPage from './pages/EmailTemplatesPage.jsx'
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/rehearsals" element={<RehearsalsPage />} />
           <Route path="/events" element={<BandEventsPage />} />
           <Route path="/availability" element={<AvailabilityPage />} />
+          <Route path="/email-templates" element={<EmailTemplatesPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="/members" element={<MembersPage />} />
           </Route>

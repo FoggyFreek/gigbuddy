@@ -47,16 +47,10 @@ const GIGS = [
 ]
 
 describe('GigsPage — delete flow', () => {
-  let confirmSpy
-
   beforeEach(() => {
     listGigs.mockReset()
     listGigs.mockResolvedValue(GIGS)
     deleteGig.mockClear()
-  })
-
-  afterEach(() => {
-    confirmSpy?.mockRestore()
   })
 
   it('renders header, Add button, and loaded gigs', async () => {
@@ -66,45 +60,44 @@ describe('GigsPage — delete flow', () => {
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
   })
 
-  it('calls deleteGig and reloads when delete is confirmed', async () => {
+  it('calls deleteGig and reloads when delete is confirmed in the dialog', async () => {
     const user = userEvent.setup()
-    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     wrap(<GigsPage />)
     await waitFor(() => expect(listGigs).toHaveBeenCalledTimes(1))
     await waitFor(() => screen.getByText('Jazz Night'))
 
     await user.click(screen.getByRole('button', { name: /delete gig/i }))
+    expect(screen.getByText(/delete gig\?/i)).toBeInTheDocument()
 
-    expect(confirmSpy).toHaveBeenCalledWith('Delete "Jazz Night"?')
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
+
     await waitFor(() => expect(deleteGig).toHaveBeenCalledWith(42))
     await waitFor(() => expect(listGigs).toHaveBeenCalledTimes(2))
   })
 
-  it('does not call deleteGig when user cancels the confirmation', async () => {
+  it('does not call deleteGig when Cancel is clicked in the dialog', async () => {
     const user = userEvent.setup()
-    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     wrap(<GigsPage />)
     await waitFor(() => screen.getByText('Jazz Night'))
 
     await user.click(screen.getByRole('button', { name: /delete gig/i }))
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
 
-    expect(confirmSpy).toHaveBeenCalled()
     expect(deleteGig).not.toHaveBeenCalled()
     expect(listGigs).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back to the formatted date when the gig has no description', async () => {
+  it('shows the formatted date in the dialog when the gig has no description', async () => {
     listGigs.mockResolvedValue([{ ...GIGS[0], id: 7, event_description: null }])
-    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const user = userEvent.setup()
     wrap(<GigsPage />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /delete gig/i })).toBeInTheDocument())
+    await waitFor(() => screen.getByRole('button', { name: /delete gig/i }))
 
     await user.click(screen.getByRole('button', { name: /delete gig/i }))
 
-    expect(confirmSpy).toHaveBeenCalled()
-    const prompt = confirmSpy.mock.calls[0][0]
-    expect(prompt).toMatch(/^Delete ".+"\?$/)
-    expect(prompt).not.toContain('this gig')
+    // Dialog should show a date string, not "this gig"
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).not.toContain('this gig')
+    expect(dialog.textContent).toMatch(/delete/i)
   })
 })

@@ -6,6 +6,8 @@ import bandMembersRouter from './bandMembers.js'
 import availabilityRouter from './availability.js'
 import rehearsalsRouter from './rehearsals.js'
 import bandEventsRouter from './bandEvents.js'
+import emailTemplatesRouter from './emailTemplates.js'
+import pushRouter from './push.js'
 import authRouter from './auth.js'
 import usersRouter from './users.js'
 import { requireApproved, requireAdmin } from '../middleware/auth.js'
@@ -28,5 +30,7 @@ router.use('/band-members', requireApproved, bandMembersRouter)
 router.use('/availability', requireApproved, availabilityRouter)
 router.use('/rehearsals', requireApproved, rehearsalsRouter)
 router.use('/band-events', requireApproved, bandEventsRouter)
+router.use('/email-templates', requireApproved, emailTemplatesRouter)
+router.use('/push', requireApproved, pushRouter)
 
 export default router

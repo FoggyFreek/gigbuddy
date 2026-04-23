@@ -75,17 +75,23 @@ describe('RehearsalsTable', () => {
     expect(screen.getByText('option')).toBeInTheDocument()
   })
 
-  it('renders a progress tally for each rehearsal', () => {
+  it('renders a yes · no · pending tally for each rehearsal', () => {
     wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={() => {}} />)
-    // Planned row: 2/2; option row: 1/2
-    expect(screen.getByText('2/2')).toBeInTheDocument()
-    expect(screen.getByText('1/2')).toBeInTheDocument()
+    // The tally is split across colored <span> children inside a Typography caption <span>.
+    // Narrow to SPAN elements so ancestor td/div matches are excluded.
+    // Planned row: 2 yes, 0 no, 0 pending; Option row: 1 yes, 0 no, 1 pending
+    const byTallySpan = (t) => (_, el) => el?.tagName === 'SPAN' && el?.textContent?.trim() === t
+    expect(screen.getByText(byTallySpan('2 · 0 · 0'))).toBeInTheDocument()
+    expect(screen.getByText(byTallySpan('1 · 0 · 1'))).toBeInTheDocument()
   })
 
-  it('shows a progress bar element per row', () => {
-    const { container } = wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={() => {}} />)
-    const bars = container.querySelectorAll('[role="progressbar"]')
-    expect(bars.length).toBeGreaterThanOrEqual(2)
+  it('renders a visual progress bar for each rehearsal', () => {
+    wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={() => {}} />)
+    // Each rehearsal with participants renders one tally span
+    const tallySpan = (_, el) =>
+      el?.tagName === 'SPAN' && /^\d+ · \d+ · \d+$/.test(el?.textContent?.trim() ?? '')
+    const tallies = screen.getAllByText(tallySpan)
+    expect(tallies.length).toBeGreaterThanOrEqual(2)
   })
 
   it('calls onRowClick with the rehearsal on row click', async () => {

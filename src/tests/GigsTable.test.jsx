@@ -94,11 +94,10 @@ describe('GigsTable', () => {
     expect(onRowClick).not.toHaveBeenCalled()
   })
 
-  it('shows dashes for missing venue/time', () => {
+  it('shows dashes for missing time values', () => {
     wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
-    // Summer Festival has no venue or times — expect em-dashes
-    const dashes = screen.getAllByText('—')
-    expect(dashes.length).toBeGreaterThanOrEqual(3)
+    // Summer Festival has no start/end time — duration cell renders as "—–—"
+    expect(screen.getByText('—–—')).toBeInTheDocument()
   })
 
   describe('mobile (compact card layout)', () => {

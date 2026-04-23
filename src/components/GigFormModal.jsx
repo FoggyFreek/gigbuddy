@@ -21,7 +21,9 @@ import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
@@ -119,6 +121,14 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
   const [addMemberId, setAddMemberId] = useState('')
   const [availabilityData, setAvailabilityData] = useState(null)
   const [confirmCreate, setConfirmCreate] = useState(false)
+  const [emailCopied, setEmailCopied] = useState(false)
+
+  const handleCopyEmail = () => {
+    if (!form.contact_email) return
+    navigator.clipboard.writeText(form.contact_email)
+    setEmailCopied(true)
+    setTimeout(() => setEmailCopied(false), 1500)
+  }
 
   const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
   const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
@@ -378,6 +388,19 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                 fullWidth
                 value={form.contact_email}
                 onChange={(e) => handleChange('contact_email', e.target.value)}
+                slotProps={{
+                  input: {
+                    endAdornment: form.contact_email ? (
+                      <InputAdornment position="end">
+                        <Tooltip title={emailCopied ? 'Copied!' : 'Copy email'}>
+                          <IconButton size="small" onClick={handleCopyEmail} edge="end">
+                            <ContentCopyIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ) : null,
+                  },
+                }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>

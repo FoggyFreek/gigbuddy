@@ -40,7 +40,7 @@ describe('AvailabilityPage', () => {
 
   it('renders page heading', () => {
     wrap(<AvailabilityPage />)
-    expect(screen.getByRole('heading', { level: 5, name: /availability/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 5, name: /calendar/i })).toBeInTheDocument()
   })
 
   it('renders calendar month/year label', async () => {

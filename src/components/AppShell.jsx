@@ -15,6 +15,7 @@ import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import ChecklistIcon from '@mui/icons-material/Checklist'
+import EmailIcon from '@mui/icons-material/Email'
 import EventIcon from '@mui/icons-material/Event'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import EventNoteIcon from '@mui/icons-material/EventNote'
@@ -22,9 +23,13 @@ import GroupIcon from '@mui/icons-material/Group'
 import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
+import NotificationsIcon from '@mui/icons-material/Notifications'
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
+import NotificationsOffIcon from '@mui/icons-material/NotificationsOff'
 import PersonIcon from '@mui/icons-material/Person'
 import { useProfile } from '../contexts/profileContext.js'
 import { useAuth } from '../contexts/authContext.js'
+import { usePushNotifications } from '../hooks/usePushNotifications.js'
 
 const DRAWER_WIDTH = 220
 
@@ -35,6 +40,7 @@ const BASE_NAV_ITEMS = [
   { to: '/events', label: 'Band Events', icon: EventNoteIcon },
   { to: '/tasks', label: 'Tasks', icon: ChecklistIcon },
   { to: '/availability', label: 'Calendar', icon: EventAvailableIcon },
+  { to: '/email-templates', label: 'Email Templates', icon: EmailIcon },
 ]
 
 const ADMIN_NAV_ITEMS = [
@@ -45,6 +51,7 @@ export default function AppShell() {
   const { pathname } = useLocation()
   const { bandName } = useProfile()
   const { user, logout } = useAuth()
+  const { status: pushStatus, subscribe, unsubscribe } = usePushNotifications()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -109,7 +116,7 @@ export default function AppShell() {
               <MenuIcon />
             </IconButton>
           )}
-          <MusicNoteIcon color="primary" sx={{ mr: 1 }} />
+          <Box component="img" src="/icons/gigbuddy_logo_pick.png" alt="gigBuddy" sx={{ height: 32, width: 'auto', mr: 1 }} />
           <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
             <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.1 }}>
               gigBuddy
@@ -128,6 +135,33 @@ export default function AppShell() {
               >
                 {user.name?.[0]}
               </Avatar>
+            </Tooltip>
+          )}
+          {pushStatus !== 'unsupported' && pushStatus !== 'loading' && (
+            <Tooltip
+              title={
+                pushStatus === 'subscribed'
+                  ? 'Notifications on — click to turn off'
+                  : pushStatus === 'denied'
+                  ? 'Notifications blocked in browser'
+                  : 'Enable notifications'
+              }
+            >
+              <span>
+                <IconButton
+                  onClick={pushStatus === 'subscribed' ? unsubscribe : subscribe}
+                  disabled={pushStatus === 'denied'}
+                  aria-label="toggle notifications"
+                >
+                  {pushStatus === 'subscribed' ? (
+                    <NotificationsIcon />
+                  ) : pushStatus === 'denied' ? (
+                    <NotificationsOffIcon />
+                  ) : (
+                    <NotificationsNoneIcon />
+                  )}
+                </IconButton>
+              </span>
             </Tooltip>
           )}
           <Tooltip title="Log out">

@@ -202,7 +202,7 @@ export default function AvailabilityCalendar({
             bgcolor = 'transparent'
           } else if (isSelected) bgcolor = 'action.selected'
           else if (!inMonth) bgcolor = 'action.hover'
-          else if (isWeekend) bgcolor = 'grey.200'
+          else if (isWeekend) bgcolor = 'background.paper'
 
           return (
             <React.Fragment key={iso}>

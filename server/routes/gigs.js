@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { sendPushToAll } from '../utils/sendPush.js'
 
 const router = Router()
 
@@ -182,6 +183,12 @@ router.post('/', async (req, res) => {
 
     await client.query('COMMIT')
     res.status(201).json(gig)
+    sendPushToAll({
+      title: 'New gig option',
+      body: [gig.venue, gig.city, toDateStr(gig.event_date)].filter(Boolean).join(' · '),
+      tag: 'gig-new',
+      url: '/gigs',
+    })
   } catch (err) {
     await client.query('ROLLBACK')
     throw err
@@ -219,7 +226,16 @@ router.patch('/:id', async (req, res) => {
     values
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  res.json(rows[0])
+  const updated = rows[0]
+  res.json(updated)
+  if (req.body.status === 'confirmed') {
+    sendPushToAll({
+      title: 'Gig confirmed!',
+      body: [updated.venue, updated.city, toDateStr(updated.event_date)].filter(Boolean).join(' · '),
+      tag: 'gig-confirmed',
+      url: '/gigs',
+    })
+  }
 })
 
 // Delete gig
