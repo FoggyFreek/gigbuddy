@@ -19,6 +19,8 @@ const TASKS = [
     created_at: '2026-04-01T00:00:00.000Z',
     event_description: 'Jazz Night',
     event_date: '2026-06-15T00:00:00.000Z',
+    assigned_to: 1,
+    assigned_to_name: 'Alice',
   },
   {
     id: 11,
@@ -29,6 +31,8 @@ const TASKS = [
     created_at: '2026-04-02T00:00:00.000Z',
     event_description: 'Summer Festival',
     event_date: '2026-07-01T00:00:00.000Z',
+    assigned_to: null,
+    assigned_to_name: null,
   },
 ]
 
@@ -39,6 +43,18 @@ describe('TasksTable', () => {
     expect(screen.getByText('Title')).toBeInTheDocument()
     expect(screen.getByText('Due date')).toBeInTheDocument()
     expect(screen.getByText('Gig')).toBeInTheDocument()
+    expect(screen.getByText('Assigned to')).toBeInTheDocument()
+  })
+
+  it('shows assigned member name in row', () => {
+    wrap(<TasksTable tasks={TASKS} onRowClick={() => {}} onToggleDone={() => {}} />)
+    expect(screen.getByText('Alice')).toBeInTheDocument()
+  })
+
+  it('shows dash when task is unassigned', () => {
+    wrap(<TasksTable tasks={TASKS} onRowClick={() => {}} onToggleDone={() => {}} />)
+    const dashes = screen.getAllByText('—')
+    expect(dashes.length).toBeGreaterThan(0)
   })
 
   it('shows empty state when no tasks', () => {

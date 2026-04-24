@@ -7,19 +7,24 @@ import theme from '../theme.js'
 
 vi.mock('../api/gigs.js', () => ({
   createTask: vi.fn().mockImplementation((_gigId, body) =>
-    Promise.resolve({ id: 99, gig_id: _gigId, title: body.title, done: false, due_date: body.due_date || null })
+    Promise.resolve({ id: 99, gig_id: _gigId, title: body.title, done: false, due_date: body.due_date || null, assigned_to: null })
   ),
   updateTask: vi.fn().mockImplementation((_gigId, taskId, body) =>
-    Promise.resolve({ id: taskId, gig_id: _gigId, title: 'Book sound engineer', done: body.done ?? false, due_date: null })
+    Promise.resolve({ id: taskId, gig_id: _gigId, title: 'Book sound engineer', done: body.done ?? false, due_date: null, assigned_to: body.assigned_to ?? null })
   ),
   deleteTask: vi.fn().mockResolvedValue(null),
 }))
 
 import { createTask, deleteTask, updateTask } from '../api/gigs.js'
 
+const MEMBERS = [
+  { id: 1, name: 'Alice' },
+  { id: 2, name: 'Bob' },
+]
+
 const INITIAL_TASKS = [
-  { id: 1, gig_id: 42, title: 'Book sound engineer', done: false, due_date: '2026-06-01' },
-  { id: 2, gig_id: 42, title: 'Send invoice', done: true, due_date: null },
+  { id: 1, gig_id: 42, title: 'Book sound engineer', done: false, due_date: '2026-06-01', assigned_to: null },
+  { id: 2, gig_id: 42, title: 'Send invoice', done: true, due_date: null, assigned_to: 1 },
 ]
 
 function wrap(ui) {
@@ -89,5 +94,29 @@ describe('GigTasks', () => {
     const taskDeleteBtns = allButtons.slice(-2)
     await user.click(taskDeleteBtns[0])
     await waitFor(() => expect(deleteTask).toHaveBeenCalled())
+  })
+
+  it('renders assignment selects with member names when members are provided', () => {
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} />)
+    const selects = screen.getAllByRole('combobox')
+    expect(selects.length).toBe(INITIAL_TASKS.length)
+  })
+
+  it('calls updateTask with assigned_to when a member is selected', async () => {
+    const user = userEvent.setup()
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} />)
+
+    const selects = screen.getAllByRole('combobox')
+    await user.click(selects[0])
+    const option = await screen.findByRole('option', { name: 'Alice' })
+    await user.click(option)
+    await waitFor(() =>
+      expect(updateTask).toHaveBeenCalledWith(42, 1, { assigned_to: 1 })
+    )
+  })
+
+  it('does not render assignment selects when no members are provided', () => {
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0)
   })
 })

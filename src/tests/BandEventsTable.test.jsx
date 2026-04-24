@@ -41,8 +41,7 @@ describe('BandEventsTable', () => {
     wrap(<BandEventsTable events={[]} onRowClick={() => {}} />)
     expect(screen.getByText('Date')).toBeInTheDocument()
     expect(screen.getByText('Title')).toBeInTheDocument()
-    expect(screen.getByText('Start')).toBeInTheDocument()
-    expect(screen.getByText('End')).toBeInTheDocument()
+    expect(screen.getByText('Time')).toBeInTheDocument()
     expect(screen.getByText('Location')).toBeInTheDocument()
   })
 
@@ -61,7 +60,7 @@ describe('BandEventsTable', () => {
   it('shows dashes for missing times/location', () => {
     wrap(<BandEventsTable events={EVENTS} onRowClick={() => {}} />)
     const dashes = screen.getAllByText('—')
-    expect(dashes.length).toBeGreaterThanOrEqual(3)
+    expect(dashes.length).toBeGreaterThanOrEqual(2)
   })
 
   it('calls onRowClick with the event when a row is clicked', async () => {

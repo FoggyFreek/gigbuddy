@@ -17,11 +17,7 @@ if (configured) {
   console.warn('[push] VAPID_* env vars not set — push notifications disabled')
 }
 
-export async function sendPushToAll(payload) {
-  if (!configured) return
-  const { rows } = await pool.query('SELECT * FROM push_subscriptions')
-  if (!rows.length) return
-
+async function fanOut(rows, payload) {
   const notification = JSON.stringify(payload)
   const stale = []
 
@@ -53,4 +49,26 @@ export async function sendPushToAll(payload) {
   if (stale.length) {
     await pool.query('DELETE FROM push_subscriptions WHERE endpoint = ANY($1)', [stale])
   }
+}
+
+export async function sendPushToAll(payload) {
+  if (!configured) return
+  const { rows } = await pool.query('SELECT * FROM push_subscriptions')
+  if (!rows.length) return
+  await fanOut(rows, payload)
+}
+
+export async function sendPushToMember(bandMemberId, payload) {
+  if (!configured) return
+  const { rows: members } = await pool.query(
+    'SELECT user_id FROM band_members WHERE id = $1 AND user_id IS NOT NULL',
+    [bandMemberId]
+  )
+  if (!members.length) return
+  const { rows } = await pool.query(
+    'SELECT * FROM push_subscriptions WHERE user_id = $1',
+    [members[0].user_id]
+  )
+  if (!rows.length) return
+  await fanOut(rows, payload)
 }

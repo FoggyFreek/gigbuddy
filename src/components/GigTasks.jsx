@@ -2,6 +2,8 @@ import { useState } from 'react'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
 import IconButton from '@mui/material/IconButton'
+import MenuItem from '@mui/material/MenuItem'
+import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -14,7 +16,7 @@ function toDateInputValue(val) {
   return String(val).slice(0, 10)
 }
 
-export default function GigTasks({ gigId, initialTasks = [] }) {
+export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
   const [tasks, setTasks] = useState(initialTasks)
   const [newTitle, setNewTitle] = useState('')
   const [newDue, setNewDue] = useState('')
@@ -44,10 +46,15 @@ export default function GigTasks({ gigId, initialTasks = [] }) {
     setTasks((prev) => prev.filter((t) => t.id !== taskId))
   }
 
+  async function handleAssign(task, value) {
+    const updated = await updateTask(gigId, task.id, { assigned_to: value || null })
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)))
+  }
+
   return (
     <Box>
       {/* Add row */}
-      <Stack direction="row" spacing={1} sx={{ mb: 1 }} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
         <TextField
           placeholder="New task…"
           size="small"
@@ -135,6 +142,21 @@ export default function GigTasks({ gigId, initialTasks = [] }) {
               },
             }}
           />
+          {members.length > 0 && (
+            <Select
+              size="small"
+              value={task.assigned_to ?? ''}
+              onChange={(e) => handleAssign(task, e.target.value)}
+              displayEmpty
+              inputProps={{ 'aria-label': `Assign ${task.title}` }}
+              sx={{ flexShrink: 0, width: 150, order: { xs: 4, sm: 3 } }}
+            >
+              <MenuItem value=""><em>Unassigned</em></MenuItem>
+              {members.map((m) => (
+                <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
+              ))}
+            </Select>
+          )}
           <IconButton
             size="small"
             onClick={() => handleDelete(task.id)}

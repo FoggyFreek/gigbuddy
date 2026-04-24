@@ -535,7 +535,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                 <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
                   Tasks
                 </Typography>
-                <GigTasks gigId={gigId} initialTasks={initialTasks} />
+                <GigTasks gigId={gigId} initialTasks={initialTasks} members={members} />
               </Grid>
             )}
 

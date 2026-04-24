@@ -41,4 +41,10 @@ export default defineConfig([
       globals: globals.serviceworker,
     },
   },
+  {
+    files: ['src/tests/sendPush.test.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ])

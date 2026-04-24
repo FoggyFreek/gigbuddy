@@ -160,11 +160,11 @@ export default function AvailabilityCalendar({
   }, {})
   return (
     <Box sx={{ maxWidth: 1024, mx: 'auto' }}>
-      <Stack direction="column" alignItems="center" sx={{ mb: 1 }}>
+      <Stack direction="column" sx={{ mb: 1, alignItems: 'center' }}>
         <Typography variant="caption" fontWeight={600} color="text.secondary">
           {year}
         </Typography>
-        <Stack direction="row" alignItems="center" sx={{ width: '100%' }}>
+        <Stack direction="row" sx={{ width: '100%', alignItems: 'center' }}>
           <IconButton size="small" onClick={onPrev} aria-label="previous month">
             <ChevronLeftIcon />
           </IconButton>

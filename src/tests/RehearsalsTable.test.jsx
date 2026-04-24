@@ -75,23 +75,16 @@ describe('RehearsalsTable', () => {
     expect(screen.getByText('option')).toBeInTheDocument()
   })
 
-  it('renders a yes · no · pending tally for each rehearsal', () => {
+  it('renders a visual progress bar for each rehearsal with participants', () => {
     wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={() => {}} />)
-    // The tally is split across colored <span> children inside a Typography caption <span>.
-    // Narrow to SPAN elements so ancestor td/div matches are excluded.
-    // Planned row: 2 yes, 0 no, 0 pending; Option row: 1 yes, 0 no, 1 pending
-    const byTallySpan = (t) => (_, el) => el?.tagName === 'SPAN' && el?.textContent?.trim() === t
-    expect(screen.getByText(byTallySpan('2 · 0 · 0'))).toBeInTheDocument()
-    expect(screen.getByText(byTallySpan('1 · 0 · 1'))).toBeInTheDocument()
+    const bars = screen.getAllByTestId('participant-progress')
+    expect(bars.length).toBeGreaterThanOrEqual(REHEARSALS.length)
   })
 
-  it('renders a visual progress bar for each rehearsal', () => {
+  it('renders one progress bar per rehearsal row', () => {
     wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={() => {}} />)
-    // Each rehearsal with participants renders one tally span
-    const tallySpan = (_, el) =>
-      el?.tagName === 'SPAN' && /^\d+ · \d+ · \d+$/.test(el?.textContent?.trim() ?? '')
-    const tallies = screen.getAllByText(tallySpan)
-    expect(tallies.length).toBeGreaterThanOrEqual(2)
+    const bars = screen.getAllByTestId('participant-progress')
+    expect(bars.length).toBe(REHEARSALS.length)
   })
 
   it('calls onRowClick with the rehearsal on row click', async () => {

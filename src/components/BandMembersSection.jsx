@@ -57,7 +57,7 @@ export default function BandMembersSection() {
 
   return (
     <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+      <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="subtitle1" fontWeight={600}>
           Band members
         </Typography>
@@ -167,7 +167,7 @@ function BandMemberRow({ member, sectionEditing, onChange, onDelete }) {
 
   if (!editing) {
     return (
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <Box
           sx={{
             width: 16, height: 16, borderRadius: '50%',
@@ -175,19 +175,19 @@ function BandMemberRow({ member, sectionEditing, onChange, onDelete }) {
           }}
         />
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" spacing={0.75} alignItems="center">
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
             <Typography variant="body2" fontWeight={500}>{member.name}</Typography>
             {member.role && (
               <Typography variant="caption" color="text.secondary">({member.role})</Typography>
             )}
-            <Chip
-              label={POSITION_LABELS[member.position] ?? member.position}
-              color={POSITION_COLORS[member.position] ?? 'default'}
-              size="small"
-              sx={{ height: 18, fontSize: '0.65rem' }}
-            />
           </Stack>
         </Box>
+        <Chip
+          label={POSITION_LABELS[member.position] ?? member.position}
+          color={POSITION_COLORS[member.position] ?? 'default'}
+          size="small"
+          sx={{ height: 18, fontSize: '0.65rem' }}
+        />
         {sectionEditing && (
           <>
             <Tooltip title="Edit member">
@@ -208,7 +208,7 @@ function BandMemberRow({ member, sectionEditing, onChange, onDelete }) {
 
   return (
     <Stack spacing={1}>
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <TextField
           label="Name"
           size="small"

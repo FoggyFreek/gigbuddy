@@ -66,7 +66,7 @@ function ParticipantProgress({ participants }) {
   const noPct = (no / total) * 100
   const pendingPct = (pending / total) * 100
   return (
-    <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: 'grey.300' }}>
+    <Box data-testid="participant-progress" sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: 'grey.300' }}>
       {yes > 0 && <Box sx={{ width: `${yesPct}%`, bgcolor: 'success.main' }} />}
       {no > 0 && <Box sx={{ width: `${noPct}%`, bgcolor: 'error.main' }} />}
       {pending > 0 && <Box sx={{ width: `${pendingPct}%`, bgcolor: 'grey.300' }} />}

@@ -140,12 +140,12 @@ export default function ProfilePage() {
         <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
       </Box>
 
-      <Grid container spacing={3} sx={{ mb: 3 }} alignItems="flex-start">
+      <Grid container spacing={3} sx={{ mb: 3, alignItems: 'flex-start' }}>
       <Grid size={{ xs: 12, lg: 8 }}>
       <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+        <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="subtitle1" fontWeight={600}>
-            Band identity
+            Details
           </Typography>
           <Button
             size="small"
@@ -199,10 +199,10 @@ export default function ProfilePage() {
       </Grid>
       </Grid>
 
-      <Grid container spacing={3} sx={{ mb: 3 }} alignItems="flex-start">
+      <Grid container spacing={3} sx={{ mb: 3, alignItems: 'flex-start' }}>
       <Grid size={{ xs: 12, lg: 6 }}>
       <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+        <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="subtitle1" fontWeight={600}>
             Social profiles
           </Typography>
@@ -226,7 +226,7 @@ export default function ProfilePage() {
             if (!editingSocials) {
               return (
                 <Grid key={social.field} size={{ xs: 12, sm: 6 }}>
-                  <Stack direction="row" alignItems="center" spacing={1.5} sx={{ py: 0.5 }}>
+                  <Stack direction="row" spacing={1.5} sx={{ py: 0.5, alignItems: 'center' }}>
                     <Box sx={{ display: 'grid', placeItems: 'center' }}>
                       <Icon fontSize="small" color="action" />
                     </Box>
@@ -323,7 +323,7 @@ export default function ProfilePage() {
 
           <Divider />
 
-          <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
             <TextField
               label="Label"
               size="small"
@@ -372,7 +372,7 @@ function ProfileLinkRow({ link, onChange, onDelete }) {
 
   if (!editing) {
     return (
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <Box sx={{ display: 'grid', placeItems: 'center' }}>
           <LinkIcon color="action" />
         </Box>
@@ -411,7 +411,7 @@ function ProfileLinkRow({ link, onChange, onDelete }) {
   }
 
   return (
-    <Stack direction="row" spacing={1} alignItems="center">
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
       <Box sx={{ display: 'grid', placeItems: 'center' }}>
         <LinkIcon color="action" />
       </Box>

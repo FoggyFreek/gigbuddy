@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
-import { sendPushToAll } from '../utils/sendPush.js'
+import { sendPushToAll, sendPushToMember } from '../utils/sendPush.js'
 
 const router = Router()
 
@@ -265,7 +265,7 @@ router.post('/:id/tasks', async (req, res) => {
 router.patch('/:id/tasks/:taskId', async (req, res) => {
   const gigId = requireId(req, res); if (gigId === null) return
   const taskId = requireTaskId(req, res); if (taskId === null) return
-  const allowed = ['title', 'done', 'due_date']
+  const allowed = ['title', 'done', 'due_date', 'assigned_to']
 
   const fields = []
   const values = []
@@ -286,6 +286,19 @@ router.patch('/:id/tasks/:taskId', async (req, res) => {
     values
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
+
+  if (req.body.assigned_to) {
+    const { rows: gigs } = await pool.query(
+      'SELECT event_description FROM gigs WHERE id = $1',
+      [gigId]
+    )
+    sendPushToMember(req.body.assigned_to, {
+      title: 'Task assigned to you',
+      body: `${rows[0].title}${gigs[0]?.event_description ? ` (${gigs[0].event_description})` : ''}`,
+      url: '/tasks',
+    }).catch((err) => console.error('[push] task assignment notify failed', err))
+  }
+
   res.json(rows[0])
 })
 
