@@ -97,9 +97,3 @@ Web Push end-to-end:
 ## Testing
 
 Tests live in `src/tests/`. All API calls are mocked with `vi.mock('../api/<resource>.js', ...)`. Components are wrapped in MUI `ThemeProvider` (and sometimes `LocalizationProvider` / `MemoryRouter`) in a local `wrap()` helper in each test file. Timer-dependent tests (`useDebouncedSave`) use `vi.useFakeTimers()` + `vi.runAllTimersAsync()`. The push-notifications hook test (`usePushNotifications.test.js`) stubs `navigator.serviceWorker`, `window.PushManager`, and `Notification` on the jsdom global.
-
-## Deployment
-
-See `INSTALL_LOG.md` for deviations and fixes encountered when deploying to the production VPS (`gigbuddy.jorisbos.nl`). Key points for future changes:
-- Node runs behind an nginx reverse proxy terminating TLS. `app.set('trust proxy', 1)` is required **before** any middleware that reads `req.secure` / `req.protocol` (session cookies with `secure: true` and OIDC callback URL reconstruction both depend on this).
-- Deploys happen via GitHub Actions on push to `main`: SSH to VPS → `git pull` → `docker compose up -d --build` → `docker compose run --rm migrate`.
