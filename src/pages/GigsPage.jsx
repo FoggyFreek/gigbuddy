@@ -16,7 +16,6 @@ import AddIcon from '@mui/icons-material/Add'
 import GigsTable from '../components/GigsTable.jsx'
 import GigFormModal from '../components/GigFormModal.jsx'
 import { deleteGig, listGigs } from '../api/gigs.js'
-import { gigShareUrl } from '../utils/shareUtils.js'
 
 export default function GigsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -111,7 +110,6 @@ export default function GigsPage() {
           gigs={statusFilter === 'all' ? gigs : gigs.filter((g) => g.status === statusFilter)}
           onRowClick={(gig) => setModal({ mode: 'edit', gigId: gig.id })}
           onDelete={handleDelete}
-          onShare={(gig) => window.open(gigShareUrl(gig), '_blank')}
         />
       )}
 

@@ -9,6 +9,7 @@ import theme from './theme.js'
 import App from './App.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { ProfileProvider } from './contexts/ProfileContext.jsx'
+import '@fontsource/bebas-neue/400.css'
 import './index.css'
 
 if ('serviceWorker' in navigator) {
