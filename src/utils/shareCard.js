@@ -29,6 +29,18 @@ export const SHARE_VARIATIONS = [
   { id: 'minimal', label: 'Minimal' },
 ]
 
+export const SHARE_STICKERS = [
+  { id: 'just-announced', label: 'Just Announced!' },
+  { id: 'coming-up', label: 'Coming Up!' },
+]
+
+export const SHARE_STICKER_POSITIONS = [
+  { id: 'left-top', label: '↖' },
+  { id: 'right-top', label: '↗' },
+  { id: 'left-bottom', label: '↙' },
+  { id: 'right-bottom', label: '↘' },
+]
+
 export function formatGigDateLong(gig) {
   if (!gig?.event_date) return ''
   return new Date(gig.event_date).toLocaleDateString('nl-NL', {
@@ -113,6 +125,18 @@ export async function copyBlobToClipboard(blob) {
     throw new Error('Clipboard image copy not supported in this browser')
   }
   await navigator.clipboard.write([new window.ClipboardItem({ [blob.type]: blob })])
+}
+
+export function formatGigRowDate(gig) {
+  if (!gig?.event_date) return ''
+  const d = new Date(gig.event_date)
+  const mon = d.toLocaleDateString('en-US', { month: 'short' })
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${mon} ${day}`
+}
+
+export function buildTourShareFilename(year, formatId) {
+  return `tour-${year}-${formatId}.png`
 }
 
 export function buildShareFilename(gig, formatId) {

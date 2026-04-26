@@ -2,19 +2,28 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Checkbox from '@mui/material/Checkbox'
+import IconButton from '@mui/material/IconButton'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import Divider from '@mui/material/Divider'
 import FormControl from '@mui/material/FormControl'
+import ListItemText from '@mui/material/ListItemText'
+import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
+import ShareIcon from '@mui/icons-material/Share'
 import GigsTable from '../components/GigsTable.jsx'
 import GigFormModal from '../components/GigFormModal.jsx'
+import TourShareDialog from '../components/TourShareDialog.jsx'
+import TourExportDialog from '../components/TourExportDialog.jsx'
 import { deleteGig, listGigs } from '../api/gigs.js'
 
 export default function GigsPage() {
@@ -25,6 +34,11 @@ export default function GigsPage() {
   const [modal, setModal] = useState(null) // null | { mode: 'create' } | { mode: 'edit', gigId: number }
   const [confirmDelete, setConfirmDelete] = useState(null) // null | gig object
   const [statusFilter, setStatusFilter] = useState('all')
+  const [tourMenuAnchor, setTourMenuAnchor] = useState(null)
+  const [tourIncludeConfirmed, setTourIncludeConfirmed] = useState(true)
+  const [tourIncludeAnnounced, setTourIncludeAnnounced] = useState(true)
+  const [tourShareOpen, setTourShareOpen] = useState(false)
+  const [tourExportOpen, setTourExportOpen] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +98,44 @@ export default function GigsPage() {
           </Select>
         </FormControl>
         <Box sx={{ flexGrow: 1 }} />
+        <Tooltip title="Share tour dates">
+          <IconButton onClick={(e) => setTourMenuAnchor(e.currentTarget)}>
+            <ShareIcon />
+          </IconButton>
+        </Tooltip>
+        <Menu
+          anchorEl={tourMenuAnchor}
+          open={!!tourMenuAnchor}
+          onClose={() => setTourMenuAnchor(null)}
+        >
+          <MenuItem onClick={() => setTourIncludeConfirmed((v) => !v)} dense>
+            <Checkbox checked={tourIncludeConfirmed} size="small" sx={{ p: 0.5 }} />
+            <ListItemText primary="Confirmed" />
+          </MenuItem>
+          <MenuItem onClick={() => setTourIncludeAnnounced((v) => !v)} dense>
+            <Checkbox checked={tourIncludeAnnounced} size="small" sx={{ p: 0.5 }} />
+            <ListItemText primary="Announced" />
+          </MenuItem>
+          <Divider />
+          <MenuItem
+            disabled={!tourIncludeConfirmed && !tourIncludeAnnounced}
+            onClick={() => { setTourMenuAnchor(null); setTourShareOpen(true) }}
+            dense
+          >
+            <Button variant="contained" size="small" fullWidth>
+              Create Tour Card
+            </Button>
+          </MenuItem>
+          <MenuItem
+            disabled={!tourIncludeConfirmed && !tourIncludeAnnounced}
+            onClick={() => { setTourMenuAnchor(null); setTourExportOpen(true) }}
+            dense
+          >
+            <Button variant="outlined" size="small" fullWidth>
+              Export tour dates
+            </Button>
+          </MenuItem>
+        </Menu>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -120,6 +172,28 @@ export default function GigsPage() {
           onClose={handleClose}
         />
       )}
+
+      <TourShareDialog
+        open={tourShareOpen}
+        onClose={() => setTourShareOpen(false)}
+        gigs={gigs
+          .filter((g) =>
+            (tourIncludeConfirmed && g.status === 'confirmed') ||
+            (tourIncludeAnnounced && g.status === 'announced'),
+          )
+          .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))}
+      />
+
+      <TourExportDialog
+        open={tourExportOpen}
+        onClose={() => setTourExportOpen(false)}
+        gigs={gigs
+          .filter((g) =>
+            (tourIncludeConfirmed && g.status === 'confirmed') ||
+            (tourIncludeAnnounced && g.status === 'announced'),
+          )
+          .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))}
+      />
 
       <Dialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)}>
         <DialogTitle>Delete gig?</DialogTitle>

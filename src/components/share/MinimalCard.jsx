@@ -7,6 +7,8 @@ import {
   SHARE_FORMATS,
   SHARE_LOGO,
 } from '../../utils/shareCard.js'
+import SocialsRow from './SocialsRow.jsx'
+import StickerOverlay from './StickerOverlay.jsx'
 
 const PAPER = '#f4efe6'
 const INK = '#111111'
@@ -84,7 +86,7 @@ function SmallCaps({ children, color = INK, size = 22, gap = 4, style }) {
   )
 }
 
-function MinimalSquare({ gig, photoSrc, pan = 0, accent }) {
+function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venueName = formatGigVenueName(gig)
@@ -141,23 +143,23 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent }) {
       <div
         style={{
           position: 'absolute',
-          top: 360,
+          top: 300,
           left: 70,
           fontFamily: '"Cooper Black", Georgia, serif',
-          fontSize: 320,
+          fontSize: 280,
           lineHeight: 0.85,
-          color: INK,
+          color: accent,
           letterSpacing: -10,
         }}
       >
         {date.day}
       </div>
       <SmallCaps
-        size={32}
+        size={52}
         gap={8}
-        style={{ position: 'absolute', top: 640, left: 84 }}
+        style={{ position: 'absolute', top: 530, left: 84 }}
       >
-        {date.month} · {date.weekday}
+        {date.month}
       </SmallCaps>
 
       {/* Title — left side */}
@@ -165,9 +167,9 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent }) {
         <div
           style={{
             position: 'absolute',
-            top: 700,
+            top: 600,
             left: 80,
-            right: 480,
+            right: 420,
             fontFamily: '"Cooper Black", Georgia, serif',
             fontSize: 78,
             lineHeight: 1.0,
@@ -194,7 +196,6 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent }) {
           gap: 18,
         }}
       >
-        <Hairline accent={accent} style={{ width: 80 }} />
         {venueName && (
           <div
             style={{
@@ -211,6 +212,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent }) {
             {city}
           </SmallCaps>
         )}
+        <SocialsRow socials={socials} iconColor={accent} textColor={SUBTLE} size={26} justify="flex-start" />
       </div>
 
       {/* Right column inside accent block — vertical info */}
@@ -260,11 +262,12 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent }) {
           filter: 'invert(1)',
         }}
       />
+      <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
     </div>
   )
 }
 
-function MinimalStory({ gig, photoSrc, pan = 0, accent }) {
+function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition }) {
   const date = formatGigDateShort(gig)
   const venueName = formatGigVenueName(gig)
   const city = formatGigCity(gig)
@@ -365,7 +368,6 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent }) {
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <SmallCaps size={28} gap={8} color={SUBTLE}>Venue</SmallCaps>
           <div style={{ fontFamily: '"Cooper Black", Georgia, serif', fontSize: 56, lineHeight: 1.05 }}>
             {venueName}
           </div>
@@ -374,8 +376,9 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent }) {
               {city}
             </SmallCaps>
           )}
+          <SocialsRow socials={socials} iconColor={accent} textColor={SUBTLE} size={26} justify="flex-start" />
         </div>
-        
+
       </div>
 
       {/* Logo top */}
@@ -392,12 +395,13 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent }) {
           height: 'auto',
         }}
       />
+      <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
     </div>
   )
 }
 
-export default function MinimalCard({ gig, photoSrc, format, pan, accent }) {
+export default function MinimalCard({ gig, photoSrc, format, pan, accent, socials, sticker, stickerPosition }) {
   return format === 'story'
-    ? <MinimalStory gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} />
-    : <MinimalSquare gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} />
+    ? <MinimalStory gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} />
+    : <MinimalSquare gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} />
 }

@@ -8,64 +8,73 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import FormControl from '@mui/material/FormControl'
-import InputLabel from '@mui/material/InputLabel'
+import FormControlLabel from '@mui/material/FormControlLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import Slider from '@mui/material/Slider'
+import Switch from '@mui/material/Switch'
 import Snackbar from '@mui/material/Snackbar'
 import Stack from '@mui/material/Stack'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
-import DownloadIcon from '@mui/icons-material/Download'
+import Typography from '@mui/material/Typography'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import GigShareCard from './GigShareCard.jsx'
-import { STICKER_CONFIGS } from './share/stickerConfigs.js'
+import DownloadIcon from '@mui/icons-material/Download'
+import TourShareCard from './share/TourShareCard.jsx'
 import { getProfile } from '../api/profile.js'
 import {
-  buildShareFilename,
+  buildTourShareFilename,
   canCopyImageToClipboard,
   copyBlobToClipboard,
   downloadBlob,
   renderNodeToBlob,
   SHARE_FORMATS,
   SHARE_PHOTOS,
-  SHARE_STICKER_POSITIONS,
-  SHARE_VARIATIONS,
   SHARE_VINTAGE_COLORS,
 } from '../utils/shareCard.js'
 
-export default function GigShareDialog({ open, onClose, gig }) {
+const NOW = new Date()
+const CURRENT_YEAR = NOW.getFullYear()
+const CURRENT_MONTH = NOW.getMonth() // 0-indexed
+
+function maxMonthsForYear(year) {
+  if (year === CURRENT_YEAR) return 12 - CURRENT_MONTH // months remaining incl. this month
+  if (year > CURRENT_YEAR) return 12
+  return 0 // previous year: all past, disable selector
+}
+
+export default function TourShareDialog({ open, onClose, gigs = [] }) {
   const [photoId, setPhotoId] = useState(SHARE_PHOTOS[0].id)
   const [format, setFormat] = useState('square')
   const [accentId, setAccentId] = useState(SHARE_VINTAGE_COLORS[0].id)
-  const [variation, setVariation] = useState(SHARE_VARIATIONS[0].id)
-  const [zoom, setZoom] = useState(100)
-  const [pan, setPan] = useState(0)
-  const [sticker, setSticker] = useState(null)
-  const [stickerPos, setStickerPos] = useState('right-top')
+  const [photoOpacity, setPhotoOpacity] = useState(35)
+  const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR)
+  const [monthsAhead, setMonthsAhead] = useState('all')
+  const [includePast, setIncludePast] = useState(false)
+  const [socials, setSocials] = useState({})
   const [busy, setBusy] = useState(false)
   const [snackbar, setSnackbar] = useState(null)
-  const [socials, setSocials] = useState({})
   const cardRef = useRef(null)
 
   const canCopy = useMemo(() => canCopyImageToClipboard(), [])
   const formatDef = SHARE_FORMATS[format]
   const photoSrc = SHARE_PHOTOS.find((p) => p.id === photoId)?.src
-  const accentColor =
-    SHARE_VINTAGE_COLORS.find((c) => c.id === accentId)?.value
-    || SHARE_VINTAGE_COLORS[0].value
+  const accentColor = SHARE_VINTAGE_COLORS.find((c) => c.id === accentId)?.value || SHARE_VINTAGE_COLORS[0].value
+
+  const today = useMemo(() => NOW.toISOString().slice(0, 10), [])
+
+  const maxMonths = maxMonthsForYear(selectedYear)
 
   useEffect(() => {
     if (open) {
       setPhotoId(SHARE_PHOTOS[0].id)
       setFormat('square')
       setAccentId(SHARE_VINTAGE_COLORS[0].id)
-      setVariation(SHARE_VARIATIONS[0].id)
-      setZoom(100)
-      setPan(0)
-      setSticker(null)
-      setStickerPos('right-top')
+      setPhotoOpacity(35)
+      setSelectedYear(CURRENT_YEAR)
+      setMonthsAhead('all')
+      setIncludePast(false)
       setBusy(false)
       getProfile().then((p) => setSocials({
         instagram: p?.instagram_handle || '',
@@ -75,16 +84,38 @@ export default function GigShareDialog({ open, onClose, gig }) {
     }
   }, [open])
 
-  // scale the 1080-wide preview to fit roughly 360px wide in the dialog
+  function handleYearChange(_, v) {
+    if (!v) return
+    setSelectedYear(v)
+    // reset months ahead if it exceeds the new year's max
+    const newMax = maxMonthsForYear(v)
+    if (monthsAhead !== 'all' && (newMax === 0 || Number(monthsAhead) > newMax)) {
+      setMonthsAhead('all')
+    }
+  }
+
+  const visibleGigs = useMemo(() => {
+    let cutoff = null
+    if (monthsAhead !== 'all') {
+      const d = new Date(NOW)
+      d.setMonth(d.getMonth() + Number(monthsAhead))
+      cutoff = d.toISOString().slice(0, 10)
+    }
+    return gigs.filter((g) => {
+      const gigDate = String(g.event_date).slice(0, 10)
+      if (new Date(g.event_date).getFullYear() !== selectedYear) return false
+      if (!includePast && gigDate < today) return false
+      if (cutoff !== null && gigDate > cutoff) return false
+      return true
+    })
+  }, [gigs, selectedYear, monthsAhead, includePast, today])
+
   const previewMaxWidth = 320
   const scale = previewMaxWidth / formatDef.width
 
   async function snapshot() {
     if (!cardRef.current) return null
-    return renderNodeToBlob(cardRef.current, {
-      width: formatDef.width,
-      height: formatDef.height,
-    })
+    return renderNodeToBlob(cardRef.current, { width: formatDef.width, height: formatDef.height })
   }
 
   async function handleDownload() {
@@ -92,7 +123,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
     try {
       const blob = await snapshot()
       if (!blob) throw new Error('Snapshot failed')
-      downloadBlob(blob, buildShareFilename(gig, format))
+      downloadBlob(blob, buildTourShareFilename(selectedYear, format))
     } catch (e) {
       setSnackbar({ severity: 'error', msg: e.message || 'Download failed' })
     } finally {
@@ -114,6 +145,14 @@ export default function GigShareDialog({ open, onClose, gig }) {
     }
   }
 
+  const monthsOptions = [
+    { value: 'all', label: 'All' },
+    ...Array.from({ length: maxMonths }, (_, i) => ({
+      value: i + 1,
+      label: `${i + 1} month${i + 1 > 1 ? 's' : ''}`,
+    })),
+  ]
+
   return (
     <>
       <Dialog
@@ -122,9 +161,11 @@ export default function GigShareDialog({ open, onClose, gig }) {
         maxWidth="md"
         onClick={(e) => e.stopPropagation()}
       >
-        <DialogTitle>Share gig as image</DialogTitle>
+        <DialogTitle>Share tour dates</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} alignItems="center">
+
+            {/* Format */}
             <ToggleButtonGroup
               value={format}
               exclusive
@@ -135,6 +176,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
               <ToggleButton value="story">Story 9:16</ToggleButton>
             </ToggleButtonGroup>
 
+            {/* Accent colors */}
             <Stack direction="row" spacing={1.25}>
               {SHARE_VINTAGE_COLORS.map((c) => {
                 const selected = c.id === accentId
@@ -160,51 +202,44 @@ export default function GigShareDialog({ open, onClose, gig }) {
               })}
             </Stack>
 
-            <ToggleButtonGroup
-              value={variation}
-              exclusive
-              size="small"
-              onChange={(_, v) => v && setVariation(v)}
-              aria-label="Card variation"
-            >
-              {SHARE_VARIATIONS.map((v) => (
-                <ToggleButton key={v.id} value={v.id}>{v.label}</ToggleButton>
-              ))}
-            </ToggleButtonGroup>
+            {/* Year + months ahead */}
+            <Stack direction="row" spacing={2} alignItems="center">
+              <ToggleButtonGroup
+                value={selectedYear}
+                exclusive
+                size="small"
+                onChange={handleYearChange}
+              >
+                <ToggleButton value={CURRENT_YEAR - 1}>{CURRENT_YEAR - 1}</ToggleButton>
+                <ToggleButton value={CURRENT_YEAR}>{CURRENT_YEAR}</ToggleButton>
+                <ToggleButton value={CURRENT_YEAR + 1}>{CURRENT_YEAR + 1}</ToggleButton>
+              </ToggleButtonGroup>
 
-            {/* overlay controls */}
-            <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="center">
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <InputLabel>Overlay</InputLabel>
+              <FormControl size="small" disabled={maxMonths === 0}>
                 <Select
-                  value={sticker ?? ''}
-                  label="Overlay"
-                  onChange={(e) => setSticker(e.target.value || null)}
+                  value={monthsAhead}
+                  onChange={(e) => setMonthsAhead(e.target.value)}
+                  sx={{ minWidth: 120 }}
                 >
-                  <MenuItem value="">None</MenuItem>
-                  {Object.keys(STICKER_CONFIGS).map((id) => (
-                    <MenuItem key={id} value={id}>
-                      {id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                    </MenuItem>
+                  {monthsOptions.map((o) => (
+                    <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              {sticker && (
-                <ToggleButtonGroup
-                  value={stickerPos}
-                  exclusive
-                  size="small"
-                  onChange={(_, v) => v && setStickerPos(v)}
-                  aria-label="Overlay position"
-                >
-                  {SHARE_STICKER_POSITIONS.map((p) => (
-                    <ToggleButton key={p.id} value={p.id}>{p.label}</ToggleButton>
-                  ))}
-                </ToggleButtonGroup>
-              )}
             </Stack>
 
-            {/* preview shell — scaled-down view of the same node we snapshot */}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={includePast}
+                  onChange={(e) => setIncludePast(e.target.checked)}
+                  size="small"
+                />
+              }
+              label={<Typography variant="caption">Include past gigs</Typography>}
+            />
+
+            {/* Preview */}
             <Box
               sx={{
                 width: previewMaxWidth,
@@ -227,54 +262,41 @@ export default function GigShareDialog({ open, onClose, gig }) {
                   transformOrigin: 'top left',
                 }}
               >
-                <GigShareCard
+                <TourShareCard
                   ref={cardRef}
-                  gig={gig}
+                  gigs={visibleGigs}
                   photoSrc={photoSrc}
-                  format={format}
-                  zoom={format === 'story' ? zoom : undefined}
-                  pan={pan}
+                  photoOpacity={photoOpacity}
                   accent={accentColor}
-                  variation={variation}
+                  format={format}
                   socials={socials}
-                  sticker={sticker}
-                  stickerPosition={stickerPos}
+                  year={selectedYear}
                 />
               </Box>
             </Box>
 
+            {/* Photo opacity — below preview, above photo selection */}
             <Box sx={{ width: previewMaxWidth, px: 1 }}>
-              {format === 'story' && (
-                <Slider
-                  value={zoom}
-                  onChange={(_, v) => setZoom(v)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  size="small"
-                  aria-label="Photo zoom"
-                  marks={[
-                    { value: 0, label: 'Width' },
-                    { value: 100, label: 'Height' },
-                  ]}
-                />
-              )}
+              <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                Photo opacity
+              </Typography>
               <Slider
-                value={pan}
-                onChange={(_, v) => setPan(v)}
-                min={-100}
+                value={photoOpacity}
+                onChange={(_, v) => setPhotoOpacity(v)}
+                min={0}
                 max={100}
                 step={1}
                 size="small"
-                aria-label="Photo pan"
+                aria-label="Photo opacity"
                 marks={[
-                  { value: -100, label: '◀' },
-                  { value: 0, label: '·' },
-                  { value: 100, label: '▶' },
+                  { value: 0, label: 'None' },
+                  { value: 50, label: 'Half' },
+                  { value: 100, label: 'Full' },
                 ]}
               />
             </Box>
 
+            {/* Photo thumbnails */}
             <Stack direction="row" spacing={1.5}>
               {SHARE_PHOTOS.map((p) => {
                 const selected = p.id === photoId
@@ -306,6 +328,12 @@ export default function GigShareDialog({ open, onClose, gig }) {
                 )
               })}
             </Stack>
+
+            {visibleGigs.length === 0 && (
+              <Typography variant="body2" color="text.secondary" textAlign="center">
+                No gigs to display for this selection.
+              </Typography>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -313,7 +341,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
           {canCopy && (
             <Button
               onClick={handleCopy}
-              disabled={busy}
+              disabled={busy || visibleGigs.length === 0}
               startIcon={busy ? <CircularProgress size={16} /> : <ContentCopyIcon />}
             >
               Copy
@@ -322,7 +350,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
           <Button
             variant="contained"
             onClick={handleDownload}
-            disabled={busy}
+            disabled={busy || visibleGigs.length === 0}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />}
           >
             Download PNG

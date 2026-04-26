@@ -9,6 +9,8 @@ import {
   SHARE_LOGO,
 } from '../utils/shareCard.js'
 import MinimalCard from './share/MinimalCard.jsx'
+import SocialsRow from './share/SocialsRow.jsx'
+import StickerOverlay from './share/StickerOverlay.jsx'
 
 const ACCENT = '#f5c542'
 const PAPER = '#f6efe2'
@@ -60,13 +62,6 @@ function FilmFrame({ children, format, accent = ACCENT }) {
         color: PAPER,
       }}
     >
-      <style>{`
-        @font-face {
-          font-family: "serifgothicitcbybt";
-          src: url(/fonts/serifgothicitcbybt_bold.ttf) format("truetype");
-          font-weight: bold;
-        }
-      `}</style>
       {children}
       {/* outer frame */}
       <div
@@ -181,7 +176,7 @@ function PhotoBackdrop({ src, zoom, pan = 0, format }) {
   )
 }
 
-function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT }) {
+function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venueName = formatGigVenueName(gig)
@@ -380,11 +375,15 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT }) {
           SHOWTIME · {time}
         </div>
       )}
+      <div style={{ position: 'absolute', bottom: 46, left: 70, right: 70 }}>
+        <SocialsRow socials={socials} iconColor={accent} textColor={PAPER} size={26} />
+      </div>
+      <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
     </FilmFrame>
   )
 }
 
-function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT }) {
+function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venue = formatGigVenue(gig)
@@ -565,14 +564,18 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT }) {
           </div>
         )}
       </div>
+      <div style={{ position: 'absolute', bottom: 56, left: 80, right: 80 }}>
+        <SocialsRow socials={socials} iconColor={accent} textColor={PAPER} size={28} />
+      </div>
+      <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
     </FilmFrame>
   )
 }
 
-function VintageVariation({ gig, photoSrc, format, zoom, pan, accent }) {
+function VintageVariation({ gig, photoSrc, format, zoom, pan, accent, socials, sticker, stickerPosition }) {
   return format === 'story'
-    ? <StoryLayout gig={gig} photoSrc={photoSrc} zoom={zoom} pan={pan} accent={accent} />
-    : <SquareLayout gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} />
+    ? <StoryLayout gig={gig} photoSrc={photoSrc} zoom={zoom} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} />
+    : <SquareLayout gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} />
 }
 
 const VARIATION_COMPONENTS = {
@@ -581,7 +584,7 @@ const VARIATION_COMPONENTS = {
 }
 
 const GigShareCard = forwardRef(function GigShareCard(
-  { gig, photoSrc, format = 'square', zoom, pan, accent, variation = 'vintage' },
+  { gig, photoSrc, format = 'square', zoom, pan, accent, variation = 'vintage', socials, sticker, stickerPosition },
   ref,
 ) {
   const Component = VARIATION_COMPONENTS[variation] || VintageVariation
@@ -594,6 +597,9 @@ const GigShareCard = forwardRef(function GigShareCard(
         zoom={zoom}
         pan={pan}
         accent={accent}
+        socials={socials}
+        sticker={sticker}
+        stickerPosition={stickerPosition}
       />
     </div>
   )
