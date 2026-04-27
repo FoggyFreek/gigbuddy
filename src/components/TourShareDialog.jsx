@@ -163,7 +163,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
       >
         <DialogTitle>Share tour dates</DialogTitle>
         <DialogContent dividers>
-          <Stack spacing={2} alignItems="center">
+          <Stack spacing={2} sx={{ alignItems: 'center' }}>
 
             {/* Format */}
             <ToggleButtonGroup
@@ -203,7 +203,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
             </Stack>
 
             {/* Year + months ahead */}
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <ToggleButtonGroup
                 value={selectedYear}
                 exclusive

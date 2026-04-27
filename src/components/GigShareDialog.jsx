@@ -124,7 +124,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
       >
         <DialogTitle>Share gig as image</DialogTitle>
         <DialogContent dividers>
-          <Stack spacing={2} alignItems="center">
+          <Stack spacing={2} sx={{ alignItems: 'center' }}>
             <ToggleButtonGroup
               value={format}
               exclusive
@@ -173,7 +173,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
             </ToggleButtonGroup>
 
             {/* overlay controls */}
-            <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="center">
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
               <FormControl size="small" sx={{ minWidth: 160 }}>
                 <InputLabel>Overlay</InputLabel>
                 <Select

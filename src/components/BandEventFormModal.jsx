@@ -156,7 +156,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
                 onBlur={onBlur('start_date')}
                 error={!!errors.start_date}
                 helperText={errors.start_date}
-                InputLabelProps={{ shrink: focused.start_date || !!form.start_date }}
+                slotProps={{ inputLabel: { shrink: focused.start_date || !!form.start_date } }}
                 sx={maskSx('start_date')}
               />
             </Grid>
@@ -171,7 +171,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
                 onBlur={onBlur('end_date')}
                 error={!!errors.end_date}
                 helperText={errors.end_date || 'Leave blank for single day'}
-                InputLabelProps={{ shrink: focused.end_date || !!form.end_date }}
+                slotProps={{ inputLabel: { shrink: focused.end_date || !!form.end_date } }}
                 sx={maskSx('end_date')}
               />
             </Grid>

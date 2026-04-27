@@ -17,21 +17,26 @@ import { useTheme } from '@mui/material/styles'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import EmailIcon from '@mui/icons-material/Email'
 import EventIcon from '@mui/icons-material/Event'
-import EventAvailableIcon from '@mui/icons-material/EventAvailable'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import EventNoteIcon from '@mui/icons-material/EventNote'
 import GroupIcon from '@mui/icons-material/Group'
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
+import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
 import NotificationsIcon from '@mui/icons-material/Notifications'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOff'
+import ContactsIcon from '@mui/icons-material/Contacts'
+import LocationOnIcon from '@mui/icons-material/LocationOn'
 import PersonIcon from '@mui/icons-material/Person'
 import { useProfile } from '../contexts/profileContext.js'
 import { useAuth } from '../contexts/authContext.js'
 import { usePushNotifications } from '../hooks/usePushNotifications.js'
 
 const DRAWER_WIDTH = 220
+const COLLAPSED_DRAWER_WIDTH = 72
 
 const BASE_NAV_ITEMS = [
   { to: '/', label: 'Profile', icon: PersonIcon },
@@ -39,8 +44,10 @@ const BASE_NAV_ITEMS = [
   { to: '/rehearsals', label: 'Rehearsals', icon: MusicNoteIcon },
   { to: '/events', label: 'Band Events', icon: EventNoteIcon },
   { to: '/tasks', label: 'Tasks', icon: ChecklistIcon },
-  { to: '/availability', label: 'Calendar', icon: EventAvailableIcon },
+  { to: '/availability', label: 'Calendar', icon: CalendarMonthIcon },
   { to: '/email-templates', label: 'Email Templates', icon: EmailIcon },
+  { to: '/venues', label: 'Venues', icon: LocationOnIcon },
+  { to: '/contacts', label: 'Contacts', icon: ContactsIcon },
 ]
 
 const ADMIN_NAV_ITEMS = [
@@ -55,6 +62,7 @@ export default function AppShell() {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [navCollapsed, setNavCollapsed] = useState(false)
 
   const handleNavClick = () => {
     if (isMobile) setMobileOpen(false)
@@ -63,28 +71,59 @@ export default function AppShell() {
   const navItems = user?.isAdmin
     ? [...BASE_NAV_ITEMS, ...ADMIN_NAV_ITEMS]
     : BASE_NAV_ITEMS
+  const isNavCollapsed = !isMobile && navCollapsed
+  const drawerWidth = isNavCollapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH
 
   const drawerContent = (
     <>
       <Toolbar />
       <Box sx={{ overflow: 'auto', pt: 1 }}>
+        {!isMobile && (
+          <Box sx={{ display: 'flex', justifyContent: isNavCollapsed ? 'center' : 'flex-end', px: 1, mb: 1 }}>
+            <Tooltip title={isNavCollapsed ? 'Expand navigation' : 'Collapse navigation'}>
+              <IconButton
+                onClick={() => setNavCollapsed((collapsed) => !collapsed)}
+                aria-label={isNavCollapsed ? 'expand navigation' : 'collapse navigation'}
+                size="small"
+              >
+                {isNavCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
         <List>
           {navItems.map((item) => {
             const selected = pathname === item.to
             const Icon = item.icon
             return (
-              <ListItemButton
+              <Tooltip
                 key={item.to}
-                component={NavLink}
-                to={item.to}
-                selected={selected}
-                onClick={handleNavClick}
+                title={isNavCollapsed ? item.label : ''}
+                placement="right"
+                disableHoverListener={!isNavCollapsed}
               >
-                <ListItemIcon sx={{ minWidth: 36 }}>
-                  <Icon color={selected ? 'primary' : 'inherit'} />
-                </ListItemIcon>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
+                <ListItemButton
+                  component={NavLink}
+                  to={item.to}
+                  selected={selected}
+                  onClick={handleNavClick}
+                  sx={{
+                    justifyContent: isNavCollapsed ? 'center' : 'flex-start',
+                    minHeight: 48,
+                    px: isNavCollapsed ? 1.5 : 2,
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: isNavCollapsed ? 0 : 36,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Icon color={selected ? 'primary' : 'inherit'} />
+                  </ListItemIcon>
+                  {!isNavCollapsed && <ListItemText primary={item.label} />}
+                </ListItemButton>
+              </Tooltip>
             )
           })}
         </List>
@@ -193,14 +232,25 @@ export default function AppShell() {
         <Drawer
           variant="permanent"
           sx={{
-            width: DRAWER_WIDTH,
+            width: drawerWidth,
             flexShrink: 0,
             '& .MuiDrawer-paper': {
-              width: DRAWER_WIDTH,
+              width: drawerWidth,
               boxSizing: 'border-box',
               borderRight: '1px solid',
               borderColor: 'divider',
+              overflowX: 'hidden',
+              transition: (t) =>
+                t.transitions.create('width', {
+                  easing: t.transitions.easing.sharp,
+                  duration: t.transitions.duration.shorter,
+                }),
             },
+            transition: (t) =>
+              t.transitions.create('width', {
+                easing: t.transitions.easing.sharp,
+                duration: t.transitions.duration.shorter,
+              }),
           }}
         >
           {drawerContent}

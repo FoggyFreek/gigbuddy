@@ -70,7 +70,7 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
           onChange={(e) => setNewDue(e.target.value)}
           onFocus={() => setDueFocused(true)}
           onBlur={() => setDueFocused(false)}
-          InputLabelProps={{ shrink: dueFocused || !!newDue }}
+          slotProps={{ inputLabel: { shrink: dueFocused || !!newDue } }}
           label="Due"
           sx={{
             width: 160,

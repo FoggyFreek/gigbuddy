@@ -7,6 +7,8 @@ import availabilityRouter from './availability.js'
 import rehearsalsRouter from './rehearsals.js'
 import bandEventsRouter from './bandEvents.js'
 import emailTemplatesRouter from './emailTemplates.js'
+import venuesRouter from './venues.js'
+import contactsRouter from './contacts.js'
 import pushRouter from './push.js'
 import authRouter from './auth.js'
 import usersRouter from './users.js'
@@ -31,6 +33,8 @@ router.use('/availability', requireApproved, availabilityRouter)
 router.use('/rehearsals', requireApproved, rehearsalsRouter)
 router.use('/band-events', requireApproved, bandEventsRouter)
 router.use('/email-templates', requireApproved, emailTemplatesRouter)
+router.use('/venues', requireApproved, venuesRouter)
+router.use('/contacts', requireApproved, contactsRouter)
 router.use('/push', requireApproved, pushRouter)
 
 export default router

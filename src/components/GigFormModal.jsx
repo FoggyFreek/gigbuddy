@@ -287,7 +287,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                 onBlur={onBlur('event_date')}
                 error={!!errors.event_date}
                 helperText={errors.event_date}
-                InputLabelProps={{ shrink: focused.event_date || !!form.event_date }}
+                slotProps={{ inputLabel: { shrink: focused.event_date || !!form.event_date } }}
                 sx={maskSx('event_date')}
               />
             </Grid>

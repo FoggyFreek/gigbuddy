@@ -48,6 +48,7 @@ export default function GigShareMenu({ gig }) {
         open={!!anchorEl}
         onClose={handleClose}
         onClick={(e) => e.stopPropagation()}
+        disableRestoreFocus
       >
         <MenuItem onClick={handleWhatsApp}>
           <ListItemIcon><WhatsAppIcon fontSize="small" /></ListItemIcon>

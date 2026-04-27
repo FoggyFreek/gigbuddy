@@ -244,7 +244,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
                 onBlur={onBlur('proposed_date')}
                 error={!!errors.proposed_date}
                 helperText={errors.proposed_date}
-                InputLabelProps={{ shrink: focused.proposed_date || !!form.proposed_date }}
+                slotProps={{ inputLabel: { shrink: focused.proposed_date || !!form.proposed_date } }}
                 sx={maskSx('proposed_date')}
               />
             </Grid>

@@ -73,7 +73,7 @@ export function formatGigDoorsTime(gig) {
   if (!gig?.start_time) return ''
   const [h, m] = String(gig.start_time).slice(0, 5).split(':').map(Number)
   if (Number.isNaN(h) || Number.isNaN(m)) return ''
-  const minutes = ((h * 60 + m - 30) % (24 * 60) + 24 * 60) % (24 * 60)
+  const minutes = ((h * 60 + m - 15) % (24 * 60) + 24 * 60) % (24 * 60)
   const hh = String(Math.floor(minutes / 60)).padStart(2, '0')
   const mm = String(minutes % 60).padStart(2, '0')
   return `${hh}:${mm}`

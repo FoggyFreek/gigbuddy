@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
 const router = Router()
 
@@ -14,6 +15,16 @@ const PROFILE_FIELDS = [
 ]
 
 const LINK_FIELDS = ['label', 'url', 'sort_order']
+
+function normalizeRequiredProfileUrl(value) {
+  const url = normalizeOptionalUrl(value, { allowedProtocols: PROFILE_LINK_PROTOCOLS })
+  if (!url) {
+    const err = new Error('Invalid URL')
+    err.status = 400
+    throw err
+  }
+  return url
+}
 
 function parseId(val) {
   const n = Number(val)
@@ -71,6 +82,7 @@ router.post('/links', async (req, res) => {
   if (!label || !url) {
     return res.status(400).json({ error: 'label and url are required' })
   }
+  const normalizedUrl = normalizeRequiredProfileUrl(url)
 
   const { rows: maxRows } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM profile_links WHERE profile_id = 1'
@@ -80,7 +92,7 @@ router.post('/links', async (req, res) => {
   const { rows } = await pool.query(
     `INSERT INTO profile_links (profile_id, label, url, sort_order)
      VALUES (1, $1, $2, $3) RETURNING *`,
-    [label, url, nextOrder]
+    [label, normalizedUrl, nextOrder]
   )
   res.status(201).json(rows[0])
 })
@@ -96,7 +108,11 @@ router.patch('/links/:linkId', async (req, res) => {
   for (const key of LINK_FIELDS) {
     if (key in req.body) {
       fields.push(`${key} = $${idx++}`)
-      values.push(req.body[key])
+      values.push(
+        key === 'url'
+          ? normalizeRequiredProfileUrl(req.body[key])
+          : req.body[key],
+      )
     }
   }
 

@@ -75,7 +75,7 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
             onChange={(e) => set('start_date', e.target.value)}
             fullWidth
             size="small"
-            InputLabelProps={{ shrink: true }}
+            slotProps={{ inputLabel: { shrink: true } }}
             error={!!errors.start_date}
             helperText={errors.start_date}
           />
@@ -87,7 +87,7 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
             onChange={(e) => set('end_date', e.target.value)}
             fullWidth
             size="small"
-            InputLabelProps={{ shrink: true }}
+            slotProps={{ inputLabel: { shrink: true } }}
             error={!!errors.end_date}
             helperText={errors.end_date}
           />

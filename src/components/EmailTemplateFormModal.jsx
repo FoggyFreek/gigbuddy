@@ -22,8 +22,6 @@ import FormatUnderlinedIcon from '@mui/icons-material/FormatUnderlined'
 import InsertLinkIcon from '@mui/icons-material/InsertLink'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
-import Underline from '@tiptap/extension-underline'
 import { createEmailTemplate, getEmailTemplate, updateEmailTemplate } from '../api/emailTemplates.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 
@@ -131,9 +129,9 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
-      Underline,
-      Link.configure({ openOnClick: false, autolink: true }),
+      StarterKit.configure({
+        link: { openOnClick: false, autolink: true },
+      }),
     ],
     content: '',
     onUpdate({ editor: e }) {
