@@ -159,7 +159,7 @@ export default function AppShell() {
               <MenuIcon />
             </IconButton>
           )}
-          <Box component="img" src="/icons/gigbuddy_logo_pick.png" alt="gigBuddy" sx={{ height: 32, width: 'auto', mr: 1 }} />
+          <Box component="img" src="/icons/gigbuddy_logo_pick.png" alt="gigBuddy" sx={{ height: 32, width: 'auto', mr: 1, filter: theme.palette.mode === 'dark' ? 'invert(1)' : 'none' }} />
           <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
             <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.1 }}>
               gigBuddy

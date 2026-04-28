@@ -6,6 +6,7 @@ import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import { useTheme } from '@mui/material/styles'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
@@ -58,6 +59,7 @@ function MonthMenu({ year, month, onMonthJump }) {
   const anchorRef = useRef(null)
   const menuRef = useRef(null)
   const [open, setOpen] = useState(false)
+  const theme = useTheme()
   const uid = useId().replace(/:/g, '')
 
   const toggle = useCallback(() => setOpen((v) => !v), [])
@@ -99,6 +101,7 @@ function MonthMenu({ year, month, onMonthJump }) {
           borderRadius: 4,
           minWidth: 140,
           textAlign: 'center',
+          color: theme.palette.text.primary,
         }}
       >
         {MONTH_NAMES[month - 1]}
