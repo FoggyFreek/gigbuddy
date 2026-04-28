@@ -149,7 +149,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
                         borderRadius: '50%',
                         bgcolor: c.value,
                         border: '2px solid',
-                        borderColor: selected ? 'primary.main' : 'rgba(0,0,0,0.25)',
+                        borderColor: selected ? 'primary.main' : 'divider',
                         boxShadow: selected ? 3 : 1,
                         transition: 'transform 120ms',
                         transform: selected ? 'scale(1.1)' : 'scale(1)',
