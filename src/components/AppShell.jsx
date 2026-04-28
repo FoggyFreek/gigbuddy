@@ -22,6 +22,8 @@ import EventNoteIcon from '@mui/icons-material/EventNote'
 import GroupIcon from '@mui/icons-material/Group'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import DarkModeIcon from '@mui/icons-material/DarkMode'
+import LightModeIcon from '@mui/icons-material/LightMode'
 import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
@@ -34,6 +36,7 @@ import PersonIcon from '@mui/icons-material/Person'
 import { useProfile } from '../contexts/profileContext.js'
 import { useAuth } from '../contexts/authContext.js'
 import { usePushNotifications } from '../hooks/usePushNotifications.js'
+import { useThemeMode } from '../contexts/ThemeContext.jsx'
 
 const DRAWER_WIDTH = 220
 const COLLAPSED_DRAWER_WIDTH = 72
@@ -59,6 +62,7 @@ export default function AppShell() {
   const { bandName } = useProfile()
   const { user, logout } = useAuth()
   const { status: pushStatus, subscribe, unsubscribe } = usePushNotifications()
+  const { mode, toggleTheme } = useThemeMode()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -203,6 +207,11 @@ export default function AppShell() {
               </span>
             </Tooltip>
           )}
+          <Tooltip title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <IconButton onClick={toggleTheme} aria-label="toggle dark mode">
+              {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Log out">
             <IconButton onClick={logout} aria-label="log out">
               <LogoutIcon />
