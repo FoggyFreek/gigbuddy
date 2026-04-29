@@ -36,7 +36,7 @@ import PersonIcon from '@mui/icons-material/Person'
 import { useProfile } from '../contexts/profileContext.js'
 import { useAuth } from '../contexts/authContext.js'
 import { usePushNotifications } from '../hooks/usePushNotifications.js'
-import { useThemeMode } from '../contexts/ThemeContext.jsx'
+import { useThemeMode } from '../contexts/themeModeContext.js'
 
 const DRAWER_WIDTH = 220
 const COLLAPSED_DRAWER_WIDTH = 72

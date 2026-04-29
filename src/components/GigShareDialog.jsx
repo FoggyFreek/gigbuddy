@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import ButtonBase from '@mui/material/ButtonBase'
@@ -9,6 +9,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
+import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import Slider from '@mui/material/Slider'
@@ -17,16 +18,17 @@ import Stack from '@mui/material/Stack'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
 import DownloadIcon from '@mui/icons-material/Download'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import GigShareCard from './GigShareCard.jsx'
 import { STICKER_CONFIGS } from './share/stickerConfigs.js'
 import { getProfile } from '../api/profile.js'
 import {
   buildShareFilename,
-  canCopyImageToClipboard,
-  copyBlobToClipboard,
+  buildSharePdfFilename,
   downloadBlob,
+  downloadPdf,
+  renderLayeredPdf,
   renderNodeToBlob,
   SHARE_FORMATS,
   SHARE_PHOTOS,
@@ -47,9 +49,9 @@ export default function GigShareDialog({ open, onClose, gig }) {
   const [busy, setBusy] = useState(false)
   const [snackbar, setSnackbar] = useState(null)
   const [socials, setSocials] = useState({})
+  const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null)
   const cardRef = useRef(null)
 
-  const canCopy = useMemo(() => canCopyImageToClipboard(), [])
   const formatDef = SHARE_FORMATS[format]
   const photoSrc = SHARE_PHOTOS.find((p) => p.id === photoId)?.src
   const accentColor =
@@ -67,6 +69,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
       setSticker(null)
       setStickerPos('right-top')
       setBusy(false)
+      setDownloadMenuAnchor(null)
       getProfile().then((p) => setSocials({
         instagram: p?.instagram_handle || '',
         facebook: p?.facebook_handle || '',
@@ -100,18 +103,28 @@ export default function GigShareDialog({ open, onClose, gig }) {
     }
   }
 
-  async function handleCopy() {
+  async function handleDownloadPdf() {
     setBusy(true)
     try {
-      const blob = await snapshot()
-      if (!blob) throw new Error('Snapshot failed')
-      await copyBlobToClipboard(blob)
-      setSnackbar({ severity: 'success', msg: 'Image copied to clipboard' })
+      const pdf = await renderLayeredPdf(cardRef.current, {
+        width: formatDef.width,
+        height: formatDef.height,
+      })
+      downloadPdf(pdf, buildSharePdfFilename(gig, format))
     } catch (e) {
-      setSnackbar({ severity: 'error', msg: e.message || 'Copy failed' })
+      setSnackbar({ severity: 'error', msg: e.message || 'PDF export failed' })
     } finally {
       setBusy(false)
     }
+  }
+
+  function handleDownloadMenuClose() {
+    setDownloadMenuAnchor(null)
+  }
+
+  function handleDownloadOption(downloadFn) {
+    setDownloadMenuAnchor(null)
+    downloadFn()
   }
 
   return (
@@ -310,23 +323,29 @@ export default function GigShareDialog({ open, onClose, gig }) {
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose} disabled={busy}>Close</Button>
-          {canCopy && (
-            <Button
-              onClick={handleCopy}
-              disabled={busy}
-              startIcon={busy ? <CircularProgress size={16} /> : <ContentCopyIcon />}
-            >
-              Copy
-            </Button>
-          )}
           <Button
+            id="gig-share-download-button"
             variant="contained"
-            onClick={handleDownload}
+            onClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
             disabled={busy}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />}
+            endIcon={<ArrowDropDownIcon />}
+            aria-controls={downloadMenuAnchor ? 'gig-share-download-menu' : undefined}
+            aria-haspopup="menu"
+            aria-expanded={downloadMenuAnchor ? 'true' : undefined}
           >
-            Download PNG
+            Download
           </Button>
+          <Menu
+            id="gig-share-download-menu"
+            anchorEl={downloadMenuAnchor}
+            open={Boolean(downloadMenuAnchor)}
+            onClose={handleDownloadMenuClose}
+            MenuListProps={{ 'aria-labelledby': 'gig-share-download-button' }}
+          >
+            <MenuItem onClick={() => handleDownloadOption(handleDownload)}>png</MenuItem>
+            <MenuItem onClick={() => handleDownloadOption(handleDownloadPdf)}>pdf</MenuItem>
+          </Menu>
         </DialogActions>
       </Dialog>
 

@@ -13,7 +13,7 @@ vi.mock('@tiptap/react', () => ({
   })),
   EditorContent: () => <div data-testid="tiptap-editor" />,
 }))
-vi.mock('@tiptap/starter-kit', () => ({ default: {} }))
+vi.mock('@tiptap/starter-kit', () => ({ default: { configure: vi.fn().mockReturnValue({}) } }))
 vi.mock('@tiptap/extension-link', () => ({ default: { configure: vi.fn().mockReturnValue({}) } }))
 vi.mock('@tiptap/extension-underline', () => ({ default: {} }))
 

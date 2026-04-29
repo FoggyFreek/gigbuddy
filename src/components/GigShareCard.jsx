@@ -51,6 +51,7 @@ function FilmFrame({ children, format, accent = ACCENT }) {
   const frameRadius = cardRadius - 8
   return (
     <div
+      data-share-frame
       style={{
         position: 'relative',
         width: f.width,
@@ -63,41 +64,43 @@ function FilmFrame({ children, format, accent = ACCENT }) {
       }}
     >
       {children}
-      {/* outer frame */}
-      <div
-        style={{
-          position: 'absolute',
-          inset,
-          border: `2px solid ${accent}`,
-          outline: `2px solid ${INK}`,
-          outlineOffset: 6,
-          borderRadius: frameRadius,
-          pointerEvents: 'none',
-          mixBlendMode: 'normal',
-        }}
-      />
-      {/* film grain */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: `url("${GRAIN_SVG}")`,
-          backgroundSize: '400px 400px',
-          opacity: 0.35,
-          mixBlendMode: 'overlay',
-          pointerEvents: 'none',
-        }}
-      />
-      {/* vignette */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background:
-            'radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.65) 100%)',
-          pointerEvents: 'none',
-        }}
-      />
+      <div data-pdf-layer="frame-decor" style={{ position: 'absolute', inset: 0 }}>
+        {/* outer frame */}
+        <div
+          style={{
+            position: 'absolute',
+            inset,
+            border: `2px solid ${accent}`,
+            outline: `2px solid ${INK}`,
+            outlineOffset: 6,
+            borderRadius: frameRadius,
+            pointerEvents: 'none',
+            mixBlendMode: 'normal',
+          }}
+        />
+        {/* film grain */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: `url("${GRAIN_SVG}")`,
+            backgroundSize: '400px 400px',
+            opacity: 0.35,
+            mixBlendMode: 'overlay',
+            pointerEvents: 'none',
+          }}
+        />
+        {/* vignette */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background:
+              'radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.65) 100%)',
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
     </div>
   )
 }
@@ -185,9 +188,10 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
 
   return (
     <FilmFrame format="square" accent={accent}>
-      <PhotoBackdrop src={photoSrc} pan={pan} format="square" />
+      <div data-share-layer="photo" data-pdf-layer="photo" style={{ position: 'absolute', inset: 0 }}><PhotoBackdrop src={photoSrc} pan={pan} format="square" /></div>
       {/* dark bottom gradient for legibility */}
       <div
+        data-pdf-layer="gradient"
         style={{
           position: 'absolute',
           inset: 0,
@@ -197,6 +201,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
       />
       {/* logo top-left */}
       <img
+        data-pdf-layer="logo"
         src={SHARE_LOGO}
         alt=""
         crossOrigin="anonymous"
@@ -211,6 +216,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
       />
       {/* "PRESENTS" tag top-right */}
       <div
+        data-pdf-layer="live"
         style={{
           position: 'absolute',
           top: 90,
@@ -228,6 +234,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
       {/* title */}
       {title && (
         <div
+          data-pdf-layer="title"
           style={{
             position: 'absolute',
             left: 70,
@@ -250,6 +257,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
 
       {/* date block */}
       <div
+        data-pdf-layer="date"
         style={{
           position: 'absolute',
           left: 70,
@@ -348,6 +356,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
 
       {/* divider */}
       <div
+        data-pdf-layer="divider"
         style={{
           position: 'absolute',
           left: 70,
@@ -361,6 +370,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
       {/* time */}
       {time && (
         <div
+          data-pdf-layer="time"
           style={{
             position: 'absolute',
             left: 530,
@@ -375,10 +385,10 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
           SHOWTIME · {time}
         </div>
       )}
-      <div style={{ position: 'absolute', bottom: 46, left: 70, right: 70 }}>
+      <div data-pdf-layer="socials" style={{ position: 'absolute', bottom: 46, left: 70, right: 70 }}>
         <SocialsRow socials={socials} iconColor={accent} textColor={PAPER} size={26} />
       </div>
-      <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
+      <div data-pdf-layer="sticker" style={{ position: 'absolute', inset: 0 }}><StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} /></div>
     </FilmFrame>
   )
 }
@@ -391,8 +401,9 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
 
   return (
     <FilmFrame format="story" accent={accent}>
-      <PhotoBackdrop src={photoSrc} zoom={zoom} pan={pan} format="story" />
+      <div data-share-layer="photo" data-pdf-layer="photo" style={{ position: 'absolute', inset: 0 }}><PhotoBackdrop src={photoSrc} zoom={zoom} pan={pan} format="story" /></div>
       <div
+        data-pdf-layer="gradient"
         style={{
           position: 'absolute',
           inset: 0,
@@ -403,6 +414,7 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
 
       {/* logo top-center */}
       <img
+        data-pdf-layer="logo"
         src={SHARE_LOGO}
         alt=""
         crossOrigin="anonymous"
@@ -418,6 +430,7 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
       />
 
       <div
+        data-pdf-layer="live"
         style={{
           position: 'absolute',
           top: 280,
@@ -437,6 +450,7 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
       {/* title */}
       {title && (
         <div
+          data-pdf-layer="title"
           style={{
             position: 'absolute',
             top: 500,
@@ -460,6 +474,7 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
 
       {/* huge day */}
       <div
+        data-pdf-layer="date-day"
         style={{
           position: 'absolute',
           top: 720,
@@ -477,6 +492,7 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
       </div>
 
       <div
+        data-pdf-layer="date-month"
         style={{
           position: 'absolute',
           top: 1000,
@@ -495,6 +511,7 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
         {date.month}
       </div>
       <div
+        data-pdf-layer="date-year"
         style={{
           position: 'absolute',
           top: 1090,
@@ -514,6 +531,7 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
 
       {/* venue + time with divider */}
       <div
+        data-pdf-layer="venue-info"
         style={{
           position: 'absolute',
           left: 80,
@@ -564,10 +582,10 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
           </div>
         )}
       </div>
-      <div style={{ position: 'absolute', bottom: 56, left: 80, right: 80 }}>
+      <div data-pdf-layer="socials" style={{ position: 'absolute', bottom: 56, left: 80, right: 80 }}>
         <SocialsRow socials={socials} iconColor={accent} textColor={PAPER} size={28} />
       </div>
-      <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
+      <div data-pdf-layer="sticker"><StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} /></div>
     </FilmFrame>
   )
 }

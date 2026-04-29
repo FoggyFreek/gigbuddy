@@ -94,9 +94,10 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
         <Box
           key={task.id}
           sx={{
-            display: 'flex',
-            alignItems: 'center',
-            flexWrap: { xs: 'wrap', sm: 'nowrap' },
+            display: { xs: 'grid', sm: 'flex' },
+            gridTemplateColumns: 'auto 1fr auto',
+            flexWrap: 'nowrap',
+            alignItems: { xs: 'start', sm: 'center' },
             gap: 0.5,
             py: 0.5,
             textDecoration: task.done ? 'line-through' : 'none',
@@ -107,7 +108,7 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
             size="small"
             checked={task.done}
             onChange={() => handleToggle(task)}
-            sx={{ flexShrink: 0 }}
+            sx={{ flexShrink: 0, gridRow: '1 / 3', alignSelf: 'center' }}
           />
           <Typography
             variant="body2"
@@ -119,48 +120,56 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
               wordBreak: 'break-word',
               overflowWrap: 'anywhere',
               lineHeight: 1.2,
-              order: 1,
             }}
           >
             {task.title}
           </Typography>
-          <TextField
-            type="date"
-            size="small"
-            value={toDateInputValue(task.due_date)}
-            onChange={(e) => handleDueChange(task, e.target.value)}
-            onFocus={() => setFocusedDueTaskId(task.id)}
-            onBlur={() => setFocusedDueTaskId(null)}
-            slotProps={{ htmlInput: { 'aria-label': `Due date for ${task.title}` } }}
+          {/* On mobile: row 2 of col 2. On desktop: display:contents lets children flow in the parent flex. */}
+          <Box
             sx={{
-              flexShrink: 0,
-              width: { xs: '100%', sm: 150 },
-              order: { xs: 3, sm: 2 },
-              pl: { xs: 4, sm: 0 },
-              '& input::-webkit-datetime-edit': {
-                opacity: task.due_date || focusedDueTaskId === task.id ? 1 : 0,
-              },
+              display: { xs: 'flex', sm: 'contents' },
+              flexWrap: 'wrap',
+              gap: 0.5,
+              gridColumn: '2',
+              gridRow: '2',
             }}
-          />
-          {members.length > 0 && (
-            <Select
+          >
+            <TextField
+              type="date"
               size="small"
-              value={task.assigned_to ?? ''}
-              onChange={(e) => handleAssign(task, e.target.value)}
-              displayEmpty
-              inputProps={{ 'aria-label': `Assign ${task.title}` }}
-              sx={{ flexShrink: 0, width: 150, order: { xs: 4, sm: 3 } }}
-            >
-              <MenuItem value=""><em>Unassigned</em></MenuItem>
-              {members.map((m) => (
-                <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
-              ))}
-            </Select>
-          )}
+              value={toDateInputValue(task.due_date)}
+              onChange={(e) => handleDueChange(task, e.target.value)}
+              onFocus={() => setFocusedDueTaskId(task.id)}
+              onBlur={() => setFocusedDueTaskId(null)}
+              slotProps={{ htmlInput: { 'aria-label': `Due date for ${task.title}` } }}
+              sx={{
+                flexShrink: 0,
+                width: { xs: 140, sm: 150 },
+                '& input::-webkit-datetime-edit': {
+                  opacity: task.due_date || focusedDueTaskId === task.id ? 1 : 0,
+                },
+              }}
+            />
+            {members.length > 0 && (
+              <Select
+                size="small"
+                value={task.assigned_to ?? ''}
+                onChange={(e) => handleAssign(task, e.target.value)}
+                displayEmpty
+                inputProps={{ 'aria-label': `Assign ${task.title}` }}
+                sx={{ flexShrink: 0, width: 150 }}
+              >
+                <MenuItem value=""><em>Unassigned</em></MenuItem>
+                {members.map((m) => (
+                  <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
+                ))}
+              </Select>
+            )}
+          </Box>
           <IconButton
             size="small"
             onClick={() => handleDelete(task.id)}
-            sx={{ flexShrink: 0, order: { xs: 2, sm: 3 } }}
+            sx={{ flexShrink: 0, gridRow: '1 / 3', alignSelf: 'center' }}
           >
             <DeleteIcon fontSize="small" />
           </IconButton>

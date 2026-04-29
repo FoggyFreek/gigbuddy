@@ -55,6 +55,16 @@ const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>
   new Date(2000, i, 1).toLocaleString('en', { month: 'long' })
 )
 
+function resolvePaletteColor(theme, color) {
+  if (typeof color !== 'string' || !color.includes('.')) return color
+
+  return color.split('.').reduce((value, key) => value?.[key], theme.palette) || color
+}
+
+function getEventTextColor(theme, backgroundColor) {
+  return theme.palette.getContrastText(resolvePaletteColor(theme, backgroundColor))
+}
+
 function MonthMenu({ year, month, onMonthJump }) {
   const anchorRef = useRef(null)
   const menuRef = useRef(null)
@@ -148,6 +158,7 @@ export default function AvailabilityCalendar({
   onMonthJump,
   onExport,
 }) {
+  const theme = useTheme()
   const cells = buildCalendarCells(year, month)
   const gigsByDate = gigs.reduce((acc, g) => {
     const key = normalizeIsoDate(g.event_date)
@@ -344,7 +355,9 @@ export default function AvailabilityCalendar({
               ) : (
                 <>
                   <Stack spacing={0.375} sx={{ mt: 0.25 }}>
-                    {cellGigs.map((gig) => (
+                    {cellGigs.map((gig) => {
+                      const backgroundColor = GIG_STATUS_COLORS[gig.status] || 'grey.500'
+                      return (
                       <Tooltip
                         key={gig.id}
                         title={[
@@ -362,8 +375,8 @@ export default function AvailabilityCalendar({
                             px: 0.5,
                             py: 0.25,
                             borderRadius: 0.5,
-                            bgcolor: GIG_STATUS_COLORS[gig.status] || 'grey.500',
-                            color: 'common.white',
+                            bgcolor: backgroundColor,
+                            color: getEventTextColor(theme, backgroundColor),
                             cursor: onGigClick ? 'pointer' : 'default',
                             fontSize: '0.7rem',
                             lineHeight: 1.2,
@@ -376,11 +389,13 @@ export default function AvailabilityCalendar({
                           {gig.event_description || gig.venue || 'Gig'}
                         </Box>
                       </Tooltip>
-                    ))}
+                      )
+                    })}
                     {cellRehearsals.map((reh) => {
                       const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
                       const total = reh.participants?.length ?? 0
                       const isOption = reh.status === 'option'
+                      const backgroundColor = REHEARSAL_STATUS_COLORS[reh.status] || 'grey.400'
                       return (
                         <Tooltip
                           key={`reh-${reh.id}`}
@@ -399,10 +414,10 @@ export default function AvailabilityCalendar({
                               px: 0.5,
                               py: 0.25,
                               borderRadius: 0.5,
-                              bgcolor: isOption ? 'transparent' : (REHEARSAL_STATUS_COLORS[reh.status] || 'grey.400'),
+                              bgcolor: isOption ? 'transparent' : backgroundColor,
                               border: isOption ? '1px dashed' : 'none',
                               borderColor: isOption ? 'grey.500' : 'transparent',
-                              color: isOption ? 'text.primary' : 'common.white',
+                              color: isOption ? 'text.primary' : getEventTextColor(theme, backgroundColor),
                               cursor: onRehearsalClick ? 'pointer' : 'default',
                               fontSize: '0.7rem',
                               lineHeight: 1.2,
@@ -432,7 +447,7 @@ export default function AvailabilityCalendar({
                             py: 0.25,
                             borderRadius: 0.5,
                             bgcolor: BAND_EVENT_COLOR,
-                            color: 'common.white',
+                            color: getEventTextColor(theme, BAND_EVENT_COLOR),
                             cursor: onBandEventClick ? 'pointer' : 'default',
                             fontSize: '0.7rem',
                             lineHeight: 1.2,
@@ -473,7 +488,7 @@ export default function AvailabilityCalendar({
                               py: 0.25,
                               borderRadius: 0.5,
                               bgcolor: color,
-                              color: 'common.white',
+                              color: getEventTextColor(theme, color),
                               fontSize: '0.7rem',
                               lineHeight: 1.2,
                               fontWeight: 600,

@@ -1,4 +1,5 @@
 import * as htmlToImage from 'html-to-image'
+import jsPDF from 'jspdf'
 
 export const SHARE_LOGO = '/share/logo.png'
 
@@ -137,6 +138,83 @@ export function formatGigRowDate(gig) {
 
 export function buildTourShareFilename(year, formatId) {
   return `tour-${year}-${formatId}.png`
+}
+
+export async function renderLayeredPdf(node, { width, height }) {
+  // Collect unique layers in DOM order
+  const seen = new Set()
+  const layers = []
+  for (const el of node.querySelectorAll('[data-pdf-layer]')) {
+    const id = el.getAttribute('data-pdf-layer')
+    if (!seen.has(id)) { seen.add(id); layers.push({ id, el }) }
+  }
+
+  const mmW = (width / 96) * 25.4
+  const mmH = (height / 96) * 25.4
+  const pdf = new jsPDF({
+    orientation: height > width ? 'portrait' : 'landscape',
+    unit: 'mm',
+    format: [mmW, mmH],
+  })
+
+  // Determine scale from preview transform (card is CSS-scaled in dialog)
+  const cardRect = node.getBoundingClientRect()
+  const previewScale = cardRect.width / width
+
+  for (const { id, el } of layers) {
+    // Element bounds in 1080px card-space
+    const r = el.getBoundingClientRect()
+    const x = Math.round((r.left - cardRect.left) / previewScale)
+    const y = Math.round((r.top - cardRect.top) / previewScale)
+    const w = Math.round(r.width / previewScale)
+    const h = Math.round(r.height / previewScale)
+    if (w <= 0 || h <= 0) continue
+
+    // Render full card with only this layer visible
+    const styleEl = document.createElement('style')
+    styleEl.textContent = `
+      [data-pdf-layer] { visibility: hidden !important; }
+      [data-pdf-layer="${id}"] { visibility: visible !important; }
+      [data-share-frame] { background: transparent !important; }
+    `
+    document.head.appendChild(styleEl)
+    await new Promise((r) => requestAnimationFrame(r))
+    const fullPng = await htmlToImage.toPng(node, { width, height, pixelRatio: 1, cacheBust: true })
+    document.head.removeChild(styleEl)
+
+    // Crop to element bounds
+    const img = new Image()
+    img.src = fullPng
+    await img.decode()
+    const crop = document.createElement('canvas')
+    crop.width = w
+    crop.height = h
+    crop.getContext('2d').drawImage(img, -x, -y)
+    const croppedPng = crop.toDataURL('image/png')
+
+    // Place at correct position in PDF
+    const pdfX = (x / width) * mmW
+    const pdfY = (y / height) * mmH
+    pdf.addImage(croppedPng, 'PNG', pdfX, pdfY, (w / width) * mmW, (h / height) * mmH)
+  }
+
+  return pdf
+}
+
+export function downloadPdf(pdf, filename) {
+  pdf.save(filename)
+}
+
+export function buildSharePdfFilename(gig, formatId) {
+  const date = gig?.event_date ? String(gig.event_date).slice(0, 10) : 'gig'
+  const slug = (gig?.event_description || gig?.venue || 'share')
+    .toString()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40) || 'share'
+  return `${date}-${slug}-${formatId}.pdf`
 }
 
 export function buildShareFilename(gig, formatId) {

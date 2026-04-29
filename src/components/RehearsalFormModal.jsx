@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import ButtonGroup from '@mui/material/ButtonGroup'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
@@ -23,19 +22,8 @@ import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
-
-dayjs.extend(customParseFormat)
-
-function timeStringToDayjs(val) {
-  if (!val) return null
-  const d = dayjs(val, 'HH:mm')
-  return d.isValid() ? d : null
-}
-
-function dayjsToTimeString(d) {
-  if (!d || !d.isValid()) return ''
-  return d.format('HH:mm')
-}
+import VoteToggle from './VoteToggle.jsx'
+import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
 import {
   addParticipant,
   createRehearsal,
@@ -46,43 +34,14 @@ import {
 } from '../api/rehearsals.js'
 import { listMembers } from '../api/bandMembers.js'
 
+dayjs.extend(customParseFormat)
+
 const EMPTY_FORM = {
   proposed_date: '',
   start_time: '',
   end_time: '',
   location: '',
   notes: '',
-}
-
-function toDateInput(val) {
-  if (!val) return ''
-  return String(val).slice(0, 10)
-}
-
-function toTimeInput(val) {
-  if (!val) return ''
-  return String(val).slice(0, 5)
-}
-
-function VoteToggle({ vote, onChange }) {
-  return (
-    <ButtonGroup size="small" variant="outlined">
-      <Button
-        variant={vote === 'yes' ? 'contained' : 'outlined'}
-        color="success"
-        onClick={() => onChange(vote === 'yes' ? null : 'yes')}
-      >
-        Yes
-      </Button>
-      <Button
-        variant={vote === 'no' ? 'contained' : 'outlined'}
-        color="error"
-        onClick={() => onChange(vote === 'no' ? null : 'no')}
-      >
-        No
-      </Button>
-    </ButtonGroup>
-  )
 }
 
 export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }) {

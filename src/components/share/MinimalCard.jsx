@@ -68,7 +68,7 @@ function Hairline({ accent, style }) {
   return <div style={{ background: accent, height: 4, ...style }} />
 }
 
-function SmallCaps({ children, color = INK, size = 22, gap = 4, style }) {
+function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }) {
   return (
     <div
       style={{
@@ -80,6 +80,7 @@ function SmallCaps({ children, color = INK, size = 22, gap = 4, style }) {
         color,
         ...style,
       }}
+      {...rest}
     >
       {children}
     </div>
@@ -96,6 +97,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
 
   return (
     <div
+      data-share-frame
       style={{
         position: 'relative',
         width: f.width,
@@ -107,6 +109,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
     >
       {/* Right-side accent block */}
       <div
+        data-pdf-layer="accent"
         style={{
           position: 'absolute',
           top: 0,
@@ -117,7 +120,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
         }}
       />
       {/* Photo inset — top right inside accent block */}
-      <PhotoFrame
+      <div data-share-layer="photo" data-pdf-layer="photo" style={{ position: 'absolute', top: 0, left: 670, width: 1080, height: 1080 }}><PhotoFrame
         src={photoSrc}
         pan={pan}
         style={{
@@ -127,10 +130,11 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
           width: 1080,
           height: 1080,
         }}
-      />
+      /></div>
 
       {/* Top-left "LIVE" eyebrow */}
       <SmallCaps
+        data-pdf-layer="live"
         color={SUBTLE}
         size={26}
         gap={10}
@@ -141,6 +145,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
 
       {/* Day numeral huge */}
       <div
+        data-pdf-layer="date-day"
         style={{
           position: 'absolute',
           top: 300,
@@ -155,6 +160,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
         {date.day}
       </div>
       <SmallCaps
+        data-pdf-layer="date-month"
         size={52}
         gap={8}
         style={{ position: 'absolute', top: 530, left: 84 }}
@@ -165,6 +171,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
       {/* Title — left side */}
       {title && (
         <div
+          data-pdf-layer="title"
           style={{
             position: 'absolute',
             top: 600,
@@ -186,6 +193,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
 
       {/* Bottom-left info stack */}
       <div
+        data-pdf-layer="venue-info"
         style={{
           position: 'absolute',
           left: 80,
@@ -217,6 +225,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
 
       {/* Right column inside accent block — vertical info */}
       <div
+        data-pdf-layer="showtime"
         style={{
           position: 'absolute',
           right: 70,
@@ -243,12 +252,11 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
             {time}
           </div>
         )}
-        
-        
       </div>
 
       {/* Logo top left */}
       <img
+        data-pdf-layer="logo"
         src={SHARE_LOGO}
         alt=""
         crossOrigin="anonymous"
@@ -262,7 +270,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
           filter: 'invert(1)',
         }}
       />
-      <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
+      <div data-pdf-layer="sticker" style={{ position: 'absolute', inset: 0 }}><StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} /></div>
     </div>
   )
 }
@@ -276,6 +284,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
 
   return (
     <div
+      data-share-frame
       style={{
         position: 'relative',
         width: f.width,
@@ -286,7 +295,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
       }}
     >
       {/* Photo centered in top panel */}
-      <PhotoFrame
+      <div data-share-layer="photo" data-pdf-layer="photo" style={{ position: 'absolute', top: 0, left: 0, width: 1080, height: 1200 }}><PhotoFrame
         src={photoSrc}
         pan={pan}
         style={{
@@ -297,20 +306,22 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
           width: 1080,
           height: 1200,
         }}
-      />
+      /></div>
 
       {/* Eyebrow above photo */}
       <SmallCaps
+        data-pdf-layer="live"
         size={42}
         gap={16}
         color="rgba(255, 255, 255, 0.7)"
         style={{ position: 'absolute', top: 150, left: 0, right: 0, textAlign: 'center' }}
       >
         Live
-        </SmallCaps>
+      </SmallCaps>
 
       {/* Day numeral huge in cream area, overlapping photo edge */}
       <div
+        data-pdf-layer="date-day"
         style={{
           position: 'absolute',
           top: 970,
@@ -325,6 +336,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
         {date.day}
       </div>
       <SmallCaps
+        data-pdf-layer="date-month"
         size={42}
         gap={10}
         style={{ position: 'absolute', top: 1300, left: 92 }}
@@ -335,6 +347,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
       {/* Title */}
       {title && (
         <div
+          data-pdf-layer="title"
           style={{
             position: 'absolute',
             top: 1400,
@@ -356,6 +369,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
 
       {/* Bottom info row */}
       <div
+        data-pdf-layer="venue-info"
         style={{
           position: 'absolute',
           left: 80,
@@ -383,6 +397,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
 
       {/* Logo top */}
       <img
+        data-pdf-layer="logo"
         src={SHARE_LOGO}
         alt=""
         crossOrigin="anonymous"
@@ -395,7 +410,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
           height: 'auto',
         }}
       />
-      <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
+      <div data-pdf-layer="sticker" style={{ position: 'absolute', inset: 0 }}><StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} /></div>
     </div>
   )
 }

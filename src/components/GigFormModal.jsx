@@ -1,51 +1,35 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import ButtonGroup from '@mui/material/ButtonGroup'
-import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
-import FormControl from '@mui/material/FormControl'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import FormGroup from '@mui/material/FormGroup'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
-import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
-import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import DeleteIcon from '@mui/icons-material/Delete'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import GigTasks from './GigTasks.jsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
+import GigParticipantsSection from './GigParticipantsSection.jsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { addGigParticipant, createGig, getGig, removeGigParticipant, setGigVote, updateGig } from '../api/gigs.js'
 import { listMembers } from '../api/bandMembers.js'
+import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
 
 dayjs.extend(customParseFormat)
-
-function timeStringToDayjs(val) {
-  if (!val) return null
-  const d = dayjs(val, 'HH:mm')
-  return d.isValid() ? d : null
-}
-
-function dayjsToTimeString(d) {
-  if (!d || !d.isValid()) return ''
-  return d.format('HH:mm')
-}
 
 const STATUSES = ['option', 'confirmed', 'announced']
 
@@ -75,37 +59,6 @@ function feeToCents(str) {
   const n = parseFloat(str)
   if (isNaN(n)) return null
   return Math.round(n * 100)
-}
-
-function toDateInput(val) {
-  if (!val) return ''
-  return val.slice(0, 10)
-}
-
-function toTimeInput(val) {
-  if (!val) return ''
-  return val.slice(0, 5)
-}
-
-function VoteToggle({ vote, onChange }) {
-  return (
-    <ButtonGroup size="small" variant="outlined">
-      <Button
-        variant={vote === 'yes' ? 'contained' : 'outlined'}
-        color="success"
-        onClick={() => onChange(vote === 'yes' ? null : 'yes')}
-      >
-        Yes
-      </Button>
-      <Button
-        variant={vote === 'no' ? 'contained' : 'outlined'}
-        color="error"
-        onClick={() => onChange(vote === 'no' ? null : 'no')}
-      >
-        No
-      </Button>
-    </ButtonGroup>
-  )
 }
 
 export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
@@ -448,78 +401,15 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                 Member availability
               </Typography>
               {mode === 'edit' && form.status === 'option' ? (
-                <Stack spacing={1}>
-                  {gig?.participants?.length === 0 && (
-                    <Typography variant="body2" color="text.secondary">
-                      No participants yet — add one below.
-                    </Typography>
-                  )}
-                  {(gig?.participants ?? []).map((p) => (
-                    <Box
-                      key={p.band_member_id}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        p: 1,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 1,
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 14,
-                          height: 14,
-                          borderRadius: '50%',
-                          bgcolor: p.color || 'grey.400',
-                        }}
-                      />
-                      <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 120 }}>
-                        {p.name}
-                      </Typography>
-                      <Chip size="small" label={p.position} variant="outlined" />
-                      <Box sx={{ flexGrow: 1 }} />
-                      <VoteToggle
-                        vote={p.vote}
-                        onChange={(v) => handleVote(p.band_member_id, v)}
-                      />
-                      <IconButton
-                        size="small"
-                        aria-label={`remove ${p.name}`}
-                        onClick={() => handleRemoveParticipant(p.band_member_id)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  ))}
-                  {candidateMembers.length > 0 && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                      <FormControl size="small" sx={{ minWidth: 220 }}>
-                        <InputLabel id="add-gig-participant-label">Add participant</InputLabel>
-                        <Select
-                          labelId="add-gig-participant-label"
-                          label="Add participant"
-                          value={addMemberId}
-                          onChange={(e) => setAddMemberId(e.target.value)}
-                        >
-                          {candidateMembers.map((m) => (
-                            <MenuItem key={m.id} value={m.id}>
-                              {m.name} ({m.position})
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <Button
-                        variant="outlined"
-                        disabled={!addMemberId}
-                        onClick={handleAddParticipant}
-                      >
-                        Add
-                      </Button>
-                    </Box>
-                  )}
-                </Stack>
+                <GigParticipantsSection
+                  participants={gig?.participants ?? []}
+                  candidateMembers={candidateMembers}
+                  addMemberId={addMemberId}
+                  onAddMemberChange={setAddMemberId}
+                  onAddParticipant={handleAddParticipant}
+                  onRemoveParticipant={handleRemoveParticipant}
+                  onVote={handleVote}
+                />
               ) : (
                 <GigAvailabilityPanel
                   eventDate={form.event_date}

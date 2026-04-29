@@ -1,12 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ThemeProvider } from '@mui/material/styles'
 import { createAppTheme } from '../theme.js'
-
-const ThemeContext = createContext({ mode: 'light', toggleTheme: () => {} })
-
-export function useThemeMode() {
-  return useContext(ThemeContext)
-}
+import { ThemeModeContext } from './themeModeContext.js'
 
 function getInitialMode() {
   const stored = localStorage.getItem('colorMode')
@@ -26,8 +21,8 @@ export function ThemeContextProvider({ children }) {
   const theme = useMemo(() => createAppTheme(mode), [mode])
 
   return (
-    <ThemeContext.Provider value={{ mode, toggleTheme }}>
+    <ThemeModeContext.Provider value={{ mode, toggleTheme }}>
       <ThemeProvider theme={theme}>{children}</ThemeProvider>
-    </ThemeContext.Provider>
+    </ThemeModeContext.Provider>
   )
 }

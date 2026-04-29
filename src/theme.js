@@ -32,3 +32,5 @@ export function createAppTheme(mode) {
     },
   })
 }
+
+export default createAppTheme('light')
