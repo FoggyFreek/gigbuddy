@@ -9,7 +9,7 @@ import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
 const router = Router()
 
-const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 const logoUpload = multer({
   storage: multer.memoryStorage(),

@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AuthContext } from '../contexts/authContext.js'
 import ProfilePage from '../pages/ProfilePage.jsx'
 import theme from '../theme.js'
 
@@ -35,21 +36,38 @@ vi.mock('../api/profile.js', () => ({
     ],
   }),
   updateProfile: vi.fn().mockResolvedValue({}),
+  uploadLogo: vi.fn().mockResolvedValue({ logo_path: 'logo/test.jpg' }),
   createLink: vi.fn().mockResolvedValue({ id: 11, label: 'Website', url: 'https://example.com', sort_order: 1 }),
   updateLink: vi.fn().mockResolvedValue({}),
   deleteLink: vi.fn().mockResolvedValue(null),
 }))
 
-import { createLink, deleteLink, getProfile, updateProfile } from '../api/profile.js'
+vi.mock('../utils/compressImage.js', () => ({
+  compressLogo: vi.fn().mockImplementation((file) => {
+    if (file.type === 'image/gif') throw new Error('File type not allowed')
+    return Promise.resolve(file)
+  }),
+}))
 
-function wrap(ui) {
-  return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
+import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '../api/profile.js'
+import { compressLogo } from '../utils/compressImage.js'
+
+function wrap(ui, { user } = {}) {
+  return render(
+    <ThemeProvider theme={theme}>
+      <AuthContext.Provider value={{ user, logout: vi.fn() }}>
+        {ui}
+      </AuthContext.Provider>
+    </ThemeProvider>
+  )
 }
 
 describe('ProfilePage', () => {
   beforeEach(() => {
     getProfile.mockClear()
     updateProfile.mockClear()
+    uploadLogo.mockClear()
+    compressLogo.mockClear()
     createLink.mockClear()
     deleteLink.mockClear()
   })
@@ -120,5 +138,19 @@ describe('ProfilePage', () => {
     await user.click(deleteBtn)
 
     await waitFor(() => expect(deleteLink).toHaveBeenCalledWith(10))
+  })
+
+  it('rejects GIF logo uploads before sending them', async () => {
+    wrap(<ProfilePage />, { user: { isAdmin: true } })
+    await waitFor(() => screen.getByText('EPK'))
+
+    const user = userEvent.setup({ applyAccept: false })
+    const input = document.querySelector('input[type="file"][accept="image/jpeg,image/png,image/webp"]')
+    const file = new File(['gif'], 'logo.gif', { type: 'image/gif' })
+
+    await user.upload(input, file)
+
+    await waitFor(() => expect(screen.getByText('File type not allowed')).toBeInTheDocument())
+    expect(uploadLogo).not.toHaveBeenCalled()
   })
 })

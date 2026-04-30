@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
@@ -121,7 +121,7 @@ describe('AuthContext', () => {
       </AuthProvider>,
     )
     await waitFor(() => expect(screen.getByText('hello Alice')).toBeInTheDocument())
-    window.dispatchEvent(new Event('auth:unauthorized'))
+    act(() => { window.dispatchEvent(new Event('auth:unauthorized')) })
     await waitFor(() => expect(screen.getByText('unauthenticated')).toBeInTheDocument())
   })
 })

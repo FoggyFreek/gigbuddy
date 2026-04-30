@@ -28,6 +28,7 @@
     "@tiptap/pm": "^3.22.4",
     "@tiptap/react": "^3.22.4",
     "@tiptap/starter-kit": "^3.22.4",
+    "browser-image-compression": "^2.0.2",
     "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.6",
     "dayjs": "^1.11.20",

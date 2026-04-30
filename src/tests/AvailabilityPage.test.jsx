@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AvailabilityPage from '../pages/AvailabilityPage.jsx'
@@ -38,8 +38,8 @@ describe('AvailabilityPage', () => {
     vi.clearAllMocks()
   })
 
-  it('renders page heading', () => {
-    wrap(<AvailabilityPage />)
+  it('renders page heading', async () => {
+    await act(async () => { wrap(<AvailabilityPage />) })
     expect(screen.getByRole('heading', { level: 5, name: /calendar/i })).toBeInTheDocument()
   })
 

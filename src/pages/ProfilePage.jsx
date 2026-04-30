@@ -13,6 +13,7 @@ import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import Snackbar from '@mui/material/Snackbar'
+import { alpha } from '@mui/material/styles'
 import AddIcon from '@mui/icons-material/Add'
 import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
@@ -37,8 +38,7 @@ import {
   updateProfile,
   uploadLogo,
 } from '../api/profile.js'
-
-const MAX_LOGO_SIZE = 2 * 1024 * 1024
+import { compressLogo } from '../utils/compressImage.js'
 
 const SOCIALS = [
   { field: 'instagram_handle', label: 'Instagram', Icon: InstagramIcon, prefix: 'instagram.com/' },
@@ -108,13 +108,10 @@ export default function ProfilePage() {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    if (file.size > MAX_LOGO_SIZE) {
-      setSnackbar('Logo must be under 2 MB')
-      return
-    }
     setLogoUploading(true)
     try {
-      const { logo_path } = await uploadLogo(file)
+      const compressed = await compressLogo(file)
+      const { logo_path } = await uploadLogo(compressed)
       setLogoPath(logo_path)
     } catch (err) {
       setSnackbar(err.message || 'Upload failed')
@@ -176,23 +173,21 @@ export default function ProfilePage() {
       <Grid container spacing={3} sx={{ mb: 3, alignItems: 'flex-start' }}>
       <Grid size={{ xs: 12, lg: 8 }}>
       <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
-        <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            Details
-          </Typography>
-          <Button
-            size="small"
-            startIcon={editingIdentity ? <CheckIcon /> : <EditIcon />}
-            onClick={() => setEditingIdentity((v) => !v)}
-            variant={editingIdentity ? 'contained' : 'outlined'}
-            sx={{ ml: 2 }}
-          >
-            {editingIdentity ? 'Done' : 'Edit'}
-          </Button>
-        </Stack>
-
-        {/* Band logo */}
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+        {/* Banner: accent strip with centered logo */}
+        <Box sx={(theme) => ({
+          mx: -3,
+          mt: -3,
+          mb: 3,
+          py: 3,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          background: theme.palette.mode === 'dark'
+            ? `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.55)}, ${alpha(theme.palette.primary.main, 0.35)})`
+            : `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.82)}, ${alpha(theme.palette.primary.main, 0.65)})`,
+          boxShadow: '0 3px 10px rgba(0,0,0,0.22)',
+          borderRadius: `${theme.shape.borderRadius}px ${theme.shape.borderRadius}px 0 0`,
+        })}>
           <Tooltip title={isAdmin ? 'Click to change logo' : ''} disableHoverListener={!isAdmin}>
             <Box sx={{ position: 'relative', display: 'inline-flex' }}>
               {isAdmin ? (
@@ -200,7 +195,7 @@ export default function ProfilePage() {
                   <input
                     ref={logoInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    accept="image/jpeg,image/png,image/webp"
                     style={{ display: 'none' }}
                     onChange={handleLogoFileChange}
                   />
@@ -238,6 +233,17 @@ export default function ProfilePage() {
               )}
             </Box>
           </Tooltip>
+        </Box>
+
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+          <Button
+            size="small"
+            startIcon={editingIdentity ? <CheckIcon /> : <EditIcon />}
+            onClick={() => setEditingIdentity((v) => !v)}
+            variant={editingIdentity ? 'contained' : 'outlined'}
+          >
+            {editingIdentity ? 'Done' : 'Edit'}
+          </Button>
         </Box>
 
         {editingIdentity ? (

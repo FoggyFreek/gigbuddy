@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -58,13 +58,13 @@ describe('RehearsalFormModal — create mode', () => {
     createRehearsal.mockClear()
   })
 
-  it('renders the propose rehearsal dialog', () => {
-    wrap(<RehearsalFormModal mode="create" onClose={() => {}} />)
+  it('renders the propose rehearsal dialog', async () => {
+    await act(async () => { wrap(<RehearsalFormModal mode="create" onClose={() => {}} />) })
     expect(screen.getByText('Propose rehearsal')).toBeInTheDocument()
   })
 
-  it('shows Cancel and Propose buttons', () => {
-    wrap(<RehearsalFormModal mode="create" onClose={() => {}} />)
+  it('shows Cancel and Propose buttons', async () => {
+    await act(async () => { wrap(<RehearsalFormModal mode="create" onClose={() => {}} />) })
     expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /propose/i })).toBeInTheDocument()
   })

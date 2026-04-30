@@ -40,8 +40,7 @@ import {
   SHARE_VARIATIONS,
   SHARE_VINTAGE_COLORS,
 } from '../utils/shareCard.js'
-
-const MAX_PHOTO_SIZE = 5 * 1024 * 1024
+import { compressPhoto } from '../utils/compressImage.js'
 
 export default function GigShareDialog({ open, onClose, gig }) {
   const { user } = useContext(AuthContext)
@@ -163,13 +162,10 @@ export default function GigShareDialog({ open, onClose, gig }) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    if (file.size > MAX_PHOTO_SIZE) {
-      setSnackbar({ msg: 'Photo must be under 5 MB' })
-      return
-    }
     setBusy(true)
     try {
-      const newPhoto = await uploadSharePhoto(file)
+      const compressed = await compressPhoto(file)
+      const newPhoto = await uploadSharePhoto(compressed)
       setPhotos((prev) => [...prev, newPhoto])
       setPhotoId(newPhoto.id)
     } catch (err) {

@@ -37,11 +37,11 @@ import {
   SHARE_FORMATS,
   SHARE_VINTAGE_COLORS,
 } from '../utils/shareCard.js'
+import { compressPhoto } from '../utils/compressImage.js'
 
 const NOW = new Date()
 const CURRENT_YEAR = NOW.getFullYear()
 const CURRENT_MONTH = NOW.getMonth() // 0-indexed
-const MAX_PHOTO_SIZE = 5 * 1024 * 1024
 
 function maxMonthsForYear(year) {
   if (year === CURRENT_YEAR) return 12 - CURRENT_MONTH
@@ -179,13 +179,10 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    if (file.size > MAX_PHOTO_SIZE) {
-      setSnackbar({ msg: 'Photo must be under 5 MB' })
-      return
-    }
     setBusy(true)
     try {
-      const newPhoto = await uploadSharePhoto(file)
+      const compressed = await compressPhoto(file)
+      const newPhoto = await uploadSharePhoto(compressed)
       setPhotos((prev) => [...prev, newPhoto])
       setPhotoId(newPhoto.id)
     } catch (err) {
