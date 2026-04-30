@@ -1,8 +1,20 @@
+import { randomUUID } from 'crypto'
+import path from 'path'
 import { Router } from 'express'
+import multer from 'multer'
 import pool from '../db/index.js'
+import { requireAdmin } from '../middleware/auth.js'
+import { storageClient, BUCKET } from '../utils/storage.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
 const router = Router()
+
+const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+})
 
 const PROFILE_FIELDS = [
   'band_name',
@@ -136,6 +148,44 @@ router.delete('/links/:linkId', async (req, res) => {
   )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
   res.status(204).end()
+})
+
+// Upload / replace band logo (admin only)
+router.post('/logo', requireAdmin, logoUpload.single('logo'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (!LOGO_ALLOWED_TYPES.has(req.file.mimetype)) {
+    return res.status(400).json({ error: 'File type not allowed' })
+  }
+
+  const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
+  const objectKey = `logo/${randomUUID()}${ext}`
+
+  const { rows: before } = await pool.query('SELECT logo_path FROM profile WHERE id = 1')
+  const oldKey = before[0]?.logo_path || null
+
+  await storageClient.putObject(BUCKET, objectKey, req.file.buffer, req.file.size, {
+    'Content-Type': req.file.mimetype,
+  })
+
+  let updatedKey
+  try {
+    const { rows } = await pool.query(
+      'UPDATE profile SET logo_path = $1 WHERE id = 1 RETURNING logo_path',
+      [objectKey]
+    )
+    updatedKey = rows[0].logo_path
+  } catch (err) {
+    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
+    throw err
+  }
+
+  if (oldKey) {
+    storageClient.removeObject(BUCKET, oldKey).catch((e) =>
+      console.warn('Failed to delete old logo object:', e.message)
+    )
+  }
+
+  res.json({ logo_path: updatedKey })
 })
 
 export default router

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import ButtonBase from '@mui/material/ButtonBase'
@@ -8,6 +8,7 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import FormControl from '@mui/material/FormControl'
+import IconButton from '@mui/material/IconButton'
 import InputLabel from '@mui/material/InputLabel'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
@@ -18,11 +19,15 @@ import Stack from '@mui/material/Stack'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
+import DeleteIcon from '@mui/icons-material/Delete'
 import DownloadIcon from '@mui/icons-material/Download'
 import GigShareCard from './GigShareCard.jsx'
 import { STICKER_CONFIGS } from './share/stickerConfigs.js'
+import { AuthContext } from '../contexts/authContext.js'
 import { getProfile } from '../api/profile.js'
+import { getSharePhotos, uploadSharePhoto, deleteSharePhoto } from '../api/sharePhotos.js'
 import {
   buildShareFilename,
   buildSharePdfFilename,
@@ -31,14 +36,20 @@ import {
   renderLayeredPdf,
   renderNodeToBlob,
   SHARE_FORMATS,
-  SHARE_PHOTOS,
   SHARE_STICKER_POSITIONS,
   SHARE_VARIATIONS,
   SHARE_VINTAGE_COLORS,
 } from '../utils/shareCard.js'
 
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024
+
 export default function GigShareDialog({ open, onClose, gig }) {
-  const [photoId, setPhotoId] = useState(SHARE_PHOTOS[0].id)
+  const { user } = useContext(AuthContext)
+  const isAdmin = user?.isAdmin
+
+  const [photos, setPhotos] = useState([])
+  const [photoId, setPhotoId] = useState(null)
+  const [photosLoading, setPhotosLoading] = useState(false)
   const [format, setFormat] = useState('square')
   const [accentId, setAccentId] = useState(SHARE_VINTAGE_COLORS[0].id)
   const [variation, setVariation] = useState(SHARE_VARIATIONS[0].id)
@@ -49,18 +60,36 @@ export default function GigShareDialog({ open, onClose, gig }) {
   const [busy, setBusy] = useState(false)
   const [snackbar, setSnackbar] = useState(null)
   const [socials, setSocials] = useState({})
+  const [logoSrc, setLogoSrc] = useState('/share/logo.png')
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null)
+  const photoInputRef = useRef(null)
   const cardRef = useRef(null)
 
   const formatDef = SHARE_FORMATS[format]
-  const photoSrc = SHARE_PHOTOS.find((p) => p.id === photoId)?.src
+  const selectedPhoto = photos.find((p) => p.id === photoId)
+  const photoSrc = selectedPhoto ? `/api/files/${selectedPhoto.object_key}` : null
   const accentColor =
     SHARE_VINTAGE_COLORS.find((c) => c.id === accentId)?.value
     || SHARE_VINTAGE_COLORS[0].value
 
+  async function loadPhotos() {
+    setPhotosLoading(true)
+    try {
+      const rows = await getSharePhotos()
+      setPhotos(rows)
+      setPhotoId((prev) => {
+        if (prev && rows.some((r) => r.id === prev)) return prev
+        return rows[0]?.id ?? null
+      })
+    } catch {
+      // non-fatal
+    } finally {
+      setPhotosLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (open) {
-      setPhotoId(SHARE_PHOTOS[0].id)
       setFormat('square')
       setAccentId(SHARE_VINTAGE_COLORS[0].id)
       setVariation(SHARE_VARIATIONS[0].id)
@@ -70,15 +99,18 @@ export default function GigShareDialog({ open, onClose, gig }) {
       setStickerPos('right-top')
       setBusy(false)
       setDownloadMenuAnchor(null)
-      getProfile().then((p) => setSocials({
-        instagram: p?.instagram_handle || '',
-        facebook: p?.facebook_handle || '',
-        tiktok: p?.tiktok_handle || '',
-      })).catch(() => {})
+      loadPhotos()
+      getProfile().then((p) => {
+        setSocials({
+          instagram: p?.instagram_handle || '',
+          facebook: p?.facebook_handle || '',
+          tiktok: p?.tiktok_handle || '',
+        })
+        setLogoSrc(p?.logo_path ? `/api/files/${p.logo_path}` : '/share/logo.png')
+      }).catch(() => {})
     }
   }, [open])
 
-  // scale the 1080-wide preview to fit roughly 360px wide in the dialog
   const previewMaxWidth = 320
   const scale = previewMaxWidth / formatDef.width
 
@@ -97,7 +129,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
       if (!blob) throw new Error('Snapshot failed')
       downloadBlob(blob, buildShareFilename(gig, format))
     } catch (e) {
-      setSnackbar({ severity: 'error', msg: e.message || 'Download failed' })
+      setSnackbar({ msg: e.message || 'Download failed' })
     } finally {
       setBusy(false)
     }
@@ -112,7 +144,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
       })
       downloadPdf(pdf, buildSharePdfFilename(gig, format))
     } catch (e) {
-      setSnackbar({ severity: 'error', msg: e.message || 'PDF export failed' })
+      setSnackbar({ msg: e.message || 'PDF export failed' })
     } finally {
       setBusy(false)
     }
@@ -125,6 +157,42 @@ export default function GigShareDialog({ open, onClose, gig }) {
   function handleDownloadOption(downloadFn) {
     setDownloadMenuAnchor(null)
     downloadFn()
+  }
+
+  async function handlePhotoUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    if (file.size > MAX_PHOTO_SIZE) {
+      setSnackbar({ msg: 'Photo must be under 5 MB' })
+      return
+    }
+    setBusy(true)
+    try {
+      const newPhoto = await uploadSharePhoto(file)
+      setPhotos((prev) => [...prev, newPhoto])
+      setPhotoId(newPhoto.id)
+    } catch (err) {
+      setSnackbar({ msg: err.message || 'Upload failed' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handlePhotoDelete(photo) {
+    try {
+      await deleteSharePhoto(photo.id)
+      setPhotos((prev) => {
+        const next = prev.filter((p) => p.id !== photo.id)
+        setPhotoId((cur) => {
+          if (cur !== photo.id) return cur
+          return next[0]?.id ?? null
+        })
+        return next
+      })
+    } catch (err) {
+      setSnackbar({ msg: err.message || 'Delete failed' })
+    }
   }
 
   return (
@@ -217,7 +285,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
               )}
             </Stack>
 
-            {/* preview shell — scaled-down view of the same node we snapshot */}
+            {/* preview */}
             <Box
               sx={{
                 width: previewMaxWidth,
@@ -252,6 +320,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
                   socials={socials}
                   sticker={sticker}
                   stickerPosition={stickerPos}
+                  logoSrc={logoSrc}
                 />
               </Box>
             </Box>
@@ -288,37 +357,91 @@ export default function GigShareDialog({ open, onClose, gig }) {
               />
             </Box>
 
-            <Stack direction="row" spacing={1.5}>
-              {SHARE_PHOTOS.map((p) => {
-                const selected = p.id === photoId
-                return (
-                  <Tooltip key={p.id} title={p.label}>
-                    <ButtonBase
-                      onClick={() => setPhotoId(p.id)}
-                      sx={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: 1,
-                        overflow: 'hidden',
-                        border: '3px solid',
-                        borderColor: selected ? 'primary.main' : 'transparent',
-                        outline: selected ? '1px solid' : 'none',
-                        outlineColor: 'primary.light',
-                        bgcolor: 'grey.800',
-                      }}
-                    >
-                      <Box
-                        component="img"
-                        src={p.src}
-                        alt={p.label}
-                        sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={(e) => { e.currentTarget.style.opacity = 0.2 }}
-                      />
-                    </ButtonBase>
-                  </Tooltip>
-                )
-              })}
-            </Stack>
+            {/* photo carousel */}
+            {photosLoading ? (
+              <CircularProgress size={24} />
+            ) : (
+              <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+                {photos.map((p) => {
+                  const selected = p.id === photoId
+                  return (
+                    <Stack key={p.id} alignItems="center" spacing={0.5}>
+                      <Tooltip title={p.label}>
+                        <ButtonBase
+                          onClick={() => setPhotoId(p.id)}
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                            border: '3px solid',
+                            borderColor: selected ? 'primary.main' : 'transparent',
+                            outline: selected ? '1px solid' : 'none',
+                            outlineColor: 'primary.light',
+                            bgcolor: 'grey.800',
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={`/api/files/${p.object_key}`}
+                            alt={p.label}
+                            sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => { e.currentTarget.style.opacity = 0.2 }}
+                          />
+                        </ButtonBase>
+                      </Tooltip>
+                      {isAdmin && (
+                        <IconButton
+                          size="small"
+                          aria-label={`Delete ${p.label}`}
+                          onClick={() => handlePhotoDelete(p)}
+                          sx={{ color: 'error.main', p: 0.25 }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Stack>
+                  )
+                })}
+
+                {isAdmin && (
+                  <>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{ display: 'none' }}
+                      onChange={handlePhotoUpload}
+                    />
+                    <Stack alignItems="center" spacing={0.5}>
+                      <Tooltip title="Upload photo">
+                        <ButtonBase
+                          onClick={() => photoInputRef.current?.click()}
+                          disabled={busy}
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            borderRadius: 1,
+                            border: '2px dashed',
+                            borderColor: 'divider',
+                            bgcolor: 'action.hover',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.5,
+                            color: 'text.secondary',
+                          }}
+                        >
+                          <AddPhotoAlternateIcon fontSize="small" />
+                        </ButtonBase>
+                      </Tooltip>
+                      <Box sx={{ height: 22 }} />
+                    </Stack>
+                  </>
+                )}
+              </Stack>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>

@@ -6,8 +6,9 @@ import {
   formatGigVenue,
   formatGigVenueName,
   SHARE_FORMATS,
-  SHARE_LOGO,
 } from '../utils/shareCard.js'
+
+const FALLBACK_LOGO = '/share/logo.png'
 import MinimalCard from './share/MinimalCard.jsx'
 import SocialsRow from './share/SocialsRow.jsx'
 import StickerOverlay from './share/StickerOverlay.jsx'
@@ -179,7 +180,7 @@ function PhotoBackdrop({ src, zoom, pan = 0, format }) {
   )
 }
 
-function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition }) {
+function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venueName = formatGigVenueName(gig)
@@ -202,7 +203,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
       {/* logo top-left */}
       <img
         data-pdf-layer="logo"
-        src={SHARE_LOGO}
+        src={logoSrc || FALLBACK_LOGO}
         alt=""
         crossOrigin="anonymous"
         style={{
@@ -393,7 +394,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
   )
 }
 
-function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition }) {
+function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venue = formatGigVenue(gig)
@@ -415,7 +416,7 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
       {/* logo top-center */}
       <img
         data-pdf-layer="logo"
-        src={SHARE_LOGO}
+        src={logoSrc || FALLBACK_LOGO}
         alt=""
         crossOrigin="anonymous"
         style={{
@@ -590,10 +591,10 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
   )
 }
 
-function VintageVariation({ gig, photoSrc, format, zoom, pan, accent, socials, sticker, stickerPosition }) {
+function VintageVariation({ gig, photoSrc, format, zoom, pan, accent, socials, sticker, stickerPosition, logoSrc }) {
   return format === 'story'
-    ? <StoryLayout gig={gig} photoSrc={photoSrc} zoom={zoom} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} />
-    : <SquareLayout gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} />
+    ? <StoryLayout gig={gig} photoSrc={photoSrc} zoom={zoom} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} />
+    : <SquareLayout gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} />
 }
 
 const VARIATION_COMPONENTS = {
@@ -602,7 +603,7 @@ const VARIATION_COMPONENTS = {
 }
 
 const GigShareCard = forwardRef(function GigShareCard(
-  { gig, photoSrc, format = 'square', zoom, pan, accent, variation = 'vintage', socials, sticker, stickerPosition },
+  { gig, photoSrc, format = 'square', zoom, pan, accent, variation = 'vintage', socials, sticker, stickerPosition, logoSrc },
   ref,
 ) {
   const Component = VARIATION_COMPONENTS[variation] || VintageVariation
@@ -618,6 +619,7 @@ const GigShareCard = forwardRef(function GigShareCard(
         socials={socials}
         sticker={sticker}
         stickerPosition={stickerPosition}
+        logoSrc={logoSrc}
       />
     </div>
   )

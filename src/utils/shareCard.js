@@ -1,15 +1,6 @@
 import * as htmlToImage from 'html-to-image'
 import jsPDF from 'jspdf'
 
-export const SHARE_LOGO = '/share/logo.png'
-
-export const SHARE_PHOTOS = [
-  { id: 'photo1', src: '/share/photos/photo1.jpg', label: 'Photo 1' },
-  { id: 'photo2', src: '/share/photos/photo2.jpg', label: 'Photo 2' },
-  { id: 'photo3', src: '/share/photos/photo3.jpg', label: 'Photo 3' },
-  { id: 'photo4', src: '/share/photos/photo4.jpg', label: 'Photo 4' },
-]
-
 export const SHARE_FORMATS = {
   square: { id: 'square', label: 'Square (1080×1080)', width: 1080, height: 1080 },
   story: { id: 'story', label: 'Story (1080×1920)', width: 1080, height: 1920 },

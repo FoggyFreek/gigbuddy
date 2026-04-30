@@ -12,6 +12,8 @@ import contactsRouter from './contacts.js'
 import pushRouter from './push.js'
 import authRouter from './auth.js'
 import usersRouter from './users.js'
+import sharePhotosRouter from './sharePhotos.js'
+import filesRouter from './files.js'
 import { requireApproved, requireAdmin } from '../middleware/auth.js'
 import { csrf } from '../middleware/csrf.js'
 
@@ -36,5 +38,7 @@ router.use('/email-templates', requireApproved, emailTemplatesRouter)
 router.use('/venues', requireApproved, venuesRouter)
 router.use('/contacts', requireApproved, contactsRouter)
 router.use('/push', requireApproved, pushRouter)
+router.use('/share/photos', requireApproved, sharePhotosRouter)
+router.use('/files', requireApproved, filesRouter)
 
 export default router

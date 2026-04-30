@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import ButtonBase from '@mui/material/ButtonBase'
@@ -9,6 +9,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import FormControl from '@mui/material/FormControl'
 import FormControlLabel from '@mui/material/FormControlLabel'
+import IconButton from '@mui/material/IconButton'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import Slider from '@mui/material/Slider'
@@ -19,10 +20,14 @@ import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import DeleteIcon from '@mui/icons-material/Delete'
 import DownloadIcon from '@mui/icons-material/Download'
 import TourShareCard from './share/TourShareCard.jsx'
+import { AuthContext } from '../contexts/authContext.js'
 import { getProfile } from '../api/profile.js'
+import { getSharePhotos, uploadSharePhoto, deleteSharePhoto } from '../api/sharePhotos.js'
 import {
   buildTourShareFilename,
   canCopyImageToClipboard,
@@ -30,22 +35,27 @@ import {
   downloadBlob,
   renderNodeToBlob,
   SHARE_FORMATS,
-  SHARE_PHOTOS,
   SHARE_VINTAGE_COLORS,
 } from '../utils/shareCard.js'
 
 const NOW = new Date()
 const CURRENT_YEAR = NOW.getFullYear()
 const CURRENT_MONTH = NOW.getMonth() // 0-indexed
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024
 
 function maxMonthsForYear(year) {
-  if (year === CURRENT_YEAR) return 12 - CURRENT_MONTH // months remaining incl. this month
+  if (year === CURRENT_YEAR) return 12 - CURRENT_MONTH
   if (year > CURRENT_YEAR) return 12
-  return 0 // previous year: all past, disable selector
+  return 0
 }
 
 export default function TourShareDialog({ open, onClose, gigs = [] }) {
-  const [photoId, setPhotoId] = useState(SHARE_PHOTOS[0].id)
+  const { user } = useContext(AuthContext)
+  const isAdmin = user?.isAdmin
+
+  const [photos, setPhotos] = useState([])
+  const [photoId, setPhotoId] = useState(null)
+  const [photosLoading, setPhotosLoading] = useState(false)
   const [format, setFormat] = useState('square')
   const [accentId, setAccentId] = useState(SHARE_VINTAGE_COLORS[0].id)
   const [photoOpacity, setPhotoOpacity] = useState(35)
@@ -53,22 +63,39 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
   const [monthsAhead, setMonthsAhead] = useState('all')
   const [includePast, setIncludePast] = useState(false)
   const [socials, setSocials] = useState({})
+  const [logoSrc, setLogoSrc] = useState('/share/logo.png')
   const [busy, setBusy] = useState(false)
   const [snackbar, setSnackbar] = useState(null)
+  const photoInputRef = useRef(null)
   const cardRef = useRef(null)
 
   const canCopy = useMemo(() => canCopyImageToClipboard(), [])
   const formatDef = SHARE_FORMATS[format]
-  const photoSrc = SHARE_PHOTOS.find((p) => p.id === photoId)?.src
+  const selectedPhoto = photos.find((p) => p.id === photoId)
+  const photoSrc = selectedPhoto ? `/api/files/${selectedPhoto.object_key}` : null
   const accentColor = SHARE_VINTAGE_COLORS.find((c) => c.id === accentId)?.value || SHARE_VINTAGE_COLORS[0].value
 
   const today = useMemo(() => NOW.toISOString().slice(0, 10), [])
-
   const maxMonths = maxMonthsForYear(selectedYear)
+
+  async function loadPhotos() {
+    setPhotosLoading(true)
+    try {
+      const rows = await getSharePhotos()
+      setPhotos(rows)
+      setPhotoId((prev) => {
+        if (prev && rows.some((r) => r.id === prev)) return prev
+        return rows[0]?.id ?? null
+      })
+    } catch {
+      // non-fatal
+    } finally {
+      setPhotosLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (open) {
-      setPhotoId(SHARE_PHOTOS[0].id)
       setFormat('square')
       setAccentId(SHARE_VINTAGE_COLORS[0].id)
       setPhotoOpacity(35)
@@ -76,18 +103,21 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
       setMonthsAhead('all')
       setIncludePast(false)
       setBusy(false)
-      getProfile().then((p) => setSocials({
-        instagram: p?.instagram_handle || '',
-        facebook: p?.facebook_handle || '',
-        tiktok: p?.tiktok_handle || '',
-      })).catch(() => {})
+      loadPhotos()
+      getProfile().then((p) => {
+        setSocials({
+          instagram: p?.instagram_handle || '',
+          facebook: p?.facebook_handle || '',
+          tiktok: p?.tiktok_handle || '',
+        })
+        setLogoSrc(p?.logo_path ? `/api/files/${p.logo_path}` : '/share/logo.png')
+      }).catch(() => {})
     }
   }, [open])
 
   function handleYearChange(_, v) {
     if (!v) return
     setSelectedYear(v)
-    // reset months ahead if it exceeds the new year's max
     const newMax = maxMonthsForYear(v)
     if (monthsAhead !== 'all' && (newMax === 0 || Number(monthsAhead) > newMax)) {
       setMonthsAhead('all')
@@ -125,7 +155,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
       if (!blob) throw new Error('Snapshot failed')
       downloadBlob(blob, buildTourShareFilename(selectedYear, format))
     } catch (e) {
-      setSnackbar({ severity: 'error', msg: e.message || 'Download failed' })
+      setSnackbar({ msg: e.message || 'Download failed' })
     } finally {
       setBusy(false)
     }
@@ -137,11 +167,47 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
       const blob = await snapshot()
       if (!blob) throw new Error('Snapshot failed')
       await copyBlobToClipboard(blob)
-      setSnackbar({ severity: 'success', msg: 'Image copied to clipboard' })
+      setSnackbar({ msg: 'Image copied to clipboard' })
     } catch (e) {
-      setSnackbar({ severity: 'error', msg: e.message || 'Copy failed' })
+      setSnackbar({ msg: e.message || 'Copy failed' })
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handlePhotoUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    if (file.size > MAX_PHOTO_SIZE) {
+      setSnackbar({ msg: 'Photo must be under 5 MB' })
+      return
+    }
+    setBusy(true)
+    try {
+      const newPhoto = await uploadSharePhoto(file)
+      setPhotos((prev) => [...prev, newPhoto])
+      setPhotoId(newPhoto.id)
+    } catch (err) {
+      setSnackbar({ msg: err.message || 'Upload failed' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handlePhotoDelete(photo) {
+    try {
+      await deleteSharePhoto(photo.id)
+      setPhotos((prev) => {
+        const next = prev.filter((p) => p.id !== photo.id)
+        setPhotoId((cur) => {
+          if (cur !== photo.id) return cur
+          return next[0]?.id ?? null
+        })
+        return next
+      })
+    } catch (err) {
+      setSnackbar({ msg: err.message || 'Delete failed' })
     }
   }
 
@@ -271,11 +337,12 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
                   format={format}
                   socials={socials}
                   year={selectedYear}
+                  logoSrc={logoSrc}
                 />
               </Box>
             </Box>
 
-            {/* Photo opacity — below preview, above photo selection */}
+            {/* Photo opacity */}
             <Box sx={{ width: previewMaxWidth, px: 1 }}>
               <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
                 Photo opacity
@@ -296,38 +363,91 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
               />
             </Box>
 
-            {/* Photo thumbnails */}
-            <Stack direction="row" spacing={1.5}>
-              {SHARE_PHOTOS.map((p) => {
-                const selected = p.id === photoId
-                return (
-                  <Tooltip key={p.id} title={p.label}>
-                    <ButtonBase
-                      onClick={() => setPhotoId(p.id)}
-                      sx={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: 1,
-                        overflow: 'hidden',
-                        border: '3px solid',
-                        borderColor: selected ? 'primary.main' : 'transparent',
-                        outline: selected ? '1px solid' : 'none',
-                        outlineColor: 'primary.light',
-                        bgcolor: 'grey.800',
-                      }}
-                    >
-                      <Box
-                        component="img"
-                        src={p.src}
-                        alt={p.label}
-                        sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={(e) => { e.currentTarget.style.opacity = 0.2 }}
-                      />
-                    </ButtonBase>
-                  </Tooltip>
-                )
-              })}
-            </Stack>
+            {/* Photo carousel */}
+            {photosLoading ? (
+              <CircularProgress size={24} />
+            ) : (
+              <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+                {photos.map((p) => {
+                  const selected = p.id === photoId
+                  return (
+                    <Stack key={p.id} alignItems="center" spacing={0.5}>
+                      <Tooltip title={p.label}>
+                        <ButtonBase
+                          onClick={() => setPhotoId(p.id)}
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                            border: '3px solid',
+                            borderColor: selected ? 'primary.main' : 'transparent',
+                            outline: selected ? '1px solid' : 'none',
+                            outlineColor: 'primary.light',
+                            bgcolor: 'grey.800',
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={`/api/files/${p.object_key}`}
+                            alt={p.label}
+                            sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => { e.currentTarget.style.opacity = 0.2 }}
+                          />
+                        </ButtonBase>
+                      </Tooltip>
+                      {isAdmin && (
+                        <IconButton
+                          size="small"
+                          aria-label={`Delete ${p.label}`}
+                          onClick={() => handlePhotoDelete(p)}
+                          sx={{ color: 'error.main', p: 0.25 }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Stack>
+                  )
+                })}
+
+                {isAdmin && (
+                  <>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{ display: 'none' }}
+                      onChange={handlePhotoUpload}
+                    />
+                    <Stack alignItems="center" spacing={0.5}>
+                      <Tooltip title="Upload photo">
+                        <ButtonBase
+                          onClick={() => photoInputRef.current?.click()}
+                          disabled={busy}
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            borderRadius: 1,
+                            border: '2px dashed',
+                            borderColor: 'divider',
+                            bgcolor: 'action.hover',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.5,
+                            color: 'text.secondary',
+                          }}
+                        >
+                          <AddPhotoAlternateIcon fontSize="small" />
+                        </ButtonBase>
+                      </Tooltip>
+                      <Box sx={{ height: 22 }} />
+                    </Stack>
+                  </>
+                )}
+              </Stack>
+            )}
 
             {visibleGigs.length === 0 && (
               <Typography variant="body2" color="text.secondary" textAlign="center">

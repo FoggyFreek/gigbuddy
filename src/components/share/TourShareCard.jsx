@@ -1,6 +1,8 @@
 import { forwardRef } from 'react'
-import { formatGigRowDate, SHARE_FORMATS, SHARE_LOGO } from '../../utils/shareCard.js'
+import { formatGigRowDate, SHARE_FORMATS } from '../../utils/shareCard.js'
 import SocialsRow from './SocialsRow.jsx'
+
+const FALLBACK_LOGO = '/share/logo.png'
 
 const PAPER = '#f6efe2'
 
@@ -207,7 +209,7 @@ function GigList({ gigs, today, fontSize, rowHeight, accent }) {
 
 // Square layout: compact, graphic, medium logo
 // List available height: 1080 - 65(top) - 90(logo) - 20(gap) - 64(title) - 16(gap) - 3(hair) - 20(gap) - 20(gap) - 3(hair) - 75(bot) ≈ 704
-function TourSquare({ gigs, photoSrc, photoOpacity, accent, year, today, socials }) {
+function TourSquare({ gigs, photoSrc, photoOpacity, accent, year, today, socials, logoSrc }) {
   const LIST_AVAILABLE = 620
   const count = gigs.length || 1
   const fontSize = calculateRowFontSize(count, LIST_AVAILABLE)
@@ -226,7 +228,7 @@ function TourSquare({ gigs, photoSrc, photoOpacity, accent, year, today, socials
         }}
       >
         <img
-          src={SHARE_LOGO}
+          src={logoSrc || FALLBACK_LOGO}
           alt=""
           crossOrigin="anonymous"
           style={{
@@ -264,7 +266,7 @@ function TourSquare({ gigs, photoSrc, photoOpacity, accent, year, today, socials
 
 // Story layout: airy, large logo, "ON TOUR" and year on separate lines for drama
 // List available height: 1920 - 80(top) - 120(logo) - 28(gap) - 95(ON TOUR) - 60(year) - 20(gap) - 3(hair) - 24(gap) - 24(gap) - 3(hair) - 90(bot) ≈ 1373
-function TourStory({ gigs, photoSrc, photoOpacity, accent, year, today, socials }) {
+function TourStory({ gigs, photoSrc, photoOpacity, accent, year, today, socials, logoSrc }) {
   const LIST_AVAILABLE = 1280
   const count = gigs.length || 1
   const fontSize = calculateRowFontSize(count, LIST_AVAILABLE)
@@ -283,7 +285,7 @@ function TourStory({ gigs, photoSrc, photoOpacity, accent, year, today, socials 
         }}
       >
         <img
-          src={SHARE_LOGO}
+          src={logoSrc || FALLBACK_LOGO}
           alt=""
           crossOrigin="anonymous"
           style={{
@@ -334,7 +336,7 @@ function TourStory({ gigs, photoSrc, photoOpacity, accent, year, today, socials 
 }
 
 const TourShareCard = forwardRef(function TourShareCard(
-  { gigs = [], photoSrc, photoOpacity = 35, accent = '#f5c542', format = 'square', socials, year: yearProp },
+  { gigs = [], photoSrc, photoOpacity = 35, accent = '#f5c542', format = 'square', socials, year: yearProp, logoSrc },
   ref,
 ) {
   const today = new Date().toISOString().slice(0, 10)
@@ -342,7 +344,7 @@ const TourShareCard = forwardRef(function TourShareCard(
     ? new Date(gigs[0].event_date).getFullYear()
     : new Date().getFullYear())
 
-  const props = { gigs, photoSrc, photoOpacity, accent, year, today, socials }
+  const props = { gigs, photoSrc, photoOpacity, accent, year, today, socials, logoSrc }
 
   return (
     <div ref={ref}>

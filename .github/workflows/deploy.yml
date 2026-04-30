@@ -17,7 +17,7 @@ jobs:
           script: |
             cd /opt/gigbuddy
             git pull origin main
-            cat > .env <<EOF
+            cat > .env <<'EOF'
             PGHOST=postgres
             PGDATABASE=${{ secrets.PGDATABASE }}
             PGUSER=${{ secrets.PGUSER }}
@@ -34,7 +34,14 @@ jobs:
             VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
             VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
             VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
+            RUSTFS_ACCESS_KEY=${{ secrets.RUSTFS_ACCESS_KEY }}
+            RUSTFS_SECRET_KEY=${{ secrets.RUSTFS_SECRET_KEY }}
+            RUSTFS_BUCKET=${{ secrets.RUSTFS_BUCKET }}
+            RUSTFS_PORT=${{ secrets.RUSTFS_PORT }}
+            RUSTFS_USE_SSL=${{ secrets.RUSTFS_USE_SSL }}
             NODE_ENV=production
             EOF
-            docker compose up -d --build
+            docker compose build
+            docker compose up -d postgres rustfs rustfs_init
             docker compose run --rm migrate
+            docker compose up -d app

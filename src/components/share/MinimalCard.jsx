@@ -5,8 +5,9 @@ import {
   formatGigDoorsTime,
   formatGigVenueName,
   SHARE_FORMATS,
-  SHARE_LOGO,
 } from '../../utils/shareCard.js'
+
+const FALLBACK_LOGO = '/share/logo.png'
 import SocialsRow from './SocialsRow.jsx'
 import StickerOverlay from './StickerOverlay.jsx'
 
@@ -87,7 +88,7 @@ function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }
   )
 }
 
-function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition }) {
+function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venueName = formatGigVenueName(gig)
@@ -257,7 +258,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
       {/* Logo top left */}
       <img
         data-pdf-layer="logo"
-        src={SHARE_LOGO}
+        src={logoSrc || FALLBACK_LOGO}
         alt=""
         crossOrigin="anonymous"
         style={{
@@ -275,7 +276,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
   )
 }
 
-function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition }) {
+function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc }) {
   const date = formatGigDateShort(gig)
   const venueName = formatGigVenueName(gig)
   const city = formatGigCity(gig)
@@ -398,7 +399,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
       {/* Logo top */}
       <img
         data-pdf-layer="logo"
-        src={SHARE_LOGO}
+        src={logoSrc || FALLBACK_LOGO}
         alt=""
         crossOrigin="anonymous"
         style={{
@@ -415,8 +416,8 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
   )
 }
 
-export default function MinimalCard({ gig, photoSrc, format, pan, accent, socials, sticker, stickerPosition }) {
+export default function MinimalCard({ gig, photoSrc, format, pan, accent, socials, sticker, stickerPosition, logoSrc }) {
   return format === 'story'
-    ? <MinimalStory gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} />
-    : <MinimalSquare gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} />
+    ? <MinimalStory gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} />
+    : <MinimalSquare gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} />
 }

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import ButtonBase from '@mui/material/ButtonBase'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
@@ -11,6 +12,7 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import Snackbar from '@mui/material/Snackbar'
 import AddIcon from '@mui/icons-material/Add'
 import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
@@ -24,6 +26,7 @@ import YouTubeIcon from '@mui/icons-material/YouTube'
 import SpotifyIcon from '../components/icons/SpotifyIcon.jsx'
 import TikTokIcon from '../components/icons/TikTokIcon.jsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
+import { useAuth } from '../contexts/authContext.js'
 import { useProfile } from '../contexts/profileContext.js'
 import BandMembersSection from '../components/BandMembersSection.jsx'
 import {
@@ -32,7 +35,10 @@ import {
   getProfile,
   updateLink,
   updateProfile,
+  uploadLogo,
 } from '../api/profile.js'
+
+const MAX_LOGO_SIZE = 2 * 1024 * 1024
 
 const SOCIALS = [
   { field: 'instagram_handle', label: 'Instagram', Icon: InstagramIcon, prefix: 'instagram.com/' },
@@ -53,7 +59,12 @@ const EMPTY_FORM = {
 }
 
 export default function ProfilePage() {
+  const { user } = useAuth()
+  const isAdmin = user?.isAdmin
+
   const [form, setForm] = useState(EMPTY_FORM)
+  const [logoPath, setLogoPath] = useState(null)
+  const [logoUploading, setLogoUploading] = useState(false)
   const [links, setLinks] = useState([])
   const [loading, setLoading] = useState(true)
   const [newLink, setNewLink] = useState({ label: '', url: '' })
@@ -61,6 +72,8 @@ export default function ProfilePage() {
   const [copiedField, setCopiedField] = useState(null)
   const [editingIdentity, setEditingIdentity] = useState(false)
   const [editingSocials, setEditingSocials] = useState(false)
+  const [snackbar, setSnackbar] = useState(null)
+  const logoInputRef = useRef(null)
   const { setBandName } = useProfile()
 
   function handleCopy(field, text) {
@@ -85,10 +98,30 @@ export default function ProfilePage() {
           youtube_handle: data.youtube_handle || '',
           spotify_handle: data.spotify_handle || '',
         })
+        setLogoPath(data.logo_path || null)
         setLinks(data.links || [])
       })
       .finally(() => setLoading(false))
   }, [])
+
+  async function handleLogoFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    if (file.size > MAX_LOGO_SIZE) {
+      setSnackbar('Logo must be under 2 MB')
+      return
+    }
+    setLogoUploading(true)
+    try {
+      const { logo_path } = await uploadLogo(file)
+      setLogoPath(logo_path)
+    } catch (err) {
+      setSnackbar(err.message || 'Upload failed')
+    } finally {
+      setLogoUploading(false)
+    }
+  }
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -157,6 +190,55 @@ export default function ProfilePage() {
             {editingIdentity ? 'Done' : 'Edit'}
           </Button>
         </Stack>
+
+        {/* Band logo */}
+        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+          <Tooltip title={isAdmin ? 'Click to change logo' : ''} disableHoverListener={!isAdmin}>
+            <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+              {isAdmin ? (
+                <>
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    style={{ display: 'none' }}
+                    onChange={handleLogoFileChange}
+                  />
+                  <ButtonBase
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={logoUploading}
+                    sx={{ borderRadius: 1, overflow: 'hidden', cursor: 'pointer' }}
+                  >
+                    <Box
+                      component="img"
+                      src={logoPath ? `/api/files/${logoPath}` : '/share/logo.png'}
+                      alt="Band logo"
+                      sx={{ maxWidth: 200, maxHeight: 120, objectFit: 'contain', display: 'block' }}
+                      onError={(e) => { e.currentTarget.src = '/share/logo.png' }}
+                    />
+                  </ButtonBase>
+                  {logoUploading && (
+                    <Box sx={{
+                      position: 'absolute', inset: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 1,
+                    }}>
+                      <CircularProgress size={28} />
+                    </Box>
+                  )}
+                </>
+              ) : (
+                <Box
+                  component="img"
+                  src={logoPath ? `/api/files/${logoPath}` : '/share/logo.png'}
+                  alt="Band logo"
+                  sx={{ maxWidth: 200, maxHeight: 120, objectFit: 'contain', display: 'block' }}
+                  onError={(e) => { e.currentTarget.src = '/share/logo.png' }}
+                />
+              )}
+            </Box>
+          </Tooltip>
+        </Box>
 
         {editingIdentity ? (
           <Grid container spacing={2}>
@@ -353,6 +435,13 @@ export default function ProfilePage() {
       </Paper>
       </Grid>
       </Grid>
+
+      <Snackbar
+        open={!!snackbar}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar(null)}
+        message={snackbar}
+      />
     </Box>
   )
 }

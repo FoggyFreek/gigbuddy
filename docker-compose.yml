@@ -14,14 +14,65 @@ services:
       timeout: 5s
       retries: 5
 
+  rustfs_perms:
+    image: busybox
+    user: root
+    volumes:
+      - rustfs_data:/data
+    command: chown -R 10001:10001 /data
+    restart: "no"
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    command: /data
+    restart: unless-stopped
+    depends_on:
+      rustfs_perms:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      # 9000 bound to 127.0.0.1 only — reachable from the host for local dev,
+      # but not exposed externally on the VPS. The app container uses the internal
+      # Docker network (rustfs:9000) and ignores this binding.
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/ > /dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rustfs_init:
+    image: minio/mc:latest
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    env_file: .env
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://rustfs:9000 $${RUSTFS_ACCESS_KEY} $${RUSTFS_SECRET_KEY};
+        mc mb --ignore-existing local/$${RUSTFS_BUCKET};
+        exit 0
+      "
+    restart: "no"
+
   app:
     build: .
     restart: unless-stopped
     ports:
       - "3002:3002"
     env_file: .env
+    environment:
+      RUSTFS_ENDPOINT: rustfs
     depends_on:
       postgres:
+        condition: service_healthy
+      rustfs:
         condition: service_healthy
 
   migrate:
@@ -35,3 +86,4 @@ services:
 
 volumes:
   postgres_data:
+  rustfs_data:
