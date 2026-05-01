@@ -8,6 +8,7 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import FormControl from '@mui/material/FormControl'
+import FormControlLabel from '@mui/material/FormControlLabel'
 import IconButton from '@mui/material/IconButton'
 import InputLabel from '@mui/material/InputLabel'
 import Menu from '@mui/material/Menu'
@@ -16,6 +17,7 @@ import Select from '@mui/material/Select'
 import Slider from '@mui/material/Slider'
 import Snackbar from '@mui/material/Snackbar'
 import Stack from '@mui/material/Stack'
+import Switch from '@mui/material/Switch'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
@@ -61,12 +63,15 @@ export default function GigShareDialog({ open, onClose, gig }) {
   const [socials, setSocials] = useState({})
   const [logoSrc, setLogoSrc] = useState('/share/logo.png')
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null)
+  const [showBanner, setShowBanner] = useState(false)
   const photoInputRef = useRef(null)
   const cardRef = useRef(null)
 
   const formatDef = SHARE_FORMATS[format]
   const selectedPhoto = photos.find((p) => p.id === photoId)
   const photoSrc = selectedPhoto ? `/api/files/${selectedPhoto.object_key}` : null
+  const gigBannerSrc = gig?.banner_path ? `/api/files/${gig.banner_path}` : null
+  const bannerSrc = showBanner && gigBannerSrc ? gigBannerSrc : null
   const accentColor =
     SHARE_VINTAGE_COLORS.find((c) => c.id === accentId)?.value
     || SHARE_VINTAGE_COLORS[0].value
@@ -98,6 +103,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
       setStickerPos('right-top')
       setBusy(false)
       setDownloadMenuAnchor(null)
+      setShowBanner(!!gig?.banner_path)
       loadPhotos()
       getProfile().then((p) => {
         setSocials({
@@ -108,7 +114,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
         setLogoSrc(p?.logo_path ? `/api/files/${p.logo_path}` : '/share/logo.png')
       }).catch(() => {})
     }
-  }, [open])
+  }, [open, gig?.banner_path])
 
   const previewMaxWidth = 320
   const scale = previewMaxWidth / formatDef.width
@@ -197,6 +203,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
         open={open}
         onClose={busy ? undefined : onClose}
         maxWidth="md"
+        fullWidth
         onClick={(e) => e.stopPropagation()}
       >
         <DialogTitle>Share gig as image</DialogTitle>
@@ -210,6 +217,18 @@ export default function GigShareDialog({ open, onClose, gig }) {
             >
               <ToggleButton value="square">Square 1:1</ToggleButton>
               <ToggleButton value="story">Story 9:16</ToggleButton>
+            </ToggleButtonGroup>
+
+            <ToggleButtonGroup
+              value={variation}
+              exclusive
+              size="small"
+              onChange={(_, v) => v && setVariation(v)}
+              aria-label="Card variation"
+            >
+              {SHARE_VARIATIONS.map((v) => (
+                <ToggleButton key={v.id} value={v.id}>{v.label}</ToggleButton>
+              ))}
             </ToggleButtonGroup>
 
             <Stack direction="row" spacing={1.25}>
@@ -237,17 +256,20 @@ export default function GigShareDialog({ open, onClose, gig }) {
               })}
             </Stack>
 
-            <ToggleButtonGroup
-              value={variation}
-              exclusive
-              size="small"
-              onChange={(_, v) => v && setVariation(v)}
-              aria-label="Card variation"
-            >
-              {SHARE_VARIATIONS.map((v) => (
-                <ToggleButton key={v.id} value={v.id}>{v.label}</ToggleButton>
-              ))}
-            </ToggleButtonGroup>
+            {/* event banner toggle — hidden on mobile, shown inline near sliders instead */}
+            {gigBannerSrc && (
+              <FormControlLabel
+                sx={{ display: { xs: 'none', sm: 'flex' } }}
+                control={
+                  <Switch
+                    checked={showBanner}
+                    onChange={(e) => setShowBanner(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Show event banner"
+              />
+            )}
 
             {/* overlay controls */}
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -317,6 +339,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
                   sticker={sticker}
                   stickerPosition={stickerPos}
                   logoSrc={logoSrc}
+                  bannerSrc={bannerSrc}
                 />
               </Box>
             </Box>
@@ -352,6 +375,21 @@ export default function GigShareDialog({ open, onClose, gig }) {
                 ]}
               />
             </Box>
+
+            {/* event banner toggle — mobile only, shown below sliders where it's reachable */}
+            {gigBannerSrc && (
+              <FormControlLabel
+                sx={{ display: { xs: 'flex', sm: 'none' } }}
+                control={
+                  <Switch
+                    checked={showBanner}
+                    onChange={(e) => setShowBanner(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Show event banner"
+              />
+            )}
 
             {/* photo carousel */}
             {photosLoading ? (

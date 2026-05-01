@@ -1,6 +1,16 @@
+import { randomUUID } from 'crypto'
+import path from 'path'
 import { Router } from 'express'
+import multer from 'multer'
 import pool from '../db/index.js'
 import { sendPushToAll, sendPushToMember } from '../utils/sendPush.js'
+import { storageClient, BUCKET } from '../utils/storage.js'
+
+const BANNER_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const bannerUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+})
 
 const router = Router()
 
@@ -241,8 +251,79 @@ router.patch('/:id', async (req, res) => {
 // Delete gig
 router.delete('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
+  const { rows } = await pool.query('SELECT banner_path FROM gigs WHERE id = $1', [id])
+  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+
+  const bannerKey = rows[0].banner_path
   const { rowCount } = await pool.query('DELETE FROM gigs WHERE id = $1', [id])
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
+
+  if (bannerKey) {
+    storageClient.removeObject(BUCKET, bannerKey).catch((e) =>
+      console.warn('Failed to delete gig banner object:', e.message)
+    )
+  }
+
+  res.status(204).end()
+})
+
+// --- Banner ---
+
+// Upload / replace gig banner
+router.post('/:id/banner', bannerUpload.single('banner'), async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (!BANNER_ALLOWED_TYPES.has(req.file.mimetype)) {
+    return res.status(400).json({ error: 'File type not allowed' })
+  }
+
+  const { rows: before } = await pool.query('SELECT banner_path FROM gigs WHERE id = $1', [id])
+  if (!before.length) return res.status(404).json({ error: 'Not found' })
+  const oldKey = before[0].banner_path
+
+  const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
+  const objectKey = `gig-banners/${randomUUID()}${ext}`
+
+  await storageClient.putObject(BUCKET, objectKey, req.file.buffer, req.file.size, {
+    'Content-Type': req.file.mimetype,
+  })
+
+  let updatedKey
+  try {
+    const { rows } = await pool.query(
+      'UPDATE gigs SET banner_path = $1, updated_at = NOW() WHERE id = $2 RETURNING banner_path',
+      [objectKey, id]
+    )
+    updatedKey = rows[0].banner_path
+  } catch (err) {
+    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
+    throw err
+  }
+
+  if (oldKey) {
+    storageClient.removeObject(BUCKET, oldKey).catch((e) =>
+      console.warn('Failed to delete old gig banner object:', e.message)
+    )
+  }
+
+  res.json({ banner_path: updatedKey })
+})
+
+// Delete gig banner
+router.delete('/:id/banner', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  const { rows } = await pool.query('SELECT banner_path FROM gigs WHERE id = $1', [id])
+  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+
+  const key = rows[0].banner_path
+  await pool.query('UPDATE gigs SET banner_path = NULL, updated_at = NOW() WHERE id = $1', [id])
+
+  if (key) {
+    storageClient.removeObject(BUCKET, key).catch((e) =>
+      console.warn('Failed to delete gig banner object:', e.message)
+    )
+  }
+
   res.status(204).end()
 })
 

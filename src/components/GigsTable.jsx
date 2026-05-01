@@ -107,7 +107,20 @@ function DesktopRow({ gig, onClick, onDelete }) {
   return (
     <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
       <TableCell>{formatDate(gig.event_date)}</TableCell>
-      <TableCell>{gig.event_description}</TableCell>
+      <TableCell>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {gig.banner_path && (
+            <Box
+              component="img"
+              src={`/api/files/${gig.banner_path}`}
+              loading="lazy"
+              alt=""
+              sx={{ height: 28, width: 28, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
+            />
+          )}
+          {gig.event_description}
+        </Box>
+      </TableCell>
       <TableCell>
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
           <span>{gig.venue || ' '}</span>

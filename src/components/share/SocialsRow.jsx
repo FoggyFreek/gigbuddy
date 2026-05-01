@@ -23,7 +23,7 @@ export default function SocialsRow({
     <div
       style={{
         display: 'flex',
-        gap: 32,
+        gap: 18,
         justifyContent: justify,
         alignItems: 'center',
         flexWrap: 'wrap',

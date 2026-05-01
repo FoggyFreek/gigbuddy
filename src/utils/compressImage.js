@@ -24,3 +24,14 @@ export function compressLogo(file) {
   }
   return imageCompression(file, LOGO_OPTIONS)
 }
+
+const BANNER_OPTIONS = {
+  maxSizeMB: 1,
+  maxWidthOrHeight: 1920,
+  initialQuality: 0.88,
+  useWebWorker: true,
+}
+
+export function compressBanner(file) {
+  return imageCompression(file, BANNER_OPTIONS)
+}

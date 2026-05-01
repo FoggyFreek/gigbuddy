@@ -1,5 +1,6 @@
 import { forwardRef, useState } from 'react'
 import {
+  calculateTitleFontSize,
   formatGigCity,
   formatGigDateShort,
   formatGigDoorsTime,
@@ -39,11 +40,6 @@ const SUNBURST_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
   </svg>`
 )}`
 
-function calculateTitleFontSize(text, maxFontSize, minFontSize) {
-  const charCount = text.length
-  const reduction = Math.max(0, (charCount - 15) * 1.5)
-  return Math.max(minFontSize, Math.min(maxFontSize, maxFontSize - reduction))
-}
 
 function FilmFrame({ children, format, accent = ACCENT }) {
   const f = SHARE_FORMATS[format]
@@ -180,7 +176,7 @@ function PhotoBackdrop({ src, zoom, pan = 0, format }) {
   )
 }
 
-function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc }) {
+function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venueName = formatGigVenueName(gig)
@@ -231,6 +227,25 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
       >
         LIVE
       </div>
+
+      {/* event banner — top-right, below LIVE tag */}
+      {bannerSrc && (
+        <img
+          data-pdf-layer="event-banner"
+          src={bannerSrc}
+          alt=""
+          crossOrigin="anonymous"
+          style={{
+            position: 'absolute',
+            top: 630,
+            right: 80,
+            width: 160,
+            height: 160,
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.55))',
+          }}
+        />
+      )}
 
       {/* title */}
       {title && (
@@ -394,7 +409,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
   )
 }
 
-function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc }) {
+function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venue = formatGigVenue(gig)
@@ -530,6 +545,26 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
         {date.year}
       </div>
 
+      {/* event banner — centered between date and venue sections */}
+      {bannerSrc && (
+        <img
+          data-pdf-layer="event-banner"
+          src={bannerSrc}
+          alt=""
+          crossOrigin="anonymous"
+          style={{
+            position: 'absolute',
+            bottom: 430,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 280,
+            height: 280,
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.6))',
+          }}
+        />
+      )}
+
       {/* venue + time with divider */}
       <div
         data-pdf-layer="venue-info"
@@ -591,10 +626,10 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
   )
 }
 
-function VintageVariation({ gig, photoSrc, format, zoom, pan, accent, socials, sticker, stickerPosition, logoSrc }) {
+function VintageVariation({ gig, photoSrc, format, zoom, pan, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
   return format === 'story'
-    ? <StoryLayout gig={gig} photoSrc={photoSrc} zoom={zoom} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} />
-    : <SquareLayout gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} />
+    ? <StoryLayout gig={gig} photoSrc={photoSrc} zoom={zoom} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} />
+    : <SquareLayout gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} />
 }
 
 const VARIATION_COMPONENTS = {
@@ -603,7 +638,7 @@ const VARIATION_COMPONENTS = {
 }
 
 const GigShareCard = forwardRef(function GigShareCard(
-  { gig, photoSrc, format = 'square', zoom, pan, accent, variation = 'vintage', socials, sticker, stickerPosition, logoSrc },
+  { gig, photoSrc, format = 'square', zoom, pan, accent, variation = 'vintage', socials, sticker, stickerPosition, logoSrc, bannerSrc },
   ref,
 ) {
   const Component = VARIATION_COMPONENTS[variation] || VintageVariation
@@ -620,6 +655,7 @@ const GigShareCard = forwardRef(function GigShareCard(
         sticker={sticker}
         stickerPosition={stickerPosition}
         logoSrc={logoSrc}
+        bannerSrc={bannerSrc}
       />
     </div>
   )

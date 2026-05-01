@@ -1,4 +1,4 @@
-import { request } from './_client.js'
+import { request, requestForm } from './_client.js'
 
 const api = (path, options) => request(`/api/gigs${path}`, options)
 
@@ -14,6 +14,14 @@ export const updateTask = (gigId, taskId, body) =>
   api(`/${gigId}/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteTask = (gigId, taskId) =>
   api(`/${gigId}/tasks/${taskId}`, { method: 'DELETE' })
+
+export const uploadGigBanner = (gigId, file) => {
+  const fd = new FormData()
+  fd.append('banner', file, 'banner.png')
+  return requestForm(`/api/gigs/${gigId}/banner`, fd)
+}
+export const deleteGigBanner = (gigId) =>
+  request(`/api/gigs/${gigId}/banner`, { method: 'DELETE' })
 
 export const addGigParticipant = (gigId, bandMemberId) =>
   api(`/${gigId}/participants`, { method: 'POST', body: JSON.stringify({ band_member_id: bandMemberId }) })

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  calculateTitleFontSize,
   formatGigCity,
   formatGigDateShort,
   formatGigDoorsTime,
@@ -88,7 +89,7 @@ function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }
   )
 }
 
-function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc }) {
+function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venueName = formatGigVenueName(gig)
@@ -179,7 +180,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
             left: 80,
             right: 420,
             fontFamily: '"Cooper Black", Georgia, serif',
-            fontSize: 78,
+            fontSize: calculateTitleFontSize(title, 78, 24),
             lineHeight: 1.0,
             color: INK,
             display: '-webkit-box',
@@ -271,12 +272,29 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
           filter: 'invert(1)',
         }}
       />
+      {bannerSrc && (
+        <img
+          data-pdf-layer="event-banner"
+          src={bannerSrc}
+          alt=""
+          crossOrigin="anonymous"
+          style={{
+            position: 'absolute',
+            bottom: 230,
+            right: 140,
+            width: 220,
+            height: 220,
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.45))',
+          }}
+        />
+      )}
       <div data-pdf-layer="sticker" style={{ position: 'absolute', inset: 0 }}><StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} /></div>
     </div>
   )
 }
 
-function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc }) {
+function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
   const date = formatGigDateShort(gig)
   const venueName = formatGigVenueName(gig)
   const city = formatGigCity(gig)
@@ -355,7 +373,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
             left: 80,
             right: 80,
             fontFamily: '"Cooper Black", Georgia, serif',
-            fontSize: 110,
+            fontSize: calculateTitleFontSize(title, 110, 36),
             lineHeight: 0.95,
             color: INK,
             display: '-webkit-box',
@@ -391,7 +409,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
               {city}
             </SmallCaps>
           )}
-          <SocialsRow socials={socials} iconColor={accent} textColor={SUBTLE} size={26} justify="flex-start" />
+          <SocialsRow socials={socials} iconColor={accent} textColor={SUBTLE} size={26}  />
         </div>
 
       </div>
@@ -411,13 +429,30 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
           height: 'auto',
         }}
       />
+      {bannerSrc && (
+        <img
+          data-pdf-layer="event-banner"
+          src={bannerSrc}
+          alt=""
+          crossOrigin="anonymous"
+          style={{
+            position: 'absolute',
+            top: 1030,
+            right: 70,
+            width: 220,
+            height: 220,
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 3px 10px rgba(0,0,0,0.5))',
+          }}
+        />
+      )}
       <div data-pdf-layer="sticker" style={{ position: 'absolute', inset: 0 }}><StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} /></div>
     </div>
   )
 }
 
-export default function MinimalCard({ gig, photoSrc, format, pan, accent, socials, sticker, stickerPosition, logoSrc }) {
+export default function MinimalCard({ gig, photoSrc, format, pan, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
   return format === 'story'
-    ? <MinimalStory gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} />
-    : <MinimalSquare gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} />
+    ? <MinimalStory gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} />
+    : <MinimalSquare gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} />
 }

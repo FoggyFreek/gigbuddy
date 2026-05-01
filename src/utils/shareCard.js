@@ -1,6 +1,11 @@
 import * as htmlToImage from 'html-to-image'
 import jsPDF from 'jspdf'
 
+export function calculateTitleFontSize(text, maxFontSize, minFontSize) {
+  const reduction = Math.max(0, (text.length - 15) * 1.5)
+  return Math.max(minFontSize, Math.min(maxFontSize, maxFontSize - reduction))
+}
+
 export const SHARE_FORMATS = {
   square: { id: 'square', label: 'Square (1080×1080)', width: 1080, height: 1080 },
   story: { id: 'story', label: 'Story (1080×1920)', width: 1080, height: 1920 },

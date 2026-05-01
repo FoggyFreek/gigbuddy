@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -13,20 +13,26 @@ import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
 import MenuItem from '@mui/material/MenuItem'
+import Snackbar from '@mui/material/Snackbar'
+import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import DeleteIcon from '@mui/icons-material/Delete'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import GigTasks from './GigTasks.jsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
 import GigParticipantsSection from './GigParticipantsSection.jsx'
+import ImageCropDialog from './ImageCropDialog.jsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
-import { addGigParticipant, createGig, getGig, removeGigParticipant, setGigVote, updateGig } from '../api/gigs.js'
+import { addGigParticipant, createGig, deleteGigBanner, getGig, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../api/gigs.js'
 import { listMembers } from '../api/bandMembers.js'
+import { compressBanner } from '../utils/compressImage.js'
 import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
 
 dayjs.extend(customParseFormat)
@@ -75,6 +81,12 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
   const [availabilityData, setAvailabilityData] = useState(null)
   const [confirmCreate, setConfirmCreate] = useState(false)
   const [emailCopied, setEmailCopied] = useState(false)
+  const [bannerPath, setBannerPath] = useState(null)
+  const [bannerBusy, setBannerBusy] = useState(false)
+  const [bannerError, setBannerError] = useState(null)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [cropImageSrc, setCropImageSrc] = useState(null)
+  const bannerInputRef = useRef(null)
 
   const handleCopyEmail = () => {
     if (!form.contact_email) return
@@ -99,6 +111,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
 
   const applyGig = useCallback((g) => {
     setGig(g)
+    setBannerPath(g.banner_path || null)
     setForm({
       event_date: toDateInput(g.event_date),
       event_description: g.event_description || '',
@@ -201,6 +214,51 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
       return
     }
     await doCreate()
+  }
+
+  function handleBannerFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setBannerError(null)
+    const url = URL.createObjectURL(file)
+    setCropImageSrc(url)
+    setCropOpen(true)
+  }
+
+  async function handleCropConfirm(blob) {
+    setCropOpen(false)
+    if (cropImageSrc) URL.revokeObjectURL(cropImageSrc)
+    setCropImageSrc(null)
+    setBannerBusy(true)
+    try {
+      const compressed = await compressBanner(blob)
+      const result = await uploadGigBanner(gigId, compressed)
+      setBannerPath(result.banner_path)
+    } catch (err) {
+      setBannerError(err.message || 'Banner upload failed')
+    } finally {
+      setBannerBusy(false)
+    }
+  }
+
+  function handleCropCancel() {
+    setCropOpen(false)
+    if (cropImageSrc) URL.revokeObjectURL(cropImageSrc)
+    setCropImageSrc(null)
+  }
+
+  async function handleBannerDelete() {
+    setBannerBusy(true)
+    setBannerError(null)
+    try {
+      await deleteGigBanner(gigId)
+      setBannerPath(null)
+    } catch (err) {
+      setBannerError(err.message || 'Banner delete failed')
+    } finally {
+      setBannerBusy(false)
+    }
   }
 
   async function handleClose() {
@@ -443,6 +501,80 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                 />
               </Grid>
             )}
+
+            {/* Event Banner — edit mode only */}
+            {mode === 'edit' && (
+              <Grid size={12}>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                  Event banner
+                </Typography>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  {bannerPath ? (
+                    <Box
+                      component="img"
+                      src={`/api/files/${bannerPath}`}
+                      alt="Event banner"
+                      sx={{
+                        width: 120,
+                        height: 120,
+                        objectFit: 'contain',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'grey.100',
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        width: 120,
+                        height: 120,
+                        borderRadius: 1,
+                        border: '2px dashed',
+                        borderColor: 'divider',
+                        bgcolor: 'action.hover',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'text.disabled',
+                      }}
+                    >
+                      <Typography variant="caption">No banner</Typography>
+                    </Box>
+                  )}
+                  <Stack spacing={1}>
+                    <input
+                      ref={bannerInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{ display: 'none' }}
+                      onChange={handleBannerFileChange}
+                    />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={bannerBusy ? <CircularProgress size={14} color="inherit" /> : <AddPhotoAlternateIcon />}
+                      disabled={bannerBusy}
+                      onClick={() => bannerInputRef.current?.click()}
+                    >
+                      {bannerPath ? 'Replace' : 'Upload banner'}
+                    </Button>
+                    {bannerPath && (
+                      <Button
+                        size="small"
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                        disabled={bannerBusy}
+                        onClick={handleBannerDelete}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </Stack>
+                </Stack>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
       )}
@@ -482,6 +614,19 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ImageCropDialog
+        open={cropOpen}
+        imageSrc={cropImageSrc}
+        onConfirm={handleCropConfirm}
+        onCancel={handleCropCancel}
+      />
+      <Snackbar
+        open={!!bannerError}
+        message={bannerError || ''}
+        autoHideDuration={4000}
+        onClose={() => setBannerError(null)}
+      />
     </Dialog>
   )
 }
