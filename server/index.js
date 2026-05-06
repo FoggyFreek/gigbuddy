@@ -29,7 +29,8 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       // MUI/Emotion injects <style> tags at runtime — unsafe-inline unavoidable without nonces
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      // data: covers Vite-inlined fonts in production builds
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
       // Google profile pictures (lh3.googleusercontent.com); data: for MUI SVG icons
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'"],
@@ -38,17 +39,18 @@ app.use(helmet({
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
-      // Upgrade insecure sub-requests to HTTPS in production only
-      ...(isProd ? { upgradeInsecureRequests: [] } : {}),
+      // Helmet's default CSP includes upgrade-insecure-requests; null removes it in dev
+      // so Safari doesn't upgrade http://localhost to https://localhost
+      upgradeInsecureRequests: isProd ? [] : null,
     },
   },
-  // HSTS: tell browsers to enforce HTTPS for 1 year (production only)
+  // HSTS: enforce HTTPS for 1 year in production only
   hsts: isProd
     ? { maxAge: 31536000, includeSubDomains: true, preload: true }
     : false,
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  // frameguard (X-Frame-Options: DENY) stays on as fallback for browsers
-  // that don't honour CSP frame-ancestors; both can coexist safely
+  // Match CSP frame-ancestors: 'none' — Helmet's default is SAMEORIGIN
+  frameguard: { action: 'deny' },
 }))
 
 const PgSession = connectPgSimple(session)
