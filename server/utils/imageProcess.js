@@ -40,7 +40,15 @@ export async function validateAndReencodeImage(buffer, mimetype) {
 
   let output
   try {
-    const img = sharp(buffer, { failOn: 'error' })
+    // failOn 'warning' is sharp's strictest mode (the default).
+    // limitInputPixels caps decoded pixel count to block decompression-bomb DoS;
+    // sharp's default of ~268MP is far higher than any band photo needs.
+    // .rotate() with no args bakes EXIF orientation into pixels before the
+    // re-encode strips metadata, so portrait phone photos stay upright.
+    const img = sharp(buffer, {
+      failOn: 'warning',
+      limitInputPixels: 50_000_000,
+    }).rotate()
     if (mimetype === 'image/jpeg') output = await img.jpeg({ quality: 85 }).toBuffer()
     else if (mimetype === 'image/png') output = await img.png().toBuffer()
     else output = await img.webp({ quality: 85 }).toBuffer()
