@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import express from 'express'
+import helmet from 'helmet'
 import cors from 'cors'
 import session from 'express-session'
 import connectPgSimple from 'connect-pg-simple'
@@ -19,6 +20,36 @@ const app = express()
 const PORT = process.env.SERVER_PORT || 3002
 
 app.set('trust proxy', 1)
+
+const isProd = process.env.NODE_ENV === 'production'
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      // MUI/Emotion injects <style> tags at runtime — unsafe-inline unavoidable without nonces
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      // Google profile pictures (lh3.googleusercontent.com); data: for MUI SVG icons
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      frameAncestors: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      // Upgrade insecure sub-requests to HTTPS in production only
+      ...(isProd ? { upgradeInsecureRequests: [] } : {}),
+    },
+  },
+  // HSTS: tell browsers to enforce HTTPS for 1 year (production only)
+  hsts: isProd
+    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+    : false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  // frameguard (X-Frame-Options: DENY) stays on as fallback for browsers
+  // that don't honour CSP frame-ancestors; both can coexist safely
+}))
 
 const PgSession = connectPgSimple(session)
 
