@@ -5,6 +5,7 @@ import multer from 'multer'
 import pool from '../db/index.js'
 import { sendPushToTenant, sendPushToMember } from '../utils/sendPush.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
+import { validateAndReencodeImage } from '../utils/imageProcess.js'
 
 const BANNER_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const bannerUpload = multer({
@@ -294,6 +295,8 @@ router.post('/:id/banner', bannerUpload.single('banner'), async (req, res) => {
     return res.status(400).json({ error: 'File type not allowed' })
   }
 
+  const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
+
   const { rows: before } = await pool.query(
     'SELECT banner_path FROM gigs WHERE id = $1 AND tenant_id = $2',
     [id, req.tenantId],
@@ -304,8 +307,8 @@ router.post('/:id/banner', bannerUpload.single('banner'), async (req, res) => {
   const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
   const objectKey = `tenants/${req.tenantId}/gig-banners/${randomUUID()}${ext}`
 
-  await storageClient.putObject(BUCKET, objectKey, req.file.buffer, req.file.size, {
-    'Content-Type': req.file.mimetype,
+  await storageClient.putObject(BUCKET, objectKey, image.buffer, image.size, {
+    'Content-Type': image.mimetype,
   })
 
   let updatedKey
