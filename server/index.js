@@ -1,6 +1,5 @@
 import 'dotenv/config'
 import express from 'express'
-import helmet from 'helmet'
 import cors from 'cors'
 import session from 'express-session'
 import connectPgSimple from 'connect-pg-simple'
@@ -9,6 +8,7 @@ import { dirname, join } from 'path'
 import pool from './db/index.js'
 import routes from './routes/index.js'
 import { initOidc } from './oidc.js'
+import { securityHeaders } from './middleware/securityHeaders.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -21,37 +21,7 @@ const PORT = process.env.SERVER_PORT || 3002
 
 app.set('trust proxy', 1)
 
-const isProd = process.env.NODE_ENV === 'production'
-
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      // MUI/Emotion injects <style> tags at runtime — unsafe-inline unavoidable without nonces
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      // data: covers Vite-inlined fonts in production builds
-      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
-      // Google profile pictures (lh3.googleusercontent.com); data: for MUI SVG icons
-      imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      frameAncestors: ["'none'"],
-      objectSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      // Helmet's default CSP includes upgrade-insecure-requests; null removes it in dev
-      // so Safari doesn't upgrade http://localhost to https://localhost
-      upgradeInsecureRequests: isProd ? [] : null,
-    },
-  },
-  // HSTS: enforce HTTPS for 1 year in production only
-  hsts: isProd
-    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
-    : false,
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  // Match CSP frame-ancestors: 'none' — Helmet's default is SAMEORIGIN
-  frameguard: { action: 'deny' },
-}))
+app.use(securityHeaders())
 
 const PgSession = connectPgSimple(session)
 
