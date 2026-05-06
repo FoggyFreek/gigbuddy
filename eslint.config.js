@@ -42,7 +42,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/tests/sendPush.test.js'],
+    files: ['src/tests/sendPush.test.js', 'src/tests/server/**/*.js'],
     languageOptions: {
       globals: globals.node,
     },

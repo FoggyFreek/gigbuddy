@@ -51,7 +51,7 @@ function maxMonthsForYear(year) {
 
 export default function TourShareDialog({ open, onClose, gigs = [] }) {
   const { user } = useContext(AuthContext)
-  const isAdmin = user?.isAdmin
+  const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
   const [photos, setPhotos] = useState([])
   const [photoId, setPhotoId] = useState(null)
@@ -368,7 +368,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
                 {photos.map((p) => {
                   const selected = p.id === photoId
                   return (
-                    <Stack key={p.id} alignItems="center" spacing={0.5}>
+                    <Stack key={p.id} spacing={0.5} sx={{ alignItems: 'center' }}>
                       <Tooltip title={p.label}>
                         <ButtonBase
                           onClick={() => setPhotoId(p.id)}
@@ -416,7 +416,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
                       style={{ display: 'none' }}
                       onChange={handlePhotoUpload}
                     />
-                    <Stack alignItems="center" spacing={0.5}>
+                    <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
                       <Tooltip title="Upload photo">
                         <ButtonBase
                           onClick={() => photoInputRef.current?.click()}

@@ -1,14 +1,30 @@
 import { Router } from 'express'
-import { requireApproved } from '../middleware/auth.js'
+import pool from '../db/index.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
 
 const router = Router()
 
-router.get('/*objectKey', requireApproved, async (req, res) => {
+async function objectKeyBelongsToTenant(objectKey, tenantId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM tenants WHERE id = $1 AND logo_path = $2
+     UNION ALL
+     SELECT 1 FROM gigs WHERE tenant_id = $1 AND banner_path = $2
+     UNION ALL
+     SELECT 1 FROM share_photos WHERE tenant_id = $1 AND object_key = $2
+     LIMIT 1`,
+    [tenantId, objectKey],
+  )
+  return rows.length > 0
+}
+
+router.get('/*objectKey', async (req, res) => {
   const segments = req.params.objectKey
   const objectKey = Array.isArray(segments) ? segments.join('/') : segments
 
   if (!objectKey) return res.status(400).json({ error: 'Missing object key' })
+
+  const allowed = await objectKeyBelongsToTenant(objectKey, req.tenantId)
+  if (!allowed) return res.status(404).json({ error: 'Not found' })
 
   try {
     const stat = await storageClient.statObject(BUCKET, objectKey)

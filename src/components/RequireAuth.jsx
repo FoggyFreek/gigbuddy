@@ -21,8 +21,18 @@ export default function RequireAuth() {
     }
     return <Navigate to="/login" replace />
   }
-  if (user.status === 'pending') return <Navigate to="/pending" replace />
   if (user.status === 'rejected') return <Navigate to="/pending" replace />
 
-  return <Outlet />
+  if (user.isSuperAdmin) return <Outlet />
+
+  const memberships = user.memberships || []
+  const hasApproved = memberships.some((m) => m.status === 'approved')
+  if (hasApproved) return <Outlet />
+
+  if (location.pathname === '/redeem-invite') return <Outlet />
+
+  if (memberships.length === 0) {
+    return <Navigate to="/redeem-invite" replace />
+  }
+  return <Navigate to="/pending" replace />
 }

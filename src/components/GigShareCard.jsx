@@ -11,6 +11,7 @@ import {
 
 const FALLBACK_LOGO = '/share/logo.png'
 import MinimalCard from './share/MinimalCard.jsx'
+import PhotoCard from './share/PhotoCard.jsx'
 import SocialsRow from './share/SocialsRow.jsx'
 import StickerOverlay from './share/StickerOverlay.jsx'
 
@@ -93,7 +94,7 @@ function FilmFrame({ children, format, accent = ACCENT }) {
             position: 'absolute',
             inset: 0,
             background:
-              'radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.65) 100%)',
+              'radial-gradient(ellipse at center, transparent 65%, rgba(0,0,0,0.65) 100%)',
             pointerEvents: 'none',
           }}
         />
@@ -176,7 +177,7 @@ function PhotoBackdrop({ src, zoom, pan = 0, format }) {
   )
 }
 
-function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
+function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venueName = formatGigVenueName(gig)
@@ -208,7 +209,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
           left: 70,
           width: 250,
           height: 'auto',
-          filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))',
+          filter: `${invertLogo ? 'invert(1) ' : ''}drop-shadow(0 2px 6px rgba(0,0,0,0.6))`,
         }}
       />
       {/* "PRESENTS" tag top-right */}
@@ -409,7 +410,7 @@ function SquareLayout({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticke
   )
 }
 
-function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
+function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venue = formatGigVenue(gig)
@@ -441,7 +442,7 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
           transform: 'translateX(-50%)',
           width: 420,
           height: 'auto',
-          filter: 'drop-shadow(0 3px 10px rgba(0,0,0,0.7))',
+          filter: `${invertLogo ? 'invert(1) ' : ''}drop-shadow(0 3px 10px rgba(0,0,0,0.7))`,
         }}
       />
 
@@ -626,19 +627,20 @@ function StoryLayout({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, s
   )
 }
 
-function VintageVariation({ gig, photoSrc, format, zoom, pan, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
+function VintageVariation({ gig, photoSrc, format, zoom, pan, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
   return format === 'story'
-    ? <StoryLayout gig={gig} photoSrc={photoSrc} zoom={zoom} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} />
-    : <SquareLayout gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} />
+    ? <StoryLayout gig={gig} photoSrc={photoSrc} zoom={zoom} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} invertLogo={invertLogo} />
+    : <SquareLayout gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} invertLogo={invertLogo} />
 }
 
 const VARIATION_COMPONENTS = {
   vintage: VintageVariation,
   minimal: MinimalCard,
+  photo: PhotoCard,
 }
 
 const GigShareCard = forwardRef(function GigShareCard(
-  { gig, photoSrc, format = 'square', zoom, pan, accent, variation = 'vintage', socials, sticker, stickerPosition, logoSrc, bannerSrc },
+  { gig, photoSrc, format = 'square', zoom, pan, accent, variation = 'vintage', socials, sticker, stickerPosition, logoSrc, bannerSrc, bandName, showLogo, invertLogo },
   ref,
 ) {
   const Component = VARIATION_COMPONENTS[variation] || VintageVariation
@@ -656,6 +658,9 @@ const GigShareCard = forwardRef(function GigShareCard(
         stickerPosition={stickerPosition}
         logoSrc={logoSrc}
         bannerSrc={bannerSrc}
+        bandName={bandName}
+        showLogo={showLogo}
+        invertLogo={invertLogo}
       />
     </div>
   )

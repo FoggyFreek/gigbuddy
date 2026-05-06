@@ -89,7 +89,7 @@ function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }
   )
 }
 
-function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
+function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venueName = formatGigVenueName(gig)
@@ -269,7 +269,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
           width: 530,
           height: 'auto',
           opacity: 0.85,
-          filter: 'invert(1)',
+          filter: invertLogo ? 'invert(1)' : undefined,
         }}
       />
       {bannerSrc && (
@@ -294,7 +294,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
   )
 }
 
-function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
+function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
   const date = formatGigDateShort(gig)
   const venueName = formatGigVenueName(gig)
   const city = formatGigCity(gig)
@@ -427,6 +427,7 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
           transform: 'translateX(-50%)',
           width: 310,
           height: 'auto',
+          filter: invertLogo ? 'invert(1)' : undefined,
         }}
       />
       {bannerSrc && (
@@ -451,8 +452,8 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
   )
 }
 
-export default function MinimalCard({ gig, photoSrc, format, pan, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }) {
+export default function MinimalCard({ gig, photoSrc, format, pan, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
   return format === 'story'
-    ? <MinimalStory gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} />
-    : <MinimalSquare gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} />
+    ? <MinimalStory gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} invertLogo={invertLogo} />
+    : <MinimalSquare gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} invertLogo={invertLogo} />
 }

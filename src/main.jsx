@@ -5,6 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { ThemeContextProvider } from './contexts/ThemeContext.jsx'
+import { TenantThemeProvider } from './contexts/TenantThemeProvider.jsx'
 import App from './App.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { ProfileProvider } from './contexts/ProfileContext.jsx'
@@ -23,7 +24,9 @@ createRoot(document.getElementById('root')).render(
         <BrowserRouter>
           <AuthProvider>
             <ProfileProvider>
-              <App />
+              <TenantThemeProvider>
+                <App />
+              </TenantThemeProvider>
             </ProfileProvider>
           </AuthProvider>
         </BrowserRouter>

@@ -24,6 +24,7 @@ export const SHARE_VINTAGE_COLORS = [
 export const SHARE_VARIATIONS = [
   { id: 'vintage', label: 'Vintage' },
   { id: 'minimal', label: 'Minimal' },
+  { id: 'photo', label: 'Photo' },
 ]
 
 export const SHARE_STICKERS = [

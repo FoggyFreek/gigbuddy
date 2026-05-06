@@ -141,7 +141,7 @@ describe('ProfilePage', () => {
   })
 
   it('rejects GIF logo uploads before sending them', async () => {
-    wrap(<ProfilePage />, { user: { isAdmin: true } })
+    wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin' } })
     await waitFor(() => screen.getByText('EPK'))
 
     const user = userEvent.setup({ applyAccept: false })

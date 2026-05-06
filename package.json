@@ -12,7 +12,8 @@
     "server": "node server/index.js",
     "server:dev": "nodemon server/index.js",
     "migrate": "node server/db/migrate.js",
-    "test": "vitest",
+    "test": "vitest --exclude src/tests/server",
+    "test:server": "vitest run --no-file-parallelism src/tests/server",
     "test:ui": "vitest --ui"
   },
   "dependencies": {
@@ -65,6 +66,7 @@
     "globals": "^17.4.0",
     "jsdom": "^29.0.2",
     "nodemon": "^3.1.14",
+    "supertest": "^7.2.2",
     "vite": "^8.0.4",
     "vitest": "^4.1.4"
   }

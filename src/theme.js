@@ -1,11 +1,12 @@
 import { createTheme } from '@mui/material/styles'
 
-export function createAppTheme(mode) {
+export function createAppTheme(mode, primaryColor) {
   const isDark = mode === 'dark'
+  const primary = primaryColor || (isDark ? '#D0BCFF' : '#6750A4')
   return createTheme({
     palette: {
       mode,
-      primary: { main: isDark ? '#D0BCFF' : '#6750A4' },
+      primary: { main: primary },
       secondary: { main: isDark ? '#CCC2DC' : '#625B71' },
       success: { main: isDark ? '#6FC97D' : '#386A20' },
       background: isDark

@@ -12,9 +12,18 @@ import contactsRouter from './contacts.js'
 import pushRouter from './push.js'
 import authRouter from './auth.js'
 import usersRouter from './users.js'
+import tenantsRouter from './tenants.js'
+import adminUsersRouter from './adminUsers.js'
 import sharePhotosRouter from './sharePhotos.js'
 import filesRouter from './files.js'
-import { requireApproved, requireAdmin } from '../middleware/auth.js'
+import { adminRouter as invitesAdminRouter, redeemRouter as invitesRedeemRouter } from './invites.js'
+import { loadUser, requireApproved } from '../middleware/auth.js'
+import {
+  resolveTenantId,
+  requireTenantMember,
+  requireTenantAdmin,
+  requireSuperAdmin,
+} from '../middleware/tenant.js'
 import { csrf } from '../middleware/csrf.js'
 
 const router = Router()
@@ -26,19 +35,28 @@ router.get('/health', (_req, res) => {
 router.use(csrf)
 
 router.use('/auth', authRouter)
-router.use('/users', requireAdmin, usersRouter)
-router.use('/gigs', requireApproved, gigsRouter)
-router.use('/tasks', requireApproved, tasksRouter)
-router.use('/profile', requireApproved, profileRouter)
-router.use('/band-members', requireApproved, bandMembersRouter)
-router.use('/availability', requireApproved, availabilityRouter)
-router.use('/rehearsals', requireApproved, rehearsalsRouter)
-router.use('/band-events', requireApproved, bandEventsRouter)
-router.use('/email-templates', requireApproved, emailTemplatesRouter)
-router.use('/venues', requireApproved, venuesRouter)
-router.use('/contacts', requireApproved, contactsRouter)
-router.use('/push', requireApproved, pushRouter)
-router.use('/share/photos', requireApproved, sharePhotosRouter)
-router.use('/files', requireApproved, filesRouter)
+
+const tenantMember = [requireApproved, resolveTenantId, requireTenantMember]
+const tenantAdmin = [requireApproved, resolveTenantId, requireTenantAdmin]
+const superAdmin = [requireApproved, requireSuperAdmin]
+
+router.use('/invites/redeem', loadUser, invitesRedeemRouter)
+router.use('/admin/tenants', superAdmin, tenantsRouter)
+router.use('/admin/users', superAdmin, adminUsersRouter)
+router.use('/invites', tenantAdmin, invitesAdminRouter)
+router.use('/users', tenantAdmin, usersRouter)
+router.use('/gigs', tenantMember, gigsRouter)
+router.use('/tasks', tenantMember, tasksRouter)
+router.use('/profile', tenantMember, profileRouter)
+router.use('/band-members', tenantMember, bandMembersRouter)
+router.use('/availability', tenantMember, availabilityRouter)
+router.use('/rehearsals', tenantMember, rehearsalsRouter)
+router.use('/band-events', tenantMember, bandEventsRouter)
+router.use('/email-templates', tenantMember, emailTemplatesRouter)
+router.use('/venues', tenantMember, venuesRouter)
+router.use('/contacts', tenantMember, contactsRouter)
+router.use('/push', tenantMember, pushRouter)
+router.use('/share/photos', tenantMember, sharePhotosRouter)
+router.use('/files', tenantMember, filesRouter)
 
 export default router

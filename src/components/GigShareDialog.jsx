@@ -46,7 +46,7 @@ import { compressPhoto } from '../utils/compressImage.js'
 
 export default function GigShareDialog({ open, onClose, gig }) {
   const { user } = useContext(AuthContext)
-  const isAdmin = user?.isAdmin
+  const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
   const [photos, setPhotos] = useState([])
   const [photoId, setPhotoId] = useState(null)
@@ -62,8 +62,11 @@ export default function GigShareDialog({ open, onClose, gig }) {
   const [snackbar, setSnackbar] = useState(null)
   const [socials, setSocials] = useState({})
   const [logoSrc, setLogoSrc] = useState('/share/logo.png')
+  const [bandName, setBandName] = useState('')
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null)
   const [showBanner, setShowBanner] = useState(false)
+  const [showLogo, setShowLogo] = useState(true)
+  const [invertLogo, setInvertLogo] = useState(false)
   const photoInputRef = useRef(null)
   const cardRef = useRef(null)
 
@@ -104,6 +107,9 @@ export default function GigShareDialog({ open, onClose, gig }) {
       setBusy(false)
       setDownloadMenuAnchor(null)
       setShowBanner(!!gig?.banner_path)
+      setShowLogo(true)
+      setInvertLogo(false)
+      setBandName('')
       loadPhotos()
       getProfile().then((p) => {
         setSocials({
@@ -112,6 +118,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
           tiktok: p?.tiktok_handle || '',
         })
         setLogoSrc(p?.logo_path ? `/api/files/${p.logo_path}` : '/share/logo.png')
+        setBandName(p?.band_name || '')
       }).catch(() => {})
     }
   }, [open, gig?.banner_path])
@@ -271,6 +278,30 @@ export default function GigShareDialog({ open, onClose, gig }) {
               />
             )}
 
+            {variation === 'photo' && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={showLogo}
+                    onChange={(e) => setShowLogo(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Show logo"
+              />
+            )}
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={invertLogo}
+                  onChange={(e) => setInvertLogo(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Invert logo"
+            />
+
             {/* overlay controls */}
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
               <FormControl size="small" sx={{ minWidth: 160 }}>
@@ -340,6 +371,9 @@ export default function GigShareDialog({ open, onClose, gig }) {
                   stickerPosition={stickerPos}
                   logoSrc={logoSrc}
                   bannerSrc={bannerSrc}
+                  bandName={bandName}
+                  showLogo={showLogo}
+                  invertLogo={invertLogo}
                 />
               </Box>
             </Box>
@@ -399,7 +433,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
                 {photos.map((p) => {
                   const selected = p.id === photoId
                   return (
-                    <Stack key={p.id} alignItems="center" spacing={0.5}>
+                    <Stack key={p.id} spacing={0.5} sx={{ alignItems: 'center' }}>
                       <Tooltip title={p.label}>
                         <ButtonBase
                           onClick={() => setPhotoId(p.id)}
@@ -447,7 +481,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
                       style={{ display: 'none' }}
                       onChange={handlePhotoUpload}
                     />
-                    <Stack alignItems="center" spacing={0.5}>
+                    <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
                       <Tooltip title="Upload photo">
                         <ButtonBase
                           onClick={() => photoInputRef.current?.click()}

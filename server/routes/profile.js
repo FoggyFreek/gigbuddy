@@ -3,7 +3,7 @@ import path from 'path'
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
-import { requireAdmin } from '../middleware/auth.js'
+import { requireTenantAdmin } from '../middleware/tenant.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
@@ -24,6 +24,7 @@ const PROFILE_FIELDS = [
   'tiktok_handle',
   'youtube_handle',
   'spotify_handle',
+  'accent_color',
 ]
 
 const LINK_FIELDS = ['label', 'url', 'sort_order']
@@ -52,18 +53,22 @@ function requireLinkId(req, res) {
   return linkId
 }
 
-// Get singleton profile with its links
-router.get('/', async (_req, res) => {
-  const { rows: profiles } = await pool.query('SELECT * FROM profile WHERE id = 1')
+// Get tenant profile with its links
+router.get('/', async (req, res) => {
+  const { rows: profiles } = await pool.query(
+    'SELECT * FROM tenants WHERE id = $1',
+    [req.tenantId],
+  )
   if (!profiles.length) return res.status(404).json({ error: 'Profile not found' })
 
   const { rows: links } = await pool.query(
-    'SELECT * FROM profile_links WHERE profile_id = 1 ORDER BY sort_order ASC, id ASC'
+    'SELECT * FROM profile_links WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
+    [req.tenantId],
   )
   res.json({ ...profiles[0], links })
 })
 
-// Update profile (partial)
+// Update tenant profile (partial)
 router.patch('/', async (req, res) => {
   const fields = []
   const values = []
@@ -79,10 +84,11 @@ router.patch('/', async (req, res) => {
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
 
   fields.push(`updated_at = NOW()`)
+  values.push(req.tenantId)
 
   const { rows } = await pool.query(
-    `UPDATE profile SET ${fields.join(', ')} WHERE id = 1 RETURNING *`,
-    values
+    `UPDATE tenants SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+    values,
   )
   if (!rows.length) return res.status(404).json({ error: 'Profile not found' })
   res.json(rows[0])
@@ -97,14 +103,15 @@ router.post('/links', async (req, res) => {
   const normalizedUrl = normalizeRequiredProfileUrl(url)
 
   const { rows: maxRows } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM profile_links WHERE profile_id = 1'
+    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM profile_links WHERE tenant_id = $1',
+    [req.tenantId],
   )
   const nextOrder = maxRows[0].next
 
   const { rows } = await pool.query(
-    `INSERT INTO profile_links (profile_id, label, url, sort_order)
-     VALUES (1, $1, $2, $3) RETURNING *`,
-    [label, normalizedUrl, nextOrder]
+    `INSERT INTO profile_links (tenant_id, label, url, sort_order)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [req.tenantId, label, normalizedUrl, nextOrder],
   )
   res.status(201).json(rows[0])
 })
@@ -130,10 +137,11 @@ router.patch('/links/:linkId', async (req, res) => {
 
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
 
-  values.push(linkId)
+  values.push(linkId, req.tenantId)
   const { rows } = await pool.query(
-    `UPDATE profile_links SET ${fields.join(', ')} WHERE id = $${idx} AND profile_id = 1 RETURNING *`,
-    values
+    `UPDATE profile_links SET ${fields.join(', ')}
+     WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
+    values,
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
   res.json(rows[0])
@@ -143,24 +151,27 @@ router.patch('/links/:linkId', async (req, res) => {
 router.delete('/links/:linkId', async (req, res) => {
   const linkId = requireLinkId(req, res); if (linkId === null) return
   const { rowCount } = await pool.query(
-    'DELETE FROM profile_links WHERE id = $1 AND profile_id = 1',
-    [linkId]
+    'DELETE FROM profile_links WHERE id = $1 AND tenant_id = $2',
+    [linkId, req.tenantId],
   )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
   res.status(204).end()
 })
 
-// Upload / replace band logo (admin only)
-router.post('/logo', requireAdmin, logoUpload.single('logo'), async (req, res) => {
+// Upload / replace band logo (tenant admin only)
+router.post('/logo', requireTenantAdmin, logoUpload.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!LOGO_ALLOWED_TYPES.has(req.file.mimetype)) {
     return res.status(400).json({ error: 'File type not allowed' })
   }
 
   const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
-  const objectKey = `logo/${randomUUID()}${ext}`
+  const objectKey = `tenants/${req.tenantId}/logo/${randomUUID()}${ext}`
 
-  const { rows: before } = await pool.query('SELECT logo_path FROM profile WHERE id = 1')
+  const { rows: before } = await pool.query(
+    'SELECT logo_path FROM tenants WHERE id = $1',
+    [req.tenantId],
+  )
   const oldKey = before[0]?.logo_path || null
 
   await storageClient.putObject(BUCKET, objectKey, req.file.buffer, req.file.size, {
@@ -170,8 +181,8 @@ router.post('/logo', requireAdmin, logoUpload.single('logo'), async (req, res) =
   let updatedKey
   try {
     const { rows } = await pool.query(
-      'UPDATE profile SET logo_path = $1 WHERE id = 1 RETURNING logo_path',
-      [objectKey]
+      'UPDATE tenants SET logo_path = $1, updated_at = NOW() WHERE id = $2 RETURNING logo_path',
+      [objectKey, req.tenantId],
     )
     updatedKey = rows[0].logo_path
   } catch (err) {
@@ -181,7 +192,7 @@ router.post('/logo', requireAdmin, logoUpload.single('logo'), async (req, res) =
 
   if (oldKey) {
     storageClient.removeObject(BUCKET, oldKey).catch((e) =>
-      console.warn('Failed to delete old logo object:', e.message)
+      console.warn('Failed to delete old logo object:', e.message),
     )
   }
 

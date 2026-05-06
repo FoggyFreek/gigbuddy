@@ -26,8 +26,8 @@ async function fanOut(rows, payload) {
       webpush.sendNotification(
         { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
         notification,
-      )
-    )
+      ),
+    ),
   )
 
   for (let i = 0; i < results.length; i++) {
@@ -51,24 +51,41 @@ async function fanOut(rows, payload) {
   }
 }
 
-export async function sendPushToAll(payload) {
-  if (!configured) return
-  const { rows } = await pool.query('SELECT * FROM push_subscriptions')
-  if (!rows.length) return
-  await fanOut(rows, payload)
+async function tenantSlug(tenantId) {
+  const { rows } = await pool.query('SELECT slug FROM tenants WHERE id = $1', [tenantId])
+  return rows[0]?.slug ?? null
 }
 
-export async function sendPushToMember(bandMemberId, payload) {
+export async function sendPushToTenant(tenantId, payload) {
+  if (!configured) return
+  const { rows } = await pool.query(
+    `SELECT ps.endpoint, ps.p256dh, ps.auth
+     FROM push_subscriptions ps
+     JOIN memberships m ON m.user_id = ps.user_id
+     WHERE m.tenant_id = $1 AND m.status = 'approved'`,
+    [tenantId],
+  )
+  if (!rows.length) return
+  const slug = await tenantSlug(tenantId)
+  await fanOut(rows, { ...payload, tenantId, tenantSlug: slug })
+}
+
+export async function sendPushToMember(bandMemberId, tenantId, payload) {
   if (!configured) return
   const { rows: members } = await pool.query(
-    'SELECT user_id FROM band_members WHERE id = $1 AND user_id IS NOT NULL',
-    [bandMemberId]
+    `SELECT user_id FROM band_members
+     WHERE id = $1 AND tenant_id = $2 AND user_id IS NOT NULL`,
+    [bandMemberId, tenantId],
   )
   if (!members.length) return
   const { rows } = await pool.query(
-    'SELECT * FROM push_subscriptions WHERE user_id = $1',
-    [members[0].user_id]
+    `SELECT ps.endpoint, ps.p256dh, ps.auth
+     FROM push_subscriptions ps
+     JOIN memberships m ON m.user_id = ps.user_id AND m.tenant_id = $2
+     WHERE ps.user_id = $1 AND m.status = 'approved'`,
+    [members[0].user_id, tenantId],
   )
   if (!rows.length) return
-  await fanOut(rows, payload)
+  const slug = await tenantSlug(tenantId)
+  await fanOut(rows, { ...payload, tenantId, tenantSlug: slug })
 }

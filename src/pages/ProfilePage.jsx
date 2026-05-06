@@ -60,7 +60,7 @@ const EMPTY_FORM = {
 
 export default function ProfilePage() {
   const { user } = useAuth()
-  const isAdmin = user?.isAdmin
+  const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
   const [form, setForm] = useState(EMPTY_FORM)
   const [logoPath, setLogoPath] = useState(null)

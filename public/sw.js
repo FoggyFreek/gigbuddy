@@ -11,7 +11,7 @@ self.addEventListener('push', (event) => {
     try { data = event.data.json() }
     catch { data = { body: event.data.text() } }
   }
-  const { title = 'gigBuddy', body = '', tag = 'default', url = '/' } = data
+  const { title = 'gigBuddy', body = '', tag = 'default', url = '/', tenantId, tenantSlug } = data
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
@@ -19,25 +19,32 @@ self.addEventListener('push', (event) => {
       renotify: true,
       icon: new URL('/icons/icon-192.png', self.location.origin).href,
       badge: new URL('/icons/badge-72.png', self.location.origin).href,
-      data: { url },
+      data: { url, tenantId, tenantSlug },
     })
   )
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const target = new URL(event.notification.data?.url || '/', self.location.origin).href
+  const data = event.notification.data || {}
+  const target = new URL(data.url || '/', self.location.origin)
+  // Encode tenant in the URL so the SPA can switch to it before navigating to
+  // the deep-linked resource. Tolerates legacy payloads (no tenantId).
+  if (data.tenantId !== undefined && data.tenantId !== null) {
+    target.searchParams.set('tenant', String(data.tenantId))
+  }
+  const targetHref = target.href
   event.waitUntil((async () => {
     const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true })
     for (const client of windowClients) {
       if ('focus' in client) {
-        if (client.url !== target) {
-          await client.navigate(target).catch(() => {})
+        if (client.url !== targetHref) {
+          await client.navigate(targetHref).catch(() => {})
         }
         return client.focus()
       }
     }
-    return clients.openWindow(target)
+    return clients.openWindow(targetHref)
   })())
 })
 

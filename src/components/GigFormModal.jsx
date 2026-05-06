@@ -509,7 +509,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                 <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
                   Event banner
                 </Typography>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                   {bannerPath ? (
                     <Box
                       component="img"

@@ -106,7 +106,7 @@ function CropContent({ imageSrc, onConfirm, onCancel }) {
   return (
     <>
       <DialogContent>
-        <Stack spacing={2} alignItems="center">
+        <Stack spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="caption" color="text.secondary">
             Drag to reposition · Zoom out for transparent padding
           </Typography>

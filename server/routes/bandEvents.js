@@ -17,16 +17,20 @@ function requireId(req, res) {
   return id
 }
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT * FROM band_events ORDER BY start_date ASC, id ASC'
+    'SELECT * FROM band_events WHERE tenant_id = $1 ORDER BY start_date ASC, id ASC',
+    [req.tenantId],
   )
   res.json(rows)
 })
 
 router.get('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const { rows } = await pool.query('SELECT * FROM band_events WHERE id = $1', [id])
+  const { rows } = await pool.query(
+    'SELECT * FROM band_events WHERE id = $1 AND tenant_id = $2',
+    [id, req.tenantId],
+  )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
   res.json(rows[0])
 })
@@ -38,10 +42,10 @@ router.post('/', async (req, res) => {
   }
   const resolvedEnd = end_date || start_date
   const { rows } = await pool.query(
-    `INSERT INTO band_events (title, start_date, end_date, start_time, end_time, location, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO band_events (tenant_id, title, start_date, end_date, start_time, end_time, location, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [title, start_date, resolvedEnd, start_time || null, end_time || null, location || null, notes || null]
+    [req.tenantId, title, start_date, resolvedEnd, start_time || null, end_time || null, location || null, notes || null],
   )
   res.status(201).json(rows[0])
 })
@@ -60,10 +64,11 @@ router.patch('/:id', async (req, res) => {
   }
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
   fields.push(`updated_at = NOW()`)
-  values.push(id)
+  values.push(id, req.tenantId)
   const { rows } = await pool.query(
-    `UPDATE band_events SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
-    values
+    `UPDATE band_events SET ${fields.join(', ')}
+     WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
+    values,
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
   res.json(rows[0])
@@ -71,7 +76,10 @@ router.patch('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const { rowCount } = await pool.query('DELETE FROM band_events WHERE id = $1', [id])
+  const { rowCount } = await pool.query(
+    'DELETE FROM band_events WHERE id = $1 AND tenant_id = $2',
+    [id, req.tenantId],
+  )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
   res.status(204).end()
 })

@@ -37,7 +37,7 @@ describe('sendPushToMember', () => {
 
   it('does not send when band member has no linked user', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] })
-    await sendPushToMember(99, { title: 'Test', body: 'Hello' })
+    await sendPushToMember(99, 1, { title: 'Test', body: 'Hello' })
     expect(mockSendNotification).not.toHaveBeenCalled()
   })
 
@@ -45,28 +45,34 @@ describe('sendPushToMember', () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ user_id: 5 }] })
       .mockResolvedValueOnce({ rows: [] })
-    await sendPushToMember(1, { title: 'Test', body: 'Hello' })
+    await sendPushToMember(1, 1, { title: 'Test', body: 'Hello' })
     expect(mockSendNotification).not.toHaveBeenCalled()
   })
 
-  it('sends to all subscriptions of the linked user', async () => {
+  it('sends to all subscriptions of the linked user with tenant context', async () => {
     const SUB = { endpoint: 'https://push.example.com/1', p256dh: 'key1', auth: 'auth1' }
     mockQuery
       .mockResolvedValueOnce({ rows: [{ user_id: 5 }] })
       .mockResolvedValueOnce({ rows: [SUB] })
-    await sendPushToMember(1, { title: 'Task assigned to you', body: 'Do the thing' })
+      .mockResolvedValueOnce({ rows: [{ slug: 'thunder' }] })
+    await sendPushToMember(1, 7, { title: 'Task assigned to you', body: 'Do the thing' })
     expect(mockSendNotification).toHaveBeenCalledWith(
       { endpoint: SUB.endpoint, keys: { p256dh: SUB.p256dh, auth: SUB.auth } },
-      JSON.stringify({ title: 'Task assigned to you', body: 'Do the thing' })
+      JSON.stringify({
+        title: 'Task assigned to you',
+        body: 'Do the thing',
+        tenantId: 7,
+        tenantSlug: 'thunder',
+      }),
     )
   })
 
-  it('queries band_members with user_id IS NOT NULL to skip unlinked members', async () => {
+  it('scopes the band_members lookup by tenant + user_id IS NOT NULL', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] })
-    await sendPushToMember(42, { title: 'Test' })
+    await sendPushToMember(42, 9, { title: 'Test' })
     expect(mockQuery).toHaveBeenCalledWith(
       expect.stringContaining('user_id IS NOT NULL'),
-      [42]
+      [42, 9],
     )
   })
 
@@ -75,14 +81,15 @@ describe('sendPushToMember', () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ user_id: 5 }] })
       .mockResolvedValueOnce({ rows: [SUB] })
-      .mockResolvedValueOnce({ rows: [] }) // DELETE query
+      .mockResolvedValueOnce({ rows: [{ slug: 'seed' }] })
+      .mockResolvedValueOnce({ rows: [] })
     mockSendNotification.mockRejectedValueOnce({ statusCode: 410 })
 
-    await sendPushToMember(1, { title: 'Test' })
+    await sendPushToMember(1, 1, { title: 'Test' })
 
     expect(mockQuery).toHaveBeenCalledWith(
       expect.stringContaining('DELETE FROM push_subscriptions'),
-      [[SUB.endpoint]]
+      [[SUB.endpoint]],
     )
   })
 })

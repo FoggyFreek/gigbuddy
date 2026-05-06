@@ -10,9 +10,10 @@ function parseId(val) {
   return Number.isInteger(n) && n > 0 ? n : null
 }
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT * FROM band_members ORDER BY sort_order ASC, id ASC'
+    'SELECT * FROM band_members WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
+    [req.tenantId],
   )
   res.json(rows)
 })
@@ -26,13 +27,15 @@ router.post('/', async (req, res) => {
   }
 
   const { rows: maxRows } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM band_members'
+    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM band_members WHERE tenant_id = $1',
+    [req.tenantId],
   )
   const nextOrder = maxRows[0].next
 
   const { rows } = await pool.query(
-    'INSERT INTO band_members (name, role, color, sort_order, position) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-    [name, role ?? null, color ?? null, nextOrder, pos]
+    `INSERT INTO band_members (tenant_id, name, role, color, sort_order, position)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [req.tenantId, name, role ?? null, color ?? null, nextOrder, pos],
   )
   res.status(201).json(rows[0])
 })
@@ -54,10 +57,11 @@ router.patch('/:id', async (req, res) => {
 
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
 
-  values.push(id)
+  values.push(id, req.tenantId)
   const { rows } = await pool.query(
-    `UPDATE band_members SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
-    values
+    `UPDATE band_members SET ${fields.join(', ')}
+     WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
+    values,
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
   res.json(rows[0])
@@ -67,7 +71,10 @@ router.delete('/:id', async (req, res) => {
   const id = parseId(req.params.id)
   if (id === null) return res.status(400).json({ error: 'Invalid id' })
 
-  const { rowCount } = await pool.query('DELETE FROM band_members WHERE id = $1', [id])
+  const { rowCount } = await pool.query(
+    'DELETE FROM band_members WHERE id = $1 AND tenant_id = $2',
+    [id, req.tenantId],
+  )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
   res.status(204).end()
 })

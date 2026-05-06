@@ -113,7 +113,6 @@ function DesktopRow({ gig, onClick, onDelete }) {
             <Box
               component="img"
               src={`/api/files/${gig.banner_path}`}
-              loading="lazy"
               alt=""
               sx={{ height: 28, width: 28, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
             />

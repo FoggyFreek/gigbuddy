@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthContext } from './authContext.js'
-import { getCurrentUser, logout as apiLogout } from '../api/auth.js'
+import {
+  getCurrentUser,
+  logout as apiLogout,
+  setActiveTenant as apiSetActiveTenant,
+} from '../api/auth.js'
 
 export function AuthProvider({ children }) {
   // undefined = loading, null = unauthenticated, object = authenticated user
@@ -39,8 +43,22 @@ export function AuthProvider({ children }) {
     navigate('/login', { replace: true })
   }, [navigate])
 
+  const switchTenant = useCallback(async (tenantId) => {
+    const updated = await apiSetActiveTenant(tenantId)
+    setUser(updated)
+    return updated
+  }, [])
+
+  const refreshUser = useCallback(async () => {
+    const updated = await getCurrentUser()
+    setUser(updated)
+    return updated
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, setUser, logout }}>
+    <AuthContext.Provider
+      value={{ user, setUser, logout, switchTenant, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   )

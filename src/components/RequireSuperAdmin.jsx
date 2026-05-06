@@ -1,9 +1,8 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../contexts/authContext.js'
 
-export default function RequireAdmin() {
+export default function RequireSuperAdmin() {
   const { user } = useAuth()
-
-  if (!user?.isAdmin) return <Navigate to="/" replace />
+  if (!user?.isSuperAdmin) return <Navigate to="/" replace />
   return <Outlet />
 }

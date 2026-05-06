@@ -2,7 +2,13 @@ import { request } from './_client.js'
 
 const api = (path, options) => request(`/api/users${path}`, options)
 
-export const listUsers = () => api('/')
-export const updateUser = (id, patch) =>
-  api(`/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
-export const deleteUser = (id) => api(`/${id}`, { method: 'DELETE' })
+export const listMemberships = () => api('/')
+export const updateMembership = (userId, patch) =>
+  api(`/${userId}/membership`, { method: 'PATCH', body: JSON.stringify(patch) })
+export const updateMembershipBandMember = (userId, band_member_id) =>
+  api(`/${userId}/band-member`, {
+    method: 'PATCH',
+    body: JSON.stringify({ band_member_id }),
+  })
+export const removeMembership = (userId) =>
+  api(`/${userId}`, { method: 'DELETE' })

@@ -5,13 +5,13 @@ export function requireAuth(req, res, next) {
   next()
 }
 
-export async function requireApproved(req, res, next) {
+export async function loadUser(req, res, next) {
   if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
+  if (req.user) return next()
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.userId])
     const user = rows[0]
     if (!user) return res.status(401).json({ error: 'Unauthorized' })
-    if (user.status !== 'approved') return res.status(403).json({ error: 'Forbidden' })
     req.user = user
     next()
   } catch (err) {
@@ -19,17 +19,11 @@ export async function requireApproved(req, res, next) {
   }
 }
 
-export async function requireAdmin(req, res, next) {
-  if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
-  try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.userId])
-    const user = rows[0]
-    if (!user) return res.status(401).json({ error: 'Unauthorized' })
-    if (user.status !== 'approved') return res.status(403).json({ error: 'Forbidden' })
-    if (!user.is_admin) return res.status(403).json({ error: 'Forbidden' })
-    req.user = user
+export async function requireApproved(req, res, next) {
+  loadUser(req, res, (err) => {
+    if (err) return next(err)
+    if (!req.user) return
+    if (req.user.status !== 'approved') return res.status(403).json({ error: 'Forbidden' })
     next()
-  } catch (err) {
-    next(err)
-  }
+  })
 }
