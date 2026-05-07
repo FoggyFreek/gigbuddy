@@ -162,7 +162,7 @@ router.post('/', async (req, res) => {
   const {
     event_date, event_description, venue, city, start_time, end_time, status,
     contact_name, contact_email, contact_phone,
-    has_pa_system, has_drumkit,
+    has_pa_system, has_drumkit, has_stage_lights,
   } = req.body
   if (!event_date || !event_description) {
     return res.status(400).json({ error: 'event_date and event_description are required' })
@@ -176,15 +176,15 @@ router.post('/', async (req, res) => {
     const { rows } = await client.query(
       `INSERT INTO gigs (tenant_id, event_date, event_description, venue, city, start_time, end_time, status,
                          contact_name, contact_email, contact_phone,
-                         has_pa_system, has_drumkit)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                         has_pa_system, has_drumkit, has_stage_lights)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
       [
         req.tenantId,
         event_date, event_description, venue || null, city || null,
         start_time || null, end_time || null, finalStatus,
         contact_name || null, contact_email || null, contact_phone || null,
-        !!has_pa_system, !!has_drumkit,
+        !!has_pa_system, !!has_drumkit, !!has_stage_lights,
       ],
     )
     const gig = rows[0]
@@ -220,7 +220,7 @@ router.post('/', async (req, res) => {
 // Update gig (partial)
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const allowed = ['event_date', 'event_description', 'venue', 'city', 'start_time', 'end_time', 'status', 'booking_fee_cents', 'notes', 'contact_name', 'contact_email', 'contact_phone', 'has_pa_system', 'has_drumkit']
+  const allowed = ['event_date', 'event_description', 'venue', 'city', 'start_time', 'end_time', 'status', 'booking_fee_cents', 'notes', 'contact_name', 'contact_email', 'contact_phone', 'has_pa_system', 'has_drumkit', 'has_stage_lights']
 
   const fields = []
   const values = []

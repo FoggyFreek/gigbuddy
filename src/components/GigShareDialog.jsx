@@ -25,8 +25,9 @@ import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DownloadIcon from '@mui/icons-material/Download'
-import GigShareCard from './GigShareCard.jsx'
+import GigShareCard from './share/GigShareCard.jsx'
 import { STICKER_CONFIGS } from './share/stickerConfigs.js'
+import { SHARE_VARIATIONS, SHARE_VARIATION_MAP } from './share/variations/index.js'
 import { AuthContext } from '../contexts/authContext.js'
 import { getProfile } from '../api/profile.js'
 import { getSharePhotos, uploadSharePhoto, deleteSharePhoto } from '../api/sharePhotos.js'
@@ -39,7 +40,6 @@ import {
   renderNodeToBlob,
   SHARE_FORMATS,
   SHARE_STICKER_POSITIONS,
-  SHARE_VARIATIONS,
   SHARE_VINTAGE_COLORS,
 } from '../utils/shareCard.js'
 import { compressPhoto } from '../utils/compressImage.js'
@@ -49,6 +49,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
   const [photos, setPhotos] = useState([])
+
   const [photoId, setPhotoId] = useState(null)
   const [photosLoading, setPhotosLoading] = useState(false)
   const [format, setFormat] = useState('square')
@@ -71,10 +72,12 @@ export default function GigShareDialog({ open, onClose, gig }) {
   const cardRef = useRef(null)
 
   const formatDef = SHARE_FORMATS[format]
+  const activeVariation = SHARE_VARIATION_MAP[variation] ?? SHARE_VARIATION_MAP.vintage
+  const supports = activeVariation.supports
   const selectedPhoto = photos.find((p) => p.id === photoId)
   const photoSrc = selectedPhoto ? `/api/files/${selectedPhoto.object_key}` : null
   const gigBannerSrc = gig?.banner_path ? `/api/files/${gig.banner_path}` : null
-  const bannerSrc = showBanner && gigBannerSrc ? gigBannerSrc : null
+  const bannerSrc = supports.banner && showBanner && gigBannerSrc ? gigBannerSrc : null
   const accentColor =
     SHARE_VINTAGE_COLORS.find((c) => c.id === accentId)?.value
     || SHARE_VINTAGE_COLORS[0].value
@@ -238,33 +241,35 @@ export default function GigShareDialog({ open, onClose, gig }) {
               ))}
             </ToggleButtonGroup>
 
-            <Stack direction="row" spacing={1.25}>
-              {SHARE_VINTAGE_COLORS.map((c) => {
-                const selected = c.id === accentId
-                return (
-                  <Tooltip key={c.id} title={c.label}>
-                    <ButtonBase
-                      onClick={() => setAccentId(c.id)}
-                      aria-label={`Accent color ${c.label}`}
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        bgcolor: c.value,
-                        border: '2px solid',
-                        borderColor: selected ? 'primary.main' : 'divider',
-                        boxShadow: selected ? 3 : 1,
-                        transition: 'transform 120ms',
-                        transform: selected ? 'scale(1.1)' : 'scale(1)',
-                      }}
-                    />
-                  </Tooltip>
-                )
-              })}
-            </Stack>
+            {supports.accent && (
+              <Stack direction="row" spacing={1.25}>
+                {SHARE_VINTAGE_COLORS.map((c) => {
+                  const selected = c.id === accentId
+                  return (
+                    <Tooltip key={c.id} title={c.label}>
+                      <ButtonBase
+                        onClick={() => setAccentId(c.id)}
+                        aria-label={`Accent color ${c.label}`}
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          bgcolor: c.value,
+                          border: '2px solid',
+                          borderColor: selected ? 'primary.main' : 'divider',
+                          boxShadow: selected ? 3 : 1,
+                          transition: 'transform 120ms',
+                          transform: selected ? 'scale(1.1)' : 'scale(1)',
+                        }}
+                      />
+                    </Tooltip>
+                  )
+                })}
+              </Stack>
+            )}
 
             {/* event banner toggle — hidden on mobile, shown inline near sliders instead */}
-            {gigBannerSrc && (
+            {supports.banner && gigBannerSrc && (
               <FormControlLabel
                 sx={{ display: { xs: 'none', sm: 'flex' } }}
                 control={
@@ -278,7 +283,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
               />
             )}
 
-            {variation === 'photo' && (
+            {supports.toggleLogo && (
               <FormControlLabel
                 control={
                   <Switch
@@ -291,48 +296,67 @@ export default function GigShareDialog({ open, onClose, gig }) {
               />
             )}
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={invertLogo}
-                  onChange={(e) => setInvertLogo(e.target.checked)}
-                  size="small"
-                />
-              }
-              label="Invert logo"
-            />
+            {supports.invertLogo && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={invertLogo}
+                    onChange={(e) => setInvertLogo(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Invert logo"
+              />
+            )}
+
+             {/* event banner toggle — mobile only, shown below sliders where it's reachable */}
+            {supports.banner && gigBannerSrc && (
+              <FormControlLabel
+                sx={{ display: { xs: 'flex', sm: 'none' } }}
+                control={
+                  <Switch
+                    checked={showBanner}
+                    onChange={(e) => setShowBanner(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Show event banner"
+              />
+            )}
 
             {/* overlay controls */}
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <InputLabel>Overlay</InputLabel>
-                <Select
-                  value={sticker ?? ''}
-                  label="Overlay"
-                  onChange={(e) => setSticker(e.target.value || null)}
-                >
-                  <MenuItem value="">None</MenuItem>
-                  {Object.keys(STICKER_CONFIGS).map((id) => (
-                    <MenuItem key={id} value={id}>
-                      {id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {sticker && (
-                <ToggleButtonGroup
-                  value={stickerPos}
-                  exclusive
-                  size="small"
-                  onChange={(_, v) => v && setStickerPos(v)}
-                  aria-label="Overlay position"
-                >
-                  {SHARE_STICKER_POSITIONS.map((p) => (
-                    <ToggleButton key={p.id} value={p.id}>{p.label}</ToggleButton>
-                  ))}
-                </ToggleButtonGroup>
-              )}
-            </Stack>
+            {supports.sticker && (
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
+                <FormControl size="small" sx={{ minWidth: 160 }}>
+                  <InputLabel>Overlay</InputLabel>
+                  <Select
+                    value={sticker ?? ''}
+                    label="Overlay"
+                    onChange={(e) => setSticker(e.target.value || null)}
+                  >
+                    <MenuItem value="">None</MenuItem>
+                    {Object.keys(STICKER_CONFIGS).map((id) => (
+                      <MenuItem key={id} value={id}>
+                        {id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {sticker && (
+                  <ToggleButtonGroup
+                    value={stickerPos}
+                    exclusive
+                    size="small"
+                    onChange={(_, v) => v && setStickerPos(v)}
+                    aria-label="Overlay position"
+                  >
+                    {SHARE_STICKER_POSITIONS.map((p) => (
+                      <ToggleButton key={p.id} value={p.id}>{p.label}</ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                )}
+              </Stack>
+            )}
 
             {/* preview */}
             <Box
@@ -379,7 +403,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
             </Box>
 
             <Box sx={{ width: previewMaxWidth, px: 1 }}>
-              {format === 'story' && (
+              {format === 'story' && supports.zoom && (
                 <Slider
                   value={zoom}
                   onChange={(_, v) => setZoom(v)}
@@ -394,36 +418,23 @@ export default function GigShareDialog({ open, onClose, gig }) {
                   ]}
                 />
               )}
-              <Slider
-                value={pan}
-                onChange={(_, v) => setPan(v)}
-                min={-100}
-                max={100}
-                step={1}
-                size="small"
-                aria-label="Photo pan"
-                marks={[
-                  { value: -100, label: '◀' },
-                  { value: 0, label: '·' },
-                  { value: 100, label: '▶' },
-                ]}
-              />
+              {supports.pan && (
+                <Slider
+                  value={pan}
+                  onChange={(_, v) => setPan(v)}
+                  min={-100}
+                  max={100}
+                  step={1}
+                  size="small"
+                  aria-label="Photo pan"
+                  marks={[
+                    { value: -100, label: '◀' },
+                    { value: 0, label: '·' },
+                    { value: 100, label: '▶' },
+                  ]}
+                />
+              )}
             </Box>
-
-            {/* event banner toggle — mobile only, shown below sliders where it's reachable */}
-            {gigBannerSrc && (
-              <FormControlLabel
-                sx={{ display: { xs: 'flex', sm: 'none' } }}
-                control={
-                  <Switch
-                    checked={showBanner}
-                    onChange={(e) => setShowBanner(e.target.checked)}
-                    size="small"
-                  />
-                }
-                label="Show event banner"
-              />
-            )}
 
             {/* photo carousel */}
             {photosLoading ? (

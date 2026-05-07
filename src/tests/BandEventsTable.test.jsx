@@ -96,15 +96,15 @@ describe('BandEventsTable', () => {
 
     it('renders a card per event', () => {
       wrap(<BandEventsTable events={EVENTS} onRowClick={() => {}} />)
-      expect(screen.getByText('Studio session')).toBeInTheDocument()
-      expect(screen.getByText('Band meeting')).toBeInTheDocument()
+      expect(screen.getByText(/Studio session/)).toBeInTheDocument()
+      expect(screen.getByText(/Band meeting/)).toBeInTheDocument()
     })
 
     it('clicking a card calls onRowClick with the event', async () => {
       const user = userEvent.setup()
       const onRowClick = vi.fn()
       wrap(<BandEventsTable events={EVENTS} onRowClick={onRowClick} />)
-      await user.click(screen.getByText('Studio session'))
+      await user.click(screen.getByText(/Studio session/))
       expect(onRowClick).toHaveBeenCalledWith(EVENTS[0])
     })
 

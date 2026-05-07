@@ -67,7 +67,7 @@ export default function AvailabilitySection() {
   const [rehearsals, setRehearsals] = useState([])
   const [bandEvents, setBandEvents] = useState([])
   const [selectionStart, setSelectionStart] = useState(null)
-  const [selectedDay, setSelectedDay] = useState(null)
+  const [selectedDay, setSelectedDay] = useState(toIsoDate(new Date()))
   const [dialog, setDialog] = useState(null)
   const [gigModalId, setGigModalId] = useState(null)
   const [rehearsalModalId, setRehearsalModalId] = useState(null)

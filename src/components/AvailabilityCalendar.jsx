@@ -6,7 +6,7 @@ import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import { useTheme } from '@mui/material/styles'
+import { useTheme, alpha } from '@mui/material/styles'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
@@ -114,7 +114,7 @@ function MonthMenu({ year, month, onMonthJump }) {
           color: theme.palette.text.primary,
         }}
       >
-        {MONTH_NAMES[month - 1]}
+        {MONTH_NAMES[month - 1]} {year}
       </button>
       <md-menu
         ref={menuRef}
@@ -159,6 +159,7 @@ export default function AvailabilityCalendar({
   onExport,
 }) {
   const theme = useTheme()
+  const today = toIsoDate(new Date())
   const cells = buildCalendarCells(year, month)
   const gigsByDate = gigs.reduce((acc, g) => {
     const key = normalizeIsoDate(g.event_date)
@@ -174,28 +175,23 @@ export default function AvailabilityCalendar({
   }, {})
   return (
     <Box sx={{ maxWidth: 1024, mx: 'auto' }}>
-      <Stack direction="column" sx={{ mb: 1, alignItems: 'center' }}>
-        <Typography variant="caption" fontWeight={600} color="text.secondary">
-          {year}
-        </Typography>
-        <Stack direction="row" sx={{ width: '100%', alignItems: 'center' }}>
-          <IconButton size="small" onClick={onPrev} aria-label="previous month">
-            <ChevronLeftIcon />
-          </IconButton>
-          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-            <MonthMenu year={year} month={month} onMonthJump={onMonthJump} />
-          </Box>
-          <IconButton size="small" onClick={onNext} aria-label="next month">
-            <ChevronRightIcon />
-          </IconButton>
-          {onExport && (
-            <Tooltip title="Export month to calendar (.ics)">
-              <IconButton size="small" onClick={onExport} aria-label="export to calendar">
-                <FileDownloadIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-        </Stack>
+      <Stack direction="row" sx={{ mb: 1, width: '100%', alignItems: 'center' }}>
+        <IconButton size="small" onClick={onPrev} aria-label="previous month">
+          <ChevronLeftIcon />
+        </IconButton>
+        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+          <MonthMenu year={year} month={month} onMonthJump={onMonthJump} />
+        </Box>
+        <IconButton size="small" onClick={onNext} aria-label="next month">
+          <ChevronRightIcon />
+        </IconButton>
+        {onExport && (
+          <Tooltip title="Export month to calendar (.ics)">
+            <IconButton size="small" onClick={onExport} aria-label="export to calendar">
+              <FileDownloadIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </Stack>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}>
@@ -217,6 +213,7 @@ export default function AvailabilityCalendar({
             inRange(iso, normalizeIsoDate(ev.start_date), normalizeIsoDate(ev.end_date) || normalizeIsoDate(ev.start_date))
           )
           const isSelected = selectionStart === iso || (mobile && selectedDay === iso)
+          const isToday = iso === today
           const dow = date.getDay()
           const isWeekend = dow === 0 || dow === 6
 
@@ -278,13 +275,37 @@ export default function AvailabilityCalendar({
                     width: 28,
                     height: 28,
                     borderRadius: '50%',
-                    bgcolor: isSelected ? 'primary.main' : 'transparent',
-                    color: isSelected
+                    bgcolor: isToday
+                      ? 'primary.main'
+                      : isSelected
+                        ? alpha(theme.palette.primary.main, 0.6)
+                        : 'transparent',
+                    color: (isToday || isSelected)
                       ? 'primary.contrastText'
                       : (inMonth ? 'text.primary' : 'text.disabled'),
                   }}
                 >
                   <Typography variant="caption" sx={{ lineHeight: 1, color: 'inherit' }}>
+                    {date.getDate()}
+                  </Typography>
+                </Box>
+              ) : isToday ? (
+                <Box
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 22,
+                    height: 22,
+                    borderRadius: '50%',
+                    bgcolor: 'primary.main',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{ lineHeight: 1, color: 'primary.contrastText', fontSize: '0.7rem', fontWeight: 700 }}
+                  >
                     {date.getDate()}
                   </Typography>
                 </Box>

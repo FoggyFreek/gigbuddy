@@ -54,6 +54,7 @@ const EMPTY_FORM = {
   contact_phone: '',
   has_pa_system: false,
   has_drumkit: false,
+  has_stage_lights: false,
 }
 
 function feeToDisplay(cents) {
@@ -127,6 +128,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
       contact_phone: g.contact_phone || '',
       has_pa_system: !!g.has_pa_system,
       has_drumkit: !!g.has_drumkit,
+      has_stage_lights: !!g.has_stage_lights,
     })
     setInitialTasks(g.tasks || [])
   }, [])
@@ -199,6 +201,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
       contact_phone: form.contact_phone || null,
       has_pa_system: form.has_pa_system,
       has_drumkit: form.has_drumkit,
+      has_stage_lights: form.has_stage_lights,
     })
     onClose()
   }
@@ -428,7 +431,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
             <Grid size={12}>
               <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                Equipment
+                Available equipment on-site
               </Typography>
               <FormGroup row>
                 <FormControlLabel
@@ -448,6 +451,15 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                     />
                   }
                   label="Drumkit"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.has_stage_lights}
+                      onChange={(e) => handleChange('has_stage_lights', e.target.checked)}
+                    />
+                  }
+                  label="Stage light"
                 />
               </FormGroup>
             </Grid>

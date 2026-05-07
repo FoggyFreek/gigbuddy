@@ -21,11 +21,6 @@ export const SHARE_VINTAGE_COLORS = [
   { id: 'orange', label: 'Orange', value: '#f5971e' },
 ]
 
-export const SHARE_VARIATIONS = [
-  { id: 'vintage', label: 'Vintage' },
-  { id: 'minimal', label: 'Minimal' },
-  { id: 'photo', label: 'Photo' },
-]
 
 export const SHARE_STICKERS = [
   { id: 'just-announced', label: 'Just Announced!' },
@@ -87,6 +82,10 @@ export function formatGigVenueName(gig) {
 
 export function formatGigCity(gig) {
   return gig?.city || ''
+}
+
+export function formatEventName(gig) {
+  return gig?.event_description || ''
 }
 
 export async function renderNodeToBlob(node, { width, height }) {

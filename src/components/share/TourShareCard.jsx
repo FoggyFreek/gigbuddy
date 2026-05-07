@@ -252,12 +252,10 @@ function TourSquare({ gigs, photoSrc, photoOpacity, accent, year, today, socials
         >
           ON TOUR · {year}
         </div>
-        <div style={{ width: '100%', height: 3, background: accent, flexShrink: 0 }} />
         <div style={{ flex: 1 }} />
         <div style={{ width: '100%', overflow: 'hidden' }}>
           <GigList gigs={gigs} today={today} fontSize={fontSize} rowHeight={rowHeight} accent={accent} />
         </div>
-        <div style={{ width: '100%', height: 3, background: accent, marginTop: 20, flexShrink: 0 }} />
         <SocialsRow socials={socials} iconColor={accent} textColor={PAPER} size={28} style={{ marginTop: 16 }} />
       </div>
     </TourFrame>
@@ -281,7 +279,7 @@ function TourStory({ gigs, photoSrc, photoOpacity, accent, year, today, socials,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          padding: '80px 90px 90px',
+          padding: '80px 70px 90px',
         }}
       >
         <img
@@ -323,12 +321,10 @@ function TourStory({ gigs, photoSrc, photoOpacity, accent, year, today, socials,
         >
           · {year} ·
         </div>
-        <div style={{ width: '100%', height: 3, background: accent, flexShrink: 0 }} />
         <div style={{ flex: 1 }} />
         <div style={{ width: '100%', overflow: 'hidden' }}>
           <GigList gigs={gigs} today={today} fontSize={fontSize} rowHeight={rowHeight} accent={accent} />
         </div>
-        <div style={{ width: '100%', height: 3, background: accent, marginTop: 24, flexShrink: 0 }} />
         <SocialsRow socials={socials} iconColor={accent} textColor={PAPER} size={28} style={{ marginTop: 20 }} />
       </div>
     </TourFrame>

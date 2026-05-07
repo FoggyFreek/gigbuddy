@@ -18,6 +18,7 @@ import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
+import VoteToggle from './VoteToggle.jsx'
 
 const STATUS_COLORS = {
   option: 'default',
@@ -66,7 +67,7 @@ function ParticipantProgress({ participants }) {
   const noPct = (no / total) * 100
   const pendingPct = (pending / total) * 100
   return (
-    <Box data-testid="participant-progress" sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: 'grey.300' }}>
+    <Box data-testid="participant-progress" sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: 'grey.300', flex: 1 }}>
       {yes > 0 && <Box sx={{ width: `${yesPct}%`, bgcolor: 'success.main' }} />}
       {no > 0 && <Box sx={{ width: `${noPct}%`, bgcolor: 'error.main' }} />}
       {pending > 0 && <Box sx={{ width: `${pendingPct}%`, bgcolor: 'grey.300' }} />}
@@ -74,7 +75,11 @@ function ParticipantProgress({ participants }) {
   )
 }
 
-function RehearsalCard({ rehearsal, onClick, onDelete, onShare }) {
+function RehearsalCard({ rehearsal, bandMemberId, onClick, onDelete, onShare, onVote }) {
+  const myParticipant = bandMemberId
+    ? (rehearsal.participants ?? []).find((p) => p.band_member_id === bandMemberId)
+    : null
+
   return (
     <Box
       onClick={onClick}
@@ -120,9 +125,20 @@ function RehearsalCard({ rehearsal, onClick, onDelete, onShare }) {
           label={rehearsal.status}
           color={STATUS_COLORS[rehearsal.status] || 'default'}
           size="small"
-          sx={{ ml: 'auto' }}
         />
       </Box>
+      {myParticipant && rehearsal.status !== 'planned' && (
+        <Box
+          sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Typography variant="caption" color="text.secondary">My vote:</Typography>
+          <VoteToggle
+            vote={myParticipant.vote}
+            onChange={(v) => onVote?.(rehearsal.id, bandMemberId, v)}
+          />
+        </Box>
+      )}
     </Box>
   )
 }
@@ -208,7 +224,7 @@ function PastHeader({ open, count, onToggle }) {
   )
 }
 
-export default function RehearsalsTable({ rehearsals, onRowClick, onDelete, onShare }) {
+export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRowClick, onDelete, onShare }) {
   const [pastOpen, setPastOpen] = useState(false)
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
@@ -231,7 +247,7 @@ export default function RehearsalsTable({ rehearsals, onRowClick, onDelete, onSh
             </Box>
           ) : (
             upcoming.map((r) => (
-              <RehearsalCard key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+              <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} onVote={onVote} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
             ))
           )}
         </Paper>
@@ -245,7 +261,7 @@ export default function RehearsalsTable({ rehearsals, onRowClick, onDelete, onSh
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((r) => (
-                  <RehearsalCard key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+                  <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} onVote={onVote} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
                 ))}
               </Box>
             </Collapse>

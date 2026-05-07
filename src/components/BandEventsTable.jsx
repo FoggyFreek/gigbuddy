@@ -73,26 +73,20 @@ function EventCard({ event, onClick, onDelete, onShare }) {
         '&:hover': { bgcolor: 'action.hover' },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="body2" fontWeight={600}>
-            {event.title}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          {formatDateRange(event.start_date, event.end_date)}
+        </Typography>
+        {(event.start_time || event.end_time) && (
+          <Typography variant="body2" color="text.secondary">
+            ({formatTimeRange(event.start_time, event.end_time)})
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {formatDateRange(event.start_date, event.end_date)}
-            {event.start_time || event.end_time ? ` (${formatTimeRange(event.start_time, event.end_time)})` : ''}
-          </Typography>
-          {event.location && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-              {event.location}
-            </Typography>
-          )}
-        </Box>
+        )}
         <IconButton
           size="small"
           aria-label="share event"
           onClick={(e) => { e.stopPropagation(); onShare?.(event) }}
-          sx={{ mt: -0.5 }}
+          sx={{ ml: 'auto', mt: -0.5 }}
         >
           <ShareIcon fontSize="small" />
         </IconButton>
@@ -105,6 +99,9 @@ function EventCard({ event, onClick, onDelete, onShare }) {
           <DeleteIcon fontSize="small" />
         </IconButton>
       </Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+        {[event.title, event.location].filter(Boolean).join(' · ') || '—'}
+      </Typography>
     </Box>
   )
 }

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import {
   calculateTitleFontSize,
   formatGigCity,
@@ -6,65 +5,16 @@ import {
   formatGigDoorsTime,
   formatGigVenueName,
   SHARE_FORMATS,
-} from '../../utils/shareCard.js'
+} from '../../../utils/shareCard.js'
+import CardFrame from '../primitives/CardFrame.jsx'
+import PhotoBackdrop from '../primitives/PhotoBackdrop.jsx'
+import SocialsRow from '../SocialsRow.jsx'
+import StickerOverlay from '../StickerOverlay.jsx'
 
 const FALLBACK_LOGO = '/share/logo.png'
-import SocialsRow from './SocialsRow.jsx'
-import StickerOverlay from './StickerOverlay.jsx'
-
 const PAPER = '#f4efe6'
 const INK = '#111111'
 const SUBTLE = '#6b6259'
-
-function PhotoFrame({ src, pan = 0, style }) {
-  const [natural, setNatural] = useState(null)
-
-  if (!src) {
-    return <div style={{ ...style, background: '#22201d' }} />
-  }
-
-  // resolve the container's pixel dimensions from the style object
-  const containerW = style?.width ?? 0
-  const containerH = style?.height ?? 0
-
-  let imgStyle
-  if (natural && containerW && containerH) {
-    const scale = Math.max(containerW / natural.w, containerH / natural.h)
-    const scaledW = natural.w * scale
-    const overflow = Math.max(0, scaledW - containerW)
-    const translateX = (pan / 100) * (overflow / 2)
-    imgStyle = {
-      position: 'absolute',
-      left: '50%',
-      top: '50%',
-      width: scaledW,
-      height: natural.h * scale,
-      transform: `translate(calc(-50% + ${translateX}px), -50%)`,
-      filter: 'contrast(1.05) saturate(0.92)',
-    }
-  } else {
-    imgStyle = {
-      position: 'absolute',
-      inset: 0,
-      width: '100%',
-      height: '100%',
-      objectFit: 'cover',
-      filter: 'contrast(1.05) saturate(0.92)',
-    }
-  }
-
-  return (
-    <div style={{ ...style, position: 'absolute', overflow: 'hidden', background: '#22201d' }}>
-      <img
-        src={src}
-        alt=""
-        crossOrigin="anonymous"
-        onLoad={(e) => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-        style={imgStyle}
-      />
-    </div>
-  )
-}
 
 function Hairline({ accent, style }) {
   return <div style={{ background: accent, height: 4, ...style }} />
@@ -90,62 +40,29 @@ function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }
 }
 
 function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
+  const f = SHARE_FORMATS.square
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
   const venueName = formatGigVenueName(gig)
   const city = formatGigCity(gig)
   const title = gig?.event_description || ''
-  const f = SHARE_FORMATS.square
 
   return (
-    <div
-      data-share-frame
-      style={{
-        position: 'relative',
-        width: f.width,
-        height: f.height,
-        background: PAPER,
-        overflow: 'hidden',
-        color: INK,
-      }}
-    >
+    <CardFrame format={f} background={PAPER} color={INK}>
       {/* Right-side accent block */}
       <div
         data-pdf-layer="accent"
-        style={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 420,
-          background: accent,
-        }}
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 420, background: accent }}
       />
-      {/* Photo inset — top right inside accent block */}
-      <div data-share-layer="photo" data-pdf-layer="photo" style={{ position: 'absolute', top: 0, left: 670, width: 1080, height: 1080 }}><PhotoFrame
-        src={photoSrc}
-        pan={pan}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 670,
-          width: 1080,
-          height: 1080,
-        }}
-      /></div>
-
-      {/* Top-left "LIVE" eyebrow */}
-      <SmallCaps
-        data-pdf-layer="live"
-        color={SUBTLE}
-        size={26}
-        gap={10}
-        style={{ position: 'absolute', top: 236, left: 400 }}
+      {/* Photo inset — fills right accent column */}
+      <div
+        data-share-layer="photo"
+        data-pdf-layer="photo"
+        style={{ position: 'absolute', top: 0, left: 660, right: 0, bottom: 0, overflow: 'hidden' }}
       >
-        Live
-      </SmallCaps>
+        <PhotoBackdrop src={photoSrc} pan={pan} width={f.width} height={f.height} filter="contrast(1.05) saturate(0.92)" bgColor="#22201d" />
+      </div>
 
-      {/* Day numeral huge */}
       <div
         data-pdf-layer="date-day"
         style={{
@@ -170,7 +87,6 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
         {date.month}
       </SmallCaps>
 
-      {/* Title — left side */}
       {title && (
         <div
           data-pdf-layer="title"
@@ -193,7 +109,6 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
         </div>
       )}
 
-      {/* Bottom-left info stack */}
       <div
         data-pdf-layer="venue-info"
         style={{
@@ -207,25 +122,14 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
         }}
       >
         {venueName && (
-          <div
-            style={{
-              fontFamily: '"Cooper Black", Georgia, serif',
-              fontSize: 38,
-              lineHeight: 1.1,
-            }}
-          >
+          <div style={{ fontFamily: '"Cooper Black", Georgia, serif', fontSize: 38, lineHeight: 1.1 }}>
             {venueName}
           </div>
         )}
-        {city && (
-          <SmallCaps color={SUBTLE} size={22} gap={6}>
-            {city}
-          </SmallCaps>
-        )}
+        {city && <SmallCaps color={SUBTLE} size={22} gap={6}>{city}</SmallCaps>}
         <SocialsRow socials={socials} iconColor={accent} textColor={SUBTLE} size={26} justify="flex-start" />
       </div>
 
-      {/* Right column inside accent block — vertical info */}
       <div
         data-pdf-layer="showtime"
         style={{
@@ -239,24 +143,14 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
           color: INK,
         }}
       >
-        <SmallCaps size={20} gap={8} color="rgba(255, 255, 255, 0.65)">
-          Showtime
-        </SmallCaps>
+        <SmallCaps size={20} gap={8} color="rgba(255, 255, 255, 0.65)">Showtime</SmallCaps>
         {time && (
-          <div
-            style={{
-              fontFamily: '"Cooper Black", Georgia, serif',
-              fontSize: 66,
-              color: 'rgba(255, 255, 255, 0.9)',
-              lineHeight: 0.9,
-            }}
-          >
+          <div style={{ fontFamily: '"Cooper Black", Georgia, serif', fontSize: 66, color: 'rgba(255, 255, 255, 0.9)', lineHeight: 0.9 }}>
             {time}
           </div>
         )}
       </div>
 
-      {/* Logo top left */}
       <img
         data-pdf-layer="logo"
         src={logoSrc || FALLBACK_LOGO}
@@ -289,56 +183,31 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
           }}
         />
       )}
-      <div data-pdf-layer="sticker" style={{ position: 'absolute', inset: 0 }}><StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} /></div>
-    </div>
+      <div data-pdf-layer="sticker" style={{ position: 'absolute', inset: 0 }}>
+        <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
+      </div>
+    </CardFrame>
   )
 }
 
 function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
+  const f = SHARE_FORMATS.story
   const date = formatGigDateShort(gig)
   const venueName = formatGigVenueName(gig)
   const city = formatGigCity(gig)
   const title = gig?.event_description || ''
-  const f = SHARE_FORMATS.story
 
   return (
-    <div
-      data-share-frame
-      style={{
-        position: 'relative',
-        width: f.width,
-        height: f.height,
-        background: PAPER,
-        overflow: 'hidden',
-        color: INK,
-      }}
-    >
-      {/* Photo centered in top panel */}
-      <div data-share-layer="photo" data-pdf-layer="photo" style={{ position: 'absolute', top: 0, left: 0, width: 1080, height: 1200 }}><PhotoFrame
-        src={photoSrc}
-        pan={pan}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          width: 1080,
-          height: 1200,
-        }}
-      /></div>
-
-      {/* Eyebrow above photo */}
-      <SmallCaps
-        data-pdf-layer="live"
-        size={42}
-        gap={16}
-        color="rgba(255, 255, 255, 0.7)"
-        style={{ position: 'absolute', top: 150, left: 0, right: 0, textAlign: 'center' }}
+    <CardFrame format={f} background={PAPER} color={INK}>
+      {/* Photo — top panel */}
+      <div
+        data-share-layer="photo"
+        data-pdf-layer="photo"
+        style={{ position: 'absolute', top: 0, left: 0, width: 1080, height: 1200, overflow: 'hidden' }}
       >
-        Live
-      </SmallCaps>
+        <PhotoBackdrop src={photoSrc} pan={pan} width={1080} height={1200} filter="contrast(1.05) saturate(0.92)" bgColor="#22201d" />
+      </div>
 
-      {/* Day numeral huge in cream area, overlapping photo edge */}
       <div
         data-pdf-layer="date-day"
         style={{
@@ -363,7 +232,6 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
         {date.month} · {date.weekday}
       </SmallCaps>
 
-      {/* Title */}
       {title && (
         <div
           data-pdf-layer="title"
@@ -386,7 +254,6 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
         </div>
       )}
 
-      {/* Bottom info row */}
       <div
         data-pdf-layer="venue-info"
         style={{
@@ -404,17 +271,11 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
           <div style={{ fontFamily: '"Cooper Black", Georgia, serif', fontSize: 56, lineHeight: 1.05 }}>
             {venueName}
           </div>
-          {city && (
-            <SmallCaps size={26} gap={6} color={SUBTLE}>
-              {city}
-            </SmallCaps>
-          )}
-          <SocialsRow socials={socials} iconColor={accent} textColor={SUBTLE} size={26}  />
+          {city && <SmallCaps size={26} gap={6} color={SUBTLE}>{city}</SmallCaps>}
+          <SocialsRow socials={socials} iconColor={accent} textColor={SUBTLE} size={26} />
         </div>
-
       </div>
 
-      {/* Logo top */}
       <img
         data-pdf-layer="logo"
         src={logoSrc || FALLBACK_LOGO}
@@ -447,13 +308,11 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
           }}
         />
       )}
-      <div data-pdf-layer="sticker" style={{ position: 'absolute', inset: 0 }}><StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} /></div>
-    </div>
+      <div data-pdf-layer="sticker" style={{ position: 'absolute', inset: 0 }}>
+        <StickerOverlay sticker={sticker} position={stickerPosition} accent={accent} />
+      </div>
+    </CardFrame>
   )
 }
 
-export default function MinimalCard({ gig, photoSrc, format, pan, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
-  return format === 'story'
-    ? <MinimalStory gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} invertLogo={invertLogo} />
-    : <MinimalSquare gig={gig} photoSrc={photoSrc} pan={pan} accent={accent} socials={socials} sticker={sticker} stickerPosition={stickerPosition} logoSrc={logoSrc} bannerSrc={bannerSrc} invertLogo={invertLogo} />
-}
+export { MinimalSquare as Square, MinimalStory as Story }

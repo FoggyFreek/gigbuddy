@@ -50,8 +50,7 @@ function makeProps(overrides = {}) {
 describe('AvailabilityCalendar', () => {
   it('renders month label', () => {
     wrap(<AvailabilityCalendar {...makeProps()} />)
-    expect(screen.getByText('2026')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'April' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'April 2026' })).toBeInTheDocument()
   })
 
   it('renders day headers', () => {

@@ -337,10 +337,12 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
                         </Typography>
                         <Chip size="small" label={p.position} variant="outlined" />
                         <Box sx={{ flexGrow: 1 }} />
-                        <VoteToggle
-                          vote={p.vote}
-                          onChange={(v) => handleVote(p.band_member_id, v)}
-                        />
+                        {rehearsal.status !== 'planned' && (
+                          <VoteToggle
+                            vote={p.vote}
+                            onChange={(v) => handleVote(p.band_member_id, v)}
+                          />
+                        )}
                         <IconButton
                           size="small"
                           aria-label={`remove ${p.name}`}

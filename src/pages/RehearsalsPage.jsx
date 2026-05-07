@@ -12,10 +12,12 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import RehearsalsTable from '../components/RehearsalsTable.jsx'
 import RehearsalFormModal from '../components/RehearsalFormModal.jsx'
-import { deleteRehearsal, listRehearsals } from '../api/rehearsals.js'
+import { deleteRehearsal, listRehearsals, setVote } from '../api/rehearsals.js'
 import { rehearsalShareUrl } from '../utils/shareUtils.js'
+import { useAuth } from '../contexts/authContext.js'
 
 export default function RehearsalsPage() {
+  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [rehearsals, setRehearsals] = useState([])
   const [loading, setLoading] = useState(true)
@@ -62,6 +64,22 @@ export default function RehearsalsPage() {
     load()
   }
 
+  async function handleVote(rehearsalId, memberId, vote) {
+    await setVote(rehearsalId, memberId, vote)
+    setRehearsals((prev) =>
+      prev.map((r) =>
+        r.id !== rehearsalId
+          ? r
+          : {
+              ...r,
+              participants: r.participants.map((p) =>
+                p.band_member_id === memberId ? { ...p, vote } : p
+              ),
+            }
+      )
+    )
+  }
+
   return (
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -92,6 +110,8 @@ export default function RehearsalsPage() {
       {!loading && (
         <RehearsalsTable
           rehearsals={rehearsals}
+          bandMemberId={user?.bandMemberId}
+          onVote={handleVote}
           onRowClick={(r) => setModal({ mode: 'edit', rehearsalId: r.id })}
           onDelete={handleDelete}
           onShare={(r) => window.open(rehearsalShareUrl(r), '_blank')}
