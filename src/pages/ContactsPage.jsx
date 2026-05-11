@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -8,13 +9,14 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import ContactsTable from '../components/ContactsTable.jsx'
 import ContactFormModal from '../components/ContactFormModal.jsx'
 import ContactImportDialog from '../components/ContactImportDialog.jsx'
-import { deleteContact, listContacts } from '../api/contacts.js'
+import { listContacts } from '../api/contacts.js'
 
 export default function ContactsPage() {
+  const navigate = useNavigate()
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [modal, setModal] = useState(null) // null | { mode: 'create' } | { mode: 'edit', contactId: number }
+  const [modal, setModal] = useState(null) // null | { mode: 'create' }
   const [importOpen, setImportOpen] = useState(false)
 
   const load = useCallback(async () => {
@@ -33,12 +35,6 @@ export default function ContactsPage() {
   useEffect(() => { load() }, [load])
 
   function handleClose() {
-    setModal(null)
-    load()
-  }
-
-  async function handleDelete() {
-    await deleteContact(modal.contactId)
     setModal(null)
     load()
   }
@@ -79,16 +75,14 @@ export default function ContactsPage() {
       {!loading && (
         <ContactsTable
           contacts={contacts}
-          onRowClick={(c) => setModal({ mode: 'edit', contactId: c.id })}
+          onRowClick={(c) => navigate(`/contacts/${c.id}`)}
         />
       )}
 
       {modal && (
         <ContactFormModal
-          mode={modal.mode}
-          contactId={modal.contactId}
+          mode="create"
           onClose={handleClose}
-          onDelete={handleDelete}
         />
       )}
 

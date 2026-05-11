@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -8,13 +9,14 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import VenuesTable from '../components/VenuesTable.jsx'
 import VenueFormModal from '../components/VenueFormModal.jsx'
 import VenueImportDialog from '../components/VenueImportDialog.jsx'
-import { deleteVenue, listVenues } from '../api/venues.js'
+import { listVenues } from '../api/venues.js'
 
 export default function VenuesPage() {
+  const navigate = useNavigate()
   const [venues, setVenues] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [modal, setModal] = useState(null) // null | { mode: 'create' } | { mode: 'edit', venueId: number }
+  const [modal, setModal] = useState(null) // null | { mode: 'create' }
   const [importOpen, setImportOpen] = useState(false)
 
   const load = useCallback(async () => {
@@ -33,12 +35,6 @@ export default function VenuesPage() {
   useEffect(() => { load() }, [load])
 
   function handleClose() {
-    setModal(null)
-    load()
-  }
-
-  async function handleDelete() {
-    await deleteVenue(modal.venueId)
     setModal(null)
     load()
   }
@@ -79,16 +75,14 @@ export default function VenuesPage() {
       {!loading && (
         <VenuesTable
           venues={venues}
-          onRowClick={(v) => setModal({ mode: 'edit', venueId: v.id })}
+          onRowClick={(v) => navigate(`/venues/${v.id}`)}
         />
       )}
 
       {modal && (
         <VenueFormModal
-          mode={modal.mode}
-          venueId={modal.venueId}
+          mode="create"
           onClose={handleClose}
-          onDelete={handleDelete}
         />
       )}
 

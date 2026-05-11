@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -18,11 +18,11 @@ import { useAuth } from '../contexts/authContext.js'
 
 export default function RehearsalsPage() {
   const { user } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [rehearsals, setRehearsals] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [modal, setModal] = useState(null) // null | { mode: 'create' } | { mode: 'edit', rehearsalId: number }
+  const [modal, setModal] = useState(null) // null | { mode: 'create' }
   const [confirmDelete, setConfirmDelete] = useState(null) // null | rehearsal object
 
   const load = useCallback(async () => {
@@ -40,16 +40,7 @@ export default function RehearsalsPage() {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    if (loading) return
-    const id = Number(searchParams.get('open'))
-    if (id) setModal({ mode: 'edit', rehearsalId: id })
-  }, [loading, searchParams])
-
   function handleClose() {
-    if (searchParams.has('open')) {
-      setSearchParams((p) => { p.delete('open'); return p }, { replace: true })
-    }
     setModal(null)
     load()
   }
@@ -112,7 +103,7 @@ export default function RehearsalsPage() {
           rehearsals={rehearsals}
           bandMemberId={user?.bandMemberId}
           onVote={handleVote}
-          onRowClick={(r) => setModal({ mode: 'edit', rehearsalId: r.id })}
+          onRowClick={(r) => navigate(`/rehearsals/${r.id}`)}
           onDelete={handleDelete}
           onShare={(r) => window.open(rehearsalShareUrl(r), '_blank')}
         />
@@ -120,8 +111,7 @@ export default function RehearsalsPage() {
 
       {modal && (
         <RehearsalFormModal
-          mode={modal.mode}
-          rehearsalId={modal.rehearsalId}
+          mode="create"
           onClose={handleClose}
         />
       )}

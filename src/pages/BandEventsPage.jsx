@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -16,11 +16,11 @@ import { deleteBandEvent, listBandEvents } from '../api/bandEvents.js'
 import { bandEventShareUrl } from '../utils/shareUtils.js'
 
 export default function BandEventsPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [modal, setModal] = useState(null) // null | { mode: 'create' } | { mode: 'edit', bandEventId: number }
+  const [modal, setModal] = useState(null) // null | { mode: 'create' }
   const [confirmDelete, setConfirmDelete] = useState(null) // null | event object
 
   const load = useCallback(async () => {
@@ -38,16 +38,7 @@ export default function BandEventsPage() {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    if (loading) return
-    const id = Number(searchParams.get('open'))
-    if (id) setModal({ mode: 'edit', bandEventId: id })
-  }, [loading, searchParams])
-
   function handleClose() {
-    if (searchParams.has('open')) {
-      setSearchParams((p) => { p.delete('open'); return p }, { replace: true })
-    }
     setModal(null)
     load()
   }
@@ -92,7 +83,7 @@ export default function BandEventsPage() {
       {!loading && (
         <BandEventsTable
           events={events}
-          onRowClick={(e) => setModal({ mode: 'edit', bandEventId: e.id })}
+          onRowClick={(e) => navigate(`/events/${e.id}`)}
           onDelete={handleDelete}
           onShare={(e) => window.open(bandEventShareUrl(e), '_blank')}
         />
@@ -100,8 +91,7 @@ export default function BandEventsPage() {
 
       {modal && (
         <BandEventFormModal
-          mode={modal.mode}
-          bandEventId={modal.bandEventId}
+          mode="create"
           onClose={handleClose}
         />
       )}

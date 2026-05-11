@@ -112,7 +112,7 @@ export default function AppShell() {
   const drawerWidth = isNavCollapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH
 
   const renderNavItem = (item) => {
-    const selected = pathname === item.to
+    const selected = item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)
     const Icon = item.icon
     return (
       <Tooltip

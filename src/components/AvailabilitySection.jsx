@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
@@ -58,6 +59,7 @@ function monthBounds(year, month) {
 export default function AvailabilitySection() {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+  const navigate = useNavigate()
   const now = new Date()
   const [viewYear, setViewYear] = useState(now.getFullYear())
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1)
@@ -69,9 +71,6 @@ export default function AvailabilitySection() {
   const [selectionStart, setSelectionStart] = useState(null)
   const [selectedDay, setSelectedDay] = useState(toIsoDate(new Date()))
   const [dialog, setDialog] = useState(null)
-  const [gigModalId, setGigModalId] = useState(null)
-  const [rehearsalModalId, setRehearsalModalId] = useState(null)
-  const [bandEventModalId, setBandEventModalId] = useState(null)
   const [addMenu, setAddMenu] = useState(null) // { anchorEl, date }
   const [createModal, setCreateModal] = useState(null) // { type, date }
   const [exportModal, setExportModal] = useState(false)
@@ -198,9 +197,9 @@ export default function AvailabilitySection() {
         selectionStart={selectionStart}
         onDayClick={handleDayClick}
         onSlotClick={handleSlotClick}
-        onGigClick={(gig) => setGigModalId(gig.id)}
-        onRehearsalClick={(reh) => setRehearsalModalId(reh.id)}
-        onBandEventClick={(ev) => setBandEventModalId(ev.id)}
+        onGigClick={(gig) => navigate(`/gigs/${gig.id}`)}
+        onRehearsalClick={(reh) => navigate(`/rehearsals/${reh.id}`)}
+        onBandEventClick={(ev) => navigate(`/events/${ev.id}`)}
         onPrev={handlePrev}
         onNext={handleNext}
         onMonthJump={(y, m) => { setViewYear(y); setViewMonth(m) }}
@@ -221,7 +220,7 @@ export default function AvailabilitySection() {
           ) : (
             <List dense disablePadding>
               {dayGigs.map((gig) => (
-                <ListItemButton key={`g-${gig.id}`} onClick={() => setGigModalId(gig.id)}>
+                <ListItemButton key={`g-${gig.id}`} onClick={() => navigate(`/gigs/${gig.id}`)}>
                   <Box
                     sx={{
                       width: 10,
@@ -242,7 +241,7 @@ export default function AvailabilitySection() {
                 const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
                 const total = reh.participants?.length ?? 0
                 return (
-                  <ListItemButton key={`r-${reh.id}`} onClick={() => setRehearsalModalId(reh.id)}>
+                  <ListItemButton key={`r-${reh.id}`} onClick={() => navigate(`/rehearsals/${reh.id}`)}>
                     <Box
                       sx={{
                         width: 10,
@@ -261,7 +260,7 @@ export default function AvailabilitySection() {
                 )
               })}
               {dayBandEvents.map((ev) => (
-                <ListItemButton key={`be-${ev.id}`} onClick={() => setBandEventModalId(ev.id)}>
+                <ListItemButton key={`be-${ev.id}`} onClick={() => navigate(`/events/${ev.id}`)}>
                   <Box
                     sx={{
                       width: 10,
@@ -349,30 +348,6 @@ export default function AvailabilitySection() {
           Band Event
         </MenuItem>
       </Menu>
-
-      {gigModalId && (
-        <GigFormModal
-          mode="edit"
-          gigId={gigModalId}
-          onClose={() => setGigModalId(null)}
-        />
-      )}
-
-      {rehearsalModalId && (
-        <RehearsalFormModal
-          mode="edit"
-          rehearsalId={rehearsalModalId}
-          onClose={() => { setRehearsalModalId(null); loadRehearsals() }}
-        />
-      )}
-
-      {bandEventModalId && (
-        <BandEventFormModal
-          mode="edit"
-          bandEventId={bandEventModalId}
-          onClose={() => { setBandEventModalId(null); loadBandEvents() }}
-        />
-      )}
 
       {createModal?.type === 'gig' && (
         <GigFormModal

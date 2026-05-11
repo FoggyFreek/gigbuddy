@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -27,11 +27,11 @@ import TourExportDialog from '../components/TourExportDialog.jsx'
 import { deleteGig, listGigs } from '../api/gigs.js'
 
 export default function GigsPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [gigs, setGigs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [modal, setModal] = useState(null) // null | { mode: 'create' } | { mode: 'edit', gigId: number }
+  const [modal, setModal] = useState(null) // null | { mode: 'create' }
   const [confirmDelete, setConfirmDelete] = useState(null) // null | gig object
   const [statusFilter, setStatusFilter] = useState('all')
   const [tourMenuAnchor, setTourMenuAnchor] = useState(null)
@@ -55,16 +55,7 @@ export default function GigsPage() {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    if (loading) return
-    const id = Number(searchParams.get('open'))
-    if (id) setModal({ mode: 'edit', gigId: id })
-  }, [loading, searchParams])
-
   function handleClose() {
-    if (searchParams.has('open')) {
-      setSearchParams((p) => { p.delete('open'); return p }, { replace: true })
-    }
     setModal(null)
     load()
   }
@@ -160,15 +151,14 @@ export default function GigsPage() {
       {!loading && (
         <GigsTable
           gigs={statusFilter === 'all' ? gigs : gigs.filter((g) => g.status === statusFilter)}
-          onRowClick={(gig) => setModal({ mode: 'edit', gigId: gig.id })}
+          onRowClick={(gig) => navigate(`/gigs/${gig.id}`)}
           onDelete={handleDelete}
         />
       )}
 
       {modal && (
         <GigFormModal
-          mode={modal.mode}
-          gigId={modal.gigId}
+          mode="create"
           onClose={handleClose}
         />
       )}
