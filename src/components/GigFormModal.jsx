@@ -25,6 +25,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
+import GigAttachments from './GigAttachments.jsx'
 import GigTasks from './GigTasks.jsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
 import GigParticipantsSection from './GigParticipantsSection.jsx'
@@ -496,6 +497,17 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                   Tasks
                 </Typography>
                 <GigTasks gigId={gigId} initialTasks={initialTasks} members={members} />
+              </Grid>
+            )}
+
+            {/* Attachments — edit mode only */}
+            {mode === 'edit' && (
+              <Grid size={12}>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                  Attachments
+                </Typography>
+                <GigAttachments gigId={gigId} initialAttachments={gig?.attachments ?? []} />
               </Grid>
             )}
 

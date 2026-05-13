@@ -13,6 +13,19 @@ const bannerUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 })
 
+const ATTACHMENT_ALLOWED_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+])
+const attachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 1 * 1024 * 1024 },
+})
+
 const router = Router()
 
 const VALID_STATUSES = ['option', 'confirmed', 'announced']
@@ -154,8 +167,13 @@ router.get('/:id', async (req, res) => {
     'SELECT * FROM gig_tasks WHERE gig_id = $1 AND tenant_id = $2 ORDER BY created_at ASC',
     [id, req.tenantId],
   )
+  const { rows: attachments } = await pool.query(
+    `SELECT id, object_key, original_filename, content_type, file_size, uploaded_at
+     FROM gig_attachments WHERE gig_id = $1 AND tenant_id = $2 ORDER BY uploaded_at ASC`,
+    [id, req.tenantId],
+  )
   const byGig = await loadParticipants([id], req.tenantId)
-  res.json({ ...gigs[0], tasks, participants: byGig.get(id) || [] })
+  res.json({ ...gigs[0], tasks, participants: byGig.get(id) || [], attachments })
 })
 
 // Create gig
@@ -221,7 +239,7 @@ router.post('/', async (req, res) => {
 // Update gig (partial)
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const allowed = ['event_date', 'event_description', 'venue', 'city', 'start_time', 'end_time', 'status', 'booking_fee_cents', 'notes', 'contact_name', 'contact_email', 'contact_phone', 'has_pa_system', 'has_drumkit', 'has_stage_lights']
+  const allowed = ['event_date', 'event_description', 'venue', 'city', 'event_link', 'start_time', 'end_time', 'status', 'booking_fee_cents', 'notes', 'contact_name', 'contact_email', 'contact_phone', 'has_pa_system', 'has_drumkit', 'has_stage_lights']
 
   const fields = []
   const values = []
@@ -353,6 +371,62 @@ router.delete('/:id/banner', async (req, res) => {
       console.warn('Failed to delete gig banner object:', e.message),
     )
   }
+
+  res.status(204).end()
+})
+
+// --- Attachments ---
+
+router.post('/:id/attachments', attachmentUpload.single('file'), async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (!ATTACHMENT_ALLOWED_TYPES.has(req.file.mimetype))
+    return res.status(400).json({ error: 'File type not allowed' })
+
+  const { rows } = await pool.query(
+    'SELECT id FROM gigs WHERE id = $1 AND tenant_id = $2',
+    [id, req.tenantId],
+  )
+  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+
+  const ext = path.extname(req.file.originalname).toLowerCase()
+  const objectKey = `tenants/${req.tenantId}/gig_attachments/${randomUUID()}${ext}`
+
+  await storageClient.putObject(BUCKET, objectKey, req.file.buffer, req.file.size, {
+    'Content-Type': req.file.mimetype,
+  })
+
+  let attachment
+  try {
+    const { rows: inserted } = await pool.query(
+      `INSERT INTO gig_attachments (gig_id, tenant_id, object_key, original_filename, content_type, file_size)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at`,
+      [id, req.tenantId, objectKey, req.file.originalname, req.file.mimetype, req.file.size],
+    )
+    attachment = inserted[0]
+  } catch (err) {
+    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
+    throw err
+  }
+
+  res.status(201).json(attachment)
+})
+
+router.delete('/:id/attachments/:attachmentId', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  const attachmentId = parseId(req.params.attachmentId)
+  if (attachmentId === null) return res.status(400).json({ error: 'Invalid attachmentId' })
+
+  const { rows } = await pool.query(
+    'DELETE FROM gig_attachments WHERE id = $1 AND gig_id = $2 AND tenant_id = $3 RETURNING object_key',
+    [attachmentId, id, req.tenantId],
+  )
+  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+
+  storageClient.removeObject(BUCKET, rows[0].object_key).catch((e) =>
+    console.warn('Failed to delete gig attachment object:', e.message),
+  )
 
   res.status(204).end()
 })

@@ -5,7 +5,7 @@ import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
 
-export default function SplitView({ basePath, children }) {
+export default function SplitView({ basePath, children, outletContext }) {
   const theme = useTheme()
   const isDesktop = useMediaQuery(theme.breakpoints.up('sm'))
   const navigate = useNavigate()
@@ -43,7 +43,7 @@ export default function SplitView({ basePath, children }) {
       )}
       {hasDetail && (
         <Box sx={{ flex: isDesktop ? '1 1 70%' : '1 1 100%', minWidth: 0 }}>
-          <Outlet context={{ insideSplitView: isDesktop, onClose: handleClose }} />
+          <Outlet context={{ insideSplitView: isDesktop, onClose: handleClose, ...outletContext }} />
         </Box>
       )}
     </Box>

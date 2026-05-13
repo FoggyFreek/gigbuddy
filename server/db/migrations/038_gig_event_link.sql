@@ -1,0 +1,1 @@
+ALTER TABLE gigs ADD COLUMN IF NOT EXISTS event_link TEXT;

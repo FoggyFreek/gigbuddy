@@ -11,6 +11,8 @@ async function objectKeyBelongsToTenant(objectKey, tenantId) {
      SELECT 1 FROM gigs WHERE tenant_id = $1 AND banner_path = $2
      UNION ALL
      SELECT 1 FROM share_photos WHERE tenant_id = $1 AND object_key = $2
+     UNION ALL
+     SELECT 1 FROM gig_attachments WHERE tenant_id = $1 AND object_key = $2
      LIMIT 1`,
     [tenantId, objectKey],
   )
@@ -26,10 +28,18 @@ router.get('/*objectKey', async (req, res) => {
   const allowed = await objectKeyBelongsToTenant(objectKey, req.tenantId)
   if (!allowed) return res.status(404).json({ error: 'Not found' })
 
+  const { rows: meta } = await pool.query(
+    'SELECT original_filename FROM gig_attachments WHERE object_key = $1 AND tenant_id = $2',
+    [objectKey, req.tenantId],
+  )
+
   try {
     const stat = await storageClient.statObject(BUCKET, objectKey)
     res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream')
     res.setHeader('Content-Length', stat.size)
+    if (meta.length) {
+      res.setHeader('Content-Disposition', `attachment; filename="${meta[0].original_filename}"`)
+    }
     const stream = await storageClient.getObject(BUCKET, objectKey)
     stream.pipe(res)
   } catch (err) {

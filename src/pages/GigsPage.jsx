@@ -73,8 +73,12 @@ export default function GigsPage() {
     load()
   }
 
+  const handleGigUpdate = useCallback((gigId, patch) => {
+    setGigs((prev) => prev.map((g) => (g.id === gigId ? { ...g, ...patch } : g)))
+  }, [])
+
   return (
-    <SplitView basePath="/gigs">
+    <SplitView basePath="/gigs" outletContext={{ onGigUpdate: handleGigUpdate }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1.5 }}>
         <Typography variant="h5" fontWeight={600}>
           Gigs

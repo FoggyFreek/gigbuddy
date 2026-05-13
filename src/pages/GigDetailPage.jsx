@@ -21,9 +21,11 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
+import GigAttachments from '../components/GigAttachments.jsx'
 import GigTasks from '../components/GigTasks.jsx'
 import GigAvailabilityPanel from '../components/GigAvailabilityPanel.jsx'
 import GigParticipantsSection from '../components/GigParticipantsSection.jsx'
@@ -61,6 +63,7 @@ export default function GigDetailPage() {
     event_description: '',
     venue: '',
     city: '',
+    event_link: '',
     start_time: '',
     end_time: '',
     status: 'option',
@@ -116,6 +119,7 @@ export default function GigDetailPage() {
       event_description: g.event_description || '',
       venue: g.venue || '',
       city: g.city || '',
+      event_link: g.event_link || '',
       start_time: toTimeInput(g.start_time),
       end_time: toTimeInput(g.end_time),
       status: g.status || 'option',
@@ -137,10 +141,14 @@ export default function GigDetailPage() {
   }, [gigId, applyGig])
 
   useEffect(() => {
+    const ac = new AbortController()
+    setLoading(true)
     listMembers().then(setMembers).catch(() => {})
-    getGig(gigId)
+    getGig(gigId, { signal: ac.signal })
       .then(applyGig)
-      .finally(() => setLoading(false))
+      .catch((err) => { if (!ac.signal.aborted) console.error(err) })
+      .finally(() => { if (!ac.signal.aborted) setLoading(false) })
+    return () => ac.abort()
   }, [gigId, applyGig])
 
   const participantIds = useMemo(
@@ -195,6 +203,7 @@ export default function GigDetailPage() {
       const compressed = await compressBanner(blob)
       const result = await uploadGigBanner(gigId, compressed)
       setBannerPath(result.banner_path)
+      outletCtx.onGigUpdate?.(gigId, { banner_path: result.banner_path })
     } catch (err) {
       setBannerError(err.message || 'Banner upload failed')
     } finally {
@@ -214,6 +223,7 @@ export default function GigDetailPage() {
     try {
       await deleteGigBanner(gigId)
       setBannerPath(null)
+      outletCtx.onGigUpdate?.(gigId, { banner_path: null })
     } catch (err) {
       setBannerError(err.message || 'Banner delete failed')
     } finally {
@@ -255,7 +265,7 @@ export default function GigDetailPage() {
         </Box>
       ) : (
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid size={{ xs: 12, sm: 3 }}>
             <TextField
               label="Date"
               type="date"
@@ -267,6 +277,37 @@ export default function GigDetailPage() {
               slotProps={{ inputLabel: { shrink: focused.event_date || !!form.event_date } }}
               sx={maskSx('event_date')}
             />
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3 }}>
+            <TimePicker
+              label="Start time"
+              ampm={false}
+              value={timeStringToDayjs(form.start_time)}
+              onChange={(v) => handleChange('start_time', dayjsToTimeString(v))}
+              slotProps={{ textField: { fullWidth: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3 }}>
+            <TimePicker
+              label="End time"
+              ampm={false}
+              value={timeStringToDayjs(form.end_time)}
+              onChange={(v) => handleChange('end_time', dayjsToTimeString(v))}
+              slotProps={{ textField: { fullWidth: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              select
+              label="Status"
+              fullWidth
+              value={form.status}
+              onChange={(e) => handleChange('status', e.target.value)}
+            >
+              {STATUSES.map((s) => (
+                <MenuItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
+              ))}
+            </TextField>
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
@@ -292,36 +333,34 @@ export default function GigDetailPage() {
               onChange={(e) => handleChange('city', e.target.value)}
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <TimePicker
-              label="Start time"
-              ampm={false}
-              value={timeStringToDayjs(form.start_time)}
-              onChange={(v) => handleChange('start_time', dayjsToTimeString(v))}
-              slotProps={{ textField: { fullWidth: true } }}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <TimePicker
-              label="End time"
-              ampm={false}
-              value={timeStringToDayjs(form.end_time)}
-              onChange={(v) => handleChange('end_time', dayjsToTimeString(v))}
-              slotProps={{ textField: { fullWidth: true } }}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 4 }}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
-              select
-              label="Status"
+              label="Event link"
+              type="url"
               fullWidth
-              value={form.status}
-              onChange={(e) => handleChange('status', e.target.value)}
-            >
-              {STATUSES.map((s) => (
-                <MenuItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
-              ))}
-            </TextField>
+              value={form.event_link}
+              onChange={(e) => handleChange('event_link', e.target.value)}
+              slotProps={{
+                input: {
+                  endAdornment: form.event_link ? (
+                    <InputAdornment position="end">
+                      <Tooltip title="Open link">
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          component="a"
+                          href={form.event_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <OpenInNewIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ) : null,
+                },
+              }}
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
@@ -445,7 +484,15 @@ export default function GigDetailPage() {
             <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
               Tasks
             </Typography>
-            <GigTasks gigId={gigId} initialTasks={initialTasks} members={members} />
+            <GigTasks key={gigId} gigId={gigId} initialTasks={initialTasks} members={members} />
+          </Grid>
+
+          <Grid size={12}>
+            <Divider sx={{ my: 1 }} />
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+              Attachments
+            </Typography>
+            <GigAttachments key={gigId} gigId={gigId} initialAttachments={gig?.attachments ?? []} />
           </Grid>
 
           <Grid size={12}>

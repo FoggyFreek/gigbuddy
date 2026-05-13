@@ -127,11 +127,9 @@ export default function AvailabilitySection({ basePath = '' } = {}) {
     if (!dateStr) return
     setSelectedDay(dateStr)
     const [yStr, mStr] = dateStr.split('-')
-    const y = Number(yStr)
-    const m = Number(mStr)
-    if (y !== viewYear) setViewYear(y)
-    if (m !== viewMonth) setViewMonth(m)
-  }, [pathname, basePath, gigs, rehearsals, bandEvents, viewYear, viewMonth])
+    setViewYear(Number(yStr))
+    setViewMonth(Number(mStr))
+  }, [pathname, basePath, gigs, rehearsals, bandEvents])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   function handlePrev() {

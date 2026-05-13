@@ -3,7 +3,7 @@ import { request, requestForm } from './_client.js'
 const api = (path, options) => request(`/api/gigs${path}`, options)
 
 export const listGigs = () => api('/')
-export const getGig = (id) => api(`/${id}`)
+export const getGig = (id, opts) => api(`/${id}`, opts)
 export const createGig = (body) => api('/', { method: 'POST', body: JSON.stringify(body) })
 export const updateGig = (id, body) => api(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteGig = (id) => api(`/${id}`, { method: 'DELETE' })
@@ -22,6 +22,14 @@ export const uploadGigBanner = (gigId, file) => {
 }
 export const deleteGigBanner = (gigId) =>
   request(`/api/gigs/${gigId}/banner`, { method: 'DELETE' })
+
+export const uploadGigAttachment = (gigId, file) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return requestForm(`/api/gigs/${gigId}/attachments`, fd)
+}
+export const deleteGigAttachment = (gigId, attachmentId) =>
+  request(`/api/gigs/${gigId}/attachments/${attachmentId}`, { method: 'DELETE' })
 
 export const addGigParticipant = (gigId, bandMemberId) =>
   api(`/${gigId}/participants`, { method: 'POST', body: JSON.stringify({ band_member_id: bandMemberId }) })

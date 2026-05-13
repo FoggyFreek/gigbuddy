@@ -30,6 +30,7 @@ import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { useAuth } from '../contexts/authContext.js'
 import { useProfile } from '../contexts/profileContext.js'
 import BandMembersSection from '../components/BandMembersSection.jsx'
+import ImageCropDialog from '../components/ImageCropDialog.jsx'
 import {
   createLink,
   deleteLink,
@@ -65,6 +66,8 @@ export default function ProfilePage() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [logoPath, setLogoPath] = useState(null)
   const [logoUploading, setLogoUploading] = useState(false)
+  const [logoCropOpen, setLogoCropOpen] = useState(false)
+  const [logoCropSrc, setLogoCropSrc] = useState(null)
   const [links, setLinks] = useState([])
   const [loading, setLoading] = useState(true)
   const [newLink, setNewLink] = useState({ label: '', url: '' })
@@ -104,13 +107,26 @@ export default function ProfilePage() {
       .finally(() => setLoading(false))
   }, [])
 
-  async function handleLogoFileChange(e) {
+  function handleLogoFileChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
+    if (file.type === 'image/gif') {
+      setSnackbar('File type not allowed')
+      return
+    }
+    const url = URL.createObjectURL(file)
+    setLogoCropSrc(url)
+    setLogoCropOpen(true)
+  }
+
+  async function handleLogoCropConfirm(blob) {
+    setLogoCropOpen(false)
+    if (logoCropSrc) URL.revokeObjectURL(logoCropSrc)
+    setLogoCropSrc(null)
     setLogoUploading(true)
     try {
-      const compressed = await compressLogo(file)
+      const compressed = await compressLogo(blob)
       const { logo_path } = await uploadLogo(compressed)
       setLogoPath(logo_path)
     } catch (err) {
@@ -118,6 +134,12 @@ export default function ProfilePage() {
     } finally {
       setLogoUploading(false)
     }
+  }
+
+  function handleLogoCropCancel() {
+    setLogoCropOpen(false)
+    if (logoCropSrc) URL.revokeObjectURL(logoCropSrc)
+    setLogoCropSrc(null)
   }
 
   function handleChange(field, value) {
@@ -447,6 +469,14 @@ export default function ProfilePage() {
         autoHideDuration={4000}
         onClose={() => setSnackbar(null)}
         message={snackbar}
+      />
+
+      <ImageCropDialog
+        open={logoCropOpen}
+        imageSrc={logoCropSrc}
+        title="Crop band logo"
+        onConfirm={handleLogoCropConfirm}
+        onCancel={handleLogoCropCancel}
       />
     </Box>
   )
