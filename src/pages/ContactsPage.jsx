@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -9,10 +9,13 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import ContactsTable from '../components/ContactsTable.jsx'
 import ContactFormModal from '../components/ContactFormModal.jsx'
 import ContactImportDialog from '../components/ContactImportDialog.jsx'
+import SplitView from '../components/SplitView.jsx'
 import { listContacts } from '../api/contacts.js'
 
 export default function ContactsPage() {
   const navigate = useNavigate()
+  const { id: selectedIdParam } = useParams()
+  const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -40,7 +43,7 @@ export default function ContactsPage() {
   }
 
   return (
-    <>
+    <SplitView basePath="/contacts">
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Contacts
@@ -76,6 +79,7 @@ export default function ContactsPage() {
         <ContactsTable
           contacts={contacts}
           onRowClick={(c) => navigate(`/contacts/${c.id}`)}
+          selectedId={selectedId}
         />
       )}
 
@@ -94,6 +98,6 @@ export default function ContactsPage() {
           }}
         />
       )}
-    </>
+    </SplitView>
   )
 }

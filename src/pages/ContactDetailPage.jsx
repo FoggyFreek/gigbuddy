@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -15,6 +15,7 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CheckIcon from '@mui/icons-material/Check'
+import CloseIcon from '@mui/icons-material/Close'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { deleteContact, getContact, updateContact } from '../api/contacts.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
@@ -52,6 +53,13 @@ export default function ContactDetailPage() {
   const { id } = useParams()
   const contactId = Number(id)
   const navigate = useNavigate()
+  const outletCtx = useOutletContext() || {}
+  const insideSplitView = !!outletCtx.insideSplitView
+
+  function closeView() {
+    if (outletCtx.onClose) outletCtx.onClose()
+    else navigate(-1)
+  }
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', category: 'press' })
   const [loading, setLoading] = useState(true)
@@ -83,24 +91,34 @@ export default function ContactDetailPage() {
 
   async function handleDelete() {
     await deleteContact(contactId)
-    navigate(-1)
+    closeView()
   }
 
   async function handleBack() {
     await flush()
-    navigate(-1)
+    closeView()
   }
 
   const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
   const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+    <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        <IconButton onClick={handleBack} aria-label="back">
-          <ArrowBackIcon />
-        </IconButton>
+        {!insideSplitView && (
+          <IconButton onClick={handleBack} aria-label="back">
+            <ArrowBackIcon />
+          </IconButton>
+        )}
         <Typography variant="h5" fontWeight={600}>Contact</Typography>
+        {insideSplitView && (
+          <>
+            <Box sx={{ flexGrow: 1 }} />
+            <IconButton onClick={handleBack} aria-label="close">
+              <CloseIcon />
+            </IconButton>
+          </>
+        )}
       </Box>
 
       {loading ? (
@@ -167,8 +185,7 @@ export default function ContactDetailPage() {
           <>
             <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>
             <Box sx={{ flexGrow: 1 }} />
-            <Typography variant="caption" color={saveColor} sx={{ mr: 2 }}>{saveLabel}</Typography>
-            <Button variant="contained" onClick={handleBack}>Close</Button>
+            <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
           </>
         )}
       </Box>

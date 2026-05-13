@@ -25,8 +25,7 @@ import Typography from '@mui/material/Typography'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
-import useMediaQuery from '@mui/material/useMediaQuery'
-import { useTheme } from '@mui/material/styles'
+import { useCompactLayout } from '../hooks/useCompactLayout.js'
 
 const PAGE_SIZE = 50
 const COLUMN_COUNT = 7
@@ -86,7 +85,7 @@ function applySearch(list, q) {
   )
 }
 
-function VenueCard({ venue, selected, onToggle, onClick }) {
+function VenueCard({ venue, selected, active, onToggle, onClick }) {
   return (
     <Box
       sx={{
@@ -94,6 +93,7 @@ function VenueCard({ venue, selected, onToggle, onClick }) {
         alignItems: 'flex-start',
         borderBottom: '1px solid',
         borderColor: 'divider',
+        boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
         '&:last-of-type': { borderBottom: 'none' },
       }}
     >
@@ -134,7 +134,7 @@ function VenueCard({ venue, selected, onToggle, onClick }) {
   )
 }
 
-export default function VenuesTable({ venues, onRowClick }) {
+export default function VenuesTable({ venues, onRowClick, selectedId = null }) {
   const [selectedCategories, setSelectedCategories] = useState(new Set(ALL_CATEGORIES))
   const [filterAnchor, setFilterAnchor] = useState(null)
   const [search, setSearch] = useState('')
@@ -143,8 +143,7 @@ export default function VenuesTable({ venues, onRowClick }) {
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)
   const [selected, setSelected] = useState(new Set())
-  const theme = useTheme()
-  const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
+  const isCompact = useCompactLayout()
 
   function handleSort(col) {
     if (sortBy === col) {
@@ -307,6 +306,7 @@ export default function VenuesTable({ venues, onRowClick }) {
                 key={v.id}
                 venue={v}
                 selected={selected.has(v.id)}
+                active={v.id === selectedId}
                 onToggle={() => toggleRow(v.id)}
                 onClick={() => onRowClick(v)}
               />
@@ -379,7 +379,10 @@ export default function VenuesTable({ venues, onRowClick }) {
                   hover
                   selected={selected.has(v.id)}
                   onClick={() => onRowClick(v)}
-                  sx={{ cursor: 'pointer' }}
+                  sx={{
+                    cursor: 'pointer',
+                    boxShadow: v.id === selectedId ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
+                  }}
                 >
                   <TableCell padding="checkbox">
                     <Checkbox

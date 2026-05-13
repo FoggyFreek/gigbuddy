@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -12,6 +12,7 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import RehearsalsTable from '../components/RehearsalsTable.jsx'
 import RehearsalFormModal from '../components/RehearsalFormModal.jsx'
+import SplitView from '../components/SplitView.jsx'
 import { deleteRehearsal, listRehearsals, setVote } from '../api/rehearsals.js'
 import { rehearsalShareUrl } from '../utils/shareUtils.js'
 import { useAuth } from '../contexts/authContext.js'
@@ -19,6 +20,8 @@ import { useAuth } from '../contexts/authContext.js'
 export default function RehearsalsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { id: selectedIdParam } = useParams()
+  const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [rehearsals, setRehearsals] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -72,7 +75,7 @@ export default function RehearsalsPage() {
   }
 
   return (
-    <>
+    <SplitView basePath="/rehearsals">
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Rehearsals
@@ -106,6 +109,7 @@ export default function RehearsalsPage() {
           onRowClick={(r) => navigate(`/rehearsals/${r.id}`)}
           onDelete={handleDelete}
           onShare={(r) => window.open(rehearsalShareUrl(r), '_blank')}
+          selectedId={selectedId}
         />
       )}
 
@@ -138,6 +142,6 @@ export default function RehearsalsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </SplitView>
   )
 }

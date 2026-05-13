@@ -68,7 +68,7 @@ describe('TasksTable', () => {
     expect(screen.getByText('Confirm rider')).toBeInTheDocument()
     expect(screen.getByText('Jazz Night')).toBeInTheDocument()
     expect(screen.getByText('Summer Festival')).toBeInTheDocument()
-    expect(screen.getByText('01-08-2026')).toBeInTheDocument()
+    expect(screen.getByText('01 aug 2026')).toBeInTheDocument()
   })
 
   it('calls onRowClick with the task when a row is clicked', async () => {

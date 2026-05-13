@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
@@ -23,8 +23,7 @@ import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import MicIcon from '@mui/icons-material/Mic'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
 import GroupIcon from '@mui/icons-material/Group'
-import useMediaQuery from '@mui/material/useMediaQuery'
-import { useTheme } from '@mui/material/styles'
+import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import AvailabilityCalendar from './AvailabilityCalendar.jsx'
 import {
   GIG_STATUS_COLORS,
@@ -56,10 +55,13 @@ function monthBounds(year, month) {
   return { from, to }
 }
 
-export default function AvailabilitySection() {
-  const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+export default function AvailabilitySection({ basePath = '' } = {}) {
+  const isMobile = useCompactLayout()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const gigHref = (id) => (basePath ? `${basePath}/gigs/${id}` : `/gigs/${id}`)
+  const rehHref = (id) => (basePath ? `${basePath}/rehearsals/${id}` : `/rehearsals/${id}`)
+  const evHref = (id) => (basePath ? `${basePath}/events/${id}` : `/events/${id}`)
   const now = new Date()
   const [viewYear, setViewYear] = useState(now.getFullYear())
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1)
@@ -100,6 +102,37 @@ export default function AvailabilitySection() {
     const { from, to } = monthBounds(viewYear, viewMonth)
     listAvailability({ from, to }).then(setSlots).catch(() => {})
   }, [viewYear, viewMonth])
+
+  // Sync calendar focus to the item opened in the split-view detail pane
+  // (URL is the source of truth; data may arrive async, hence the effect).
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!basePath) return
+    const escaped = basePath.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')
+    const match = pathname.match(new RegExp(`^${escaped}/(gigs|rehearsals|events)/(\\d+)`))
+    if (!match) return
+    const [, type, idStr] = match
+    const id = Number(idStr)
+    let dateStr = null
+    if (type === 'gigs') {
+      const g = gigs.find((x) => x.id === id)
+      if (g) dateStr = normalizeIsoDate(g.event_date)
+    } else if (type === 'rehearsals') {
+      const r = rehearsals.find((x) => x.id === id)
+      if (r) dateStr = normalizeIsoDate(r.proposed_date)
+    } else if (type === 'events') {
+      const ev = bandEvents.find((x) => x.id === id)
+      if (ev) dateStr = normalizeIsoDate(ev.start_date)
+    }
+    if (!dateStr) return
+    setSelectedDay(dateStr)
+    const [yStr, mStr] = dateStr.split('-')
+    const y = Number(yStr)
+    const m = Number(mStr)
+    if (y !== viewYear) setViewYear(y)
+    if (m !== viewMonth) setViewMonth(m)
+  }, [pathname, basePath, gigs, rehearsals, bandEvents, viewYear, viewMonth])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function handlePrev() {
     if (viewMonth === 1) { setViewYear((y) => y - 1); setViewMonth(12) }
@@ -197,9 +230,9 @@ export default function AvailabilitySection() {
         selectionStart={selectionStart}
         onDayClick={handleDayClick}
         onSlotClick={handleSlotClick}
-        onGigClick={(gig) => navigate(`/gigs/${gig.id}`)}
-        onRehearsalClick={(reh) => navigate(`/rehearsals/${reh.id}`)}
-        onBandEventClick={(ev) => navigate(`/events/${ev.id}`)}
+        onGigClick={(gig) => navigate(gigHref(gig.id))}
+        onRehearsalClick={(reh) => navigate(rehHref(reh.id))}
+        onBandEventClick={(ev) => navigate(evHref(ev.id))}
         onPrev={handlePrev}
         onNext={handleNext}
         onMonthJump={(y, m) => { setViewYear(y); setViewMonth(m) }}
@@ -220,7 +253,7 @@ export default function AvailabilitySection() {
           ) : (
             <List dense disablePadding>
               {dayGigs.map((gig) => (
-                <ListItemButton key={`g-${gig.id}`} onClick={() => navigate(`/gigs/${gig.id}`)}>
+                <ListItemButton key={`g-${gig.id}`} onClick={() => navigate(gigHref(gig.id))}>
                   <Box
                     sx={{
                       width: 10,
@@ -241,7 +274,7 @@ export default function AvailabilitySection() {
                 const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
                 const total = reh.participants?.length ?? 0
                 return (
-                  <ListItemButton key={`r-${reh.id}`} onClick={() => navigate(`/rehearsals/${reh.id}`)}>
+                  <ListItemButton key={`r-${reh.id}`} onClick={() => navigate(rehHref(reh.id))}>
                     <Box
                       sx={{
                         width: 10,
@@ -260,7 +293,7 @@ export default function AvailabilitySection() {
                 )
               })}
               {dayBandEvents.map((ev) => (
-                <ListItemButton key={`be-${ev.id}`} onClick={() => navigate(`/events/${ev.id}`)}>
+                <ListItemButton key={`be-${ev.id}`} onClick={() => navigate(evHref(ev.id))}>
                   <Box
                     sx={{
                       width: 10,

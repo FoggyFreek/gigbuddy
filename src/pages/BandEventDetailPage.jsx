@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import CloseIcon from '@mui/icons-material/Close'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
@@ -36,6 +36,8 @@ export default function BandEventDetailPage() {
   const { id } = useParams()
   const bandEventId = Number(id)
   const navigate = useNavigate()
+  const outletCtx = useOutletContext() || {}
+  const insideSplitView = !!outletCtx.insideSplitView
 
   const [form, setForm] = useState({
     title: '',
@@ -88,19 +90,30 @@ export default function BandEventDetailPage() {
 
   async function handleBack() {
     await flush()
-    navigate(-1)
+    if (outletCtx.onClose) outletCtx.onClose()
+    else navigate(-1)
   }
 
   const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
   const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+    <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        <IconButton onClick={handleBack} aria-label="back">
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h5" fontWeight={600}>Band event</Typography>
+        {!insideSplitView && (
+          <IconButton onClick={handleBack} aria-label="back">
+            <ArrowBackIcon />
+          </IconButton>
+        )}
+        <Typography variant="h5" fontWeight={600}>Band event details</Typography>
+        {insideSplitView && (
+          <>
+            <Box sx={{ flexGrow: 1 }} />
+            <IconButton onClick={handleBack} aria-label="close">
+              <CloseIcon />
+            </IconButton>
+          </>
+        )}
       </Box>
 
       {loading ? (
@@ -188,9 +201,8 @@ export default function BandEventDetailPage() {
         </Grid>
       )}
 
-      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
         <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
-        <Button variant="contained" onClick={handleBack}>Close</Button>
       </Box>
     </Box>
   )

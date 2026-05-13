@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/rehearsals.js', () => ({
@@ -39,6 +39,7 @@ vi.mock('../api/bandMembers.js', () => ({
 }))
 
 import RehearsalsPage from '../pages/RehearsalsPage.jsx'
+import RehearsalDetailPage from '../pages/RehearsalDetailPage.jsx'
 import { listRehearsals } from '../api/rehearsals.js'
 import theme from '../theme.js'
 
@@ -47,6 +48,22 @@ function wrap(ui, { initialEntries = ['/'] } = {}) {
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
         <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </ThemeProvider>
+    </MemoryRouter>
+  )
+}
+
+function wrapWithRoutes({ initialEntries }) {
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <Routes>
+            <Route path="/rehearsals" element={<RehearsalsPage />}>
+              <Route path=":id" element={<RehearsalDetailPage />} />
+            </Route>
+          </Routes>
+        </LocalizationProvider>
       </ThemeProvider>
     </MemoryRouter>
   )
@@ -76,16 +93,17 @@ describe('RehearsalsPage', () => {
     expect(screen.getByText('Propose rehearsal', { selector: 'h2' })).toBeInTheDocument()
   })
 
-  it('opens the edit modal for ?open=1 and returns to the page on close', async () => {
+  it('renders detail alongside the list at /rehearsals/:id and the Close button returns to /rehearsals', async () => {
     const user = userEvent.setup()
-    wrap(<RehearsalsPage />, { initialEntries: ['/rehearsals?open=1'] })
+    wrapWithRoutes({ initialEntries: ['/rehearsals/1'] })
 
     await waitFor(() => expect(screen.getByText('Rehearsal details')).toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: /rehearsals/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^back$/i })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^close$/i }))
 
-    await waitFor(() => expect(listRehearsals).toHaveBeenCalledTimes(2))
-    expect(screen.queryByText('Rehearsal details')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Rehearsal details')).not.toBeInTheDocument())
     expect(screen.getByRole('heading', { name: /rehearsals/i })).toBeInTheDocument()
   })
 })

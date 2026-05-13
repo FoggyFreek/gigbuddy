@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
+import SplitView from '../components/SplitView.jsx'
 import VenuesTable from '../components/VenuesTable.jsx'
 import VenueFormModal from '../components/VenueFormModal.jsx'
 import VenueImportDialog from '../components/VenueImportDialog.jsx'
@@ -13,6 +14,8 @@ import { listVenues } from '../api/venues.js'
 
 export default function VenuesPage() {
   const navigate = useNavigate()
+  const { id: selectedIdParam } = useParams()
+  const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [venues, setVenues] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -40,7 +43,7 @@ export default function VenuesPage() {
   }
 
   return (
-    <>
+    <SplitView basePath="/venues">
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Venues
@@ -76,6 +79,7 @@ export default function VenuesPage() {
         <VenuesTable
           venues={venues}
           onRowClick={(v) => navigate(`/venues/${v.id}`)}
+          selectedId={selectedId}
         />
       )}
 
@@ -94,6 +98,6 @@ export default function VenuesPage() {
           }}
         />
       )}
-    </>
+    </SplitView>
   )
 }

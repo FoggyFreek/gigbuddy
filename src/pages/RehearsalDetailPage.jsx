@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -15,6 +15,7 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
@@ -31,6 +32,8 @@ export default function RehearsalDetailPage() {
   const { id } = useParams()
   const rehearsalId = Number(id)
   const navigate = useNavigate()
+  const outletCtx = useOutletContext() || {}
+  const insideSplitView = !!outletCtx.insideSplitView
 
   const [form, setForm] = useState({ proposed_date: '', start_time: '', end_time: '', location: '', notes: '' })
   const [loading, setLoading] = useState(true)
@@ -119,7 +122,8 @@ export default function RehearsalDetailPage() {
 
   async function handleBack() {
     await flush()
-    navigate(-1)
+    if (outletCtx.onClose) outletCtx.onClose()
+    else navigate(-1)
   }
 
   const participantIds = useMemo(
@@ -135,12 +139,22 @@ export default function RehearsalDetailPage() {
   const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+    <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        <IconButton onClick={handleBack} aria-label="back">
-          <ArrowBackIcon />
-        </IconButton>
+        {!insideSplitView && (
+          <IconButton onClick={handleBack} aria-label="back">
+            <ArrowBackIcon />
+          </IconButton>
+        )}
         <Typography variant="h5" fontWeight={600}>Rehearsal details</Typography>
+        {insideSplitView && (
+          <>
+            <Box sx={{ flexGrow: 1 }} />
+            <IconButton onClick={handleBack} aria-label="close">
+              <CloseIcon />
+            </IconButton>
+          </>
+        )}
       </Box>
 
       {loading ? (
@@ -310,9 +324,8 @@ export default function RehearsalDetailPage() {
         </Grid>
       )}
 
-      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
         <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
-        <Button variant="contained" onClick={handleBack}>Close</Button>
       </Box>
     </Box>
   )

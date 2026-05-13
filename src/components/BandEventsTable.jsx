@@ -16,8 +16,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import ShareIcon from '@mui/icons-material/Share'
 import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import useMediaQuery from '@mui/material/useMediaQuery'
-import { useTheme } from '@mui/material/styles'
+import { useCompactLayout } from '../hooks/useCompactLayout.js'
 
 const COLUMN_COUNT = 5
 
@@ -25,7 +24,7 @@ function formatDate(val) {
   if (!val) return '—'
   return new Date(val + 'T00:00:00').toLocaleDateString('nl-NL', {
     day: '2-digit',
-    month: '2-digit',
+    month: 'short',
     year: 'numeric',
   })
 }
@@ -60,7 +59,7 @@ function isPastEvent(event) {
   return d < today
 }
 
-function EventCard({ event, onClick, onDelete, onShare }) {
+function EventCard({ event, active, onClick, onDelete, onShare }) {
   return (
     <Box
       onClick={onClick}
@@ -69,12 +68,13 @@ function EventCard({ event, onClick, onDelete, onShare }) {
         borderBottom: '1px solid',
         borderColor: 'divider',
         cursor: 'pointer',
+        boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
         '&:last-of-type': { borderBottom: 'none' },
         '&:hover': { bgcolor: 'action.hover' },
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+        <Typography variant="body2">
           {formatDateRange(event.start_date, event.end_date)}
         </Typography>
         {(event.start_time || event.end_time) && (
@@ -106,9 +106,16 @@ function EventCard({ event, onClick, onDelete, onShare }) {
   )
 }
 
-function DesktopRow({ event, onClick, onDelete, onShare }) {
+function DesktopRow({ event, active, onClick, onDelete, onShare }) {
   return (
-    <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
+    <TableRow
+      hover
+      onClick={onClick}
+      sx={{
+        cursor: 'pointer',
+        boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
+      }}
+    >
       <TableCell>{formatDateRange(event.start_date, event.end_date)}</TableCell>
       <TableCell>{event.title}</TableCell>
       <TableCell>{formatTimeRange(event.start_time, event.end_time)}</TableCell>
@@ -177,10 +184,9 @@ function PastHeader({ open, count, onToggle }) {
   )
 }
 
-export default function BandEventsTable({ events, onRowClick, onDelete, onShare }) {
+export default function BandEventsTable({ events, onRowClick, onDelete, onShare, selectedId = null }) {
   const [pastOpen, setPastOpen] = useState(false)
-  const theme = useTheme()
-  const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
+  const isCompact = useCompactLayout()
 
   const upcoming = events.filter((e) => !isPastEvent(e))
   const past = events.filter((e) => isPastEvent(e))
@@ -200,7 +206,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete, onShare 
             </Box>
           ) : (
             upcoming.map((e) => (
-              <EventCard key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
+              <EventCard key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
             ))
           )}
         </Paper>
@@ -210,7 +216,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete, onShare 
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((e) => (
-                  <EventCard key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
+                  <EventCard key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
                 ))}
               </Box>
             </Collapse>
@@ -241,7 +247,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete, onShare 
               </TableRow>
             )}
             {upcoming.map((e) => (
-              <DesktopRow key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
+              <DesktopRow key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
             ))}
           </TableBody>
         </Table>
@@ -255,7 +261,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete, onShare 
                 <DesktopHead />
                 <TableBody>
                   {past.map((e) => (
-                    <DesktopRow key={e.id} event={e} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
+                    <DesktopRow key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
                   ))}
                 </TableBody>
               </Table>

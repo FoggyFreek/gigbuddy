@@ -14,7 +14,7 @@ import { useTheme } from '@mui/material/styles'
 
 function formatDate(val) {
   if (!val) return '—'
-  return new Date(val).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(val).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function isOverdue(task) {

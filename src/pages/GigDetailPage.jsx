@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -18,6 +18,7 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import CloseIcon from '@mui/icons-material/Close'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
@@ -52,6 +53,8 @@ export default function GigDetailPage() {
   const { id } = useParams()
   const gigId = Number(id)
   const navigate = useNavigate()
+  const outletCtx = useOutletContext() || {}
+  const insideSplitView = !!outletCtx.insideSplitView
 
   const [form, setForm] = useState({
     event_date: '',
@@ -220,19 +223,30 @@ export default function GigDetailPage() {
 
   async function handleBack() {
     await flush()
-    navigate(-1)
+    if (outletCtx.onClose) outletCtx.onClose()
+    else navigate(-1)
   }
 
   const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
   const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+    <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        <IconButton onClick={handleBack} aria-label="back">
-          <ArrowBackIcon />
-        </IconButton>
+        {!insideSplitView && (
+          <IconButton onClick={handleBack} aria-label="back">
+            <ArrowBackIcon />
+          </IconButton>
+        )}
         <Typography variant="h5" fontWeight={600}>Gig details</Typography>
+        {insideSplitView && (
+          <>
+            <Box sx={{ flexGrow: 1 }} />
+            <IconButton onClick={handleBack} aria-label="close">
+              <CloseIcon />
+            </IconButton>
+          </>
+        )}
       </Box>
 
       {loading ? (
@@ -519,9 +533,8 @@ export default function GigDetailPage() {
         </Grid>
       )}
 
-      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
         <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
-        <Button variant="contained" onClick={handleBack}>Close</Button>
       </Box>
 
       <ImageCropDialog

@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AvailabilityPage from '../pages/AvailabilityPage.jsx'
 import { listAvailability } from '../api/availability.js'
@@ -26,7 +27,11 @@ vi.mock('../api/gigs.js', () => ({
 }))
 
 function wrap(ui) {
-  return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
+  return render(
+    <MemoryRouter>
+      <ThemeProvider theme={theme}>{ui}</ThemeProvider>
+    </MemoryRouter>
+  )
 }
 
 describe('AvailabilityPage', () => {

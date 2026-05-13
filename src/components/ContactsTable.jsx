@@ -25,8 +25,7 @@ import Typography from '@mui/material/Typography'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
-import useMediaQuery from '@mui/material/useMediaQuery'
-import { useTheme } from '@mui/material/styles'
+import { useCompactLayout } from '../hooks/useCompactLayout.js'
 
 const PAGE_SIZE = 50
 const COLUMN_COUNT = 5
@@ -92,7 +91,7 @@ function applySearch(list, q) {
   )
 }
 
-function ContactCard({ contact, selected, onToggle, onClick }) {
+function ContactCard({ contact, selected, active, onToggle, onClick }) {
   return (
     <Box
       sx={{
@@ -100,6 +99,7 @@ function ContactCard({ contact, selected, onToggle, onClick }) {
         alignItems: 'flex-start',
         borderBottom: '1px solid',
         borderColor: 'divider',
+        boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
         '&:last-of-type': { borderBottom: 'none' },
       }}
     >
@@ -144,7 +144,7 @@ function ContactCard({ contact, selected, onToggle, onClick }) {
   )
 }
 
-export default function ContactsTable({ contacts, onRowClick }) {
+export default function ContactsTable({ contacts, onRowClick, selectedId = null }) {
   const [selectedCategories, setSelectedCategories] = useState(new Set(ALL_CATEGORIES))
   const [filterAnchor, setFilterAnchor] = useState(null)
   const [search, setSearch] = useState('')
@@ -153,8 +153,7 @@ export default function ContactsTable({ contacts, onRowClick }) {
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)
   const [selected, setSelected] = useState(new Set())
-  const theme = useTheme()
-  const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
+  const isCompact = useCompactLayout()
 
   function handleSort(col) {
     if (sortBy === col) {
@@ -317,6 +316,7 @@ export default function ContactsTable({ contacts, onRowClick }) {
                 key={c.id}
                 contact={c}
                 selected={selected.has(c.id)}
+                active={c.id === selectedId}
                 onToggle={() => toggleRow(c.id)}
                 onClick={() => onRowClick(c)}
               />
@@ -389,7 +389,10 @@ export default function ContactsTable({ contacts, onRowClick }) {
                   hover
                   selected={selected.has(c.id)}
                   onClick={() => onRowClick(c)}
-                  sx={{ cursor: 'pointer' }}
+                  sx={{
+                    cursor: 'pointer',
+                    boxShadow: c.id === selectedId ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
+                  }}
                 >
                   <TableCell padding="checkbox">
                     <Checkbox

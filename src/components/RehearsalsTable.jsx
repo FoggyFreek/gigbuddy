@@ -16,8 +16,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import ShareIcon from '@mui/icons-material/Share'
 import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import useMediaQuery from '@mui/material/useMediaQuery'
-import { useTheme } from '@mui/material/styles'
+import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import VoteToggle from './VoteToggle.jsx'
 
 const STATUS_COLORS = {
@@ -29,7 +28,7 @@ const COLUMN_COUNT = 6
 
 function formatDate(val) {
   if (!val) return '—'
-  return new Date(val).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(val).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function formatTime(val) {
@@ -75,7 +74,7 @@ function ParticipantProgress({ participants }) {
   )
 }
 
-function RehearsalCard({ rehearsal, bandMemberId, onClick, onDelete, onShare, onVote }) {
+function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onDelete, onShare, onVote }) {
   const myParticipant = bandMemberId
     ? (rehearsal.participants ?? []).find((p) => p.band_member_id === bandMemberId)
     : null
@@ -88,12 +87,13 @@ function RehearsalCard({ rehearsal, bandMemberId, onClick, onDelete, onShare, on
         borderBottom: '1px solid',
         borderColor: 'divider',
         cursor: 'pointer',
+        boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
         '&:last-of-type': { borderBottom: 'none' },
         '&:hover': { bgcolor: 'action.hover' },
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+        <Typography variant="body2">
           {formatDate(rehearsal.proposed_date)}
         </Typography>
         <Typography variant="body2" color="text.secondary">
@@ -143,9 +143,16 @@ function RehearsalCard({ rehearsal, bandMemberId, onClick, onDelete, onShare, on
   )
 }
 
-function DesktopRow({ rehearsal, onClick, onDelete, onShare }) {
+function DesktopRow({ rehearsal, active, onClick, onDelete, onShare }) {
   return (
-    <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
+    <TableRow
+      hover
+      onClick={onClick}
+      sx={{
+        cursor: 'pointer',
+        boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
+      }}
+    >
       <TableCell>{formatDate(rehearsal.proposed_date)}</TableCell>
       <TableCell>{formatTime(rehearsal.start_time)} – {formatTime(rehearsal.end_time)}</TableCell>
       <TableCell>{rehearsal.location || '—'}</TableCell>
@@ -224,10 +231,9 @@ function PastHeader({ open, count, onToggle }) {
   )
 }
 
-export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRowClick, onDelete, onShare }) {
+export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRowClick, onDelete, onShare, selectedId = null }) {
   const [pastOpen, setPastOpen] = useState(false)
-  const theme = useTheme()
-  const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
+  const isCompact = useCompactLayout()
 
   const upcoming = rehearsals.filter((r) => !isPastDate(r.proposed_date))
   const past = rehearsals.filter((r) => isPastDate(r.proposed_date))
@@ -247,7 +253,7 @@ export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRo
             </Box>
           ) : (
             upcoming.map((r) => (
-              <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} onVote={onVote} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+              <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
             ))
           )}
         </Paper>
@@ -261,7 +267,7 @@ export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRo
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((r) => (
-                  <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} onVote={onVote} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+                  <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
                 ))}
               </Box>
             </Collapse>
@@ -292,7 +298,7 @@ export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRo
               </TableRow>
             )}
             {upcoming.map((r) => (
-              <DesktopRow key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+              <DesktopRow key={r.id} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
             ))}
           </TableBody>
         </Table>
@@ -310,7 +316,7 @@ export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRo
                 <DesktopHead />
                 <TableBody>
                   {past.map((r) => (
-                    <DesktopRow key={r.id} rehearsal={r} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+                    <DesktopRow key={r.id} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
                   ))}
                 </TableBody>
               </Table>

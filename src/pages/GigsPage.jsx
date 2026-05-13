@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -22,12 +22,15 @@ import AddIcon from '@mui/icons-material/Add'
 import ShareIcon from '@mui/icons-material/Share'
 import GigsTable from '../components/GigsTable.jsx'
 import GigFormModal from '../components/GigFormModal.jsx'
+import SplitView from '../components/SplitView.jsx'
 import TourShareDialog from '../components/TourShareDialog.jsx'
 import TourExportDialog from '../components/TourExportDialog.jsx'
 import { deleteGig, listGigs } from '../api/gigs.js'
 
 export default function GigsPage() {
   const navigate = useNavigate()
+  const { id: selectedIdParam } = useParams()
+  const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [gigs, setGigs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -71,7 +74,7 @@ export default function GigsPage() {
   }
 
   return (
-    <>
+    <SplitView basePath="/gigs">
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1.5 }}>
         <Typography variant="h5" fontWeight={600}>
           Gigs
@@ -153,6 +156,7 @@ export default function GigsPage() {
           gigs={statusFilter === 'all' ? gigs : gigs.filter((g) => g.status === statusFilter)}
           onRowClick={(gig) => navigate(`/gigs/${gig.id}`)}
           onDelete={handleDelete}
+          selectedId={selectedId}
         />
       )}
 
@@ -208,6 +212,6 @@ export default function GigsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </SplitView>
   )
 }

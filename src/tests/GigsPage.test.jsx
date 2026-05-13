@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/gigs.js', () => ({
@@ -25,6 +25,7 @@ vi.mock('../api/bandMembers.js', () => ({
 }))
 
 import GigsPage from '../pages/GigsPage.jsx'
+import GigDetailPage from '../pages/GigDetailPage.jsx'
 import { deleteGig, getGig, listGigs } from '../api/gigs.js'
 import theme from '../theme.js'
 
@@ -33,6 +34,22 @@ function wrap(ui, { initialEntries = ['/'] } = {}) {
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
         <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </ThemeProvider>
+    </MemoryRouter>
+  )
+}
+
+function wrapWithRoutes({ initialEntries }) {
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <Routes>
+            <Route path="/gigs" element={<GigsPage />}>
+              <Route path=":id" element={<GigDetailPage />} />
+            </Route>
+          </Routes>
+        </LocalizationProvider>
       </ThemeProvider>
     </MemoryRouter>
   )
@@ -108,7 +125,7 @@ describe('GigsPage — delete flow', () => {
   })
 })
 
-describe('GigsPage — ?open= query param', () => {
+describe('GigsPage — split-view detail route', () => {
   const GIG_DETAIL = {
     ...GIGS[0],
     booking_fee_cents: null,
@@ -118,6 +135,7 @@ describe('GigsPage — ?open= query param', () => {
     contact_phone: '',
     has_pa_system: false,
     has_drumkit: false,
+    has_stage_lights: false,
     tasks: [],
     participants: [],
   }
@@ -129,16 +147,19 @@ describe('GigsPage — ?open= query param', () => {
     getGig.mockResolvedValue(GIG_DETAIL)
   })
 
-  it('opens the edit modal for the given id and returns to the page on close', async () => {
+  it('renders detail alongside the list at /gigs/:id and the Close button returns to /gigs', async () => {
     const user = userEvent.setup()
-    wrap(<GigsPage />, { initialEntries: ['/gigs?open=42'] })
+    wrapWithRoutes({ initialEntries: ['/gigs/42'] })
 
     await waitFor(() => expect(screen.getByText('Gig details')).toBeInTheDocument())
+    // list stays visible to the left in split view
+    expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
+    // in split-view mode the top-left back arrow is hidden
+    expect(screen.queryByRole('button', { name: /^back$/i })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^close$/i }))
 
-    await waitFor(() => expect(listGigs).toHaveBeenCalledTimes(2))
-    expect(screen.queryByText('Gig details')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Gig details')).not.toBeInTheDocument())
     expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
   })
 })

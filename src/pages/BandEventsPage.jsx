@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -12,11 +12,14 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import BandEventsTable from '../components/BandEventsTable.jsx'
 import BandEventFormModal from '../components/BandEventFormModal.jsx'
+import SplitView from '../components/SplitView.jsx'
 import { deleteBandEvent, listBandEvents } from '../api/bandEvents.js'
 import { bandEventShareUrl } from '../utils/shareUtils.js'
 
 export default function BandEventsPage() {
   const navigate = useNavigate()
+  const { id: selectedIdParam } = useParams()
+  const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -54,7 +57,7 @@ export default function BandEventsPage() {
   }
 
   return (
-    <>
+    <SplitView basePath="/events">
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Band Events
@@ -86,6 +89,7 @@ export default function BandEventsPage() {
           onRowClick={(e) => navigate(`/events/${e.id}`)}
           onDelete={handleDelete}
           onShare={(e) => window.open(bandEventShareUrl(e), '_blank')}
+          selectedId={selectedId}
         />
       )}
 
@@ -114,6 +118,6 @@ export default function BandEventsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </SplitView>
   )
 }

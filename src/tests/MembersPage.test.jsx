@@ -99,9 +99,9 @@ describe('MembersPage', () => {
 
   it('renders membership rows', async () => {
     wrap(<MembersPage />)
-    await waitFor(() => expect(screen.getByText('Pending User')).toBeInTheDocument())
-    expect(screen.getByText('Approved User')).toBeInTheDocument()
-    expect(screen.getByText('Admin')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
+    expect(screen.getAllByText('Approved User').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Admin').length).toBeGreaterThan(0)
   })
 
   it('renders status chips', async () => {
@@ -115,8 +115,8 @@ describe('MembersPage', () => {
     updateMembership.mockResolvedValue(updated)
     const user = userEvent.setup()
     wrap(<MembersPage />)
-    await waitFor(() => expect(screen.getByText('Pending User')).toBeInTheDocument())
-    await user.click(screen.getByText('Approve'))
+    await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
+    await user.click(screen.getAllByText('Approve')[0])
     expect(updateMembership).toHaveBeenCalledWith(1, { status: 'approved' })
   })
 
@@ -125,7 +125,7 @@ describe('MembersPage', () => {
     updateMembership.mockResolvedValue(updated)
     const user = userEvent.setup()
     wrap(<MembersPage />)
-    await waitFor(() => expect(screen.getByText('Pending User')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     const rejectButtons = screen.getAllByText('Reject')
     await user.click(rejectButtons[0])
     expect(updateMembership).toHaveBeenCalledWith(1, { status: 'rejected' })
@@ -135,11 +135,11 @@ describe('MembersPage', () => {
     removeMembership.mockResolvedValue(null)
     const user = userEvent.setup()
     wrap(<MembersPage />)
-    await waitFor(() => expect(screen.getByText('Pending User')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     const deleteButtons = screen.getAllByRole('button', { name: /remove member/i })
     await user.click(deleteButtons[0])
     expect(removeMembership).toHaveBeenCalledWith(1)
-    await waitFor(() => expect(screen.queryByText('Pending User')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryAllByText('Pending User')).toHaveLength(0))
   })
 
   it('links a band member to a user', async () => {
@@ -148,9 +148,9 @@ describe('MembersPage', () => {
     updateMembershipBandMember.mockResolvedValue(updated)
     const user = userEvent.setup()
     wrap(<MembersPage />)
-    await waitFor(() => expect(screen.getByText('Pending User')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     const allCombos = screen.getAllByRole('combobox')
-    // Each row contributes 2 selects (role, band_member). Band member is index 1.
+    // Each row contributes 2 selects (role, band_member). Band member is index 1 (desktop table comes first).
     await user.click(allCombos[1])
     await user.click(screen.getByRole('option', { name: 'Alice' }))
     expect(updateMembershipBandMember).toHaveBeenCalledWith(1, 10)
@@ -158,7 +158,7 @@ describe('MembersPage', () => {
 
   it('non-super admin cannot promote a member to tenant_admin', async () => {
     wrap(<MembersPage />)
-    await waitFor(() => expect(screen.getByText('Pending User')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     // Role select for first row is the first combobox; should be disabled for member rows.
     const allCombos = screen.getAllByRole('combobox')
     expect(allCombos[0]).toHaveAttribute('aria-disabled', 'true')
@@ -170,9 +170,9 @@ describe('MembersPage', () => {
     updateMembership.mockResolvedValue(updated)
     const user = userEvent.setup()
     wrap(<MembersPage />)
-    await waitFor(() => expect(screen.getByText('Approved User')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Approved User').length).toBeGreaterThan(0))
     const allCombos = screen.getAllByRole('combobox')
-    // Approved User (row index 1) — role combobox at index 2 (row 0 has 2 selects).
+    // Approved User (row index 1) — role combobox at index 2 (row 0 has 2 selects in desktop table).
     await user.click(allCombos[2])
     await user.click(screen.getByRole('option', { name: 'tenant_admin' }))
     expect(updateMembership).toHaveBeenCalledWith(2, { role: 'tenant_admin' })

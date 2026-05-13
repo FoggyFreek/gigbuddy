@@ -37,18 +37,27 @@ export default function App() {
           <Route path="/redeem-invite" element={<RedeemInvitePage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<ProfilePage />} />
-            <Route path="/gigs" element={<GigsPage />} />
-            <Route path="/gigs/:id" element={<GigDetailPage />} />
+            <Route path="/gigs" element={<GigsPage />}>
+              <Route path=":id" element={<GigDetailPage />} />
+            </Route>
             <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/rehearsals" element={<RehearsalsPage />} />
-            <Route path="/rehearsals/:id" element={<RehearsalDetailPage />} />
-            <Route path="/events" element={<BandEventsPage />} />
-            <Route path="/events/:id" element={<BandEventDetailPage />} />
-            <Route path="/venues" element={<VenuesPage />} />
-            <Route path="/venues/:id" element={<VenueDetailPage />} />
-            <Route path="/contacts" element={<ContactsPage />} />
-            <Route path="/contacts/:id" element={<ContactDetailPage />} />
-            <Route path="/availability" element={<AvailabilityPage />} />
+            <Route path="/rehearsals" element={<RehearsalsPage />}>
+              <Route path=":id" element={<RehearsalDetailPage />} />
+            </Route>
+            <Route path="/events" element={<BandEventsPage />}>
+              <Route path=":id" element={<BandEventDetailPage />} />
+            </Route>
+            <Route path="/venues" element={<VenuesPage />}>
+              <Route path=":id" element={<VenueDetailPage />} />
+            </Route>
+            <Route path="/contacts" element={<ContactsPage />}>
+              <Route path=":id" element={<ContactDetailPage />} />
+            </Route>
+            <Route path="/availability" element={<AvailabilityPage />}>
+              <Route path="gigs/:id" element={<GigDetailPage />} />
+              <Route path="rehearsals/:id" element={<RehearsalDetailPage />} />
+              <Route path="events/:id" element={<BandEventDetailPage />} />
+            </Route>
             <Route path="/email-templates" element={<EmailTemplatesPage />} />
             <Route element={<RequireTenantAdmin />}>
               <Route path="/members" element={<MembersPage />} />

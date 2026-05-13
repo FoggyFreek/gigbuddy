@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/bandEvents.js', () => ({
@@ -23,6 +23,7 @@ vi.mock('../api/bandEvents.js', () => ({
 }))
 
 import BandEventsPage from '../pages/BandEventsPage.jsx'
+import BandEventDetailPage from '../pages/BandEventDetailPage.jsx'
 import {
   deleteBandEvent,
   listBandEvents,
@@ -34,6 +35,22 @@ function wrap(ui, { initialEntries = ['/'] } = {}) {
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
         <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </ThemeProvider>
+    </MemoryRouter>
+  )
+}
+
+function wrapWithRoutes({ initialEntries }) {
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <Routes>
+            <Route path="/events" element={<BandEventsPage />}>
+              <Route path=":id" element={<BandEventDetailPage />} />
+            </Route>
+          </Routes>
+        </LocalizationProvider>
       </ThemeProvider>
     </MemoryRouter>
   )
@@ -104,18 +121,17 @@ describe('BandEventsPage', () => {
     expect(listBandEvents).toHaveBeenCalledTimes(1)
   })
 
-  it('opens the edit modal for ?open=1 and returns to the page on close', async () => {
+  it('renders detail alongside the list at /events/:id and the Close button returns to /events', async () => {
     const user = userEvent.setup()
-    wrap(<BandEventsPage />, { initialEntries: ['/events?open=1'] })
+    wrapWithRoutes({ initialEntries: ['/events/1'] })
 
-    await waitFor(() => expect(screen.getByText('Band event')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Band event details')).toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: /band events/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^back$/i })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^close$/i }))
 
-    // Wait for the reload triggered by close to finish — only then can we confirm
-    // the modal hasn't been reopened by the ?open= effect re-firing.
-    await waitFor(() => expect(listBandEvents).toHaveBeenCalledTimes(2))
-    expect(screen.queryByText('Band event')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Band event details')).not.toBeInTheDocument())
     expect(screen.getByRole('heading', { name: /band events/i })).toBeInTheDocument()
   })
 })
