@@ -74,12 +74,13 @@ describe('securityHeaders middleware (production mode)', () => {
     expect(csp['font-src']).toContain('data:')
   })
 
-  it('allows https: and data: images for Google profile pictures', async () => {
+  it('allows https:, data:, and blob: images', async () => {
     const res = await request(app).get('/_t')
     const csp = parseCsp(res.headers['content-security-policy'])
     expect(csp['img-src']).toContain("'self'")
     expect(csp['img-src']).toContain('data:')
     expect(csp['img-src']).toContain('https:')
+    expect(csp['img-src']).toContain('blob:')
   })
 
   it('does not allow unsafe-inline or unsafe-eval in script-src', async () => {
