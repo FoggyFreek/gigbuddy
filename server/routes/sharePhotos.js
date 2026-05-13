@@ -5,6 +5,7 @@ import multer from 'multer'
 import pool from '../db/index.js'
 import { requireTenantAdmin } from '../middleware/tenant.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
+import { validateAndReencodeImage } from '../utils/imageProcess.js'
 
 const router = Router()
 
@@ -31,6 +32,8 @@ router.post('/', requireTenantAdmin, upload.single('photo'), async (req, res) =>
     return res.status(400).json({ error: 'File type not allowed' })
   }
 
+  const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
+
   const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
   const objectKey = `tenants/${req.tenantId}/share/${randomUUID()}${ext}`
   const label = path.basename(req.file.originalname, ext) || 'Photo'
@@ -41,8 +44,8 @@ router.post('/', requireTenantAdmin, upload.single('photo'), async (req, res) =>
   )
   const sortOrder = maxRows[0].next
 
-  await storageClient.putObject(BUCKET, objectKey, req.file.buffer, req.file.size, {
-    'Content-Type': req.file.mimetype,
+  await storageClient.putObject(BUCKET, objectKey, image.buffer, image.size, {
+    'Content-Type': image.mimetype,
   })
 
   let row
@@ -50,7 +53,7 @@ router.post('/', requireTenantAdmin, upload.single('photo'), async (req, res) =>
     const { rows } = await pool.query(
       `INSERT INTO share_photos (tenant_id, object_key, content_type, label, sort_order)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [req.tenantId, objectKey, req.file.mimetype, label, sortOrder],
+      [req.tenantId, objectKey, image.mimetype, label, sortOrder],
     )
     row = rows[0]
   } catch (err) {

@@ -5,6 +5,7 @@ import multer from 'multer'
 import pool from '../db/index.js'
 import { requireTenantAdmin } from '../middleware/tenant.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
+import { validateAndReencodeImage } from '../utils/imageProcess.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
 const router = Router()
@@ -165,6 +166,8 @@ router.post('/logo', requireTenantAdmin, logoUpload.single('logo'), async (req, 
     return res.status(400).json({ error: 'File type not allowed' })
   }
 
+  const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
+
   const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
   const objectKey = `tenants/${req.tenantId}/logo/${randomUUID()}${ext}`
 
@@ -174,8 +177,8 @@ router.post('/logo', requireTenantAdmin, logoUpload.single('logo'), async (req, 
   )
   const oldKey = before[0]?.logo_path || null
 
-  await storageClient.putObject(BUCKET, objectKey, req.file.buffer, req.file.size, {
-    'Content-Type': req.file.mimetype,
+  await storageClient.putObject(BUCKET, objectKey, image.buffer, image.size, {
+    'Content-Type': image.mimetype,
   })
 
   let updatedKey
