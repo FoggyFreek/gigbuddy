@@ -8,6 +8,7 @@ import { dirname, join } from 'path'
 import pool from './db/index.js'
 import routes from './routes/index.js'
 import { initOidc } from './oidc.js'
+import { securityHeaders } from './middleware/securityHeaders.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -19,6 +20,8 @@ const app = express()
 const PORT = process.env.SERVER_PORT || 3002
 
 app.set('trust proxy', 1)
+
+app.use(securityHeaders())
 
 const PgSession = connectPgSimple(session)
 
