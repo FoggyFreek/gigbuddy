@@ -83,6 +83,12 @@ describe('securityHeaders middleware (production mode)', () => {
     expect(csp['img-src']).toContain('blob:')
   })
 
+  it('allows blob: workers for image compression', async () => {
+    const res = await request(app).get('/_t')
+    const csp = parseCsp(res.headers['content-security-policy'])
+    expect(csp['worker-src']).toContain('blob:')
+  })
+
   it('does not allow unsafe-inline or unsafe-eval in script-src', async () => {
     const res = await request(app).get('/_t')
     const csp = parseCsp(res.headers['content-security-policy'])
