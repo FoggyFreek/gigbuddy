@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { randomBytes } from 'crypto'
 import pool from '../db/index.js'
+import { auditLog } from '../utils/auditLog.js'
 
 export const adminRouter = Router()
 export const redeemRouter = Router()
@@ -78,6 +79,7 @@ adminRouter.post('/', async (req, res, next) => {
        RETURNING *`,
       [code, req.tenantId, role, req.user.id, expiresAt],
     )
+    auditLog(req, 'invite.create', { inviteId: rows[0].id, role, expiresAt })
     res.status(201).json(shapeInvite(rows[0]))
   } catch (err) {
     next(err)
@@ -99,6 +101,7 @@ adminRouter.delete('/:id', async (req, res, next) => {
     if (rowCount === 0) {
       return res.status(404).json({ error: 'Invite not found' })
     }
+    auditLog(req, 'invite.revoke', { inviteId: id })
     res.status(204).end()
   } catch (err) {
     next(err)
@@ -167,6 +170,11 @@ redeemRouter.post('/', async (req, res, next) => {
 
     await client.query('COMMIT')
 
+    auditLog(req, 'invite.redeem', {
+      tenantId: invite.tenant_id,
+      inviteId: invite.id,
+      role: invite.role,
+    })
     res.status(201).json({
       tenant: {
         id: invite.tenant_id,

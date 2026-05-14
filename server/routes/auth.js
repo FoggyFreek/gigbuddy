@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as oidc from '../oidc.js'
 import pool from '../db/index.js'
+import { auditLog } from '../utils/auditLog.js'
 
 const router = Router()
 
@@ -144,6 +145,7 @@ router.get('/callback', async (req, res, next) => {
       req.session.save((err) => (err ? reject(err) : resolve())),
     )
 
+    auditLog(req, 'auth.login', { userId: user.id, email: user.email })
     res.redirect(process.env.APP_URL || 'http://localhost:5173')
   } catch (err) {
     next(err)
@@ -151,8 +153,11 @@ router.get('/callback', async (req, res, next) => {
 })
 
 router.post('/logout', (req, res, next) => {
+  // Capture before session is destroyed.
+  const userId = req.session?.userId ?? null
   req.session.destroy((err) => {
     if (err) return next(err)
+    auditLog(req, 'auth.logout', { userId })
     res.clearCookie('connect.sid')
     res.status(204).end()
   })
@@ -196,11 +201,13 @@ router.post('/active-tenant', async (req, res, next) => {
     )
     if (rows.length === 0) return res.status(403).json({ error: 'Forbidden' })
 
+    const prevTenantId = req.session.activeTenantId ?? null
     req.session.activeTenantId = tenantId
     await new Promise((resolve, reject) =>
       req.session.save((err) => (err ? reject(err) : resolve())),
     )
 
+    auditLog(req, 'auth.tenant.switch', { fromTenantId: prevTenantId, toTenantId: tenantId })
     const result = await buildMePayload(req.session.userId, tenantId)
     if (!result) return res.status(401).json({ error: 'Unauthorized' })
     res.json(result.payload)

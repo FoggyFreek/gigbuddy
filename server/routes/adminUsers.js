@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { auditLog } from '../utils/auditLog.js'
 
 const router = Router()
 
@@ -43,6 +44,7 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'Cannot delete yourself' })
     }
     await pool.query('DELETE FROM users WHERE id = $1', [userId])
+    auditLog(req, 'admin.user.delete', { targetUserId: userId, targetEmail: rows[0].email })
     res.status(204).end()
   } catch (err) {
     next(err)

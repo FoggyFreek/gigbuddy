@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { auditLog } from '../utils/auditLog.js'
 
 const router = Router()
 
@@ -129,6 +130,11 @@ router.patch('/:userId/membership', async (req, res, next) => {
     )
 
     const updated = await readMembershipRow(req.tenantId, userId)
+    auditLog(req, 'membership.update', {
+      targetUserId: userId,
+      ...(status !== undefined && { status }),
+      ...(role !== undefined && { role }),
+    })
     res.json(updated)
   } catch (err) {
     next(err)
@@ -194,6 +200,7 @@ router.delete('/:userId', async (req, res, next) => {
       `DELETE FROM memberships WHERE tenant_id = $1 AND user_id = $2`,
       [req.tenantId, userId],
     )
+    auditLog(req, 'membership.remove', { targetUserId: userId })
     res.status(204).end()
   } catch (err) {
     next(err)
