@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { Buffer } from 'node:buffer'
+import process from 'node:process'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import express from 'express'
 import supertest from 'supertest'
@@ -35,7 +37,7 @@ describe('sanitizeFilename', () => {
     // Build a string with every char from 0x01–0x1f
     const controls = Array.from({ length: 31 }, (_, i) => String.fromCharCode(i + 1)).join('')
     const result = sanitizeFilename(`a${controls}b`)
-    expect(result).not.toMatch(/[\x00-\x1f]/)
+    expect([...result].some((ch) => ch.charCodeAt(0) <= 0x1f)).toBe(false)
   })
 
   it('returns "download" for an empty string', () => {
@@ -66,6 +68,24 @@ describe('sanitizeFilename', () => {
 // verifyDocumentContent (A06 — magic-byte validation)
 // ---------------------------------------------------------------------------
 describe('verifyDocumentContent', () => {
+  function zipWithEntries(entries) {
+    return Buffer.concat(entries.map((entry) => {
+      const name = Buffer.from(entry, 'utf8')
+      const content = Buffer.from('<xml/>')
+      const header = Buffer.alloc(30)
+      header.writeUInt32LE(0x04034b50, 0)
+      header.writeUInt16LE(20, 4)
+      header.writeUInt16LE(0, 6)
+      header.writeUInt16LE(0, 8)
+      header.writeUInt32LE(0, 14)
+      header.writeUInt32LE(content.length, 18)
+      header.writeUInt32LE(content.length, 22)
+      header.writeUInt16LE(name.length, 26)
+      header.writeUInt16LE(0, 28)
+      return Buffer.concat([header, name, content])
+    }))
+  }
+
   // --- PDF ---
   it('accepts a buffer starting with %PDF magic bytes', () => {
     const buf = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34])
@@ -97,9 +117,9 @@ describe('verifyDocumentContent', () => {
     expect(verifyDocumentContent(buf, 'application/msword')).toBe(true)
   })
 
-  // --- OOXML (.xlsx, .docx) — ZIP ---
-  it('accepts ZIP (PK) magic bytes for xlsx MIME type', () => {
-    const buf = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00])
+  // --- OOXML (.xlsx, .docx) — ZIP container with Office entries ---
+  it('accepts xlsx when the ZIP contains workbook entries', () => {
+    const buf = zipWithEntries(['[Content_Types].xml', 'xl/workbook.xml'])
     expect(
       verifyDocumentContent(
         buf,
@@ -108,14 +128,24 @@ describe('verifyDocumentContent', () => {
     ).toBe(true)
   })
 
-  it('accepts ZIP end-of-central-dir signature for xlsx (edge case)', () => {
+  it('rejects an empty ZIP declared as xlsx', () => {
     const buf = Buffer.from([0x50, 0x4b, 0x05, 0x06, 0x00, 0x00])
     expect(
       verifyDocumentContent(
         buf,
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       ),
-    ).toBe(true)
+    ).toBe(false)
+  })
+
+  it('rejects a generic ZIP with no xlsx workbook entry', () => {
+    const buf = zipWithEntries(['[Content_Types].xml', 'not-office.txt'])
+    expect(
+      verifyDocumentContent(
+        buf,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ),
+    ).toBe(false)
   })
 
   it('rejects OLE2 bytes declared as xlsx (wrong Office format era)', () => {
@@ -128,8 +158,8 @@ describe('verifyDocumentContent', () => {
     ).toBe(false)
   })
 
-  it('accepts ZIP (PK) magic bytes for docx MIME type', () => {
-    const buf = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00])
+  it('accepts docx when the ZIP contains document entries', () => {
+    const buf = zipWithEntries(['[Content_Types].xml', 'word/document.xml'])
     expect(
       verifyDocumentContent(
         buf,
@@ -228,16 +258,6 @@ describe('auditLog', () => {
 // Global error handler — 5xx must not leak internal messages (A02/A10)
 // ---------------------------------------------------------------------------
 describe('error handler — message suppression on 5xx', () => {
-  function makeApp() {
-    const a = express()
-    a.use((err, _req, res, _next) => {
-      const status = err.status || 500
-      const message = status < 500 ? (err.message || 'Bad request') : 'Internal error'
-      res.status(status).json({ error: message })
-    })
-    return a
-  }
-
   it('returns "Internal error" and NOT the actual message for 5xx', async () => {
     const a = express()
     a.get('/boom', (_req, _res, next) => {
@@ -320,5 +340,21 @@ describe('rate limiting', () => {
     const res = await supertest(a).get('/ping').expect(200)
     expect(res.headers).toHaveProperty('ratelimit')
     expect(res.headers).toHaveProperty('ratelimit-policy')
+  })
+
+  it('does not apply the tight auth limiter to /auth/me', async () => {
+    const oldEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    vi.resetModules()
+    const { default: routes } = await import('../../server/routes/index.js')
+    process.env.NODE_ENV = oldEnv
+
+    const a = express()
+    a.use('/api', routes)
+
+    for (let i = 0; i < 35; i++) {
+      const res = await supertest(a).get('/api/auth/me')
+      expect(res.status).toBe(401)
+    }
   })
 })

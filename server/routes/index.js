@@ -71,7 +71,9 @@ router.get('/health', (_req, res) => {
 router.use(apiLimiter)
 router.use(csrf)
 
-router.use('/auth', authLimiter, authRouter)
+router.use('/auth/login', authLimiter)
+router.use('/auth/callback', authLimiter)
+router.use('/auth', authRouter)
 
 const tenantMember = [requireApproved, resolveTenantId, requireTenantMember]
 const tenantAdmin = [requireApproved, resolveTenantId, requireTenantAdmin]

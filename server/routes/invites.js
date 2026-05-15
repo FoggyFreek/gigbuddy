@@ -111,9 +111,11 @@ adminRouter.delete('/:id', async (req, res, next) => {
 redeemRouter.post('/', async (req, res, next) => {
   const code = typeof req.body?.code === 'string' ? req.body.code.trim() : ''
   if (!code) {
+    auditLog(req, 'invite.redeem.denied', { reason: 'missing_code' })
     return res.status(400).json({ error: 'code is required' })
   }
   if (req.user?.status === 'rejected') {
+    auditLog(req, 'invite.redeem.denied', { reason: 'rejected_user' })
     return res.status(403).json({ error: 'Account is not allowed to redeem invites' })
   }
   const client = await pool.connect()
@@ -138,15 +140,21 @@ redeemRouter.post('/', async (req, res, next) => {
         [code],
       )
       await client.query('ROLLBACK')
-      if (!existingInvites[0]) return res.status(404).json({ error: 'Invite not found' })
+      if (!existingInvites[0]) {
+        auditLog(req, 'invite.redeem.denied', { reason: 'not_found' })
+        return res.status(404).json({ error: 'Invite not found' })
+      }
+      auditLog(req, 'invite.redeem.denied', { reason: 'already_used' })
       return res.status(409).json({ error: 'Invite already used' })
     }
     if (invite.expires_at && new Date(invite.expires_at) <= new Date()) {
       await client.query('ROLLBACK')
+      auditLog(req, 'invite.redeem.denied', { tenantId: invite.tenant_id, inviteId: invite.id, reason: 'expired' })
       return res.status(410).json({ error: 'Invite has expired' })
     }
     if (invite.tenant_archived_at) {
       await client.query('ROLLBACK')
+      auditLog(req, 'invite.redeem.denied', { tenantId: invite.tenant_id, inviteId: invite.id, reason: 'tenant_archived' })
       return res.status(409).json({ error: 'Tenant is archived' })
     }
 
@@ -156,6 +164,11 @@ redeemRouter.post('/', async (req, res, next) => {
     )
     if (existingMembership[0]) {
       await client.query('ROLLBACK')
+      auditLog(req, 'invite.redeem.denied', {
+        tenantId: invite.tenant_id,
+        inviteId: invite.id,
+        reason: 'already_member',
+      })
       return res.status(409).json({
         error: 'Already a member of this tenant',
         membership: existingMembership[0],

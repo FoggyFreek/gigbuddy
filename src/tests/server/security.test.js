@@ -136,8 +136,8 @@ describe('audit logging', () => {
         .send({ role: 'member', expiresInDays: 7 }),
     ).expect(201)
 
-    capture.restore()
     const entries = capture.getEntries().filter((e) => e.action === 'invite.create')
+    capture.restore()
     expect(entries).toHaveLength(1)
     expect(entries[0].role).toBe('member')
     expect(entries[0].inviteId).toBeDefined()
@@ -157,8 +157,8 @@ describe('audit logging', () => {
       request(app).delete(`/api/invites/${inviteId}`),
     ).expect(204)
 
-    capture.restore()
     const entries = capture.getEntries().filter((e) => e.action === 'invite.revoke')
+    capture.restore()
     expect(entries).toHaveLength(1)
     expect(entries[0].inviteId).toBe(inviteId)
   })
@@ -183,8 +183,8 @@ describe('audit logging', () => {
         .send({ status: 'approved' }),
     ).expect(200)
 
-    capture.restore()
     const entries = capture.getEntries().filter((e) => e.action === 'membership.update')
+    capture.restore()
     expect(entries).toHaveLength(1)
     expect(entries[0].targetUserId).toBe(pending.id)
     expect(entries[0].status).toBe('approved')
@@ -209,8 +209,8 @@ describe('audit logging', () => {
       request(app).delete(`/api/users/${removable.id}`),
     ).expect(204)
 
-    capture.restore()
     const entries = capture.getEntries().filter((e) => e.action === 'membership.remove')
+    capture.restore()
     expect(entries).toHaveLength(1)
     expect(entries[0].targetUserId).toBe(removable.id)
   })
@@ -227,10 +227,49 @@ describe('audit logging', () => {
       request(app).delete(`/api/admin/users/${victim.id}`),
     ).expect(204)
 
-    capture.restore()
     const entries = capture.getEntries().filter((e) => e.action === 'admin.user.delete')
+    capture.restore()
     expect(entries).toHaveLength(1)
     expect(entries[0].targetUserId).toBe(victim.id)
     expect(entries[0].targetEmail).toBe('del@test.local')
+  })
+
+  it('writes invite.redeem.denied entry when an invite code is invalid', async () => {
+    const capture = captureAuditLines()
+
+    await asUserA(
+      request(app).post('/api/invites/redeem').send({ code: 'not-a-real-code' }),
+    ).expect(404)
+
+    const entries = capture.getEntries().filter((e) => e.action === 'invite.redeem.denied')
+    capture.restore()
+    expect(entries).toHaveLength(1)
+    expect(entries[0].reason).toBe('not_found')
+  })
+
+  it('writes membership.update.denied entry when a tenant admin tries to grant tenant_admin', async () => {
+    const { rows: [target] } = await pool.query(
+      `INSERT INTO users (google_sub, email, name, status)
+       VALUES ('sub-deny', 'deny@test.local', 'Denied', 'approved') RETURNING id`,
+    )
+    await pool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
+       VALUES ($1, $2, 'member', 'approved', NOW())`,
+      [target.id, seed.tenantA.id],
+    )
+
+    const capture = captureAuditLines()
+
+    await asUserA(
+      request(app)
+        .patch(`/api/users/${target.id}/membership`)
+        .send({ role: 'tenant_admin' }),
+    ).expect(403)
+
+    const entries = capture.getEntries().filter((e) => e.action === 'membership.update.denied')
+    capture.restore()
+    expect(entries).toHaveLength(1)
+    expect(entries[0].targetUserId).toBe(target.id)
+    expect(entries[0].reason).toBe('grant_tenant_admin_requires_super_admin')
   })
 })

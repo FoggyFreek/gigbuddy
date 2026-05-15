@@ -38,9 +38,11 @@ router.delete('/:id', async (req, res, next) => {
     const { rows } = await pool.query('SELECT email FROM users WHERE id = $1', [userId])
     if (!rows[0]) return res.status(404).json({ error: 'User not found' })
     if (rows[0].email === process.env.ADMIN_EMAIL) {
+      auditLog(req, 'admin.user.delete.denied', { targetUserId: userId, targetEmail: rows[0].email, reason: 'bootstrap_admin' })
       return res.status(400).json({ error: 'Cannot delete the bootstrap admin user' })
     }
     if (userId === req.user.id) {
+      auditLog(req, 'admin.user.delete.denied', { targetUserId: userId, targetEmail: rows[0].email, reason: 'self_delete' })
       return res.status(400).json({ error: 'Cannot delete yourself' })
     }
     await pool.query('DELETE FROM users WHERE id = $1', [userId])

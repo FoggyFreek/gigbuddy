@@ -74,6 +74,7 @@ router.patch('/:userId/membership', async (req, res, next) => {
   }
   const callerIsSuperAdmin = !!req.user?.is_super_admin
   if (role === 'tenant_admin' && !callerIsSuperAdmin) {
+    auditLog(req, 'membership.update.denied', { targetUserId: userId, role, reason: 'grant_tenant_admin_requires_super_admin' })
     return res.status(403).json({ error: 'Only super admins can grant tenant_admin' })
   }
 
@@ -81,6 +82,7 @@ router.patch('/:userId/membership', async (req, res, next) => {
     const existing = await readMembershipRow(req.tenantId, userId)
     if (!existing) return res.status(404).json({ error: 'Membership not found' })
     if (existing.is_super_admin && existing.user_id !== req.user.id && !callerIsSuperAdmin) {
+      auditLog(req, 'membership.update.denied', { targetUserId: userId, reason: 'modify_super_admin' })
       return res.status(403).json({ error: 'Cannot modify a super admin membership' })
     }
     if (
@@ -89,6 +91,7 @@ router.patch('/:userId/membership', async (req, res, next) => {
       role !== 'tenant_admin' &&
       !callerIsSuperAdmin
     ) {
+      auditLog(req, 'membership.update.denied', { targetUserId: userId, role, reason: 'demote_tenant_admin_requires_super_admin' })
       return res.status(403).json({ error: 'Only super admins can demote a tenant_admin' })
     }
     // Approving a pending tenant_admin membership is effectively a grant of
@@ -100,6 +103,7 @@ router.patch('/:userId/membership', async (req, res, next) => {
       existing.status !== 'approved' &&
       !callerIsSuperAdmin
     ) {
+      auditLog(req, 'membership.update.denied', { targetUserId: userId, status, reason: 'approve_tenant_admin_requires_super_admin' })
       return res.status(403).json({ error: 'Only super admins can approve a tenant_admin membership' })
     }
 
@@ -182,6 +186,7 @@ router.delete('/:userId', async (req, res, next) => {
     const existing = await readMembershipRow(req.tenantId, userId)
     if (!existing) return res.status(404).json({ error: 'Membership not found' })
     if (existing.is_super_admin && !callerIsSuperAdmin) {
+      auditLog(req, 'membership.remove.denied', { targetUserId: userId, reason: 'remove_super_admin' })
       return res.status(403).json({ error: 'Cannot remove a super admin membership' })
     }
     if (
@@ -189,6 +194,7 @@ router.delete('/:userId', async (req, res, next) => {
       existing.user_id !== req.user.id &&
       !callerIsSuperAdmin
     ) {
+      auditLog(req, 'membership.remove.denied', { targetUserId: userId, reason: 'remove_tenant_admin_requires_super_admin' })
       return res.status(403).json({ error: 'Only super admins can remove a tenant_admin' })
     }
     await pool.query(
