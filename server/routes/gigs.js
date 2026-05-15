@@ -6,6 +6,7 @@ import pool from '../db/index.js'
 import { sendPushToTenant, sendPushToMember } from '../utils/sendPush.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
 import { validateAndReencodeImage } from '../utils/imageProcess.js'
+import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 
 const BANNER_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const bannerUpload = multer({
@@ -388,6 +389,13 @@ router.post('/:id/attachments', attachmentUpload.single('file'), async (req, res
     [id, req.tenantId],
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
+
+  // Verify actual file content against declared MIME type (OWASP A06).
+  // req.file.mimetype is the client-supplied Content-Type and cannot be trusted
+  // on its own; magic-byte verification confirms the bytes match.
+  if (!verifyDocumentContent(req.file.buffer, req.file.mimetype)) {
+    return res.status(400).json({ error: 'File content does not match declared type' })
+  }
 
   const ext = path.extname(req.file.originalname).toLowerCase()
   const objectKey = `tenants/${req.tenantId}/gig_attachments/${randomUUID()}${ext}`

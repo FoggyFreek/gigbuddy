@@ -55,7 +55,12 @@ app.use((_req, res) => {
 
 app.use((err, _req, res, _next) => {
   console.error(err)
-  res.status(err.status || 500).json({ error: err.message || 'Internal error' })
+  const status = err.status || 500
+  // Only surface the specific message for client errors (4xx); for server
+  // errors expose nothing beyond a generic string to avoid leaking internals
+  // such as DB constraint names, file paths, or stack traces (OWASP A02).
+  const message = status < 500 ? (err.message || 'Bad request') : 'Internal error'
+  res.status(status).json({ error: message })
 })
 
 await initOidc()

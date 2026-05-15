@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
+import { sanitizeFilename } from '../utils/sanitizeFilename.js'
 
 const router = Router()
 
@@ -38,9 +39,21 @@ router.get('/*objectKey', async (req, res) => {
     res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream')
     res.setHeader('Content-Length', stat.size)
     if (meta.length) {
-      res.setHeader('Content-Disposition', `attachment; filename="${meta[0].original_filename}"`)
+      // Sanitize before embedding in header to prevent response splitting (OWASP A05).
+      const safeName = sanitizeFilename(meta[0].original_filename)
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`)
     }
     const stream = await storageClient.getObject(BUCKET, objectKey)
+    // Handle stream errors that occur after headers are sent; pipe() won't
+    // propagate these to Express's error handler (OWASP A10).
+    stream.on('error', (streamErr) => {
+      console.error('[files] storage stream error:', streamErr)
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Storage error' })
+      } else {
+        res.destroy()
+      }
+    })
     stream.pipe(res)
   } catch (err) {
     if (err.code === 'NoSuchKey' || err.message?.includes('Not Found')) {
