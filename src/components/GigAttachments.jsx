@@ -81,9 +81,9 @@ export default function GigAttachments({ gigId, initialAttachments = [] }) {
         <Stack
           key={a.id}
           direction="row"
-          alignItems="center"
           spacing={1}
           sx={{
+            alignItems: 'center',
             px: 1.5,
             py: 0.75,
             borderRadius: 1,

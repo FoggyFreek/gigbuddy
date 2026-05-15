@@ -59,6 +59,9 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
   const [format, setFormat] = useState('square')
   const [accentId, setAccentId] = useState(SHARE_VINTAGE_COLORS[0].id)
   const [photoOpacity, setPhotoOpacity] = useState(35)
+  const [zoom, setZoom] = useState(100)
+  const [pan, setPan] = useState(0)
+  const [showBanners, setShowBanners] = useState(false)
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR)
   const [monthsAhead, setMonthsAhead] = useState('all')
   const [includePast, setIncludePast] = useState(false)
@@ -99,6 +102,9 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
       setFormat('square')
       setAccentId(SHARE_VINTAGE_COLORS[0].id)
       setPhotoOpacity(35)
+      setZoom(100)
+      setPan(0)
+      setShowBanners(false)
       setSelectedYear(CURRENT_YEAR)
       setMonthsAhead('all')
       setIncludePast(false)
@@ -291,16 +297,30 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
               </FormControl>
             </Stack>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={includePast}
-                  onChange={(e) => setIncludePast(e.target.checked)}
-                  size="small"
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includePast}
+                    onChange={(e) => setIncludePast(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label={<Typography variant="caption">Include past gigs</Typography>}
+              />
+              {visibleGigs.some((g) => g.banner_path) && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showBanners}
+                      onChange={(e) => setShowBanners(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label={<Typography variant="caption">Show banners</Typography>}
                 />
-              }
-              label={<Typography variant="caption">Include past gigs</Typography>}
-            />
+              )}
+            </Stack>
 
             {/* Preview */}
             <Box
@@ -330,16 +350,19 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
                   gigs={visibleGigs}
                   photoSrc={photoSrc}
                   photoOpacity={photoOpacity}
+                  zoom={format === 'story' ? zoom : undefined}
+                  pan={pan}
                   accent={accentColor}
                   format={format}
                   socials={socials}
                   year={selectedYear}
                   logoSrc={logoSrc}
+                  showBanners={showBanners}
                 />
               </Box>
             </Box>
 
-            {/* Photo opacity */}
+            {/* Photo controls */}
             <Box sx={{ width: previewMaxWidth, px: 1 }}>
               <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
                 Photo opacity
@@ -356,6 +379,43 @@ export default function TourShareDialog({ open, onClose, gigs = [] }) {
                   { value: 0, label: 'None' },
                   { value: 50, label: 'Half' },
                   { value: 100, label: 'Full' },
+                ]}
+              />
+              {format === 'story' && (
+                <>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom sx={{ mt: 1 }}>
+                    Zoom
+                  </Typography>
+                  <Slider
+                    value={zoom}
+                    onChange={(_, v) => setZoom(v)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    size="small"
+                    aria-label="Photo zoom"
+                    marks={[
+                      { value: 0, label: 'Width' },
+                      { value: 100, label: 'Height' },
+                    ]}
+                  />
+                </>
+              )}
+              <Typography variant="caption" color="text.secondary" display="block" gutterBottom sx={{ mt: 1 }}>
+                Pan
+              </Typography>
+              <Slider
+                value={pan}
+                onChange={(_, v) => setPan(v)}
+                min={-100}
+                max={100}
+                step={1}
+                size="small"
+                aria-label="Photo pan"
+                marks={[
+                  { value: -100, label: '◀' },
+                  { value: 0, label: '·' },
+                  { value: 100, label: '▶' },
                 ]}
               />
             </Box>

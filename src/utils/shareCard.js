@@ -1,6 +1,60 @@
 import * as htmlToImage from 'html-to-image'
 import jsPDF from 'jspdf'
 
+let shareCardFontCssPromise = null
+const ROBOTO_CONDENSED_CSS_URL = 'https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap'
+
+async function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = reject
+    reader.onloadend = () => resolve(reader.result)
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function fetchFontDataUrl(path) {
+  const res = await fetch(path)
+  if (!res.ok) throw new Error(`Failed to load font: ${path}`)
+  return blobToDataUrl(await res.blob())
+}
+
+async function fetchCssFontFaces(cssUrl) {
+  const cssRes = await fetch(cssUrl)
+  if (!cssRes.ok) throw new Error(`Failed to load font CSS: ${cssUrl}`)
+  let css = await cssRes.text()
+  const fontUrls = [...css.matchAll(/url\(([^)]+)\)/g)]
+
+  await Promise.all(fontUrls.map(async (match) => {
+    const original = match[1].replace(/^['"]|['"]$/g, '')
+    const absoluteUrl = new URL(original, cssUrl).href
+    const dataUrl = await fetchFontDataUrl(absoluteUrl)
+    css = css.replace(match[0], `url('${dataUrl}')`)
+  }))
+
+  return css
+}
+
+function getShareCardFontCss() {
+  if (!shareCardFontCssPromise) {
+    shareCardFontCssPromise = Promise.all([
+      fetchFontDataUrl('/fonts/CooperBlack.ttf'),
+      fetchCssFontFaces(ROBOTO_CONDENSED_CSS_URL).catch(() => ''),
+    ])
+      .then(([cooperBlack, robotoCondensed]) => `
+        @font-face {
+          font-family: 'Cooper Black';
+          src: url('${cooperBlack}') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+        }
+        ${robotoCondensed}
+      `)
+      .catch(() => '')
+  }
+  return shareCardFontCssPromise
+}
+
 export function calculateTitleFontSize(text, maxFontSize, minFontSize) {
   const reduction = Math.max(0, (text.length - 15) * 1.5)
   return Math.max(minFontSize, Math.min(maxFontSize, maxFontSize - reduction))
@@ -89,12 +143,17 @@ export function formatEventName(gig) {
 }
 
 export async function renderNodeToBlob(node, { width, height }) {
+  if (document.fonts?.ready) {
+    await document.fonts.ready
+  }
+
   return htmlToImage.toBlob(node, {
     width,
     height,
     pixelRatio: 1,
     cacheBust: true,
     backgroundColor: '#000',
+    fontEmbedCSS: await getShareCardFontCss(),
   })
 }
 
@@ -137,6 +196,8 @@ export function buildTourShareFilename(year, formatId) {
 }
 
 export async function renderLayeredPdf(node, { width, height }) {
+  const fontEmbedCSS = await getShareCardFontCss()
+
   // Collect unique layers in DOM order
   const seen = new Set()
   const layers = []
@@ -175,7 +236,7 @@ export async function renderLayeredPdf(node, { width, height }) {
     `
     document.head.appendChild(styleEl)
     await new Promise((r) => requestAnimationFrame(r))
-    const fullPng = await htmlToImage.toPng(node, { width, height, pixelRatio: 1, cacheBust: true })
+    const fullPng = await htmlToImage.toPng(node, { width, height, pixelRatio: 1, cacheBust: true, fontEmbedCSS })
     document.head.removeChild(styleEl)
 
     // Crop to element bounds
