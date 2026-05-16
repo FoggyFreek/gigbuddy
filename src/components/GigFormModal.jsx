@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -10,31 +9,17 @@ import Divider from '@mui/material/Divider'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import FormGroup from '@mui/material/FormGroup'
 import Grid from '@mui/material/Grid'
-import IconButton from '@mui/material/IconButton'
-import InputAdornment from '@mui/material/InputAdornment'
 import MenuItem from '@mui/material/MenuItem'
-import Snackbar from '@mui/material/Snackbar'
-import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
-import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import DeleteIcon from '@mui/icons-material/Delete'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
-import GigAttachments from './GigAttachments.jsx'
-import GigTasks from './GigTasks.jsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
-import GigParticipantsSection from './GigParticipantsSection.jsx'
-import ImageCropDialog from './ImageCropDialog.jsx'
-import useDebouncedSave from '../hooks/useDebouncedSave.js'
-import { addGigParticipant, createGig, deleteGigBanner, getGig, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../api/gigs.js'
-import { listMembers } from '../api/bandMembers.js'
-import { compressBanner } from '../utils/compressImage.js'
-import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
+import GigDetailContent from './GigDetailContent.jsx'
+import { createGig } from '../api/gigs.js'
+import { dayjsToTimeString, timeStringToDayjs } from '../utils/eventFormUtils.js'
 
 dayjs.extend(customParseFormat)
 
@@ -48,7 +33,6 @@ const EMPTY_FORM = {
   start_time: '',
   end_time: '',
   status: 'option',
-  booking_fee: '',
   notes: '',
   contact_name: '',
   contact_email: '',
@@ -58,44 +42,31 @@ const EMPTY_FORM = {
   has_stage_lights: false,
 }
 
-function feeToDisplay(cents) {
-  if (cents == null || cents === '') return ''
-  return (cents / 100).toFixed(2)
-}
-
-function feeToCents(str) {
-  const n = parseFloat(str)
-  if (isNaN(n)) return null
-  return Math.round(n * 100)
-}
-
 export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
+  const contentRef = useRef()
+
+  // ── Create mode state ──────────────────────────────────────────────────────
   const [form, setForm] = useState(() =>
     mode === 'create' && initialDate ? { ...EMPTY_FORM, event_date: initialDate } : EMPTY_FORM
   )
   const [errors, setErrors] = useState({})
-  const [loading, setLoading] = useState(mode === 'edit')
-  const [initialTasks, setInitialTasks] = useState([])
   const [focused, setFocused] = useState({ event_date: false })
-  const [gig, setGig] = useState(null)
-  const [members, setMembers] = useState([])
-  const [addMemberId, setAddMemberId] = useState('')
   const [availabilityData, setAvailabilityData] = useState(null)
   const [confirmCreate, setConfirmCreate] = useState(false)
-  const [emailCopied, setEmailCopied] = useState(false)
-  const [bannerPath, setBannerPath] = useState(null)
-  const [bannerBusy, setBannerBusy] = useState(false)
-  const [bannerError, setBannerError] = useState(null)
-  const [cropOpen, setCropOpen] = useState(false)
-  const [cropImageSrc, setCropImageSrc] = useState(null)
-  const bannerInputRef = useRef(null)
 
-  const handleCopyEmail = () => {
-    if (!form.contact_email) return
-    navigator.clipboard.writeText(form.contact_email)
-    setEmailCopied(true)
-    setTimeout(() => setEmailCopied(false), 1500)
-  }
+  // ── Edit mode state ────────────────────────────────────────────────────────
+  const [saveLabel, setSaveLabel] = useState('')
+  const [saveColor, setSaveColor] = useState('text.secondary')
+
+  useEffect(() => {
+    if (mode !== 'edit') return
+    const interval = setInterval(() => {
+      const status = contentRef.current?.saveStatus
+      setSaveLabel({ idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[status] ?? '')
+      setSaveColor(status === 'error' ? 'error.main' : 'text.secondary')
+    }, 100)
+    return () => clearInterval(interval)
+  }, [mode])
 
   const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
   const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
@@ -105,83 +76,9 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
     },
   })
 
-  const saveFn = useCallback(
-    async (patch) => { await updateGig(gigId, patch) },
-    [gigId]
-  )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn)
-
-  const applyGig = useCallback((g) => {
-    setGig(g)
-    setBannerPath(g.banner_path || null)
-    setForm({
-      event_date: toDateInput(g.event_date),
-      event_description: g.event_description || '',
-      venue: g.venue || '',
-      city: g.city || '',
-      start_time: toTimeInput(g.start_time),
-      end_time: toTimeInput(g.end_time),
-      status: g.status || 'option',
-      booking_fee: feeToDisplay(g.booking_fee_cents),
-      notes: g.notes || '',
-      contact_name: g.contact_name || '',
-      contact_email: g.contact_email || '',
-      contact_phone: g.contact_phone || '',
-      has_pa_system: !!g.has_pa_system,
-      has_drumkit: !!g.has_drumkit,
-      has_stage_lights: !!g.has_stage_lights,
-    })
-    setInitialTasks(g.tasks || [])
-  }, [])
-
-  const refresh = useCallback(async () => {
-    if (mode !== 'edit') return
-    const g = await getGig(gigId)
-    applyGig(g)
-  }, [mode, gigId, applyGig])
-
-  useEffect(() => {
-    if (mode !== 'edit') return
-    listMembers().then(setMembers).catch(() => {})
-    getGig(gigId)
-      .then(applyGig)
-      .finally(() => setLoading(false))
-  }, [mode, gigId, applyGig])
-
-  const participantIds = useMemo(
-    () => new Set((gig?.participants ?? []).map((p) => p.band_member_id)),
-    [gig]
-  )
-  const candidateMembers = members.filter((m) => !participantIds.has(m.id))
-
-  async function handleVote(memberId, vote) {
-    await setGigVote(gigId, memberId, vote)
-    await refresh()
-  }
-
-  async function handleRemoveParticipant(memberId) {
-    await removeGigParticipant(gigId, memberId)
-    await refresh()
-  }
-
-  async function handleAddParticipant() {
-    if (!addMemberId) return
-    await addGigParticipant(gigId, Number(addMemberId))
-    setAddMemberId('')
-    await refresh()
-  }
-
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
-    if (mode === 'edit') {
-      const patch = { [field]: value }
-      if (field === 'booking_fee') {
-        patch.booking_fee_cents = feeToCents(value)
-        delete patch.booking_fee
-      }
-      schedule(patch)
-    }
   }
 
   const unavailableLeads = (availabilityData?.members ?? []).filter(
@@ -220,77 +117,20 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
     await doCreate()
   }
 
-  function handleBannerFileChange(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    setBannerError(null)
-    const url = URL.createObjectURL(file)
-    setCropImageSrc(url)
-    setCropOpen(true)
-  }
-
-  async function handleCropConfirm(blob) {
-    setCropOpen(false)
-    if (cropImageSrc) URL.revokeObjectURL(cropImageSrc)
-    setCropImageSrc(null)
-    setBannerBusy(true)
-    try {
-      const compressed = await compressBanner(blob)
-      const result = await uploadGigBanner(gigId, compressed)
-      setBannerPath(result.banner_path)
-    } catch (err) {
-      setBannerError(err.message || 'Banner upload failed')
-    } finally {
-      setBannerBusy(false)
-    }
-  }
-
-  function handleCropCancel() {
-    setCropOpen(false)
-    if (cropImageSrc) URL.revokeObjectURL(cropImageSrc)
-    setCropImageSrc(null)
-  }
-
-  async function handleBannerDelete() {
-    setBannerBusy(true)
-    setBannerError(null)
-    try {
-      await deleteGigBanner(gigId)
-      setBannerPath(null)
-    } catch (err) {
-      setBannerError(err.message || 'Banner delete failed')
-    } finally {
-      setBannerBusy(false)
-    }
-  }
-
   async function handleClose() {
-    await flush()
+    await contentRef.current?.flush()
     onClose()
   }
-
-  const saveLabel = {
-    idle: '',
-    saving: 'Saving…',
-    saved: 'Saved',
-    error: 'Save failed',
-  }[saveStatus]
-
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
     <Dialog open fullWidth maxWidth="md" onClose={mode === 'edit' ? handleClose : undefined}>
       <DialogTitle>{mode === 'create' ? 'New gig' : 'Gig details'}</DialogTitle>
 
-      {loading ? (
-        <DialogContent sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
-        </DialogContent>
-      ) : (
-        <DialogContent>
+      <DialogContent>
+        {mode === 'edit' ? (
+          <GigDetailContent ref={contentRef} gigId={gigId} />
+        ) : (
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            {/* Left column */}
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 label="Date"
@@ -364,24 +204,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
               </TextField>
             </Grid>
 
-            {mode === 'edit' && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  label="Band fee"
-                  fullWidth
-                  value={form.booking_fee}
-                  onChange={(e) => handleChange('booking_fee', e.target.value)}
-                  placeholder="0.00"
-                  slotProps={{
-                    input: {
-                    startAdornment: <InputAdornment position="start">€</InputAdornment>,
-                  },
-                }}
-                />
-              </Grid>
-            )}
-
-            {/* Contact person */}
             <Grid size={12}>
               <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
@@ -403,19 +225,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                 fullWidth
                 value={form.contact_email}
                 onChange={(e) => handleChange('contact_email', e.target.value)}
-                slotProps={{
-                  input: {
-                    endAdornment: form.contact_email ? (
-                      <InputAdornment position="end">
-                        <Tooltip title={emailCopied ? 'Copied!' : 'Copy email'}>
-                          <IconButton size="small" onClick={handleCopyEmail} edge="end">
-                            <ContentCopyIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </InputAdornment>
-                    ) : null,
-                  },
-                }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
@@ -428,7 +237,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
               />
             </Grid>
 
-            {/* Equipment */}
             <Grid size={12}>
               <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
@@ -465,143 +273,19 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
               </FormGroup>
             </Grid>
 
-            {/* Availability / Participants */}
             <Grid size={12}>
               <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
                 Member availability
               </Typography>
-              {mode === 'edit' && form.status === 'option' ? (
-                <GigParticipantsSection
-                  participants={gig?.participants ?? []}
-                  candidateMembers={candidateMembers}
-                  addMemberId={addMemberId}
-                  onAddMemberChange={setAddMemberId}
-                  onAddParticipant={handleAddParticipant}
-                  onRemoveParticipant={handleRemoveParticipant}
-                  onVote={handleVote}
-                />
-              ) : (
-                <GigAvailabilityPanel
-                  eventDate={form.event_date}
-                  onDataLoad={mode === 'create' ? setAvailabilityData : undefined}
-                />
-              )}
+              <GigAvailabilityPanel
+                eventDate={form.event_date}
+                onDataLoad={setAvailabilityData}
+              />
             </Grid>
-
-            {/* Tasks — edit mode only */}
-            {mode === 'edit' && (
-              <Grid size={12}>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                  Tasks
-                </Typography>
-                <GigTasks gigId={gigId} initialTasks={initialTasks} members={members} />
-              </Grid>
-            )}
-
-            {/* Attachments — edit mode only */}
-            {mode === 'edit' && (
-              <Grid size={12}>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                  Attachments
-                </Typography>
-                <GigAttachments gigId={gigId} initialAttachments={gig?.attachments ?? []} />
-              </Grid>
-            )}
-
-            {/* Notes — edit mode only */}
-            {mode === 'edit' && (
-              <Grid size={12}>
-                <Divider sx={{ my: 1 }} />
-                <TextField
-                  label="Notes"
-                  fullWidth
-                  multiline
-                  minRows={3}
-                  value={form.notes}
-                  onChange={(e) => handleChange('notes', e.target.value)}
-                />
-              </Grid>
-            )}
-
-            {/* Event Banner — edit mode only */}
-            {mode === 'edit' && (
-              <Grid size={12}>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                  Event banner
-                </Typography>
-                <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                  {bannerPath ? (
-                    <Box
-                      component="img"
-                      src={`/api/files/${bannerPath}`}
-                      alt="Event banner"
-                      sx={{
-                        width: 120,
-                        height: 120,
-                        objectFit: 'contain',
-                        borderRadius: 1,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        bgcolor: 'grey.100',
-                      }}
-                    />
-                  ) : (
-                    <Box
-                      sx={{
-                        width: 120,
-                        height: 120,
-                        borderRadius: 1,
-                        border: '2px dashed',
-                        borderColor: 'divider',
-                        bgcolor: 'action.hover',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'text.disabled',
-                      }}
-                    >
-                      <Typography variant="caption">No banner</Typography>
-                    </Box>
-                  )}
-                  <Stack spacing={1}>
-                    <input
-                      ref={bannerInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      style={{ display: 'none' }}
-                      onChange={handleBannerFileChange}
-                    />
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={bannerBusy ? <CircularProgress size={14} color="inherit" /> : <AddPhotoAlternateIcon />}
-                      disabled={bannerBusy}
-                      onClick={() => bannerInputRef.current?.click()}
-                    >
-                      {bannerPath ? 'Replace' : 'Upload banner'}
-                    </Button>
-                    {bannerPath && (
-                      <Button
-                        size="small"
-                        color="error"
-                        startIcon={<DeleteIcon />}
-                        disabled={bannerBusy}
-                        onClick={handleBannerDelete}
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  </Stack>
-                </Stack>
-              </Grid>
-            )}
           </Grid>
-        </DialogContent>
-      )}
+        )}
+      </DialogContent>
 
       <Box sx={{ px: 3, pb: 1, minHeight: 24 }}>
         {mode === 'edit' && (
@@ -638,19 +322,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <ImageCropDialog
-        open={cropOpen}
-        imageSrc={cropImageSrc}
-        onConfirm={handleCropConfirm}
-        onCancel={handleCropCancel}
-      />
-      <Snackbar
-        open={!!bannerError}
-        message={bannerError || ''}
-        autoHideDuration={4000}
-        onClose={() => setBannerError(null)}
-      />
     </Dialog>
   )
 }

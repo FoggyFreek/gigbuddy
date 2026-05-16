@@ -15,7 +15,10 @@ vi.mock('../api/availability.js', () => ({
   deleteSlot: vi.fn(),
 }))
 
-// Mock API
+vi.mock('../api/bandMembers.js', () => ({
+  listMembers: vi.fn().mockResolvedValue([]),
+}))
+
 vi.mock('../api/gigs.js', () => ({
   createGig: vi.fn().mockResolvedValue({ id: 99 }),
   getGig: vi.fn().mockResolvedValue({
@@ -24,16 +27,27 @@ vi.mock('../api/gigs.js', () => ({
     event_description: 'Jazz Night',
     venue: 'Bimhuis',
     city: 'Amsterdam',
+    event_link: '',
     start_time: '20:00:00',
     end_time: '23:00:00',
     status: 'confirmed',
     booking_fee_cents: 15000,
+    admission: 'free',
+    ticket_link: null,
     notes: 'Bring own PA',
     has_pa_system: false,
     has_drumkit: false,
+    has_stage_lights: false,
     tasks: [],
+    attachments: [],
+    participants: [],
   }),
   updateGig: vi.fn().mockResolvedValue({}),
+  addGigParticipant: vi.fn().mockResolvedValue({}),
+  removeGigParticipant: vi.fn().mockResolvedValue({}),
+  setGigVote: vi.fn().mockResolvedValue({}),
+  uploadGigBanner: vi.fn().mockResolvedValue({ banner_path: 'test/banner.jpg' }),
+  deleteGigBanner: vi.fn().mockResolvedValue({}),
 }))
 
 import { createGig, getGig, updateGig } from '../api/gigs.js'
@@ -109,7 +123,7 @@ describe('GigFormModal — edit mode', () => {
 
   it('loads and renders gig data', async () => {
     wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />)
-    await waitFor(() => expect(getGig).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(getGig).toHaveBeenCalledWith(1, expect.objectContaining({ signal: expect.any(AbortSignal) })))
     await waitFor(() => {
       expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument()
     })

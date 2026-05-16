@@ -7,26 +7,11 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
-import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { TimePicker } from '@mui/x-date-pickers/TimePicker'
-import dayjs from 'dayjs'
-import customParseFormat from 'dayjs/plugin/customParseFormat'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
-
-dayjs.extend(customParseFormat)
-
-function timeStringToDayjs(val) {
-  if (!val) return null
-  const d = dayjs(val, 'HH:mm')
-  return d.isValid() ? d : null
-}
-
-function dayjsToTimeString(d) {
-  if (!d || !d.isValid()) return ''
-  return d.format('HH:mm')
-}
+import { toDateInput } from '../utils/eventFormUtils.js'
+import BandEventFields from './BandEventFields.jsx'
 
 const EMPTY_FORM = {
   title: '',
@@ -38,11 +23,6 @@ const EMPTY_FORM = {
   notes: '',
 }
 
-function toDateInput(val) {
-  if (!val) return ''
-  return String(val).slice(0, 10)
-}
-
 export default function BandEventFormModal({ mode, bandEventId, onClose, initialDate }) {
   const [form, setForm] = useState(() =>
     mode === 'create' && initialDate
@@ -51,15 +31,6 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
   )
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
-  const [focused, setFocused] = useState({ start_date: false, end_date: false })
-
-  const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
-  const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
-  const maskSx = (field) => ({
-    '& input::-webkit-datetime-edit': {
-      opacity: focused[field] || form[field] ? 1 : 0,
-    },
-  })
 
   const saveFn = useCallback(
     async (patch) => { await updateBandEvent(bandEventId, patch) },
@@ -113,12 +84,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
     onClose()
   }
 
-  const saveLabel = {
-    idle: '',
-    saving: 'Saving…',
-    saved: 'Saved',
-    error: 'Save failed',
-  }[saveStatus]
+  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
   const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
@@ -132,85 +98,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       ) : (
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid size={12}>
-              <TextField
-                label="Title"
-                fullWidth
-                required
-                value={form.title}
-                onChange={(e) => handleChange('title', e.target.value)}
-                error={!!errors.title}
-                helperText={errors.title}
-                placeholder="e.g. Studio session, Photo shoot, Band meeting"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label="Start date"
-                type="date"
-                fullWidth
-                required
-                value={form.start_date}
-                onChange={(e) => handleChange('start_date', e.target.value)}
-                onFocus={onFocus('start_date')}
-                onBlur={onBlur('start_date')}
-                error={!!errors.start_date}
-                helperText={errors.start_date}
-                slotProps={{ inputLabel: { shrink: focused.start_date || !!form.start_date } }}
-                sx={maskSx('start_date')}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label="End date"
-                type="date"
-                fullWidth
-                value={form.end_date}
-                onChange={(e) => handleChange('end_date', e.target.value)}
-                onFocus={onFocus('end_date')}
-                onBlur={onBlur('end_date')}
-                error={!!errors.end_date}
-                helperText={errors.end_date || 'Leave blank for single day'}
-                slotProps={{ inputLabel: { shrink: focused.end_date || !!form.end_date } }}
-                sx={maskSx('end_date')}
-              />
-            </Grid>
-            <Grid size={12}>
-              <TextField
-                label="Location"
-                fullWidth
-                value={form.location}
-                onChange={(e) => handleChange('location', e.target.value)}
-              />
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <TimePicker
-                label="Start time"
-                ampm={false}
-                value={timeStringToDayjs(form.start_time)}
-                onChange={(v) => handleChange('start_time', dayjsToTimeString(v))}
-                slotProps={{ textField: { fullWidth: true } }}
-              />
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <TimePicker
-                label="End time"
-                ampm={false}
-                value={timeStringToDayjs(form.end_time)}
-                onChange={(v) => handleChange('end_time', dayjsToTimeString(v))}
-                slotProps={{ textField: { fullWidth: true } }}
-              />
-            </Grid>
-            <Grid size={12}>
-              <TextField
-                label="Notes"
-                fullWidth
-                multiline
-                minRows={3}
-                value={form.notes}
-                onChange={(e) => handleChange('notes', e.target.value)}
-              />
-            </Grid>
+            <BandEventFields form={form} onChange={handleChange} errors={errors} />
           </Grid>
         </DialogContent>
       )}

@@ -5,3 +5,13 @@ dist
 !.env.example
 .git
 *.md
+.claude
+.mcp.json
+.github
+src/tests
+*.test.js
+*.test.jsx
+coverage
+.eslintrc*
+.prettierrc*
+*.log

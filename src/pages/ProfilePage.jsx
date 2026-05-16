@@ -24,6 +24,7 @@ import InstagramIcon from '@mui/icons-material/Instagram'
 import LaunchIcon from '@mui/icons-material/Launch'
 import LinkIcon from '@mui/icons-material/Link'
 import YouTubeIcon from '@mui/icons-material/YouTube'
+import BandsintownIcon from '../components/icons/BandsintownIcon.jsx'
 import SpotifyIcon from '../components/icons/SpotifyIcon.jsx'
 import TikTokIcon from '../components/icons/TikTokIcon.jsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
@@ -42,11 +43,12 @@ import {
 import { compressLogo } from '../utils/compressImage.js'
 
 const SOCIALS = [
-  { field: 'instagram_handle', label: 'Instagram', Icon: InstagramIcon, prefix: 'instagram.com/' },
-  { field: 'facebook_handle',  label: 'Facebook',  Icon: FacebookIcon,  prefix: 'facebook.com/' },
-  { field: 'tiktok_handle',    label: 'TikTok',    Icon: TikTokIcon,    prefix: 'tiktok.com/@' },
-  { field: 'youtube_handle',   label: 'YouTube',   Icon: YouTubeIcon,   prefix: 'youtube.com/@' },
-  { field: 'spotify_handle',   label: 'Spotify',   Icon: SpotifyIcon,   prefix: 'open.spotify.com/artist/' },
+  { field: 'instagram_handle',       label: 'Instagram',              Icon: InstagramIcon,    prefix: 'instagram.com/' },
+  { field: 'facebook_handle',        label: 'Facebook',               Icon: FacebookIcon,     prefix: 'facebook.com/' },
+  { field: 'tiktok_handle',          label: 'TikTok',                 Icon: TikTokIcon,       prefix: 'tiktok.com/@' },
+  { field: 'youtube_handle',         label: 'YouTube',                Icon: YouTubeIcon,      prefix: 'youtube.com/@' },
+  { field: 'spotify_handle',         label: 'Spotify',                Icon: SpotifyIcon,      prefix: 'open.spotify.com/artist/' },
+  { field: 'bandsintown_artist_name', label: 'Bandsintown artist name', Icon: BandsintownIcon, prefix: '' },
 ]
 
 const EMPTY_FORM = {
@@ -57,6 +59,7 @@ const EMPTY_FORM = {
   tiktok_handle: '',
   youtube_handle: '',
   spotify_handle: '',
+  bandsintown_artist_name: '',
 }
 
 export default function ProfilePage() {
@@ -100,6 +103,7 @@ export default function ProfilePage() {
           tiktok_handle: data.tiktok_handle || '',
           youtube_handle: data.youtube_handle || '',
           spotify_handle: data.spotify_handle || '',
+          bandsintown_artist_name: data.bandsintown_artist_name || '',
         })
         setLogoPath(data.logo_path || null)
         setLinks(data.links || [])

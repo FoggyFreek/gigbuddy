@@ -31,6 +31,7 @@ vi.mock('../api/profile.js', () => ({
     tiktok_handle: '',
     youtube_handle: '',
     spotify_handle: '',
+    bandsintown_artist_name: 'The Testers',
     links: [
       { id: 10, label: 'EPK', url: 'https://drive.google.com/xyz', sort_order: 0 },
     ],
@@ -138,6 +139,12 @@ describe('ProfilePage', () => {
     await user.click(deleteBtn)
 
     await waitFor(() => expect(deleteLink).toHaveBeenCalledWith(10))
+  })
+
+  it('shows Bandsintown artist name in socials section', async () => {
+    wrap(<ProfilePage />)
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+    expect(await screen.findByText(/bandsintown\.com\/The Testers/i)).toBeInTheDocument()
   })
 
   it('rejects GIF logo uploads before sending them', async () => {

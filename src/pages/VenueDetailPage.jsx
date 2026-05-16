@@ -3,42 +3,14 @@ import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import FormControl from '@mui/material/FormControl'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
-import InputAdornment from '@mui/material/InputAdornment'
-import InputLabel from '@mui/material/InputLabel'
-import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
-import TextField from '@mui/material/TextField'
-import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { deleteVenue, getVenue, updateVenue } from '../api/venues.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
-
-function CopyAdornment({ value }) {
-  const [copied, setCopied] = useState(false)
-  if (!value) return null
-  function handleCopy() {
-    navigator.clipboard.writeText(value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <InputAdornment position="end">
-      <Tooltip title={copied ? 'Copied!' : 'Copy'}>
-        <IconButton size="small" edge="end" onClick={handleCopy} tabIndex={-1}>
-          {copied ? <CheckIcon fontSize="small" color="success" /> : <ContentCopyIcon fontSize="small" />}
-        </IconButton>
-      </Tooltip>
-    </InputAdornment>
-  )
-}
+import VenueFields from '../components/VenueFields.jsx'
 
 export default function VenueDetailPage() {
   const { id } = useParams()
@@ -135,121 +107,7 @@ export default function VenueDetailPage() {
         </Box>
       ) : (
         <Grid container spacing={2}>
-          <Grid size={4}>
-            <FormControl fullWidth>
-              <InputLabel>Category</InputLabel>
-              <Select
-                label="Category"
-                value={form.category}
-                onChange={(e) => handleChange('category', e.target.value)}
-              >
-                <MenuItem value="venue">Venue</MenuItem>
-                <MenuItem value="festival">Festival</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid size={8}>
-            <TextField
-              label="Name"
-              fullWidth
-              required
-              value={form.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-            />
-          </Grid>
-          <Grid size={6}>
-            <TextField
-              label="City"
-              fullWidth
-              value={form.city}
-              onChange={(e) => handleChange('city', e.target.value)}
-            />
-          </Grid>
-          <Grid size={3}>
-            <TextField
-              label="Country"
-              fullWidth
-              value={form.country}
-              onChange={(e) => handleChange('country', e.target.value.slice(0, 2).toUpperCase())}
-              slotProps={{ htmlInput: { maxLength: 2 } }}
-              placeholder="NL"
-            />
-          </Grid>
-          <Grid size={3}>
-            <TextField
-              label="Province"
-              fullWidth
-              value={form.province}
-              onChange={(e) => handleChange('province', e.target.value.slice(0, 2).toUpperCase())}
-              slotProps={{ htmlInput: { maxLength: 2 } }}
-              placeholder="NH"
-            />
-          </Grid>
-          <Grid size={12}>
-            <TextField
-              label="Address"
-              fullWidth
-              value={form.address}
-              onChange={(e) => handleChange('address', e.target.value)}
-            />
-          </Grid>
-          <Grid size={12}>
-            <TextField
-              label="Website"
-              fullWidth
-              value={form.website}
-              onChange={(e) => handleChange('website', e.target.value)}
-              placeholder="https://"
-              slotProps={{
-                input: {
-                  endAdornment: form.website ? (
-                    <InputAdornment position="end">
-                      <Tooltip title="Open in new tab">
-                        <IconButton
-                          size="small"
-                          edge="end"
-                          tabIndex={-1}
-                          component="a"
-                          href={form.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <OpenInNewIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </InputAdornment>
-                  ) : null,
-                },
-              }}
-            />
-          </Grid>
-          <Grid size={6}>
-            <TextField
-              label="Contact Person"
-              fullWidth
-              value={form.contact_person}
-              onChange={(e) => handleChange('contact_person', e.target.value)}
-            />
-          </Grid>
-          <Grid size={6}>
-            <TextField
-              label="Phone"
-              fullWidth
-              value={form.phone}
-              onChange={(e) => handleChange('phone', e.target.value)}
-              slotProps={{ input: { endAdornment: <CopyAdornment value={form.phone} /> } }}
-            />
-          </Grid>
-          <Grid size={12}>
-            <TextField
-              label="Email"
-              fullWidth
-              type="email"
-              value={form.email}
-              onChange={(e) => handleChange('email', e.target.value)}
-              slotProps={{ input: { endAdornment: <CopyAdornment value={form.email} /> } }}
-            />
-          </Grid>
+          <VenueFields form={form} onChange={handleChange} />
         </Grid>
       )}
 

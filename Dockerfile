@@ -15,4 +15,5 @@ RUN npm ci --omit=dev
 COPY server/ ./server/
 COPY --from=builder /app/dist ./dist
 EXPOSE 3002
+USER node
 CMD ["node", "server/index.js"]

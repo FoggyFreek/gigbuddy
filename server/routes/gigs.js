@@ -240,7 +240,7 @@ router.post('/', async (req, res) => {
 // Update gig (partial)
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const allowed = ['event_date', 'event_description', 'venue', 'city', 'event_link', 'start_time', 'end_time', 'status', 'booking_fee_cents', 'notes', 'contact_name', 'contact_email', 'contact_phone', 'has_pa_system', 'has_drumkit', 'has_stage_lights']
+  const allowed = ['event_date', 'event_description', 'venue', 'city', 'event_link', 'start_time', 'end_time', 'status', 'booking_fee_cents', 'admission', 'ticket_link', 'notes', 'contact_name', 'contact_email', 'contact_phone', 'has_pa_system', 'has_drumkit', 'has_stage_lights']
 
   const fields = []
   const values = []

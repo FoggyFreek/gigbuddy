@@ -25,6 +25,7 @@ const PROFILE_FIELDS = [
   'tiktok_handle',
   'youtube_handle',
   'spotify_handle',
+  'bandsintown_artist_name',
   'accent_color',
 ]
 

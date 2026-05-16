@@ -26,6 +26,8 @@ import SplitView from '../components/SplitView.jsx'
 import TourShareDialog from '../components/TourShareDialog.jsx'
 import TourExportDialog from '../components/TourExportDialog.jsx'
 import { deleteGig, listGigs } from '../api/gigs.js'
+import { getProfile } from '../api/profile.js'
+import { downloadBandsintownCsv } from '../utils/bandsintownExport.js'
 
 export default function GigsPage() {
   const navigate = useNavigate()
@@ -42,6 +44,7 @@ export default function GigsPage() {
   const [tourIncludeAnnounced, setTourIncludeAnnounced] = useState(true)
   const [tourShareOpen, setTourShareOpen] = useState(false)
   const [tourExportOpen, setTourExportOpen] = useState(false)
+  const [bandsintownArtistName, setBandsintownArtistName] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -57,6 +60,10 @@ export default function GigsPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    getProfile().then((p) => setBandsintownArtistName(p.bandsintown_artist_name || '')).catch(() => {})
+  }, [])
 
   function handleClose() {
     setModal(null)
@@ -131,6 +138,26 @@ export default function GigsPage() {
           >
             <Button variant="outlined" size="small" fullWidth>
               Export tour dates
+            </Button>
+          </MenuItem>
+          <MenuItem
+            disabled={!tourIncludeConfirmed && !tourIncludeAnnounced}
+            onClick={() => {
+              setTourMenuAnchor(null)
+              downloadBandsintownCsv(
+                gigs
+                  .filter((g) =>
+                    (tourIncludeConfirmed && g.status === 'confirmed') ||
+                    (tourIncludeAnnounced && g.status === 'announced'),
+                  )
+                  .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date))),
+                bandsintownArtistName,
+              )
+            }}
+            dense
+          >
+            <Button variant="outlined" size="small" fullWidth>
+              Export to Bandsintown
             </Button>
           </MenuItem>
         </Menu>

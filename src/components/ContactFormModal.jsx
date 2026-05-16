@@ -6,49 +6,11 @@ import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
-import FormControl from '@mui/material/FormControl'
 import Grid from '@mui/material/Grid'
-import IconButton from '@mui/material/IconButton'
-import InputAdornment from '@mui/material/InputAdornment'
-import InputLabel from '@mui/material/InputLabel'
-import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
-import TextField from '@mui/material/TextField'
-import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import CheckIcon from '@mui/icons-material/Check'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { createContact, getContact, updateContact } from '../api/contacts.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
-
-function CopyAdornment({ value }) {
-  const [copied, setCopied] = useState(false)
-  if (!value) return null
-  function handleCopy() {
-    navigator.clipboard.writeText(value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <InputAdornment position="end">
-      <Tooltip title={copied ? 'Copied!' : 'Copy'}>
-        <IconButton size="small" edge="end" onClick={handleCopy} tabIndex={-1}>
-          {copied ? <CheckIcon fontSize="small" color="success" /> : <ContentCopyIcon fontSize="small" />}
-        </IconButton>
-      </Tooltip>
-    </InputAdornment>
-  )
-}
-
-const VALID_CATEGORIES = ['press', 'radio & tv', 'booker', 'promotion', 'network']
-
-const CATEGORY_LABELS = {
-  'press':      'Press',
-  'radio & tv': 'Radio & TV',
-  'booker':     'Booker',
-  'promotion':  'Promotion',
-  'network':    'Network',
-}
+import ContactFields from './ContactFields.jsx'
 
 const EMPTY_FORM = {
   name:     '',
@@ -121,50 +83,7 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete })
       ) : (
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid size={4}>
-              <FormControl fullWidth>
-                <InputLabel>Category</InputLabel>
-                <Select
-                  label="Category"
-                  value={form.category}
-                  onChange={(e) => handleChange('category', e.target.value)}
-                >
-                  {VALID_CATEGORIES.map((cat) => (
-                    <MenuItem key={cat} value={cat}>{CATEGORY_LABELS[cat]}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={8}>
-              <TextField
-                label="Name"
-                fullWidth
-                required
-                value={form.name}
-                onChange={(e) => handleChange('name', e.target.value)}
-                error={!!errors.name}
-                helperText={errors.name}
-              />
-            </Grid>
-            <Grid size={6}>
-              <TextField
-                label="Email"
-                fullWidth
-                type="email"
-                value={form.email}
-                onChange={(e) => handleChange('email', e.target.value)}
-                slotProps={{ input: { endAdornment: <CopyAdornment value={form.email} /> } }}
-              />
-            </Grid>
-            <Grid size={6}>
-              <TextField
-                label="Phone"
-                fullWidth
-                value={form.phone}
-                onChange={(e) => handleChange('phone', e.target.value)}
-                slotProps={{ input: { endAdornment: <CopyAdornment value={form.phone} /> } }}
-              />
-            </Grid>
+            <ContactFields form={form} onChange={handleChange} errors={errors} />
           </Grid>
         </DialogContent>
       )}

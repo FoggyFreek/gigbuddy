@@ -25,6 +25,7 @@ INSTALL_LOG.md
 
 # Claude Code local settings
 .claude/settings.local.json
+.claude/settings.json
 
 # Editor directories and files
 .vscode/*
