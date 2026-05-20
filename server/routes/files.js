@@ -14,6 +14,10 @@ async function objectKeyBelongsToTenant(objectKey, tenantId) {
      SELECT 1 FROM share_photos WHERE tenant_id = $1 AND object_key = $2
      UNION ALL
      SELECT 1 FROM gig_attachments WHERE tenant_id = $1 AND object_key = $2
+     UNION ALL
+     SELECT 1 FROM invoices WHERE tenant_id = $1 AND pdf_path = $2
+     UNION ALL
+     SELECT 1 FROM invoices WHERE tenant_id = $1 AND custom_logo_path = $2
      LIMIT 1`,
     [tenantId, objectKey],
   )

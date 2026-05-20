@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import gigsRouter from './gigs.js'
 import tasksRouter from './tasks.js'
 import profileRouter from './profile.js'
@@ -10,6 +10,7 @@ import bandEventsRouter from './bandEvents.js'
 import emailTemplatesRouter from './emailTemplates.js'
 import venuesRouter from './venues.js'
 import contactsRouter from './contacts.js'
+import invoicesRouter from './invoices.js'
 import pushRouter from './push.js'
 import authRouter from './auth.js'
 import usersRouter from './users.js'
@@ -33,6 +34,12 @@ const router = Router()
 // can fire many requests without hitting artificial ceilings.
 const isTest = process.env.NODE_ENV === 'test'
 
+// express-rate-limit v8 hashes the result of keyGenerator for the draft-8
+// RateLimit header partition key; the default uses req.ip, which can be
+// undefined for some requests (closed sockets, certain proxy setups) and
+// would crash Hash.update. Fall back to a string when that happens.
+const keyGenerator = (req) => req.ip ? ipKeyGenerator(req.ip) : 'unknown'
+
 // Broad API-wide limit — prevents bulk scraping and automated abuse.
 // Applied before any route so every /api/* endpoint is covered.
 const apiLimiter = rateLimit({
@@ -41,6 +48,7 @@ const apiLimiter = rateLimit({
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
   skip: () => isTest,
 })
 
@@ -51,6 +59,7 @@ const authLimiter = rateLimit({
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
   skip: () => isTest,
 })
 
@@ -61,6 +70,7 @@ const redeemLimiter = rateLimit({
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
   skip: () => isTest,
 })
 
@@ -94,6 +104,7 @@ router.use('/band-events', tenantMember, bandEventsRouter)
 router.use('/email-templates', tenantMember, emailTemplatesRouter)
 router.use('/venues', tenantMember, venuesRouter)
 router.use('/contacts', tenantMember, contactsRouter)
+router.use('/invoices', tenantMember, invoicesRouter)
 router.use('/push', tenantMember, pushRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)
 router.use('/files', tenantMember, filesRouter)

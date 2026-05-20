@@ -146,7 +146,7 @@ export async function seedTwoTenants() {
     `INSERT INTO venues (tenant_id, category, name)
      VALUES ($1, 'venue', 'Alpha Hall'),
             ($2, 'venue', 'Beta Hall')
-     RETURNING id, tenant_id`,
+     RETURNING id, tenant_id, name`,
     [tenantA.id, tenantB.id],
   )
 

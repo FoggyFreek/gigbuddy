@@ -42,6 +42,7 @@ import ContactsIcon from '@mui/icons-material/Contacts'
 import LocationOnIcon from '@mui/icons-material/LocationOn'
 import PersonIcon from '@mui/icons-material/Person'
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt'
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import { useProfile } from '../contexts/profileContext.js'
 import { useAuth } from '../contexts/authContext.js'
 import { usePushNotifications } from '../hooks/usePushNotifications.js'
@@ -61,6 +62,7 @@ const BASE_NAV_ITEMS = [
   { to: '/email-templates', label: 'Email Templates', icon: EmailIcon },
   { to: '/venues', label: 'Venues', icon: LocationOnIcon },
   { to: '/contacts', label: 'Contacts', icon: ContactsIcon },
+  { to: '/invoices', label: 'Invoices', icon: ReceiptLongIcon },
 ]
 
 const TENANT_ADMIN_NAV_ITEMS = [
