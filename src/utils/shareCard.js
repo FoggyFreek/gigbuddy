@@ -1,5 +1,6 @@
 import * as htmlToImage from 'html-to-image'
 import jsPDF from 'jspdf'
+import { venueHeadline, venueCity } from './venueDisplay.js'
 
 let shareCardFontCssPromise = null
 const ROBOTO_CONDENSED_CSS_URL = 'https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap'
@@ -127,15 +128,15 @@ export function formatGigDoorsTime(gig) {
 }
 
 export function formatGigVenue(gig) {
-  return [gig?.venue, gig?.city].filter(Boolean).join(', ')
+  return [venueHeadline(gig?.venue), venueCity(gig?.venue)].filter(Boolean).join(', ')
 }
 
 export function formatGigVenueName(gig) {
-  return gig?.venue || ''
+  return venueHeadline(gig?.venue)
 }
 
 export function formatGigCity(gig) {
-  return gig?.city || ''
+  return venueCity(gig?.venue)
 }
 
 export function formatEventName(gig) {
@@ -264,7 +265,7 @@ export function downloadPdf(pdf, filename) {
 
 export function buildSharePdfFilename(gig, formatId) {
   const date = gig?.event_date ? String(gig.event_date).slice(0, 10) : 'gig'
-  const slug = (gig?.event_description || gig?.venue || 'share')
+  const slug = (gig?.event_description || venueHeadline(gig?.venue) || 'share')
     .toString()
     .toLowerCase()
     .normalize('NFKD')
@@ -276,7 +277,7 @@ export function buildSharePdfFilename(gig, formatId) {
 
 export function buildShareFilename(gig, formatId) {
   const date = gig?.event_date ? String(gig.event_date).slice(0, 10) : 'gig'
-  const slug = (gig?.event_description || gig?.venue || 'share')
+  const slug = (gig?.event_description || venueHeadline(gig?.venue) || 'share')
     .toString()
     .toLowerCase()
     .normalize('NFKD')

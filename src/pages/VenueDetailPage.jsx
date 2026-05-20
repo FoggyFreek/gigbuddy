@@ -10,7 +10,10 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import { deleteVenue, getVenue, updateVenue } from '../api/venues.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
+import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import VenueFields from '../components/VenueFields.jsx'
+
+const REQUIRED_FIELDS = ['name']
 
 export default function VenueDetailPage() {
   const { id } = useParams()
@@ -27,12 +30,18 @@ export default function VenueDetailPage() {
   const [form, setForm] = useState({
     category: 'venue',
     name: '',
+    festival_name: '',
+    title: '',
+    given_name: '',
+    family_name: '',
+    organization_name: '',
+    street_and_number: '',
+    street_additional: '',
+    postal_code: '',
     city: '',
+    region: '',
     country: '',
-    province: '',
-    address: '',
     website: '',
-    contact_person: '',
     phone: '',
     email: '',
   })
@@ -51,12 +60,18 @@ export default function VenueDetailPage() {
         setForm({
           category: v.category || 'venue',
           name: v.name || '',
+          festival_name: v.festival_name || '',
+          title: v.title || '',
+          given_name: v.given_name || '',
+          family_name: v.family_name || '',
+          organization_name: v.organization_name || '',
+          street_and_number: v.street_and_number || '',
+          street_additional: v.street_additional || '',
+          postal_code: v.postal_code || '',
           city: v.city || '',
+          region: v.region || '',
           country: v.country ? String(v.country).trim() : '',
-          province: v.province ? String(v.province).trim() : '',
-          address: v.address || '',
           website: v.website || '',
-          contact_person: v.contact_person || '',
           phone: v.phone || '',
           email: v.email || '',
         })
@@ -66,6 +81,7 @@ export default function VenueDetailPage() {
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
+    if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
     schedule({ [field]: value || null })
   }
 
@@ -107,7 +123,11 @@ export default function VenueDetailPage() {
         </Box>
       ) : (
         <Grid container spacing={2}>
-          <VenueFields form={form} onChange={handleChange} />
+          <VenueFields
+            form={form}
+            onChange={handleChange}
+            errors={getRequiredErrors(form, REQUIRED_FIELDS)}
+          />
         </Grid>
       )}
 

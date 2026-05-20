@@ -10,7 +10,10 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import { deleteContact, getContact, updateContact } from '../api/contacts.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
+import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import ContactFields from '../components/ContactFields.jsx'
+
+const REQUIRED_FIELDS = ['name']
 
 export default function ContactDetailPage() {
   const { id } = useParams()
@@ -49,6 +52,7 @@ export default function ContactDetailPage() {
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
+    if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
     schedule({ [field]: value || null })
   }
 
@@ -90,7 +94,11 @@ export default function ContactDetailPage() {
         </Box>
       ) : (
         <Grid container spacing={2}>
-          <ContactFields form={form} onChange={handleChange} />
+          <ContactFields
+            form={form}
+            onChange={handleChange}
+            errors={getRequiredErrors(form, REQUIRED_FIELDS)}
+          />
         </Grid>
       )}
 

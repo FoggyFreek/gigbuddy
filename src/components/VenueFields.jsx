@@ -11,6 +11,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import CopyAdornment from './CopyAdornment.jsx'
 
 export default function VenueFields({ form, onChange, errors = {} }) {
+  const isFestival = form.category === 'festival'
   return (
     <>
       <Grid size={4}>
@@ -26,9 +27,19 @@ export default function VenueFields({ form, onChange, errors = {} }) {
           </Select>
         </FormControl>
       </Grid>
-      <Grid size={8}>
+      {isFestival && (
+        <Grid size={4}>
+          <TextField
+            label="Festival name"
+            fullWidth
+            value={form.festival_name}
+            onChange={(e) => onChange('festival_name', e.target.value)}
+          />
+        </Grid>
+      )}
+      <Grid size={isFestival ? 4 : 8}>
         <TextField
-          label="Name"
+          label="Venue name"
           fullWidth
           required
           value={form.name}
@@ -37,12 +48,84 @@ export default function VenueFields({ form, onChange, errors = {} }) {
           helperText={errors.name}
         />
       </Grid>
-      <Grid size={6}>
+
+      <Grid size={3}>
+        <TextField
+          label="Title"
+          fullWidth
+          value={form.title}
+          onChange={(e) => onChange('title', e.target.value)}
+          placeholder="Mr."
+        />
+      </Grid>
+      <Grid size={4}>
+        <TextField
+          label="Given name"
+          fullWidth
+          value={form.given_name}
+          onChange={(e) => onChange('given_name', e.target.value)}
+        />
+      </Grid>
+      <Grid size={5}>
+        <TextField
+          label="Family name"
+          fullWidth
+          value={form.family_name}
+          onChange={(e) => onChange('family_name', e.target.value)}
+        />
+      </Grid>
+
+      <Grid size={12}>
+        <TextField
+          label="Organization name"
+          fullWidth
+          value={form.organization_name}
+          onChange={(e) => onChange('organization_name', e.target.value)}
+        />
+      </Grid>
+
+      <Grid size={8}>
+        <TextField
+          label="Street and number"
+          fullWidth
+          value={form.street_and_number}
+          onChange={(e) => onChange('street_and_number', e.target.value)}
+        />
+      </Grid>
+      <Grid size={4}>
+        <TextField
+          label="Postal code"
+          fullWidth
+          value={form.postal_code}
+          onChange={(e) => onChange('postal_code', e.target.value)}
+          placeholder="1234AB"
+        />
+      </Grid>
+      <Grid size={12}>
+        <TextField
+          label="Street additional"
+          fullWidth
+          value={form.street_additional}
+          onChange={(e) => onChange('street_additional', e.target.value)}
+          placeholder="Apt. 1"
+        />
+      </Grid>
+
+      <Grid size={5}>
         <TextField
           label="City"
           fullWidth
           value={form.city}
           onChange={(e) => onChange('city', e.target.value)}
+        />
+      </Grid>
+      <Grid size={4}>
+        <TextField
+          label="Region"
+          fullWidth
+          value={form.region}
+          onChange={(e) => onChange('region', e.target.value)}
+          placeholder="Noord-Holland"
         />
       </Grid>
       <Grid size={3}>
@@ -55,24 +138,7 @@ export default function VenueFields({ form, onChange, errors = {} }) {
           placeholder="NL"
         />
       </Grid>
-      <Grid size={3}>
-        <TextField
-          label="Province"
-          fullWidth
-          value={form.province}
-          onChange={(e) => onChange('province', e.target.value.slice(0, 2).toUpperCase())}
-          slotProps={{ htmlInput: { maxLength: 2 } }}
-          placeholder="NH"
-        />
-      </Grid>
-      <Grid size={12}>
-        <TextField
-          label="Address"
-          fullWidth
-          value={form.address}
-          onChange={(e) => onChange('address', e.target.value)}
-        />
-      </Grid>
+
       <Grid size={12}>
         <TextField
           label="Website"
@@ -105,14 +171,6 @@ export default function VenueFields({ form, onChange, errors = {} }) {
       </Grid>
       <Grid size={6}>
         <TextField
-          label="Contact Person"
-          fullWidth
-          value={form.contact_person}
-          onChange={(e) => onChange('contact_person', e.target.value)}
-        />
-      </Grid>
-      <Grid size={6}>
-        <TextField
           label="Phone"
           fullWidth
           value={form.phone}
@@ -120,7 +178,7 @@ export default function VenueFields({ form, onChange, errors = {} }) {
           slotProps={{ input: { endAdornment: <CopyAdornment value={form.phone} /> } }}
         />
       </Grid>
-      <Grid size={12}>
+      <Grid size={6}>
         <TextField
           label="Email"
           fullWidth

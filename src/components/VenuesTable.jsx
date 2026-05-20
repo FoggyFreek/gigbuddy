@@ -34,13 +34,22 @@ const ALL_CATEGORIES = ['venue', 'festival']
 const CATEGORY_LABELS = { venue: 'Venues', festival: 'Festivals' }
 
 const COLUMNS = [
-  { id: 'category',       label: 'Category' },
-  { id: 'name',           label: 'Name' },
-  { id: 'city',           label: 'City / Country' },
-  { id: 'contact_person', label: 'Contact Person' },
-  { id: 'phone',          label: 'Phone' },
-  { id: 'email',          label: 'Email' },
+  { id: 'category', label: 'Category' },
+  { id: 'name',     label: 'Name' },
+  { id: 'city',     label: 'City / Country' },
+  { id: 'contact',  label: 'Contact' },
+  { id: 'phone',    label: 'Phone' },
+  { id: 'email',    label: 'Email' },
 ]
+
+function contactName(venue) {
+  return [venue.title, venue.given_name, venue.family_name].filter(Boolean).join(' ')
+}
+
+function displayName(venue) {
+  if (venue.category === 'festival') return venue.festival_name || venue.name || ''
+  return venue.name || ''
+}
 
 function CategoryChip({ category }) {
   return (
@@ -59,13 +68,13 @@ function cityCountry(venue) {
 
 function sortValue(venue, col) {
   switch (col) {
-    case 'category':       return venue.category || ''
-    case 'name':           return venue.name || ''
-    case 'city':           return venue.city || ''
-    case 'contact_person': return venue.contact_person || ''
-    case 'phone':          return venue.phone || ''
-    case 'email':          return venue.email || ''
-    default:               return ''
+    case 'category': return venue.category || ''
+    case 'name':     return displayName(venue)
+    case 'city':     return venue.city || ''
+    case 'contact':  return venue.family_name || venue.given_name || ''
+    case 'phone':    return venue.phone || ''
+    case 'email':    return venue.email || ''
+    default:         return ''
   }
 }
 
@@ -80,8 +89,11 @@ function applySearch(list, q) {
   if (!q) return list
   const lower = q.toLowerCase()
   return list.filter((v) =>
-    [v.name, v.category, v.city, v.country, v.province, v.address, v.website, v.contact_person, v.phone, v.email]
-      .some((f) => f && String(f).toLowerCase().includes(lower))
+    [
+      v.name, v.festival_name, v.category, v.city, v.country, v.region,
+      v.street_and_number, v.street_additional, v.postal_code,
+      v.website, v.title, v.given_name, v.family_name, v.phone, v.email,
+    ].some((f) => f && String(f).toLowerCase().includes(lower))
   )
 }
 
@@ -116,7 +128,7 @@ function VenueCard({ venue, selected, active, onToggle, onClick }) {
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
           <Box>
             <Typography variant="body2" fontWeight={600}>
-              {venue.name}
+              {displayName(venue)}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               {cityCountry(venue)}
@@ -124,9 +136,9 @@ function VenueCard({ venue, selected, active, onToggle, onClick }) {
           </Box>
           <CategoryChip category={venue.category} />
         </Box>
-        {(venue.contact_person || venue.email) && (
+        {(contactName(venue) || venue.email) && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            {[venue.contact_person, venue.email].filter(Boolean).join(' · ')}
+            {[contactName(venue), venue.email].filter(Boolean).join(' · ')}
           </Typography>
         )}
       </Box>
@@ -393,9 +405,9 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }) {
                     />
                   </TableCell>
                   <TableCell><CategoryChip category={v.category} /></TableCell>
-                  <TableCell>{v.name}</TableCell>
+                  <TableCell>{displayName(v)}</TableCell>
                   <TableCell>{cityCountry(v)}</TableCell>
-                  <TableCell>{v.contact_person || '—'}</TableCell>
+                  <TableCell>{contactName(v) || '—'}</TableCell>
                   <TableCell>{v.phone || '—'}</TableCell>
                   <TableCell>{v.email || '—'}</TableCell>
                 </TableRow>

@@ -10,23 +10,32 @@ import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
 import { createVenue, getVenue, updateVenue } from '../api/venues.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
+import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import VenueFields from './VenueFields.jsx'
+
+const REQUIRED_FIELDS = ['name']
 
 const EMPTY_FORM = {
   category: 'venue',
   name: '',
+  festival_name: '',
+  title: '',
+  given_name: '',
+  family_name: '',
+  organization_name: '',
+  street_and_number: '',
+  street_additional: '',
+  postal_code: '',
   city: '',
+  region: '',
   country: '',
-  province: '',
-  address: '',
   website: '',
-  contact_person: '',
   phone: '',
   email: '',
 }
 
-export default function VenueFormModal({ mode, venueId, onClose, onDelete }) {
-  const [form, setForm] = useState(EMPTY_FORM)
+export default function VenueFormModal({ mode, venueId, onClose, onDelete, initial, onCreated }) {
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...(initial || {}) }))
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -44,12 +53,18 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete }) {
         setForm({
           category: v.category || 'venue',
           name: v.name || '',
+          festival_name: v.festival_name || '',
+          title: v.title || '',
+          given_name: v.given_name || '',
+          family_name: v.family_name || '',
+          organization_name: v.organization_name || '',
+          street_and_number: v.street_and_number || '',
+          street_additional: v.street_additional || '',
+          postal_code: v.postal_code || '',
           city: v.city || '',
+          region: v.region || '',
           country: v.country ? String(v.country).trim() : '',
-          province: v.province ? String(v.province).trim() : '',
-          address: v.address || '',
           website: v.website || '',
-          contact_person: v.contact_person || '',
           phone: v.phone || '',
           email: v.email || '',
         })
@@ -60,25 +75,35 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete }) {
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
-    if (mode === 'edit') schedule({ [field]: value || null })
+    if (mode === 'edit') {
+      if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
+      schedule({ [field]: value || null })
+    }
   }
 
   async function handleCreate() {
     const errs = {}
     if (!form.name.trim()) errs.name = 'Required'
     if (Object.keys(errs).length) { setErrors(errs); return }
-    await createVenue({
+    const venue = await createVenue({
       category: form.category,
       name: form.name.trim(),
+      festival_name: form.festival_name || null,
+      title: form.title || null,
+      given_name: form.given_name || null,
+      family_name: form.family_name || null,
+      organization_name: form.organization_name || null,
+      street_and_number: form.street_and_number || null,
+      street_additional: form.street_additional || null,
+      postal_code: form.postal_code || null,
       city: form.city || null,
+      region: form.region || null,
       country: form.country || null,
-      province: form.province || null,
-      address: form.address || null,
       website: form.website || null,
-      contact_person: form.contact_person || null,
       phone: form.phone || null,
       email: form.email || null,
     })
+    onCreated?.(venue)
     onClose()
   }
 
@@ -101,7 +126,11 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete }) {
       ) : (
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <VenueFields form={form} onChange={handleChange} errors={errors} />
+            <VenueFields
+              form={form}
+              onChange={handleChange}
+              errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
+            />
           </Grid>
         </DialogContent>
       )}

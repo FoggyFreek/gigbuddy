@@ -11,7 +11,10 @@ import Typography from '@mui/material/Typography'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput } from '../utils/eventFormUtils.js'
+import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import BandEventFields from './BandEventFields.jsx'
+
+const REQUIRED_FIELDS = ['title', 'start_date']
 
 const EMPTY_FORM = {
   title: '',
@@ -58,7 +61,10 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
-    if (mode === 'edit') schedule({ [field]: value || null })
+    if (mode === 'edit') {
+      if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
+      schedule({ [field]: value || null })
+    }
   }
 
   async function handleCreate() {
@@ -98,7 +104,11 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       ) : (
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <BandEventFields form={form} onChange={handleChange} errors={errors} />
+            <BandEventFields
+              form={form}
+              onChange={handleChange}
+              errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
+            />
           </Grid>
         </DialogContent>
       )}

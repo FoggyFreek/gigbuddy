@@ -32,6 +32,16 @@ vi.mock('../api/profile.js', () => ({
     youtube_handle: '',
     spotify_handle: '',
     bandsintown_artist_name: 'The Testers',
+    formal_name: '',
+    address_street: '',
+    address_postal_code: '',
+    address_city: '',
+    address_country: 'Netherlands',
+    kvk_number: '',
+    iban: '',
+    tax_id: '',
+    tax_percentage: 9,
+    applies_kor: false,
     links: [
       { id: 10, label: 'EPK', url: 'https://drive.google.com/xyz', sort_order: 0 },
     ],
@@ -82,8 +92,9 @@ describe('ProfilePage', () => {
     await user.click(editButtons[0]) // Band identity edit button
     await waitFor(() => expect(screen.getByDisplayValue('The Testers')).toBeInTheDocument())
     expect(screen.getByDisplayValue('We test things.')).toBeInTheDocument()
-    // EPK link appears as text in display mode
-    expect(screen.getByText('EPK')).toBeInTheDocument()
+    // Switch to Links tab to see the EPK link
+    await user.click(screen.getByRole('tab', { name: /links/i }))
+    expect(await screen.findByText('EPK')).toBeInTheDocument()
   })
 
   it('auto-saves band name edits', async () => {
@@ -105,10 +116,12 @@ describe('ProfilePage', () => {
   })
 
   it('adds a new link', async () => {
+    const user = userEvent.setup()
     wrap(<ProfilePage />)
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+    await user.click(screen.getByRole('tab', { name: /links/i }))
     await waitFor(() => screen.getByText('EPK'))
 
-    const user = userEvent.setup()
     const labelInputs = screen.getAllByLabelText(/^label$/i)
     const urlInputs = screen.getAllByLabelText(/^url$/i)
     // Last of each are the "new link" inputs
@@ -131,10 +144,12 @@ describe('ProfilePage', () => {
   })
 
   it('deletes a link', async () => {
+    const user = userEvent.setup()
     wrap(<ProfilePage />)
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+    await user.click(screen.getByRole('tab', { name: /links/i }))
     await waitFor(() => screen.getByText('EPK'))
 
-    const user = userEvent.setup()
     const deleteBtn = screen.getByRole('button', { name: /delete link/i })
     await user.click(deleteBtn)
 
@@ -144,12 +159,51 @@ describe('ProfilePage', () => {
   it('shows Bandsintown artist name in socials section', async () => {
     wrap(<ProfilePage />)
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
-    expect(await screen.findByText(/bandsintown\.com\/The Testers/i)).toBeInTheDocument()
+    const label = await screen.findByText(/Bandsintown artist name/i)
+    expect(label.parentElement).toHaveTextContent('The Testers')
+  })
+
+  it('auto-saves KvK edits for tenant admins (stripping non-digits)', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin' } })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+
+    // Switch to Financial details tab, then click its Edit button (unique aria-label)
+    await user.click(screen.getByRole('tab', { name: /financial details/i }))
+    const editBtn = await screen.findByRole('button', { name: /edit financial details/i })
+    await user.click(editBtn)
+
+    const kvkInput = await screen.findByLabelText(/kvk number/i)
+    await user.type(kvkInput, '12-34a5678')
+
+    await waitFor(
+      () => expect(updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ kvk_number: '12345678' })
+      ),
+      { timeout: 2000 }
+    )
+  })
+
+  it('hides edit affordance for non-admin members on the financial section', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'member' } })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+
+    // Switch to Financial details tab (visible to everyone)
+    await user.click(screen.getByRole('tab', { name: /financial details/i }))
+
+    // No Edit button inside the Financial panel for members
+    expect(screen.queryByRole('button', { name: /edit financial details/i })).toBeNull()
+    // No financial input fields rendered (read-only typography only)
+    expect(screen.queryByLabelText(/kvk number/i)).toBeNull()
+    expect(screen.queryByLabelText(/iban/i)).toBeNull()
+    expect(screen.queryByLabelText(/tax id/i)).toBeNull()
+    expect(updateProfile).not.toHaveBeenCalled()
   })
 
   it('rejects GIF logo uploads before sending them', async () => {
     wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin' } })
-    await waitFor(() => screen.getByText('EPK'))
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
 
     const user = userEvent.setup({ applyAccept: false })
     const input = document.querySelector('input[type="file"][accept="image/jpeg,image/png,image/webp"]')

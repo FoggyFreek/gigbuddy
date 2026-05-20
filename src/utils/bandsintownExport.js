@@ -1,3 +1,5 @@
+import { venueHeadline } from './venueDisplay.js'
+
 const HEADER = 'Artist Name,Venue*,Country*,Address,City*,Region*,Postal Code,Timezone*,Start Date* (yyyy-mm-dd),Start Time* (HH:MM),End Date,End Time,Streaming Link,Ticket Link,Ticket Type,Ticket Link 2,Ticket Type 2,On-Sale Date,On-Sale Time,Lineup,Event Name,Event Display Format,Description,Schedule Date,Schedule Time,Do Not Announce,Setlist,Event Image'
 
 function csvEscape(val) {
@@ -8,12 +10,12 @@ function csvEscape(val) {
 function gigToRow(gig, artistName) {
   return [
     artistName,
-    gig.venue,
+    venueHeadline(gig.venue),
     'Netherlands',
     '',
-    gig.city,
-    '',
-    '',
+    gig.venue?.city || '',
+    gig.venue?.region || '',
+    gig.venue?.postal_code || '',
     'Europe/Amsterdam',
     gig.event_date,
     gig.start_time ? gig.start_time.slice(0, 5) : '',
@@ -21,7 +23,7 @@ function gigToRow(gig, artistName) {
     gig.end_time ? gig.end_time.slice(0, 5) : '',
     gig.event_link,
     gig.ticket_link,
-    gig.ticket_link ? 'Tickets' : '',
+    gig.ticket_link ? 'Tickets' : 'free',
     '',
     '',
     '',
@@ -39,7 +41,7 @@ function gigToRow(gig, artistName) {
 }
 
 export function downloadBandsintownCsv(gigs, artistName = '') {
-  const rows = [HEADER, ...gigs.filter((g) => g.venue).map((g) => gigToRow(g, artistName))].join('\r\n')
+  const rows = [HEADER, ...gigs.filter((g) => g.venue?.id).map((g) => gigToRow(g, artistName))].join('\r\n')
   const blob = new Blob([rows], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

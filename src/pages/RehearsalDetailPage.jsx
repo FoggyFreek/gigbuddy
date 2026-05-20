@@ -9,10 +9,13 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
+import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import { addParticipant, getRehearsal, removeParticipant, setVote, updateRehearsal } from '../api/rehearsals.js'
 import { listMembers } from '../api/bandMembers.js'
 import RehearsalFields from '../components/RehearsalFields.jsx'
 import RehearsalParticipantsSection from '../components/RehearsalParticipantsSection.jsx'
+
+const REQUIRED_FIELDS = ['proposed_date']
 
 export default function RehearsalDetailPage() {
   const { id } = useParams()
@@ -66,6 +69,7 @@ export default function RehearsalDetailPage() {
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
+    if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
     schedule({ [field]: value || null })
   }
 
@@ -131,7 +135,11 @@ export default function RehearsalDetailPage() {
         </Box>
       ) : (
         <Grid container spacing={2}>
-          <RehearsalFields form={form} onChange={handleChange} />
+          <RehearsalFields
+            form={form}
+            onChange={handleChange}
+            errors={getRequiredErrors(form, REQUIRED_FIELDS)}
+          />
           {rehearsal && (
             <RehearsalParticipantsSection
               rehearsal={rehearsal}

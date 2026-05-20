@@ -22,8 +22,11 @@ import {
 import { listMembers } from '../api/bandMembers.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
+import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import RehearsalFields from './RehearsalFields.jsx'
 import RehearsalParticipantsSection from './RehearsalParticipantsSection.jsx'
+
+const REQUIRED_FIELDS = ['proposed_date']
 
 const EMPTY_FORM = {
   proposed_date: '',
@@ -86,7 +89,10 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
-    if (mode === 'edit') schedule({ [field]: value || null })
+    if (mode === 'edit') {
+      if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
+      schedule({ [field]: value || null })
+    }
   }
 
   async function handleCreate() {
@@ -155,7 +161,11 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       ) : (
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <RehearsalFields form={form} onChange={handleChange} errors={errors} />
+            <RehearsalFields
+              form={form}
+              onChange={handleChange}
+              errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
+            />
 
             {mode === 'create' && createExtras.length > 0 && (
               <Grid size={12}>

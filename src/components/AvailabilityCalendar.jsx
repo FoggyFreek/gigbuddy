@@ -18,6 +18,7 @@ import {
   normalizeIsoDate,
   getMemberColor,
 } from '../utils/availabilityUtils.js'
+import { venueHeadline } from '../utils/venueDisplay.js'
 
 const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -383,7 +384,7 @@ export default function AvailabilityCalendar({
                         key={gig.id}
                         title={[
                           gig.event_description,
-                          gig.venue,
+                          venueHeadline(gig.venue),
                           gig.status,
                         ].filter(Boolean).join(' — ')}
                       >
@@ -407,7 +408,7 @@ export default function AvailabilityCalendar({
                             textOverflow: 'ellipsis',
                           }}
                         >
-                          {gig.event_description || gig.venue || 'Gig'}
+                          {gig.event_description || venueHeadline(gig.venue) || 'Gig'}
                         </Box>
                       </Tooltip>
                       )

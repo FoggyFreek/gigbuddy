@@ -8,6 +8,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Snackbar from '@mui/material/Snackbar'
 import Typography from '@mui/material/Typography'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import { venueHeadline, venueCity } from '../utils/venueDisplay.js'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -23,7 +24,7 @@ export default function TourExportDialog({ open, onClose, gigs = [] }) {
   const text = useMemo(
     () =>
       gigs
-        .map((g) => [exportDate(g.event_date), g.venue || '', g.city || ''].join('\t'))
+        .map((g) => [exportDate(g.event_date), venueHeadline(g.venue), venueCity(g.venue)].join('\t'))
         .join('\n'),
     [gigs],
   )

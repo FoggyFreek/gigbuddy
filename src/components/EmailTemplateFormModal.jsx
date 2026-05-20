@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -24,6 +24,9 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { createEmailTemplate, getEmailTemplate, updateEmailTemplate } from '../api/emailTemplates.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
+import { hasRequiredErrors } from '../utils/requiredFields.js'
+
+const REQUIRED_FIELDS = ['name']
 
 const EMPTY_FORM = { name: '', subject: '' }
 
@@ -120,6 +123,9 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
+  const requiredInvalid = hasRequiredErrors(form, REQUIRED_FIELDS)
+  const requiredInvalidRef = useRef(requiredInvalid)
+  useEffect(() => { requiredInvalidRef.current = requiredInvalid }, [requiredInvalid])
 
   const saveFn = useCallback(
     async (patch) => { await updateEmailTemplate(templateId, patch) },
@@ -135,7 +141,7 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }) {
     ],
     content: '',
     onUpdate({ editor: e }) {
-      if (mode === 'edit') {
+      if (mode === 'edit' && !requiredInvalidRef.current) {
         schedule({ body_html: e.getHTML() })
       }
     },
@@ -154,7 +160,10 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }) {
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
-    if (mode === 'edit') schedule({ [field]: value })
+    if (mode === 'edit') {
+      if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
+      schedule({ [field]: value })
+    }
   }
 
   async function handleCreate() {
@@ -202,8 +211,8 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }) {
                 required
                 value={form.name}
                 onChange={(e) => handleChange('name', e.target.value)}
-                error={!!errors.name}
-                helperText={errors.name}
+                error={!!errors.name || (mode === 'edit' && !form.name.trim())}
+                helperText={errors.name || (mode === 'edit' && !form.name.trim() ? 'Required' : '')}
                 placeholder="e.g. Gig announcement, Rehearsal notice"
               />
             </Grid>

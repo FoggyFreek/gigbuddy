@@ -85,7 +85,7 @@ describe('RehearsalFormModal — create mode', () => {
     // Wait for members to load so the "Also include" chips render.
     await waitFor(() => screen.getByText(/Sam/))
 
-    const dateInput = screen.getByLabelText(/^date$/i)
+    const dateInput = screen.getByLabelText(/^date\s*\*?$/i)
     await user.type(dateInput, '2099-08-01')
 
     // Select the 'sub' member Sam as extra.

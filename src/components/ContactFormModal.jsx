@@ -10,7 +10,10 @@ import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
 import { createContact, getContact, updateContact } from '../api/contacts.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
+import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import ContactFields from './ContactFields.jsx'
+
+const REQUIRED_FIELDS = ['name']
 
 const EMPTY_FORM = {
   name:     '',
@@ -48,7 +51,10 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete })
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
-    if (mode === 'edit') schedule({ [field]: value || null })
+    if (mode === 'edit') {
+      if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
+      schedule({ [field]: value || null })
+    }
   }
 
   async function handleCreate() {
@@ -83,7 +89,11 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete })
       ) : (
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <ContactFields form={form} onChange={handleChange} errors={errors} />
+            <ContactFields
+              form={form}
+              onChange={handleChange}
+              errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
+            />
           </Grid>
         </DialogContent>
       )}

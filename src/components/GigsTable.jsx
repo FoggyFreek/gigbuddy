@@ -16,6 +16,7 @@ import ChecklistIcon from '@mui/icons-material/Checklist'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
+import { venueHeadline, venueCity } from '../utils/venueDisplay.js'
 import MemberAvatarStack from './MemberAvatarStack.jsx'
 import GigShareMenu from './GigShareMenu.jsx'
 
@@ -48,7 +49,7 @@ function isPastDate(val) {
 
 function GigCard({ gig, active, onClick, onDelete }) {
   const taskCount = gig.open_task_count ?? 0
-  const metaParts = [gig.event_description, gig.venue, gig.city].filter(Boolean)
+  const metaParts = [gig.event_description, venueHeadline(gig.venue), venueCity(gig.venue)].filter(Boolean)
   return (
     <Box
       onClick={onClick}
@@ -129,8 +130,8 @@ function DesktopRow({ gig, active, onClick, onDelete }) {
       </TableCell>
       <TableCell>
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-          <span>{gig.venue || ' '}</span>
-          <Typography variant="caption" color="text.secondary">{gig.city || ' '}</Typography>
+          <span>{venueHeadline(gig.venue) || ' '}</span>
+          <Typography variant="caption" color="text.secondary">{venueCity(gig.venue) || ' '}</Typography>
         </Box>
       </TableCell>
       <TableCell>{formatTime(gig.start_time)}–{formatTime(gig.end_time)}</TableCell>

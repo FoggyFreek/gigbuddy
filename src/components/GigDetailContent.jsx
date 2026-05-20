@@ -27,11 +27,15 @@ import GigTasks from './GigTasks.jsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
 import GigParticipantsSection from './GigParticipantsSection.jsx'
 import ImageCropDialog from './ImageCropDialog.jsx'
+import VenuePicker from './VenuePicker.jsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { addGigParticipant, deleteGigBanner, getGig, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../api/gigs.js'
 import { listMembers } from '../api/bandMembers.js'
 import { compressBanner } from '../utils/compressImage.js'
 import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
+import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
+
+const REQUIRED_FIELDS = ['event_date', 'event_description']
 
 dayjs.extend(customParseFormat)
 
@@ -52,8 +56,7 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
   const [form, setForm] = useState({
     event_date: '',
     event_description: '',
-    venue: '',
-    city: '',
+    venue_id: null,
     event_link: '',
     start_time: '',
     end_time: '',
@@ -71,6 +74,7 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
   })
   const [loading, setLoading] = useState(true)
   const [initialTasks, setInitialTasks] = useState([])
+  const [selectedVenue, setSelectedVenue] = useState(null)
   const [focused, setFocused] = useState({ event_date: false })
   const [gig, setGig] = useState(null)
   const [members, setMembers] = useState([])
@@ -109,11 +113,11 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
   const applyGig = useCallback((g) => {
     setGig(g)
     setBannerPath(g.banner_path || null)
+    setSelectedVenue(g.venue || null)
     setForm({
       event_date: toDateInput(g.event_date),
       event_description: g.event_description || '',
-      venue: g.venue || '',
-      city: g.city || '',
+      venue_id: g.venue?.id ?? null,
       event_link: g.event_link || '',
       start_time: toTimeInput(g.start_time),
       end_time: toTimeInput(g.end_time),
@@ -174,10 +178,12 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
   function handleChange(field, value) {
     if (field === 'admission' && value === 'free') {
       setForm((prev) => ({ ...prev, admission: 'free', ticket_link: '' }))
+      if (hasRequiredErrors(form, REQUIRED_FIELDS)) return
       schedule({ admission: 'free', ticket_link: null })
       return
     }
     setForm((prev) => ({ ...prev, [field]: value }))
+    if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
     const patch = { [field]: value }
     if (field === 'booking_fee') {
       patch.booking_fee_cents = feeToCents(value)
@@ -241,6 +247,8 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
     )
   }
 
+  const requiredErrors = getRequiredErrors(form, REQUIRED_FIELDS)
+
   return (
     <>
       <Grid container spacing={2}>
@@ -249,10 +257,13 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
             label="Date"
             type="date"
             fullWidth
+            required
             value={form.event_date}
             onChange={(e) => handleChange('event_date', e.target.value)}
             onFocus={onFocus('event_date')}
             onBlur={onBlur('event_date')}
+            error={!!requiredErrors.event_date}
+            helperText={requiredErrors.event_date}
             slotProps={{ inputLabel: { shrink: focused.event_date || !!form.event_date } }}
             sx={maskSx('event_date')}
           />
@@ -292,24 +303,20 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
           <TextField
             label="Event description"
             fullWidth
+            required
             value={form.event_description}
             onChange={(e) => handleChange('event_description', e.target.value)}
+            error={!!requiredErrors.event_description}
+            helperText={requiredErrors.event_description}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
-          <TextField
-            label="Venue"
-            fullWidth
-            value={form.venue}
-            onChange={(e) => handleChange('venue', e.target.value)}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <TextField
-            label="City"
-            fullWidth
-            value={form.city}
-            onChange={(e) => handleChange('city', e.target.value)}
+          <VenuePicker
+            value={selectedVenue}
+            onChange={(v) => {
+              setSelectedVenue(v)
+              handleChange('venue_id', v?.id ?? null)
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>

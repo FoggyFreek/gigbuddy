@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GigDetailContent from '../components/GigDetailContent.jsx'
 import theme from '../theme.js'
@@ -24,8 +25,7 @@ vi.mock('../api/gigs.js', () => ({
     id: 1,
     event_date: '2026-06-15',
     event_description: 'Jazz Night',
-    venue: 'Bimhuis',
-    city: 'Amsterdam',
+    venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam' },
     event_link: '',
     start_time: '20:00:00',
     end_time: '23:00:00',
@@ -55,8 +55,7 @@ const GIG_PAID = {
   id: 1,
   event_date: '2026-06-15',
   event_description: 'Jazz Night',
-  venue: 'Bimhuis',
-  city: 'Amsterdam',
+  venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam' },
   event_link: '',
   start_time: '20:00:00',
   end_time: '23:00:00',
@@ -75,9 +74,11 @@ const GIG_PAID = {
 
 function wrap(ui) {
   return render(
-    <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
-    </ThemeProvider>
+    <MemoryRouter>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </ThemeProvider>
+    </MemoryRouter>
   )
 }
 
@@ -90,7 +91,7 @@ describe('GigDetailContent — field rendering', () => {
   it('loads and displays gig data', async () => {
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
-    expect(screen.getByDisplayValue('Bimhuis')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Bimhuis — Amsterdam')).toBeInTheDocument()
   })
 
   it('renders the Paid admission switch', async () => {

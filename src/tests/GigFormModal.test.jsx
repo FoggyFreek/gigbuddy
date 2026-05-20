@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GigFormModal from '../components/GigFormModal.jsx'
 import theme from '../theme.js'
@@ -54,9 +55,11 @@ import { createGig, getGig, updateGig } from '../api/gigs.js'
 
 function wrap(ui) {
   return render(
-    <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
-    </ThemeProvider>
+    <MemoryRouter>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </ThemeProvider>
+    </MemoryRouter>
   )
 }
 

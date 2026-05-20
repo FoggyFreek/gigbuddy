@@ -26,6 +26,7 @@ export default function RehearsalFields({ form, onChange, errors = {} }) {
           label="Date"
           type="date"
           fullWidth
+          required
           value={form.proposed_date}
           onChange={(e) => onChange('proposed_date', e.target.value)}
           onFocus={onFocus('proposed_date')}

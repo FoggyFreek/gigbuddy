@@ -1,5 +1,6 @@
 import { forwardRef } from 'react'
 import { SHARE_FORMATS } from '../../utils/shareCard.js'
+import { venueCity } from '../../utils/venueDisplay.js'
 import PhotoBackdrop from './primitives/PhotoBackdrop.jsx'
 import SocialsRow from './SocialsRow.jsx'
 
@@ -178,7 +179,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
           >
             {gig.event_description.toUpperCase() || ''}
           </div>
-          {gig.city && (
+          {venueCity(gig.venue) && (
             <div
               style={{
                 color: 'rgba(246,239,226,0.65)',
@@ -192,7 +193,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
                 textAlign: 'center',
               }}
             >
-              {gig.city}
+              {venueCity(gig.venue)}
             </div>
           )}
         </div>

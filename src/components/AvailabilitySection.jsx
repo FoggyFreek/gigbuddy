@@ -25,6 +25,7 @@ import MusicNoteIcon from '@mui/icons-material/MusicNote'
 import GroupIcon from '@mui/icons-material/Group'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import AvailabilityCalendar from './AvailabilityCalendar.jsx'
+import { venueHeadline } from '../utils/venueDisplay.js'
 import {
   GIG_STATUS_COLORS,
   REHEARSAL_STATUS_COLORS,
@@ -263,8 +264,8 @@ export default function AvailabilitySection({ basePath = '' } = {}) {
                     }}
                   />
                   <ListItemText
-                    primary={gig.event_description || gig.venue || 'Gig'}
-                    secondary={[gig.venue, gig.status].filter(Boolean).join(' — ')}
+                    primary={gig.event_description || venueHeadline(gig.venue) || 'Gig'}
+                    secondary={[venueHeadline(gig.venue), gig.status].filter(Boolean).join(' — ')}
                   />
                 </ListItemButton>
               ))}

@@ -10,7 +10,10 @@ import CloseIcon from '@mui/icons-material/Close'
 import { getBandEvent, updateBandEvent } from '../api/bandEvents.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput } from '../utils/eventFormUtils.js'
+import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import BandEventFields from '../components/BandEventFields.jsx'
+
+const REQUIRED_FIELDS = ['title', 'start_date']
 
 export default function BandEventDetailPage() {
   const { id } = useParams()
@@ -56,6 +59,7 @@ export default function BandEventDetailPage() {
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
+    if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
     schedule({ [field]: value || null })
   }
 
@@ -93,7 +97,11 @@ export default function BandEventDetailPage() {
         </Box>
       ) : (
         <Grid container spacing={2}>
-          <BandEventFields form={form} onChange={handleChange} errors={errors} />
+          <BandEventFields
+            form={form}
+            onChange={handleChange}
+            errors={{ ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors }}
+          />
         </Grid>
       )}
 

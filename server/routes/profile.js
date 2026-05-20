@@ -29,6 +29,33 @@ const PROFILE_FIELDS = [
   'accent_color',
 ]
 
+const FINANCIAL_FIELDS = [
+  'formal_name',
+  'address_street',
+  'address_postal_code',
+  'address_city',
+  'address_country',
+  'kvk_number',
+  'iban',
+  'tax_id',
+  'tax_percentage',
+  'applies_kor',
+]
+
+const FINANCIAL_FIELDS_SET = new Set(FINANCIAL_FIELDS)
+
+const TEXT_MAX_LENGTHS = {
+  formal_name: 200,
+  address_street: 200,
+  address_postal_code: 10,
+  address_city: 200,
+  address_country: 200,
+}
+
+const KVK_RE = /^[0-9]{8}$/
+const IBAN_RE = /^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/
+const TAX_ID_RE = /^NL[0-9]{9}B[0-9]{2}$/
+
 const LINK_FIELDS = ['label', 'url', 'sort_order']
 
 function normalizeRequiredProfileUrl(value) {
@@ -70,8 +97,61 @@ router.get('/', async (req, res) => {
   res.json({ ...profiles[0], links })
 })
 
+function normalizeFinancialValue(key, raw) {
+  if (key === 'applies_kor') {
+    if (raw === null || raw === undefined) return { skip: true }
+    if (typeof raw !== 'boolean') return { error: `invalid_${key}` }
+    return { value: raw }
+  }
+
+  if (raw === null || raw === undefined) return { value: null }
+
+  if (key === 'tax_percentage') {
+    if (raw === '') return { skip: true }
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n < 0 || n > 100) {
+      return { error: `invalid_${key}` }
+    }
+    return { value: n }
+  }
+
+  if (typeof raw !== 'string') return { error: `invalid_${key}` }
+
+  if (key === 'kvk_number') {
+    const stripped = raw.replace(/\s+/g, '')
+    if (stripped === '') return { value: '' }
+    if (!KVK_RE.test(stripped)) return { error: `invalid_${key}` }
+    return { value: stripped }
+  }
+
+  if (key === 'iban') {
+    const stripped = raw.replace(/\s+/g, '').toUpperCase()
+    if (stripped === '') return { value: '' }
+    if (!IBAN_RE.test(stripped)) return { error: `invalid_${key}` }
+    return { value: stripped }
+  }
+
+  if (key === 'tax_id') {
+    const stripped = raw.replace(/\s+/g, '').toUpperCase()
+    if (stripped === '') return { value: '' }
+    if (!TAX_ID_RE.test(stripped)) return { error: `invalid_${key}` }
+    return { value: stripped }
+  }
+
+  const max = TEXT_MAX_LENGTHS[key]
+  if (max != null && raw.length > max) return { error: `invalid_${key}` }
+  return { value: raw }
+}
+
 // Update tenant profile (partial)
 router.patch('/', async (req, res) => {
+  const bodyKeys = Object.keys(req.body || {})
+  const touchesFinancial = bodyKeys.some((k) => FINANCIAL_FIELDS_SET.has(k))
+  if (touchesFinancial) {
+    const isAdmin = req.membership?.role === 'tenant_admin' || req.user?.is_super_admin
+    if (!isAdmin) return res.status(403).json({ error: 'tenant_admin_required' })
+  }
+
   const fields = []
   const values = []
   let idx = 1
@@ -81,6 +161,15 @@ router.patch('/', async (req, res) => {
       fields.push(`${key} = $${idx++}`)
       values.push(req.body[key])
     }
+  }
+
+  for (const key of FINANCIAL_FIELDS) {
+    if (!(key in req.body)) continue
+    const result = normalizeFinancialValue(key, req.body[key])
+    if (result.error) return res.status(400).json({ error: result.error })
+    if (result.skip) continue
+    fields.push(`${key} = $${idx++}`)
+    values.push(result.value)
   }
 
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })

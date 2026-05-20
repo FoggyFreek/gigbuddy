@@ -23,16 +23,22 @@ import Typography from '@mui/material/Typography'
 import { importVenues } from '../api/venues.js'
 
 const VENUE_FIELDS = [
-  { key: 'name',           label: 'Name',           required: true,  aliases: ['name'] },
-  { key: 'category',       label: 'Category',       required: false, aliases: ['category', 'type', 'venue type'] },
-  { key: 'city',           label: 'City',           required: false, aliases: ['city'] },
-  { key: 'country',        label: 'Country',        required: false, aliases: ['country'] },
-  { key: 'province',       label: 'Province',       required: false, aliases: ['province', 'state', 'region'] },
-  { key: 'address',        label: 'Address',        required: false, aliases: ['address', 'street'] },
-  { key: 'website',        label: 'Website',        required: false, aliases: ['website', 'url', 'web'] },
-  { key: 'contact_person', label: 'Contact Person', required: false, aliases: ['contact_person', 'contact person', 'contact', 'booking contact'] },
-  { key: 'phone',          label: 'Phone',          required: false, aliases: ['phone', 'tel', 'telephone', 'phone number'] },
-  { key: 'email',          label: 'Email',          required: false, aliases: ['email', 'e-mail', 'email address'] },
+  { key: 'name',              label: 'Venue name',        required: true,  aliases: ['name', 'venue', 'venue name'] },
+  { key: 'category',          label: 'Category',          required: false, aliases: ['category', 'type', 'venue type'] },
+  { key: 'festival_name',     label: 'Festival name',     required: false, aliases: ['festival_name', 'festival name', 'festivalname', 'festival'] },
+  { key: 'title',             label: 'Title',             required: false, aliases: ['title', 'salutation'] },
+  { key: 'given_name',        label: 'Given name',        required: false, aliases: ['given_name', 'given name', 'givenname', 'first name', 'firstname', 'contact_person', 'contact person', 'contact', 'booking contact'] },
+  { key: 'family_name',       label: 'Family name',       required: false, aliases: ['family_name', 'family name', 'familyname', 'last name', 'lastname', 'surname'] },
+  { key: 'organization_name', label: 'Organization name', required: false, aliases: ['organization_name', 'organization name', 'organizationname', 'organisation', 'organisation name', 'organization', 'company', 'company name'] },
+  { key: 'street_and_number', label: 'Street and number', required: false, aliases: ['street_and_number', 'street and number', 'streetandnumber', 'address', 'street', 'address line 1'] },
+  { key: 'street_additional', label: 'Street additional', required: false, aliases: ['street_additional', 'street additional', 'streetadditional', 'address line 2', 'address2'] },
+  { key: 'postal_code',       label: 'Postal code',       required: false, aliases: ['postal_code', 'postal code', 'postalcode', 'postcode', 'zip', 'zip code', 'zipcode'] },
+  { key: 'city',              label: 'City',              required: false, aliases: ['city'] },
+  { key: 'region',            label: 'Region',            required: false, aliases: ['region', 'province', 'state'] },
+  { key: 'country',           label: 'Country',           required: false, aliases: ['country'] },
+  { key: 'website',           label: 'Website',           required: false, aliases: ['website', 'url', 'web'] },
+  { key: 'phone',             label: 'Phone',             required: false, aliases: ['phone', 'tel', 'telephone', 'phone number'] },
+  { key: 'email',             label: 'Email',             required: false, aliases: ['email', 'e-mail', 'email address'] },
 ]
 
 function autoMap(headers) {
@@ -124,8 +130,10 @@ export default function VenueImportDialog({ onClose }) {
         {step === 'upload' && (
           <Box sx={{ py: 2 }}>
             <Typography variant="body2" sx={{ mb: 2 }}>
-              Upload a UTF-8 CSV file with column headers. Supported fields: name, category, city, country,
-              province, address, website, contact person, phone, email.
+              Upload a UTF-8 CSV file with column headers. Supported fields: name (venue),
+              category, festival name, title, given name, family name, organization name, street
+              and number, street additional, postal code, city, region, country, website, phone,
+              email.
             </Typography>
             <Button variant="outlined" component="label">
               Choose CSV file
@@ -188,19 +196,22 @@ export default function VenueImportDialog({ onClose }) {
                   <TableCell>Name</TableCell>
                   <TableCell>City</TableCell>
                   <TableCell>Country</TableCell>
-                  <TableCell>Contact Person</TableCell>
+                  <TableCell>Contact</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {previewRows.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell>{row.category || '—'}</TableCell>
-                    <TableCell><strong>{row.name || '—'}</strong></TableCell>
-                    <TableCell>{row.city || '—'}</TableCell>
-                    <TableCell>{row.country || '—'}</TableCell>
-                    <TableCell>{row.contact_person || '—'}</TableCell>
-                  </TableRow>
-                ))}
+                {previewRows.map((row, i) => {
+                  const contact = [row.title, row.given_name, row.family_name].filter(Boolean).join(' ')
+                  return (
+                    <TableRow key={i}>
+                      <TableCell>{row.category || '—'}</TableCell>
+                      <TableCell><strong>{row.name || '—'}</strong></TableCell>
+                      <TableCell>{row.city || '—'}</TableCell>
+                      <TableCell>{row.country || '—'}</TableCell>
+                      <TableCell>{contact || '—'}</TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </Box>

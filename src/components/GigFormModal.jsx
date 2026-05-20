@@ -18,6 +18,7 @@ import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
 import GigDetailContent from './GigDetailContent.jsx'
+import VenuePicker from './VenuePicker.jsx'
 import { createGig } from '../api/gigs.js'
 import { dayjsToTimeString, timeStringToDayjs } from '../utils/eventFormUtils.js'
 
@@ -28,8 +29,7 @@ const STATUSES = ['option', 'confirmed', 'announced']
 const EMPTY_FORM = {
   event_date: '',
   event_description: '',
-  venue: '',
-  city: '',
+  venue_id: null,
   start_time: '',
   end_time: '',
   status: 'option',
@@ -49,6 +49,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
   const [form, setForm] = useState(() =>
     mode === 'create' && initialDate ? { ...EMPTY_FORM, event_date: initialDate } : EMPTY_FORM
   )
+  const [selectedVenue, setSelectedVenue] = useState(null)
   const [errors, setErrors] = useState({})
   const [focused, setFocused] = useState({ event_date: false })
   const [availabilityData, setAvailabilityData] = useState(null)
@@ -89,8 +90,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
     await createGig({
       event_date: form.event_date,
       event_description: form.event_description,
-      venue: form.venue || null,
-      city: form.city || null,
+      venue_id: form.venue_id,
       start_time: form.start_time || null,
       end_time: form.end_time || null,
       status: form.status,
@@ -156,20 +156,13 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                 helperText={errors.event_description}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label="Venue"
-                fullWidth
-                value={form.venue}
-                onChange={(e) => handleChange('venue', e.target.value)}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label="City"
-                fullWidth
-                value={form.city}
-                onChange={(e) => handleChange('city', e.target.value)}
+            <Grid size={12}>
+              <VenuePicker
+                value={selectedVenue}
+                onChange={(v) => {
+                  setSelectedVenue(v)
+                  handleChange('venue_id', v?.id ?? null)
+                }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
