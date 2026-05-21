@@ -154,8 +154,15 @@ router.post('/', async (req, res) => {
   if (!req.body.name || !String(req.body.name).trim()) {
     return res.status(400).json({ error: 'name is required' })
   }
-  const { rows } = await pool.query(INSERT_SQL, buildInsertValues(req.tenantId, req.body))
-  res.status(201).json(rows[0])
+  try {
+    const { rows } = await pool.query(INSERT_SQL, buildInsertValues(req.tenantId, req.body))
+    res.status(201).json(rows[0])
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'A venue with this name and city already exists' })
+    }
+    throw err
+  }
 })
 
 const VALID_GIG_ACTIONS = new Set(['migrate', 'remove'])
