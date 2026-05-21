@@ -190,8 +190,8 @@ router.patch('/:id', async (req, res) => {
   fields.push(`updated_at = NOW()`)
   values.push(id, req.tenantId)
 
-  // When category is changing with an on_affected_gigs action, handle gig references in a transaction.
-  if ('category' in req.body && onAffectedGigs !== null) {
+  // When category is changing, always check for affected gigs — server is authoritative.
+  if ('category' in req.body) {
     const { rows: current } = await pool.query(
       'SELECT category FROM venues WHERE id = $1 AND tenant_id = $2',
       [id, req.tenantId],
@@ -204,34 +204,48 @@ router.patch('/:id', async (req, res) => {
       const affectedCol = currentCategory === 'venue' ? 'venue_id' : 'festival_id'
       const targetCol = currentCategory === 'venue' ? 'festival_id' : 'venue_id'
 
-      const client = await pool.connect()
-      try {
-        await client.query('BEGIN')
-        if (onAffectedGigs === 'migrate') {
-          await client.query(
-            `UPDATE gigs SET ${targetCol} = ${affectedCol}, ${affectedCol} = NULL
-             WHERE ${affectedCol} = $1 AND tenant_id = $2`,
-            [id, req.tenantId],
-          )
-        } else {
-          await client.query(
-            `UPDATE gigs SET ${affectedCol} = NULL WHERE ${affectedCol} = $1 AND tenant_id = $2`,
-            [id, req.tenantId],
-          )
+      const { rows: affectedGigs } = await pool.query(
+        `SELECT id, event_description, event_date
+           FROM gigs
+          WHERE ${affectedCol} = $1 AND tenant_id = $2
+          ORDER BY event_date ASC`,
+        [id, req.tenantId],
+      )
+
+      if (affectedGigs.length > 0) {
+        if (onAffectedGigs === null) {
+          return res.status(409).json({ error: 'Category change affects gigs', affected_gigs: affectedGigs })
         }
-        const { rows } = await client.query(
-          `UPDATE venues SET ${fields.join(', ')}
-           WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
-          values,
-        )
-        await client.query('COMMIT')
-        if (!rows.length) return res.status(404).json({ error: 'Not found' })
-        return res.json(rows[0])
-      } catch (err) {
-        await client.query('ROLLBACK').catch(() => {})
-        throw err
-      } finally {
-        client.release()
+
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          if (onAffectedGigs === 'migrate') {
+            await client.query(
+              `UPDATE gigs SET ${targetCol} = ${affectedCol}, ${affectedCol} = NULL
+               WHERE ${affectedCol} = $1 AND tenant_id = $2`,
+              [id, req.tenantId],
+            )
+          } else {
+            await client.query(
+              `UPDATE gigs SET ${affectedCol} = NULL WHERE ${affectedCol} = $1 AND tenant_id = $2`,
+              [id, req.tenantId],
+            )
+          }
+          const { rows } = await client.query(
+            `UPDATE venues SET ${fields.join(', ')}
+             WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
+            values,
+          )
+          await client.query('COMMIT')
+          if (!rows.length) return res.status(404).json({ error: 'Not found' })
+          return res.json(rows[0])
+        } catch (err) {
+          await client.query('ROLLBACK').catch(() => {})
+          throw err
+        } finally {
+          client.release()
+        }
       }
     }
   }
