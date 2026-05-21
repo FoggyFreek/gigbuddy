@@ -12,8 +12,8 @@ const makeGig = ({ venue = null, festival = null } = {}) => ({
   festival,
 })
 
-const venueRow = { id: 1, category: 'venue', name: 'Café De Zwaan', city: 'Den Burg', festival_name: null }
-const festivalRow = { id: 2, category: 'festival', name: 'Texel Blues', festival_name: 'Texel Blues Festival', city: 'Den Hoorn' }
+const venueRow = { id: 1, category: 'venue', name: 'Café De Zwaan', city: 'Den Burg' }
+const festivalRow = { id: 2, category: 'festival', name: 'Texel Blues Festival', city: 'Den Hoorn' }
 
 describe('formatGigCity', () => {
   it('returns empty string when no venue and no festival', () => {
@@ -42,8 +42,7 @@ describe('formatGigVenueName', () => {
     expect(formatGigVenueName(makeGig({ venue: venueRow }))).toBe('Café De Zwaan')
   })
 
-  it('returns festival headline when only festival is set', () => {
-    // venueHeadline uses festival_name when category='festival'
+  it('returns festival name when only festival is set', () => {
     expect(formatGigVenueName(makeGig({ festival: festivalRow }))).toBe('Texel Blues Festival')
   })
 
@@ -61,7 +60,7 @@ describe('formatGigVenue', () => {
     expect(formatGigVenue(makeGig({ venue: venueRow }))).toBe('Café De Zwaan, Den Burg')
   })
 
-  it('shows festival headline and city as fallback when only festival is set', () => {
+  it('shows festival name and city as fallback when only festival is set', () => {
     expect(formatGigVenue(makeGig({ festival: festivalRow }))).toBe('Texel Blues Festival, Den Hoorn')
   })
 

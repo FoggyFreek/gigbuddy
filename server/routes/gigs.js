@@ -99,7 +99,6 @@ const VENUE_JSON_SELECT = `CASE WHEN v.id IS NULL THEN NULL ELSE jsonb_build_obj
   'id', v.id,
   'name', v.name,
   'category', v.category,
-  'festival_name', v.festival_name,
   'organization_name', v.organization_name,
   'city', v.city,
   'region', v.region,
@@ -111,7 +110,6 @@ const FESTIVAL_JSON_SELECT = `CASE WHEN fv.id IS NULL THEN NULL ELSE jsonb_build
   'id', fv.id,
   'name', fv.name,
   'category', fv.category,
-  'festival_name', fv.festival_name,
   'organization_name', fv.organization_name,
   'city', fv.city,
   'region', fv.region,
@@ -124,8 +122,7 @@ const FESTIVAL_JOIN = `LEFT JOIN venues fv ON fv.id = g.festival_id AND fv.tenan
 
 function venueDisplay(v) {
   if (!v) return ''
-  const headline = v.category === 'festival' && v.festival_name ? v.festival_name : v.name
-  return [headline, v.city].filter(Boolean).join(' · ')
+  return [v.name, v.city].filter(Boolean).join(' · ')
 }
 
 async function assertVenueInTenant(executor, venueId, tenantId, expectedCategory = null) {

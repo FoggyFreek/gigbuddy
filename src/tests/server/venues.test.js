@@ -77,6 +77,53 @@ describe('POST /api/venues — create venue', () => {
   })
 })
 
+describe('POST /api/venues — festival_name rejected', () => {
+  it('returns 400 when festival_name is present in create body', async () => {
+    const res = await asUserA(
+      request(app).post('/api/venues').send({ name: 'Texel Blues', festival_name: 'Texel Blues Festival' })
+    ).expect(400)
+    expect(res.body.error).toMatch(/festival_name/)
+  })
+})
+
+describe('PATCH /api/venues/:id — festival_name rejected', () => {
+  it('returns 400 when festival_name is present in update body', async () => {
+    const v = venueA()
+    const res = await asUserA(
+      request(app).patch(`/api/venues/${v.id}`).send({ festival_name: 'something' })
+    ).expect(400)
+    expect(res.body.error).toMatch(/festival_name/)
+  })
+})
+
+describe('GET /api/venues/search', () => {
+  it('matches festival by name (not festival_name)', async () => {
+    await pool.query(
+      `INSERT INTO venues (tenant_id, category, name, city)
+       VALUES ($1, 'festival', 'Texel Blues Festival', 'Den Hoorn')`,
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(
+      request(app).get('/api/venues/search?q=Texel')
+    ).expect(200)
+    expect(res.body.length).toBeGreaterThan(0)
+    expect(res.body[0].name).toBe('Texel Blues Festival')
+    expect(res.body[0]).not.toHaveProperty('festival_name')
+  })
+
+  it('filters by category=festival', async () => {
+    await pool.query(
+      `INSERT INTO venues (tenant_id, category, name, city)
+       VALUES ($1, 'festival', 'Big Outdoor Fest', 'Breda')`,
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(
+      request(app).get('/api/venues/search?q=Big&category=festival')
+    ).expect(200)
+    expect(res.body.every((v) => v.category === 'festival')).toBe(true)
+  })
+})
+
 describe('PATCH venue category — server enforces invariant', () => {
   it('rejects category change without on_affected_gigs when gig references exist', async () => {
     const v = venueA()

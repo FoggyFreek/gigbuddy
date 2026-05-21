@@ -18,7 +18,6 @@ const REQUIRED_FIELDS = ['name']
 const EMPTY_FORM = {
   category: 'venue',
   name: '',
-  festival_name: '',
   title: '',
   given_name: '',
   family_name: '',
@@ -55,7 +54,6 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
         setForm({
           category: v.category || 'venue',
           name: v.name || '',
-          festival_name: v.festival_name || '',
           title: v.title || '',
           given_name: v.given_name || '',
           family_name: v.family_name || '',
@@ -124,7 +122,6 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
     const venue = await createVenue({
       category: form.category,
       name: form.name.trim(),
-      festival_name: form.festival_name || null,
       title: form.title || null,
       given_name: form.given_name || null,
       family_name: form.family_name || null,
@@ -212,10 +209,11 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" gutterBottom>
-            Changing this {categoryChange.prevCategory} to a {categoryChange.newCategory} affects the following gigs.
-            What should happen to those references?
+            The following {categoryChange.affectedGigs.length === 1 ? 'gig links' : 'gigs link'} to this record
+            as a <strong>{categoryChange.prevCategory}</strong>. Changing to
+            a <strong>{categoryChange.newCategory}</strong> requires each gig's link to be updated.
           </Typography>
-          <Box component="ul" sx={{ pl: 2, mt: 1 }}>
+          <Box component="ul" sx={{ pl: 2, mt: 1, mb: 2 }}>
             {categoryChange.affectedGigs.map((g) => (
               <li key={g.id}>
                 <Typography variant="body2">
@@ -224,12 +222,18 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
               </li>
             ))}
           </Box>
+          <Typography variant="body2" color="text.secondary">
+            <strong>Move links</strong> — keep each gig linked to this record, moved to
+            the {categoryChange.newCategory} slot.
+            <br />
+            <strong>Remove links</strong> — unlink each gig from this record entirely.
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCategoryCancel}>Cancel</Button>
-          <Button onClick={() => handleCategoryConfirm('remove')}>Remove references</Button>
+          <Button onClick={() => handleCategoryConfirm('remove')}>Remove links</Button>
           <Button variant="contained" onClick={() => handleCategoryConfirm('migrate')}>
-            Migrate references
+            Move links
           </Button>
         </DialogActions>
       </Dialog>

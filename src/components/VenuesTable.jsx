@@ -47,7 +47,6 @@ function contactName(venue) {
 }
 
 function displayName(venue) {
-  if (venue.category === 'festival') return venue.festival_name || venue.name || ''
   return venue.name || ''
 }
 
@@ -90,7 +89,7 @@ function applySearch(list, q) {
   const lower = q.toLowerCase()
   return list.filter((v) =>
     [
-      v.name, v.festival_name, v.category, v.city, v.country, v.region,
+      v.name, v.category, v.city, v.country, v.region,
       v.street_and_number, v.street_additional, v.postal_code,
       v.website, v.title, v.given_name, v.family_name, v.phone, v.email,
     ].some((f) => f && String(f).toLowerCase().includes(lower))

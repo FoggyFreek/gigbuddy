@@ -229,8 +229,8 @@ describe('invoices — draft-from-gig', () => {
 
   it('returns two billing_targets when gig has both festival and venue', async () => {
     const { rows: fv } = await pool.query(
-      `INSERT INTO venues (tenant_id, category, name, festival_name, city)
-       VALUES ($1, 'festival', 'Texel Blues Org', 'Texel Blues Festival', 'Den Hoorn') RETURNING id`,
+      `INSERT INTO venues (tenant_id, category, name, city)
+       VALUES ($1, 'festival', 'Texel Blues Festival', 'Den Hoorn') RETURNING id`,
       [seed.tenantA.id],
     )
     const festivalId = fv[0].id

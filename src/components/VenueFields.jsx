@@ -29,19 +29,9 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           </FormControl>
         </Grid>
       )}
-      {isFestival && (
-        <Grid size={4}>
-          <TextField
-            label="Festival name"
-            fullWidth
-            value={form.festival_name}
-            onChange={(e) => onChange('festival_name', e.target.value)}
-          />
-        </Grid>
-      )}
-      <Grid size={isFestival ? 4 : 8}>
+      <Grid size={8}>
         <TextField
-          label="Venue name"
+          label={isFestival ? 'Festival / event name' : 'Venue name'}
           fullWidth
           required
           value={form.name}
