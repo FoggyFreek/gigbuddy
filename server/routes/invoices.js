@@ -248,7 +248,7 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
     billingTargets.push({
       type: 'festival',
       id: festival.id,
-      name: festival.festival_name || festival.organization_name || festival.name,
+      name: festival.organization_name || festival.name,
       address_street: festival.street_and_number || null,
       address_postal_code: festival.postal_code || null,
       address_city: festival.city || null,
@@ -300,7 +300,7 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
       issue_date: issueDate,
       payment_term_days: paymentTermDays,
       due_date: computeDueDate(issueDate, paymentTermDays),
-      customer_name: defaultTarget?.organization_name || defaultTarget?.festival_name || defaultTarget?.name || '',
+      customer_name: defaultTarget?.organization_name || defaultTarget?.name || '',
       customer_address_street: defaultTarget?.street_and_number || null,
       customer_address_postal_code: defaultTarget?.postal_code || null,
       customer_address_city: defaultTarget?.city || null,

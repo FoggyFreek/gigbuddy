@@ -30,7 +30,6 @@ export default function VenueDetailPage() {
   const [form, setForm] = useState({
     category: 'venue',
     name: '',
-    festival_name: '',
     title: '',
     given_name: '',
     family_name: '',
@@ -60,7 +59,6 @@ export default function VenueDetailPage() {
         setForm({
           category: v.category || 'venue',
           name: v.name || '',
-          festival_name: v.festival_name || '',
           title: v.title || '',
           given_name: v.given_name || '',
           family_name: v.family_name || '',

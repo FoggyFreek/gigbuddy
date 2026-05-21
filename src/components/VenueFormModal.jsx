@@ -18,7 +18,6 @@ const REQUIRED_FIELDS = ['name']
 const EMPTY_FORM = {
   category: 'venue',
   name: '',
-  festival_name: '',
   title: '',
   given_name: '',
   family_name: '',
@@ -55,7 +54,6 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
         setForm({
           category: v.category || 'venue',
           name: v.name || '',
-          festival_name: v.festival_name || '',
           title: v.title || '',
           given_name: v.given_name || '',
           family_name: v.family_name || '',
@@ -124,7 +122,6 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
     const venue = await createVenue({
       category: form.category,
       name: form.name.trim(),
-      festival_name: form.festival_name || null,
       title: form.title || null,
       given_name: form.given_name || null,
       family_name: form.family_name || null,

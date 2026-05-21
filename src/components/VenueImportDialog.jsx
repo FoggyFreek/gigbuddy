@@ -25,7 +25,6 @@ import { importVenues } from '../api/venues.js'
 const VENUE_FIELDS = [
   { key: 'name',              label: 'Venue name',        required: true,  aliases: ['name', 'venue', 'venue name'] },
   { key: 'category',          label: 'Category',          required: false, aliases: ['category', 'type', 'venue type'] },
-  { key: 'festival_name',     label: 'Festival name',     required: false, aliases: ['festival_name', 'festival name', 'festivalname', 'festival'] },
   { key: 'title',             label: 'Title',             required: false, aliases: ['title', 'salutation'] },
   { key: 'given_name',        label: 'Given name',        required: false, aliases: ['given_name', 'given name', 'givenname', 'first name', 'firstname', 'contact_person', 'contact person', 'contact', 'booking contact'] },
   { key: 'family_name',       label: 'Family name',       required: false, aliases: ['family_name', 'family name', 'familyname', 'last name', 'lastname', 'surname'] },

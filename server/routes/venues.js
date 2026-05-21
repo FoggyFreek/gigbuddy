@@ -9,7 +9,6 @@ const VALID_CATEGORIES = ['venue', 'festival']
 const EDITABLE_FIELDS = [
   'category',
   'name',
-  'festival_name',
   'title',
   'given_name',
   'family_name',
@@ -53,7 +52,6 @@ function buildInsertValues(tenantId, body) {
     tenantId,
     finalCategory,
     String(body.name).trim(),
-    body.festival_name || null,
     body.title || null,
     body.given_name || null,
     body.family_name || null,
@@ -95,17 +93,16 @@ router.get('/search', async (req, res) => {
   const params = [req.tenantId, like, limit]
   const categoryClause = categoryFilter ? `AND category = $${params.push(categoryFilter)}` : ''
   const { rows } = await pool.query(
-    `SELECT id, name, category, festival_name, organization_name,
+    `SELECT id, name, category, organization_name,
             city, region, postal_code, country
        FROM venues
       WHERE tenant_id = $1
-        AND (name ILIKE $2 OR city ILIKE $2 OR festival_name ILIKE $2)
+        AND (name ILIKE $2 OR city ILIKE $2 OR region ILIKE $2)
         ${categoryClause}
       ORDER BY
         CASE
           WHEN name ILIKE $2 THEN 0
-          WHEN festival_name ILIKE $2 THEN 1
-          ELSE 2
+          ELSE 1
         END,
         name ASC
       LIMIT $3`,
@@ -154,6 +151,9 @@ router.post('/', async (req, res) => {
   if (!req.body.name || !String(req.body.name).trim()) {
     return res.status(400).json({ error: 'name is required' })
   }
+  if ('festival_name' in req.body) {
+    return res.status(400).json({ error: 'festival_name is no longer supported; use name' })
+  }
   try {
     const { rows } = await pool.query(INSERT_SQL, buildInsertValues(req.tenantId, req.body))
     res.status(201).json(rows[0])
@@ -169,6 +169,9 @@ const VALID_GIG_ACTIONS = new Set(['migrate', 'remove'])
 
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
+  if ('festival_name' in req.body) {
+    return res.status(400).json({ error: 'festival_name is no longer supported; use name' })
+  }
   const onAffectedGigs = req.body.on_affected_gigs ?? null
 
   if (onAffectedGigs !== null && !VALID_GIG_ACTIONS.has(onAffectedGigs)) {

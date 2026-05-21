@@ -30,7 +30,7 @@ const GIGS = [
     id: 2,
     event_date: '2026-07-01T00:00:00.000Z',
     event_description: 'Summer Festival',
-    venue: { id: 12, name: 'Rotterdam Open Air', category: 'festival', festival_name: 'Summer Fest', city: 'Rotterdam' },
+    venue: { id: 12, name: 'Summer Fest', category: 'festival', city: 'Rotterdam' },
     start_time: null,
     end_time: null,
     status: 'option',

@@ -1,6 +1,6 @@
 export function venueHeadline(v) {
   if (!v) return ''
-  return v.category === 'festival' && v.festival_name ? v.festival_name : v.name || ''
+  return v.name || ''
 }
 
 export function venueCity(v) {
