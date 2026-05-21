@@ -49,7 +49,8 @@ function isPastDate(val) {
 
 function GigCard({ gig, active, onClick, onDelete }) {
   const taskCount = gig.open_task_count ?? 0
-  const metaParts = [gig.event_description, venueHeadline(gig.venue), venueCity(gig.venue)].filter(Boolean)
+  const displayVenue = gig.venue ?? gig.festival
+  const metaParts = [gig.event_description, venueHeadline(displayVenue), venueCity(displayVenue)].filter(Boolean)
   return (
     <Box
       onClick={onClick}
@@ -130,8 +131,8 @@ function DesktopRow({ gig, active, onClick, onDelete }) {
       </TableCell>
       <TableCell>
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-          <span>{venueHeadline(gig.venue) || ' '}</span>
-          <Typography variant="caption" color="text.secondary">{venueCity(gig.venue) || ' '}</Typography>
+          <span>{venueHeadline(gig.venue ?? gig.festival) || ' '}</span>
+          <Typography variant="caption" color="text.secondary">{venueCity(gig.venue ?? gig.festival) || ' '}</Typography>
         </Box>
       </TableCell>
       <TableCell>{formatTime(gig.start_time)}–{formatTime(gig.end_time)}</TableCell>

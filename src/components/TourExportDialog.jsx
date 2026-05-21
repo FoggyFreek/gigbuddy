@@ -24,7 +24,7 @@ export default function TourExportDialog({ open, onClose, gigs = [] }) {
   const text = useMemo(
     () =>
       gigs
-        .map((g) => [exportDate(g.event_date), venueHeadline(g.venue), venueCity(g.venue)].join('\t'))
+        .map((g) => [exportDate(g.event_date), venueHeadline(g.venue ?? g.festival), venueCity(g.venue ?? g.festival)].join('\t'))
         .join('\n'),
     [gigs],
   )

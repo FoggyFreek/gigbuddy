@@ -209,6 +209,46 @@ describe('invoices — draft-from-gig', () => {
     expect(res.body.draft.lines[0].unit_price_cents).toBe(50000)
   })
 
+  it('returns empty billing_targets when only venue is linked', async () => {
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(res.body.billing_targets).toEqual([])
+  })
+
+  it('returns empty billing_targets when gig has no venue or festival', async () => {
+    const { rows } = await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description)
+       VALUES ($1, '2026-11-01', 'No Venue Gig') RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(
+      request(app).get(`/api/invoices/draft-from-gig/${rows[0].id}`)
+    ).expect(200)
+    expect(res.body.billing_targets).toEqual([])
+    expect(res.body.draft.customer_name).toBe('')
+  })
+
+  it('returns two billing_targets when gig has both festival and venue', async () => {
+    const { rows: fv } = await pool.query(
+      `INSERT INTO venues (tenant_id, category, name, festival_name, city)
+       VALUES ($1, 'festival', 'Texel Blues Org', 'Texel Blues Festival', 'Den Hoorn') RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const festivalId = fv[0].id
+    await pool.query(
+      'UPDATE gigs SET festival_id = $1 WHERE id = $2',
+      [festivalId, seed.gigA.id],
+    )
+    const res = await asUserA(
+      request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)
+    ).expect(200)
+    expect(res.body.billing_targets).toHaveLength(2)
+    const types = res.body.billing_targets.map((t) => t.type)
+    expect(types).toContain('festival')
+    expect(types).toContain('venue')
+    // Default customer should be from festival (first target)
+    expect(res.body.draft.customer_name).toContain('Texel Blues')
+  })
+
   it('cross-tenant draft returns 404', async () => {
     await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigB.id}`)).expect(404)
   })

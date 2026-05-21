@@ -8,4 +8,8 @@ export const createVenue  = (body)     => api('/', { method: 'POST', body: JSON.
 export const updateVenue  = (id, body) => api(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteVenue  = (id)       => api(`/${id}`, { method: 'DELETE' })
 export const importVenues = (rows)     => api('/import', { method: 'POST', body: JSON.stringify(rows) })
-export const searchVenues = (q)        => api(`/search?q=${encodeURIComponent(q)}`)
+export const searchVenues = (q, category) => {
+  const params = new URLSearchParams({ q })
+  if (category) params.set('category', category)
+  return api(`/search?${params}`)
+}

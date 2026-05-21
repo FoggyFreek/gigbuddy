@@ -179,7 +179,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
           >
             {gig.event_description.toUpperCase() || ''}
           </div>
-          {venueCity(gig.venue) && (
+          {(venueCity(gig.festival) || venueCity(gig.venue)) && (
             <div
               style={{
                 color: 'rgba(246,239,226,0.65)',
@@ -193,7 +193,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
                 textAlign: 'center',
               }}
             >
-              {venueCity(gig.venue)}
+              {venueCity(gig.festival) || venueCity(gig.venue)}
             </div>
           )}
         </div>

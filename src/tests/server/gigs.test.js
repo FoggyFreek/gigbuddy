@@ -151,3 +151,116 @@ describe('gig admission — tenant isolation', () => {
     expect(rows[0].admission).toBe('free')
   })
 })
+
+describe('gig festival_id — venue category validation', () => {
+  async function insertVenue(tenantId, category, name) {
+    const { rows } = await pool.query(
+      `INSERT INTO venues (tenant_id, category, name) VALUES ($1, $2, $3) RETURNING id`,
+      [tenantId, category, name],
+    )
+    return rows[0].id
+  }
+
+  it('POST rejects festival_id pointing to a venue row', async () => {
+    const venueId = await insertVenue(seed.tenantA.id, 'venue', 'Normal Hall')
+    await asUserA(
+      request(app).post('/api/gigs').send({
+        event_date: '2026-09-01',
+        event_description: 'Festival Test',
+        festival_id: venueId,
+      })
+    ).expect(400)
+  })
+
+  it('POST rejects venue_id pointing to a festival row', async () => {
+    const festivalId = await insertVenue(seed.tenantA.id, 'festival', 'Big Festival')
+    await asUserA(
+      request(app).post('/api/gigs').send({
+        event_date: '2026-09-01',
+        event_description: 'Festival Test',
+        venue_id: festivalId,
+      })
+    ).expect(400)
+  })
+
+  it('POST creates gig with only festival_id', async () => {
+    const festivalId = await insertVenue(seed.tenantA.id, 'festival', 'Big Festival')
+    const res = await asUserA(
+      request(app).post('/api/gigs').send({
+        event_date: '2026-09-01',
+        event_description: 'Festival Show',
+        festival_id: festivalId,
+      })
+    ).expect(201)
+    expect(res.body.festival_id).toBe(festivalId)
+    expect(res.body.venue_id).toBeNull()
+    expect(res.body.festival).toMatchObject({ id: festivalId, category: 'festival' })
+  })
+
+  it('POST creates gig with both festival_id and venue_id', async () => {
+    const festivalId = await insertVenue(seed.tenantA.id, 'festival', 'Texel Blues')
+    const venueId = await insertVenue(seed.tenantA.id, 'venue', 'Café De Zwaan')
+    const res = await asUserA(
+      request(app).post('/api/gigs').send({
+        event_date: '2026-09-01',
+        event_description: 'Festival + Venue',
+        festival_id: festivalId,
+        venue_id: venueId,
+      })
+    ).expect(201)
+    expect(res.body.festival_id).toBe(festivalId)
+    expect(res.body.venue_id).toBe(venueId)
+    expect(res.body.festival).toMatchObject({ id: festivalId })
+    expect(res.body.venue).toMatchObject({ id: venueId })
+  })
+
+  it('PATCH rejects festival_id pointing to a venue row', async () => {
+    const venueId = await insertVenue(seed.tenantA.id, 'venue', 'Normal Hall')
+    await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}`)
+        .send({ festival_id: venueId })
+    ).expect(400)
+  })
+
+  it('PATCH sets festival_id on existing gig', async () => {
+    const festivalId = await insertVenue(seed.tenantA.id, 'festival', 'Test Fest')
+    const res = await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}`)
+        .send({ festival_id: festivalId })
+    ).expect(200)
+    expect(res.body.festival_id).toBe(festivalId)
+    expect(res.body.festival).toMatchObject({ id: festivalId, category: 'festival' })
+  })
+
+  it('GET /api/gigs includes festival field (null when unset)', async () => {
+    const res = await asUserA(request(app).get('/api/gigs')).expect(200)
+    const gig = res.body.find((g) => g.id === seed.gigA.id)
+    expect(gig).toHaveProperty('festival', null)
+  })
+
+  it('GET /api/gigs/:id includes festival field', async () => {
+    const festivalId = await insertVenue(seed.tenantA.id, 'festival', 'Annual Fest')
+    await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}`)
+        .send({ festival_id: festivalId })
+    ).expect(200)
+    const res = await asUserA(
+      request(app).get(`/api/gigs/${seed.gigA.id}`)
+    ).expect(200)
+    expect(res.body.festival).toMatchObject({ id: festivalId, category: 'festival' })
+  })
+
+  it('festival_id from foreign tenant is rejected', async () => {
+    const betaFestivalId = await insertVenue(seed.tenantB.id, 'festival', 'Beta Fest')
+    await asUserA(
+      request(app).post('/api/gigs').send({
+        event_date: '2026-09-01',
+        event_description: 'Cross-tenant attempt',
+        festival_id: betaFestivalId,
+      })
+    ).expect(400)
+  })
+})

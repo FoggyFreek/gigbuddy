@@ -57,6 +57,7 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
     event_date: '',
     event_description: '',
     venue_id: null,
+    festival_id: null,
     event_link: '',
     start_time: '',
     end_time: '',
@@ -75,6 +76,7 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
   const [loading, setLoading] = useState(true)
   const [initialTasks, setInitialTasks] = useState([])
   const [selectedVenue, setSelectedVenue] = useState(null)
+  const [selectedFestival, setSelectedFestival] = useState(null)
   const [focused, setFocused] = useState({ event_date: false })
   const [gig, setGig] = useState(null)
   const [members, setMembers] = useState([])
@@ -114,10 +116,12 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
     setGig(g)
     setBannerPath(g.banner_path || null)
     setSelectedVenue(g.venue || null)
+    setSelectedFestival(g.festival || null)
     setForm({
       event_date: toDateInput(g.event_date),
       event_description: g.event_description || '',
       venue_id: g.venue?.id ?? null,
+      festival_id: g.festival?.id ?? null,
       event_link: g.event_link || '',
       start_time: toTimeInput(g.start_time),
       end_time: toTimeInput(g.end_time),
@@ -312,6 +316,17 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
           <VenuePicker
+            categoryFilter="festival"
+            value={selectedFestival}
+            onChange={(v) => {
+              setSelectedFestival(v)
+              handleChange('festival_id', v?.id ?? null)
+            }}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <VenuePicker
+            categoryFilter="venue"
             value={selectedVenue}
             onChange={(v) => {
               setSelectedVenue(v)

@@ -264,8 +264,8 @@ export default function AvailabilitySection({ basePath = '' } = {}) {
                     }}
                   />
                   <ListItemText
-                    primary={gig.event_description || venueHeadline(gig.venue) || 'Gig'}
-                    secondary={[venueHeadline(gig.venue), gig.status].filter(Boolean).join(' — ')}
+                    primary={gig.event_description || venueHeadline(gig.venue ?? gig.festival) || 'Gig'}
+                    secondary={[venueHeadline(gig.venue ?? gig.festival), gig.status].filter(Boolean).join(' — ')}
                   />
                 </ListItemButton>
               ))}

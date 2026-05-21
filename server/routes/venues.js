@@ -91,12 +91,16 @@ router.get('/search', async (req, res) => {
     Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),
   )
   const like = `%${q}%`
+  const categoryFilter = VALID_CATEGORIES.includes(req.query.category) ? req.query.category : null
+  const params = [req.tenantId, like, limit]
+  const categoryClause = categoryFilter ? `AND category = $${params.push(categoryFilter)}` : ''
   const { rows } = await pool.query(
     `SELECT id, name, category, festival_name, organization_name,
             city, region, postal_code, country
        FROM venues
       WHERE tenant_id = $1
         AND (name ILIKE $2 OR city ILIKE $2 OR festival_name ILIKE $2)
+        ${categoryClause}
       ORDER BY
         CASE
           WHEN name ILIKE $2 THEN 0
@@ -105,7 +109,7 @@ router.get('/search', async (req, res) => {
         END,
         name ASC
       LIMIT $3`,
-    [req.tenantId, like, limit],
+    params,
   )
   res.json(rows)
 })
