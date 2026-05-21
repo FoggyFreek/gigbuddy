@@ -15,13 +15,16 @@ import VenueFormModal from './VenueFormModal.jsx'
 const MIN_CHARS = 3
 const DEBOUNCE_MS = 250
 
-export default function VenuePicker({ value, onChange, disabled, label = 'Venue' }) {
+export default function VenuePicker({ value, onChange, disabled, label, categoryFilter }) {
   const navigate = useNavigate()
   const [input, setInput] = useState('')
   const [options, setOptions] = useState([])
   const [loading, setLoading] = useState(false)
   const [createPrefill, setCreatePrefill] = useState(null) // { name, category } | null
   const reqIdRef = useRef(0)
+
+  const defaultLabel = categoryFilter === 'festival' ? 'Festival / event organisation' : 'Venue / physical location'
+  const resolvedLabel = label ?? defaultLabel
 
   const trimmed = input.trim()
   const tooShort = trimmed.length < MIN_CHARS
@@ -41,7 +44,7 @@ export default function VenuePicker({ value, onChange, disabled, label = 'Venue'
       setLoading(true)
     }, 0)
     const handle = setTimeout(() => {
-      searchVenues(trimmed)
+      searchVenues(trimmed, categoryFilter)
         .then((rows) => {
           if (reqIdRef.current !== myReqId) return
           setOptions(rows)
@@ -59,17 +62,23 @@ export default function VenuePicker({ value, onChange, disabled, label = 'Venue'
       clearTimeout(startHandle)
       clearTimeout(handle)
     }
-  }, [trimmed, tooShort])
+  }, [trimmed, tooShort, categoryFilter])
 
   const augmentedOptions = useMemo(() => {
     if (tooShort || loading) return options
     if (options.length > 0) return options
     if (value) return options
+    if (categoryFilter === 'festival') {
+      return [{ __action: 'create-festival', __label: `+ Create festival '${trimmed}'` }]
+    }
+    if (categoryFilter === 'venue') {
+      return [{ __action: 'create-venue', __label: `+ Create venue '${trimmed}'` }]
+    }
     return [
       { __action: 'create-venue', __label: `+ Create venue '${trimmed}'` },
       { __action: 'create-festival', __label: `+ Create festival '${trimmed}'` },
     ]
-  }, [options, tooShort, loading, trimmed, value])
+  }, [options, tooShort, loading, trimmed, value, categoryFilter])
 
   function handleSelect(_event, picked) {
     if (!picked) {
@@ -91,6 +100,7 @@ export default function VenuePicker({ value, onChange, disabled, label = 'Venue'
     setCreatePrefill(null)
     setInput('')
     setOptions([])
+    if (categoryFilter && venue.category !== categoryFilter) return
     onChange(venue)
   }
 
@@ -164,7 +174,7 @@ export default function VenuePicker({ value, onChange, disabled, label = 'Venue'
           return (
             <TextField
               {...params}
-              label={label}
+              label={resolvedLabel}
               slotProps={{
                 ...params.slotProps,
                 input: {
@@ -187,6 +197,7 @@ export default function VenuePicker({ value, onChange, disabled, label = 'Venue'
           initial={createPrefill}
           onCreated={handleCreated}
           onClose={() => setCreatePrefill(null)}
+          lockedCategory={categoryFilter || undefined}
         />
       )}
     </>

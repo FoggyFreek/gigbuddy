@@ -8,14 +8,15 @@ function csvEscape(val) {
 }
 
 function gigToRow(gig, artistName) {
+  const displayVenue = gig.venue ?? gig.festival
   return [
     artistName,
-    venueHeadline(gig.venue),
+    venueHeadline(displayVenue),
     'Netherlands',
     '',
-    gig.venue?.city || '',
-    gig.venue?.region || '',
-    gig.venue?.postal_code || '',
+    displayVenue?.city || '',
+    displayVenue?.region || '',
+    displayVenue?.postal_code || '',
     'Europe/Amsterdam',
     gig.event_date,
     gig.start_time ? gig.start_time.slice(0, 5) : '',
@@ -41,7 +42,7 @@ function gigToRow(gig, artistName) {
 }
 
 export function downloadBandsintownCsv(gigs, artistName = '') {
-  const rows = [HEADER, ...gigs.filter((g) => g.venue?.id).map((g) => gigToRow(g, artistName))].join('\r\n')
+  const rows = [HEADER, ...gigs.filter((g) => g.venue?.id || g.festival?.id).map((g) => gigToRow(g, artistName))].join('\r\n')
   const blob = new Blob([rows], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

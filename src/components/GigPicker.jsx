@@ -36,8 +36,8 @@ export default function GigPicker({ value, onChange, disabled, label = 'Gig', au
         `${formatShortDate(o.event_date)} - ${o.event_description || '(untitled)'}`
       }
       renderOption={(props, option) => {
-        const venueName = option.venue?.name ||
-          (option.venue?.category === 'festival' ? option.venue?.festival_name : null)
+        const displayVenue = option.venue ?? option.festival
+        const venueName = displayVenue?.festival_name || displayVenue?.name || null
         return (
           <li {...props} key={option.id}>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>

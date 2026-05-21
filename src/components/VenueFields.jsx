@@ -10,23 +10,25 @@ import Tooltip from '@mui/material/Tooltip'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import CopyAdornment from './CopyAdornment.jsx'
 
-export default function VenueFields({ form, onChange, errors = {} }) {
+export default function VenueFields({ form, onChange, errors = {}, lockedCategory }) {
   const isFestival = form.category === 'festival'
   return (
     <>
-      <Grid size={4}>
-        <FormControl fullWidth>
-          <InputLabel>Category</InputLabel>
-          <Select
-            label="Category"
-            value={form.category}
-            onChange={(e) => onChange('category', e.target.value)}
-          >
-            <MenuItem value="venue">Venue</MenuItem>
-            <MenuItem value="festival">Festival</MenuItem>
-          </Select>
-        </FormControl>
-      </Grid>
+      {!lockedCategory && (
+        <Grid size={4}>
+          <FormControl fullWidth>
+            <InputLabel>Category</InputLabel>
+            <Select
+              label="Category"
+              value={form.category}
+              onChange={(e) => onChange('category', e.target.value)}
+            >
+              <MenuItem value="venue">Venue</MenuItem>
+              <MenuItem value="festival">Festival</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
+      )}
       {isFestival && (
         <Grid size={4}>
           <TextField

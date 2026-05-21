@@ -30,6 +30,7 @@ const EMPTY_FORM = {
   event_date: '',
   event_description: '',
   venue_id: null,
+  festival_id: null,
   start_time: '',
   end_time: '',
   status: 'option',
@@ -50,6 +51,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
     mode === 'create' && initialDate ? { ...EMPTY_FORM, event_date: initialDate } : EMPTY_FORM
   )
   const [selectedVenue, setSelectedVenue] = useState(null)
+  const [selectedFestival, setSelectedFestival] = useState(null)
   const [errors, setErrors] = useState({})
   const [focused, setFocused] = useState({ event_date: false })
   const [availabilityData, setAvailabilityData] = useState(null)
@@ -91,6 +93,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
       event_date: form.event_date,
       event_description: form.event_description,
       venue_id: form.venue_id,
+      festival_id: form.festival_id,
       start_time: form.start_time || null,
       end_time: form.end_time || null,
       status: form.status,
@@ -156,8 +159,19 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                 helperText={errors.event_description}
               />
             </Grid>
-            <Grid size={12}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <VenuePicker
+                categoryFilter="festival"
+                value={selectedFestival}
+                onChange={(v) => {
+                  setSelectedFestival(v)
+                  handleChange('festival_id', v?.id ?? null)
+                }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <VenuePicker
+                categoryFilter="venue"
                 value={selectedVenue}
                 onChange={(v) => {
                   setSelectedVenue(v)

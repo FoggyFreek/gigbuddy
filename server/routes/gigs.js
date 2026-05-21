@@ -107,7 +107,20 @@ const VENUE_JSON_SELECT = `CASE WHEN v.id IS NULL THEN NULL ELSE jsonb_build_obj
   'country', v.country
 ) END AS venue`
 
+const FESTIVAL_JSON_SELECT = `CASE WHEN fv.id IS NULL THEN NULL ELSE jsonb_build_object(
+  'id', fv.id,
+  'name', fv.name,
+  'category', fv.category,
+  'festival_name', fv.festival_name,
+  'organization_name', fv.organization_name,
+  'city', fv.city,
+  'region', fv.region,
+  'postal_code', fv.postal_code,
+  'country', fv.country
+) END AS festival`
+
 const VENUE_JOIN = `LEFT JOIN venues v ON v.id = g.venue_id AND v.tenant_id = g.tenant_id`
+const FESTIVAL_JOIN = `LEFT JOIN venues fv ON fv.id = g.festival_id AND fv.tenant_id = g.tenant_id`
 
 function venueDisplay(v) {
   if (!v) return ''
@@ -115,14 +128,18 @@ function venueDisplay(v) {
   return [headline, v.city].filter(Boolean).join(' · ')
 }
 
-async function assertVenueInTenant(executor, venueId, tenantId) {
+async function assertVenueInTenant(executor, venueId, tenantId, expectedCategory = null) {
   if (venueId === null || venueId === undefined) return
-  const { rowCount } = await executor.query(
-    'SELECT 1 FROM venues WHERE id = $1 AND tenant_id = $2',
-    [venueId, tenantId],
-  )
+  let sql = 'SELECT 1 FROM venues WHERE id = $1 AND tenant_id = $2'
+  const params = [venueId, tenantId]
+  if (expectedCategory) {
+    sql += ' AND category = $3'
+    params.push(expectedCategory)
+  }
+  const { rowCount } = await executor.query(sql, params)
   if (!rowCount) {
-    const err = new Error('Invalid venue_id')
+    const fieldName = expectedCategory === 'festival' ? 'festival_id' : 'venue_id'
+    const err = new Error(`Invalid ${fieldName}`)
     err.status = 400
     throw err
   }
@@ -140,9 +157,11 @@ router.get('/', async (req, res) => {
             AND t.tenant_id = g.tenant_id
             AND t.done = FALSE
        ) AS open_task_count,
-       ${VENUE_JSON_SELECT}
+       ${VENUE_JSON_SELECT},
+       ${FESTIVAL_JSON_SELECT}
      FROM gigs g
      ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
      WHERE g.tenant_id = $1
      ORDER BY g.event_date ASC`,
     [req.tenantId],
@@ -198,9 +217,10 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const { rows: gigs } = await pool.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}
+    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
        FROM gigs g
        ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
       WHERE g.id = $1 AND g.tenant_id = $2`,
     [id, req.tenantId],
   )
@@ -222,7 +242,7 @@ router.get('/:id', async (req, res) => {
 // Create gig
 router.post('/', async (req, res) => {
   const {
-    event_date, event_description, venue_id, start_time, end_time, status,
+    event_date, event_description, venue_id, festival_id, start_time, end_time, status,
     contact_name, contact_email, contact_phone,
     has_pa_system, has_drumkit, has_stage_lights,
   } = req.body
@@ -234,6 +254,11 @@ router.post('/', async (req, res) => {
     venueId = parseId(venue_id)
     if (venueId === null) return res.status(400).json({ error: 'Invalid venue_id' })
   }
+  let festivalId = null
+  if (festival_id !== undefined && festival_id !== null) {
+    festivalId = parseId(festival_id)
+    if (festivalId === null) return res.status(400).json({ error: 'Invalid festival_id' })
+  }
   const finalStatus = VALID_STATUSES.includes(status) ? status : 'option'
 
   const client = await pool.connect()
@@ -241,7 +266,8 @@ router.post('/', async (req, res) => {
     await client.query('BEGIN')
 
     try {
-      await assertVenueInTenant(client, venueId, req.tenantId)
+      await assertVenueInTenant(client, venueId, req.tenantId, 'venue')
+      await assertVenueInTenant(client, festivalId, req.tenantId, 'festival')
     } catch (err) {
       if (err.status === 400) {
         await client.query('ROLLBACK')
@@ -252,18 +278,19 @@ router.post('/', async (req, res) => {
 
     const { rows } = await client.query(
       `WITH inserted AS (
-         INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, start_time, end_time, status,
+         INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id, start_time, end_time, status,
                            contact_name, contact_email, contact_phone,
                            has_pa_system, has_drumkit, has_stage_lights)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          RETURNING *
        )
-       SELECT g.*, ${VENUE_JSON_SELECT}
+       SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
          FROM inserted g
-         ${VENUE_JOIN}`,
+         ${VENUE_JOIN}
+         ${FESTIVAL_JOIN}`,
       [
         req.tenantId,
-        event_date, event_description, venueId,
+        event_date, event_description, venueId, festivalId,
         start_time || null, end_time || null, finalStatus,
         contact_name || null, contact_email || null, contact_phone || null,
         !!has_pa_system, !!has_drumkit, !!has_stage_lights,
@@ -287,7 +314,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(gig)
     sendPushToTenant(req.tenantId, {
       title: 'New gig option',
-      body: [venueDisplay(gig.venue), toDateStr(gig.event_date)].filter(Boolean).join(' · '),
+      body: [venueDisplay(gig.festival ?? gig.venue), toDateStr(gig.event_date)].filter(Boolean).join(' · '),
       tag: 'gig-new',
       url: '/gigs',
     }).catch((err) => console.error('[push] sendPushToTenant failed', err))
@@ -302,7 +329,7 @@ router.post('/', async (req, res) => {
 // Update gig (partial)
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const allowed = ['event_date', 'event_description', 'venue_id', 'event_link', 'start_time', 'end_time', 'status', 'booking_fee_cents', 'admission', 'ticket_link', 'notes', 'contact_name', 'contact_email', 'contact_phone', 'has_pa_system', 'has_drumkit', 'has_stage_lights']
+  const allowed = ['event_date', 'event_description', 'venue_id', 'festival_id', 'event_link', 'start_time', 'end_time', 'status', 'booking_fee_cents', 'admission', 'ticket_link', 'notes', 'contact_name', 'contact_email', 'contact_phone', 'has_pa_system', 'has_drumkit', 'has_stage_lights']
 
   if ('venue_id' in req.body && req.body.venue_id !== null) {
     const parsed = parseId(req.body.venue_id)
@@ -310,9 +337,24 @@ router.patch('/:id', async (req, res) => {
     req.body.venue_id = parsed
   }
 
+  if ('festival_id' in req.body && req.body.festival_id !== null) {
+    const parsed = parseId(req.body.festival_id)
+    if (parsed === null) return res.status(400).json({ error: 'Invalid festival_id' })
+    req.body.festival_id = parsed
+  }
+
   if ('venue_id' in req.body) {
     try {
-      await assertVenueInTenant(pool, req.body.venue_id, req.tenantId)
+      await assertVenueInTenant(pool, req.body.venue_id, req.tenantId, 'venue')
+    } catch (err) {
+      if (err.status === 400) return res.status(400).json({ error: err.message })
+      throw err
+    }
+  }
+
+  if ('festival_id' in req.body) {
+    try {
+      await assertVenueInTenant(pool, req.body.festival_id, req.tenantId, 'festival')
     } catch (err) {
       if (err.status === 400) return res.status(400).json({ error: err.message })
       throw err
@@ -344,9 +386,10 @@ router.patch('/:id', async (req, res) => {
        WHERE id = $${idx} AND tenant_id = $${idx + 1}
        RETURNING *
      )
-     SELECT g.*, ${VENUE_JSON_SELECT}
+     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
        FROM updated g
-       ${VENUE_JOIN}`,
+       ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}`,
     values,
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
@@ -355,7 +398,7 @@ router.patch('/:id', async (req, res) => {
   if (req.body.status === 'confirmed') {
     sendPushToTenant(req.tenantId, {
       title: 'Gig confirmed!',
-      body: [venueDisplay(updated.venue), toDateStr(updated.event_date)].filter(Boolean).join(' · '),
+      body: [venueDisplay(updated.festival ?? updated.venue), toDateStr(updated.event_date)].filter(Boolean).join(' · '),
       tag: 'gig-confirmed',
       url: '/gigs',
     }).catch((err) => console.error('[push] sendPushToTenant failed', err))
@@ -649,9 +692,10 @@ router.post('/:id/participants', async (req, res) => {
     [gigId, req.tenantId],
   )
   const { rows } = await pool.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}
+    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
        FROM gigs g
        ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
       WHERE g.id = $1 AND g.tenant_id = $2`,
     [gigId, req.tenantId],
   )
@@ -706,9 +750,10 @@ router.patch('/:id/participants/:bandMemberId', async (req, res) => {
     [gigId, req.tenantId],
   )
   const { rows: gigRows } = await pool.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}
+    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
        FROM gigs g
        ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
       WHERE g.id = $1 AND g.tenant_id = $2`,
     [gigId, req.tenantId],
   )

@@ -128,14 +128,19 @@ export function formatGigDoorsTime(gig) {
 }
 
 export function formatGigVenue(gig) {
-  return [venueHeadline(gig?.venue), venueCity(gig?.venue)].filter(Boolean).join(', ')
+  // Prefer physical venue; fall back to festival for display when no venue is set
+  const v = gig?.venue ?? gig?.festival
+  return [venueHeadline(v), venueCity(v)].filter(Boolean).join(', ')
 }
 
 export function formatGigVenueName(gig) {
-  return venueHeadline(gig?.venue)
+  const v = gig?.venue ?? gig?.festival
+  return venueHeadline(v)
 }
 
 export function formatGigCity(gig) {
+  // Festival city takes precedence per share-card rules
+  if (gig?.festival) return venueCity(gig.festival)
   return venueCity(gig?.venue)
 }
 

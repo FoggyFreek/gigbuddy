@@ -218,6 +218,15 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
     venue = rows[0] || null
   }
 
+  let festival = null
+  if (gig.festival_id) {
+    const { rows } = await pool.query(
+      'SELECT * FROM venues WHERE id = $1 AND tenant_id = $2',
+      [gig.festival_id, req.tenantId],
+    )
+    festival = rows[0] || null
+  }
+
   const tenant = await fetchTenant(pool, req.tenantId)
   if (!tenant) return res.status(404).json({ error: 'Tenant not found' })
 
@@ -229,6 +238,36 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
     ? new Date(gig.event_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
     : ''
   const description = `${tenant.band_name || ''} optreden tijdens ${gig.event_description || ''} op ${eventDateStr}`.trim()
+
+  // Default billing target: festival when present, otherwise venue
+  const defaultTarget = festival ?? venue
+
+  // Build billing_targets list when both are present (enables choice in UI)
+  const billingTargets = []
+  if (festival) {
+    billingTargets.push({
+      type: 'festival',
+      id: festival.id,
+      name: festival.festival_name || festival.organization_name || festival.name,
+      address_street: festival.street_and_number || null,
+      address_postal_code: festival.postal_code || null,
+      address_city: festival.city || null,
+      address_country: festival.country || null,
+      email: festival.email || null,
+    })
+  }
+  if (venue) {
+    billingTargets.push({
+      type: 'venue',
+      id: venue.id,
+      name: venue.organization_name || venue.name,
+      address_street: venue.street_and_number || null,
+      address_postal_code: venue.postal_code || null,
+      address_city: venue.city || null,
+      address_country: venue.country || null,
+      email: venue.email || null,
+    })
+  }
 
   res.json({
     gig: {
@@ -255,17 +294,18 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
       applies_kor: tenant.applies_kor,
       logo_path: tenant.logo_path,
     },
+    billing_targets: billingTargets.length > 1 ? billingTargets : [],
     draft: {
       gig_id: gig.id,
       issue_date: issueDate,
       payment_term_days: paymentTermDays,
       due_date: computeDueDate(issueDate, paymentTermDays),
-      customer_name: venue?.organization_name || venue?.name || '',
-      customer_address_street: venue?.street_and_number || null,
-      customer_address_postal_code: venue?.postal_code || null,
-      customer_address_city: venue?.city || null,
-      customer_address_country: venue?.country || 'NL',
-      customer_email: venue?.email || null,
+      customer_name: defaultTarget?.organization_name || defaultTarget?.festival_name || defaultTarget?.name || '',
+      customer_address_street: defaultTarget?.street_and_number || null,
+      customer_address_postal_code: defaultTarget?.postal_code || null,
+      customer_address_city: defaultTarget?.city || null,
+      customer_address_country: defaultTarget?.country || 'NL',
+      customer_email: defaultTarget?.email || null,
       customer_kvk: null,
       customer_tax_id: null,
       memo: null,

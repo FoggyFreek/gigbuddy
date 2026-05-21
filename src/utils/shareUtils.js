@@ -27,7 +27,8 @@ export function gigShareUrl(gig) {
   const start = formatTime(gig.start_time)
   const end = formatTime(gig.end_time)
   const timeStr = start ? (end ? `${start} – ${end}` : start) : null
-  const venueLine = [venueHeadline(gig.venue), venueCity(gig.venue)].filter(Boolean).join(', ')
+  const displayVenue = gig.venue ?? gig.festival
+  const venueLine = [venueHeadline(displayVenue), venueCity(displayVenue)].filter(Boolean).join(', ')
 
   const lines = [
     `*Gig*`,
@@ -122,8 +123,9 @@ export function exportMonthToICS(gigs, rehearsals, bandEvents, year, month) {
   for (const gig of gigs) {
     const d = normalizeIsoDate(gig.event_date)
     if (!d || d < monthStart || d > monthEnd) continue
-    const summary = [gig.event_description, venueHeadline(gig.venue)].filter(Boolean).join(' @ ') || 'Gig'
-    const desc = [gig.status, venueCity(gig.venue)].filter(Boolean).join(', ')
+    const calVenue = gig.venue ?? gig.festival
+    const summary = [gig.event_description, venueHeadline(calVenue)].filter(Boolean).join(' @ ') || 'Gig'
+    const desc = [gig.status, venueCity(calVenue)].filter(Boolean).join(', ')
     out.push('BEGIN:VEVENT')
     dtStartEnd(out, d, gig.start_time, gig.end_time, null)
     out.push(`DTSTAMP:${dtstamp}`)
@@ -131,7 +133,7 @@ export function exportMonthToICS(gigs, rehearsals, bandEvents, year, month) {
     const gigUrl = `${APP_URL}/gigs?open=${gig.id}`
     const gigDesc = [desc, `Open in GigBuddy: ${gigUrl}`].filter(Boolean).join('\n')
     out.push(`DESCRIPTION:${escapeICS(gigDesc)}`)
-    const location = [venueHeadline(gig.venue), venueCity(gig.venue)].filter(Boolean).join(', ')
+    const location = [venueHeadline(calVenue), venueCity(calVenue)].filter(Boolean).join(', ')
     if (location) out.push(`LOCATION:${escapeICS(location)}`)
     out.push(`URL:${gigUrl}`)
     out.push(`UID:gigbuddy-gig-${gig.id}@gigbuddy`)

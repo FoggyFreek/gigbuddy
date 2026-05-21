@@ -384,7 +384,7 @@ export default function AvailabilityCalendar({
                         key={gig.id}
                         title={[
                           gig.event_description,
-                          venueHeadline(gig.venue),
+                          venueHeadline(gig.venue ?? gig.festival),
                           gig.status,
                         ].filter(Boolean).join(' — ')}
                       >
@@ -408,7 +408,7 @@ export default function AvailabilityCalendar({
                             textOverflow: 'ellipsis',
                           }}
                         >
-                          {gig.event_description || venueHeadline(gig.venue) || 'Gig'}
+                          {gig.event_description || venueHeadline(gig.venue ?? gig.festival) || 'Gig'}
                         </Box>
                       </Tooltip>
                       )
