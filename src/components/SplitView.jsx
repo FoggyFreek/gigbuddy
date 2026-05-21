@@ -22,15 +22,16 @@ export default function SplitView({ basePath, children, outletContext }) {
       sx={{
         display: 'flex',
         gap: splitDesktop ? 2 : 0,
-        alignItems: 'flex-start',
+        alignItems: splitDesktop ? 'stretch' : 'flex-start',
         width: '100%',
+        ...(splitDesktop && { height: 'calc(100vh - 112px)' }),
       }}
     >
       <Box
         sx={{
           flex: splitDesktop ? '0 0 30%' : '1 1 100%',
           minWidth: 0,
-          overflow: splitDesktop ? 'hidden' : 'visible',
+          overflow: splitDesktop ? 'hidden auto' : 'visible',
           display: hideList ? 'none' : 'block',
         }}
       >
@@ -42,7 +43,13 @@ export default function SplitView({ basePath, children, outletContext }) {
         <Divider orientation="vertical" flexItem sx={{ alignSelf: 'stretch' }} />
       )}
       {hasDetail && (
-        <Box sx={{ flex: isDesktop ? '1 1 70%' : '1 1 100%', minWidth: 0 }}>
+        <Box
+          sx={{
+            flex: isDesktop ? '1 1 70%' : '1 1 100%',
+            minWidth: 0,
+            ...(splitDesktop && { overflow: 'hidden auto' }),
+          }}
+        >
           <Outlet context={{ insideSplitView: isDesktop, onClose: handleClose, ...outletContext }} />
         </Box>
       )}
