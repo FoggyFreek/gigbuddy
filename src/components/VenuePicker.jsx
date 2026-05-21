@@ -100,6 +100,7 @@ export default function VenuePicker({ value, onChange, disabled, label, category
     setCreatePrefill(null)
     setInput('')
     setOptions([])
+    if (categoryFilter && venue.category !== categoryFilter) return
     onChange(venue)
   }
 
@@ -196,6 +197,7 @@ export default function VenuePicker({ value, onChange, disabled, label, category
           initial={createPrefill}
           onCreated={handleCreated}
           onClose={() => setCreatePrefill(null)}
+          lockedCategory={categoryFilter || undefined}
         />
       )}
     </>

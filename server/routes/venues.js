@@ -124,6 +124,32 @@ router.get('/:id', async (req, res) => {
   res.json(rows[0])
 })
 
+// Returns the gigs that reference this venue and would be affected by a category change.
+router.get('/:id/category-impact', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  const newCategory = req.query.new_category
+  if (!VALID_CATEGORIES.includes(newCategory)) {
+    return res.status(400).json({ error: 'Invalid new_category' })
+  }
+  const { rows: venueRows } = await pool.query(
+    'SELECT id, category FROM venues WHERE id = $1 AND tenant_id = $2',
+    [id, req.tenantId],
+  )
+  if (!venueRows.length) return res.status(404).json({ error: 'Not found' })
+  const currentCategory = venueRows[0].category
+  if (currentCategory === newCategory) return res.json({ affected_gigs: [] })
+
+  const affectedCol = currentCategory === 'venue' ? 'venue_id' : 'festival_id'
+  const { rows: affectedGigs } = await pool.query(
+    `SELECT id, event_description, event_date
+       FROM gigs
+      WHERE ${affectedCol} = $1 AND tenant_id = $2
+      ORDER BY event_date ASC`,
+    [id, req.tenantId],
+  )
+  res.json({ affected_gigs: affectedGigs })
+})
+
 router.post('/', async (req, res) => {
   if (!req.body.name || !String(req.body.name).trim()) {
     return res.status(400).json({ error: 'name is required' })
@@ -132,8 +158,16 @@ router.post('/', async (req, res) => {
   res.status(201).json(rows[0])
 })
 
+const VALID_GIG_ACTIONS = new Set(['migrate', 'remove'])
+
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
+  const onAffectedGigs = req.body.on_affected_gigs ?? null
+
+  if (onAffectedGigs !== null && !VALID_GIG_ACTIONS.has(onAffectedGigs)) {
+    return res.status(400).json({ error: 'Invalid on_affected_gigs value' })
+  }
+
   const fields = []
   const values = []
   let idx = 1
@@ -155,6 +189,53 @@ router.patch('/:id', async (req, res) => {
   if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
   fields.push(`updated_at = NOW()`)
   values.push(id, req.tenantId)
+
+  // When category is changing with an on_affected_gigs action, handle gig references in a transaction.
+  if ('category' in req.body && onAffectedGigs !== null) {
+    const { rows: current } = await pool.query(
+      'SELECT category FROM venues WHERE id = $1 AND tenant_id = $2',
+      [id, req.tenantId],
+    )
+    if (!current.length) return res.status(404).json({ error: 'Not found' })
+    const currentCategory = current[0].category
+    const newCategory = req.body.category
+
+    if (currentCategory !== newCategory) {
+      const affectedCol = currentCategory === 'venue' ? 'venue_id' : 'festival_id'
+      const targetCol = currentCategory === 'venue' ? 'festival_id' : 'venue_id'
+
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        if (onAffectedGigs === 'migrate') {
+          await client.query(
+            `UPDATE gigs SET ${targetCol} = ${affectedCol}, ${affectedCol} = NULL
+             WHERE ${affectedCol} = $1 AND tenant_id = $2`,
+            [id, req.tenantId],
+          )
+        } else {
+          await client.query(
+            `UPDATE gigs SET ${affectedCol} = NULL WHERE ${affectedCol} = $1 AND tenant_id = $2`,
+            [id, req.tenantId],
+          )
+        }
+        const { rows } = await client.query(
+          `UPDATE venues SET ${fields.join(', ')}
+           WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
+          values,
+        )
+        await client.query('COMMIT')
+        if (!rows.length) return res.status(404).json({ error: 'Not found' })
+        return res.json(rows[0])
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {})
+        throw err
+      } finally {
+        client.release()
+      }
+    }
+  }
+
   const { rows } = await pool.query(
     `UPDATE venues SET ${fields.join(', ')}
      WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,

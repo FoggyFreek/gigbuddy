@@ -13,3 +13,5 @@ export const searchVenues = (q, category) => {
   if (category) params.set('category', category)
   return api(`/search?${params}`)
 }
+export const getVenueCategoryImpact = (id, newCategory) =>
+  api(`/${id}/category-impact?new_category=${encodeURIComponent(newCategory)}`)

@@ -8,7 +8,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
-import { createVenue, getVenue, updateVenue } from '../api/venues.js'
+import { createVenue, getVenueCategoryImpact, getVenue, updateVenue } from '../api/venues.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import VenueFields from './VenueFields.jsx'
@@ -34,11 +34,13 @@ const EMPTY_FORM = {
   email: '',
 }
 
-export default function VenueFormModal({ mode, venueId, onClose, onDelete, initial, onCreated }) {
+export default function VenueFormModal({ mode, venueId, onClose, onDelete, initial, onCreated, lockedCategory }) {
   const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...(initial || {}) }))
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [categoryChange, setCategoryChange] = useState(null) // { newCategory, prevCategory, affectedGigs }
+  const [categorySaving, setCategorySaving] = useState(false)
 
   const saveFn = useCallback(
     async (patch) => { await updateVenue(venueId, patch) },
@@ -72,10 +74,44 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
       .finally(() => setLoading(false))
   }, [mode, venueId])
 
+  async function handleCategoryChangeCheck(newCategory, prevCategory) {
+    try {
+      const { affected_gigs: affectedGigs } = await getVenueCategoryImpact(venueId, newCategory)
+      if (!affectedGigs.length) {
+        schedule({ category: newCategory })
+      } else {
+        setCategoryChange({ newCategory, prevCategory, affectedGigs })
+      }
+    } catch {
+      // Revert on error
+      setForm((prev) => ({ ...prev, category: prevCategory }))
+    }
+  }
+
+  async function handleCategoryConfirm(action) {
+    const { newCategory } = categoryChange
+    setCategoryChange(null)
+    setCategorySaving(true)
+    try {
+      await updateVenue(venueId, { category: newCategory, on_affected_gigs: action })
+    } finally {
+      setCategorySaving(false)
+    }
+  }
+
+  function handleCategoryCancel() {
+    setForm((prev) => ({ ...prev, category: categoryChange.prevCategory }))
+    setCategoryChange(null)
+  }
+
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
     if (mode === 'edit') {
+      if (field === 'category') {
+        handleCategoryChangeCheck(value, form.category)
+        return
+      }
       if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
       schedule({ [field]: value || null })
     }
@@ -116,6 +152,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
   const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
+    <>
     <Dialog open fullWidth maxWidth="sm" onClose={mode === 'edit' ? handleClose : undefined}>
       <DialogTitle>{mode === 'create' ? 'Add venue' : 'Venue'}</DialogTitle>
 
@@ -130,6 +167,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
               form={form}
               onChange={handleChange}
               errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
+              lockedCategory={lockedCategory}
             />
           </Grid>
         </DialogContent>
@@ -137,8 +175,8 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
 
       <Box sx={{ px: 3, pb: 1, minHeight: 24 }}>
         {mode === 'edit' && (
-          <Typography variant="caption" color={saveColor}>
-            {saveLabel}
+          <Typography variant="caption" color={categorySaving ? 'text.secondary' : saveColor}>
+            {categorySaving ? 'Saving…' : saveLabel}
           </Typography>
         )}
       </Box>
@@ -166,5 +204,36 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
         )}
       </DialogActions>
     </Dialog>
+
+    {categoryChange && (
+      <Dialog open onClose={handleCategoryCancel} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Category change affects {categoryChange.affectedGigs.length} gig{categoryChange.affectedGigs.length !== 1 ? 's' : ''}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" gutterBottom>
+            Changing this {categoryChange.prevCategory} to a {categoryChange.newCategory} affects the following gigs.
+            What should happen to those references?
+          </Typography>
+          <Box component="ul" sx={{ pl: 2, mt: 1 }}>
+            {categoryChange.affectedGigs.map((g) => (
+              <li key={g.id}>
+                <Typography variant="body2">
+                  {g.event_description || '(untitled)'} — {String(g.event_date).slice(0, 10)}
+                </Typography>
+              </li>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCategoryCancel}>Cancel</Button>
+          <Button onClick={() => handleCategoryConfirm('remove')}>Remove references</Button>
+          <Button variant="contained" onClick={() => handleCategoryConfirm('migrate')}>
+            Migrate references
+          </Button>
+        </DialogActions>
+      </Dialog>
+    )}
+    </>
   )
 }
