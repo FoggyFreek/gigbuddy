@@ -32,7 +32,50 @@ function asUserA(req) {
     .set('x-test-tenant-id', String(seed.tenantA.id))
 }
 
+function asUserB(req) {
+  return req
+    .set('x-test-user-id', String(seed.userB.id))
+    .set('x-test-tenant-id', String(seed.tenantB.id))
+}
+
 const venueA = () => seed.venues.find((v) => v.tenant_id === seed.tenantA.id)
+
+describe('POST /api/venues — create venue', () => {
+  it('creates a venue and returns 201 with the new row', async () => {
+    const res = await asUserA(
+      request(app).post('/api/venues').send({ name: 'New Hall', city: 'Amsterdam' })
+    ).expect(201)
+
+    expect(res.body.name).toBe('New Hall')
+    expect(res.body.category).toBe('venue')
+    expect(res.body.city).toBe('Amsterdam')
+    expect(res.body.tenant_id).toBe(seed.tenantA.id)
+  })
+
+  it('returns 409 (not 500) when name+city duplicates an existing venue in the same tenant', async () => {
+    await asUserA(
+      request(app).post('/api/venues').send({ name: 'The Garage', city: 'Utrecht' })
+    ).expect(201)
+
+    const res = await asUserA(
+      request(app).post('/api/venues').send({ name: 'The Garage', city: 'Utrecht' })
+    ).expect(409)
+
+    expect(res.body.error).toBeTruthy()
+  })
+
+  it('allows the same venue name+city in two different tenants', async () => {
+    await asUserA(
+      request(app).post('/api/venues').send({ name: 'Shared Stage', city: 'Rotterdam' })
+    ).expect(201)
+
+    const res = await asUserB(
+      request(app).post('/api/venues').send({ name: 'Shared Stage', city: 'Rotterdam' })
+    ).expect(201)
+
+    expect(res.body.name).toBe('Shared Stage')
+  })
+})
 
 describe('PATCH venue category — server enforces invariant', () => {
   it('rejects category change without on_affected_gigs when gig references exist', async () => {
