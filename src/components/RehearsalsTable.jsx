@@ -12,7 +12,6 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
-import DeleteIcon from '@mui/icons-material/Delete'
 import ShareIcon from '@mui/icons-material/Share'
 import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -74,7 +73,7 @@ function ParticipantProgress({ participants }) {
   )
 }
 
-function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onDelete, onShare, onVote }) {
+function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVote }) {
   const myParticipant = bandMemberId
     ? (rehearsal.participants ?? []).find((p) => p.band_member_id === bandMemberId)
     : null
@@ -107,14 +106,6 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onDelete, onS
         >
           <ShareIcon fontSize="small" />
         </IconButton>
-        <IconButton
-          size="small"
-          aria-label="delete rehearsal"
-          onClick={(e) => { e.stopPropagation(); onDelete?.(rehearsal) }}
-          sx={{ mt: -0.5, mr: -0.5 }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
         {rehearsal.location || '—'}
@@ -143,7 +134,7 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onDelete, onS
   )
 }
 
-function DesktopRow({ rehearsal, active, onClick, onDelete, onShare }) {
+function DesktopRow({ rehearsal, active, onClick, onShare }) {
   return (
     <TableRow
       hover
@@ -176,13 +167,6 @@ function DesktopRow({ rehearsal, active, onClick, onDelete, onShare }) {
             <ShareIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-        <IconButton
-          size="small"
-          aria-label="delete rehearsal"
-          onClick={(e) => { e.stopPropagation(); onDelete?.(rehearsal) }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
       </TableCell>
     </TableRow>
   )
@@ -231,7 +215,7 @@ function PastHeader({ open, count, onToggle }) {
   )
 }
 
-export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRowClick, onDelete, onShare, selectedId = null }) {
+export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRowClick, onShare, selectedId = null }) {
   const [pastOpen, setPastOpen] = useState(false)
   const isCompact = useCompactLayout()
 
@@ -253,7 +237,7 @@ export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRo
             </Box>
           ) : (
             upcoming.map((r) => (
-              <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+              <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick(r)} onShare={onShare} />
             ))
           )}
         </Paper>
@@ -267,7 +251,7 @@ export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRo
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((r) => (
-                  <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+                  <RehearsalCard key={r.id} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick(r)} onShare={onShare} />
                 ))}
               </Box>
             </Collapse>
@@ -298,7 +282,7 @@ export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRo
               </TableRow>
             )}
             {upcoming.map((r) => (
-              <DesktopRow key={r.id} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+              <DesktopRow key={r.id} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick(r)} onShare={onShare} />
             ))}
           </TableBody>
         </Table>
@@ -316,7 +300,7 @@ export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRo
                 <DesktopHead />
                 <TableBody>
                   {past.map((r) => (
-                    <DesktopRow key={r.id} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick(r)} onDelete={onDelete} onShare={onShare} />
+                    <DesktopRow key={r.id} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick(r)} onShare={onShare} />
                   ))}
                 </TableBody>
               </Table>

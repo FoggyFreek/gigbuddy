@@ -12,7 +12,6 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
-import DeleteIcon from '@mui/icons-material/Delete'
 import ShareIcon from '@mui/icons-material/Share'
 import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -59,7 +58,7 @@ function isPastEvent(event) {
   return d < today
 }
 
-function EventCard({ event, active, onClick, onDelete, onShare }) {
+function EventCard({ event, active, onClick, onShare }) {
   return (
     <Box
       onClick={onClick}
@@ -90,14 +89,6 @@ function EventCard({ event, active, onClick, onDelete, onShare }) {
         >
           <ShareIcon fontSize="small" />
         </IconButton>
-        <IconButton
-          size="small"
-          aria-label="delete event"
-          onClick={(e) => { e.stopPropagation(); onDelete?.(event) }}
-          sx={{ mt: -0.5, mr: -0.5 }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
         {[event.title, event.location].filter(Boolean).join(' · ') || '—'}
@@ -106,7 +97,7 @@ function EventCard({ event, active, onClick, onDelete, onShare }) {
   )
 }
 
-function DesktopRow({ event, active, onClick, onDelete, onShare }) {
+function DesktopRow({ event, active, onClick, onShare }) {
   return (
     <TableRow
       hover
@@ -130,13 +121,6 @@ function DesktopRow({ event, active, onClick, onDelete, onShare }) {
             <ShareIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-        <IconButton
-          size="small"
-          aria-label="delete event"
-          onClick={(e) => { e.stopPropagation(); onDelete?.(event) }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
       </TableCell>
     </TableRow>
   )
@@ -184,7 +168,7 @@ function PastHeader({ open, count, onToggle }) {
   )
 }
 
-export default function BandEventsTable({ events, onRowClick, onDelete, onShare, selectedId = null }) {
+export default function BandEventsTable({ events, onRowClick, onShare, selectedId = null }) {
   const [pastOpen, setPastOpen] = useState(false)
   const isCompact = useCompactLayout()
 
@@ -206,7 +190,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete, onShare,
             </Box>
           ) : (
             upcoming.map((e) => (
-              <EventCard key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
+              <EventCard key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onShare={onShare} />
             ))
           )}
         </Paper>
@@ -216,7 +200,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete, onShare,
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((e) => (
-                  <EventCard key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
+                  <EventCard key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onShare={onShare} />
                 ))}
               </Box>
             </Collapse>
@@ -247,7 +231,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete, onShare,
               </TableRow>
             )}
             {upcoming.map((e) => (
-              <DesktopRow key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
+              <DesktopRow key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onShare={onShare} />
             ))}
           </TableBody>
         </Table>
@@ -261,7 +245,7 @@ export default function BandEventsTable({ events, onRowClick, onDelete, onShare,
                 <DesktopHead />
                 <TableBody>
                   {past.map((e) => (
-                    <DesktopRow key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onDelete={onDelete} onShare={onShare} />
+                    <DesktopRow key={e.id} event={e} active={e.id === selectedId} onClick={() => onRowClick(e)} onShare={onShare} />
                   ))}
                 </TableBody>
               </Table>

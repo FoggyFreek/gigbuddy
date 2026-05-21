@@ -5,11 +5,6 @@ import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import IconButton from '@mui/material/IconButton'
 import CircularProgress from '@mui/material/CircularProgress'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogContentText from '@mui/material/DialogContentText'
-import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import FormControl from '@mui/material/FormControl'
 import ListItemText from '@mui/material/ListItemText'
@@ -25,7 +20,7 @@ import GigFormModal from '../components/GigFormModal.jsx'
 import SplitView from '../components/SplitView.jsx'
 import TourShareDialog from '../components/TourShareDialog.jsx'
 import TourExportDialog from '../components/TourExportDialog.jsx'
-import { deleteGig, listGigs } from '../api/gigs.js'
+import { listGigs } from '../api/gigs.js'
 import { getProfile } from '../api/profile.js'
 import { downloadBandsintownCsv } from '../utils/bandsintownExport.js'
 
@@ -37,7 +32,6 @@ export default function GigsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [modal, setModal] = useState(null) // null | { mode: 'create' }
-  const [confirmDelete, setConfirmDelete] = useState(null) // null | gig object
   const [statusFilter, setStatusFilter] = useState('all')
   const [tourMenuAnchor, setTourMenuAnchor] = useState(null)
   const [tourIncludeConfirmed, setTourIncludeConfirmed] = useState(true)
@@ -67,16 +61,6 @@ export default function GigsPage() {
 
   function handleClose() {
     setModal(null)
-    load()
-  }
-
-  function handleDelete(gig) {
-    setConfirmDelete(gig)
-  }
-
-  async function handleConfirmDelete() {
-    await deleteGig(confirmDelete.id)
-    setConfirmDelete(null)
     load()
   }
 
@@ -186,7 +170,6 @@ export default function GigsPage() {
         <GigsTable
           gigs={statusFilter === 'all' ? gigs : gigs.filter((g) => g.status === statusFilter)}
           onRowClick={(gig) => navigate(`/gigs/${gig.id}`)}
-          onDelete={handleDelete}
           selectedId={selectedId}
         />
       )}
@@ -219,30 +202,6 @@ export default function GigsPage() {
           )
           .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))}
       />
-
-      <Dialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)}>
-        <DialogTitle>Delete gig?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {confirmDelete && (
-              <>
-                Delete &ldquo;
-                {confirmDelete.event_description
-                  || (confirmDelete.event_date
-                    ? new Date(confirmDelete.event_date).toLocaleDateString()
-                    : 'this gig')}
-                &rdquo;? This cannot be undone.
-              </>
-            )}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(null)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={handleConfirmDelete}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
     </SplitView>
   )
 }

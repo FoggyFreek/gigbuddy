@@ -51,18 +51,6 @@ describe('RehearsalsTable', () => {
     expect(screen.getByText('Votes')).toBeInTheDocument()
   })
 
-  it('renders a delete icon per row and calls onDelete without triggering row click', async () => {
-    const user = userEvent.setup()
-    const onDelete = vi.fn()
-    const onRowClick = vi.fn()
-    wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={onRowClick} onDelete={onDelete} />)
-    const buttons = screen.getAllByRole('button', { name: /delete rehearsal/i })
-    expect(buttons.length).toBe(REHEARSALS.length)
-    await user.click(buttons[0])
-    expect(onDelete).toHaveBeenCalledWith(REHEARSALS[0])
-    expect(onRowClick).not.toHaveBeenCalled()
-  })
-
   it('shows empty state when no rehearsals', () => {
     wrap(<RehearsalsTable rehearsals={[]} onRowClick={() => {}} />)
     expect(screen.getByText(/No rehearsals yet/i)).toBeInTheDocument()

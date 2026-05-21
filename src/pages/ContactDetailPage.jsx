@@ -3,6 +3,11 @@ import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
@@ -103,22 +108,25 @@ export default function ContactDetailPage() {
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        {confirmingDelete ? (
-          <>
-            <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
-              Delete this contact?
-            </Typography>
-            <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
-            <Button color="error" variant="contained" onClick={handleDelete}>Delete</Button>
-          </>
-        ) : (
-          <>
-            <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>
-            <Box sx={{ flexGrow: 1 }} />
-            <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
-          </>
-        )}
+        <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
       </Box>
+
+      <Box sx={{ mt: 4 }}>
+        <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
+          Delete
+        </Button>
+      </Box>
+
+      <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
+        <DialogTitle>Delete contact?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>This cannot be undone.</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={handleDelete}>Delete</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

@@ -85,7 +85,7 @@ export default function RehearsalsPage() {
           startIcon={<AddIcon />}
           onClick={() => setModal({ mode: 'create' })}
         >
-          Propose rehearsal
+          Add rehearsal
         </Button>
       </Box>
 

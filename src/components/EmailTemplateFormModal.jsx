@@ -5,6 +5,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
@@ -22,7 +23,7 @@ import FormatUnderlinedIcon from '@mui/icons-material/FormatUnderlined'
 import InsertLinkIcon from '@mui/icons-material/InsertLink'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { createEmailTemplate, getEmailTemplate, updateEmailTemplate } from '../api/emailTemplates.js'
+import { createEmailTemplate, deleteEmailTemplate, getEmailTemplate, updateEmailTemplate } from '../api/emailTemplates.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { hasRequiredErrors } from '../utils/requiredFields.js'
 
@@ -123,6 +124,7 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const requiredInvalid = hasRequiredErrors(form, REQUIRED_FIELDS)
   const requiredInvalidRef = useRef(requiredInvalid)
   useEffect(() => { requiredInvalidRef.current = requiredInvalid }, [requiredInvalid])
@@ -284,10 +286,33 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }) {
               Download .eml
             </Button>
             <Box sx={{ flexGrow: 1 }} />
+            <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+              Delete
+            </Button>
             <Button variant="contained" onClick={handleClose}>Close</Button>
           </>
         )}
       </DialogActions>
+
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
+        <DialogTitle>Delete template?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>This cannot be undone.</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={async () => {
+              await deleteEmailTemplate(templateId)
+              onClose()
+            }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   )
 }

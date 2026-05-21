@@ -26,7 +26,7 @@ vi.mock('../api/bandMembers.js', () => ({
 
 import GigsPage from '../pages/GigsPage.jsx'
 import GigDetailPage from '../pages/GigDetailPage.jsx'
-import { deleteGig, getGig, listGigs } from '../api/gigs.js'
+import { getGig, listGigs } from '../api/gigs.js'
 import theme from '../theme.js'
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
@@ -69,11 +69,10 @@ const GIGS = [
   },
 ]
 
-describe('GigsPage — delete flow', () => {
+describe('GigsPage', () => {
   beforeEach(() => {
     listGigs.mockReset()
     listGigs.mockResolvedValue(GIGS)
-    deleteGig.mockClear()
   })
 
   it('renders header, Add button, and loaded gigs', async () => {
@@ -81,47 +80,6 @@ describe('GigsPage — delete flow', () => {
     expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /add gig/i })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
-  })
-
-  it('calls deleteGig and reloads when delete is confirmed in the dialog', async () => {
-    const user = userEvent.setup()
-    wrap(<GigsPage />)
-    await waitFor(() => expect(listGigs).toHaveBeenCalledTimes(1))
-    await waitFor(() => screen.getByText('Jazz Night'))
-
-    await user.click(screen.getByRole('button', { name: /delete gig/i }))
-    expect(screen.getByText(/delete gig\?/i)).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: /^delete$/i }))
-
-    await waitFor(() => expect(deleteGig).toHaveBeenCalledWith(42))
-    await waitFor(() => expect(listGigs).toHaveBeenCalledTimes(2))
-  })
-
-  it('does not call deleteGig when Cancel is clicked in the dialog', async () => {
-    const user = userEvent.setup()
-    wrap(<GigsPage />)
-    await waitFor(() => screen.getByText('Jazz Night'))
-
-    await user.click(screen.getByRole('button', { name: /delete gig/i }))
-    await user.click(screen.getByRole('button', { name: /cancel/i }))
-
-    expect(deleteGig).not.toHaveBeenCalled()
-    expect(listGigs).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows the formatted date in the dialog when the gig has no description', async () => {
-    listGigs.mockResolvedValue([{ ...GIGS[0], id: 7, event_description: null }])
-    const user = userEvent.setup()
-    wrap(<GigsPage />)
-    await waitFor(() => screen.getByRole('button', { name: /delete gig/i }))
-
-    await user.click(screen.getByRole('button', { name: /delete gig/i }))
-
-    // Dialog should show a date string, not "this gig"
-    const dialog = screen.getByRole('dialog')
-    expect(dialog.textContent).not.toContain('this gig')
-    expect(dialog.textContent).toMatch(/delete/i)
   })
 })
 

@@ -50,10 +50,10 @@ describe('EmailTemplatesPage', () => {
     deleteEmailTemplate.mockClear()
   })
 
-  it('renders the page heading and New template button', async () => {
+  it('renders the page heading and Add template button', async () => {
     wrap(<EmailTemplatesPage />)
     expect(screen.getByRole('heading', { name: /email templates/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /new template/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /add template/i })).toBeInTheDocument()
     await waitFor(() => expect(listEmailTemplates).toHaveBeenCalled())
   })
 
@@ -70,11 +70,11 @@ describe('EmailTemplatesPage', () => {
     await waitFor(() => expect(screen.getByText(/no templates yet/i)).toBeInTheDocument())
   })
 
-  it('opens the create modal when New template is clicked', async () => {
+  it('opens the create modal when Add template is clicked', async () => {
     const user = userEvent.setup()
     wrap(<EmailTemplatesPage />)
     await waitFor(() => expect(listEmailTemplates).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /new template/i }))
+    await user.click(screen.getByRole('button', { name: /add template/i }))
     expect(screen.getByText('New email template', { selector: 'h2' })).toBeInTheDocument()
   })
 
@@ -88,47 +88,4 @@ describe('EmailTemplatesPage', () => {
     )
   })
 
-  it('shows delete confirmation dialog when delete button is clicked', async () => {
-    const user = userEvent.setup()
-    wrap(<EmailTemplatesPage />)
-    await waitFor(() => screen.getByText('Gig Announcement'))
-
-    const deleteButtons = screen.getAllByRole('button', { name: /delete template/i })
-    await user.click(deleteButtons[0])
-
-    expect(screen.getByText(/delete template\?/i)).toBeInTheDocument()
-    // confirm dialog shows Cancel and Delete buttons
-    expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /cancel/i }).length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('calls deleteEmailTemplate and reloads when delete is confirmed', async () => {
-    const user = userEvent.setup()
-    wrap(<EmailTemplatesPage />)
-    await waitFor(() => expect(listEmailTemplates).toHaveBeenCalledTimes(1))
-    await waitFor(() => screen.getByText('Gig Announcement'))
-
-    const deleteButtons = screen.getAllByRole('button', { name: /delete template/i })
-    await user.click(deleteButtons[0])
-
-    const confirmButton = screen.getByRole('button', { name: /^delete$/i })
-    await user.click(confirmButton)
-
-    await waitFor(() => expect(deleteEmailTemplate).toHaveBeenCalledWith(1))
-    await waitFor(() => expect(listEmailTemplates).toHaveBeenCalledTimes(2))
-  })
-
-  it('does not call deleteEmailTemplate when cancel is clicked in the dialog', async () => {
-    const user = userEvent.setup()
-    wrap(<EmailTemplatesPage />)
-    await waitFor(() => screen.getByText('Gig Announcement'))
-
-    const deleteButtons = screen.getAllByRole('button', { name: /delete template/i })
-    await user.click(deleteButtons[0])
-
-    await user.click(screen.getByRole('button', { name: /cancel/i }))
-
-    expect(deleteEmailTemplate).not.toHaveBeenCalled()
-    expect(listEmailTemplates).toHaveBeenCalledTimes(1)
-  })
 })

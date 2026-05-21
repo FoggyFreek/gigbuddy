@@ -254,6 +254,70 @@ describe('invoices — draft-from-gig', () => {
   })
 })
 
+describe('invoices — discount', () => {
+  it('percentage discount stores correct totals and round-trips discount_type + discount_pct', async () => {
+    const r = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({
+        discount_type: 'pct',
+        discount_pct: 10,
+        discount_cents: 0,
+      })).expect(201)
+    // subtotal=50000, pct=10 → discount=5000
+    // discounted net=45000; VAT = round(45000 * 9 / 100) = 4050; total = 49050
+    expect(r.body.discount_type).toBe('pct')
+    expect(Number(r.body.discount_pct)).toBe(10)
+    expect(r.body.discount_cents).toBe(5000)
+    expect(r.body.subtotal_cents).toBe(50000)
+    expect(r.body.tax_cents).toBe(4050)
+    expect(r.body.total_cents).toBe(49050)
+  })
+
+  it('absolute discount (eur type) stores correct totals', async () => {
+    const r = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({
+        discount_type: 'eur',
+        discount_cents: 10000,
+      })).expect(201)
+    // subtotal=50000, discount=10000
+    // discounted net=40000; VAT = round(40000 * 9 / 100) = 3600; total = 43600
+    expect(r.body.discount_type).toBe('eur')
+    expect(r.body.discount_cents).toBe(10000)
+    expect(r.body.subtotal_cents).toBe(50000)
+    expect(r.body.tax_cents).toBe(3600)
+    expect(r.body.total_cents).toBe(43600)
+  })
+
+  it('PATCH can apply a percentage discount and recomputes totals', async () => {
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload()).expect(201)
+
+    const patched = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
+      .send({ discount_type: 'pct', discount_pct: 20 }).expect(200)
+    // subtotal=50000, pct=20 → discount=10000
+    // discounted net=40000; VAT = round(40000 * 9 / 100) = 3600; total = 43600
+    expect(patched.body.discount_type).toBe('pct')
+    expect(Number(patched.body.discount_pct)).toBe(20)
+    expect(patched.body.discount_cents).toBe(10000)
+    expect(patched.body.tax_cents).toBe(3600)
+    expect(patched.body.total_cents).toBe(43600)
+  })
+
+  it('PATCH can switch from pct to eur discount and recomputes totals', async () => {
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({ discount_type: 'pct', discount_pct: 10, discount_cents: 0 })).expect(201)
+    expect(created.body.discount_cents).toBe(5000)
+
+    const patched = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
+      .send({ discount_type: 'eur', discount_cents: 15000 }).expect(200)
+    // subtotal=50000, eur=15000
+    // discounted net=35000; VAT = round(35000 * 9 / 100) = 3150; total = 38150
+    expect(patched.body.discount_type).toBe('eur')
+    expect(patched.body.discount_cents).toBe(15000)
+    expect(patched.body.tax_cents).toBe(3150)
+    expect(patched.body.total_cents).toBe(38150)
+  })
+})
+
 describe('invoices — render retry', () => {
   it('row persists with pdf_path NULL when render fails, retry populates it', async () => {
     // First create with broken render (mock putObject to reject once).

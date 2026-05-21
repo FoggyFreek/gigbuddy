@@ -22,6 +22,9 @@ const CONTENT_FIELDS = [
   'due_date',
   'payment_term_days',
   'customer_name',
+  'customer_contact_title',
+  'customer_contact_given_name',
+  'customer_contact_family_name',
   'customer_address_street',
   'customer_address_postal_code',
   'customer_address_city',
@@ -31,7 +34,10 @@ const CONTENT_FIELDS = [
   'customer_tax_id',
   'memo',
   'tax_inclusive',
+  'discount_type',
+  'discount_pct',
   'discount_cents',
+  'invert_logo',
   'lines',
 ]
 const CONTENT_FIELDS_SET = new Set(CONTENT_FIELDS)
@@ -171,6 +177,8 @@ function computeAndApply(invoiceFields, lines, tenant) {
     lines,
     taxInclusive: invoiceFields.tax_inclusive,
     discountCents: invoiceFields.discount_cents,
+    discountType: invoiceFields.discount_type,
+    discountPct: invoiceFields.discount_pct,
     appliesKor: tenant.applies_kor,
   })
 }
@@ -249,6 +257,9 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
       type: 'festival',
       id: festival.id,
       name: festival.organization_name || festival.name,
+      contact_title: festival.title || null,
+      contact_given_name: festival.given_name || null,
+      contact_family_name: festival.family_name || null,
       address_street: festival.street_and_number || null,
       address_postal_code: festival.postal_code || null,
       address_city: festival.city || null,
@@ -261,6 +272,9 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
       type: 'venue',
       id: venue.id,
       name: venue.organization_name || venue.name,
+      contact_title: venue.title || null,
+      contact_given_name: venue.given_name || null,
+      contact_family_name: venue.family_name || null,
       address_street: venue.street_and_number || null,
       address_postal_code: venue.postal_code || null,
       address_city: venue.city || null,
@@ -301,6 +315,9 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
       payment_term_days: paymentTermDays,
       due_date: computeDueDate(issueDate, paymentTermDays),
       customer_name: defaultTarget?.organization_name || defaultTarget?.name || '',
+      customer_contact_title: defaultTarget?.title || null,
+      customer_contact_given_name: defaultTarget?.given_name || null,
+      customer_contact_family_name: defaultTarget?.family_name || null,
       customer_address_street: defaultTarget?.street_and_number || null,
       customer_address_postal_code: defaultTarget?.postal_code || null,
       customer_address_city: defaultTarget?.city || null,
@@ -333,7 +350,8 @@ router.get('/:id', async (req, res) => {
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
   const lines = await fetchLines(pool, id, req.tenantId)
-  res.json({ ...rows[0], lines })
+  const tenant = await fetchTenant(pool, req.tenantId)
+  res.json({ ...rows[0], lines, tenant })
 })
 
 // ---------- create ----------
@@ -348,6 +366,8 @@ router.post('/', async (req, res) => {
   const issueDate = body.issue_date || new Date().toISOString().slice(0, 10)
   const dueDate = body.due_date || computeDueDate(issueDate, paymentTermDays)
   const taxInclusive = Boolean(body.tax_inclusive)
+  const discountType = body.discount_type === 'pct' ? 'pct' : 'eur'
+  const discountPct = Math.max(0, Number(body.discount_pct) || 0)
   const discountCents = Math.max(0, Number.isInteger(Number(body.discount_cents)) ? Number(body.discount_cents) : 0)
   const lines = normalizeLines(body.lines)
   if (!lines.length) return res.status(400).json({ error: 'At least one line is required' })
@@ -355,7 +375,7 @@ router.post('/', async (req, res) => {
   const tenant = await fetchTenant(pool, req.tenantId)
   if (!tenant) return res.status(404).json({ error: 'Tenant not found' })
 
-  const totals = computeAndApply({ tax_inclusive: taxInclusive, discount_cents: discountCents }, lines, tenant)
+  const totals = computeAndApply({ tax_inclusive: taxInclusive, discount_type: discountType, discount_pct: discountPct, discount_cents: discountCents }, lines, tenant)
   const year = new Date(issueDate).getUTCFullYear() || new Date().getUTCFullYear()
 
   let gigId = null
@@ -372,22 +392,31 @@ router.post('/', async (req, res) => {
     const insertSql = `
       INSERT INTO invoices (
         tenant_id, gig_id, invoice_number, issue_date, due_date, payment_term_days,
-        customer_name, customer_address_street, customer_address_postal_code,
+        customer_name, customer_contact_title, customer_contact_given_name, customer_contact_family_name,
+        customer_address_street, customer_address_postal_code,
         customer_address_city, customer_address_country, customer_email,
-        customer_kvk, customer_tax_id, memo, tax_inclusive, discount_cents,
+        customer_kvk, customer_tax_id, memo, tax_inclusive,
+        discount_type, discount_pct, discount_cents,
+        invert_logo,
         subtotal_cents, tax_cents, total_cents
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
-        $7, $8, $9,
-        $10, $11, $12,
-        $13, $14, $15, $16, $17,
-        $18, $19, $20
+        $7, $8, $9, $10,
+        $11, $12,
+        $13, $14, $15,
+        $16, $17, $18, $19,
+        $20, $21, $22,
+        $23,
+        $24, $25, $26
       ) RETURNING id`
     const { rows } = await client.query(insertSql, [
       req.tenantId, gigId, invoiceNumber, issueDate, dueDate, paymentTermDays,
-      customerName, body.customer_address_street || null, body.customer_address_postal_code || null,
+      customerName, body.customer_contact_title || null, body.customer_contact_given_name || null, body.customer_contact_family_name || null,
+      body.customer_address_street || null, body.customer_address_postal_code || null,
       body.customer_address_city || null, body.customer_address_country || null, body.customer_email || null,
-      body.customer_kvk || null, body.customer_tax_id || null, body.memo || null, taxInclusive, discountCents,
+      body.customer_kvk || null, body.customer_tax_id || null, body.memo || null, taxInclusive,
+      discountType, discountPct, totals.discountCents,
+      Boolean(body.invert_logo),
       totals.subtotalCents, totals.taxCents, totals.totalCents,
     ])
     invoiceId = rows[0].id
@@ -456,9 +485,11 @@ router.patch('/:id', async (req, res) => {
 
     const simpleFields = [
       'gig_id', 'issue_date', 'due_date', 'payment_term_days',
-      'customer_name', 'customer_address_street', 'customer_address_postal_code',
+      'customer_name', 'customer_contact_title', 'customer_contact_given_name', 'customer_contact_family_name',
+      'customer_address_street', 'customer_address_postal_code',
       'customer_address_city', 'customer_address_country', 'customer_email',
-      'customer_kvk', 'customer_tax_id', 'memo', 'tax_inclusive', 'discount_cents',
+      'customer_kvk', 'customer_tax_id', 'memo', 'tax_inclusive',
+      'discount_type', 'discount_pct', 'invert_logo',
     ]
     for (const key of simpleFields) {
       if (key in body) {
@@ -484,13 +515,16 @@ router.patch('/:id', async (req, res) => {
 
     if (contentChanged) {
       const { rows: cur } = await client.query(
-        'SELECT tax_inclusive, discount_cents FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+        'SELECT tax_inclusive, discount_type, discount_pct, discount_cents FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
         [id, req.tenantId],
       )
       const taxInclusive = 'tax_inclusive' in body ? Boolean(body.tax_inclusive) : cur[0].tax_inclusive
+      const discountType = 'discount_type' in body ? (body.discount_type === 'pct' ? 'pct' : 'eur') : cur[0].discount_type
+      const discountPct = 'discount_pct' in body ? Math.max(0, Number(body.discount_pct) || 0) : Number(cur[0].discount_pct)
       const discountCents = 'discount_cents' in body ? Math.max(0, Number(body.discount_cents) || 0) : cur[0].discount_cents
       const currentLines = await fetchLines(client, id, req.tenantId)
-      const totals = computeAndApply({ tax_inclusive: taxInclusive, discount_cents: discountCents }, currentLines, tenant)
+      const totals = computeAndApply({ tax_inclusive: taxInclusive, discount_type: discountType, discount_pct: discountPct, discount_cents: discountCents }, currentLines, tenant)
+      updates.push(`discount_cents = $${idx++}`); values.push(totals.discountCents)
       updates.push(`subtotal_cents = $${idx++}`); values.push(totals.subtotalCents)
       updates.push(`tax_cents = $${idx++}`); values.push(totals.taxCents)
       updates.push(`total_cents = $${idx++}`); values.push(totals.totalCents)

@@ -24,10 +24,7 @@ vi.mock('../api/bandEvents.js', () => ({
 
 import BandEventsPage from '../pages/BandEventsPage.jsx'
 import BandEventDetailPage from '../pages/BandEventDetailPage.jsx'
-import {
-  deleteBandEvent,
-  listBandEvents,
-} from '../api/bandEvents.js'
+import { listBandEvents } from '../api/bandEvents.js'
 import theme from '../theme.js'
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
@@ -71,7 +68,6 @@ describe('BandEventsPage', () => {
   beforeEach(() => {
     listBandEvents.mockReset()
     listBandEvents.mockResolvedValue(EVENTS)
-    deleteBandEvent.mockClear()
   })
 
   it('renders header and Add event button', async () => {
@@ -92,33 +88,6 @@ describe('BandEventsPage', () => {
     await waitFor(() => expect(listBandEvents).toHaveBeenCalled())
     await user.click(screen.getByRole('button', { name: /add event/i }))
     expect(screen.getByText('Add band event', { selector: 'h2' })).toBeInTheDocument()
-  })
-
-  it('calls deleteBandEvent and reloads when delete is confirmed in the dialog', async () => {
-    const user = userEvent.setup()
-    wrap(<BandEventsPage />)
-    await waitFor(() => expect(listBandEvents).toHaveBeenCalledTimes(1))
-    await waitFor(() => screen.getByText('Studio session'))
-
-    await user.click(screen.getByRole('button', { name: /delete event/i }))
-    expect(screen.getByText(/delete event\?/i)).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: /^delete$/i }))
-
-    await waitFor(() => expect(deleteBandEvent).toHaveBeenCalledWith(1))
-    await waitFor(() => expect(listBandEvents).toHaveBeenCalledTimes(2))
-  })
-
-  it('does not call deleteBandEvent when Cancel is clicked in the dialog', async () => {
-    const user = userEvent.setup()
-    wrap(<BandEventsPage />)
-    await waitFor(() => screen.getByText('Studio session'))
-
-    await user.click(screen.getByRole('button', { name: /delete event/i }))
-    await user.click(screen.getByRole('button', { name: /cancel/i }))
-
-    expect(deleteBandEvent).not.toHaveBeenCalled()
-    expect(listBandEvents).toHaveBeenCalledTimes(1)
   })
 
   it('renders detail alongside the list at /events/:id and the Close button returns to /events', async () => {

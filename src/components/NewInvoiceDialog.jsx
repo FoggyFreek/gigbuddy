@@ -51,6 +51,9 @@ export default function NewInvoiceDialog({ onClose, onDraftReady }) {
       draft: {
         ...pendingPayload.draft,
         customer_name: target.name || '',
+        customer_contact_title: target.contact_title || null,
+        customer_contact_given_name: target.contact_given_name || null,
+        customer_contact_family_name: target.contact_family_name || null,
         customer_address_street: target.address_street || null,
         customer_address_postal_code: target.address_postal_code || null,
         customer_address_city: target.address_city || null,

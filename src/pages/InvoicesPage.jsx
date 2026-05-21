@@ -79,7 +79,7 @@ export default function InvoicesPage() {
           startIcon={<AddIcon />}
           onClick={() => setNewDialog(true)}
         >
-          New invoice
+          Add invoice
         </Button>
       </Box>
 
@@ -127,7 +127,7 @@ function InvoicesList({ invoices, selectedId, onRowClick, onRetryRender }) {
       <Paper variant="outlined">
         {!invoices.length && (
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No invoices yet. Tap <strong>New invoice</strong> to create one.
+            No invoices yet. Tap <strong>Add invoice</strong> to create one.
           </Typography>
         )}
         {invoices.map((inv) => (

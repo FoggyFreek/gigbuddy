@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import { getBandEvent, updateBandEvent } from '../api/bandEvents.js'
+import { deleteBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput } from '../utils/eventFormUtils.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
@@ -33,6 +39,7 @@ export default function BandEventDetailPage() {
   })
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(true)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const saveFn = useCallback(
     async (patch) => { await updateBandEvent(bandEventId, patch) },
@@ -108,6 +115,34 @@ export default function BandEventDetailPage() {
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
         <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
       </Box>
+
+      <Box sx={{ mt: 4 }}>
+        <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+          Delete
+        </Button>
+      </Box>
+
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
+        <DialogTitle>Delete band event?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>This cannot be undone.</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={async () => {
+              await deleteBandEvent(bandEventId)
+              setConfirmDelete(false)
+              if (outletCtx.onClose) outletCtx.onClose()
+              else navigate(-1)
+            }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

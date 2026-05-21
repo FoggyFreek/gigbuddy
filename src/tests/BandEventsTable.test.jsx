@@ -71,18 +71,6 @@ describe('BandEventsTable', () => {
     expect(onRowClick).toHaveBeenCalledWith(EVENTS[0])
   })
 
-  it('renders a delete icon per row and calls onDelete without triggering row click', async () => {
-    const user = userEvent.setup()
-    const onDelete = vi.fn()
-    const onRowClick = vi.fn()
-    wrap(<BandEventsTable events={EVENTS} onRowClick={onRowClick} onDelete={onDelete} />)
-    const buttons = screen.getAllByRole('button', { name: /delete event/i })
-    expect(buttons.length).toBe(EVENTS.length)
-    await user.click(buttons[0])
-    expect(onDelete).toHaveBeenCalledWith(EVENTS[0])
-    expect(onRowClick).not.toHaveBeenCalled()
-  })
-
   describe('mobile (compact card layout)', () => {
     beforeEach(() => { mockIsMobile = true })
     afterEach(() => { mockIsMobile = false })
@@ -106,18 +94,6 @@ describe('BandEventsTable', () => {
       wrap(<BandEventsTable events={EVENTS} onRowClick={onRowClick} />)
       await user.click(screen.getByText(/Studio session/))
       expect(onRowClick).toHaveBeenCalledWith(EVENTS[0])
-    })
-
-    it('clicking delete calls onDelete without triggering card click', async () => {
-      const user = userEvent.setup()
-      const onDelete = vi.fn()
-      const onRowClick = vi.fn()
-      wrap(<BandEventsTable events={EVENTS} onRowClick={onRowClick} onDelete={onDelete} />)
-      const buttons = screen.getAllByRole('button', { name: /delete event/i })
-      expect(buttons.length).toBe(EVENTS.length)
-      await user.click(buttons[1])
-      expect(onDelete).toHaveBeenCalledWith(EVENTS[1])
-      expect(onRowClick).not.toHaveBeenCalled()
     })
 
     it('shows empty state when no events', () => {

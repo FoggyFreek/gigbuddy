@@ -10,6 +10,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import FormControl from '@mui/material/FormControl'
+import FormControlLabel from '@mui/material/FormControlLabel'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
 import InputLabel from '@mui/material/InputLabel'
@@ -17,6 +18,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
+import Switch from '@mui/material/Switch'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
@@ -57,6 +59,9 @@ function emptyDraft(taxPct = 9) {
     due_date: null,
     payment_term_days: 14,
     customer_name: '',
+    customer_contact_title: '',
+    customer_contact_given_name: '',
+    customer_contact_family_name: '',
     customer_address_street: '',
     customer_address_postal_code: '',
     customer_address_city: '',
@@ -66,6 +71,9 @@ function emptyDraft(taxPct = 9) {
     customer_tax_id: '',
     memo: null,
     tax_inclusive: false,
+    invert_logo: false,
+    discount_type: 'pct',
+    discount_pct: 0,
     discount_cents: 0,
     lines: [
       { description: '', quantity: 1, unit_price_cents: 0, tax_percentage: taxPct, position: 0 },
@@ -98,11 +106,14 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
   const [loading, setLoading] = useState(isEdit)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [form, setForm] = useState(() => (draft ? draft.draft : emptyDraft()))
-  const [tenant] = useState(draft?.tenant || null)
+  const [tenant, setTenant] = useState(draft?.tenant || null)
   const [invoice, setInvoice] = useState(null)
   const [memoOpen, setMemoOpen] = useState(Boolean(draft?.draft?.memo))
-  const [discountOpen, setDiscountOpen] = useState(Boolean(draft?.draft?.discount_cents))
+  const [discountOpen, setDiscountOpen] = useState(
+    Boolean(draft?.draft?.discount_pct > 0 || draft?.draft?.discount_cents > 0)
+  )
   const [logoBusy, setLogoBusy] = useState(false)
   const logoInputRef = useRef(null)
 
@@ -115,12 +126,16 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
       .then((data) => {
         if (cancelled) return
         setInvoice(data)
+        if (data.tenant) setTenant(data.tenant)
         setForm({
           gig_id: data.gig_id,
           issue_date: data.issue_date ? String(data.issue_date).slice(0, 10) : null,
           due_date: data.due_date ? String(data.due_date).slice(0, 10) : null,
           payment_term_days: data.payment_term_days || 14,
           customer_name: data.customer_name || '',
+          customer_contact_title: data.customer_contact_title || '',
+          customer_contact_given_name: data.customer_contact_given_name || '',
+          customer_contact_family_name: data.customer_contact_family_name || '',
           customer_address_street: data.customer_address_street || '',
           customer_address_postal_code: data.customer_address_postal_code || '',
           customer_address_city: data.customer_address_city || '',
@@ -130,6 +145,9 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
           customer_tax_id: data.customer_tax_id || '',
           memo: data.memo || null,
           tax_inclusive: !!data.tax_inclusive,
+          invert_logo: !!data.invert_logo,
+          discount_type: data.discount_type === 'pct' ? 'pct' : 'eur',
+          discount_pct: Number(data.discount_pct) || 0,
           discount_cents: Number(data.discount_cents) || 0,
           lines: (data.lines || []).map((l, i) => ({
             description: l.description || '',
@@ -140,7 +158,7 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
           })),
         })
         setMemoOpen(Boolean(data.memo))
-        setDiscountOpen(Number(data.discount_cents) > 0)
+        setDiscountOpen(Number(data.discount_pct) > 0 || Number(data.discount_cents) > 0)
       })
       .catch((e) => { if (!cancelled) setError(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -164,9 +182,11 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
   const totals = useMemo(() => computeInvoiceTotals({
     lines: form.lines,
     taxInclusive: form.tax_inclusive,
+    discountType: form.discount_type,
+    discountPct: form.discount_pct,
     discountCents: form.discount_cents,
     appliesKor,
-  }), [form.lines, form.tax_inclusive, form.discount_cents, appliesKor])
+  }), [form.lines, form.tax_inclusive, form.discount_type, form.discount_pct, form.discount_cents, appliesKor])
 
   function patchForm(patch) {
     setForm((prev) => ({ ...prev, ...patch }))
@@ -206,6 +226,9 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
       due_date: form.due_date,
       payment_term_days: form.payment_term_days,
       customer_name: form.customer_name?.trim() || '',
+      customer_contact_title: form.customer_contact_title?.trim() || null,
+      customer_contact_given_name: form.customer_contact_given_name?.trim() || null,
+      customer_contact_family_name: form.customer_contact_family_name?.trim() || null,
       customer_address_street: form.customer_address_street || null,
       customer_address_postal_code: form.customer_address_postal_code || null,
       customer_address_city: form.customer_address_city || null,
@@ -215,7 +238,10 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
       customer_tax_id: form.customer_tax_id || null,
       memo: form.memo || null,
       tax_inclusive: !!form.tax_inclusive,
-      discount_cents: Math.max(0, Math.round(Number(form.discount_cents) || 0)),
+      invert_logo: !!form.invert_logo,
+      discount_type: form.discount_type,
+      discount_pct: form.discount_type === 'pct' ? Math.max(0, Number(form.discount_pct) || 0) : 0,
+      discount_cents: form.discount_type === 'eur' ? Math.max(0, Math.round(Number(form.discount_cents) || 0)) : 0,
       lines: form.lines.map((l, i) => ({
         description: l.description || '',
         quantity: Number(l.quantity) || 0,
@@ -267,7 +293,11 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
 
   async function handleDelete() {
     if (!isEdit) return
-    if (!window.confirm(`Delete invoice ${invoice?.invoice_number}?`)) return
+    setDeleteDialogOpen(true)
+  }
+
+  async function confirmDelete() {
+    setDeleteDialogOpen(false)
     try {
       await deleteInvoice(invoiceId)
       onClose(true)
@@ -405,6 +435,20 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
               Save the invoice first to upload a custom logo.
             </Typography>
           )}
+          {(logoKey || isEdit) && (
+            <FormControlLabel
+              sx={{ mt: 0.5 }}
+              control={
+                <Switch
+                  size="small"
+                  checked={!!form.invert_logo}
+                  onChange={(e) => patchForm({ invert_logo: e.target.checked })}
+                  disabled={readOnly}
+                />
+              }
+              label={<Typography variant="caption">Invert logo colors</Typography>}
+            />
+          )}
         </Box>
 
         <Box sx={{ textAlign: 'right' }}>
@@ -470,7 +514,7 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
       <Typography variant="subtitle2" sx={{ mb: 1 }}>Customer</Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
         <TextField
-          label="Name"
+          label="Organisation name"
           size="small"
           required
           value={form.customer_name}
@@ -484,6 +528,33 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
           onChange={(e) => patchForm({ customer_email: e.target.value })}
           disabled={readOnly}
         />
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <TextField
+            label="Title"
+            size="small"
+            sx={{ width: 100 }}
+            value={form.customer_contact_title || ''}
+            onChange={(e) => patchForm({ customer_contact_title: e.target.value })}
+            disabled={readOnly}
+            placeholder="e.g. Dhr."
+          />
+          <TextField
+            label="Given name"
+            size="small"
+            sx={{ flexGrow: 1 }}
+            value={form.customer_contact_given_name || ''}
+            onChange={(e) => patchForm({ customer_contact_given_name: e.target.value })}
+            disabled={readOnly}
+          />
+          <TextField
+            label="Family name"
+            size="small"
+            sx={{ flexGrow: 1 }}
+            value={form.customer_contact_family_name || ''}
+            onChange={(e) => patchForm({ customer_contact_family_name: e.target.value })}
+            disabled={readOnly}
+          />
+        </Box>
         <TextField
           label="Street and number"
           size="small"
@@ -595,11 +666,9 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
               onChange={(e) => patchLine(idx, { quantity: Number(e.target.value) || 0 })}
               disabled={readOnly}
             />
-            <TextField
-              size="small"
-              value={centsToEditableEuro(line.unit_price_cents)}
-              onChange={(e) => patchLine(idx, { unit_price_cents: parseEuroInput(e.target.value) })}
-              slotProps={{ input: { startAdornment: <InputAdornment position="start">€</InputAdornment> } }}
+            <MoneyInput
+              cents={line.unit_price_cents}
+              onChange={(c) => patchLine(idx, { unit_price_cents: c })}
               disabled={readOnly}
             />
             {!appliesKor ? (
@@ -617,7 +686,9 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
             ) : (
               <span />
             )}
-            <Typography variant="body2" align="right">{formatEur(lineTotals.grossCents)}</Typography>
+            <Typography variant="body2" align="right">
+              {formatEur(form.tax_inclusive ? lineTotals.grossCents : lineTotals.netCents)}
+            </Typography>
             <IconButton
               size="small"
               onClick={() => removeLine(idx)}
@@ -639,26 +710,57 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
       <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Box sx={{ minWidth: 320 }}>
           <Row label="Subtotal" value={formatEur(totals.subtotalCents)} />
-          {discountOpen || totals.discountCents > 0 ? (
+          {discountOpen ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
-              <Typography variant="body2" sx={{ flexGrow: 1 }}>Discount (excl. VAT)</Typography>
-              <TextField
+              <Typography variant="body2" sx={{ flexGrow: 1 }}>Discount</Typography>
+              {form.discount_type === 'pct' ? (
+                <TextField
+                  size="small"
+                  type="number"
+                  sx={{ width: 80 }}
+                  value={form.discount_pct}
+                  onChange={(e) => patchForm({ discount_pct: Math.max(0, Number(e.target.value) || 0) })}
+                  slotProps={{ htmlInput: { min: 0, max: 100, step: 0.01 } }}
+                  disabled={readOnly}
+                />
+              ) : (
+                <MoneyInput
+                  cents={form.discount_cents}
+                  onChange={(c) => patchForm({ discount_cents: c })}
+                  disabled={readOnly}
+                  sx={{ width: 80 }}
+                />
+              )}
+              <Select
                 size="small"
-                sx={{ width: 140 }}
-                value={centsToEditableEuro(form.discount_cents)}
-                onChange={(e) => patchForm({ discount_cents: parseEuroInput(e.target.value) })}
-                slotProps={{ input: { startAdornment: <InputAdornment position="start">€</InputAdornment> } }}
+                value={form.discount_type}
+                onChange={(e) => patchForm({ discount_type: e.target.value, discount_pct: 0, discount_cents: 0 })}
                 disabled={readOnly}
-              />
+                sx={{ minWidth: 70 }}
+              >
+                <MenuItem value="pct">%</MenuItem>
+                <MenuItem value="eur">€</MenuItem>
+              </Select>
+              <Typography variant="body2" sx={{ minWidth: 80, textAlign: 'right' }}>
+                {formatEur(-totals.discountCents)}
+              </Typography>
+              <IconButton
+                size="small"
+                disabled={readOnly}
+                onClick={() => { patchForm({ discount_pct: 0, discount_cents: 0 }); setDiscountOpen(false) }}
+                aria-label="remove discount"
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
             </Box>
           ) : (
             <Button size="small" startIcon={<AddIcon />} disabled={readOnly} onClick={() => setDiscountOpen(true)}>
               Add discount
             </Button>
           )}
-          {!appliesKor && (
-            <Row label="VAT" value={formatEur(totals.taxCents)} />
-          )}
+          {!appliesKor && totals.vatByRate.map(({ rate, cents }) => (
+            <Row key={rate} label={`VAT ${rate}%`} value={formatEur(cents)} />
+          ))}
           {appliesKor && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'right' }}>
               Kleine ondernemersregeling — no VAT charged.
@@ -692,7 +794,6 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
             Download PDF
           </Button>
         )}
-        <Button onClick={() => onClose(false)}>Close</Button>
         {!readOnly && (
           <Button variant="contained" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save'}
@@ -702,30 +803,49 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
     </>
   )
 
+  const deleteConfirmDialog = (
+    <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+      <DialogTitle>Delete invoice?</DialogTitle>
+      <DialogContent>
+        Delete invoice {invoice?.invoice_number}? Cannot be undone.
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+        <Button color="error" variant="contained" onClick={confirmDelete}>Delete</Button>
+      </DialogActions>
+    </Dialog>
+  )
+
   if (embedded) {
     return (
-      <Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          {titleNode}
+      <>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            {titleNode}
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+          <Box>{bodyNode}</Box>
+          <Divider sx={{ mt: 3, mb: 2 }} />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {actionsNode}
+          </Box>
         </Box>
-        <Divider sx={{ mb: 2 }} />
-        <Box>{bodyNode}</Box>
-        <Divider sx={{ mt: 3, mb: 2 }} />
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {actionsNode}
-        </Box>
-      </Box>
+        {deleteConfirmDialog}
+      </>
     )
   }
 
   return (
-    <Dialog open fullWidth maxWidth="md" onClose={() => onClose(false)}>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        {titleNode}
-      </DialogTitle>
-      <DialogContent dividers>{bodyNode}</DialogContent>
-      <DialogActions sx={{ justifyContent: 'space-between' }}>{actionsNode}</DialogActions>
-    </Dialog>
+    <>
+      <Dialog open fullWidth maxWidth="md" onClose={() => onClose(false)}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {titleNode}
+        </DialogTitle>
+        <DialogContent dividers>{bodyNode}</DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between' }}>{actionsNode}</DialogActions>
+      </Dialog>
+      {deleteConfirmDialog}
+    </>
   )
 }
 
@@ -735,5 +855,32 @@ function Row({ label, value }) {
       <Typography variant="body2">{label}</Typography>
       <Typography variant="body2">{value}</Typography>
     </Box>
+  )
+}
+
+// Lets the user type freely (e.g. "200") and only commits the parsed cent value on blur,
+// preventing the controlled-input loop where every keystroke reformats the display value.
+function MoneyInput({ cents, onChange, disabled, sx }) {
+  const [raw, setRaw] = useState('')
+  const [focused, setFocused] = useState(false)
+
+  return (
+    <TextField
+      size="small"
+      value={focused ? raw : centsToEditableEuro(cents)}
+      onChange={(e) => setRaw(e.target.value)}
+      onFocus={(e) => {
+        setRaw(centsToEditableEuro(cents))
+        setFocused(true)
+        e.target.select()
+      }}
+      onBlur={() => {
+        setFocused(false)
+        onChange(parseEuroInput(raw))
+      }}
+      disabled={disabled}
+      sx={sx}
+      slotProps={{ input: { startAdornment: <InputAdornment position="start">€</InputAdornment> } }}
+    />
   )
 }

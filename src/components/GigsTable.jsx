@@ -8,12 +8,10 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
-import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import Collapse from '@mui/material/Collapse'
 import ChecklistIcon from '@mui/icons-material/Checklist'
-import DeleteIcon from '@mui/icons-material/Delete'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.js'
@@ -47,7 +45,7 @@ function isPastDate(val) {
   return d < today
 }
 
-function GigCard({ gig, active, onClick, onDelete }) {
+function GigCard({ gig, active, onClick }) {
   const taskCount = gig.open_task_count ?? 0
   const displayVenue = gig.venue ?? gig.festival
   const metaParts = [gig.event_description, venueHeadline(displayVenue), venueCity(displayVenue)].filter(Boolean)
@@ -80,14 +78,6 @@ function GigCard({ gig, active, onClick, onDelete }) {
         <Box sx={{ ml: taskCount > 0 ? 0.5 : 'auto', mt: -0.5 }}>
           <GigShareMenu gig={gig} />
         </Box>
-        <IconButton
-          size="small"
-          aria-label="delete gig"
-          onClick={(e) => { e.stopPropagation(); onDelete?.(gig) }}
-          sx={{ mt: -0.5, mr: -0.5 }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
         {metaParts.length ? metaParts.join(' · ') : '—'}
@@ -105,7 +95,7 @@ function GigCard({ gig, active, onClick, onDelete }) {
   )
 }
 
-function DesktopRow({ gig, active, onClick, onDelete }) {
+function DesktopRow({ gig, active, onClick }) {
   return (
     <TableRow
       hover
@@ -149,13 +139,6 @@ function DesktopRow({ gig, active, onClick, onDelete }) {
       <TableCell align="center">{gig.open_task_count ?? 0}</TableCell>
       <TableCell align="right" padding="none" sx={{ pr: 1 }}>
         <GigShareMenu gig={gig} />
-        <IconButton
-          size="small"
-          aria-label="delete gig"
-          onClick={(e) => { e.stopPropagation(); onDelete?.(gig) }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
       </TableCell>
     </TableRow>
   )
@@ -206,7 +189,7 @@ function PastGigsHeader({ open, count, onToggle }) {
   )
 }
 
-export default function GigsTable({ gigs, onRowClick, onDelete, selectedId = null }) {
+export default function GigsTable({ gigs, onRowClick, selectedId = null }) {
   const [pastOpen, setPastOpen] = useState(false)
   const isCompact = useCompactLayout()
 
@@ -229,7 +212,7 @@ export default function GigsTable({ gigs, onRowClick, onDelete, selectedId = nul
             </Box>
           ) : (
             upcoming.map((gig) => (
-              <GigCard key={gig.id} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick(gig)} onDelete={onDelete} />
+              <GigCard key={gig.id} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick(gig)} />
             ))
           )}
         </Paper>
@@ -243,7 +226,7 @@ export default function GigsTable({ gigs, onRowClick, onDelete, selectedId = nul
             <Collapse in={pastOpen} unmountOnExit>
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {past.map((gig) => (
-                  <GigCard key={gig.id} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick(gig)} onDelete={onDelete} />
+                  <GigCard key={gig.id} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick(gig)} />
                 ))}
               </Box>
             </Collapse>
@@ -274,7 +257,7 @@ export default function GigsTable({ gigs, onRowClick, onDelete, selectedId = nul
               </TableRow>
             )}
             {upcoming.map((gig) => (
-              <DesktopRow key={gig.id} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick(gig)} onDelete={onDelete} />
+              <DesktopRow key={gig.id} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick(gig)} />
             ))}
           </TableBody>
         </Table>
@@ -292,7 +275,7 @@ export default function GigsTable({ gigs, onRowClick, onDelete, selectedId = nul
                 <DesktopHead />
                 <TableBody>
                   {past.map((gig) => (
-                    <DesktopRow key={gig.id} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick(gig)} onDelete={onDelete} />
+                    <DesktopRow key={gig.id} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick(gig)} />
                   ))}
                 </TableBody>
               </Table>

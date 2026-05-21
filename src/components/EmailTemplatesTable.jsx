@@ -1,5 +1,4 @@
 import Box from '@mui/material/Box'
-import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
@@ -9,7 +8,6 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
-import DeleteIcon from '@mui/icons-material/Delete'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 
@@ -24,7 +22,7 @@ function formatDate(val) {
   })
 }
 
-function TemplateCard({ template, onClick, onDelete }) {
+function TemplateCard({ template, onClick }) {
   return (
     <Box
       onClick={onClick}
@@ -49,20 +47,12 @@ function TemplateCard({ template, onClick, onDelete }) {
             Created {formatDate(template.created_at)}
           </Typography>
         </Box>
-        <IconButton
-          size="small"
-          aria-label="delete template"
-          onClick={(e) => { e.stopPropagation(); onDelete?.(template) }}
-          sx={{ mt: -0.5, mr: -0.5 }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
       </Box>
     </Box>
   )
 }
 
-function DesktopRow({ template, onClick, onDelete }) {
+function DesktopRow({ template, onClick }) {
   return (
     <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
       <TableCell>
@@ -70,19 +60,12 @@ function DesktopRow({ template, onClick, onDelete }) {
       </TableCell>
       <TableCell>{template.subject || '—'}</TableCell>
       <TableCell align="right" padding="none" sx={{ pr: 1 }}>
-        <IconButton
-          size="small"
-          aria-label="delete template"
-          onClick={(e) => { e.stopPropagation(); onDelete?.(template) }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
       </TableCell>
     </TableRow>
   )
 }
 
-export default function EmailTemplatesTable({ templates, onRowClick, onDelete }) {
+export default function EmailTemplatesTable({ templates, onRowClick }) {
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
 
@@ -95,7 +78,7 @@ export default function EmailTemplatesTable({ templates, onRowClick, onDelete })
           </Box>
         ) : (
           templates.map((t) => (
-            <TemplateCard key={t.id} template={t} onClick={() => onRowClick(t)} onDelete={onDelete} />
+            <TemplateCard key={t.id} template={t} onClick={() => onRowClick(t)} />
           ))
         )}
       </Paper>
@@ -122,7 +105,7 @@ export default function EmailTemplatesTable({ templates, onRowClick, onDelete })
               </TableRow>
             ) : (
               templates.map((t) => (
-                <DesktopRow key={t.id} template={t} onClick={() => onRowClick(t)} onDelete={onDelete} />
+                <DesktopRow key={t.id} template={t} onClick={() => onRowClick(t)} />
               ))
             )}
           </TableBody>

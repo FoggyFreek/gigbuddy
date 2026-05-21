@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
@@ -10,7 +16,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
-import { addParticipant, getRehearsal, removeParticipant, setVote, updateRehearsal } from '../api/rehearsals.js'
+import { addParticipant, deleteRehearsal, getRehearsal, removeParticipant, setVote, updateRehearsal } from '../api/rehearsals.js'
 import { listMembers } from '../api/bandMembers.js'
 import RehearsalFields from '../components/RehearsalFields.jsx'
 import RehearsalParticipantsSection from '../components/RehearsalParticipantsSection.jsx'
@@ -26,6 +32,7 @@ export default function RehearsalDetailPage() {
 
   const [form, setForm] = useState({ proposed_date: '', start_time: '', end_time: '', location: '', notes: '' })
   const [loading, setLoading] = useState(true)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [rehearsal, setRehearsal] = useState(null)
   const [members, setMembers] = useState([])
   const [addMemberId, setAddMemberId] = useState('')
@@ -161,6 +168,34 @@ export default function RehearsalDetailPage() {
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
         <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
       </Box>
+
+      <Box sx={{ mt: 4 }}>
+        <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+          Delete
+        </Button>
+      </Box>
+
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
+        <DialogTitle>Delete rehearsal?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>This cannot be undone.</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={async () => {
+              await deleteRehearsal(rehearsalId)
+              setConfirmDelete(false)
+              if (outletCtx.onClose) outletCtx.onClose()
+              else navigate(-1)
+            }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
