@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
+import rateLimit from 'express-rate-limit'
 import gigsRouter from './gigs.js'
 import tasksRouter from './tasks.js'
 import profileRouter from './profile.js'
@@ -34,11 +34,9 @@ const router = Router()
 // can fire many requests without hitting artificial ceilings.
 const isTest = process.env.NODE_ENV === 'test'
 
-// express-rate-limit v8 hashes the result of keyGenerator for the draft-8
-// RateLimit header partition key; the default uses req.ip, which can be
-// undefined for some requests (closed sockets, certain proxy setups) and
-// would crash Hash.update. Fall back to a string when that happens.
-const keyGenerator = (req) => req.ip ? ipKeyGenerator(req.ip) : 'unknown'
+// express-rate-limit v8 draft-8 headers hash the keyGenerator result; req.ip
+// can be undefined under some proxy setups, which would crash Hash.update.
+const keyGenerator = (req) => req.ip ?? req.socket?.remoteAddress ?? 'unknown'
 
 // Broad API-wide limit — prevents bulk scraping and automated abuse.
 // Applied before any route so every /api/* endpoint is covered.
