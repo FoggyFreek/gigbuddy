@@ -26,6 +26,7 @@ const VenuesPage = lazy(() => import('./pages/VenuesPage.jsx'))
 const InvoicesPage = lazy(() => import('./pages/InvoicesPage.jsx'))
 const InvoiceDetailPage = lazy(() => import('./pages/InvoiceDetailPage.jsx'))
 const TenantSettingsPage = lazy(() => import('./pages/TenantSettingsPage.jsx'))
+const PaymentThanksPage = lazy(() => import('./pages/PaymentThanksPage.jsx'))
 const TenantsPage = lazy(() => import('./pages/admin/TenantsPage.jsx'))
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage.jsx'))
 
@@ -35,6 +36,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/pending" element={<PendingApprovalPage />} />
+        <Route path="/payment/thanks" element={<PaymentThanksPage />} />
         <Route element={<RequireAuth />}>
           <Route path="/redeem-invite" element={<RedeemInvitePage />} />
           <Route element={<AppShell />}>

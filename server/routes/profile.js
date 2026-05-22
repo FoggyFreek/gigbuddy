@@ -8,6 +8,17 @@ import { storageClient, BUCKET } from '../utils/storage.js'
 import { validateAndReencodeImage } from '../utils/imageProcess.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
+// Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
+const MOLLIE_KEY_RE = /^(live|test)_[A-Za-z0-9]{25,}$/
+
+function maskMollieKey(key) {
+  if (!key) return null
+  const prefix = key.slice(0, 5)
+  const last4 = key.slice(-4)
+  const dots = '•'.repeat(Math.max(0, key.length - 9))
+  return `${prefix}${dots}${last4}`
+}
+
 const router = Router()
 
 const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -82,7 +93,8 @@ function requireLinkId(req, res) {
   return linkId
 }
 
-// Get tenant profile with its links
+// Get tenant profile with its links.
+// mollie_api_key is intentionally excluded — use GET /profile/mollie-key for masked status.
 router.get('/', async (req, res) => {
   const { rows: profiles } = await pool.query(
     'SELECT * FROM tenants WHERE id = $1',
@@ -94,7 +106,8 @@ router.get('/', async (req, res) => {
     'SELECT * FROM profile_links WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
     [req.tenantId],
   )
-  res.json({ ...profiles[0], links })
+  const { mollie_api_key: _omit, ...profile } = profiles[0]
+  res.json({ ...profile, links })
 })
 
 function normalizeFinancialValue(key, raw) {
@@ -182,7 +195,8 @@ router.patch('/', async (req, res) => {
     values,
   )
   if (!rows.length) return res.status(404).json({ error: 'Profile not found' })
-  res.json(rows[0])
+  const { mollie_api_key: _omit, ...updated } = rows[0]
+  res.json(updated)
 })
 
 // Create link
@@ -247,6 +261,39 @@ router.delete('/links/:linkId', async (req, res) => {
   )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
   res.status(204).end()
+})
+
+// Get Mollie API key status (returns masked preview, never the raw key)
+router.get('/mollie-key', async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT mollie_api_key FROM tenants WHERE id = $1',
+    [req.tenantId],
+  )
+  const key = rows[0]?.mollie_api_key || null
+  res.json({ isSet: !!key, preview: maskMollieKey(key) })
+})
+
+// Set or replace Mollie API key (tenant admin only)
+router.put('/mollie-key', requireTenantAdmin, async (req, res) => {
+  const { key } = req.body || {}
+  if (typeof key !== 'string' || !MOLLIE_KEY_RE.test(key)) {
+    return res.status(400).json({ error: 'invalid_mollie_key' })
+  }
+  const { rows } = await pool.query(
+    'UPDATE tenants SET mollie_api_key = $1, updated_at = NOW() WHERE id = $2 RETURNING mollie_api_key',
+    [key, req.tenantId],
+  )
+  const stored = rows[0]?.mollie_api_key
+  res.json({ isSet: !!stored, preview: maskMollieKey(stored) })
+})
+
+// Clear Mollie API key (tenant admin only)
+router.delete('/mollie-key', requireTenantAdmin, async (req, res) => {
+  await pool.query(
+    'UPDATE tenants SET mollie_api_key = NULL, updated_at = NOW() WHERE id = $1',
+    [req.tenantId],
+  )
+  res.json({ isSet: false, preview: null })
 })
 
 // Upload / replace band logo (tenant admin only)

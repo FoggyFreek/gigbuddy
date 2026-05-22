@@ -19,6 +19,8 @@ import adminUsersRouter from './adminUsers.js'
 import sharePhotosRouter from './sharePhotos.js'
 import filesRouter from './files.js'
 import { adminRouter as invitesAdminRouter, redeemRouter as invitesRedeemRouter } from './invites.js'
+import publicMollieRouter from './publicMollie.js'
+import publicInvoicesRouter from './publicInvoices.js'
 import { loadUser, requireApproved } from '../middleware/auth.js'
 import {
   resolveTenantId,
@@ -72,9 +74,25 @@ const redeemLimiter = rateLimit({
   skip: () => isTest,
 })
 
+// Public webhook endpoints — unauthenticated and CSRF-exempt; this limiter
+// caps abuse from random callers hitting our endpoint with guessed invoice IDs.
+const publicWebhookLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
+  skip: () => isTest,
+})
+
 router.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
+
+// Public unauthenticated routes — mounted before CSRF and auth middleware.
+router.use('/public/mollie', publicWebhookLimiter, publicMollieRouter)
+router.use('/public/invoices', publicWebhookLimiter, publicInvoicesRouter)
 
 router.use(apiLimiter)
 router.use(csrf)

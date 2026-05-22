@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit'
+import QRCode from 'qrcode'
 import sharp from 'sharp'
 import { computeInvoiceTotals } from './computeInvoiceTotals.js'
 
@@ -80,12 +81,27 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
     }
   }
 
-  const titleBottom    = drawTitle(doc, invoice, tenant, effectiveLogo)
-  const addrBottom     = drawAddresses(doc, invoice, tenant, titleBottom + 20)
+  // Generate QR code buffer if a payment link exists.
+  let qrBuffer = null
+  if (invoice.mollie_payment_link_url) {
+    try {
+      qrBuffer = await QRCode.toBuffer(invoice.mollie_payment_link_url, {
+        type: 'png',
+        width: 200,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' },
+      })
+    } catch (err) {
+      console.warn('[renderInvoicePdf] QR generation failed:', err.message)
+    }
+  }
+
+  const titleBottom = drawTitle(doc, invoice, tenant, effectiveLogo)
+  const addrBottom  = drawAddresses(doc, invoice, tenant, titleBottom + 20)
   hline(doc, PAGE_MARGIN, RIGHT_EDGE, addrBottom + 8)
-  const linesBottom    = drawLinesTable(doc, lines, totals.perLine, invoice.tax_inclusive, tenant.applies_kor, addrBottom + 24)
+  const linesBottom = drawLinesTable(doc, lines, totals.perLine, invoice.tax_inclusive, tenant.applies_kor, addrBottom + 24)
   drawTotals(doc, totals, tenant.applies_kor, linesBottom)
-  drawFooter(doc, invoice, tenant)
+  drawFooter(doc, invoice, tenant, qrBuffer)
 
   doc.end()
   return done
@@ -305,20 +321,44 @@ function drawTotals(doc, totals, appliesKor, startY) {
 
 // ─── footer ───────────────────────────────────────────────────────────────────
 
-function drawFooter(doc, invoice, tenant) {
-  const y = doc.page.height - PAGE_MARGIN - 48
-  const w = USABLE_W
+const QR_SIZE   = 65  // pt — rendered size of the QR code image in the PDF
+const QR_GAP    = 10  // pt — gap between QR code and text column
 
-  doc.fontSize(9).font('Helvetica').fillColor('#555')
+function drawFooter(doc, invoice, tenant, qrBuffer) {
+  const hasQr = Boolean(qrBuffer)
+
+  // Reserve extra vertical space when a QR code is present.
+  const footerHeight = hasQr ? QR_SIZE + 20 : 48
+  const y = doc.page.height - PAGE_MARGIN - footerHeight
 
   hline(doc, PAGE_MARGIN, RIGHT_EDGE, y - 8, '#cccccc')
 
+  if (hasQr) {
+    // QR code — bottom-left
+    try {
+      doc.image(qrBuffer, PAGE_MARGIN, y, { fit: [QR_SIZE, QR_SIZE] })
+    } catch {
+      // ignore render failure; fall through to text-only footer
+    }
+    doc.fontSize(7).font('Helvetica').fillColor('#888')
+    doc.text('Scan om online te betalen', PAGE_MARGIN, y + QR_SIZE + 3, {
+      width: QR_SIZE,
+      align: 'center',
+    })
+  }
+
+  // Payment instruction text — shifted right when QR is present
+  const textX = hasQr ? PAGE_MARGIN + QR_SIZE + QR_GAP : PAGE_MARGIN
+  const textW = hasQr ? USABLE_W - QR_SIZE - QR_GAP    : USABLE_W
+  const textY = y + (hasQr ? 4 : 0)
+
+  doc.fontSize(9).font('Helvetica').fillColor('#555')
   const payLine = tenant.iban
     ? `Gelieve te betalen binnen ${invoice.payment_term_days || 14} dagen op IBAN ${tenant.iban} t.a.v. ${tenant.formal_name || tenant.band_name || ''} o.v.v. factuurnummer ${invoice.invoice_number}.`
     : `Gelieve te betalen binnen ${invoice.payment_term_days || 14} dagen o.v.v. factuurnummer ${invoice.invoice_number}.`
-  doc.text(payLine, PAGE_MARGIN, y, { width: w })
+  doc.text(payLine, textX, textY, { width: textW })
 
   if (invoice.memo) {
-    doc.fillColor('#333').text(invoice.memo, PAGE_MARGIN, y + 20, { width: w })
+    doc.fillColor('#333').text(invoice.memo, textX, textY + 20, { width: textW })
   }
 }

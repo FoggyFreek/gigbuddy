@@ -102,6 +102,7 @@ npm run lint
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `OIDC_REDIRECT_URI` | Google OAuth |
 | `SESSION_SECRET` | express-session signing key |
 | `APP_URL` / `CLIENT_ORIGIN` | Frontend URL (CORS, OIDC redirect, invite URLs) |
+| `MOLLIE_WEBHOOK_BASE_URL` / `MOLLIE_DISABLE_WEBHOOK` | Public API URL for Mollie webhooks; set disable flag to `true` only for local/testing payment links without webhook callbacks |
 | `ADMIN_EMAIL` | Email of the first super admin |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Web Push (optional; disables push if unset) |
 | `PGDATABASE_TEST` | Test database override (defaults to `${PGDATABASE}_test`) |

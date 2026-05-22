@@ -21,17 +21,24 @@ import TextField from '@mui/material/TextField'
 import Switch from '@mui/material/Switch'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
+import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DownloadIcon from '@mui/icons-material/Download'
 import ImageIcon from '@mui/icons-material/Image'
+import LaunchIcon from '@mui/icons-material/Launch'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import {
   createInvoice,
+  createInvoicePaymentLink,
   deleteInvoice,
   getInvoice,
   removeInvoiceLogo,
+  syncInvoicePaymentLink,
   updateInvoice,
   uploadInvoiceLogo,
 } from '../api/invoices.js'
@@ -770,6 +777,16 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
           <Row label={<strong>Total</strong>} value={<strong>{formatEur(totals.totalCents)}</strong>} />
         </Box>
       </Box>
+
+      {isEdit && invoice && (
+        <>
+          <Divider sx={{ my: 2 }} />
+          <PaymentLinkPanel
+            invoice={invoice}
+            onUpdated={(updated) => setInvoice((prev) => ({ ...prev, ...updated }))}
+          />
+        </>
+      )}
     </>
   )
 
@@ -846,6 +863,171 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
       </Dialog>
       {deleteConfirmDialog}
     </>
+  )
+}
+
+const MOLLIE_STATUS_COLOR = {
+  open: 'default',
+  paid: 'success',
+  expired: 'warning',
+  canceled: 'error',
+}
+
+function PaymentLinkPanel({ invoice, onUpdated }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(null) // 'url' | 'snippet'
+
+  const hasLink = Boolean(invoice.mollie_payment_link_id)
+  const url = invoice.mollie_payment_link_url
+  const paymentStatus = invoice.mollie_payment_status
+  const isVoid = invoice.status === 'void'
+  const hasAmount = invoice.total_cents > 0
+
+  async function handleCreate() {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await createInvoicePaymentLink(invoice.id)
+      // Response is the full invoice row (matches GET /:id shape) so we can
+      // merge it directly — this also carries the new status='sent' and
+      // finalized_at, which are required for the form to switch to read-only.
+      onUpdated(result)
+    } catch (err) {
+      const msg = {
+        mollie_key_missing: 'Mollie API key not configured. Go to Settings → Integrations.',
+        zero_amount: 'Invoice total must be greater than zero.',
+        void_invoice: 'Cannot create a payment link for a void invoice.',
+      }[err.message] ?? err.message
+      setError(msg)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleSync() {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await syncInvoicePaymentLink(invoice.id)
+      onUpdated({
+        mollie_payment_status: result.status,
+        mollie_payment_id: result.paymentId,
+        mollie_paid_at: result.paidAt,
+        status: result.invoiceStatus,
+      })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function copyUrl() {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied('url')
+      setTimeout(() => setCopied((c) => (c === 'url' ? null : c)), 1500)
+    }).catch(() => {})
+  }
+
+  function copySnippet() {
+    const html = [
+      `<p>U kunt uw factuur betalen via de volgende betaallink:</p>`,
+      `<p><a href="${url}">Betaal factuur ${invoice.invoice_number}</a></p>`,
+    ].join('\n')
+    navigator.clipboard.writeText(html).then(() => {
+      setCopied('snippet')
+      setTimeout(() => setCopied((c) => (c === 'snippet' ? null : c)), 1500)
+    }).catch(() => {})
+  }
+
+  return (
+    <Box>
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>Payment link</Typography>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError(null)}>{error}</Alert>
+      )}
+
+      {!hasLink ? (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleCreate}
+            disabled={busy || isVoid || !hasAmount}
+            startIcon={busy ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            Create payment link
+          </Button>
+          {(isVoid || !hasAmount) && (
+            <Typography variant="caption" color="text.secondary">
+              {isVoid ? 'Invoice is void.' : 'Invoice total must be > 0.'}
+            </Typography>
+          )}
+        </Stack>
+      ) : (
+        <Stack spacing={1}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Chip
+              size="small"
+              label={paymentStatus || 'open'}
+              color={MOLLIE_STATUS_COLOR[paymentStatus] ?? 'default'}
+            />
+            <Typography
+              variant="body2"
+              sx={{ fontFamily: 'monospace', wordBreak: 'break-all', flex: 1, minWidth: 0 }}
+            >
+              {url}
+            </Typography>
+          </Stack>
+
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+            <Tooltip title={copied === 'url' ? 'Copied!' : 'Copy link'}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={copied === 'url' ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+                onClick={copyUrl}
+              >
+                Copy link
+              </Button>
+            </Tooltip>
+
+            <Tooltip title="Open payment page">
+              <Button
+                size="small"
+                variant="outlined"
+                component="a"
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                startIcon={<LaunchIcon fontSize="small" />}
+              >
+                Open
+              </Button>
+            </Tooltip>
+
+            <Tooltip title={copied === 'snippet' ? 'Copied!' : 'Copy HTML snippet for email'}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={copied === 'snippet' ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+                onClick={copySnippet}
+              >
+                Copy email snippet
+              </Button>
+            </Tooltip>
+
+            <Tooltip title="Refresh payment status from Mollie">
+              <IconButton size="small" onClick={handleSync} disabled={busy} aria-label="Refresh payment status">
+                {busy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Stack>
+      )}
+    </Box>
   )
 }
 
