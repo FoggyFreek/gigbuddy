@@ -106,7 +106,6 @@ router.get('/', async (req, res) => {
     'SELECT * FROM profile_links WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
     [req.tenantId],
   )
-  // eslint-disable-next-line no-unused-vars
   const { mollie_api_key: _omit, ...profile } = profiles[0]
   res.json({ ...profile, links })
 })
@@ -196,7 +195,6 @@ router.patch('/', async (req, res) => {
     values,
   )
   if (!rows.length) return res.status(404).json({ error: 'Profile not found' })
-  // eslint-disable-next-line no-unused-vars
   const { mollie_api_key: _omit, ...updated } = rows[0]
   res.json(updated)
 })

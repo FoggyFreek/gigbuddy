@@ -36,7 +36,7 @@ router.post('/payment-links/webhook', async (req, res) => {
       const mollieApiKey = invoice.mollie_api_key
       if (mollieApiKey) {
         const mollie = createTenantMollieClient(mollieApiKey)
-        await syncInvoicePaymentStatus(mollie, pool, invoice)
+        await syncInvoicePaymentStatus(mollie, pool, invoice, paymentId)
       }
     }
   } catch (err) {

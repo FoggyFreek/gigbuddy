@@ -358,7 +358,8 @@ router.get('/:id', async (req, res) => {
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
   const lines = await fetchLines(pool, id, req.tenantId)
   const tenant = await fetchTenant(pool, req.tenantId)
-  res.json({ ...rows[0], lines, tenant })
+  const { mollie_api_key: _omit, ...safeTenant } = tenant || {}
+  res.json({ ...rows[0], lines, tenant: safeTenant })
 })
 
 // ---------- create ----------
@@ -668,6 +669,45 @@ router.post('/:id/logo', logoUpload.single('logo'), async (req, res) => {
   res.json({ custom_logo_path: objectKey })
 })
 
+// Mollie payment methods we explicitly accept; restricting up front gives a
+// clearer error than a generic Mollie API error and prevents typos from
+// silently being forwarded.
+const SUPPORTED_PAYMENT_METHODS = new Set([
+  'applepay', 'bancontact', 'banktransfer', 'belfius', 'creditcard',
+  'eps', 'giftcard', 'ideal', 'kbc', 'paypal', 'paysafecard', 'przelewy24',
+  'sofort', 'klarnapaylater', 'klarnasliceit', 'klarnapaynow',
+])
+
+function validatePaymentLinkOptions(body) {
+  const result = { expiresAt: undefined, allowedMethods: undefined }
+
+  if (body.expiresAt !== undefined && body.expiresAt !== null) {
+    if (typeof body.expiresAt !== 'string') {
+      return { error: 'invalid_expires_at' }
+    }
+    const ts = Date.parse(body.expiresAt)
+    if (Number.isNaN(ts)) return { error: 'invalid_expires_at' }
+    if (ts <= Date.now()) return { error: 'expires_at_in_past' }
+    result.expiresAt = body.expiresAt
+  }
+
+  if (body.allowedMethods !== undefined && body.allowedMethods !== null) {
+    if (!Array.isArray(body.allowedMethods)) {
+      return { error: 'invalid_allowed_methods' }
+    }
+    if (body.allowedMethods.length) {
+      for (const m of body.allowedMethods) {
+        if (typeof m !== 'string' || !SUPPORTED_PAYMENT_METHODS.has(m)) {
+          return { error: 'unsupported_payment_method' }
+        }
+      }
+      result.allowedMethods = body.allowedMethods
+    }
+  }
+
+  return result
+}
+
 // ---------- payment link ----------
 router.post('/:id/payment-link', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
@@ -686,7 +726,7 @@ router.post('/:id/payment-link', async (req, res) => {
     return res.status(400).json({ error: 'zero_amount' })
   }
 
-  // Return existing link rather than creating a duplicate
+  // Return existing link rather than creating a duplicate (sequential case).
   if (invoice.mollie_payment_link_id) {
     return res.json({
       paymentLinkId: invoice.mollie_payment_link_id,
@@ -695,18 +735,15 @@ router.post('/:id/payment-link', async (req, res) => {
     })
   }
 
+  const opts = validatePaymentLinkOptions(req.body || {})
+  if (opts.error) return res.status(400).json({ error: opts.error })
+
   const tenant = await fetchTenant(pool, req.tenantId)
   assertMollieConfigured(tenant)
 
   const mollie = createTenantMollieClient(tenant.mollie_api_key)
   const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
   const webhookBase = (process.env.MOLLIE_WEBHOOK_BASE_URL || appUrl).replace(/\/$/, '')
-
-  const body = req.body || {}
-  const expiresAt = typeof body.expiresAt === 'string' ? body.expiresAt : undefined
-  const allowedMethods = Array.isArray(body.allowedMethods) && body.allowedMethods.length
-    ? body.allowedMethods
-    : undefined
 
   const tenantLabel = (tenant.band_name || tenant.formal_name || '').trim()
   const description = tenantLabel
@@ -719,13 +756,20 @@ router.post('/:id/payment-link', async (req, res) => {
     redirectUrl: `${appUrl}/payment/thanks?invoice=${id}`,
     webhookUrl: `${webhookBase}/api/public/mollie/payment-links/webhook?invoice=${id}`,
     reusable: false,
-    ...(expiresAt ? { expiresAt } : {}),
-    ...(allowedMethods ? { allowedMethods } : {}),
+    ...(opts.expiresAt ? { expiresAt: opts.expiresAt } : {}),
+    ...(opts.allowedMethods ? { allowedMethods: opts.allowedMethods } : {}),
   })
 
-  const checkoutUrl = paymentLink._links?.paymentLink?.href ?? null
+  const checkoutUrl = paymentLink._links?.paymentLink?.href
+  if (!checkoutUrl) {
+    return res.status(502).json({ error: 'mollie_payment_link_url_missing' })
+  }
 
-  await pool.query(
+  // Atomic update guard: only write if no other concurrent request beat us to it.
+  // If a concurrent request stored its own link first, the Mollie link we just
+  // created is orphaned — acceptable in the rare race window because Mollie
+  // payment links carry no charge until used.
+  const updateResult = await pool.query(
     `UPDATE invoices
         SET mollie_payment_link_id = $1,
             mollie_payment_link_url = $2,
@@ -733,9 +777,23 @@ router.post('/:id/payment-link', async (req, res) => {
             mollie_payment_link_expires_at = $3,
             mollie_payment_status = 'open',
             updated_at = NOW()
-      WHERE id = $4 AND tenant_id = $5`,
-    [paymentLink.id, checkoutUrl, expiresAt ?? null, id, req.tenantId],
+      WHERE id = $4 AND tenant_id = $5
+        AND mollie_payment_link_id IS NULL`,
+    [paymentLink.id, checkoutUrl, opts.expiresAt ?? null, id, req.tenantId],
   )
+
+  if (updateResult.rowCount === 0) {
+    const { rows: refreshed } = await pool.query(
+      `SELECT mollie_payment_link_id, mollie_payment_link_url, mollie_payment_status
+         FROM invoices WHERE id = $1 AND tenant_id = $2`,
+      [id, req.tenantId],
+    )
+    return res.json({
+      paymentLinkId: refreshed[0].mollie_payment_link_id,
+      paymentLinkUrl: refreshed[0].mollie_payment_link_url,
+      status: refreshed[0].mollie_payment_status || 'open',
+    })
+  }
 
   // Re-render the PDF so it includes the QR code.
   renderAndStorePdf(id, req.tenantId).catch((err) =>
@@ -807,13 +865,20 @@ router.delete('/:id/logo', async (req, res) => {
 
 // Shared payment-status update logic used by both the sync endpoint and the webhook.
 // Fetches current payment link state from Mollie, then checks the most recent payment.
-export async function syncInvoicePaymentStatus(mollie, db, invoice) {
-  // Fetch from Mollie to get authoritative state
+//
+// `expectedPaymentId` — when called from the webhook, this is the id Mollie posted.
+// We refuse to mutate state unless the posted id matches the payment Mollie actually
+// reports under the link, so callers who guess invoice ids can't even trigger a status
+// flip with a random payment id.
+export async function syncInvoicePaymentStatus(mollie, db, invoice, expectedPaymentId = null) {
   const paymentLink = await mollie.paymentLinks.get(invoice.mollie_payment_link_id)
 
-  // Look up payments for this link (first page only; for a reusable:false link there is at most 1)
   const payments = await mollie.paymentLinks.listPayments(invoice.mollie_payment_link_id, { limit: 1 })
   const latestPayment = payments?.[0] ?? null
+
+  if (expectedPaymentId && (!latestPayment || latestPayment.id !== expectedPaymentId)) {
+    return invoice
+  }
 
   let mollieStatus = paymentLink.status ?? 'open'
   let paymentId = invoice.mollie_payment_id
@@ -836,9 +901,9 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice) {
             mollie_paid_at        = $3,
             status                = $4,
             updated_at            = NOW()
-      WHERE id = $5
+      WHERE id = $5 AND tenant_id = $6
       RETURNING *`,
-    [mollieStatus, paymentId, paidAt, invoiceStatus, invoice.id],
+    [mollieStatus, paymentId, paidAt, invoiceStatus, invoice.id, invoice.tenant_id],
   )
   return rows[0]
 }

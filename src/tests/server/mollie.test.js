@@ -448,3 +448,273 @@ describe('public webhook endpoint authentication', () => {
     expect(res.status).toBe(401)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review finding #1: GET /api/invoices/:id must not leak mollie_api_key
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /api/invoices/:id — Mollie key hardening (review #1)', () => {
+  it('does not include tenant.mollie_api_key in invoice detail response', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).get(`/api/invoices/${inv.id}`))
+    expect(res.status).toBe(200)
+    expect(res.body.tenant).toBeDefined()
+    expect(res.body.tenant).not.toHaveProperty('mollie_api_key')
+    // Verify the tenant object still contains expected display fields
+    expect(res.body.tenant.band_name).toBe('Alpha Band')
+  })
+
+  it('does not include mollie_api_key at any top-level key of invoice detail', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).get(`/api/invoices/${inv.id}`))
+    expect(JSON.stringify(res.body)).not.toContain('test_mollie_key_alpha')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review finding #4: Webhook must verify the posted payment id matches Mollie
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Webhook payment id verification (review #4)', () => {
+  it('does not update invoice when posted payment id mismatches Mollie payment', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    // Mollie reports paid for tr_real456 — but the webhook posts a different id.
+    mockPaymentLinksGet.mockResolvedValue({ id: 'pl_test123', status: 'paid' })
+    mockPaymentLinksListPayments.mockResolvedValue([{
+      id: 'tr_real456', status: 'paid', paidAt: '2026-05-20T12:00:00+00:00',
+    }])
+
+    const res = await request(app)
+      .post(`/api/public/mollie/payment-links/webhook?invoice=${inv.id}`)
+      .send('id=tr_forged999')
+      .set('Content-Type', 'application/x-www-form-urlencoded')
+    expect(res.status).toBe(200)
+
+    const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('draft')          // unchanged
+    expect(rows[0].mollie_payment_id).toBeNull()  // unchanged
+  })
+
+  it('does update invoice when posted payment id matches Mollie payment', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    mockPaymentLinksGet.mockResolvedValue({ id: 'pl_test123', status: 'paid' })
+    mockPaymentLinksListPayments.mockResolvedValue([{
+      id: 'tr_match', status: 'paid', paidAt: '2026-05-20T12:00:00+00:00',
+    }])
+
+    await request(app)
+      .post(`/api/public/mollie/payment-links/webhook?invoice=${inv.id}`)
+      .send('id=tr_match')
+      .set('Content-Type', 'application/x-www-form-urlencoded')
+
+    const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('paid')
+    expect(rows[0].mollie_payment_id).toBe('tr_match')
+  })
+
+  it('sync endpoint (no expectedPaymentId) still updates without a posted id', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    mockPaymentLinksGet.mockResolvedValue({ id: 'pl_test123', status: 'paid' })
+    mockPaymentLinksListPayments.mockResolvedValue([{
+      id: 'tr_real', status: 'paid', paidAt: '2026-05-20T12:00:00+00:00',
+    }])
+
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link/sync`)).send()
+    expect(res.status).toBe(200)
+    expect(res.body.invoiceStatus).toBe('paid')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review finding #6: Validate optional expiresAt and allowedMethods
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Payment-link option validation (review #6)', () => {
+  it('rejects non-string expiresAt with 400', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ expiresAt: 12345 })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invalid_expires_at')
+    expect(mockPaymentLinksCreate).not.toHaveBeenCalled()
+  })
+
+  it('rejects unparseable expiresAt with 400', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ expiresAt: 'not-a-date' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invalid_expires_at')
+  })
+
+  it('rejects past expiresAt with 400', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ expiresAt: '2020-01-01T00:00:00Z' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('expires_at_in_past')
+  })
+
+  it('accepts a future expiresAt and forwards it to Mollie', async () => {
+    const inv = await createInvoiceA()
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ expiresAt: future })
+    expect(res.status).toBe(201)
+    expect(mockPaymentLinksCreate).toHaveBeenCalledWith(expect.objectContaining({
+      expiresAt: future,
+    }))
+  })
+
+  it('rejects non-array allowedMethods with 400', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ allowedMethods: 'ideal' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invalid_allowed_methods')
+  })
+
+  it('rejects unsupported allowedMethods entry with 400', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ allowedMethods: ['ideal', 'made-up-method'] })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('unsupported_payment_method')
+  })
+
+  it('accepts supported allowedMethods and forwards them to Mollie', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ allowedMethods: ['ideal', 'creditcard'] })
+    expect(res.status).toBe(201)
+    expect(mockPaymentLinksCreate).toHaveBeenCalledWith(expect.objectContaining({
+      allowedMethods: ['ideal', 'creditcard'],
+    }))
+  })
+
+  it('omits allowedMethods entirely when an empty array is sent', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ allowedMethods: [] })
+    expect(res.status).toBe(201)
+    expect(mockPaymentLinksCreate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ allowedMethods: expect.anything() }),
+    )
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review finding #7: Missing checkout URL must fail fast
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Payment-link missing checkout URL (review #7)', () => {
+  it('returns 502 and does not store the link when Mollie omits the URL', async () => {
+    mockPaymentLinksCreate.mockResolvedValue({ id: 'pl_nourl', _links: {} })
+
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    expect(res.status).toBe(502)
+    expect(res.body.error).toBe('mollie_payment_link_url_missing')
+
+    const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].mollie_payment_link_id).toBeNull()
+    expect(rows[0].mollie_payment_link_url).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review finding #3: Concurrent payment-link creation produces a single link
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Concurrent payment-link creation (review #3)', () => {
+  it('two concurrent calls leave only one stored link on the invoice', async () => {
+    const inv = await createInvoiceA()
+
+    // Give each concurrent call a distinct Mollie id so we can tell which one
+    // won the race; only one should make it into the DB.
+    let count = 0
+    mockPaymentLinksCreate.mockImplementation(async () => {
+      count += 1
+      return {
+        id: `pl_race_${count}`,
+        _links: { paymentLink: { href: `https://paymentlink.mollie.com/payment/race_${count}` } },
+      }
+    })
+
+    const [r1, r2] = await Promise.all([
+      asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({}),
+      asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({}),
+    ])
+
+    expect([r1.status, r2.status].sort()).toEqual([200, 201])
+
+    // Both responses report the same stored link
+    expect(r1.body.paymentLinkId).toBe(r2.body.paymentLinkId)
+    expect(r1.body.paymentLinkUrl).toBe(r2.body.paymentLinkUrl)
+
+    // DB has exactly one of the two generated ids
+    const { rows } = await pool.query(
+      'SELECT mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
+    expect(['pl_race_1', 'pl_race_2']).toContain(rows[0].mollie_payment_link_id)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review finding #5: syncInvoicePaymentStatus is tenant-scoped
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('syncInvoicePaymentStatus tenant scoping (review #5)', () => {
+  it('UPDATE includes tenant_id so an invoice carrying the wrong tenant_id is a no-op', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    // Load the canonical invoice row, then tamper with its tenant_id to simulate
+    // a stale or attacker-controlled invoice object reaching the sync helper.
+    const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
+    const tampered = { ...rows[0], tenant_id: seed.tenantB.id }
+
+    const { syncInvoicePaymentStatus } = await import('../../../server/routes/invoices.js')
+    const mollieMod = await import('../../../server/utils/mollieClient.js')
+    const mollie = mollieMod.createTenantMollieClient('any')
+
+    mockPaymentLinksGet.mockResolvedValue({ id: 'pl_test123', status: 'paid' })
+    mockPaymentLinksListPayments.mockResolvedValue([{
+      id: 'tr_x', status: 'paid', paidAt: '2026-05-20T12:00:00+00:00',
+    }])
+
+    const result = await syncInvoicePaymentStatus(mollie, pool, tampered)
+    // Update with tenant_id mismatch returns no row from RETURNING
+    expect(result).toBeUndefined()
+
+    // Original tenant A invoice is untouched.
+    const { rows: after } = await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])
+    expect(after[0].status).toBe('draft')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review finding #2: Public webhook is rate-limited (configuration-only test;
+// the limiter is bypassed in NODE_ENV=test, so we assert it's mounted)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Public webhook rate limiter (review #2)', () => {
+  it('publicWebhookLimiter is wired before the /public/mollie router', async () => {
+    // Re-read the routes file to confirm the limiter is referenced before the
+    // router. This catches accidental ordering regressions in code review.
+    const fs = await import('fs/promises')
+    const path = await import('path')
+    const url = await import('url')
+    const here = path.dirname(url.fileURLToPath(import.meta.url))
+    const src = await fs.readFile(
+      path.resolve(here, '../../../server/routes/index.js'),
+      'utf8',
+    )
+    expect(src).toMatch(/publicWebhookLimiter[\s\S]*router\.use\('\/public\/mollie',\s*publicWebhookLimiter/)
+  })
+})
