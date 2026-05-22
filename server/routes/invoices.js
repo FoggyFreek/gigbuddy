@@ -674,8 +674,7 @@ router.post('/:id/logo', logoUpload.single('logo'), async (req, res) => {
 // silently being forwarded.
 const SUPPORTED_PAYMENT_METHODS = new Set([
   'applepay', 'bancontact', 'banktransfer', 'belfius', 'creditcard',
-  'eps', 'giftcard', 'ideal', 'kbc', 'paypal', 'paysafecard', 'przelewy24',
-  'sofort', 'klarnapaylater', 'klarnasliceit', 'klarnapaynow',
+  'eps', 'ideal', 'kbc', 'paypal', 'paysafecard', 'przelewy24',
 ])
 
 function validatePaymentLinkOptions(body) {
@@ -771,7 +770,9 @@ router.post('/:id/payment-link', async (req, res) => {
   // payment links carry no charge until used.
   const updateResult = await pool.query(
     `UPDATE invoices
-        SET mollie_payment_link_id = $1,
+        SET status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END,
+            finalized_at = COALESCE(finalized_at, NOW()),
+            mollie_payment_link_id = $1,
             mollie_payment_link_url = $2,
             mollie_payment_link_created_at = NOW(),
             mollie_payment_link_expires_at = $3,

@@ -238,6 +238,71 @@ describe('POST /api/invoices/:id/payment-link', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Issue 1: Invoice finalization on payment-link creation
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Invoice finalization on payment-link creation (issue 1)', () => {
+  it('creates payment link for a draft invoice and sets status=sent + finalized_at', async () => {
+    const inv = await createInvoiceA()
+    expect(inv.status).toBe('draft')
+    expect(inv.finalized_at).toBeNull()
+
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    expect(res.status).toBe(201)
+
+    const { rows } = await pool.query('SELECT status, finalized_at FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('sent')
+    expect(rows[0].finalized_at).not.toBeNull()
+  })
+
+  it('does not regress status when invoice is already finalized (status stays "sent")', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'sent' })
+
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    expect(res.status).toBe(201)
+
+    const { rows } = await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('sent')
+  })
+
+  it('content edits to line items are blocked after payment-link creation (409)', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    const patchRes = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({
+      lines: [{ description: 'Changed', quantity: 1, unit_price_cents: 75000, tax_percentage: 0 }],
+    })
+    expect(patchRes.status).toBe(409)
+    expect(patchRes.body.code).toBe('invoice_finalized')
+  })
+
+  it('customer_name edit is blocked after payment-link creation (finalized_at gate)', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    const patchRes = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({
+      customer_name: 'Different Name',
+    })
+    expect(patchRes.status).toBe(409)
+  })
+
+  it('Mollie amount matches invoice total_cents at time of link creation', async () => {
+    const inv = await createInvoiceA({
+      lines: [{ description: 'Gig fee', quantity: 2, unit_price_cents: 25000, tax_percentage: 0 }],
+    })
+    // total_cents should be 50000 (€500.00)
+    expect(inv.total_cents).toBe(50000)
+
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    expect(mockPaymentLinksCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: { currency: 'EUR', value: '500.00' } }),
+    )
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/invoices/:id/payment-link/sync
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -282,10 +347,11 @@ describe('POST /api/invoices/:id/payment-link/sync', () => {
 
     const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link/sync`)).send()
     expect(res.status).toBe(200)
-    expect(res.body.invoiceStatus).toBe('draft')
+    // Invoice is finalized to 'sent' when the payment link is created; sync leaves it 'sent'
+    expect(res.body.invoiceStatus).toBe('sent')
 
     const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
-    expect(rows[0].status).toBe('draft')
+    expect(rows[0].status).toBe('sent')
   })
 
   it('is idempotent for paid status', async () => {
@@ -350,7 +416,8 @@ describe('POST /api/public/mollie/payment-links/webhook', () => {
       .set('Content-Type', 'application/x-www-form-urlencoded')
 
     const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
-    expect(rows[0].status).toBe('draft')
+    // Finalized to 'sent' on link creation; stays 'sent' (not promoted to 'paid') for open payment
+    expect(rows[0].status).toBe('sent')
   })
 
   it('returns 200 for unknown invoice id (no data leakage)', async () => {
@@ -607,6 +674,40 @@ describe('Payment-link option validation (review #6)', () => {
       expect.not.objectContaining({ allowedMethods: expect.anything() }),
     )
   })
+
+  // Issue 2: methods that require extra Mollie request fields (lines, billingAddress)
+  // are rejected by the conservative allowlist.
+  it('rejects klarnapaylater (requires lines + billingAddress) with 400', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ allowedMethods: ['klarnapaylater'] })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('unsupported_payment_method')
+  })
+
+  it('rejects klarna (requires lines + billingAddress) with 400', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ allowedMethods: ['klarna'] })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('unsupported_payment_method')
+  })
+
+  it('rejects sofort (not in conservative list) with 400', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ allowedMethods: ['sofort'] })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('unsupported_payment_method')
+  })
+
+  it('rejects giftcard (requires extra fields) with 400', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`))
+      .send({ allowedMethods: ['giftcard'] })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('unsupported_payment_method')
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -692,9 +793,9 @@ describe('syncInvoicePaymentStatus tenant scoping (review #5)', () => {
     // Update with tenant_id mismatch returns no row from RETURNING
     expect(result).toBeUndefined()
 
-    // Original tenant A invoice is untouched.
+    // Original tenant A invoice is untouched — 'sent' because link creation finalized it.
     const { rows: after } = await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])
-    expect(after[0].status).toBe('draft')
+    expect(after[0].status).toBe('sent')
   })
 })
 
