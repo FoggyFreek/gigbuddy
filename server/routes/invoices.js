@@ -7,6 +7,11 @@ import { storageClient, BUCKET } from '../utils/storage.js'
 import { validateAndReencodeImage } from '../utils/imageProcess.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
+import {
+  assertMollieConfigured,
+  createTenantMollieClient,
+  formatMollieAmountFromCents,
+} from '../utils/mollieClient.js'
 
 const router = Router()
 
@@ -196,6 +201,8 @@ router.get('/', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT id, invoice_number, gig_id, issue_date, due_date,
             customer_name, total_cents, status, pdf_path, finalized_at,
+            mollie_payment_link_id, mollie_payment_link_url,
+            mollie_payment_status, mollie_paid_at,
             created_at, updated_at
        FROM invoices
       WHERE tenant_id = $1
@@ -661,6 +668,112 @@ router.post('/:id/logo', logoUpload.single('logo'), async (req, res) => {
   res.json({ custom_logo_path: objectKey })
 })
 
+// ---------- payment link ----------
+router.post('/:id/payment-link', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+
+  const { rows } = await pool.query(
+    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
+    [id, req.tenantId],
+  )
+  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+  const invoice = rows[0]
+
+  if (invoice.status === 'void') {
+    return res.status(400).json({ error: 'void_invoice' })
+  }
+  if (invoice.total_cents <= 0) {
+    return res.status(400).json({ error: 'zero_amount' })
+  }
+
+  // Return existing link rather than creating a duplicate
+  if (invoice.mollie_payment_link_id) {
+    return res.json({
+      paymentLinkId: invoice.mollie_payment_link_id,
+      paymentLinkUrl: invoice.mollie_payment_link_url,
+      status: invoice.mollie_payment_status || 'open',
+    })
+  }
+
+  const tenant = await fetchTenant(pool, req.tenantId)
+  assertMollieConfigured(tenant)
+
+  const mollie = createTenantMollieClient(tenant.mollie_api_key)
+  const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
+  const webhookBase = (process.env.MOLLIE_WEBHOOK_BASE_URL || appUrl).replace(/\/$/, '')
+
+  const body = req.body || {}
+  const expiresAt = typeof body.expiresAt === 'string' ? body.expiresAt : undefined
+  const allowedMethods = Array.isArray(body.allowedMethods) && body.allowedMethods.length
+    ? body.allowedMethods
+    : undefined
+
+  const tenantLabel = (tenant.band_name || tenant.formal_name || '').trim()
+  const description = tenantLabel
+    ? `Invoice ${invoice.invoice_number} - ${tenantLabel}`
+    : `Invoice ${invoice.invoice_number}`
+
+  const paymentLink = await mollie.paymentLinks.create({
+    amount: { currency: 'EUR', value: formatMollieAmountFromCents(invoice.total_cents) },
+    description,
+    redirectUrl: `${appUrl}/payment/thanks?invoice=${id}`,
+    webhookUrl: `${webhookBase}/api/public/mollie/payment-links/webhook?invoice=${id}`,
+    reusable: false,
+    ...(expiresAt ? { expiresAt } : {}),
+    ...(allowedMethods ? { allowedMethods } : {}),
+  })
+
+  const checkoutUrl = paymentLink._links?.paymentLink?.href ?? null
+
+  await pool.query(
+    `UPDATE invoices
+        SET mollie_payment_link_id = $1,
+            mollie_payment_link_url = $2,
+            mollie_payment_link_created_at = NOW(),
+            mollie_payment_link_expires_at = $3,
+            mollie_payment_status = 'open',
+            updated_at = NOW()
+      WHERE id = $4 AND tenant_id = $5`,
+    [paymentLink.id, checkoutUrl, expiresAt ?? null, id, req.tenantId],
+  )
+
+  res.status(201).json({
+    paymentLinkId: paymentLink.id,
+    paymentLinkUrl: checkoutUrl,
+    status: 'open',
+  })
+})
+
+// ---------- payment link sync ----------
+router.post('/:id/payment-link/sync', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+
+  const { rows } = await pool.query(
+    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
+    [id, req.tenantId],
+  )
+  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+  const invoice = rows[0]
+
+  if (!invoice.mollie_payment_link_id) {
+    return res.status(400).json({ error: 'no_payment_link' })
+  }
+
+  const tenant = await fetchTenant(pool, req.tenantId)
+  assertMollieConfigured(tenant)
+
+  const mollie = createTenantMollieClient(tenant.mollie_api_key)
+  const updated = await syncInvoicePaymentStatus(mollie, pool, invoice)
+
+  res.json({
+    paymentLinkId: updated.mollie_payment_link_id,
+    paymentLinkUrl: updated.mollie_payment_link_url,
+    status: updated.mollie_payment_status,
+    paidAt: updated.mollie_paid_at,
+    invoiceStatus: updated.status,
+  })
+})
+
 router.delete('/:id/logo', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const { rows } = await pool.query(
@@ -686,5 +799,43 @@ router.delete('/:id/logo', async (req, res) => {
   }
   res.status(204).end()
 })
+
+// Shared payment-status update logic used by both the sync endpoint and the webhook.
+// Fetches current payment link state from Mollie, then checks the most recent payment.
+export async function syncInvoicePaymentStatus(mollie, db, invoice) {
+  // Fetch from Mollie to get authoritative state
+  const paymentLink = await mollie.paymentLinks.get(invoice.mollie_payment_link_id)
+
+  // Look up payments for this link (first page only; for a reusable:false link there is at most 1)
+  const payments = await mollie.paymentLinks.listPayments(invoice.mollie_payment_link_id, { limit: 1 })
+  const latestPayment = payments?.[0] ?? null
+
+  let mollieStatus = paymentLink.status ?? 'open'
+  let paymentId = invoice.mollie_payment_id
+  let paidAt = invoice.mollie_paid_at
+  let invoiceStatus = invoice.status
+
+  if (latestPayment) {
+    mollieStatus = latestPayment.status
+    paymentId = latestPayment.id
+    if (latestPayment.status === 'paid') {
+      paidAt = latestPayment.paidAt ? new Date(latestPayment.paidAt) : new Date()
+      if (invoice.status !== 'void') invoiceStatus = 'paid'
+    }
+  }
+
+  const { rows } = await db.query(
+    `UPDATE invoices
+        SET mollie_payment_status = $1,
+            mollie_payment_id     = $2,
+            mollie_paid_at        = $3,
+            status                = $4,
+            updated_at            = NOW()
+      WHERE id = $5
+      RETURNING *`,
+    [mollieStatus, paymentId, paidAt, invoiceStatus, invoice.id],
+  )
+  return rows[0]
+}
 
 export default router

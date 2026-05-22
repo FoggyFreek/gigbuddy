@@ -93,7 +93,8 @@ function requireLinkId(req, res) {
   return linkId
 }
 
-// Get tenant profile with its links
+// Get tenant profile with its links.
+// mollie_api_key is intentionally excluded — use GET /profile/mollie-key for masked status.
 router.get('/', async (req, res) => {
   const { rows: profiles } = await pool.query(
     'SELECT * FROM tenants WHERE id = $1',
@@ -105,7 +106,9 @@ router.get('/', async (req, res) => {
     'SELECT * FROM profile_links WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
     [req.tenantId],
   )
-  res.json({ ...profiles[0], links })
+  // eslint-disable-next-line no-unused-vars
+  const { mollie_api_key: _omit, ...profile } = profiles[0]
+  res.json({ ...profile, links })
 })
 
 function normalizeFinancialValue(key, raw) {
@@ -193,7 +196,9 @@ router.patch('/', async (req, res) => {
     values,
   )
   if (!rows.length) return res.status(404).json({ error: 'Profile not found' })
-  res.json(rows[0])
+  // eslint-disable-next-line no-unused-vars
+  const { mollie_api_key: _omit, ...updated } = rows[0]
+  res.json(updated)
 })
 
 // Create link

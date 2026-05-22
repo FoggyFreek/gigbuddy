@@ -17,3 +17,9 @@ export function uploadInvoiceLogo(id, file) {
 }
 
 export const removeInvoiceLogo = (id) => api(`/${id}/logo`, { method: 'DELETE' })
+
+export const createInvoicePaymentLink = (id, body = {}) =>
+  api(`/${id}/payment-link`, { method: 'POST', body: JSON.stringify(body) })
+
+export const syncInvoicePaymentLink = (id) =>
+  api(`/${id}/payment-link/sync`, { method: 'POST' })

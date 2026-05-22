@@ -19,6 +19,7 @@ import adminUsersRouter from './adminUsers.js'
 import sharePhotosRouter from './sharePhotos.js'
 import filesRouter from './files.js'
 import { adminRouter as invitesAdminRouter, redeemRouter as invitesRedeemRouter } from './invites.js'
+import publicMollieRouter from './publicMollie.js'
 import { loadUser, requireApproved } from '../middleware/auth.js'
 import {
   resolveTenantId,
@@ -75,6 +76,9 @@ const redeemLimiter = rateLimit({
 router.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
+
+// Public unauthenticated routes — mounted before CSRF and auth middleware.
+router.use('/public/mollie', publicMollieRouter)
 
 router.use(apiLimiter)
 router.use(csrf)
