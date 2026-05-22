@@ -17,3 +17,8 @@ export function uploadLogo(file) {
   fd.append('logo', file)
   return requestForm('/api/profile/logo', fd)
 }
+
+export const getMollieKey = () => api('/mollie-key')
+export const setMollieKey = (key) =>
+  api('/mollie-key', { method: 'PUT', body: JSON.stringify({ key }) })
+export const clearMollieKey = () => api('/mollie-key', { method: 'DELETE' })

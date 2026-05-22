@@ -8,6 +8,17 @@ import { storageClient, BUCKET } from '../utils/storage.js'
 import { validateAndReencodeImage } from '../utils/imageProcess.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
+// Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
+const MOLLIE_KEY_RE = /^(live|test)_[A-Za-z0-9]{25,}$/
+
+function maskMollieKey(key) {
+  if (!key) return null
+  const prefix = key.slice(0, 5)
+  const last4 = key.slice(-4)
+  const dots = '•'.repeat(Math.max(0, key.length - 9))
+  return `${prefix}${dots}${last4}`
+}
+
 const router = Router()
 
 const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -247,6 +258,39 @@ router.delete('/links/:linkId', async (req, res) => {
   )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
   res.status(204).end()
+})
+
+// Get Mollie API key status (returns masked preview, never the raw key)
+router.get('/mollie-key', async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT mollie_api_key FROM tenants WHERE id = $1',
+    [req.tenantId],
+  )
+  const key = rows[0]?.mollie_api_key || null
+  res.json({ isSet: !!key, preview: maskMollieKey(key) })
+})
+
+// Set or replace Mollie API key (tenant admin only)
+router.put('/mollie-key', requireTenantAdmin, async (req, res) => {
+  const { key } = req.body || {}
+  if (typeof key !== 'string' || !MOLLIE_KEY_RE.test(key)) {
+    return res.status(400).json({ error: 'invalid_mollie_key' })
+  }
+  const { rows } = await pool.query(
+    'UPDATE tenants SET mollie_api_key = $1, updated_at = NOW() WHERE id = $2 RETURNING mollie_api_key',
+    [key, req.tenantId],
+  )
+  const stored = rows[0]?.mollie_api_key
+  res.json({ isSet: !!stored, preview: maskMollieKey(stored) })
+})
+
+// Clear Mollie API key (tenant admin only)
+router.delete('/mollie-key', requireTenantAdmin, async (req, res) => {
+  await pool.query(
+    'UPDATE tenants SET mollie_api_key = NULL, updated_at = NOW() WHERE id = $1',
+    [req.tenantId],
+  )
+  res.json({ isSet: false, preview: null })
 })
 
 // Upload / replace band logo (tenant admin only)
