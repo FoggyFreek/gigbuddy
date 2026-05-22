@@ -1,9 +1,24 @@
+import { useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined'
 
 export default function PaymentThanksPage() {
+  const [params] = useSearchParams()
+  const bandName = params.get('band')?.trim() || ''
+  const invoiceId = params.get('invoice')
+
+  const logoSrc = useMemo(() => {
+    if (!invoiceId || !/^\d+$/.test(invoiceId)) return null
+    return `/api/public/invoices/${invoiceId}/logo`
+  }, [invoiceId])
+
+  const heading = bandName
+    ? `Bedankt namens ${bandName} voor uw betaling`
+    : 'Bedankt voor uw betaling'
+
   return (
     <Box
       sx={{
@@ -19,17 +34,26 @@ export default function PaymentThanksPage() {
         variant="outlined"
         sx={{ p: 5, maxWidth: 420, width: '100%', textAlign: 'center' }}
       >
+        {logoSrc && (
+          <Box
+            component="img"
+            src={logoSrc}
+            alt={bandName ? `${bandName} logo` : 'Band logo'}
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
+            sx={{ maxWidth: 160, maxHeight: 120, mb: 3, mx: 'auto', display: 'block' }}
+          />
+        )}
         <CheckCircleOutlineIcon
           sx={{ fontSize: 64, color: 'success.main', mb: 2 }}
         />
         <Typography variant="h5" fontWeight={600} gutterBottom>
-          Thanks for your payment
+          {heading}
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-          We&apos;ll process the payment confirmation shortly.
+          We verwerken de betalingsbevestiging zo spoedig mogelijk.
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          You may close this page.
+          U kunt deze pagina sluiten.
         </Typography>
       </Paper>
     </Box>

@@ -20,6 +20,7 @@ import sharePhotosRouter from './sharePhotos.js'
 import filesRouter from './files.js'
 import { adminRouter as invitesAdminRouter, redeemRouter as invitesRedeemRouter } from './invites.js'
 import publicMollieRouter from './publicMollie.js'
+import publicInvoicesRouter from './publicInvoices.js'
 import { loadUser, requireApproved } from '../middleware/auth.js'
 import {
   resolveTenantId,
@@ -91,6 +92,7 @@ router.get('/health', (_req, res) => {
 
 // Public unauthenticated routes — mounted before CSRF and auth middleware.
 router.use('/public/mollie', publicWebhookLimiter, publicMollieRouter)
+router.use('/public/invoices', publicWebhookLimiter, publicInvoicesRouter)
 
 router.use(apiLimiter)
 router.use(csrf)

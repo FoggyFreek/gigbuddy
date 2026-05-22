@@ -30,6 +30,7 @@ Additional env vars:
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `OIDC_REDIRECT_URI` — Google OAuth (OpenID Connect)
 - `SESSION_SECRET` — `express-session` signing secret
 - `APP_URL` / `CLIENT_ORIGIN` — frontend URL, used for CORS and OIDC post-login redirect, and for invite URL generation
+- `MOLLIE_WEBHOOK_BASE_URL` / `MOLLIE_DISABLE_WEBHOOK` — Mollie webhook base URL for invoice payment links; set `MOLLIE_DISABLE_WEBHOOK=true` only for local/testing flows where Mollie cannot reach the app
 - `ADMIN_EMAIL` — first user with this email is bootstrapped as super admin (and `tenant_admin` of the seed tenant) on initial login
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` — Web Push credentials. If unset, push notifications are silently disabled (server logs a warning at boot)
 - `PGDATABASE_TEST` — optional override for the backend test DB. Defaults to `${PGDATABASE}_test`; the harness refuses any DB name not ending in `_test`

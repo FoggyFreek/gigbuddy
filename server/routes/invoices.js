@@ -523,9 +523,21 @@ router.patch('/:id', async (req, res) => {
 
     if (contentChanged) {
       const { rows: cur } = await client.query(
-        'SELECT tax_inclusive, discount_type, discount_pct, discount_cents FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+        'SELECT tax_inclusive, discount_type, discount_pct, discount_cents, finalized_at FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
         [id, req.tenantId],
       )
+      // Re-check finalization under row lock: a concurrent payment-link
+      // creation may have finalized the invoice between the non-locking read
+      // above (line ~461) and this point. Without this gate, the PATCH would
+      // mutate content (e.g. line items, total_cents) on an invoice whose
+      // Mollie payment link is already committed to the original amount.
+      // Mirror the pre-tx gate's field set: memo and status are allowed
+      // post-finalization, so only block when a FINALIZED_LOCKED field is in
+      // the request body.
+      if (cur[0].finalized_at !== null && requestedContentFields.length > 0) {
+        await client.query('ROLLBACK')
+        return res.status(409).json({ error: 'Invoice is finalized', code: 'invoice_finalized' })
+      }
       const taxInclusive = 'tax_inclusive' in body ? Boolean(body.tax_inclusive) : cur[0].tax_inclusive
       const discountType = 'discount_type' in body ? (body.discount_type === 'pct' ? 'pct' : 'eur') : cur[0].discount_type
       const discountPct = 'discount_pct' in body ? Math.max(0, Number(body.discount_pct) || 0) : Number(cur[0].discount_pct)
@@ -707,35 +719,75 @@ function validatePaymentLinkOptions(body) {
   return result
 }
 
+function isMollieWebhookDisabled() {
+  return process.env.MOLLIE_DISABLE_WEBHOOK === 'true'
+}
+
 // ---------- payment link ----------
 router.post('/:id/payment-link', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
 
-  const { rows } = await pool.query(
-    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  const invoice = rows[0]
-
-  if (invoice.status === 'void') {
-    return res.status(400).json({ error: 'void_invoice' })
-  }
-  if (invoice.total_cents <= 0) {
-    return res.status(400).json({ error: 'zero_amount' })
-  }
-
-  // Return existing link rather than creating a duplicate (sequential case).
-  if (invoice.mollie_payment_link_id) {
-    return res.json({
-      paymentLinkId: invoice.mollie_payment_link_id,
-      paymentLinkUrl: invoice.mollie_payment_link_url,
-      status: invoice.mollie_payment_status || 'open',
-    })
-  }
-
   const opts = validatePaymentLinkOptions(req.body || {})
   if (opts.error) return res.status(400).json({ error: opts.error })
+
+  // Step 1: lock the invoice row, validate, and finalize (status='sent' if
+  // draft, set finalized_at) BEFORE calling Mollie. Committing finalization
+  // first means a concurrent PATCH that re-checks finalized_at under its own
+  // row lock will 409 instead of mutating content (e.g. line totals) that
+  // Mollie's amount is already pinned to.
+  let invoice
+  let alreadyLinkedResponse = null
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const locked = await client.query(
+      'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+      [id, req.tenantId],
+    )
+    if (!locked.rows.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Not found' })
+    }
+    const current = locked.rows[0]
+    if (current.status === 'void') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'void_invoice' })
+    }
+    if (current.total_cents <= 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'zero_amount' })
+    }
+
+    if (current.mollie_payment_link_id) {
+      // Sequential case — link already exists. Return the row as-is.
+      await client.query('ROLLBACK')
+      alreadyLinkedResponse = current
+    } else {
+      const finalized = await client.query(
+        `UPDATE invoices
+            SET status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END,
+                finalized_at = COALESCE(finalized_at, NOW()),
+                updated_at = NOW()
+          WHERE id = $1 AND tenant_id = $2
+        RETURNING *`,
+        [id, req.tenantId],
+      )
+      invoice = finalized.rows[0]
+      await client.query('COMMIT')
+    }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+
+  if (alreadyLinkedResponse) {
+    const lines = await fetchLines(pool, id, req.tenantId)
+    const tenant = await fetchTenant(pool, req.tenantId)
+    const { mollie_api_key: _omit, ...safeTenant } = tenant || {}
+    return res.json({ ...alreadyLinkedResponse, lines, tenant: safeTenant })
+  }
 
   const tenant = await fetchTenant(pool, req.tenantId)
   assertMollieConfigured(tenant)
@@ -749,15 +801,23 @@ router.post('/:id/payment-link', async (req, res) => {
     ? `Invoice ${invoice.invoice_number} - ${tenantLabel}`
     : `Invoice ${invoice.invoice_number}`
 
-  const paymentLink = await mollie.paymentLinks.create({
+  const redirectQuery = new URLSearchParams({ invoice: String(id) })
+  if (tenantLabel) redirectQuery.set('band', tenantLabel)
+
+  const paymentLinkPayload = {
     amount: { currency: 'EUR', value: formatMollieAmountFromCents(invoice.total_cents) },
     description,
-    redirectUrl: `${appUrl}/payment/thanks?invoice=${id}`,
-    webhookUrl: `${webhookBase}/api/public/mollie/payment-links/webhook?invoice=${id}`,
+    redirectUrl: `${appUrl}/payment/thanks?${redirectQuery.toString()}`,
     reusable: false,
     ...(opts.expiresAt ? { expiresAt: opts.expiresAt } : {}),
     ...(opts.allowedMethods ? { allowedMethods: opts.allowedMethods } : {}),
-  })
+  }
+
+  if (!isMollieWebhookDisabled()) {
+    paymentLinkPayload.webhookUrl = `${webhookBase}/api/public/mollie/payment-links/webhook?invoice=${id}`
+  }
+
+  const paymentLink = await mollie.paymentLinks.create(paymentLinkPayload)
 
   const checkoutUrl = paymentLink._links?.paymentLink?.href
   if (!checkoutUrl) {
@@ -770,42 +830,46 @@ router.post('/:id/payment-link', async (req, res) => {
   // payment links carry no charge until used.
   const updateResult = await pool.query(
     `UPDATE invoices
-        SET status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END,
-            finalized_at = COALESCE(finalized_at, NOW()),
-            mollie_payment_link_id = $1,
+        SET mollie_payment_link_id = $1,
             mollie_payment_link_url = $2,
             mollie_payment_link_created_at = NOW(),
             mollie_payment_link_expires_at = $3,
             mollie_payment_status = 'open',
             updated_at = NOW()
       WHERE id = $4 AND tenant_id = $5
-        AND mollie_payment_link_id IS NULL`,
+        AND mollie_payment_link_id IS NULL
+    RETURNING *`,
     [paymentLink.id, checkoutUrl, opts.expiresAt ?? null, id, req.tenantId],
   )
 
+  let finalInvoice
   if (updateResult.rowCount === 0) {
     const { rows: refreshed } = await pool.query(
-      `SELECT mollie_payment_link_id, mollie_payment_link_url, mollie_payment_status
-         FROM invoices WHERE id = $1 AND tenant_id = $2`,
+      'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
       [id, req.tenantId],
     )
-    return res.json({
-      paymentLinkId: refreshed[0].mollie_payment_link_id,
-      paymentLinkUrl: refreshed[0].mollie_payment_link_url,
-      status: refreshed[0].mollie_payment_status || 'open',
-    })
+    finalInvoice = refreshed[0]
+  } else {
+    finalInvoice = updateResult.rows[0]
   }
 
-  // Re-render the PDF so it includes the QR code.
-  renderAndStorePdf(id, req.tenantId).catch((err) =>
-    console.error('[invoices] PDF re-render after payment-link creation failed:', err),
-  )
+  // Re-render the PDF so it includes the QR code. Await so the response
+  // carries the freshly-rendered pdf_path — renderAndStorePdf deletes the
+  // previous PDF, so returning the stale key would 404 on download.
+  try {
+    await renderAndStorePdf(id, req.tenantId)
+    const { rows: refreshed } = await pool.query(
+      'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
+      [id, req.tenantId],
+    )
+    if (refreshed.length) finalInvoice = refreshed[0]
+  } catch (err) {
+    console.error('[invoices] PDF re-render after payment-link creation failed:', err)
+  }
 
-  res.status(201).json({
-    paymentLinkId: paymentLink.id,
-    paymentLinkUrl: checkoutUrl,
-    status: 'open',
-  })
+  const lines = await fetchLines(pool, id, req.tenantId)
+  const { mollie_api_key: _omit, ...safeTenant } = tenant || {}
+  res.status(201).json({ ...finalInvoice, lines, tenant: safeTenant })
 })
 
 // ---------- payment link sync ----------
@@ -874,8 +938,14 @@ router.delete('/:id/logo', async (req, res) => {
 export async function syncInvoicePaymentStatus(mollie, db, invoice, expectedPaymentId = null) {
   const paymentLink = await mollie.paymentLinks.get(invoice.mollie_payment_link_id)
 
-  const payments = await mollie.paymentLinks.listPayments(invoice.mollie_payment_link_id, { limit: 1 })
-  const latestPayment = payments?.[0] ?? null
+  // In @mollie/api-client v4.3+ payments-under-a-link is a helper iterator on
+  // the PaymentLink object, not a method on the paymentLinks binder. The API
+  // returns newest-first, so taking 1 gives us the latest payment.
+  let latestPayment = null
+  for await (const p of paymentLink.getPayments().take(1)) {
+    latestPayment = p
+    break
+  }
 
   if (expectedPaymentId && (!latestPayment || latestPayment.id !== expectedPaymentId)) {
     return invoice

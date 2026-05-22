@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -12,8 +12,14 @@ import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
+import Checkbox from '@mui/material/Checkbox'
+import ListItemIcon from '@mui/material/ListItemIcon'
+import ListItemText from '@mui/material/ListItemText'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
+import FilterListIcon from '@mui/icons-material/FilterList'
 import NewInvoiceDialog from '../components/NewInvoiceDialog.jsx'
 import InvoiceDetails from '../components/InvoiceDetails.jsx'
 import InvoicePdfAction from '../components/InvoicePdfAction.jsx'
@@ -24,6 +30,9 @@ import { formatEur } from '../utils/invoiceTotals.js'
 import { formatShortDate } from '../utils/dateFormat.js'
 import { invoiceStatusColor } from '../utils/invoiceStatus.js'
 
+const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'void']
+const DEFAULT_STATUS_FILTER = ['draft', 'sent']
+
 export default function InvoicesPage() {
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
@@ -33,6 +42,21 @@ export default function InvoicesPage() {
   const [error, setError] = useState(null)
   const [newDialog, setNewDialog] = useState(false)
   const [draftPayload, setDraftPayload] = useState(null)
+  const [statusFilter, setStatusFilter] = useState(DEFAULT_STATUS_FILTER)
+  const [filterAnchor, setFilterAnchor] = useState(null)
+
+  function toggleStatus(status) {
+    setStatusFilter((prev) => (
+      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
+    ))
+  }
+
+  const visibleInvoices = useMemo(
+    () => (statusFilter.length === 0
+      ? invoices
+      : invoices.filter((inv) => statusFilter.includes(inv.status))),
+    [invoices, statusFilter],
+  )
 
   const load = useCallback(async () => {
     try {
@@ -93,12 +117,47 @@ export default function InvoicesPage() {
       )}
 
       {!loading && (
-        <InvoicesList
-          invoices={invoices}
-          selectedId={selectedId}
-          onRowClick={(inv) => navigate(`/invoices/${inv.id}`)}
-          onRetryRender={handleRetryRender}
-        />
+        <>
+          <Box sx={{ mb: 2 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<FilterListIcon />}
+              onClick={(e) => setFilterAnchor(e.currentTarget)}
+            >
+              Status{statusFilter.length ? ` (${statusFilter.length})` : ''}
+            </Button>
+            <Menu
+              anchorEl={filterAnchor}
+              open={Boolean(filterAnchor)}
+              onClose={() => setFilterAnchor(null)}
+            >
+              {STATUS_OPTIONS.map((status) => (
+                <MenuItem key={status} onClick={() => toggleStatus(status)} dense>
+                  <ListItemIcon>
+                    <Checkbox
+                      edge="start"
+                      size="small"
+                      checked={statusFilter.includes(status)}
+                      tabIndex={-1}
+                      disableRipple
+                    />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={status}
+                    primaryTypographyProps={{ sx: { textTransform: 'capitalize' } }}
+                  />
+                </MenuItem>
+              ))}
+            </Menu>
+          </Box>
+          <InvoicesList
+            invoices={visibleInvoices}
+            selectedId={selectedId}
+            onRowClick={(inv) => navigate(`/invoices/${inv.id}`)}
+            onRetryRender={handleRetryRender}
+          />
+        </>
       )}
 
       {newDialog && (

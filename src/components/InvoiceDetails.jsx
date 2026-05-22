@@ -889,11 +889,10 @@ function PaymentLinkPanel({ invoice, onUpdated }) {
     setError(null)
     try {
       const result = await createInvoicePaymentLink(invoice.id)
-      onUpdated({
-        mollie_payment_link_id: result.paymentLinkId,
-        mollie_payment_link_url: result.paymentLinkUrl,
-        mollie_payment_status: result.status,
-      })
+      // Response is the full invoice row (matches GET /:id shape) so we can
+      // merge it directly — this also carries the new status='sent' and
+      // finalized_at, which are required for the form to switch to read-only.
+      onUpdated(result)
     } catch (err) {
       const msg = {
         mollie_key_missing: 'Mollie API key not configured. Go to Settings → Integrations.',
