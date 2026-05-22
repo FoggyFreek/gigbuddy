@@ -737,6 +737,11 @@ router.post('/:id/payment-link', async (req, res) => {
     [paymentLink.id, checkoutUrl, expiresAt ?? null, id, req.tenantId],
   )
 
+  // Re-render the PDF so it includes the QR code.
+  renderAndStorePdf(id, req.tenantId).catch((err) =>
+    console.error('[invoices] PDF re-render after payment-link creation failed:', err),
+  )
+
   res.status(201).json({
     paymentLinkId: paymentLink.id,
     paymentLinkUrl: checkoutUrl,
