@@ -1,0 +1,108 @@
+// Pure request/parameter validation for invoice routes. No DB or IO here.
+
+export const CONTENT_FIELDS = [
+  'gig_id',
+  'issue_date',
+  'due_date',
+  'payment_term_days',
+  'customer_name',
+  'customer_contact_title',
+  'customer_contact_given_name',
+  'customer_contact_family_name',
+  'customer_address_street',
+  'customer_address_postal_code',
+  'customer_address_city',
+  'customer_address_country',
+  'customer_email',
+  'customer_kvk',
+  'customer_tax_id',
+  'memo',
+  'tax_inclusive',
+  'discount_type',
+  'discount_pct',
+  'discount_cents',
+  'invert_logo',
+  'lines',
+]
+export const CONTENT_FIELDS_SET = new Set(CONTENT_FIELDS)
+export const FINALIZED_LOCKED_FIELDS_SET = new Set(CONTENT_FIELDS.filter((field) => field !== 'memo'))
+export const STATUS_VALUES = new Set(['draft', 'sent', 'paid', 'void'])
+export const PAYMENT_TERM_DAYS = new Set([7, 14, 30, 60])
+
+// Columns the PATCH handler copies straight through (everything except lines,
+// which need their own replacement, and the derived total columns).
+export const SIMPLE_PATCH_FIELDS = [
+  'gig_id', 'issue_date', 'due_date', 'payment_term_days',
+  'customer_name', 'customer_contact_title', 'customer_contact_given_name', 'customer_contact_family_name',
+  'customer_address_street', 'customer_address_postal_code',
+  'customer_address_city', 'customer_address_country', 'customer_email',
+  'customer_kvk', 'customer_tax_id', 'memo', 'tax_inclusive',
+  'discount_type', 'discount_pct', 'invert_logo',
+]
+
+// Mollie payment methods we explicitly accept; restricting up front gives a
+// clearer error than a generic Mollie API error and prevents typos from
+// silently being forwarded.
+export const SUPPORTED_PAYMENT_METHODS = new Set([
+  'applepay', 'bancontact', 'banktransfer', 'belfius', 'creditcard',
+  'eps', 'ideal', 'kbc', 'paypal', 'paysafecard', 'przelewy24',
+])
+
+export function parseId(val) {
+  const n = Number(val)
+  return Number.isInteger(n) && n > 0 ? n : null
+}
+
+function pad4(n) { return String(n).padStart(4, '0') }
+
+export function formatInvoiceNumber(year, seq) {
+  return `${year}-${pad4(seq)}`
+}
+
+export function normalizeLines(lines) {
+  if (!Array.isArray(lines)) return []
+  return lines.map((raw, idx) => ({
+    description: String(raw.description ?? '').trim(),
+    quantity: Number.isFinite(Number(raw.quantity)) ? Number(raw.quantity) : 1,
+    unit_price_cents: Number.isInteger(Number(raw.unit_price_cents)) ? Number(raw.unit_price_cents) : 0,
+    tax_percentage: Number.isFinite(Number(raw.tax_percentage)) ? Number(raw.tax_percentage) : 0,
+    position: Number.isInteger(Number(raw.position)) ? Number(raw.position) : idx,
+  }))
+}
+
+export function computeDueDate(issueDate, paymentTermDays) {
+  if (!issueDate || !paymentTermDays) return null
+  const d = issueDate instanceof Date ? new Date(issueDate.getTime()) : new Date(issueDate)
+  if (Number.isNaN(d.getTime())) return null
+  d.setDate(d.getDate() + paymentTermDays)
+  return d.toISOString().slice(0, 10)
+}
+
+function validateExpiresAt(value) {
+  if (value === undefined || value === null) return { ok: true }
+  if (typeof value !== 'string') return { error: 'invalid_expires_at' }
+  const ts = Date.parse(value)
+  if (Number.isNaN(ts)) return { error: 'invalid_expires_at' }
+  if (ts <= Date.now()) return { error: 'expires_at_in_past' }
+  return { ok: true, value }
+}
+
+function validateAllowedMethods(value) {
+  if (value === undefined || value === null) return { ok: true }
+  if (!Array.isArray(value)) return { error: 'invalid_allowed_methods' }
+  if (!value.length) return { ok: true }
+  for (const m of value) {
+    if (typeof m !== 'string' || !SUPPORTED_PAYMENT_METHODS.has(m)) {
+      return { error: 'unsupported_payment_method' }
+    }
+  }
+  return { ok: true, value }
+}
+
+export function validatePaymentLinkOptions(body) {
+  const expires = validateExpiresAt(body.expiresAt)
+  if (expires.error) return { error: expires.error }
+  const methods = validateAllowedMethods(body.allowedMethods)
+  if (methods.error) return { error: methods.error }
+  return { expiresAt: expires.value, allowedMethods: methods.value }
+}

@@ -6,13 +6,31 @@ import QRCode from 'qrcode'
 import pool from '../db/index.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
 import { validateAndReencodeImage } from '../utils/imageProcess.js'
-import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
-import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
+import { assertMollieConfigured, createTenantMollieClient } from '../utils/mollieClient.js'
 import {
-  assertMollieConfigured,
-  createTenantMollieClient,
-  formatMollieAmountFromCents,
-} from '../utils/mollieClient.js'
+  parseId,
+  normalizeLines,
+  computeDueDate,
+  validatePaymentLinkOptions,
+  PAYMENT_TERM_DAYS,
+} from '../validators/invoiceValidators.js'
+import {
+  fetchTenant,
+  fetchInvoice,
+  fetchLines,
+  insertInvoiceLines,
+  nextInvoiceNumber,
+  validateGigIdForTenant,
+  stripMollieKey,
+} from '../repositories/invoiceRepository.js'
+import {
+  computeAndApply,
+  renderAndStorePdf,
+  applyInvoicePatch,
+  finalizeInvoiceForPaymentLink,
+  createMolliePaymentLink,
+  syncInvoicePaymentStatus,
+} from '../services/invoiceService.js'
 
 const router = Router()
 
@@ -22,40 +40,6 @@ const logoUpload = multer({
   limits: { fileSize: 2 * 1024 * 1024 },
 })
 
-const CONTENT_FIELDS = [
-  'gig_id',
-  'issue_date',
-  'due_date',
-  'payment_term_days',
-  'customer_name',
-  'customer_contact_title',
-  'customer_contact_given_name',
-  'customer_contact_family_name',
-  'customer_address_street',
-  'customer_address_postal_code',
-  'customer_address_city',
-  'customer_address_country',
-  'customer_email',
-  'customer_kvk',
-  'customer_tax_id',
-  'memo',
-  'tax_inclusive',
-  'discount_type',
-  'discount_pct',
-  'discount_cents',
-  'invert_logo',
-  'lines',
-]
-const CONTENT_FIELDS_SET = new Set(CONTENT_FIELDS)
-const FINALIZED_LOCKED_FIELDS_SET = new Set(CONTENT_FIELDS.filter((field) => field !== 'memo'))
-const STATUS_VALUES = new Set(['draft', 'sent', 'paid', 'void'])
-const PAYMENT_TERM_DAYS = new Set([7, 14, 30, 60])
-
-function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
-
 function requireId(req, res) {
   const id = parseId(req.params.id)
   if (id === null) {
@@ -63,138 +47,6 @@ function requireId(req, res) {
     return null
   }
   return id
-}
-
-function pad4(n) { return String(n).padStart(4, '0') }
-
-async function nextInvoiceNumber(executor, tenantId, year) {
-  const { rows } = await executor.query(
-    `INSERT INTO invoice_number_sequences (tenant_id, year, next_seq)
-     VALUES ($1, $2, 2)
-     ON CONFLICT (tenant_id, year)
-     DO UPDATE SET next_seq = invoice_number_sequences.next_seq + 1
-     RETURNING next_seq - 1 AS seq`,
-    [tenantId, year],
-  )
-  return `${year}-${pad4(rows[0].seq)}`
-}
-
-function normalizeLines(lines) {
-  if (!Array.isArray(lines)) return []
-  return lines.map((raw, idx) => ({
-    description: String(raw.description ?? '').trim(),
-    quantity: Number.isFinite(Number(raw.quantity)) ? Number(raw.quantity) : 1,
-    unit_price_cents: Number.isInteger(Number(raw.unit_price_cents)) ? Number(raw.unit_price_cents) : 0,
-    tax_percentage: Number.isFinite(Number(raw.tax_percentage)) ? Number(raw.tax_percentage) : 0,
-    position: Number.isInteger(Number(raw.position)) ? Number(raw.position) : idx,
-  }))
-}
-
-async function fetchTenant(executor, tenantId) {
-  const { rows } = await executor.query('SELECT * FROM tenants WHERE id = $1', [tenantId])
-  return rows[0] || null
-}
-
-async function fetchLines(executor, invoiceId, tenantId) {
-  const { rows } = await executor.query(
-    `SELECT id, description, quantity, unit_price_cents, tax_percentage, position
-       FROM invoice_lines
-      WHERE invoice_id = $1 AND tenant_id = $2
-      ORDER BY position ASC, id ASC`,
-    [invoiceId, tenantId],
-  )
-  return rows
-}
-
-async function validateGigIdForTenant(executor, rawGigId, tenantId) {
-  const parsed = parseId(rawGigId)
-  if (parsed === null) return null
-  const { rowCount } = await executor.query(
-    'SELECT 1 FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [parsed, tenantId],
-  )
-  return rowCount ? parsed : null
-}
-
-async function insertInvoiceLines(executor, invoiceId, tenantId, lines) {
-  for (const line of lines) {
-    await executor.query(
-      `INSERT INTO invoice_lines (invoice_id, tenant_id, position, description, quantity, unit_price_cents, tax_percentage)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [invoiceId, tenantId, line.position, line.description, line.quantity, line.unit_price_cents, line.tax_percentage],
-    )
-  }
-}
-
-async function loadLogoBuffer(tenant, customLogoPath) {
-  const key = customLogoPath || tenant.logo_path
-  if (!key) return null
-  try {
-    const stream = await storageClient.getObject(BUCKET, key)
-    const chunks = []
-    for await (const chunk of stream) chunks.push(chunk)
-    return Buffer.concat(chunks)
-  } catch (err) {
-    console.warn('[invoices] failed to load logo:', err.message)
-    return null
-  }
-}
-
-async function renderAndStorePdf(invoiceId, tenantId) {
-  const { rows } = await pool.query(
-    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
-    [invoiceId, tenantId],
-  )
-  if (!rows.length) return null
-  const invoice = rows[0]
-  const tenant = await fetchTenant(pool, tenantId)
-  const lines = await fetchLines(pool, invoiceId, tenantId)
-  const logoBuffer = await loadLogoBuffer(tenant, invoice.custom_logo_path)
-
-  const pdfBuffer = await renderInvoicePdf({ invoice, lines, tenant, logoBuffer })
-  const previousKey = invoice.pdf_path
-  const newKey = `tenants/${tenantId}/invoices/${randomUUID()}.pdf`
-
-  await storageClient.putObject(BUCKET, newKey, pdfBuffer, pdfBuffer.length, {
-    'Content-Type': 'application/pdf',
-  })
-
-  try {
-    await pool.query(
-      'UPDATE invoices SET pdf_path = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3',
-      [newKey, invoiceId, tenantId],
-    )
-  } catch (err) {
-    storageClient.removeObject(BUCKET, newKey).catch(() => {})
-    throw err
-  }
-
-  if (previousKey && previousKey !== newKey) {
-    storageClient.removeObject(BUCKET, previousKey).catch((e) =>
-      console.warn('[invoices] failed to remove previous pdf:', e.message),
-    )
-  }
-
-  return newKey
-}
-
-function computeAndApply(invoiceFields, lines, tenant) {
-  return computeInvoiceTotals({
-    lines,
-    taxInclusive: invoiceFields.tax_inclusive,
-    discountCents: invoiceFields.discount_cents,
-    discountType: invoiceFields.discount_type,
-    discountPct: invoiceFields.discount_pct,
-    appliesKor: tenant.applies_kor,
-  })
-}
-
-function computeDueDate(issueDate, paymentTermDays) {
-  if (!issueDate || !paymentTermDays) return null
-  const d = issueDate instanceof Date ? new Date(issueDate.getTime()) : new Date(issueDate)
-  if (Number.isNaN(d.getTime())) return null
-  d.setDate(d.getDate() + paymentTermDays)
-  return d.toISOString().slice(0, 10)
 }
 
 // ---------- list ----------
@@ -214,6 +66,22 @@ router.get('/', async (req, res) => {
 })
 
 // ---------- draft (from gig) ----------
+function buildBillingTarget(type, row) {
+  return {
+    type,
+    id: row.id,
+    name: row.organization_name || row.name,
+    contact_title: row.title || null,
+    contact_given_name: row.given_name || null,
+    contact_family_name: row.family_name || null,
+    address_street: row.street_and_number || null,
+    address_postal_code: row.postal_code || null,
+    address_city: row.city || null,
+    address_country: row.country || null,
+    email: row.email || null,
+  }
+}
+
 router.get('/draft-from-gig/:gigId', async (req, res) => {
   const gigId = parseId(req.params.gigId)
   if (gigId === null) return res.status(400).json({ error: 'Invalid gigId' })
@@ -260,36 +128,8 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
 
   // Build billing_targets list when both are present (enables choice in UI)
   const billingTargets = []
-  if (festival) {
-    billingTargets.push({
-      type: 'festival',
-      id: festival.id,
-      name: festival.organization_name || festival.name,
-      contact_title: festival.title || null,
-      contact_given_name: festival.given_name || null,
-      contact_family_name: festival.family_name || null,
-      address_street: festival.street_and_number || null,
-      address_postal_code: festival.postal_code || null,
-      address_city: festival.city || null,
-      address_country: festival.country || null,
-      email: festival.email || null,
-    })
-  }
-  if (venue) {
-    billingTargets.push({
-      type: 'venue',
-      id: venue.id,
-      name: venue.organization_name || venue.name,
-      contact_title: venue.title || null,
-      contact_given_name: venue.given_name || null,
-      contact_family_name: venue.family_name || null,
-      address_street: venue.street_and_number || null,
-      address_postal_code: venue.postal_code || null,
-      address_city: venue.city || null,
-      address_country: venue.country || null,
-      email: venue.email || null,
-    })
-  }
+  if (festival) billingTargets.push(buildBillingTarget('festival', festival))
+  if (venue) billingTargets.push(buildBillingTarget('venue', venue))
 
   res.json({
     gig: {
@@ -352,15 +192,11 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
 // ---------- single ----------
 router.get('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const { rows } = await pool.query(
-    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+  const invoice = await fetchInvoice(pool, req.tenantId, id)
+  if (!invoice) return res.status(404).json({ error: 'Not found' })
   const lines = await fetchLines(pool, id, req.tenantId)
   const tenant = await fetchTenant(pool, req.tenantId)
-  const { mollie_api_key: _omit, ...safeTenant } = tenant || {}
-  res.json({ ...rows[0], lines, tenant: safeTenant })
+  res.json({ ...invoice, lines, tenant: stripMollieKey(tenant) })
 })
 
 // ---------- create ----------
@@ -441,157 +277,34 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    await renderAndStorePdf(invoiceId, req.tenantId)
+    await renderAndStorePdf(pool, invoiceId, req.tenantId)
   } catch (err) {
     console.error('[invoices] PDF render failed (row persisted, retry via POST /:id/render):', err)
   }
 
-  const { rows: created } = await pool.query(
-    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
-    [invoiceId, req.tenantId],
-  )
+  const created = await fetchInvoice(pool, req.tenantId, invoiceId)
   const createdLines = await fetchLines(pool, invoiceId, req.tenantId)
-  res.status(201).json({ ...created[0], lines: createdLines })
+  res.status(201).json({ ...created, lines: createdLines })
 })
 
 // ---------- patch ----------
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const body = req.body || {}
 
-  const { rows: existingRows } = await pool.query(
-    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!existingRows.length) return res.status(404).json({ error: 'Not found' })
-  const existing = existingRows[0]
-  const isFinalized = existing.finalized_at !== null
+  const result = await applyInvoicePatch(pool, req.tenantId, id, req.body || {})
+  if (result.error) return res.status(result.error.status).json(result.error.body)
 
-  const requestedContentFields = Object.keys(body).filter((k) => FINALIZED_LOCKED_FIELDS_SET.has(k))
-  if (isFinalized && requestedContentFields.length > 0) {
-    return res.status(409).json({ error: 'Invoice is finalized', code: 'invoice_finalized' })
-  }
-
-  if (body.status !== undefined && !STATUS_VALUES.has(body.status)) {
-    return res.status(400).json({ error: 'Invalid status' })
-  }
-  if (body.gig_id !== undefined && body.gig_id !== null) {
-    const gigId = await validateGigIdForTenant(pool, body.gig_id, req.tenantId)
-    if (gigId === null) return res.status(400).json({ error: 'Invalid gig_id' })
-    body.gig_id = gigId
-  }
-
-  const tenant = await fetchTenant(pool, req.tenantId)
-
-  const client = await pool.connect()
-  let contentChanged = false
-  try {
-    await client.query('BEGIN')
-
-    const updates = []
-    const values = []
-    let idx = 1
-
-    const simpleFields = [
-      'gig_id', 'issue_date', 'due_date', 'payment_term_days',
-      'customer_name', 'customer_contact_title', 'customer_contact_given_name', 'customer_contact_family_name',
-      'customer_address_street', 'customer_address_postal_code',
-      'customer_address_city', 'customer_address_country', 'customer_email',
-      'customer_kvk', 'customer_tax_id', 'memo', 'tax_inclusive',
-      'discount_type', 'discount_pct', 'invert_logo',
-    ]
-    for (const key of simpleFields) {
-      if (key in body) {
-        updates.push(`${key} = $${idx++}`)
-        values.push(body[key])
-        if (CONTENT_FIELDS_SET.has(key)) contentChanged = true
-      }
-    }
-
-    if ('lines' in body) {
-      contentChanged = true
-      const lines = normalizeLines(body.lines)
-      if (!lines.length) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: 'At least one line is required' })
-      }
-      await client.query(
-        'DELETE FROM invoice_lines WHERE invoice_id = $1 AND tenant_id = $2',
-        [id, req.tenantId],
-      )
-      await insertInvoiceLines(client, id, req.tenantId, lines)
-    }
-
-    if (contentChanged) {
-      const { rows: cur } = await client.query(
-        'SELECT tax_inclusive, discount_type, discount_pct, discount_cents, finalized_at FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
-        [id, req.tenantId],
-      )
-      // Re-check finalization under row lock: a concurrent payment-link
-      // creation may have finalized the invoice between the non-locking read
-      // above (line ~461) and this point. Without this gate, the PATCH would
-      // mutate content (e.g. line items, total_cents) on an invoice whose
-      // Mollie payment link is already committed to the original amount.
-      // Mirror the pre-tx gate's field set: memo and status are allowed
-      // post-finalization, so only block when a FINALIZED_LOCKED field is in
-      // the request body.
-      if (cur[0].finalized_at !== null && requestedContentFields.length > 0) {
-        await client.query('ROLLBACK')
-        return res.status(409).json({ error: 'Invoice is finalized', code: 'invoice_finalized' })
-      }
-      const taxInclusive = 'tax_inclusive' in body ? Boolean(body.tax_inclusive) : cur[0].tax_inclusive
-      const discountType = 'discount_type' in body ? (body.discount_type === 'pct' ? 'pct' : 'eur') : cur[0].discount_type
-      const discountPct = 'discount_pct' in body ? Math.max(0, Number(body.discount_pct) || 0) : Number(cur[0].discount_pct)
-      const discountCents = 'discount_cents' in body ? Math.max(0, Number(body.discount_cents) || 0) : cur[0].discount_cents
-      const currentLines = await fetchLines(client, id, req.tenantId)
-      const totals = computeAndApply({ tax_inclusive: taxInclusive, discount_type: discountType, discount_pct: discountPct, discount_cents: discountCents }, currentLines, tenant)
-      updates.push(`discount_cents = $${idx++}`); values.push(totals.discountCents)
-      updates.push(`subtotal_cents = $${idx++}`); values.push(totals.subtotalCents)
-      updates.push(`tax_cents = $${idx++}`); values.push(totals.taxCents)
-      updates.push(`total_cents = $${idx++}`); values.push(totals.totalCents)
-    }
-
-    if (body.status !== undefined) {
-      updates.push(`status = $${idx++}`); values.push(body.status)
-      if (body.status !== 'draft' && existing.finalized_at === null) {
-        updates.push(`finalized_at = NOW()`)
-      }
-    }
-
-    if (!updates.length) {
-      await client.query('ROLLBACK')
-      return res.status(400).json({ error: 'No valid fields to update' })
-    }
-
-    updates.push(`updated_at = NOW()`)
-    values.push(id, req.tenantId)
-    await client.query(
-      `UPDATE invoices SET ${updates.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`,
-      values,
-    )
-
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
-
-  if (contentChanged) {
+  if (result.contentChanged) {
     try {
-      await renderAndStorePdf(id, req.tenantId)
+      await renderAndStorePdf(pool, id, req.tenantId)
     } catch (err) {
       console.error('[invoices] PDF re-render failed:', err)
     }
   }
 
-  const { rows: updated } = await pool.query(
-    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
+  const updated = await fetchInvoice(pool, req.tenantId, id)
   const lines = await fetchLines(pool, id, req.tenantId)
-  res.json({ ...updated[0], lines })
+  res.json({ ...updated, lines })
 })
 
 // ---------- delete ----------
@@ -623,7 +336,7 @@ router.post('/:id/render', async (req, res) => {
     [id, req.tenantId],
   )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
-  await renderAndStorePdf(id, req.tenantId)
+  await renderAndStorePdf(pool, id, req.tenantId)
   const { rows } = await pool.query(
     'SELECT pdf_path FROM invoices WHERE id = $1 AND tenant_id = $2',
     [id, req.tenantId],
@@ -674,55 +387,13 @@ router.post('/:id/logo', logoUpload.single('logo'), async (req, res) => {
   }
 
   try {
-    await renderAndStorePdf(id, req.tenantId)
+    await renderAndStorePdf(pool, id, req.tenantId)
   } catch (err) {
     console.error('[invoices] PDF re-render after logo upload failed:', err)
   }
 
   res.json({ custom_logo_path: objectKey })
 })
-
-// Mollie payment methods we explicitly accept; restricting up front gives a
-// clearer error than a generic Mollie API error and prevents typos from
-// silently being forwarded.
-const SUPPORTED_PAYMENT_METHODS = new Set([
-  'applepay', 'bancontact', 'banktransfer', 'belfius', 'creditcard',
-  'eps', 'ideal', 'kbc', 'paypal', 'paysafecard', 'przelewy24',
-])
-
-function validatePaymentLinkOptions(body) {
-  const result = { expiresAt: undefined, allowedMethods: undefined }
-
-  if (body.expiresAt !== undefined && body.expiresAt !== null) {
-    if (typeof body.expiresAt !== 'string') {
-      return { error: 'invalid_expires_at' }
-    }
-    const ts = Date.parse(body.expiresAt)
-    if (Number.isNaN(ts)) return { error: 'invalid_expires_at' }
-    if (ts <= Date.now()) return { error: 'expires_at_in_past' }
-    result.expiresAt = body.expiresAt
-  }
-
-  if (body.allowedMethods !== undefined && body.allowedMethods !== null) {
-    if (!Array.isArray(body.allowedMethods)) {
-      return { error: 'invalid_allowed_methods' }
-    }
-    if (body.allowedMethods.length) {
-      for (const m of body.allowedMethods) {
-        if (typeof m !== 'string' || !SUPPORTED_PAYMENT_METHODS.has(m)) {
-          return { error: 'unsupported_payment_method' }
-        }
-      }
-      result.allowedMethods = body.allowedMethods
-    }
-  }
-
-  return result
-}
-
-function isMollieWebhookDisabled() {
-  return process.env.MOLLIE_DISABLE_WEBHOOK === 'true'
-}
 
 // ---------- payment link ----------
 router.post('/:id/payment-link', async (req, res) => {
@@ -731,158 +402,47 @@ router.post('/:id/payment-link', async (req, res) => {
   const opts = validatePaymentLinkOptions(req.body || {})
   if (opts.error) return res.status(400).json({ error: opts.error })
 
-  // Step 1: lock the invoice row, validate, and finalize (status='sent' if
-  // draft, set finalized_at) BEFORE calling Mollie. Committing finalization
-  // first means a concurrent PATCH that re-checks finalized_at under its own
-  // row lock will 409 instead of mutating content (e.g. line totals) that
-  // Mollie's amount is already pinned to.
-  let invoice
-  let alreadyLinkedResponse = null
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    const locked = await client.query(
-      'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
-      [id, req.tenantId],
-    )
-    if (!locked.rows.length) {
-      await client.query('ROLLBACK')
-      return res.status(404).json({ error: 'Not found' })
-    }
-    const current = locked.rows[0]
-    if (current.status === 'void') {
-      await client.query('ROLLBACK')
-      return res.status(400).json({ error: 'void_invoice' })
-    }
-    if (current.total_cents <= 0) {
-      await client.query('ROLLBACK')
-      return res.status(400).json({ error: 'zero_amount' })
-    }
-
-    if (current.mollie_payment_link_id) {
-      // Sequential case — link already exists. Return the row as-is.
-      await client.query('ROLLBACK')
-      alreadyLinkedResponse = current
-    } else {
-      const finalized = await client.query(
-        `UPDATE invoices
-            SET status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END,
-                finalized_at = COALESCE(finalized_at, NOW()),
-                updated_at = NOW()
-          WHERE id = $1 AND tenant_id = $2
-        RETURNING *`,
-        [id, req.tenantId],
-      )
-      invoice = finalized.rows[0]
-      await client.query('COMMIT')
-    }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
-
-  if (alreadyLinkedResponse) {
-    const lines = await fetchLines(pool, id, req.tenantId)
-    const tenant = await fetchTenant(pool, req.tenantId)
-    const { mollie_api_key: _omit, ...safeTenant } = tenant || {}
-    return res.json({ ...alreadyLinkedResponse, lines, tenant: safeTenant })
-  }
+  // Finalize the invoice (committing finalization) BEFORE calling Mollie, so a
+  // concurrent PATCH re-checking finalized_at under its own row lock 409s
+  // instead of mutating content the Mollie amount is already pinned to.
+  const finalize = await finalizeInvoiceForPaymentLink(pool, req.tenantId, id)
+  if (finalize.error) return res.status(finalize.error.status).json(finalize.error.body)
 
   const tenant = await fetchTenant(pool, req.tenantId)
+
+  if (finalize.alreadyLinked) {
+    const lines = await fetchLines(pool, id, req.tenantId)
+    return res.json({ ...finalize.alreadyLinked, lines, tenant: stripMollieKey(tenant) })
+  }
+
   assertMollieConfigured(tenant)
+  const created = await createMolliePaymentLink({
+    pool, tenant, invoice: finalize.invoice, tenantId: req.tenantId, invoiceId: id, opts,
+  })
+  if (created.error) return res.status(created.error.status).json(created.error.body)
 
-  const mollie = createTenantMollieClient(tenant.mollie_api_key)
-  const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
-  const webhookBase = (process.env.MOLLIE_WEBHOOK_BASE_URL || appUrl).replace(/\/$/, '')
-
-  const tenantLabel = (tenant.band_name || tenant.formal_name || '').trim()
-  const description = tenantLabel
-    ? `Invoice ${invoice.invoice_number} - ${tenantLabel}`
-    : `Invoice ${invoice.invoice_number}`
-
-  const redirectQuery = new URLSearchParams({ invoice: String(id) })
-  if (tenantLabel) redirectQuery.set('band', tenantLabel)
-
-  const paymentLinkPayload = {
-    amount: { currency: 'EUR', value: formatMollieAmountFromCents(invoice.total_cents) },
-    description,
-    redirectUrl: `${appUrl}/payment/thanks?${redirectQuery.toString()}`,
-    reusable: false,
-    ...(opts.expiresAt ? { expiresAt: opts.expiresAt } : {}),
-    ...(opts.allowedMethods ? { allowedMethods: opts.allowedMethods } : {}),
-  }
-
-  if (!isMollieWebhookDisabled()) {
-    paymentLinkPayload.webhookUrl = `${webhookBase}/api/public/mollie/payment-links/webhook?invoice=${id}`
-  }
-
-  const paymentLink = await mollie.paymentLinks.create(paymentLinkPayload)
-
-  const checkoutUrl = paymentLink._links?.paymentLink?.href
-  if (!checkoutUrl) {
-    return res.status(502).json({ error: 'mollie_payment_link_url_missing' })
-  }
-
-  // Atomic update guard: only write if no other concurrent request beat us to it.
-  // If a concurrent request stored its own link first, the Mollie link we just
-  // created is orphaned — acceptable in the rare race window because Mollie
-  // payment links carry no charge until used.
-  const updateResult = await pool.query(
-    `UPDATE invoices
-        SET mollie_payment_link_id = $1,
-            mollie_payment_link_url = $2,
-            mollie_payment_link_created_at = NOW(),
-            mollie_payment_link_expires_at = $3,
-            mollie_payment_status = 'open',
-            updated_at = NOW()
-      WHERE id = $4 AND tenant_id = $5
-        AND mollie_payment_link_id IS NULL
-    RETURNING *`,
-    [paymentLink.id, checkoutUrl, opts.expiresAt ?? null, id, req.tenantId],
-  )
-
-  let finalInvoice
-  if (updateResult.rowCount === 0) {
-    const { rows: refreshed } = await pool.query(
-      'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
-      [id, req.tenantId],
-    )
-    finalInvoice = refreshed[0]
-  } else {
-    finalInvoice = updateResult.rows[0]
-  }
-
-  // Re-render the PDF so it includes the QR code. Await so the response
-  // carries the freshly-rendered pdf_path — renderAndStorePdf deletes the
-  // previous PDF, so returning the stale key would 404 on download.
+  // Re-render the PDF so it includes the QR code. Await so the response carries
+  // the freshly-rendered pdf_path — renderAndStorePdf deletes the previous PDF,
+  // so returning the stale key would 404 on download.
+  let finalInvoice = created.invoice
   try {
-    await renderAndStorePdf(id, req.tenantId)
-    const { rows: refreshed } = await pool.query(
-      'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
-      [id, req.tenantId],
-    )
-    if (refreshed.length) finalInvoice = refreshed[0]
+    await renderAndStorePdf(pool, id, req.tenantId)
+    const refreshed = await fetchInvoice(pool, req.tenantId, id)
+    if (refreshed) finalInvoice = refreshed
   } catch (err) {
     console.error('[invoices] PDF re-render after payment-link creation failed:', err)
   }
 
   const lines = await fetchLines(pool, id, req.tenantId)
-  const { mollie_api_key: _omit, ...safeTenant } = tenant || {}
-  res.status(201).json({ ...finalInvoice, lines, tenant: safeTenant })
+  res.status(201).json({ ...finalInvoice, lines, tenant: stripMollieKey(tenant) })
 })
 
 // ---------- payment link sync ----------
 router.post('/:id/payment-link/sync', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
 
-  const { rows } = await pool.query(
-    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  const invoice = rows[0]
+  const invoice = await fetchInvoice(pool, req.tenantId, id)
+  if (!invoice) return res.status(404).json({ error: 'Not found' })
 
   if (!invoice.mollie_payment_link_id) {
     return res.status(400).json({ error: 'no_payment_link' })
@@ -922,7 +482,7 @@ router.delete('/:id/logo', async (req, res) => {
     storageClient.removeObject(BUCKET, oldKey).catch(() => {})
   }
   try {
-    await renderAndStorePdf(id, req.tenantId)
+    await renderAndStorePdf(pool, id, req.tenantId)
   } catch (err) {
     console.error('[invoices] PDF re-render after logo remove failed:', err)
   }
@@ -1080,17 +640,19 @@ async function resolveEmlData(id, tenantId) {
   const invoiceNumber = invoice.invoice_number || 'concept'
 
   const subjectDate = gigDate || issueDate || ''
-  const subject = `Factuur ${invoiceNumber} – ${bandName}${subjectDate ? ` – ${subjectDate}` : ''}`
+  const subjectDateSuffix = subjectDate ? ` – ${subjectDate}` : ''
+  const subject = `Factuur ${invoiceNumber} – ${bandName}${subjectDateSuffix}`
 
   const titlePart  = invoice.customer_contact_title ? `${invoice.customer_contact_title} ` : ''
   const familyName = invoice.customer_contact_family_name || ''
   const greeting   = familyName ? `Geachte ${titlePart}${familyName},` : 'Geachte heer/mevrouw,'
 
-  const toAddress = invoice.customer_email
-    ? invoice.customer_name
+  let toAddress = ''
+  if (invoice.customer_email) {
+    toAddress = invoice.customer_name
       ? `${invoice.customer_name} <${invoice.customer_email}>`
       : invoice.customer_email
-    : ''
+  }
 
   return { invoice, tenant, bandName, invoiceNumber, gigDate, issueDate, subject, greeting, toAddress }
 }
@@ -1118,7 +680,7 @@ router.post('/:id/eml', async (req, res) => {
 
   const { invoice, bandName, invoiceNumber, gigDate, issueDate, subject, greeting, toAddress } = data
   const personalMessage = String(req.body?.personalMessage || defaultPersonalMessage(bandName, gigDate)).slice(0, 4000)
-  const safeNumber = invoiceNumber.replace(/[^a-zA-Z0-9-]/g, '-')
+  const safeNumber = invoiceNumber.replaceAll(/[^a-zA-Z0-9-]/g, '-')
 
   const hasPaymentLink = Boolean(invoice.mollie_payment_link_url)
   let qrBase64 = null
@@ -1224,57 +786,5 @@ router.post('/:id/eml', async (req, res) => {
   res.send(emlContent)
 })
 
-// Shared payment-status update logic used by both the sync endpoint and the webhook.
-// Fetches current payment link state from Mollie, then checks the most recent payment.
-//
-// `expectedPaymentId` — when called from the webhook, this is the id Mollie posted.
-// We refuse to mutate state unless the posted id matches the payment Mollie actually
-// reports under the link, so callers who guess invoice ids can't even trigger a status
-// flip with a random payment id.
-// In @mollie/api-client v4.3+ payments-under-a-link is a helper iterator on
-// the PaymentLink object, not a method on the paymentLinks binder. The API
-// returns newest-first, so the first item is the latest payment.
-async function getLatestPayment(paymentLink) {
-  const iterator = paymentLink.getPayments().take(1)[Symbol.asyncIterator]()
-  const { value, done } = await iterator.next()
-  return done ? null : value
-}
-
-export async function syncInvoicePaymentStatus(mollie, db, invoice, expectedPaymentId = null) {
-  const paymentLink = await mollie.paymentLinks.get(invoice.mollie_payment_link_id)
-
-  const latestPayment = await getLatestPayment(paymentLink)
-
-  if (expectedPaymentId && (!latestPayment || latestPayment.id !== expectedPaymentId)) {
-    return invoice
-  }
-
-  let mollieStatus = paymentLink.status ?? 'open'
-  let paymentId = invoice.mollie_payment_id
-  let paidAt = invoice.mollie_paid_at
-  let invoiceStatus = invoice.status
-
-  if (latestPayment) {
-    mollieStatus = latestPayment.status
-    paymentId = latestPayment.id
-    if (latestPayment.status === 'paid') {
-      paidAt = latestPayment.paidAt ? new Date(latestPayment.paidAt) : new Date()
-      if (invoice.status !== 'void') invoiceStatus = 'paid'
-    }
-  }
-
-  const { rows } = await db.query(
-    `UPDATE invoices
-        SET mollie_payment_status = $1,
-            mollie_payment_id     = $2,
-            mollie_paid_at        = $3,
-            status                = $4,
-            updated_at            = NOW()
-      WHERE id = $5 AND tenant_id = $6
-      RETURNING *`,
-    [mollieStatus, paymentId, paidAt, invoiceStatus, invoice.id, invoice.tenant_id],
-  )
-  return rows[0]
-}
-
+export { syncInvoicePaymentStatus }
 export default router
