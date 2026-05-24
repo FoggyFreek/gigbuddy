@@ -25,6 +25,26 @@ export async function request(url, options = {}) {
   return data
 }
 
+export async function requestBlob(url, options = {}) {
+  const method = (options.method || 'POST').toUpperCase()
+  const headers = { 'Content-Type': 'application/json', ...options.headers }
+  if (!SAFE_METHODS.has(method) && csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken
+  }
+  const res = await fetch(url, { ...options, headers })
+  const responseToken = res.headers.get('X-CSRF-Token')
+  if (responseToken) csrfToken = responseToken
+  if (res.status === 401) {
+    window.dispatchEvent(new Event('auth:unauthorized'))
+    throw Object.assign(new Error('Unauthorized'), { status: 401 })
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || `HTTP ${res.status}`)
+  }
+  return res.blob()
+}
+
 export async function requestForm(url, formData) {
   const headers = {}
   if (csrfToken) headers['X-CSRF-Token'] = csrfToken

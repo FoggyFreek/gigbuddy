@@ -1,4 +1,4 @@
-import { request, requestForm } from './_client.js'
+import { request, requestBlob, requestForm } from './_client.js'
 
 const api = (path, options) => request(`/api/invoices${path}`, options)
 
@@ -23,3 +23,11 @@ export const createInvoicePaymentLink = (id, body = {}) =>
 
 export const syncInvoicePaymentLink = (id) =>
   api(`/${id}/payment-link/sync`, { method: 'POST' })
+
+export const getInvoiceEmlDefaults = (id) => api(`/${id}/eml-defaults`)
+
+export const downloadInvoiceEml = (id, personalMessage) =>
+  requestBlob(`/api/invoices/${id}/eml`, {
+    method: 'POST',
+    body: JSON.stringify({ personalMessage }),
+  })
