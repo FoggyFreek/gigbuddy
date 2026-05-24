@@ -14,6 +14,8 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
 import VoteToggle from './VoteToggle.jsx'
+import PropTypes from 'prop-types'
+import { rehearsalShape } from '../propTypes/shared.js'
 
 export default function RehearsalParticipantsSection({
   rehearsal,
@@ -155,4 +157,18 @@ export default function RehearsalParticipantsSection({
       </Grid>
     </>
   )
+}
+
+RehearsalParticipantsSection.propTypes = {
+  rehearsal: rehearsalShape,
+  members: PropTypes.array,
+  addMemberId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  onAddMemberIdChange: PropTypes.func,
+  notes: PropTypes.string,
+  onNotesChange: PropTypes.func,
+  onVote: PropTypes.func,
+  onRemoveParticipant: PropTypes.func,
+  onAddParticipant: PropTypes.func,
+  onPromote: PropTypes.func,
+  onDemote: PropTypes.func,
 }

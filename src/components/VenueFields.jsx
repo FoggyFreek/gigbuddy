@@ -9,6 +9,7 @@ import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import CopyAdornment from './CopyAdornment.jsx'
+import PropTypes from 'prop-types'
 
 export default function VenueFields({ form, onChange, errors = {}, lockedCategory }) {
   const isFestival = form.category === 'festival'
@@ -182,4 +183,11 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
       </Grid>
     </>
   )
+}
+
+VenueFields.propTypes = {
+  form: PropTypes.object.isRequired,
+  onChange: PropTypes.func.isRequired,
+  errors: PropTypes.object,
+  lockedCategory: PropTypes.string,
 }

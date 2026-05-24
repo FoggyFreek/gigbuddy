@@ -16,6 +16,8 @@ import ShareIcon from '@mui/icons-material/Share'
 import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
+import PropTypes from 'prop-types'
+import { bandEventShape, idProp } from '../propTypes/shared.js'
 
 const COLUMN_COUNT = 5
 
@@ -255,4 +257,27 @@ export default function BandEventsTable({ events, onRowClick, onShare, selectedI
       )}
     </Stack>
   )
+}
+
+const eventRowPropTypes = {
+  event: bandEventShape,
+  active: PropTypes.bool,
+  onClick: PropTypes.func,
+  onShare: PropTypes.func,
+}
+
+EventCard.propTypes = eventRowPropTypes
+DesktopRow.propTypes = eventRowPropTypes
+
+PastHeader.propTypes = {
+  open: PropTypes.bool,
+  count: PropTypes.number,
+  onToggle: PropTypes.func,
+}
+
+BandEventsTable.propTypes = {
+  events: PropTypes.arrayOf(bandEventShape),
+  onRowClick: PropTypes.func,
+  onShare: PropTypes.func,
+  selectedId: idProp,
 }
