@@ -49,16 +49,6 @@ export function useInvoiceFormState({ mode, draft, invoiceId, onClose }) {
     return () => { cancelled = true }
   }, [isEdit, invoiceId])
 
-  // Recompute due_date when issue_date or payment_term_days change.
-  useEffect(() => {
-    if (!form.issue_date) return
-    const computed = addDays(form.issue_date, form.payment_term_days || 14)
-    if (computed && computed !== form.due_date) {
-      setForm((prev) => ({ ...prev, due_date: computed }))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.issue_date, form.payment_term_days])
-
   const finalized = Boolean(invoice?.finalized_at)
   const readOnly = isEdit && finalized
   const appliesKor = Boolean(tenant?.applies_kor)
@@ -72,8 +62,18 @@ export function useInvoiceFormState({ mode, draft, invoiceId, onClose }) {
     appliesKor,
   }), [form.lines, form.tax_inclusive, form.discount_type, form.discount_pct, form.discount_cents, appliesKor])
 
+  // due_date is derived from issue_date + payment_term_days. Recompute it in the
+  // same transition that changes either input, rather than in a post-render
+  // effect, so the derived update is explicit and synchronous.
   function patchForm(patch) {
-    setForm((prev) => ({ ...prev, ...patch }))
+    setForm((prev) => {
+      const next = { ...prev, ...patch }
+      if ('issue_date' in patch || 'payment_term_days' in patch) {
+        const computed = addDays(next.issue_date, next.payment_term_days || 14)
+        if (computed) next.due_date = computed
+      }
+      return next
+    })
   }
 
   function patchLine(index, patch) {

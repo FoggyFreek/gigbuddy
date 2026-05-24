@@ -1,8 +1,9 @@
 export function emptyDraft(taxPct = 9) {
+  const issueDate = new Date().toISOString().slice(0, 10)
   return {
     gig_id: null,
-    issue_date: new Date().toISOString().slice(0, 10),
-    due_date: null,
+    issue_date: issueDate,
+    due_date: addDays(issueDate, 14),
     payment_term_days: 14,
     customer_name: '',
     customer_contact_title: '',
