@@ -29,6 +29,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DownloadIcon from '@mui/icons-material/Download'
+import EmailIcon from '@mui/icons-material/Email'
 import ImageIcon from '@mui/icons-material/Image'
 import LaunchIcon from '@mui/icons-material/Launch'
 import RefreshIcon from '@mui/icons-material/Refresh'
@@ -811,6 +812,16 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
             Download PDF
           </Button>
         )}
+        {isEdit && invoice && (
+          <Button
+            component="a"
+            href={`/api/invoices/${invoice.id}/eml`}
+            download={`factuur-${(invoice.invoice_number || 'concept').replace(/[^a-zA-Z0-9-]/g, '-')}.eml`}
+            startIcon={<EmailIcon />}
+          >
+            Download email
+          </Button>
+        )}
         {!readOnly && (
           <Button variant="contained" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save'}
@@ -930,17 +941,6 @@ function PaymentLinkPanel({ invoice, onUpdated }) {
     }).catch(() => {})
   }
 
-  function copySnippet() {
-    const html = [
-      `<p>U kunt uw factuur betalen via de volgende betaallink:</p>`,
-      `<p><a href="${url}">Betaal factuur ${invoice.invoice_number}</a></p>`,
-    ].join('\n')
-    navigator.clipboard.writeText(html).then(() => {
-      setCopied('snippet')
-      setTimeout(() => setCopied((c) => (c === 'snippet' ? null : c)), 1500)
-    }).catch(() => {})
-  }
-
   return (
     <Box>
       <Typography variant="subtitle2" sx={{ mb: 1 }}>Payment link</Typography>
@@ -1005,17 +1005,6 @@ function PaymentLinkPanel({ invoice, onUpdated }) {
                 startIcon={<LaunchIcon fontSize="small" />}
               >
                 Open
-              </Button>
-            </Tooltip>
-
-            <Tooltip title={copied === 'snippet' ? 'Copied!' : 'Copy HTML snippet for email'}>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={copied === 'snippet' ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-                onClick={copySnippet}
-              >
-                Copy email snippet
               </Button>
             </Tooltip>
 
