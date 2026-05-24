@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import PropTypes from 'prop-types'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
@@ -40,20 +41,34 @@ export default function AvailabilityCalendar({
   onExport,
 }) {
   const today = toIsoDate(new Date())
-  const cells = buildCalendarCells(year, month)
+  const cells = useMemo(() => buildCalendarCells(year, month), [year, month])
 
-  const gigsByDate = indexByDate(gigs, (g) => normalizeIsoDate(g.event_date))
-  const rehearsalsByDate = indexByDate(rehearsals, (r) => normalizeIsoDate(r.proposed_date))
-  const bandEventsByDate = indexByDateRange(
-    bandEvents,
-    (ev) => normalizeIsoDate(ev.start_date),
-    (ev) => normalizeIsoDate(ev.end_date) || normalizeIsoDate(ev.start_date),
-    cells,
+  const gigsByDate = useMemo(
+    () => indexByDate(gigs, (g) => normalizeIsoDate(g.event_date)),
+    [gigs],
   )
-  const slotsByDate = indexByDateRange(slots, (s) => s.start_date, (s) => s.end_date, cells)
+  const rehearsalsByDate = useMemo(
+    () => indexByDate(rehearsals, (r) => normalizeIsoDate(r.proposed_date)),
+    [rehearsals],
+  )
+  const bandEventsByDate = useMemo(
+    () => indexByDateRange(
+      bandEvents,
+      (ev) => normalizeIsoDate(ev.start_date),
+      (ev) => normalizeIsoDate(ev.end_date) || normalizeIsoDate(ev.start_date),
+      cells,
+    ),
+    [bandEvents, cells],
+  )
+  const slotsByDate = useMemo(
+    () => indexByDateRange(slots, (s) => s.start_date, (s) => s.end_date, cells),
+    [slots, cells],
+  )
 
-  const cellCtx = { slotsByDate, gigsByDate, rehearsalsByDate, bandEventsByDate, selectionStart, selectedDay, mobile, today }
-  const cellViewModels = cells.map((cell, idx) => buildCalendarCellViewModel(cell, idx, cellCtx))
+  const cellViewModels = useMemo(() => {
+    const cellCtx = { slotsByDate, gigsByDate, rehearsalsByDate, bandEventsByDate, selectionStart, selectedDay, mobile, today }
+    return cells.map((cell, idx) => buildCalendarCellViewModel(cell, idx, cellCtx))
+  }, [cells, slotsByDate, gigsByDate, rehearsalsByDate, bandEventsByDate, selectionStart, selectedDay, mobile, today])
 
   return (
     <Box sx={{ maxWidth: 1024, mx: 'auto' }}>
