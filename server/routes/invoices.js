@@ -929,15 +929,11 @@ router.delete('/:id/logo', async (req, res) => {
   res.status(204).end()
 })
 
-// ---------- download .eml ----------
+// ---------- email (.eml) ----------
 
 function escHtml(str) {
   if (!str) return ''
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function wrapBase64Lines(str) {
@@ -952,7 +948,6 @@ function buildPaymentSectionHtml(url, invoiceNumber, qrBase64) {
               <p style="margin:6px 0 0 0;font-size:11px;color:#888888;text-align:center;">Scan om te betalen</p>
             </td>` : ''
   return `
-                <!-- Payment link block -->
                 <tr>
                   <td style="padding-top:8px;padding-bottom:16px;">
                     <table cellpadding="0" cellspacing="0" border="0" width="100%"
@@ -978,10 +973,13 @@ function buildPaymentSectionHtml(url, invoiceNumber, qrBase64) {
                 </tr>`
 }
 
-function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting, paymentSectionHtml }) {
-  const gigThanks = gigDate
-    ? ` tijdens het optreden van <strong>${escHtml(bandName)}</strong> op <strong>${escHtml(gigDate)}</strong>`
-    : ''
+function defaultPersonalMessage(bandName, gigDate) {
+  const gigPart = gigDate ? ` tijdens het optreden van ${bandName} op ${gigDate}` : ''
+  return `Hartelijk dank voor de prettige samenwerking${gigPart}.\n\nIn de bijlage vindt u onze factuur met de bijbehorende specificaties.`
+}
+
+function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting, personalMessage, paymentSectionHtml }) {
+  const personalHtml = escHtml(personalMessage).replace(/\n/g, '<br>')
   const issueDateCell = issueDate
     ? `<td style="padding-left:32px;">
                         <p style="margin:0 0 2px 0;font-size:12px;color:#888888;">Factuurdatum</p>
@@ -1003,35 +1001,20 @@ function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting,
       <td align="center">
         <table cellpadding="0" cellspacing="0" border="0" width="600"
                style="max-width:600px;background:#ffffff;border:1px solid #dddddd;">
-
-          <!-- Header -->
           <tr>
             <td style="background:#1a1a2e;padding:24px 32px;">
-              <p style="margin:0;font-size:22px;font-weight:bold;color:#ffffff;letter-spacing:0.5px;">
-                ${escHtml(bandName)}
-              </p>
+              <p style="margin:0;font-size:22px;font-weight:bold;color:#ffffff;letter-spacing:0.5px;">${escHtml(bandName)}</p>
             </td>
           </tr>
-
-          <!-- Body -->
           <tr>
             <td style="padding:32px;">
               <table cellpadding="0" cellspacing="0" border="0" width="100%">
-
                 <tr>
-                  <td style="padding-bottom:18px;font-size:15px;color:#333333;line-height:1.6;">
-                    ${escHtml(greeting)}
-                  </td>
+                  <td style="padding-bottom:18px;font-size:15px;color:#333333;line-height:1.6;">${escHtml(greeting)}</td>
                 </tr>
-
                 <tr>
-                  <td style="padding-bottom:18px;font-size:15px;color:#333333;line-height:1.7;">
-                    Hartelijk dank voor de prettige samenwerking${gigThanks}.
-                    In de bijlage vindt u onze factuur met de bijbehorende specificaties.
-                  </td>
+                  <td style="padding-bottom:18px;font-size:15px;color:#333333;line-height:1.7;">${personalHtml}</td>
                 </tr>
-
-                <!-- Invoice reference -->
                 <tr>
                   <td style="padding-bottom:18px;">
                     <table cellpadding="0" cellspacing="0" border="0" width="100%"
@@ -1046,32 +1029,21 @@ function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting,
                     </table>
                   </td>
                 </tr>
-
-                ${paymentSectionHtml}
-
+                ${paymentSectionHtml || ''}
                 <tr>
                   <td style="padding-top:8px;padding-bottom:8px;font-size:15px;color:#333333;line-height:1.7;">
                     Mocht u vragen hebben omtrent deze factuur, neemt u dan gerust contact met ons op.
                   </td>
                 </tr>
-
                 <tr>
-                  <td style="padding-bottom:4px;font-size:15px;color:#333333;line-height:1.7;">
-                    Met vriendelijke groet,
-                  </td>
+                  <td style="padding-bottom:4px;font-size:15px;color:#333333;line-height:1.7;">Met vriendelijke groet,</td>
                 </tr>
-
                 <tr>
-                  <td style="padding-bottom:0;font-size:15px;font-weight:bold;color:#1a1a2e;line-height:1.7;">
-                    ${escHtml(bandName)}
-                  </td>
+                  <td style="font-size:15px;font-weight:bold;color:#1a1a2e;line-height:1.7;">${escHtml(bandName)}</td>
                 </tr>
-
               </table>
             </td>
           </tr>
-
-          <!-- Footer -->
           <tr>
             <td style="background:#f8f8f8;padding:14px 32px;border-top:1px solid #dddddd;">
               <p style="margin:0;font-size:11px;color:#aaaaaa;">
@@ -1079,7 +1051,6 @@ function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting,
               </p>
             </td>
           </tr>
-
         </table>
       </td>
     </tr>
@@ -1088,113 +1059,166 @@ function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting,
 </html>`
 }
 
-router.get('/:id/eml', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
-
+async function resolveEmlData(id, tenantId) {
   const { rows } = await pool.query(
     `SELECT i.*, g.event_date, g.event_description
        FROM invoices i
        LEFT JOIN gigs g ON g.id = i.gig_id AND g.tenant_id = i.tenant_id
       WHERE i.id = $1 AND i.tenant_id = $2`,
-    [id, req.tenantId],
+    [id, tenantId],
   )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+  if (!rows.length) return null
   const invoice = rows[0]
-  const tenant = await fetchTenant(pool, req.tenantId)
-  if (!tenant) return res.status(404).json({ error: 'Tenant not found' })
-
-  const hasPaymentLink = Boolean(invoice.mollie_payment_link_url)
-
-  let qrBase64 = null
-  if (hasPaymentLink) {
-    try {
-      const qrBuffer = await QRCode.toBuffer(invoice.mollie_payment_link_url, {
-        type: 'png', width: 200, margin: 1,
-      })
-      qrBase64 = qrBuffer.toString('base64')
-    } catch (err) {
-      console.warn('[invoices/eml] QR generation failed:', err.message)
-    }
-  }
+  const tenant = await fetchTenant(pool, tenantId)
+  if (!tenant) return null
 
   const fmtNl = (d) =>
     d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }) : null
-  const gigDate = fmtNl(invoice.event_date)
+  const gigDate   = fmtNl(invoice.event_date)
   const issueDate = fmtNl(invoice.issue_date)
-
-  const bandName = tenant.formal_name || tenant.band_name || ''
+  const bandName  = tenant.formal_name || tenant.band_name || ''
   const invoiceNumber = invoice.invoice_number || 'concept'
 
   const subjectDate = gigDate || issueDate || ''
   const subject = `Factuur ${invoiceNumber} – ${bandName}${subjectDate ? ` – ${subjectDate}` : ''}`
 
-  const titlePart = invoice.customer_contact_title ? `${invoice.customer_contact_title} ` : ''
+  const titlePart  = invoice.customer_contact_title ? `${invoice.customer_contact_title} ` : ''
   const familyName = invoice.customer_contact_family_name || ''
-  const greeting = familyName
-    ? `Geachte ${titlePart}${familyName},`
-    : 'Geachte heer/mevrouw,'
-
-  const paymentSectionHtml = hasPaymentLink
-    ? buildPaymentSectionHtml(invoice.mollie_payment_link_url, invoiceNumber, qrBase64)
-    : ''
-
-  const html = buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting, paymentSectionHtml })
+  const greeting   = familyName ? `Geachte ${titlePart}${familyName},` : 'Geachte heer/mevrouw,'
 
   const toAddress = invoice.customer_email
     ? invoice.customer_name
       ? `${invoice.customer_name} <${invoice.customer_email}>`
       : invoice.customer_email
     : ''
-  const fromAddress = `${bandName} <noreply@gigbuddy>`
+
+  return { invoice, tenant, bandName, invoiceNumber, gigDate, issueDate, subject, greeting, toAddress }
+}
+
+// Returns the pre-filled defaults for the email compose dialog.
+router.get('/:id/eml-defaults', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  const data = await resolveEmlData(id, req.tenantId)
+  if (!data) return res.status(404).json({ error: 'Not found' })
+  const { bandName, gigDate, subject, greeting, toAddress } = data
+  res.json({
+    subject,
+    to: toAddress,
+    greeting,
+    personalMessage: defaultPersonalMessage(bandName, gigDate),
+  })
+})
+
+// Generates and streams the .eml file.
+// X-Unsent: 1 verified working in Outlook 1.2026.105.100 (WebView2 143).
+router.post('/:id/eml', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  const data = await resolveEmlData(id, req.tenantId)
+  if (!data) return res.status(404).json({ error: 'Not found' })
+
+  const { invoice, bandName, invoiceNumber, gigDate, issueDate, subject, greeting, toAddress } = data
+  const personalMessage = String(req.body?.personalMessage || defaultPersonalMessage(bandName, gigDate)).slice(0, 4000)
+  const safeNumber = invoiceNumber.replace(/[^a-zA-Z0-9-]/g, '-')
+
+  const hasPaymentLink = Boolean(invoice.mollie_payment_link_url)
+  let qrBase64 = null
+  if (hasPaymentLink) {
+    try {
+      const qrBuffer = await QRCode.toBuffer(invoice.mollie_payment_link_url, { type: 'png', width: 200, margin: 1 })
+      qrBase64 = qrBuffer.toString('base64')
+    } catch (err) {
+      console.warn('[invoices/eml] QR generation failed:', err.message)
+    }
+  }
+
+  const paymentSectionHtml = hasPaymentLink
+    ? buildPaymentSectionHtml(invoice.mollie_payment_link_url, invoiceNumber, qrBase64)
+    : ''
+
+  const html = buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting, personalMessage, paymentSectionHtml })
+  const htmlBase64 = Buffer.from(html, 'utf8').toString('base64')
+
+  let pdfBase64 = null
+  if (invoice.pdf_path) {
+    try {
+      const stream = await storageClient.getObject(BUCKET, invoice.pdf_path)
+      const chunks = []
+      for await (const chunk of stream) chunks.push(chunk)
+      pdfBase64 = Buffer.concat(chunks).toString('base64')
+    } catch (err) {
+      console.warn('[invoices/eml] PDF fetch failed:', err.message)
+    }
+  }
+
   const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`
   const dateHeader = new Date().toUTCString()
   const msgId = `<invoice-${id}-${Date.now()}@gigbuddy>`
-  const htmlBase64 = Buffer.from(html, 'utf8').toString('base64')
+  const ts = Date.now()
+  const relatedBoundary = `----=_Related_GigBuddy_${ts}`
+  const mixedBoundary   = `----=_Mixed_GigBuddy_${ts}`
+  const pdfFilename = `factuur-${safeNumber}.pdf`
+
+  const bodySection = qrBase64
+    ? [
+        `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
+        '',
+        `--${relatedBoundary}`,
+        'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: base64',
+        '',
+        wrapBase64Lines(htmlBase64),
+        '',
+        `--${relatedBoundary}`,
+        'Content-Type: image/png; name="qr-betaallink.png"',
+        'Content-Transfer-Encoding: base64',
+        'Content-ID: <qr-betaallink>',
+        'Content-Disposition: inline; filename="qr-betaallink.png"',
+        '',
+        wrapBase64Lines(qrBase64),
+        '',
+        `--${relatedBoundary}--`,
+      ].join('\r\n')
+    : [
+        'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: base64',
+        '',
+        wrapBase64Lines(htmlBase64),
+      ].join('\r\n')
+
+  const outerHeaders = [
+    'MIME-Version: 1.0',
+    `Date: ${dateHeader}`,
+    `Message-ID: ${msgId}`,
+    'X-Unsent: 1',
+    ...(toAddress ? [`To: ${toAddress}`] : []),
+    `Subject: ${encodedSubject}`,
+  ]
 
   let emlContent
-  if (qrBase64) {
-    const boundary = `----=_Part_GigBuddy_${Date.now()}`
+  if (pdfBase64) {
+    const pdfSection = [
+      `Content-Type: application/pdf; name="${pdfFilename}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${pdfFilename}"`,
+      '',
+      wrapBase64Lines(pdfBase64),
+    ].join('\r\n')
     emlContent = [
-      'MIME-Version: 1.0',
-      `Date: ${dateHeader}`,
-      `Message-ID: ${msgId}`,
-      `From: ${fromAddress}`,
-      ...(toAddress ? [`To: ${toAddress}`] : []),
-      `Subject: ${encodedSubject}`,
-      `Content-Type: multipart/related; boundary="${boundary}"`,
+      ...outerHeaders,
+      `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
       '',
-      `--${boundary}`,
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
+      `--${mixedBoundary}`,
+      bodySection,
       '',
-      wrapBase64Lines(htmlBase64),
+      `--${mixedBoundary}`,
+      pdfSection,
       '',
-      `--${boundary}`,
-      'Content-Type: image/png; name="qr-betaallink.png"',
-      'Content-Transfer-Encoding: base64',
-      'Content-ID: <qr-betaallink>',
-      'Content-Disposition: inline; filename="qr-betaallink.png"',
-      '',
-      wrapBase64Lines(qrBase64),
-      '',
-      `--${boundary}--`,
+      `--${mixedBoundary}--`,
     ].join('\r\n')
   } else {
-    emlContent = [
-      'MIME-Version: 1.0',
-      `Date: ${dateHeader}`,
-      `Message-ID: ${msgId}`,
-      `From: ${fromAddress}`,
-      ...(toAddress ? [`To: ${toAddress}`] : []),
-      `Subject: ${encodedSubject}`,
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      wrapBase64Lines(htmlBase64),
-    ].join('\r\n')
+    emlContent = [...outerHeaders, bodySection].join('\r\n')
   }
 
-  const safeNumber = invoiceNumber.replace(/[^a-zA-Z0-9-]/g, '-')
   res.setHeader('Content-Type', 'message/rfc822')
   res.setHeader('Content-Disposition', `attachment; filename="factuur-${safeNumber}.eml"`)
   res.send(emlContent)

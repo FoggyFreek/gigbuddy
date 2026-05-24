@@ -37,7 +37,9 @@ import {
   createInvoice,
   createInvoicePaymentLink,
   deleteInvoice,
+  downloadInvoiceEml,
   getInvoice,
+  getInvoiceEmlDefaults,
   removeInvoiceLogo,
   syncInvoicePaymentLink,
   updateInvoice,
@@ -124,6 +126,11 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
   )
   const [logoBusy, setLogoBusy] = useState(false)
   const logoInputRef = useRef(null)
+  const [emlDialogOpen, setEmlDialogOpen] = useState(false)
+  const [emlMessage, setEmlMessage] = useState('')
+  const [emlLoading, setEmlLoading] = useState(false)
+  const [emlBusy, setEmlBusy] = useState(false)
+  const [emlError, setEmlError] = useState(null)
 
   // Load invoice when editing.
   useEffect(() => {
@@ -311,6 +318,43 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
       onClose(true)
     } catch (e) {
       setError(e.message)
+    }
+  }
+
+  async function openEmlDialog() {
+    setEmlDialogOpen(true)
+    setEmlError(null)
+    setEmlMessage('')
+    setEmlLoading(true)
+    try {
+      const defaults = await getInvoiceEmlDefaults(invoiceId)
+      setEmlMessage(defaults.personalMessage)
+    } catch (err) {
+      setEmlError(err.message)
+    } finally {
+      setEmlLoading(false)
+    }
+  }
+
+  async function handleEmlDownload() {
+    setEmlBusy(true)
+    setEmlError(null)
+    try {
+      const blob = await downloadInvoiceEml(invoiceId, emlMessage)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const safeNumber = (invoice?.invoice_number || 'concept').replace(/[^a-zA-Z0-9-]/g, '-')
+      a.download = `factuur-${safeNumber}.eml`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setEmlDialogOpen(false)
+    } catch (err) {
+      setEmlError(err.message)
+    } finally {
+      setEmlBusy(false)
     }
   }
 
@@ -813,15 +857,11 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
           </Button>
         )}
         {isEdit && invoice && (
-          <Button
-            component="a"
-            href={`/api/invoices/${invoice.id}/eml`}
-            download={`factuur-${(invoice.invoice_number || 'concept').replace(/[^a-zA-Z0-9-]/g, '-')}.eml`}
-            startIcon={<EmailIcon />}
-          >
+          <Button startIcon={<EmailIcon />} onClick={openEmlDialog}>
             Download email
           </Button>
         )}
+        <Button onClick={() => onClose(false)}>Close</Button>
         {!readOnly && (
           <Button variant="contained" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save'}
@@ -844,6 +884,42 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
     </Dialog>
   )
 
+  const emlDialog = (
+    <Dialog open={emlDialogOpen} onClose={() => !emlBusy && setEmlDialogOpen(false)} fullWidth maxWidth="sm">
+      <DialogTitle>Pas het persoonlijk bericht aan</DialogTitle>
+      <DialogContent>
+        {emlError && <Alert severity="error" sx={{ mb: 2 }}>{emlError}</Alert>}
+        {emlLoading
+          ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+          : (
+            <TextField
+              multiline
+              fullWidth
+              minRows={5}
+              maxRows={12}
+              value={emlMessage}
+              onChange={(e) => setEmlMessage(e.target.value)}
+              disabled={emlBusy}
+              sx={{ mt: 1 }}
+              helperText="Dit is de persoonlijke begeleidende tekst in het e-mailbericht."
+            />
+          )
+        }
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setEmlDialogOpen(false)} disabled={emlBusy}>Annuleren</Button>
+        <Button
+          variant="contained"
+          startIcon={emlBusy ? <CircularProgress size={16} color="inherit" /> : <EmailIcon />}
+          onClick={handleEmlDownload}
+          disabled={emlLoading || emlBusy}
+        >
+          Download email
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+
   if (embedded) {
     return (
       <>
@@ -859,6 +935,7 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
           </Box>
         </Box>
         {deleteConfirmDialog}
+        {emlDialog}
       </>
     )
   }
@@ -873,6 +950,7 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
         <DialogActions sx={{ justifyContent: 'space-between' }}>{actionsNode}</DialogActions>
       </Dialog>
       {deleteConfirmDialog}
+      {emlDialog}
     </>
   )
 }
@@ -887,7 +965,7 @@ const MOLLIE_STATUS_COLOR = {
 function PaymentLinkPanel({ invoice, onUpdated }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const [copied, setCopied] = useState(null) // 'url' | 'snippet'
+  const [copied, setCopied] = useState(null) // 'url'
 
   const hasLink = Boolean(invoice.mollie_payment_link_id)
   const url = invoice.mollie_payment_link_url
@@ -900,9 +978,6 @@ function PaymentLinkPanel({ invoice, onUpdated }) {
     setError(null)
     try {
       const result = await createInvoicePaymentLink(invoice.id)
-      // Response is the full invoice row (matches GET /:id shape) so we can
-      // merge it directly — this also carries the new status='sent' and
-      // finalized_at, which are required for the form to switch to read-only.
       onUpdated(result)
     } catch (err) {
       const msg = {
