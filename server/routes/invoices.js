@@ -1231,17 +1231,19 @@ router.post('/:id/eml', async (req, res) => {
 // We refuse to mutate state unless the posted id matches the payment Mollie actually
 // reports under the link, so callers who guess invoice ids can't even trigger a status
 // flip with a random payment id.
+// In @mollie/api-client v4.3+ payments-under-a-link is a helper iterator on
+// the PaymentLink object, not a method on the paymentLinks binder. The API
+// returns newest-first, so the first item is the latest payment.
+async function getLatestPayment(paymentLink) {
+  const iterator = paymentLink.getPayments().take(1)[Symbol.asyncIterator]()
+  const { value, done } = await iterator.next()
+  return done ? null : value
+}
+
 export async function syncInvoicePaymentStatus(mollie, db, invoice, expectedPaymentId = null) {
   const paymentLink = await mollie.paymentLinks.get(invoice.mollie_payment_link_id)
 
-  // In @mollie/api-client v4.3+ payments-under-a-link is a helper iterator on
-  // the PaymentLink object, not a method on the paymentLinks binder. The API
-  // returns newest-first, so taking 1 gives us the latest payment.
-  let latestPayment = null
-  for await (const p of paymentLink.getPayments().take(1)) {
-    latestPayment = p
-    break
-  }
+  const latestPayment = await getLatestPayment(paymentLink)
 
   if (expectedPaymentId && (!latestPayment || latestPayment.id !== expectedPaymentId)) {
     return invoice

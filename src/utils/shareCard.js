@@ -149,7 +149,7 @@ export function formatEventName(gig) {
 }
 
 export async function renderNodeToBlob(node, { width, height }) {
-  if (document.fonts?.ready) {
+  if (document.fonts && 'ready' in document.fonts) {
     await document.fonts.ready
   }
 
