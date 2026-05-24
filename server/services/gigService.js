@@ -97,15 +97,18 @@ export async function patchGig(db, tenantId, gigId, body) {
 
 // ---------- task patch ----------
 
+// Validates assigned_to (when present) and returns a normalized copy of body
+// with it parsed to an integer, leaving the input untouched. A null/absent
+// assigned_to passes through unchanged (null clears the assignee). Returns
+// { error } | { body: normalizedBody }.
 async function resolveTaskAssignee(db, tenantId, body) {
-  if (!('assigned_to' in body) || body.assigned_to === null) return {}
+  if (!('assigned_to' in body) || body.assigned_to === null) return { body }
   const assignedTo = parseId(body.assigned_to)
   if (assignedTo === null) return { error: { status: 400, body: { error: 'Invalid assigned_to' } } }
   if (!(await memberExistsInTenant(db, assignedTo, tenantId))) {
     return { error: { status: 404, body: { error: 'assigned_to not found' } } }
   }
-  body.assigned_to = assignedTo
-  return {}
+  return { body: { ...body, assigned_to: assignedTo } }
 }
 
 // Validates and applies a gig-task PATCH. Returns { error } or { task }. Fires
@@ -113,14 +116,15 @@ async function resolveTaskAssignee(db, tenantId, body) {
 export async function patchGigTask(db, tenantId, gigId, taskId, body) {
   const assignee = await resolveTaskAssignee(db, tenantId, body)
   if (assignee.error) return assignee
+  const normalizedBody = assignee.body
 
-  const built = buildGigTaskUpdateFields(body)
+  const built = buildGigTaskUpdateFields(normalizedBody)
   if (!built.fields.length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
 
   const task = await updateGigTaskFields(db, tenantId, gigId, taskId, built.fields, built.values)
   if (!task) return { error: { status: 404, body: { error: 'Not found' } } }
 
-  if (body.assigned_to) {
+  if (normalizedBody.assigned_to) {
     await notifyTaskAssignment(db, tenantId, gigId, task)
   }
   return { task }

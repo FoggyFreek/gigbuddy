@@ -287,3 +287,33 @@ describe('gig festival_id — venue category validation', () => {
     expect(rows).toHaveLength(0)
   })
 })
+
+describe('gig task assignment — assigned_to normalization', () => {
+  function taskA() {
+    return seed.tasks.find((t) => t.tenant_id === seed.tenantA.id)
+  }
+
+  it('PATCH normalizes a numeric-string assigned_to and persists the integer', async () => {
+    const res = await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}/tasks/${taskA().id}`)
+        .send({ assigned_to: String(seed.memberA.id) }),
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.assigned_to).toBe(seed.memberA.id)
+    const { rows } = await pool.query('SELECT assigned_to FROM gig_tasks WHERE id = $1', [taskA().id])
+    expect(rows[0].assigned_to).toBe(seed.memberA.id)
+  })
+
+  it('PATCH rejects a cross-tenant assigned_to with 404 and leaves it unchanged', async () => {
+    const res = await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}/tasks/${taskA().id}`)
+        .send({ assigned_to: seed.memberB.id }),
+    )
+    expect(res.status).toBe(404)
+    expect(res.body.error).toMatch(/assigned_to/i)
+    const { rows } = await pool.query('SELECT assigned_to FROM gig_tasks WHERE id = $1', [taskA().id])
+    expect(rows[0].assigned_to).toBeNull()
+  })
+})
