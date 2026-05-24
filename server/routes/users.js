@@ -60,18 +60,69 @@ async function readMembershipRow(tenantId, userId) {
   return rows[0] || null
 }
 
+function validateMembershipPatch(status, role) {
+  if (status !== undefined && !ALLOWED_STATUS.has(status)) {
+    return { error: { status: 400, body: { error: 'Invalid status' } } }
+  }
+  if (role !== undefined && !ALLOWED_ROLE.has(role)) {
+    return { error: { status: 400, body: { error: 'Invalid role' } } }
+  }
+  if (status === undefined && role === undefined) {
+    return { error: { status: 400, body: { error: 'Nothing to update' } } }
+  }
+  return {}
+}
+
+// Privileged-change gates that need the existing membership row. Emits an audit
+// entry and returns { status, body } on denial, or null when allowed.
+function authorizeMembershipChange(req, { existing, status, role, callerIsSuperAdmin, userId }) {
+  if (existing.is_super_admin && existing.user_id !== req.user.id && !callerIsSuperAdmin) {
+    auditLog(req, 'membership.update.denied', { targetUserId: userId, reason: 'modify_super_admin' })
+    return { status: 403, body: { error: 'Cannot modify a super admin membership' } }
+  }
+  if (existing.role === 'tenant_admin' && role !== undefined && role !== 'tenant_admin' && !callerIsSuperAdmin) {
+    auditLog(req, 'membership.update.denied', { targetUserId: userId, role, reason: 'demote_tenant_admin_requires_super_admin' })
+    return { status: 403, body: { error: 'Only super admins can demote a tenant_admin' } }
+  }
+  // Approving a pending tenant_admin membership is effectively a grant of
+  // tenant_admin powers — gate it to super admins regardless of how the
+  // pending row got there (invite redemption, manual seed, etc.).
+  if (status === 'approved' && existing.role === 'tenant_admin' && existing.status !== 'approved' && !callerIsSuperAdmin) {
+    auditLog(req, 'membership.update.denied', { targetUserId: userId, status, reason: 'approve_tenant_admin_requires_super_admin' })
+    return { status: 403, body: { error: 'Only super admins can approve a tenant_admin membership' } }
+  }
+  return null
+}
+
+function buildMembershipUpdate({ status, role, approverUserId }) {
+  const sets = []
+  const values = []
+  let i = 1
+  if (status !== undefined) {
+    sets.push(`status = $${i++}`)
+    values.push(status)
+    if (status === 'approved') {
+      sets.push(`approved_at = NOW()`)
+      sets.push(`approved_by_user_id = $${i++}`)
+      values.push(approverUserId)
+    } else {
+      sets.push(`approved_at = NULL`)
+      sets.push(`approved_by_user_id = NULL`)
+    }
+  }
+  if (role !== undefined) {
+    sets.push(`role = $${i++}`)
+    values.push(role)
+  }
+  return { sets, values, nextIdx: i }
+}
+
 router.patch('/:userId/membership', async (req, res, next) => {
   const userId = Number(req.params.userId)
   const { status, role } = req.body
-  if (status !== undefined && !ALLOWED_STATUS.has(status)) {
-    return res.status(400).json({ error: 'Invalid status' })
-  }
-  if (role !== undefined && !ALLOWED_ROLE.has(role)) {
-    return res.status(400).json({ error: 'Invalid role' })
-  }
-  if (status === undefined && role === undefined) {
-    return res.status(400).json({ error: 'Nothing to update' })
-  }
+  const validation = validateMembershipPatch(status, role)
+  if (validation.error) return res.status(validation.error.status).json(validation.error.body)
+
   const callerIsSuperAdmin = !!req.user?.is_super_admin
   if (role === 'tenant_admin' && !callerIsSuperAdmin) {
     auditLog(req, 'membership.update.denied', { targetUserId: userId, role, reason: 'grant_tenant_admin_requires_super_admin' })
@@ -81,55 +132,15 @@ router.patch('/:userId/membership', async (req, res, next) => {
   try {
     const existing = await readMembershipRow(req.tenantId, userId)
     if (!existing) return res.status(404).json({ error: 'Membership not found' })
-    if (existing.is_super_admin && existing.user_id !== req.user.id && !callerIsSuperAdmin) {
-      auditLog(req, 'membership.update.denied', { targetUserId: userId, reason: 'modify_super_admin' })
-      return res.status(403).json({ error: 'Cannot modify a super admin membership' })
-    }
-    if (
-      existing.role === 'tenant_admin' &&
-      role !== undefined &&
-      role !== 'tenant_admin' &&
-      !callerIsSuperAdmin
-    ) {
-      auditLog(req, 'membership.update.denied', { targetUserId: userId, role, reason: 'demote_tenant_admin_requires_super_admin' })
-      return res.status(403).json({ error: 'Only super admins can demote a tenant_admin' })
-    }
-    // Approving a pending tenant_admin membership is effectively a grant of
-    // tenant_admin powers — gate it to super admins regardless of how the
-    // pending row got there (invite redemption, manual seed, etc.).
-    if (
-      status === 'approved' &&
-      existing.role === 'tenant_admin' &&
-      existing.status !== 'approved' &&
-      !callerIsSuperAdmin
-    ) {
-      auditLog(req, 'membership.update.denied', { targetUserId: userId, status, reason: 'approve_tenant_admin_requires_super_admin' })
-      return res.status(403).json({ error: 'Only super admins can approve a tenant_admin membership' })
-    }
 
-    const sets = []
-    const values = []
-    let i = 1
-    if (status !== undefined) {
-      sets.push(`status = $${i++}`)
-      values.push(status)
-      if (status === 'approved') {
-        sets.push(`approved_at = NOW()`)
-        sets.push(`approved_by_user_id = $${i++}`)
-        values.push(req.user.id)
-      } else {
-        sets.push(`approved_at = NULL`)
-        sets.push(`approved_by_user_id = NULL`)
-      }
-    }
-    if (role !== undefined) {
-      sets.push(`role = $${i++}`)
-      values.push(role)
-    }
+    const denied = authorizeMembershipChange(req, { existing, status, role, callerIsSuperAdmin, userId })
+    if (denied) return res.status(denied.status).json(denied.body)
+
+    const { sets, values, nextIdx } = buildMembershipUpdate({ status, role, approverUserId: req.user.id })
     values.push(req.tenantId, userId)
     await pool.query(
       `UPDATE memberships SET ${sets.join(', ')}
-        WHERE tenant_id = $${i++} AND user_id = $${i}`,
+        WHERE tenant_id = $${nextIdx} AND user_id = $${nextIdx + 1}`,
       values,
     )
 

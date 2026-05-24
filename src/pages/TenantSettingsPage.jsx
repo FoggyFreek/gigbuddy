@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import PropTypes from 'prop-types'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -158,6 +159,88 @@ export default function TenantSettingsPage() {
   )
 }
 
+function mollieKeyErrorMessage(err) {
+  if (err.message === 'invalid_mollie_key') {
+    return 'Invalid key format. Keys must start with live_ or test_ followed by at least 25 alphanumeric characters.'
+  }
+  return 'Failed to save key. Please try again.'
+}
+
+function MollieKeyStatusDisplay({ status }) {
+  if (status === null) return <CircularProgress size={18} />
+  if (status.isSet) {
+    return (
+      <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+        {status.preview}
+      </Typography>
+    )
+  }
+  return <Typography variant="body2" color="text.disabled">Not configured</Typography>
+}
+
+MollieKeyStatusDisplay.propTypes = {
+  status: PropTypes.shape({ isSet: PropTypes.bool, preview: PropTypes.string }),
+}
+
+function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, error, saving, onSave, onCancel }) {
+  return (
+    <Stack spacing={1.5}>
+      <TextField
+        label="Mollie API key"
+        fullWidth
+        size="small"
+        value={inputKey}
+        onChange={onInputChange}
+        type={showKey ? 'text' : 'password'}
+        placeholder="live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        error={!!error}
+        helperText={error || 'Paste your live or test key from the Mollie dashboard.'}
+        autoComplete="off"
+        inputProps={{ spellCheck: false }}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                size="small"
+                onClick={onToggleShowKey}
+                edge="end"
+                aria-label={showKey ? 'Hide key' : 'Show key'}
+              >
+                {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
+      <Stack direction="row" spacing={1}>
+        <Button
+          variant="contained"
+          size="small"
+          onClick={onSave}
+          disabled={!inputKey.trim() || saving}
+          startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
+        >
+          Save
+        </Button>
+        <Button size="small" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
+      </Stack>
+    </Stack>
+  )
+}
+
+MollieKeyEditor.propTypes = {
+  inputKey: PropTypes.string.isRequired,
+  onInputChange: PropTypes.func.isRequired,
+  showKey: PropTypes.bool,
+  onToggleShowKey: PropTypes.func.isRequired,
+  error: PropTypes.string,
+  saving: PropTypes.bool,
+  onSave: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired,
+}
+
 function MollieKeySection() {
   const [status, setStatus] = useState(null) // { isSet, preview }
   const [editing, setEditing] = useState(false)
@@ -193,9 +276,7 @@ function MollieKeySection() {
       setEditing(false)
       setInputKey('')
     } catch (err) {
-      setError(err.message === 'invalid_mollie_key'
-        ? 'Invalid key format. Keys must start with live_ or test_ followed by at least 25 alphanumeric characters.'
-        : 'Failed to save key. Please try again.')
+      setError(mollieKeyErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -224,18 +305,21 @@ function MollieKeySection() {
         Used to process payments via Mollie. The key is stored securely and never shown in full after saving.
       </Typography>
 
-      {!editing ? (
+      {editing ? (
+        <MollieKeyEditor
+          inputKey={inputKey}
+          onInputChange={(e) => { setInputKey(e.target.value); setError(null) }}
+          showKey={showKey}
+          onToggleShowKey={() => setShowKey((v) => !v)}
+          error={error}
+          saving={saving}
+          onSave={handleSave}
+          onCancel={cancelEditing}
+        />
+      ) : (
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box sx={{ flex: 1 }}>
-            {status === null ? (
-              <CircularProgress size={18} />
-            ) : status.isSet ? (
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                {status.preview}
-              </Typography>
-            ) : (
-              <Typography variant="body2" color="text.disabled">Not configured</Typography>
-            )}
+            <MollieKeyStatusDisplay status={status} />
           </Box>
           <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
             {status?.isSet ? 'Replace key' : 'Configure'}
@@ -249,50 +333,6 @@ function MollieKeySection() {
               </span>
             </Tooltip>
           )}
-        </Stack>
-      ) : (
-        <Stack spacing={1.5}>
-          <TextField
-            label="Mollie API key"
-            fullWidth
-            size="small"
-            value={inputKey}
-            onChange={(e) => { setInputKey(e.target.value); setError(null) }}
-            type={showKey ? 'text' : 'password'}
-            placeholder="live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            error={!!error}
-            helperText={error || 'Paste your live or test key from the Mollie dashboard.'}
-            autoComplete="off"
-            inputProps={{ spellCheck: false }}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={() => setShowKey((v) => !v)}
-                    edge="end"
-                    aria-label={showKey ? 'Hide key' : 'Show key'}
-                  >
-                    {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
-          />
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={handleSave}
-              disabled={!inputKey.trim() || saving}
-              startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
-            >
-              Save
-            </Button>
-            <Button size="small" onClick={cancelEditing} disabled={saving}>
-              Cancel
-            </Button>
-          </Stack>
         </Stack>
       )}
     </Paper>

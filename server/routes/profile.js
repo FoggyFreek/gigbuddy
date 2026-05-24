@@ -110,50 +110,52 @@ router.get('/', async (req, res) => {
   res.json({ ...profile, links })
 })
 
-function normalizeFinancialValue(key, raw) {
-  if (key === 'applies_kor') {
-    if (raw === null || raw === undefined) return { skip: true }
-    if (typeof raw !== 'boolean') return { error: `invalid_${key}` }
-    return { value: raw }
-  }
+function validateAppliesKor(raw) {
+  if (raw === null || raw === undefined) return { skip: true }
+  if (typeof raw !== 'boolean') return { error: 'invalid_applies_kor' }
+  return { value: raw }
+}
 
+function validateTaxPercentage(raw) {
   if (raw === null || raw === undefined) return { value: null }
+  if (raw === '') return { skip: true }
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0 || n > 100) return { error: 'invalid_tax_percentage' }
+  return { value: n }
+}
 
-  if (key === 'tax_percentage') {
-    if (raw === '') return { skip: true }
-    const n = Number(raw)
-    if (!Number.isFinite(n) || n < 0 || n > 100) {
-      return { error: `invalid_${key}` }
-    }
-    return { value: n }
+// Builds a validator for whitespace-stripped, regex-checked fields (kvk/iban/tax_id).
+function makeStrippedValidator(key, re, upper) {
+  return (raw) => {
+    if (raw === null || raw === undefined) return { value: null }
+    if (typeof raw !== 'string') return { error: `invalid_${key}` }
+    let stripped = raw.replace(/\s+/g, '')
+    if (upper) stripped = stripped.toUpperCase()
+    if (stripped === '') return { value: '' }
+    if (!re.test(stripped)) return { error: `invalid_${key}` }
+    return { value: stripped }
   }
+}
 
+function validateBoundedText(key, raw) {
+  if (raw === null || raw === undefined) return { value: null }
   if (typeof raw !== 'string') return { error: `invalid_${key}` }
-
-  if (key === 'kvk_number') {
-    const stripped = raw.replace(/\s+/g, '')
-    if (stripped === '') return { value: '' }
-    if (!KVK_RE.test(stripped)) return { error: `invalid_${key}` }
-    return { value: stripped }
-  }
-
-  if (key === 'iban') {
-    const stripped = raw.replace(/\s+/g, '').toUpperCase()
-    if (stripped === '') return { value: '' }
-    if (!IBAN_RE.test(stripped)) return { error: `invalid_${key}` }
-    return { value: stripped }
-  }
-
-  if (key === 'tax_id') {
-    const stripped = raw.replace(/\s+/g, '').toUpperCase()
-    if (stripped === '') return { value: '' }
-    if (!TAX_ID_RE.test(stripped)) return { error: `invalid_${key}` }
-    return { value: stripped }
-  }
-
   const max = TEXT_MAX_LENGTHS[key]
   if (max != null && raw.length > max) return { error: `invalid_${key}` }
   return { value: raw }
+}
+
+const FINANCIAL_VALIDATORS = {
+  applies_kor: validateAppliesKor,
+  tax_percentage: validateTaxPercentage,
+  kvk_number: makeStrippedValidator('kvk_number', KVK_RE, false),
+  iban: makeStrippedValidator('iban', IBAN_RE, true),
+  tax_id: makeStrippedValidator('tax_id', TAX_ID_RE, true),
+}
+
+function normalizeFinancialValue(key, raw) {
+  const validator = FINANCIAL_VALIDATORS[key]
+  return validator ? validator(raw) : validateBoundedText(key, raw)
 }
 
 // Update tenant profile (partial)

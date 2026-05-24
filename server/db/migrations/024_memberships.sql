@@ -1,3 +1,9 @@
+-- NOTE: the repeated 'member' role literal (DEFAULT, CHECK constraint, and the
+-- backfill CASE below) is intentional and left as-is. This migration has already
+-- been applied in every environment; the runner records applied files by name and
+-- never re-executes them, so editing the DDL here would have no effect on existing
+-- databases while risking divergence from production. The Sonar duplicate-literal
+-- finding is acknowledged and intentionally not "fixed" by mutating history.
 CREATE TABLE memberships (
   id                  SERIAL PRIMARY KEY,
   user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

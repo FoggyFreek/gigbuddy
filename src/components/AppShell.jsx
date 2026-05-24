@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import AppBar from '@mui/material/AppBar'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
@@ -7,20 +7,13 @@ import Divider from '@mui/material/Divider'
 import Drawer from '@mui/material/Drawer'
 import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
-import ListItemButton from '@mui/material/ListItemButton'
-import ListItemIcon from '@mui/material/ListItemIcon'
-import ListItemText from '@mui/material/ListItemText'
 import ListSubheader from '@mui/material/ListSubheader'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
 import Toolbar from '@mui/material/Toolbar'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import ApartmentIcon from '@mui/icons-material/Apartment'
-import CheckIcon from '@mui/icons-material/Check'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import EmailIcon from '@mui/icons-material/Email'
 import EventIcon from '@mui/icons-material/Event'
@@ -35,9 +28,6 @@ import LightModeIcon from '@mui/icons-material/LightMode'
 import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
-import NotificationsIcon from '@mui/icons-material/Notifications'
-import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
-import NotificationsOffIcon from '@mui/icons-material/NotificationsOff'
 import ContactsIcon from '@mui/icons-material/Contacts'
 import LocationOnIcon from '@mui/icons-material/LocationOn'
 import PersonIcon from '@mui/icons-material/Person'
@@ -48,6 +38,9 @@ import { useAuth } from '../contexts/authContext.js'
 import { usePushNotifications } from '../hooks/usePushNotifications.js'
 import { useTenantQuerySync } from '../hooks/useTenantQuerySync.js'
 import { useThemeMode } from '../contexts/themeModeContext.js'
+import NavItem from './appShell/NavItem.jsx'
+import NotificationToggle from './appShell/NotificationToggle.jsx'
+import UserMenu from './appShell/UserMenu.jsx'
 
 const DRAWER_WIDTH = 220
 const COLLAPSED_DRAWER_WIDTH = 72
@@ -113,40 +106,15 @@ export default function AppShell() {
   const isNavCollapsed = !isMobile && navCollapsed
   const drawerWidth = isNavCollapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH
 
-  const renderNavItem = (item) => {
-    const selected = item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)
-    const Icon = item.icon
-    return (
-      <Tooltip
-        key={item.to}
-        title={isNavCollapsed ? item.label : ''}
-        placement="right"
-        disableHoverListener={!isNavCollapsed}
-      >
-        <ListItemButton
-          component={NavLink}
-          to={item.to}
-          selected={selected}
-          onClick={handleNavClick}
-          sx={{
-            justifyContent: isNavCollapsed ? 'center' : 'flex-start',
-            minHeight: 48,
-            px: isNavCollapsed ? 1.5 : 2,
-          }}
-        >
-          <ListItemIcon
-            sx={{
-              minWidth: isNavCollapsed ? 0 : 36,
-              justifyContent: 'center',
-            }}
-          >
-            <Icon color={selected ? 'primary' : 'inherit'} />
-          </ListItemIcon>
-          {!isNavCollapsed && <ListItemText primary={item.label} />}
-        </ListItemButton>
-      </Tooltip>
-    )
-  }
+  const renderNavItem = (item) => (
+    <NavItem
+      key={item.to}
+      item={item}
+      pathname={pathname}
+      isNavCollapsed={isNavCollapsed}
+      onClick={handleNavClick}
+    />
+  )
 
   const drawerContent = (
     <>
@@ -254,89 +222,23 @@ export default function AppShell() {
                   </Avatar>
                 </IconButton>
               </Tooltip>
-              <Menu
+              <UserMenu
                 anchorEl={userMenuAnchor}
                 open={Boolean(userMenuAnchor)}
                 onClose={() => setUserMenuAnchor(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              >
-                {approvedMemberships.length > 1 && [
-                  <ListSubheader key="hdr" component="div" disableSticky>
-                    Switch band
-                  </ListSubheader>,
-                  ...approvedMemberships.map((m) => (
-                    <MenuItem
-                      key={m.tenantId}
-                      selected={m.tenantId === activeTenantId}
-                      onClick={() => handleSwitch(m.tenantId)}
-                    >
-                      <ListItemIcon>
-                        {m.tenantId === activeTenantId ? (
-                          <CheckIcon fontSize="small" />
-                        ) : null}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={m.tenantName}
-                        secondary={m.role === 'tenant_admin' ? 'admin' : null}
-                      />
-                    </MenuItem>
-                  )),
-                  <Divider key="div" />,
-                ]}
-                {isSuperAdmin && (
-                  <MenuItem
-                    component={NavLink}
-                    to="/admin/tenants"
-                    onClick={() => setUserMenuAnchor(null)}
-                  >
-                    <ListItemIcon>
-                      <AdminPanelSettingsIcon fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText primary="Manage tenants" />
-                  </MenuItem>
-                )}
-                <MenuItem
-                  onClick={() => {
-                    setUserMenuAnchor(null)
-                    logout()
-                  }}
-                >
-                  <ListItemIcon>
-                    <LogoutIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText primary="Log out" />
-                </MenuItem>
-              </Menu>
+                isSuperAdmin={isSuperAdmin}
+                approvedMemberships={approvedMemberships}
+                activeTenantId={activeTenantId}
+                onSwitch={handleSwitch}
+                onLogout={() => { setUserMenuAnchor(null); logout() }}
+              />
             </>
           )}
-          {pushStatus !== 'unsupported' && pushStatus !== 'loading' && (
-            <Tooltip
-              title={
-                pushStatus === 'subscribed'
-                  ? 'Notifications on — click to turn off'
-                  : pushStatus === 'denied'
-                  ? 'Notifications blocked in browser'
-                  : 'Enable notifications'
-              }
-            >
-              <span>
-                <IconButton
-                  onClick={pushStatus === 'subscribed' ? unsubscribe : subscribe}
-                  disabled={pushStatus === 'denied'}
-                  aria-label="toggle notifications"
-                >
-                  {pushStatus === 'subscribed' ? (
-                    <NotificationsIcon />
-                  ) : pushStatus === 'denied' ? (
-                    <NotificationsOffIcon />
-                  ) : (
-                    <NotificationsNoneIcon />
-                  )}
-                </IconButton>
-              </span>
-            </Tooltip>
-          )}
+          <NotificationToggle
+            status={pushStatus}
+            onSubscribe={subscribe}
+            onUnsubscribe={unsubscribe}
+          />
           <Tooltip title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
             <IconButton onClick={toggleTheme} aria-label="toggle dark mode">
               {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
