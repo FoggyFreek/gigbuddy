@@ -234,6 +234,19 @@ describe('POST /api/invoices/:id/payment-link', () => {
     expect(mockPaymentLinksCreate).toHaveBeenCalledTimes(1)
   })
 
+  it('returns the stored link with 200 (and no leaked Mollie key) when already linked', async () => {
+    const inv = await createInvoiceA()
+    const first = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    expect(first.status).toBe(201)
+
+    const second = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    expect(second.status).toBe(200)
+    expect(second.body.mollie_payment_link_id).toBe('pl_test123')
+    expect(Array.isArray(second.body.lines)).toBe(true)
+    expect(second.body.tenant).not.toHaveProperty('mollie_api_key')
+    expect(mockPaymentLinksCreate).toHaveBeenCalledTimes(1)
+  })
+
   it('returns 400 for zero-total invoice', async () => {
     const inv = await createInvoiceA({
       lines: [{ description: 'Free', quantity: 1, unit_price_cents: 0, tax_percentage: 0 }],

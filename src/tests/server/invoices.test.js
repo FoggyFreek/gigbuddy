@@ -328,6 +328,48 @@ describe('invoices — discount', () => {
   })
 })
 
+describe('invoices — PATCH gig_id + recompute', () => {
+  it('normalizes a numeric-string gig_id and persists the integer', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`))
+      .send({ gig_id: String(seed.gigA.id) })
+    expect(res.status).toBe(200)
+    expect(res.body.gig_id).toBe(seed.gigA.id)
+    const { rows } = await pool.query('SELECT gig_id FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].gig_id).toBe(seed.gigA.id)
+  })
+
+  it('rejects a cross-tenant gig_id and leaves the stored gig_id unchanged', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`))
+      .send({ gig_id: seed.gigB.id })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/gig/i)
+    const { rows } = await pool.query('SELECT gig_id FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].gig_id).toBe(seed.gigA.id)
+  })
+
+  it('rejects an invalid status', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'bogus' })
+    expect(res.status).toBe(400)
+  })
+
+  it('recomputes stored totals when lines change', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      lines: [{ description: 'x', quantity: 1, unit_price_cents: 10000, tax_percentage: 21 }],
+    })).expect(201)
+    expect(r.body.total_cents).toBe(12100)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({
+      lines: [{ description: 'x', quantity: 2, unit_price_cents: 10000, tax_percentage: 21 }],
+    })
+    expect(res.status).toBe(200)
+    expect(res.body.subtotal_cents).toBe(20000)
+    expect(res.body.tax_cents).toBe(4200)
+    expect(res.body.total_cents).toBe(24200)
+  })
+})
+
 describe('invoices — render retry', () => {
   it('row persists with pdf_path NULL when render fails, retry populates it', async () => {
     // First create with broken render (mock putObject to reject once).
