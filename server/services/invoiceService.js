@@ -241,15 +241,17 @@ export async function applyInvoicePatch(pool, tenantId, invoiceId, body) {
   const validation = validatePatchRequest(body, existing)
   if (validation.error) return validation
 
+  // Normalize gig_id into a copy so the caller's request body stays immutable.
+  let patch = body
   if (body.gig_id !== undefined && body.gig_id !== null) {
     const gigId = await validateGigIdForTenant(pool, body.gig_id, tenantId)
     if (gigId === null) return { error: { status: 400, body: { error: 'Invalid gig_id' } } }
-    body.gig_id = gigId
+    patch = { ...body, gig_id: gigId }
   }
 
   const tenant = await fetchTenant(pool, tenantId)
   return runPatchTransaction({
-    pool, tenantId, invoiceId, body, existing, tenant,
+    pool, tenantId, invoiceId, body: patch, existing, tenant,
     requestedContentFields: validation.requestedContentFields,
   })
 }

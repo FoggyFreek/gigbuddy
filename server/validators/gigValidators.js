@@ -29,17 +29,19 @@ export function venueDisplay(v) {
   return [v.name, v.city].filter(Boolean).join(' · ')
 }
 
-// Parses venue_id/festival_id in place to validated integers. Returns
-// { error } when a provided id is malformed, otherwise {}.
+// Returns a copy of body with venue_id/festival_id parsed to validated
+// integers (input is left untouched). Returns { error } when a provided id is
+// malformed, otherwise { body: normalizedBody }.
 export function normalizeGigVenueRefs(body) {
+  const normalized = { ...body }
   for (const key of ['venue_id', 'festival_id']) {
-    if (key in body && body[key] !== null) {
-      const parsed = parseId(body[key])
+    if (key in normalized && normalized[key] !== null) {
+      const parsed = parseId(normalized[key])
       if (parsed === null) return { error: `Invalid ${key}` }
-      body[key] = parsed
+      normalized[key] = parsed
     }
   }
-  return {}
+  return { body: normalized }
 }
 
 // Builds the dynamic SET fragments/values for a gig UPDATE. Returns

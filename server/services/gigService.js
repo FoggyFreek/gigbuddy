@@ -81,11 +81,12 @@ export async function validateVenueAndFestivalForTenant(db, body, tenantId) {
 export async function patchGig(db, tenantId, gigId, body) {
   const refs = normalizeGigVenueRefs(body)
   if (refs.error) return { error: { status: 400, body: { error: refs.error } } }
+  const normalizedBody = refs.body
 
-  const venueCheck = await validateVenueAndFestivalForTenant(db, body, tenantId)
+  const venueCheck = await validateVenueAndFestivalForTenant(db, normalizedBody, tenantId)
   if (venueCheck.error) return { error: { status: venueCheck.status, body: { error: venueCheck.error } } }
 
-  const built = buildGigUpdateFields(body)
+  const built = buildGigUpdateFields(normalizedBody)
   if (built.error) return { error: { status: 400, body: { error: built.error } } }
   if (!built.fields.length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
 
