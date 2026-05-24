@@ -1,11 +1,10 @@
 import { randomUUID } from 'crypto'
-import path from 'path'
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
 import { requireTenantAdmin } from '../middleware/tenant.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
-import { validateAndReencodeImage } from '../utils/imageProcess.js'
+import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
 // Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
@@ -309,7 +308,7 @@ router.post('/logo', requireTenantAdmin, logoUpload.single('logo'), async (req, 
 
   const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
 
-  const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
+  const ext = extensionForImageMime(image.mimetype)
   const objectKey = `tenants/${req.tenantId}/logo/${randomUUID()}${ext}`
 
   const { rows: before } = await pool.query(

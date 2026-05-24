@@ -4,7 +4,7 @@
 import { randomUUID } from 'crypto'
 import path from 'path'
 import { storageClient, BUCKET } from '../utils/storage.js'
-import { validateAndReencodeImage } from '../utils/imageProcess.js'
+import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { sendPushToTenant, sendPushToMember } from '../utils/sendPush.js'
 import {
@@ -139,7 +139,7 @@ export async function replaceGigBanner({ db, tenantId, gigId, file }) {
   if (!before.length) return { error: { status: 404, body: { error: 'Not found' } } }
   const oldKey = before[0].banner_path
 
-  const ext = path.extname(file.originalname).toLowerCase() || '.jpg'
+  const ext = extensionForImageMime(image.mimetype)
   const objectKey = `tenants/${tenantId}/gig-banners/${randomUUID()}${ext}`
 
   await storageClient.putObject(BUCKET, objectKey, image.buffer, image.size, {

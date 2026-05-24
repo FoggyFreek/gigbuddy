@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import sharp from 'sharp'
-import { validateAndReencodeImage } from '../../../server/utils/imageProcess.js'
+import { validateAndReencodeImage, extensionForImageMime } from '../../../server/utils/imageProcess.js'
 
 // Helpers — synthesize real images on the fly so the test has no fixture deps
 function solid({ width = 8, height = 8, channels = 3, r = 255, g = 0, b = 0 } = {}) {
@@ -11,6 +11,19 @@ function solid({ width = 8, height = 8, channels = 3, r = 255, g = 0, b = 0 } = 
 async function makePng(opts) { return solid(opts).png().toBuffer() }
 async function makeJpeg(opts) { return solid(opts).jpeg().toBuffer() }
 async function makeWebp(opts) { return solid(opts).webp().toBuffer() }
+
+describe('extensionForImageMime', () => {
+  it('maps each supported output MIME type to its extension', () => {
+    expect(extensionForImageMime('image/jpeg')).toBe('.jpg')
+    expect(extensionForImageMime('image/png')).toBe('.png')
+    expect(extensionForImageMime('image/webp')).toBe('.webp')
+  })
+
+  it('falls back to .jpg for unknown types', () => {
+    expect(extensionForImageMime('application/octet-stream')).toBe('.jpg')
+    expect(extensionForImageMime(undefined)).toBe('.jpg')
+  })
+})
 
 describe('validateAndReencodeImage — happy path', () => {
   it('round-trips a real PNG', async () => {
