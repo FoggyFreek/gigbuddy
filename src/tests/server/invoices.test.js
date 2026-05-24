@@ -105,7 +105,11 @@ describe('invoices — isolation', () => {
 
   it('cross-tenant get returns 404', async () => {
     const created = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
-    await asUserB(request(app).get(`/api/invoices/${created.body.id}`)).expect(404)
+    const foreign = await asUserB(request(app).get(`/api/invoices/${created.body.id}`))
+    expect(foreign.status).toBe(404)
+    // The row exists and is visible to its owning tenant — the 404 is isolation, not absence.
+    const owner = await asUserA(request(app).get(`/api/invoices/${created.body.id}`)).expect(200)
+    expect(owner.body.id).toBe(created.body.id)
   })
 
   it('cross-tenant gig_id rejected with 400', async () => {
@@ -190,13 +194,18 @@ describe('invoices — finalization gate', () => {
   it('DELETE on non-draft invoice is rejected', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
     await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
-    await asUserA(request(app).delete(`/api/invoices/${r.body.id}`)).expect(409)
+    const res = await asUserA(request(app).delete(`/api/invoices/${r.body.id}`))
+    expect(res.status).toBe(409)
+    const { rows } = await pool.query('SELECT id FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows).toHaveLength(1)
   })
 
   it('DELETE on draft removes the row', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
-    await asUserA(request(app).delete(`/api/invoices/${r.body.id}`)).expect(204)
-    await asUserA(request(app).get(`/api/invoices/${r.body.id}`)).expect(404)
+    const del = await asUserA(request(app).delete(`/api/invoices/${r.body.id}`))
+    expect(del.status).toBe(204)
+    const { rows } = await pool.query('SELECT id FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows).toHaveLength(0)
   })
 })
 
@@ -250,7 +259,8 @@ describe('invoices — draft-from-gig', () => {
   })
 
   it('cross-tenant draft returns 404', async () => {
-    await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigB.id}`)).expect(404)
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigB.id}`))
+    expect(res.status).toBe(404)
   })
 })
 
