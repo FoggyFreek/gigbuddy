@@ -106,7 +106,8 @@ router.get('/', async (req, res) => {
     'SELECT * FROM profile_links WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
     [req.tenantId],
   )
-  const { mollie_api_key: _omit, ...profile } = profiles[0]
+  const profile = { ...profiles[0] }
+  delete profile.mollie_api_key
   res.json({ ...profile, links })
 })
 
@@ -197,7 +198,8 @@ router.patch('/', async (req, res) => {
     values,
   )
   if (!rows.length) return res.status(404).json({ error: 'Profile not found' })
-  const { mollie_api_key: _omit, ...updated } = rows[0]
+  const updated = { ...rows[0] }
+  delete updated.mollie_api_key
   res.json(updated)
 })
 

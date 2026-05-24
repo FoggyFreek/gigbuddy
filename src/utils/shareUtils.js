@@ -53,10 +53,10 @@ function icsDateUTC(date) {
 
 function escapeICS(text) {
   return String(text)
-    .replace(/\\/g, '\\\\')
-    .replace(/,/g, '\\,')
-    .replace(/;/g, '\\;')
-    .replace(/\n/g, '\\n')
+    .replaceAll('\\', '\\\\')
+    .replaceAll(',', '\\,')
+    .replaceAll(';', '\\;')
+    .replaceAll('\n', '\\n')
 }
 
 function foldICSLine(line) {
@@ -81,12 +81,12 @@ function foldICSLine(line) {
 }
 
 function isoToICSDate(isoStr) {
-  return isoStr.replace(/-/g, '')
+  return isoStr.replaceAll('-', '')
 }
 
 function timeToICS(timeStr) {
   // "HH:MM:SS" or "HH:MM" → "HHMMSS"
-  return timeStr.replace(/:/g, '').slice(0, 6).padEnd(6, '0')
+  return timeStr.replaceAll(':', '').slice(0, 6).padEnd(6, '0')
 }
 
 function dtStartEnd(lines, isoDate, startTime, endTime, endIsoDate) {

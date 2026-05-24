@@ -493,7 +493,7 @@ router.delete('/:id/logo', async (req, res) => {
 
 function escHtml(str) {
   if (!str) return ''
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return String(str).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 }
 
 function wrapBase64Lines(str) {
@@ -539,7 +539,7 @@ function defaultPersonalMessage(bandName, gigDate) {
 }
 
 function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting, personalMessage, paymentSectionHtml }) {
-  const personalHtml = escHtml(personalMessage).replace(/\n/g, '<br>')
+  const personalHtml = escHtml(personalMessage).replaceAll('\n', '<br>')
   const issueDateCell = issueDate
     ? `<td style="padding-left:32px;">
                         <p style="margin:0 0 2px 0;font-size:12px;color:#888888;">Factuurdatum</p>
