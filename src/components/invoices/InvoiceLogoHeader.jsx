@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types'
+import { invoiceShape, tenantShape } from '../../propTypes/shared.js'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import FormControlLabel from '@mui/material/FormControlLabel'
@@ -102,8 +103,8 @@ InvoiceLogoHeader.propTypes = {
   isEdit: PropTypes.bool.isRequired,
   readOnly: PropTypes.bool.isRequired,
   logoKey: PropTypes.string,
-  invoice: PropTypes.object,
-  tenant: PropTypes.object,
+  invoice: invoiceShape,
+  tenant: tenantShape,
   bandHeading: PropTypes.string,
   logoBusy: PropTypes.bool,
   logoInputRef: PropTypes.shape({ current: PropTypes.any }).isRequired,

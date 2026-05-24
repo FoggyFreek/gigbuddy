@@ -15,6 +15,7 @@ import DownloadIcon from '@mui/icons-material/Download'
 import EmailIcon from '@mui/icons-material/Email'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { invoiceStatusColor } from '../utils/invoiceStatus.js'
+import { tenantShape } from '../propTypes/shared.js'
 import { useInvoiceDetailsState } from './invoices/useInvoiceDetailsState.js'
 import InvoiceLogoHeader from './invoices/InvoiceLogoHeader.jsx'
 import InvoiceCustomerFields from './invoices/InvoiceCustomerFields.jsx'
@@ -224,7 +225,10 @@ export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedd
 
 InvoiceDetails.propTypes = {
   mode: PropTypes.oneOf(['create', 'edit']).isRequired,
-  draft: PropTypes.object,
+  draft: PropTypes.shape({
+    tenant: tenantShape,
+    draft: PropTypes.object,
+  }),
   invoiceId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   onClose: PropTypes.func.isRequired,
   embedded: PropTypes.bool,

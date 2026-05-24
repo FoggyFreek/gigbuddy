@@ -1,16 +1,10 @@
-// Shared PropTypes shapes for the share-card family. Centralised so the many
+// Shared PropTypes for the share-card family. Centralised so the many
 // Square/Story variations and the tour card declare contracts without
 // duplicating large prop blocks (see issue #56).
 import PropTypes from 'prop-types'
+import { gigShape } from './shared.js'
 
-export const gigShape = PropTypes.shape({
-  id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-  event_date: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
-  event_description: PropTypes.string,
-  banner_path: PropTypes.string,
-  venue: PropTypes.object,
-  festival: PropTypes.object,
-})
+export { gigShape }
 
 export const socialsProp = PropTypes.oneOfType([PropTypes.array, PropTypes.object])
 export const panProp = PropTypes.oneOfType([PropTypes.number, PropTypes.object])

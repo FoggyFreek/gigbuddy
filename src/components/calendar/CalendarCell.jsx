@@ -13,6 +13,14 @@ import {
 } from '../../utils/availabilityUtils.js'
 import { venueHeadline } from '../../utils/venueDisplay.js'
 import { getEventTextColor } from './calendarColors.js'
+import {
+  calendarCellShape,
+  memberShape,
+  slotShape,
+  gigShape,
+  rehearsalShape,
+  bandEventShape,
+} from '../../propTypes/shared.js'
 
 const BAR_SX = {
   minHeight: 20,
@@ -96,8 +104,8 @@ function MobileDots({ cell, members }) {
 }
 
 MobileDots.propTypes = {
-  cell: PropTypes.object.isRequired,
-  members: PropTypes.array.isRequired,
+  cell: calendarCellShape.isRequired,
+  members: PropTypes.arrayOf(memberShape).isRequired,
 }
 
 function GigBar({ gig, theme, onGigClick }) {
@@ -115,7 +123,7 @@ function GigBar({ gig, theme, onGigClick }) {
   )
 }
 
-GigBar.propTypes = { gig: PropTypes.object.isRequired, theme: PropTypes.object.isRequired, onGigClick: PropTypes.func }
+GigBar.propTypes = { gig: gigShape.isRequired, theme: PropTypes.object.isRequired, onGigClick: PropTypes.func }
 
 function RehearsalBar({ reh, theme, onRehearsalClick }) {
   const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
@@ -142,7 +150,7 @@ function RehearsalBar({ reh, theme, onRehearsalClick }) {
   )
 }
 
-RehearsalBar.propTypes = { reh: PropTypes.object.isRequired, theme: PropTypes.object.isRequired, onRehearsalClick: PropTypes.func }
+RehearsalBar.propTypes = { reh: rehearsalShape.isRequired, theme: PropTypes.object.isRequired, onRehearsalClick: PropTypes.func }
 
 function BandEventBar({ ev, theme, onBandEventClick }) {
   return (
@@ -158,7 +166,7 @@ function BandEventBar({ ev, theme, onBandEventClick }) {
   )
 }
 
-BandEventBar.propTypes = { ev: PropTypes.object.isRequired, theme: PropTypes.object.isRequired, onBandEventClick: PropTypes.func }
+BandEventBar.propTypes = { ev: bandEventShape.isRequired, theme: PropTypes.object.isRequired, onBandEventClick: PropTypes.func }
 
 function SlotBar({ slot, members, theme, onSlotClick }) {
   const color = getMemberColor(slot, members)
@@ -188,8 +196,8 @@ function SlotBar({ slot, members, theme, onSlotClick }) {
 }
 
 SlotBar.propTypes = {
-  slot: PropTypes.object.isRequired,
-  members: PropTypes.array.isRequired,
+  slot: slotShape.isRequired,
+  members: PropTypes.arrayOf(memberShape).isRequired,
   theme: PropTypes.object.isRequired,
   onSlotClick: PropTypes.func.isRequired,
 }
@@ -218,8 +226,8 @@ function DesktopEvents({ cell, members, theme, onGigClick, onRehearsalClick, onB
 }
 
 DesktopEvents.propTypes = {
-  cell: PropTypes.object.isRequired,
-  members: PropTypes.array.isRequired,
+  cell: calendarCellShape.isRequired,
+  members: PropTypes.arrayOf(memberShape).isRequired,
   theme: PropTypes.object.isRequired,
   onGigClick: PropTypes.func,
   onRehearsalClick: PropTypes.func,
@@ -295,8 +303,8 @@ export default function CalendarCell({
 }
 
 CalendarCell.propTypes = {
-  cell: PropTypes.object.isRequired,
-  members: PropTypes.array.isRequired,
+  cell: calendarCellShape.isRequired,
+  members: PropTypes.arrayOf(memberShape).isRequired,
   mobile: PropTypes.bool,
   onDayClick: PropTypes.func.isRequired,
   onSlotClick: PropTypes.func.isRequired,

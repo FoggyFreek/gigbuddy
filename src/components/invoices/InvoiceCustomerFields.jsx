@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types'
+import { invoiceShape } from '../../propTypes/shared.js'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import FormControl from '@mui/material/FormControl'
@@ -177,7 +178,7 @@ InvoiceCustomerFields.propTypes = {
   patchForm: PropTypes.func.isRequired,
   readOnly: PropTypes.bool.isRequired,
   isEdit: PropTypes.bool.isRequired,
-  invoice: PropTypes.object,
+  invoice: invoiceShape,
   onStatusChange: PropTypes.func.isRequired,
   memoOpen: PropTypes.bool.isRequired,
   setMemoOpen: PropTypes.func.isRequired,

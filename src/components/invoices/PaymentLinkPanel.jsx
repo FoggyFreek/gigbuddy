@@ -14,6 +14,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import LaunchIcon from '@mui/icons-material/Launch'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { createInvoicePaymentLink, syncInvoicePaymentLink } from '../../api/invoices.js'
+import { invoiceShape } from '../../propTypes/shared.js'
 
 const MOLLIE_STATUS_COLOR = {
   open: 'default',
@@ -161,13 +162,6 @@ export default function PaymentLinkPanel({ invoice, onUpdated }) {
 }
 
 PaymentLinkPanel.propTypes = {
-  invoice: PropTypes.shape({
-    id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
-    status: PropTypes.string,
-    total_cents: PropTypes.number,
-    mollie_payment_link_id: PropTypes.string,
-    mollie_payment_link_url: PropTypes.string,
-    mollie_payment_status: PropTypes.string,
-  }).isRequired,
+  invoice: invoiceShape.isRequired,
   onUpdated: PropTypes.func.isRequired,
 }

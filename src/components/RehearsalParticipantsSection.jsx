@@ -15,7 +15,7 @@ import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
 import VoteToggle from './VoteToggle.jsx'
 import PropTypes from 'prop-types'
-import { rehearsalShape } from '../propTypes/shared.js'
+import { rehearsalShape, memberShape, idProp } from '../propTypes/shared.js'
 
 export default function RehearsalParticipantsSection({
   rehearsal,
@@ -161,8 +161,8 @@ export default function RehearsalParticipantsSection({
 
 RehearsalParticipantsSection.propTypes = {
   rehearsal: rehearsalShape,
-  members: PropTypes.array,
-  addMemberId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  members: PropTypes.arrayOf(memberShape),
+  addMemberId: idProp,
   onAddMemberIdChange: PropTypes.func,
   notes: PropTypes.string,
   onNotesChange: PropTypes.func,

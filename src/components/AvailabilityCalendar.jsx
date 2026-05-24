@@ -18,6 +18,13 @@ import {
 } from './calendar/calendarGrid.js'
 import MonthMenu from './calendar/MonthMenu.jsx'
 import CalendarCell from './calendar/CalendarCell.jsx'
+import {
+  memberShape,
+  slotShape,
+  gigShape,
+  rehearsalShape,
+  bandEventShape,
+} from '../propTypes/shared.js'
 
 export default function AvailabilityCalendar({
   year,
@@ -122,11 +129,11 @@ export default function AvailabilityCalendar({
 AvailabilityCalendar.propTypes = {
   year: PropTypes.number.isRequired,
   month: PropTypes.number.isRequired,
-  slots: PropTypes.array.isRequired,
-  gigs: PropTypes.array,
-  rehearsals: PropTypes.array,
-  bandEvents: PropTypes.array,
-  members: PropTypes.array.isRequired,
+  slots: PropTypes.arrayOf(slotShape).isRequired,
+  gigs: PropTypes.arrayOf(gigShape),
+  rehearsals: PropTypes.arrayOf(rehearsalShape),
+  bandEvents: PropTypes.arrayOf(bandEventShape),
+  members: PropTypes.arrayOf(memberShape).isRequired,
   selectionStart: PropTypes.string,
   selectedDay: PropTypes.string,
   mobile: PropTypes.bool,
