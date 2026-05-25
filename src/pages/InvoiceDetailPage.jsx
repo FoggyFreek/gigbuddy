@@ -43,6 +43,7 @@ export default function InvoiceDetailPage() {
         mode="edit"
         invoiceId={invoiceId}
         onClose={(reload) => closeView(reload)}
+        onInvoiceUpdate={outletCtx.onInvoiceUpdate}
         embedded
       />
     </Box>

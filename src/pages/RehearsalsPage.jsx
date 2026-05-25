@@ -73,8 +73,22 @@ export default function RehearsalsPage() {
     setRehearsals((prev) => applyVoteToRehearsals(prev, rehearsalId, memberId, vote))
   }
 
+  const handleRehearsalUpdate = useCallback((id, patch) => {
+    setRehearsals((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  }, [])
+
+  const handleRehearsalDetailDelete = useCallback((id) => {
+    setRehearsals((prev) => prev.filter((r) => r.id !== id))
+  }, [])
+
   return (
-    <SplitView basePath="/rehearsals">
+    <SplitView
+      basePath="/rehearsals"
+      outletContext={{
+        onRehearsalUpdate: handleRehearsalUpdate,
+        onRehearsalDelete: handleRehearsalDetailDelete,
+      }}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Rehearsals

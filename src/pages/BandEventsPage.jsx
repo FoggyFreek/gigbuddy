@@ -56,8 +56,22 @@ export default function BandEventsPage() {
     load()
   }
 
+  const handleBandEventUpdate = useCallback((id, patch) => {
+    setEvents((prev) => prev.map((ev) => (ev.id === id ? { ...ev, ...patch } : ev)))
+  }, [])
+
+  const handleBandEventDetailDelete = useCallback((id) => {
+    setEvents((prev) => prev.filter((ev) => ev.id !== id))
+  }, [])
+
   return (
-    <SplitView basePath="/events">
+    <SplitView
+      basePath="/events"
+      outletContext={{
+        onBandEventUpdate: handleBandEventUpdate,
+        onBandEventDelete: handleBandEventDetailDelete,
+      }}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Band Events

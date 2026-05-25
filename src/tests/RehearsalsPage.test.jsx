@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -30,6 +30,7 @@ vi.mock('../api/rehearsals.js', () => ({
   }),
   createRehearsal: vi.fn(),
   updateRehearsal: vi.fn(),
+  deleteRehearsal: vi.fn().mockResolvedValue({}),
   addParticipant: vi.fn(),
   removeParticipant: vi.fn(),
   setVote: vi.fn(),
@@ -40,7 +41,7 @@ vi.mock('../api/bandMembers.js', () => ({
 
 import RehearsalsPage from '../pages/RehearsalsPage.jsx'
 import RehearsalDetailPage from '../pages/RehearsalDetailPage.jsx'
-import { listRehearsals } from '../api/rehearsals.js'
+import { deleteRehearsal, listRehearsals, updateRehearsal } from '../api/rehearsals.js'
 import theme from '../theme.js'
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
@@ -72,6 +73,7 @@ function wrapWithRoutes({ initialEntries }) {
 describe('RehearsalsPage', () => {
   beforeEach(() => {
     listRehearsals.mockClear()
+    deleteRehearsal.mockClear()
   })
 
   it('renders header and Add rehearsal button', async () => {
@@ -93,6 +95,28 @@ describe('RehearsalsPage', () => {
     expect(screen.getByText('Propose rehearsal', { selector: 'h2' })).toBeInTheDocument()
   })
 
+  it('updates the list row when a field is saved in the detail', async () => {
+    const user = userEvent.setup()
+    updateRehearsal.mockResolvedValue({})
+    wrapWithRoutes({ initialEntries: ['/rehearsals/1'] })
+
+    // Wait for detail to load — Location field shows the current value
+    await waitFor(() => expect(screen.getByDisplayValue('Studio A')).toBeInTheDocument())
+
+    // Clear the location and type a new value
+    await user.clear(screen.getByLabelText('Location'))
+    await user.type(screen.getByLabelText('Location'), 'New Place')
+
+    // After debounce fires and save completes, the list should show the new location
+    await waitFor(
+      () => expect(screen.getByText('New Place')).toBeInTheDocument(),
+      { timeout: 2000 }
+    )
+    expect(updateRehearsal).toHaveBeenCalledWith(1, expect.objectContaining({ location: 'New Place' }))
+    // list was updated in-place, not via a full reload
+    expect(listRehearsals).toHaveBeenCalledTimes(1)
+  })
+
   it('renders detail alongside the list at /rehearsals/:id and the Close button returns to /rehearsals', async () => {
     const user = userEvent.setup()
     wrapWithRoutes({ initialEntries: ['/rehearsals/1'] })
@@ -105,5 +129,18 @@ describe('RehearsalsPage', () => {
 
     await waitFor(() => expect(screen.queryByText('Rehearsal details')).not.toBeInTheDocument())
     expect(screen.getByRole('heading', { name: /rehearsals/i })).toBeInTheDocument()
+  })
+
+  it('removes a rehearsal from the still-mounted list after deleting it in detail', async () => {
+    const user = userEvent.setup()
+    wrapWithRoutes({ initialEntries: ['/rehearsals/1'] })
+
+    await waitFor(() => expect(screen.getByText('Rehearsal details')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^delete$/i }))
+
+    await waitFor(() => expect(deleteRehearsal).toHaveBeenCalledWith(1))
+    expect(screen.queryByText('Studio A')).not.toBeInTheDocument()
+    expect(screen.getByText(/no rehearsals yet/i)).toBeInTheDocument()
   })
 })

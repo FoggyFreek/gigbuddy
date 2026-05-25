@@ -87,7 +87,9 @@ export default function GigDetailPage() {
             onClick={async () => {
               await deleteGig(gigId)
               setConfirmDelete(false)
-              navigate('/gigs')
+              outletCtx.onGigDelete?.(gigId)
+              if (outletCtx.onClose) outletCtx.onClose()
+              else navigate(-1)
             }}
           >
             Delete

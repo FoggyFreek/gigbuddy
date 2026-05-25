@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-export default function useDebouncedSave(saveFn, delay = 600) {
+export default function useDebouncedSave(saveFn, delay = 600, onSaved = null) {
   const [status, setStatus] = useState('idle') // 'idle' | 'saving' | 'saved' | 'error'
   const timerRef = useRef(null)
   const pendingRef = useRef(null)
@@ -13,10 +13,11 @@ export default function useDebouncedSave(saveFn, delay = 600) {
     try {
       await saveFn(payload)
       setStatus('saved')
+      onSaved?.(payload)
     } catch {
       setStatus('error')
     }
-  }, [saveFn])
+  }, [saveFn, onSaved])
 
   const schedule = useCallback((data) => {
     pendingRef.current = { ...pendingRef.current, ...data }

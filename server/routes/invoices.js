@@ -535,7 +535,7 @@ function buildPaymentSectionHtml(url, invoiceNumber, qrBase64) {
 
 function defaultPersonalMessage(bandName, gigDate) {
   const gigPart = gigDate ? ` tijdens het optreden van ${bandName} op ${gigDate}` : ''
-  return `Hartelijk dank voor de prettige samenwerking${gigPart}.\n\nIn de bijlage vindt u onze factuur met de bijbehorende specificaties.`
+  return `Hartelijk dank voor de prettige samenwerking${gigPart}.\n\nIn de bijlage vindt u onze factuur.`
 }
 
 function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting, personalMessage, paymentSectionHtml }) {

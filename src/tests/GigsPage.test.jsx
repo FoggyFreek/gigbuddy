@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -26,7 +26,7 @@ vi.mock('../api/bandMembers.js', () => ({
 
 import GigsPage from '../pages/GigsPage.jsx'
 import GigDetailPage from '../pages/GigDetailPage.jsx'
-import { getGig, listGigs } from '../api/gigs.js'
+import { deleteGig, getGig, listGigs } from '../api/gigs.js'
 import theme from '../theme.js'
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
@@ -103,6 +103,7 @@ describe('GigsPage — split-view detail route', () => {
     listGigs.mockResolvedValue(GIGS)
     getGig.mockClear()
     getGig.mockResolvedValue(GIG_DETAIL)
+    deleteGig.mockClear()
   })
 
   it('renders detail alongside the list at /gigs/:id and the Close button returns to /gigs', async () => {
@@ -119,5 +120,18 @@ describe('GigsPage — split-view detail route', () => {
 
     await waitFor(() => expect(screen.queryByText('Gig details')).not.toBeInTheDocument())
     expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
+  })
+
+  it('removes a gig from the still-mounted list after deleting it in detail', async () => {
+    const user = userEvent.setup()
+    wrapWithRoutes({ initialEntries: ['/gigs/42'] })
+
+    await waitFor(() => expect(screen.getByText('Gig details')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^delete$/i }))
+
+    await waitFor(() => expect(deleteGig).toHaveBeenCalledWith(42))
+    expect(screen.queryByText('Jazz Night')).not.toBeInTheDocument()
+    expect(screen.getByText(/no gigs yet/i)).toBeInTheDocument()
   })
 })

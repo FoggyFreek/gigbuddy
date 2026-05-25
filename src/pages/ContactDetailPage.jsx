@@ -41,7 +41,11 @@ export default function ContactDetailPage() {
     async (patch) => { await updateContact(contactId, patch) },
     [contactId]
   )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn)
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(
+    saveFn,
+    600,
+    (patch) => outletCtx.onContactUpdate?.(contactId, patch)
+  )
 
   useEffect(() => {
     getContact(contactId)
@@ -64,6 +68,7 @@ export default function ContactDetailPage() {
 
   async function handleDelete() {
     await deleteContact(contactId)
+    outletCtx.onContactDelete?.(contactId)
     closeView()
   }
 

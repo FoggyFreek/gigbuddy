@@ -35,6 +35,14 @@ export default function ContactsPage() {
     }
   }, [])
 
+  const handleContactUpdate = useCallback((id, patch) => {
+    setContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+  }, [])
+
+  const handleContactDelete = useCallback((id) => {
+    setContacts((prev) => prev.filter((c) => c.id !== id))
+  }, [])
+
   useEffect(() => { load() }, [load])
 
   function handleClose() {
@@ -43,7 +51,10 @@ export default function ContactsPage() {
   }
 
   return (
-    <SplitView basePath="/contacts">
+    <SplitView
+      basePath="/contacts"
+      outletContext={{ onContactUpdate: handleContactUpdate, onContactDelete: handleContactDelete }}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Contacts

@@ -108,7 +108,11 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
     async (patch) => { await updateGig(gigId, patch) },
     [gigId]
   )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn)
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(
+    saveFn,
+    600,
+    (patch) => onBannerUpdate?.(gigId, patch)
+  )
 
   useImperativeHandle(ref, () => ({ flush, saveStatus }), [flush, saveStatus])
 

@@ -25,8 +25,8 @@ import InvoiceDeleteDialog from './invoices/InvoiceDeleteDialog.jsx'
 import InvoiceEmlDialog from './invoices/InvoiceEmlDialog.jsx'
 import PaymentLinkPanel from './invoices/PaymentLinkPanel.jsx'
 
-export default function InvoiceDetails({ mode, draft, invoiceId, onClose, embedded = false }) {
-  const s = useInvoiceDetailsState({ mode, draft, invoiceId, onClose })
+export default function InvoiceDetails({ mode, draft, invoiceId, onClose, onInvoiceUpdate, embedded = false }) {
+  const s = useInvoiceDetailsState({ mode, draft, invoiceId, onClose, onInvoiceUpdate })
 
   if (s.loading) {
     const spinner = (

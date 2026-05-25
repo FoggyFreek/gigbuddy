@@ -46,7 +46,11 @@ export default function BandEventDetailPage() {
     async (patch) => { await updateBandEvent(bandEventId, patch) },
     [bandEventId]
   )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn)
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(
+    saveFn,
+    600,
+    (patch) => outletCtx.onBandEventUpdate?.(bandEventId, patch)
+  )
 
   useEffect(() => {
     getBandEvent(bandEventId)
@@ -133,6 +137,7 @@ export default function BandEventDetailPage() {
             onClick={async () => {
               await deleteBandEvent(bandEventId)
               setConfirmDelete(false)
+              outletCtx.onBandEventDelete?.(bandEventId)
               if (outletCtx.onClose) outletCtx.onClose()
               else navigate(-1)
             }}

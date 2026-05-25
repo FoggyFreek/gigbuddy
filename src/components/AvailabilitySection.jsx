@@ -56,7 +56,7 @@ function monthBounds(year, month) {
   return { from, to }
 }
 
-export default function AvailabilitySection({ basePath = '' } = {}) {
+export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 } = {}) {
   const isMobile = useCompactLayout()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -94,10 +94,10 @@ export default function AvailabilitySection({ basePath = '' } = {}) {
 
   useEffect(() => {
     listMembers().then(setMembers).catch(() => {})
-    loadGigs()
-    loadRehearsals()
-    loadBandEvents()
-  }, [])
+    listGigs().then(setGigs).catch(() => {})
+    listRehearsals().then(setRehearsals).catch(() => {})
+    listBandEvents().then(setBandEvents).catch(() => {})
+  }, [eventReloadKey])
 
   useEffect(() => {
     const { from, to } = monthBounds(viewYear, viewMonth)

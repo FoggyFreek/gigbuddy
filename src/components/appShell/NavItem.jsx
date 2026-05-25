@@ -28,7 +28,7 @@ export default function NavItem({ item, pathname, isNavCollapsed, onClick }) {
         <ListItemIcon sx={{ minWidth: isNavCollapsed ? 0 : 36, justifyContent: 'center' }}>
           <Icon color={selected ? 'primary' : 'inherit'} />
         </ListItemIcon>
-        {!isNavCollapsed && <ListItemText primary={item.label} />}
+        {!isNavCollapsed && <ListItemText primary={item.label} sx={{ ml: 1.5 }} />}
       </ListItemButton>
     </Tooltip>
   )

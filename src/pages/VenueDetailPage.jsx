@@ -59,7 +59,11 @@ export default function VenueDetailPage() {
     async (patch) => { await updateVenue(venueId, patch) },
     [venueId]
   )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn)
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(
+    saveFn,
+    600,
+    (patch) => outletCtx.onVenueUpdate?.(venueId, patch)
+  )
 
   useEffect(() => {
     getVenue(venueId)
@@ -104,6 +108,7 @@ export default function VenueDetailPage() {
     setCategorySaving(true)
     try {
       await updateVenue(venueId, { category: newCategory, on_affected_gigs: action })
+      outletCtx.onVenueUpdate?.(venueId, { category: newCategory })
     } finally {
       setCategorySaving(false)
     }
@@ -126,6 +131,7 @@ export default function VenueDetailPage() {
 
   async function handleDelete() {
     await deleteVenue(venueId)
+    outletCtx.onVenueDelete?.(venueId)
     closeView()
   }
 

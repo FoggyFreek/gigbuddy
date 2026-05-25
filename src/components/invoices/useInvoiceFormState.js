@@ -16,7 +16,7 @@ import {
 // Owns the editable invoice form: data loading, derived totals, line/field
 // mutations, and the save/delete/status lifecycle. Logo and EML side effects
 // live in their own hooks (see useInvoiceDetailsState).
-export function useInvoiceFormState({ mode, draft, invoiceId, onClose }) {
+export function useInvoiceFormState({ mode, draft, invoiceId, onClose, onInvoiceUpdate }) {
   const isEdit = mode === 'edit'
   const [loading, setLoading] = useState(isEdit)
   const [error, setError] = useState(null)
@@ -135,6 +135,7 @@ export function useInvoiceFormState({ mode, draft, invoiceId, onClose }) {
       setError(null)
       const updated = await updateInvoice(invoiceId, { status: newStatus })
       setInvoice(updated)
+      onInvoiceUpdate?.(invoiceId, { status: updated.status })
     } catch (e) {
       setError(e.message)
     } finally {
