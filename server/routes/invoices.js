@@ -456,6 +456,7 @@ router.post('/:id/payment-link/sync', async (req, res) => {
   res.json({
     paymentLinkId: updated.mollie_payment_link_id,
     paymentLinkUrl: updated.mollie_payment_link_url,
+    paymentId: updated.mollie_payment_id,
     status: updated.mollie_payment_status,
     paidAt: updated.mollie_paid_at,
     invoiceStatus: updated.status,

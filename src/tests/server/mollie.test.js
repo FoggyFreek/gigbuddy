@@ -411,6 +411,20 @@ describe('POST /api/invoices/:id/payment-link/sync', () => {
     expect(rows[0].status).toBe('sent')
   })
 
+  it('returns paymentId (the field PaymentLinkPanel maps into mollie_payment_id)', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
+      status: 'paid',
+      payments: [{ id: 'tr_paid789', status: 'paid', paidAt: '2026-05-15T10:00:00+00:00' }],
+    }))
+
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link/sync`)).send()
+    expect(res.status).toBe(200)
+    expect(res.body.paymentId).toBe('tr_paid789')
+  })
+
   it('is idempotent for paid status', async () => {
     const inv = await createInvoiceA()
     await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})

@@ -118,6 +118,26 @@ describe('InvoiceDetails', () => {
     expect(await screen.findByText(/Mollie API key not configured/)).toBeInTheDocument()
   })
 
+  it('reflects a successful payment-link sync (maps the API response shape)', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
+    // Real sync response shape: { paymentLinkId, paymentLinkUrl, paymentId, status, paidAt, invoiceStatus }
+    invoicesApi.syncInvoicePaymentLink.mockResolvedValueOnce({
+      paymentLinkId: 'pl_test123',
+      paymentLinkUrl: LINKED_INVOICE.mollie_payment_link_url,
+      paymentId: 'tr_paid789',
+      status: 'paid',
+      paidAt: '2026-05-15T10:00:00.000Z',
+      invoiceStatus: 'paid',
+    })
+    wrap(<InvoiceDetails mode="edit" invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh payment status' }))
+    // Both the payment-status chip and the invoice-status chip move to 'paid'
+    // (proving result.status and result.invoiceStatus both flow through onUpdated).
+    await waitFor(() => expect(screen.getAllByText('paid')).toHaveLength(2))
+  })
+
   it('shows an error when payment-link sync fails', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
     invoicesApi.syncInvoicePaymentLink.mockRejectedValueOnce(new Error('sync boom'))
