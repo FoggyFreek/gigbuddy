@@ -7,12 +7,12 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
-import Typography from '@mui/material/Typography'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput } from '../utils/eventFormUtils.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import BandEventFields from './BandEventFields.jsx'
+import SaveStatusLabel from './SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['title', 'start_date']
 
@@ -90,9 +90,6 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
     onClose()
   }
 
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={mode === 'edit' ? handleClose : undefined}>
       <DialogTitle>{mode === 'create' ? 'Add band event' : 'Band event'}</DialogTitle>
@@ -114,11 +111,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       )}
 
       <Box sx={{ px: 3, pb: 1, minHeight: 24 }}>
-        {mode === 'edit' && (
-          <Typography variant="caption" color={saveColor}>
-            {saveLabel}
-          </Typography>
-        )}
+        {mode === 'edit' && <SaveStatusLabel status={saveStatus} />}
       </Box>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>

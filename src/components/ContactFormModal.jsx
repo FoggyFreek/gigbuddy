@@ -12,6 +12,7 @@ import { createContact, getContact, updateContact } from '../api/contacts.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import ContactFields from './ContactFields.jsx'
+import SaveStatusLabel from './SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['name']
 
@@ -75,9 +76,6 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete })
     onClose()
   }
 
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={mode === 'edit' ? handleClose : undefined}>
       <DialogTitle>{mode === 'create' ? 'Add contact' : 'Contact'}</DialogTitle>
@@ -99,11 +97,7 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete })
       )}
 
       <Box sx={{ px: 3, pb: 1, minHeight: 24 }}>
-        {mode === 'edit' && (
-          <Typography variant="caption" color={saveColor}>
-            {saveLabel}
-          </Typography>
-        )}
+        {mode === 'edit' && <SaveStatusLabel status={saveStatus} />}
       </Box>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>

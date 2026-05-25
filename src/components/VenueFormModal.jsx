@@ -11,6 +11,7 @@ import Typography from '@mui/material/Typography'
 import { createVenue, getVenueCategoryImpact, getVenue, updateVenue } from '../api/venues.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
+import SaveStatusLabel from './SaveStatusLabel.jsx'
 import VenueFields from './VenueFields.jsx'
 
 const REQUIRED_FIELDS = ['name']
@@ -145,9 +146,6 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
     onClose()
   }
 
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   return (
     <>
     <Dialog open fullWidth maxWidth="sm" onClose={mode === 'edit' ? handleClose : undefined}>
@@ -171,11 +169,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
       )}
 
       <Box sx={{ px: 3, pb: 1, minHeight: 24 }}>
-        {mode === 'edit' && (
-          <Typography variant="caption" color={categorySaving ? 'text.secondary' : saveColor}>
-            {categorySaving ? 'Saving…' : saveLabel}
-          </Typography>
-        )}
+        {mode === 'edit' && <SaveStatusLabel status={categorySaving ? 'saving' : saveStatus} />}
       </Box>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>

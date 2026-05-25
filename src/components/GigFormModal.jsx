@@ -18,6 +18,7 @@ import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
 import GigDetailContent from './GigDetailContent.jsx'
+import SaveStatusLabel from './SaveStatusLabel.jsx'
 import VenuePicker from './VenuePicker.jsx'
 import { createGig } from '../api/gigs.js'
 import { dayjsToTimeString, timeStringToDayjs } from '../utils/eventFormUtils.js'
@@ -58,15 +59,12 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
   const [confirmCreate, setConfirmCreate] = useState(false)
 
   // ── Edit mode state ────────────────────────────────────────────────────────
-  const [saveLabel, setSaveLabel] = useState('')
-  const [saveColor, setSaveColor] = useState('text.secondary')
+  const [polledStatus, setPolledStatus] = useState('idle')
 
   useEffect(() => {
     if (mode !== 'edit') return
     const interval = setInterval(() => {
-      const status = contentRef.current?.saveStatus
-      setSaveLabel({ idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[status] ?? '')
-      setSaveColor(status === 'error' ? 'error.main' : 'text.secondary')
+      setPolledStatus(contentRef.current?.saveStatus ?? 'idle')
     }, 100)
     return () => clearInterval(interval)
   }, [mode])
@@ -295,11 +293,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
       </DialogContent>
 
       <Box sx={{ px: 3, pb: 1, minHeight: 24 }}>
-        {mode === 'edit' && (
-          <Typography variant="caption" color={saveColor}>
-            {saveLabel}
-          </Typography>
-        )}
+        {mode === 'edit' && <SaveStatusLabel status={polledStatus} />}
       </Box>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>

@@ -16,6 +16,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import { deleteVenue, getVenue, getVenueCategoryImpact, updateVenue } from '../api/venues.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 import VenueFields from '../components/VenueFields.jsx'
 
 const REQUIRED_FIELDS = ['name']
@@ -133,9 +134,6 @@ export default function VenueDetailPage() {
     closeView()
   }
 
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   return (
     <>
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
@@ -171,9 +169,7 @@ export default function VenueDetailPage() {
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <Typography variant="caption" color={categorySaving ? 'text.secondary' : saveColor}>
-          {categorySaving ? 'Saving…' : saveLabel}
-        </Typography>
+        <SaveStatusLabel status={categorySaving ? 'saving' : saveStatus} />
       </Box>
 
       <Box sx={{ mt: 4 }}>

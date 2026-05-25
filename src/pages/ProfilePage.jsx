@@ -19,13 +19,7 @@ import ProfileIdentityCard from '../components/profile/ProfileIdentityCard.jsx'
 import ProfileSocialsTab from '../components/profile/ProfileSocialsTab.jsx'
 import ProfileLinksTab from '../components/profile/ProfileLinksTab.jsx'
 import ProfileFinancialsTab from '../components/profile/ProfileFinancialsTab.jsx'
-
-const SAVE_LABELS = {
-  idle: '',
-  saving: 'Saving…',
-  saved: 'Saved',
-  error: 'Save failed',
-}
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -131,9 +125,6 @@ export default function ProfilePage() {
     setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)))
   }
 
-  const saveLabel = SAVE_LABELS[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -146,7 +137,7 @@ export default function ProfilePage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>Profile</Typography>
-        <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
+        <SaveStatusLabel status={saveStatus} />
       </Box>
 
       <Grid container spacing={3} sx={{ mb: 3, alignItems: 'flex-start' }}>

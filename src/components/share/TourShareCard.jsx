@@ -132,7 +132,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
           display: 'flex',
           alignItems: 'center',
           height: rowHeight,
-          opacity: isPast ? 0.38 : 1,
+          opacity: isPast ? 0.75 : 1,
           width: '90%',
         }}
       >
@@ -200,23 +200,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
           >
             {gig.event_description.toUpperCase() || ''}
           </div>
-          {gig.venue && (
-            <div
-              style={{
-                color: 'rgba(246,239,226,0.75)',
-                fontFamily: '"Roboto Condensed", sans-serif',
-                fontSize: fontSize * 0.55,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                width: '100%',
-                textAlign: 'center',
-              }}
-            >
-              {venueHeadline(gig.venue)}
-            </div>
-          )}
-          {(venueCity(gig.festival) || venueCity(gig.venue)) && (
+          {(venueHeadline(gig.venue) || (venueCity(gig.festival) || venueCity(gig.venue))) && (
             <div
               style={{
                 color: 'rgba(246,239,226,0.65)',
@@ -230,7 +214,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
                 textAlign: 'center',
               }}
             >
-              {venueCity(gig.festival) || venueCity(gig.venue)}
+              {venueHeadline(gig.venue)} {venueCity(gig.festival) || venueCity(gig.venue)}
             </div>
           )}
         </div>
@@ -386,7 +370,7 @@ function TourStory({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, toda
             opacity: 0.85,
           }}
         >
-          · {year} ·
+          {year}
         </div>
         <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
           <GigList gigs={gigs} today={today} fontSize={fontSize} rowHeight={rowHeight} accent={accent} showBanners={showBanners} />
@@ -400,7 +384,7 @@ function TourStory({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, toda
 TourStory.propTypes = tourLayoutPropTypes
 
 const TourShareCard = forwardRef(function TourShareCard(
-  { gigs = [], photoSrc, photoOpacity = 35, zoom, pan = 0, accent = '#f5c542', format = 'square', socials, year: yearProp, logoSrc, showBanners = false },
+  { gigs = [], photoSrc, photoOpacity = 55, zoom, pan = 0, accent = '#f5c542', format = 'square', socials, year: yearProp, logoSrc, showBanners = false },
   ref,
 ) {
   const today = new Date().toISOString().slice(0, 10)

@@ -36,6 +36,7 @@ async function fetchCssFontFaces(cssUrl) {
   return css
 }
 
+// Load and embed share card fonts as data URLs to ensure they work in html-to-image and jsPDF renderings
 function getShareCardFontCss() {
   if (!shareCardFontCssPromise) {
     shareCardFontCssPromise = Promise.all([

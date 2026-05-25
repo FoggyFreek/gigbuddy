@@ -18,6 +18,7 @@ import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput } from '../utils/eventFormUtils.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import BandEventFields from '../components/BandEventFields.jsx'
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['title', 'start_date']
 
@@ -76,9 +77,6 @@ export default function BandEventDetailPage() {
     else navigate(-1)
   }
 
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -113,7 +111,7 @@ export default function BandEventDetailPage() {
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
+        <SaveStatusLabel status={saveStatus} />
       </Box>
 
       <Box sx={{ mt: 4 }}>

@@ -20,6 +20,7 @@ import { addParticipant, deleteRehearsal, getRehearsal, removeParticipant, setVo
 import { listMembers } from '../api/bandMembers.js'
 import RehearsalFields from '../components/RehearsalFields.jsx'
 import RehearsalParticipantsSection from '../components/RehearsalParticipantsSection.jsx'
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['proposed_date']
 
@@ -114,9 +115,6 @@ export default function RehearsalDetailPage() {
     else navigate(-1)
   }
 
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -166,7 +164,7 @@ export default function RehearsalDetailPage() {
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
+        <SaveStatusLabel status={saveStatus} />
       </Box>
 
       <Box sx={{ mt: 4 }}>
