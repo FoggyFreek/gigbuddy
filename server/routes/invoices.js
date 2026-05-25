@@ -619,6 +619,41 @@ function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting,
 </html>`
 }
 
+// RFC 5322 "specials" that force a display name to be quoted or MIME-encoded.
+const HEADER_ADDR_SPECIALS_RE = /[()<>[\]:;@\\,."]/
+// Conservative email check: no whitespace/control chars, a single @, a dotted domain.
+const HEADER_EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/
+
+function stripHeaderControlChars(value) {
+  // Drop CR, LF, and other C0 control chars so user fields can't inject headers.
+  // eslint-disable-next-line no-control-regex -- matching control chars is the intent
+  return String(value ?? '').replaceAll(/[\u0000-\u001f\u007f]/g, '').trim()
+}
+
+function encodeDisplayName(rawName) {
+  const name = stripHeaderControlChars(rawName)
+  if (!name) return ''
+  const isAscii = /^[\u0020-\u007e]*$/.test(name)
+  if (!isAscii) {
+    return `=?UTF-8?B?${Buffer.from(name, 'utf8').toString('base64')}?=`
+  }
+  if (HEADER_ADDR_SPECIALS_RE.test(name)) {
+    return `"${name.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+  }
+  return name
+}
+
+// Builds a safe RFC 5322 address for the To header, or '' when the email is
+// missing/invalid. customer_name and customer_email are user-controlled invoice
+// fields, so CR/LF are stripped and the email is validated before it reaches the
+// raw header (the subject is already MIME encoded-word'd).
+function formatHeaderAddress(name, email) {
+  const cleanEmail = stripHeaderControlChars(email)
+  if (!HEADER_EMAIL_RE.test(cleanEmail)) return ''
+  const display = encodeDisplayName(name)
+  return display ? `${display} <${cleanEmail}>` : cleanEmail
+}
+
 async function resolveEmlData(id, tenantId) {
   const { rows } = await pool.query(
     `SELECT i.*, g.event_date, g.event_description
@@ -647,12 +682,7 @@ async function resolveEmlData(id, tenantId) {
   const familyName = invoice.customer_contact_family_name || ''
   const greeting   = familyName ? `Geachte ${titlePart}${familyName},` : 'Geachte heer/mevrouw,'
 
-  let toAddress = ''
-  if (invoice.customer_email) {
-    toAddress = invoice.customer_name
-      ? `${invoice.customer_name} <${invoice.customer_email}>`
-      : invoice.customer_email
-  }
+  const toAddress = formatHeaderAddress(invoice.customer_name, invoice.customer_email)
 
   return { invoice, tenant, bandName, invoiceNumber, gigDate, issueDate, subject, greeting, toAddress }
 }

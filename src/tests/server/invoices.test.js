@@ -395,6 +395,54 @@ describe('invoices — PATCH gig_id + recompute', () => {
   })
 })
 
+describe('invoices — .eml header sanitization', () => {
+  async function emlFor(overrides) {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload(overrides)).expect(201)
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({})
+    expect(res.status).toBe(200)
+    return res.text
+  }
+
+  it('rejects CRLF header injection via customer_email (no To, no injected header)', async () => {
+    const text = await emlFor({
+      customer_name: 'Victim',
+      customer_email: 'evil@example.com\r\nBcc: attacker@example.com',
+    })
+    expect(text).not.toMatch(/[\r\n]Bcc:/i)
+    expect(text).not.toMatch(/[\r\n]To:/)
+  })
+
+  it('strips CR/LF from customer_name so it cannot inject headers', async () => {
+    const text = await emlFor({
+      customer_name: 'Evil\r\nBcc: attacker@example.com',
+      customer_email: 'real@example.com',
+    })
+    expect(text).not.toMatch(/[\r\n]Bcc:/i)
+    expect(text).toMatch(/[\r\n]To: .*<real@example\.com>/)
+  })
+
+  it('formats a plain display name + email', async () => {
+    const text = await emlFor({ customer_name: 'John Doe', customer_email: 'john@example.com' })
+    expect(text).toContain('To: John Doe <john@example.com>')
+  })
+
+  it('quotes a display name containing RFC 5322 specials', async () => {
+    const text = await emlFor({ customer_name: 'Acme, B.V.', customer_email: 'billing@acme.example' })
+    expect(text).toContain('To: "Acme, B.V." <billing@acme.example>')
+  })
+
+  it('MIME-encodes a non-ASCII display name', async () => {
+    const text = await emlFor({ customer_name: 'José Café', customer_email: 'jose@example.com' })
+    const encoded = `=?UTF-8?B?${Buffer.from('José Café', 'utf8').toString('base64')}?= <jose@example.com>`
+    expect(text).toContain(`To: ${encoded}`)
+  })
+
+  it('omits the To header entirely for an invalid email', async () => {
+    const text = await emlFor({ customer_name: 'No Email', customer_email: 'not-an-email' })
+    expect(text).not.toMatch(/[\r\n]To:/)
+  })
+})
+
 describe('invoices — render retry', () => {
   it('row persists with pdf_path NULL when render fails, retry populates it', async () => {
     // First create with broken render (mock putObject to reject once).
