@@ -225,6 +225,34 @@ describe('/api/users — tenant-scoped membership ops', () => {
         .send({ band_member_id: seed.memberB.id }),
     ).expect(404)
   })
+
+  it('PATCH /:userId/band-member does not clear the existing link when the target is missing', async () => {
+    const pending = await createPendingUser({
+      email: 'atomic@test.local',
+      tenantId: seed.tenantA.id,
+      status: 'approved',
+    })
+    const { rows } = await pool.query(
+      `INSERT INTO band_members (tenant_id, name, sort_order) VALUES ($1, 'Slot One', 1) RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const memberId = rows[0].id
+    await asUserA(request(app).patch(`/api/users/${pending.id}/band-member`))
+      .send({ band_member_id: memberId }).expect(200)
+
+    // Target does not exist → 404, and the prior link must survive (atomic).
+    await asUserA(request(app).patch(`/api/users/${pending.id}/band-member`))
+      .send({ band_member_id: 999999 }).expect(404)
+
+    const { rows: after } = await pool.query('SELECT user_id FROM band_members WHERE id = $1', [memberId])
+    expect(after[0].user_id).toBe(pending.id)
+  })
+
+  it('PATCH /:userId/band-member returns 400 for a non-numeric userId', async () => {
+    const res = await asUserA(request(app).patch('/api/users/not-a-number/band-member'))
+      .send({ band_member_id: null })
+    expect(res.status).toBe(400)
+  })
 })
 
 describe('/api/invites/redeem', () => {
