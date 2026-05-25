@@ -17,6 +17,8 @@ import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.js'
 import MemberAvatarStack from './MemberAvatarStack.jsx'
 import GigShareMenu from './GigShareMenu.jsx'
+import PropTypes from 'prop-types'
+import { gigShape, idProp } from '../propTypes/shared.js'
 
 const STATUS_COLORS = {
   option: 'default',
@@ -285,4 +287,25 @@ export default function GigsTable({ gigs, onRowClick, selectedId = null }) {
       )}
     </Stack>
   )
+}
+
+const gigRowPropTypes = {
+  gig: gigShape,
+  active: PropTypes.bool,
+  onClick: PropTypes.func,
+}
+
+GigCard.propTypes = gigRowPropTypes
+DesktopRow.propTypes = gigRowPropTypes
+
+PastGigsHeader.propTypes = {
+  open: PropTypes.bool,
+  count: PropTypes.number,
+  onToggle: PropTypes.func,
+}
+
+GigsTable.propTypes = {
+  gigs: PropTypes.arrayOf(gigShape),
+  onRowClick: PropTypes.func,
+  selectedId: idProp,
 }

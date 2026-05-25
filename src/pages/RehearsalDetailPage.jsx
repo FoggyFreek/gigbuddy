@@ -20,6 +20,7 @@ import { addParticipant, deleteRehearsal, getRehearsal, removeParticipant, setVo
 import { listMembers } from '../api/bandMembers.js'
 import RehearsalFields from '../components/RehearsalFields.jsx'
 import RehearsalParticipantsSection from '../components/RehearsalParticipantsSection.jsx'
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['proposed_date']
 
@@ -41,7 +42,11 @@ export default function RehearsalDetailPage() {
     async (patch) => { await updateRehearsal(rehearsalId, patch) },
     [rehearsalId]
   )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn)
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(
+    saveFn,
+    600,
+    (patch) => outletCtx.onRehearsalUpdate?.(rehearsalId, patch)
+  )
 
   useEffect(() => {
     listMembers().then(setMembers).catch(() => {})
@@ -100,11 +105,13 @@ export default function RehearsalDetailPage() {
   async function handlePromote() {
     await flush()
     await updateRehearsal(rehearsalId, { status: 'planned' })
+    outletCtx.onRehearsalUpdate?.(rehearsalId, { status: 'planned' })
     await refresh()
   }
 
   async function handleDemote() {
     await updateRehearsal(rehearsalId, { status: 'option' })
+    outletCtx.onRehearsalUpdate?.(rehearsalId, { status: 'option' })
     await refresh()
   }
 
@@ -113,9 +120,6 @@ export default function RehearsalDetailPage() {
     if (outletCtx.onClose) outletCtx.onClose()
     else navigate(-1)
   }
-
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
@@ -166,7 +170,7 @@ export default function RehearsalDetailPage() {
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
+        <SaveStatusLabel status={saveStatus} />
       </Box>
 
       <Box sx={{ mt: 4 }}>
@@ -188,6 +192,7 @@ export default function RehearsalDetailPage() {
             onClick={async () => {
               await deleteRehearsal(rehearsalId)
               setConfirmDelete(false)
+              outletCtx.onRehearsalDelete?.(rehearsalId)
               if (outletCtx.onClose) outletCtx.onClose()
               else navigate(-1)
             }}

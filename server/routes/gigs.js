@@ -1,12 +1,33 @@
-import { randomUUID } from 'crypto'
-import path from 'path'
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
-import { sendPushToTenant, sendPushToMember } from '../utils/sendPush.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
-import { validateAndReencodeImage } from '../utils/imageProcess.js'
-import { verifyDocumentContent } from '../utils/verifyFileContent.js'
+import {
+  parseId,
+  toDateStr,
+  VALID_STATUSES,
+  VALID_VOTES,
+} from '../validators/gigValidators.js'
+import {
+  VENUE_JSON_SELECT,
+  FESTIVAL_JSON_SELECT,
+  VENUE_JOIN,
+  FESTIVAL_JOIN,
+  assertVenueInTenant,
+  loadParticipants,
+  fetchGigWithRelations,
+  gigExistsInTenant,
+  memberExistsInTenant,
+} from '../repositories/gigRepository.js'
+import {
+  patchGig,
+  patchGigTask,
+  replaceGigBanner,
+  deleteGigBanner,
+  createGigAttachment,
+  notifyGigCreated,
+  notifyGigConfirmed,
+} from '../services/gigService.js'
 
 const BANNER_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const bannerUpload = multer({
@@ -28,14 +49,6 @@ const attachmentUpload = multer({
 })
 
 const router = Router()
-
-const VALID_STATUSES = ['option', 'confirmed', 'announced']
-const VALID_VOTES = ['yes', 'no']
-
-function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
 
 function requireId(req, res) {
   const id = parseId(req.params.id)
@@ -62,84 +75,6 @@ function requireMemberId(req, res) {
     return null
   }
   return id
-}
-
-async function loadParticipants(gigIds, tenantId) {
-  if (!gigIds.length) return new Map()
-  const { rows } = await pool.query(
-    `SELECT gp.gig_id, gp.band_member_id, gp.vote,
-            bm.name, bm.color, bm.position
-     FROM gig_participants gp
-     JOIN band_members bm ON bm.id = gp.band_member_id AND bm.tenant_id = $2
-     WHERE gp.gig_id = ANY($1) AND gp.tenant_id = $2
-     ORDER BY bm.sort_order ASC, bm.id ASC`,
-    [gigIds, tenantId],
-  )
-  const byGig = new Map()
-  for (const id of gigIds) byGig.set(id, [])
-  for (const row of rows) {
-    byGig.get(row.gig_id).push({
-      band_member_id: row.band_member_id,
-      name: row.name,
-      color: row.color,
-      position: row.position,
-      vote: row.vote,
-    })
-  }
-  return byGig
-}
-
-function toDateStr(val) {
-  if (!val) return null
-  if (val instanceof Date) return val.toISOString().slice(0, 10)
-  return String(val).slice(0, 10)
-}
-
-const VENUE_JSON_SELECT = `CASE WHEN v.id IS NULL THEN NULL ELSE jsonb_build_object(
-  'id', v.id,
-  'name', v.name,
-  'category', v.category,
-  'organization_name', v.organization_name,
-  'city', v.city,
-  'region', v.region,
-  'postal_code', v.postal_code,
-  'country', v.country
-) END AS venue`
-
-const FESTIVAL_JSON_SELECT = `CASE WHEN fv.id IS NULL THEN NULL ELSE jsonb_build_object(
-  'id', fv.id,
-  'name', fv.name,
-  'category', fv.category,
-  'organization_name', fv.organization_name,
-  'city', fv.city,
-  'region', fv.region,
-  'postal_code', fv.postal_code,
-  'country', fv.country
-) END AS festival`
-
-const VENUE_JOIN = `LEFT JOIN venues v ON v.id = g.venue_id AND v.tenant_id = g.tenant_id`
-const FESTIVAL_JOIN = `LEFT JOIN venues fv ON fv.id = g.festival_id AND fv.tenant_id = g.tenant_id`
-
-function venueDisplay(v) {
-  if (!v) return ''
-  return [v.name, v.city].filter(Boolean).join(' · ')
-}
-
-async function assertVenueInTenant(executor, venueId, tenantId, expectedCategory = null) {
-  if (venueId === null || venueId === undefined) return
-  let sql = 'SELECT 1 FROM venues WHERE id = $1 AND tenant_id = $2'
-  const params = [venueId, tenantId]
-  if (expectedCategory) {
-    sql += ' AND category = $3'
-    params.push(expectedCategory)
-  }
-  const { rowCount } = await executor.query(sql, params)
-  if (!rowCount) {
-    const fieldName = expectedCategory === 'festival' ? 'festival_id' : 'venue_id'
-    const err = new Error(`Invalid ${fieldName}`)
-    err.status = 400
-    throw err
-  }
 }
 
 // List all gigs with open task count and member availability
@@ -213,15 +148,8 @@ router.get('/', async (req, res) => {
 // Get single gig with tasks and participants
 router.get('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const { rows: gigs } = await pool.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
-       FROM gigs g
-       ${VENUE_JOIN}
-       ${FESTIVAL_JOIN}
-      WHERE g.id = $1 AND g.tenant_id = $2`,
-    [id, req.tenantId],
-  )
-  if (!gigs.length) return res.status(404).json({ error: 'Not found' })
+  const gig = await fetchGigWithRelations(pool, id, req.tenantId)
+  if (!gig) return res.status(404).json({ error: 'Not found' })
 
   const { rows: tasks } = await pool.query(
     'SELECT * FROM gig_tasks WHERE gig_id = $1 AND tenant_id = $2 ORDER BY created_at ASC',
@@ -232,8 +160,8 @@ router.get('/:id', async (req, res) => {
      FROM gig_attachments WHERE gig_id = $1 AND tenant_id = $2 ORDER BY uploaded_at ASC`,
     [id, req.tenantId],
   )
-  const byGig = await loadParticipants([id], req.tenantId)
-  res.json({ ...gigs[0], tasks, participants: byGig.get(id) || [], attachments })
+  const byGig = await loadParticipants(pool, [id], req.tenantId)
+  res.json({ ...gig, tasks, participants: byGig.get(id) || [], attachments })
 })
 
 // Create gig
@@ -309,12 +237,7 @@ router.post('/', async (req, res) => {
 
     await client.query('COMMIT')
     res.status(201).json(gig)
-    sendPushToTenant(req.tenantId, {
-      title: 'New gig option',
-      body: [venueDisplay(gig.festival ?? gig.venue), toDateStr(gig.event_date)].filter(Boolean).join(' · '),
-      tag: 'gig-new',
-      url: '/gigs',
-    }).catch((err) => console.error('[push] sendPushToTenant failed', err))
+    notifyGigCreated(req.tenantId, gig)
   } catch (err) {
     await client.query('ROLLBACK')
     throw err
@@ -326,79 +249,14 @@ router.post('/', async (req, res) => {
 // Update gig (partial)
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const allowed = ['event_date', 'event_description', 'venue_id', 'festival_id', 'event_link', 'start_time', 'end_time', 'status', 'booking_fee_cents', 'admission', 'ticket_link', 'notes', 'contact_name', 'contact_email', 'contact_phone', 'has_pa_system', 'has_drumkit', 'has_stage_lights']
+  const body = req.body || {}
 
-  if ('venue_id' in req.body && req.body.venue_id !== null) {
-    const parsed = parseId(req.body.venue_id)
-    if (parsed === null) return res.status(400).json({ error: 'Invalid venue_id' })
-    req.body.venue_id = parsed
-  }
+  const result = await patchGig(pool, req.tenantId, id, body)
+  if (result.error) return res.status(result.error.status).json(result.error.body)
 
-  if ('festival_id' in req.body && req.body.festival_id !== null) {
-    const parsed = parseId(req.body.festival_id)
-    if (parsed === null) return res.status(400).json({ error: 'Invalid festival_id' })
-    req.body.festival_id = parsed
-  }
-
-  if ('venue_id' in req.body) {
-    try {
-      await assertVenueInTenant(pool, req.body.venue_id, req.tenantId, 'venue')
-    } catch (err) {
-      if (err.status === 400) return res.status(400).json({ error: err.message })
-      throw err
-    }
-  }
-
-  if ('festival_id' in req.body) {
-    try {
-      await assertVenueInTenant(pool, req.body.festival_id, req.tenantId, 'festival')
-    } catch (err) {
-      if (err.status === 400) return res.status(400).json({ error: err.message })
-      throw err
-    }
-  }
-
-  const fields = []
-  const values = []
-  let idx = 1
-
-  for (const key of allowed) {
-    if (key in req.body) {
-      if (key === 'status' && !VALID_STATUSES.includes(req.body[key])) {
-        return res.status(400).json({ error: 'Invalid status value' })
-      }
-      fields.push(`${key} = $${idx++}`)
-      values.push(req.body[key])
-    }
-  }
-
-  if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
-
-  fields.push(`updated_at = NOW()`)
-  values.push(id, req.tenantId)
-
-  const { rows } = await pool.query(
-    `WITH updated AS (
-       UPDATE gigs SET ${fields.join(', ')}
-       WHERE id = $${idx} AND tenant_id = $${idx + 1}
-       RETURNING *
-     )
-     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
-       FROM updated g
-       ${VENUE_JOIN}
-       ${FESTIVAL_JOIN}`,
-    values,
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  const updated = rows[0]
-  res.json(updated)
-  if (req.body.status === 'confirmed') {
-    sendPushToTenant(req.tenantId, {
-      title: 'Gig confirmed!',
-      body: [venueDisplay(updated.festival ?? updated.venue), toDateStr(updated.event_date)].filter(Boolean).join(' · '),
-      tag: 'gig-confirmed',
-      url: '/gigs',
-    }).catch((err) => console.error('[push] sendPushToTenant failed', err))
+  res.json(result.gig)
+  if (body.status === 'confirmed') {
+    notifyGigConfirmed(req.tenantId, result.gig)
   }
 })
 
@@ -437,65 +295,16 @@ router.post('/:id/banner', bannerUpload.single('banner'), async (req, res) => {
     return res.status(400).json({ error: 'File type not allowed' })
   }
 
-  const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
-
-  const { rows: before } = await pool.query(
-    'SELECT banner_path FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!before.length) return res.status(404).json({ error: 'Not found' })
-  const oldKey = before[0].banner_path
-
-  const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
-  const objectKey = `tenants/${req.tenantId}/gig-banners/${randomUUID()}${ext}`
-
-  await storageClient.putObject(BUCKET, objectKey, image.buffer, image.size, {
-    'Content-Type': image.mimetype,
-  })
-
-  let updatedKey
-  try {
-    const { rows } = await pool.query(
-      `UPDATE gigs SET banner_path = $1, updated_at = NOW()
-       WHERE id = $2 AND tenant_id = $3 RETURNING banner_path`,
-      [objectKey, id, req.tenantId],
-    )
-    updatedKey = rows[0].banner_path
-  } catch (err) {
-    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
-    throw err
-  }
-
-  if (oldKey) {
-    storageClient.removeObject(BUCKET, oldKey).catch((e) =>
-      console.warn('Failed to delete old gig banner object:', e.message),
-    )
-  }
-
-  res.json({ banner_path: updatedKey })
+  const result = await replaceGigBanner({ db: pool, tenantId: req.tenantId, gigId: id, file: req.file })
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.json({ banner_path: result.bannerPath })
 })
 
 // Delete gig banner
 router.delete('/:id/banner', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const { rows } = await pool.query(
-    'SELECT banner_path FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-
-  const key = rows[0].banner_path
-  await pool.query(
-    'UPDATE gigs SET banner_path = NULL, updated_at = NOW() WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-
-  if (key) {
-    storageClient.removeObject(BUCKET, key).catch((e) =>
-      console.warn('Failed to delete gig banner object:', e.message),
-    )
-  }
-
+  const result = await deleteGigBanner({ db: pool, tenantId: req.tenantId, gigId: id })
+  if (result.error) return res.status(result.error.status).json(result.error.body)
   res.status(204).end()
 })
 
@@ -507,41 +316,9 @@ router.post('/:id/attachments', attachmentUpload.single('file'), async (req, res
   if (!ATTACHMENT_ALLOWED_TYPES.has(req.file.mimetype))
     return res.status(400).json({ error: 'File type not allowed' })
 
-  const { rows } = await pool.query(
-    'SELECT id FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-
-  // Verify actual file content against declared MIME type (OWASP A06).
-  // req.file.mimetype is the client-supplied Content-Type and cannot be trusted
-  // on its own; magic-byte verification confirms the bytes match.
-  if (!verifyDocumentContent(req.file.buffer, req.file.mimetype)) {
-    return res.status(400).json({ error: 'File content does not match declared type' })
-  }
-
-  const ext = path.extname(req.file.originalname).toLowerCase()
-  const objectKey = `tenants/${req.tenantId}/gig_attachments/${randomUUID()}${ext}`
-
-  await storageClient.putObject(BUCKET, objectKey, req.file.buffer, req.file.size, {
-    'Content-Type': req.file.mimetype,
-  })
-
-  let attachment
-  try {
-    const { rows: inserted } = await pool.query(
-      `INSERT INTO gig_attachments (gig_id, tenant_id, object_key, original_filename, content_type, file_size)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at`,
-      [id, req.tenantId, objectKey, req.file.originalname, req.file.mimetype, req.file.size],
-    )
-    attachment = inserted[0]
-  } catch (err) {
-    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
-    throw err
-  }
-
-  res.status(201).json(attachment)
+  const result = await createGigAttachment({ db: pool, tenantId: req.tenantId, gigId: id, file: req.file })
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.status(201).json(result.attachment)
 })
 
 router.delete('/:id/attachments/:attachmentId', async (req, res) => {
@@ -570,11 +347,9 @@ router.post('/:id/tasks', async (req, res) => {
   const { title, due_date } = req.body
   if (!title) return res.status(400).json({ error: 'title is required' })
 
-  const { rows: gigCheck } = await pool.query(
-    'SELECT 1 FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [gigId, req.tenantId],
-  )
-  if (!gigCheck.length) return res.status(404).json({ error: 'Not found' })
+  if (!(await gigExistsInTenant(pool, gigId, req.tenantId))) {
+    return res.status(404).json({ error: 'Not found' })
+  }
 
   const { rows } = await pool.query(
     `INSERT INTO gig_tasks (tenant_id, gig_id, title, due_date)
@@ -588,57 +363,11 @@ router.post('/:id/tasks', async (req, res) => {
 router.patch('/:id/tasks/:taskId', async (req, res) => {
   const gigId = requireId(req, res); if (gigId === null) return
   const taskId = requireTaskId(req, res); if (taskId === null) return
-  const allowed = ['title', 'done', 'due_date', 'assigned_to']
+  const body = req.body || {}
 
-  if ('assigned_to' in req.body && req.body.assigned_to !== null) {
-    const assignedTo = parseId(req.body.assigned_to)
-    if (assignedTo === null) {
-      return res.status(400).json({ error: 'Invalid assigned_to' })
-    }
-    const { rows: memberRows } = await pool.query(
-      'SELECT id FROM band_members WHERE id = $1 AND tenant_id = $2',
-      [assignedTo, req.tenantId],
-    )
-    if (!memberRows.length) {
-      return res.status(404).json({ error: 'assigned_to not found' })
-    }
-    req.body.assigned_to = assignedTo
-  }
-
-  const fields = []
-  const values = []
-  let idx = 1
-
-  for (const key of allowed) {
-    if (key in req.body) {
-      fields.push(`${key} = $${idx++}`)
-      values.push(req.body[key])
-    }
-  }
-
-  if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
-
-  values.push(taskId, gigId, req.tenantId)
-  const { rows } = await pool.query(
-    `UPDATE gig_tasks SET ${fields.join(', ')}
-     WHERE id = $${idx} AND gig_id = $${idx + 1} AND tenant_id = $${idx + 2} RETURNING *`,
-    values,
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-
-  if (req.body.assigned_to) {
-    const { rows: gigs } = await pool.query(
-      'SELECT event_description FROM gigs WHERE id = $1 AND tenant_id = $2',
-      [gigId, req.tenantId],
-    )
-    sendPushToMember(req.body.assigned_to, req.tenantId, {
-      title: 'Task assigned to you',
-      body: `${rows[0].title}${gigs[0]?.event_description ? ` (${gigs[0].event_description})` : ''}`,
-      url: '/tasks',
-    }).catch((err) => console.error('[push] task assignment notify failed', err))
-  }
-
-  res.json(rows[0])
+  const result = await patchGigTask(pool, req.tenantId, gigId, taskId, body)
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.json(result.task)
 })
 
 // Delete task
@@ -661,17 +390,12 @@ router.post('/:id/participants', async (req, res) => {
   const memberId = parseId(req.body.band_member_id)
   if (memberId === null) return res.status(400).json({ error: 'Invalid band_member_id' })
 
-  const { rows: memberRows } = await pool.query(
-    'SELECT id FROM band_members WHERE id = $1 AND tenant_id = $2',
-    [memberId, req.tenantId],
-  )
-  if (!memberRows.length) return res.status(404).json({ error: 'band_member not found' })
-
-  const { rows: gigRows } = await pool.query(
-    'SELECT id FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [gigId, req.tenantId],
-  )
-  if (!gigRows.length) return res.status(404).json({ error: 'Not found' })
+  if (!(await memberExistsInTenant(pool, memberId, req.tenantId))) {
+    return res.status(404).json({ error: 'band_member not found' })
+  }
+  if (!(await gigExistsInTenant(pool, gigId, req.tenantId))) {
+    return res.status(404).json({ error: 'Not found' })
+  }
 
   try {
     await pool.query(
@@ -688,20 +412,13 @@ router.post('/:id/participants', async (req, res) => {
     'UPDATE gigs SET updated_at = NOW() WHERE id = $1 AND tenant_id = $2',
     [gigId, req.tenantId],
   )
-  const { rows } = await pool.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
-       FROM gigs g
-       ${VENUE_JOIN}
-       ${FESTIVAL_JOIN}
-      WHERE g.id = $1 AND g.tenant_id = $2`,
-    [gigId, req.tenantId],
-  )
+  const gig = await fetchGigWithRelations(pool, gigId, req.tenantId)
   const { rows: tasks } = await pool.query(
     'SELECT * FROM gig_tasks WHERE gig_id = $1 AND tenant_id = $2 ORDER BY created_at ASC',
     [gigId, req.tenantId],
   )
-  const byGig = await loadParticipants([gigId], req.tenantId)
-  res.status(201).json({ ...rows[0], tasks, participants: byGig.get(gigId) || [] })
+  const byGig = await loadParticipants(pool, [gigId], req.tenantId)
+  res.status(201).json({ ...gig, tasks, participants: byGig.get(gigId) || [] })
 })
 
 // Remove participant
@@ -746,20 +463,13 @@ router.patch('/:id/participants/:bandMemberId', async (req, res) => {
     'UPDATE gigs SET updated_at = NOW() WHERE id = $1 AND tenant_id = $2',
     [gigId, req.tenantId],
   )
-  const { rows: gigRows } = await pool.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
-       FROM gigs g
-       ${VENUE_JOIN}
-       ${FESTIVAL_JOIN}
-      WHERE g.id = $1 AND g.tenant_id = $2`,
-    [gigId, req.tenantId],
-  )
+  const gig = await fetchGigWithRelations(pool, gigId, req.tenantId)
   const { rows: tasks } = await pool.query(
     'SELECT * FROM gig_tasks WHERE gig_id = $1 AND tenant_id = $2 ORDER BY created_at ASC',
     [gigId, req.tenantId],
   )
-  const byGig = await loadParticipants([gigId], req.tenantId)
-  res.json({ ...gigRows[0], tasks, participants: byGig.get(gigId) || [] })
+  const byGig = await loadParticipants(pool, [gigId], req.tenantId)
+  res.json({ ...gig, tasks, participants: byGig.get(gigId) || [] })
 })
 
 export default router

@@ -18,6 +18,7 @@ import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput } from '../utils/eventFormUtils.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import BandEventFields from '../components/BandEventFields.jsx'
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['title', 'start_date']
 
@@ -45,7 +46,11 @@ export default function BandEventDetailPage() {
     async (patch) => { await updateBandEvent(bandEventId, patch) },
     [bandEventId]
   )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn)
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(
+    saveFn,
+    600,
+    (patch) => outletCtx.onBandEventUpdate?.(bandEventId, patch)
+  )
 
   useEffect(() => {
     getBandEvent(bandEventId)
@@ -75,9 +80,6 @@ export default function BandEventDetailPage() {
     if (outletCtx.onClose) outletCtx.onClose()
     else navigate(-1)
   }
-
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
@@ -113,7 +115,7 @@ export default function BandEventDetailPage() {
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
+        <SaveStatusLabel status={saveStatus} />
       </Box>
 
       <Box sx={{ mt: 4 }}>
@@ -135,6 +137,7 @@ export default function BandEventDetailPage() {
             onClick={async () => {
               await deleteBandEvent(bandEventId)
               setConfirmDelete(false)
+              outletCtx.onBandEventDelete?.(bandEventId)
               if (outletCtx.onClose) outletCtx.onClose()
               else navigate(-1)
             }}

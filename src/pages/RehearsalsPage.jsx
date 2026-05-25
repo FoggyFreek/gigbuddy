@@ -17,6 +17,16 @@ import { deleteRehearsal, listRehearsals, setVote } from '../api/rehearsals.js'
 import { rehearsalShareUrl } from '../utils/shareUtils.js'
 import { useAuth } from '../contexts/authContext.js'
 
+function applyVoteToRehearsals(rehearsals, rehearsalId, memberId, vote) {
+  return rehearsals.map((r) => {
+    if (r.id !== rehearsalId) return r
+    const participants = r.participants.map((p) =>
+      p.band_member_id === memberId ? { ...p, vote } : p,
+    )
+    return { ...r, participants }
+  })
+}
+
 export default function RehearsalsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -60,22 +70,25 @@ export default function RehearsalsPage() {
 
   async function handleVote(rehearsalId, memberId, vote) {
     await setVote(rehearsalId, memberId, vote)
-    setRehearsals((prev) =>
-      prev.map((r) =>
-        r.id !== rehearsalId
-          ? r
-          : {
-              ...r,
-              participants: r.participants.map((p) =>
-                p.band_member_id === memberId ? { ...p, vote } : p
-              ),
-            }
-      )
-    )
+    setRehearsals((prev) => applyVoteToRehearsals(prev, rehearsalId, memberId, vote))
   }
 
+  const handleRehearsalUpdate = useCallback((id, patch) => {
+    setRehearsals((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  }, [])
+
+  const handleRehearsalDetailDelete = useCallback((id) => {
+    setRehearsals((prev) => prev.filter((r) => r.id !== id))
+  }, [])
+
   return (
-    <SplitView basePath="/rehearsals">
+    <SplitView
+      basePath="/rehearsals"
+      outletContext={{
+        onRehearsalUpdate: handleRehearsalUpdate,
+        onRehearsalDelete: handleRehearsalDetailDelete,
+      }}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Rehearsals

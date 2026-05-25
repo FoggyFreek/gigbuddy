@@ -11,10 +11,35 @@
  *   tenantId  — active tenant id from req.tenantId, or null
  *   ip        — client IP (Express req.ip, respects trust proxy setting)
  *
- * Additional fields are merged from the `extra` argument and override the
- * defaults above, which is intentional — callers can supply a pre-captured
- * userId for events where the session has already been destroyed (logout).
+ * Additional fields come from the `extra` argument but are restricted to a
+ * whitelist (SAFE_EXTRA_KEYS) so callers can't inject arbitrary, potentially
+ * user-controlled data into structured logs. Whitelisted keys may override the
+ * defaults above — that is intentional (e.g. logout supplies a pre-captured
+ * `userId` after the session has been destroyed; the redeem flow supplies a
+ * `tenantId` because there is no active tenant in the request context yet).
  */
+const SAFE_EXTRA_KEYS = new Set([
+  'userId',
+  'email',
+  'targetUserId',
+  'targetEmail',
+  'tenantId',
+  'fromTenantId',
+  'toTenantId',
+  'inviteId',
+  'membershipId',
+  'role',
+  'status',
+  'reason',
+  'expiresAt',
+])
+
+export function sanitizeAuditExtra(extra = {}) {
+  return Object.fromEntries(
+    Object.entries(extra).filter(([key]) => SAFE_EXTRA_KEYS.has(key)),
+  )
+}
+
 export function auditLog(req, action, extra = {}) {
   console.log(JSON.stringify({
     ts: new Date().toISOString(),
@@ -22,6 +47,6 @@ export function auditLog(req, action, extra = {}) {
     userId: req?.session?.userId ?? null,
     tenantId: req?.tenantId ?? null,
     ip: req?.ip ?? null,
-    ...extra,
+    ...sanitizeAuditExtra(extra),
   }))
 }

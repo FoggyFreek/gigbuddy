@@ -27,7 +27,7 @@ import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 25
 const COLUMN_COUNT = 5
 
 const COLUMNS = [
@@ -148,7 +148,7 @@ export default function ContactsTable({ contacts, onRowClick, selectedId = null 
   const [selectedCategories, setSelectedCategories] = useState(new Set(ALL_CATEGORIES))
   const [filterAnchor, setFilterAnchor] = useState(null)
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState('category')
+  const [sortBy, setSortBy] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)

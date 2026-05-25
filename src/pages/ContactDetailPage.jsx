@@ -17,6 +17,7 @@ import { deleteContact, getContact, updateContact } from '../api/contacts.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import ContactFields from '../components/ContactFields.jsx'
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['name']
 
@@ -40,7 +41,11 @@ export default function ContactDetailPage() {
     async (patch) => { await updateContact(contactId, patch) },
     [contactId]
   )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn)
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(
+    saveFn,
+    600,
+    (patch) => outletCtx.onContactUpdate?.(contactId, patch)
+  )
 
   useEffect(() => {
     getContact(contactId)
@@ -63,6 +68,7 @@ export default function ContactDetailPage() {
 
   async function handleDelete() {
     await deleteContact(contactId)
+    outletCtx.onContactDelete?.(contactId)
     closeView()
   }
 
@@ -70,9 +76,6 @@ export default function ContactDetailPage() {
     await flush()
     closeView()
   }
-
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
@@ -108,7 +111,7 @@ export default function ContactDetailPage() {
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
+        <SaveStatusLabel status={saveStatus} />
       </Box>
 
       <Box sx={{ mt: 4 }}>

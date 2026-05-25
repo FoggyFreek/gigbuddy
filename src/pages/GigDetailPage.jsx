@@ -12,6 +12,7 @@ import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import GigDetailContent from '../components/GigDetailContent.jsx'
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 import { deleteGig } from '../api/gigs.js'
 
 export default function GigDetailPage() {
@@ -22,15 +23,12 @@ export default function GigDetailPage() {
   const insideSplitView = !!outletCtx.insideSplitView
 
   const contentRef = useRef()
-  const [saveLabel, setSaveLabel] = useState('')
-  const [saveColor, setSaveColor] = useState('text.secondary')
+  const [polledStatus, setPolledStatus] = useState('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const status = contentRef.current?.saveStatus
-      setSaveLabel({ idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[status] ?? '')
-      setSaveColor(status === 'error' ? 'error.main' : 'text.secondary')
+      setPolledStatus(contentRef.current?.saveStatus ?? 'idle')
     }, 100)
     return () => clearInterval(interval)
   }, [])
@@ -67,7 +65,7 @@ export default function GigDetailPage() {
       />
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
+        <SaveStatusLabel status={polledStatus} />
       </Box>
 
       <Box sx={{ mt: 4 }}>
@@ -89,7 +87,9 @@ export default function GigDetailPage() {
             onClick={async () => {
               await deleteGig(gigId)
               setConfirmDelete(false)
-              navigate('/gigs')
+              outletCtx.onGigDelete?.(gigId)
+              if (outletCtx.onClose) outletCtx.onClose()
+              else navigate(-1)
             }}
           >
             Delete

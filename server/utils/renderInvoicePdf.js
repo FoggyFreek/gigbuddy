@@ -124,7 +124,7 @@ function drawTitle(doc, invoice, tenant, logoBuffer) {
 
   // Invoice title — large, right-aligned
   const titleText = `Factuur #${invoice.invoice_number || 'concept'}`
-  doc.fontSize(22).font('Helvetica-Bold').fillColor('#000')
+  doc.fontSize(14).font('Helvetica-Bold').fillColor('#000')
   doc.text(titleText, PAGE_MARGIN, y, { width: USABLE_W, align: 'right' })
 
   // Date + payment terms — smaller, right-aligned below title

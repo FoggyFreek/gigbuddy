@@ -25,6 +25,7 @@ import { toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import RehearsalFields from './RehearsalFields.jsx'
 import RehearsalParticipantsSection from './RehearsalParticipantsSection.jsx'
+import SaveStatusLabel from './SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['proposed_date']
 
@@ -145,9 +146,6 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
 
   const createExtras = members.filter((m) => m.position !== 'lead')
 
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   return (
     <Dialog open fullWidth maxWidth="md" onClose={mode === 'edit' ? handleClose : undefined}>
       <DialogTitle>
@@ -218,11 +216,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       )}
 
       <Box sx={{ px: 3, pb: 1, minHeight: 24 }}>
-        {mode === 'edit' && (
-          <Typography variant="caption" color={saveColor}>
-            {saveLabel}
-          </Typography>
-        )}
+        {mode === 'edit' && <SaveStatusLabel status={saveStatus} />}
       </Box>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>

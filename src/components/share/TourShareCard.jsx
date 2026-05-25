@@ -1,8 +1,20 @@
 import { forwardRef } from 'react'
+import PropTypes from 'prop-types'
 import { SHARE_FORMATS } from '../../utils/shareCard.js'
 import { venueCity, venueHeadline } from '../../utils/venueDisplay.js'
+import { gigShape, tourLayoutPropTypes } from '../../propTypes/shareCardProps.js'
 import PhotoBackdrop from './primitives/PhotoBackdrop.jsx'
 import SocialsRow from './SocialsRow.jsx'
+
+const rowPropTypes = {
+  gig: gigShape,
+  gigs: PropTypes.arrayOf(gigShape),
+  today: PropTypes.string,
+  fontSize: PropTypes.number,
+  rowHeight: PropTypes.number,
+  accent: PropTypes.string,
+  showBanners: PropTypes.bool,
+}
 
 const FALLBACK_LOGO = '/share/logo.png'
 
@@ -72,7 +84,7 @@ function TourFrame({ format, photoSrc, photoOpacity, zoom, pan, children }) {
         }}
       />
       {children}
-      
+
       <div
         style={{
           position: 'absolute',
@@ -96,6 +108,15 @@ function TourFrame({ format, photoSrc, photoOpacity, zoom, pan, children }) {
   )
 }
 
+TourFrame.propTypes = {
+  format: PropTypes.string,
+  photoSrc: PropTypes.string,
+  photoOpacity: PropTypes.number,
+  zoom: PropTypes.number,
+  pan: PropTypes.oneOfType([PropTypes.number, PropTypes.object]),
+  children: PropTypes.node,
+}
+
 function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
   const gigDate = String(gig.event_date).slice(0, 10)
   const isPast = gigDate < today
@@ -111,7 +132,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
           display: 'flex',
           alignItems: 'center',
           height: rowHeight,
-          opacity: isPast ? 0.38 : 1,
+          opacity: isPast ? 0.75 : 1,
           width: '90%',
         }}
       >
@@ -179,23 +200,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
           >
             {gig.event_description.toUpperCase() || ''}
           </div>
-          {gig.venue && (
-            <div
-              style={{
-                color: 'rgba(246,239,226,0.75)',
-                fontFamily: '"Roboto Condensed", sans-serif',
-                fontSize: fontSize * 0.55,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                width: '100%',
-                textAlign: 'center',
-              }}
-            >
-              {venueHeadline(gig.venue)}
-            </div>
-          )}
-          {(venueCity(gig.festival) || venueCity(gig.venue)) && (
+          {(venueHeadline(gig.venue) || (venueCity(gig.festival) || venueCity(gig.venue))) && (
             <div
               style={{
                 color: 'rgba(246,239,226,0.65)',
@@ -209,7 +214,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
                 textAlign: 'center',
               }}
             >
-              {venueCity(gig.festival) || venueCity(gig.venue)}
+              {venueHeadline(gig.venue)} {venueCity(gig.festival) || venueCity(gig.venue)}
             </div>
           )}
         </div>
@@ -217,6 +222,8 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
     </div>
   )
 }
+
+GigRow.propTypes = rowPropTypes
 
 function GigList({ gigs, today, fontSize, rowHeight, accent, showBanners }) {
   if (gigs.length === 0) {
@@ -247,6 +254,8 @@ function GigList({ gigs, today, fontSize, rowHeight, accent, showBanners }) {
     />
   ))
 }
+
+GigList.propTypes = rowPropTypes
 
 // Square layout: compact, graphic, medium logo
 // List available height: 1080 - 65(top) - 90(logo) - 20(gap) - 64(title) - 16(gap) - 3(hair) - 20(gap) - 20(gap) - 3(hair) - 75(bot) ≈ 704
@@ -301,6 +310,8 @@ function TourSquare({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, tod
     </TourFrame>
   )
 }
+
+TourSquare.propTypes = tourLayoutPropTypes
 
 // Story layout: airy, large logo, "ON TOUR" and year on separate lines for drama
 // List available height: 1920 - 80(top) - 120(logo) - 28(gap) - 95(ON TOUR) - 60(year) - 20(gap) - 3(hair) - 24(gap) - 24(gap) - 3(hair) - 90(bot) ≈ 1373
@@ -359,7 +370,7 @@ function TourStory({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, toda
             opacity: 0.85,
           }}
         >
-          · {year} ·
+          {year}
         </div>
         <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
           <GigList gigs={gigs} today={today} fontSize={fontSize} rowHeight={rowHeight} accent={accent} showBanners={showBanners} />
@@ -370,8 +381,10 @@ function TourStory({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, toda
   )
 }
 
+TourStory.propTypes = tourLayoutPropTypes
+
 const TourShareCard = forwardRef(function TourShareCard(
-  { gigs = [], photoSrc, photoOpacity = 35, zoom, pan = 0, accent = '#f5c542', format = 'square', socials, year: yearProp, logoSrc, showBanners = false },
+  { gigs = [], photoSrc, photoOpacity = 55, zoom, pan = 0, accent = '#f5c542', format = 'square', socials, year: yearProp, logoSrc, showBanners = false },
   ref,
 ) {
   const today = new Date().toISOString().slice(0, 10)
@@ -389,5 +402,7 @@ const TourShareCard = forwardRef(function TourShareCard(
     </div>
   )
 })
+
+TourShareCard.propTypes = tourLayoutPropTypes
 
 export default TourShareCard

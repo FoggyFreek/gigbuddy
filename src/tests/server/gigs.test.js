@@ -163,24 +163,36 @@ describe('gig festival_id — venue category validation', () => {
 
   it('POST rejects festival_id pointing to a venue row', async () => {
     const venueId = await insertVenue(seed.tenantA.id, 'venue', 'Normal Hall')
-    await asUserA(
+    const res = await asUserA(
       request(app).post('/api/gigs').send({
         event_date: '2026-09-01',
         event_description: 'Festival Test',
         festival_id: venueId,
       })
-    ).expect(400)
+    )
+    expect(res.status).toBe(400)
+    const { rows } = await pool.query(
+      `SELECT id FROM gigs WHERE event_description = 'Festival Test' AND tenant_id = $1`,
+      [seed.tenantA.id],
+    )
+    expect(rows).toHaveLength(0)
   })
 
   it('POST rejects venue_id pointing to a festival row', async () => {
     const festivalId = await insertVenue(seed.tenantA.id, 'festival', 'Big Festival')
-    await asUserA(
+    const res = await asUserA(
       request(app).post('/api/gigs').send({
         event_date: '2026-09-01',
         event_description: 'Festival Test',
         venue_id: festivalId,
       })
-    ).expect(400)
+    )
+    expect(res.status).toBe(400)
+    const { rows } = await pool.query(
+      `SELECT id FROM gigs WHERE event_description = 'Festival Test' AND tenant_id = $1`,
+      [seed.tenantA.id],
+    )
+    expect(rows).toHaveLength(0)
   })
 
   it('POST creates gig with only festival_id', async () => {
@@ -216,11 +228,17 @@ describe('gig festival_id — venue category validation', () => {
 
   it('PATCH rejects festival_id pointing to a venue row', async () => {
     const venueId = await insertVenue(seed.tenantA.id, 'venue', 'Normal Hall')
-    await asUserA(
+    const res = await asUserA(
       request(app)
         .patch(`/api/gigs/${seed.gigA.id}`)
         .send({ festival_id: venueId })
-    ).expect(400)
+    )
+    expect(res.status).toBe(400)
+    const { rows } = await pool.query(
+      'SELECT festival_id FROM gigs WHERE id = $1',
+      [seed.gigA.id],
+    )
+    expect(rows[0].festival_id).toBeNull()
   })
 
   it('PATCH sets festival_id on existing gig', async () => {
@@ -255,12 +273,47 @@ describe('gig festival_id — venue category validation', () => {
 
   it('festival_id from foreign tenant is rejected', async () => {
     const betaFestivalId = await insertVenue(seed.tenantB.id, 'festival', 'Beta Fest')
-    await asUserA(
+    const res = await asUserA(
       request(app).post('/api/gigs').send({
         event_date: '2026-09-01',
         event_description: 'Cross-tenant attempt',
         festival_id: betaFestivalId,
       })
-    ).expect(400)
+    )
+    expect(res.status).toBe(400)
+    const { rows } = await pool.query(
+      `SELECT id FROM gigs WHERE event_description = 'Cross-tenant attempt'`,
+    )
+    expect(rows).toHaveLength(0)
+  })
+})
+
+describe('gig task assignment — assigned_to normalization', () => {
+  function taskA() {
+    return seed.tasks.find((t) => t.tenant_id === seed.tenantA.id)
+  }
+
+  it('PATCH normalizes a numeric-string assigned_to and persists the integer', async () => {
+    const res = await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}/tasks/${taskA().id}`)
+        .send({ assigned_to: String(seed.memberA.id) }),
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.assigned_to).toBe(seed.memberA.id)
+    const { rows } = await pool.query('SELECT assigned_to FROM gig_tasks WHERE id = $1', [taskA().id])
+    expect(rows[0].assigned_to).toBe(seed.memberA.id)
+  })
+
+  it('PATCH rejects a cross-tenant assigned_to with 404 and leaves it unchanged', async () => {
+    const res = await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}/tasks/${taskA().id}`)
+        .send({ assigned_to: seed.memberB.id }),
+    )
+    expect(res.status).toBe(404)
+    expect(res.body.error).toMatch(/assigned_to/i)
+    const { rows } = await pool.query('SELECT assigned_to FROM gig_tasks WHERE id = $1', [taskA().id])
+    expect(rows[0].assigned_to).toBeNull()
   })
 })

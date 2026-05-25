@@ -105,7 +105,11 @@ describe('invoices — isolation', () => {
 
   it('cross-tenant get returns 404', async () => {
     const created = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
-    await asUserB(request(app).get(`/api/invoices/${created.body.id}`)).expect(404)
+    const foreign = await asUserB(request(app).get(`/api/invoices/${created.body.id}`))
+    expect(foreign.status).toBe(404)
+    // The row exists and is visible to its owning tenant — the 404 is isolation, not absence.
+    const owner = await asUserA(request(app).get(`/api/invoices/${created.body.id}`)).expect(200)
+    expect(owner.body.id).toBe(created.body.id)
   })
 
   it('cross-tenant gig_id rejected with 400', async () => {
@@ -190,13 +194,18 @@ describe('invoices — finalization gate', () => {
   it('DELETE on non-draft invoice is rejected', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
     await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
-    await asUserA(request(app).delete(`/api/invoices/${r.body.id}`)).expect(409)
+    const res = await asUserA(request(app).delete(`/api/invoices/${r.body.id}`))
+    expect(res.status).toBe(409)
+    const { rows } = await pool.query('SELECT id FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows).toHaveLength(1)
   })
 
   it('DELETE on draft removes the row', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
-    await asUserA(request(app).delete(`/api/invoices/${r.body.id}`)).expect(204)
-    await asUserA(request(app).get(`/api/invoices/${r.body.id}`)).expect(404)
+    const del = await asUserA(request(app).delete(`/api/invoices/${r.body.id}`))
+    expect(del.status).toBe(204)
+    const { rows } = await pool.query('SELECT id FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows).toHaveLength(0)
   })
 })
 
@@ -250,7 +259,8 @@ describe('invoices — draft-from-gig', () => {
   })
 
   it('cross-tenant draft returns 404', async () => {
-    await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigB.id}`)).expect(404)
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigB.id}`))
+    expect(res.status).toBe(404)
   })
 })
 
@@ -315,6 +325,137 @@ describe('invoices — discount', () => {
     expect(patched.body.discount_cents).toBe(15000)
     expect(patched.body.tax_cents).toBe(3150)
     expect(patched.body.total_cents).toBe(38150)
+  })
+
+  it('PATCH with only discount_cents recomputes totals on a eur-discount invoice', async () => {
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({ discount_type: 'eur', discount_cents: 10000 })).expect(201)
+    expect(created.body.total_cents).toBe(43600)
+
+    const patched = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
+      .send({ discount_cents: 15000 })
+    expect(patched.status).toBe(200)
+    // subtotal=50000, eur=15000 → net 35000; VAT round(35000*9/100)=3150; total 38150
+    expect(patched.body.discount_cents).toBe(15000)
+    expect(patched.body.tax_cents).toBe(3150)
+    expect(patched.body.total_cents).toBe(38150)
+  })
+
+  it('PATCH with only discount_cents is blocked on a finalized invoice (409)', async () => {
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({ discount_type: 'eur', discount_cents: 10000 })).expect(201)
+    await asUserA(request(app).patch(`/api/invoices/${created.body.id}`)).send({ status: 'sent' }).expect(200)
+
+    const res = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
+      .send({ discount_cents: 5000 })
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('invoice_finalized')
+  })
+})
+
+describe('invoices — PATCH field taxonomy', () => {
+  it('SIMPLE_PATCH_FIELDS is exactly CONTENT_FIELDS minus the derived/replaced columns', async () => {
+    const v = await import('../../../server/validators/invoiceValidators.js')
+    // discount_cents and lines are part of the content model...
+    expect(v.CONTENT_FIELDS).toContain('discount_cents')
+    expect(v.CONTENT_FIELDS).toContain('lines')
+    // ...but are intentionally not straight-through SET assignments.
+    expect(v.SIMPLE_PATCH_FIELDS).not.toContain('discount_cents')
+    expect(v.SIMPLE_PATCH_FIELDS).not.toContain('lines')
+    // The two lists are derived from one another, so they cannot drift.
+    expect(v.SIMPLE_PATCH_FIELDS).toEqual(
+      v.CONTENT_FIELDS.filter((f) => !v.DERIVED_CONTENT_FIELDS.has(f)),
+    )
+  })
+})
+
+describe('invoices — PATCH gig_id + recompute', () => {
+  it('normalizes a numeric-string gig_id and persists the integer', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`))
+      .send({ gig_id: String(seed.gigA.id) })
+    expect(res.status).toBe(200)
+    expect(res.body.gig_id).toBe(seed.gigA.id)
+    const { rows } = await pool.query('SELECT gig_id FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].gig_id).toBe(seed.gigA.id)
+  })
+
+  it('rejects a cross-tenant gig_id and leaves the stored gig_id unchanged', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`))
+      .send({ gig_id: seed.gigB.id })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/gig/i)
+    const { rows } = await pool.query('SELECT gig_id FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].gig_id).toBe(seed.gigA.id)
+  })
+
+  it('rejects an invalid status', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'bogus' })
+    expect(res.status).toBe(400)
+  })
+
+  it('recomputes stored totals when lines change', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      lines: [{ description: 'x', quantity: 1, unit_price_cents: 10000, tax_percentage: 21 }],
+    })).expect(201)
+    expect(r.body.total_cents).toBe(12100)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({
+      lines: [{ description: 'x', quantity: 2, unit_price_cents: 10000, tax_percentage: 21 }],
+    })
+    expect(res.status).toBe(200)
+    expect(res.body.subtotal_cents).toBe(20000)
+    expect(res.body.tax_cents).toBe(4200)
+    expect(res.body.total_cents).toBe(24200)
+  })
+})
+
+describe('invoices — .eml header sanitization', () => {
+  async function emlFor(overrides) {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload(overrides)).expect(201)
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({})
+    expect(res.status).toBe(200)
+    return res.text
+  }
+
+  it('rejects CRLF header injection via customer_email (no To, no injected header)', async () => {
+    const text = await emlFor({
+      customer_name: 'Victim',
+      customer_email: 'evil@example.com\r\nBcc: attacker@example.com',
+    })
+    expect(text).not.toMatch(/[\r\n]Bcc:/i)
+    expect(text).not.toMatch(/[\r\n]To:/)
+  })
+
+  it('strips CR/LF from customer_name so it cannot inject headers', async () => {
+    const text = await emlFor({
+      customer_name: 'Evil\r\nBcc: attacker@example.com',
+      customer_email: 'real@example.com',
+    })
+    expect(text).not.toMatch(/[\r\n]Bcc:/i)
+    expect(text).toMatch(/[\r\n]To: .*<real@example\.com>/)
+  })
+
+  it('formats a plain display name + email', async () => {
+    const text = await emlFor({ customer_name: 'John Doe', customer_email: 'john@example.com' })
+    expect(text).toContain('To: John Doe <john@example.com>')
+  })
+
+  it('quotes a display name containing RFC 5322 specials', async () => {
+    const text = await emlFor({ customer_name: 'Acme, B.V.', customer_email: 'billing@acme.example' })
+    expect(text).toContain('To: "Acme, B.V." <billing@acme.example>')
+  })
+
+  it('MIME-encodes a non-ASCII display name', async () => {
+    const text = await emlFor({ customer_name: 'José Café', customer_email: 'jose@example.com' })
+    const encoded = `=?UTF-8?B?${Buffer.from('José Café', 'utf8').toString('base64')}?= <jose@example.com>`
+    expect(text).toContain(`To: ${encoded}`)
+  })
+
+  it('omits the To header entirely for an invalid email', async () => {
+    const text = await emlFor({ customer_name: 'No Email', customer_email: 'not-an-email' })
+    expect(text).not.toMatch(/[\r\n]To:/)
   })
 })
 

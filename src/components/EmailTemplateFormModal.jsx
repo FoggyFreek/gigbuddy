@@ -26,6 +26,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { createEmailTemplate, deleteEmailTemplate, getEmailTemplate, updateEmailTemplate } from '../api/emailTemplates.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { hasRequiredErrors } from '../utils/requiredFields.js'
+import SaveStatusLabel from './SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['name']
 
@@ -185,14 +186,6 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }) {
     onClose()
   }
 
-  const saveLabel = {
-    idle: '',
-    saving: 'Saving…',
-    saved: 'Saved',
-    error: 'Save failed',
-  }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   return (
     <Dialog open fullWidth maxWidth="md" onClose={mode === 'edit' ? handleClose : undefined}>
       <DialogTitle>
@@ -264,11 +257,7 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }) {
       )}
 
       <Box sx={{ px: 3, pb: 1, minHeight: 24 }}>
-        {mode === 'edit' && (
-          <Typography variant="caption" color={saveColor}>
-            {saveLabel}
-          </Typography>
-        )}
+        {mode === 'edit' && <SaveStatusLabel status={saveStatus} />}
       </Box>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>

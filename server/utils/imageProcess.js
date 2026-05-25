@@ -24,6 +24,19 @@ const MAGIC_BYTES = {
     buf[11] === 0x50,
 }
 
+const IMAGE_EXTENSIONS = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+}
+
+// Object-key extension for a validated/re-encoded image. Derive it from the
+// output MIME type (authoritative) rather than the original filename, which may
+// be missing, wrong, or in a different format than what we actually stored.
+export function extensionForImageMime(mimetype) {
+  return IMAGE_EXTENSIONS[mimetype] || '.jpg'
+}
+
 /**
  * Validates uploaded image content via magic bytes, then re-encodes with sharp.
  * Re-encoding strips EXIF/metadata and confirms the data is a decodable image.

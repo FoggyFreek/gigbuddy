@@ -17,6 +17,8 @@ import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import VoteToggle from './VoteToggle.jsx'
+import PropTypes from 'prop-types'
+import { rehearsalShape, participantShape, idProp } from '../propTypes/shared.js'
 
 const STATUS_COLORS = {
   option: 'default',
@@ -310,4 +312,39 @@ export default function RehearsalsTable({ rehearsals, bandMemberId, onVote, onRo
       )}
     </Stack>
   )
+}
+
+ParticipantProgress.propTypes = {
+  participants: PropTypes.arrayOf(participantShape),
+}
+
+RehearsalCard.propTypes = {
+  rehearsal: rehearsalShape,
+  bandMemberId: idProp,
+  active: PropTypes.bool,
+  onClick: PropTypes.func,
+  onShare: PropTypes.func,
+  onVote: PropTypes.func,
+}
+
+DesktopRow.propTypes = {
+  rehearsal: rehearsalShape,
+  active: PropTypes.bool,
+  onClick: PropTypes.func,
+  onShare: PropTypes.func,
+}
+
+PastHeader.propTypes = {
+  open: PropTypes.bool,
+  count: PropTypes.number,
+  onToggle: PropTypes.func,
+}
+
+RehearsalsTable.propTypes = {
+  rehearsals: PropTypes.arrayOf(rehearsalShape),
+  bandMemberId: idProp,
+  onVote: PropTypes.func,
+  onRowClick: PropTypes.func,
+  onShare: PropTypes.func,
+  selectedId: idProp,
 }

@@ -5,9 +5,11 @@ import {
   formatGigDateShort,
   SHARE_FORMATS,
 } from '../../../utils/shareCard.js'
+import PropTypes from 'prop-types'
 import CardFrame from '../primitives/CardFrame.jsx'
 import PhotoBackdrop from '../primitives/PhotoBackdrop.jsx'
 import StickerOverlay from '../StickerOverlay.jsx'
+import { shareLayoutPropTypes } from '../../../propTypes/shareCardProps.js'
 
 const FALLBACK_LOGO = '/share/logo.png'
 const WHITE = '#ffffff'
@@ -38,6 +40,15 @@ function TextStrip({ children, color = INK, background = WHITE, size, radius, st
       {children}
     </div>
   )
+}
+
+TextStrip.propTypes = {
+  children: PropTypes.node,
+  color: PropTypes.string,
+  background: PropTypes.string,
+  size: PropTypes.number,
+  radius: PropTypes.number,
+  style: PropTypes.object,
 }
 
 function PhotoSquare({ gig, photoSrc, pan = 0, accent, bandName, sticker, stickerPosition, logoSrc, showLogo = true, invertLogo }) {
@@ -244,5 +255,8 @@ function PhotoStory({ gig, photoSrc, zoom, pan = 0, accent, bandName, sticker, s
     </CardFrame>
   )
 }
+
+PhotoSquare.propTypes = shareLayoutPropTypes
+PhotoStory.propTypes = shareLayoutPropTypes
 
 export { PhotoSquare as Square, PhotoStory as Story }

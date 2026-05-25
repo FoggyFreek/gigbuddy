@@ -92,8 +92,12 @@ export default function InvoicesPage() {
     if (reload) load()
   }
 
+  const handleInvoiceUpdate = useCallback((id, patch) => {
+    setInvoices((prev) => prev.map((inv) => (inv.id === id ? { ...inv, ...patch } : inv)))
+  }, [])
+
   return (
-    <SplitView basePath="/invoices" outletContext={{ onReload: load }}>
+    <SplitView basePath="/invoices" outletContext={{ onReload: load, onInvoiceUpdate: handleInvoiceUpdate }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Invoices

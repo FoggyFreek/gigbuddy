@@ -1,0 +1,188 @@
+import { useCallback, useState } from 'react'
+import PropTypes from 'prop-types'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
+import Stack from '@mui/material/Stack'
+import TextField from '@mui/material/TextField'
+import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
+import AddIcon from '@mui/icons-material/Add'
+import CheckIcon from '@mui/icons-material/Check'
+import DeleteIcon from '@mui/icons-material/Delete'
+import EditIcon from '@mui/icons-material/Edit'
+import LaunchIcon from '@mui/icons-material/Launch'
+import LinkIcon from '@mui/icons-material/Link'
+import useDebouncedSave from '../../hooks/useDebouncedSave.js'
+import { updateLink } from '../../api/profile.js'
+
+function ProfileLinkRow({ link, onChange, onDelete }) {
+  const [editing, setEditing] = useState(false)
+  const saveFn = useCallback(
+    async (patch) => { await updateLink(link.id, patch) },
+    [link.id],
+  )
+  const { schedule } = useDebouncedSave(saveFn)
+
+  function handle(field, value) {
+    onChange({ [field]: value })
+    schedule({ [field]: value })
+  }
+
+  if (!editing) {
+    return (
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Box sx={{ display: 'grid', placeItems: 'center' }}>
+          <LinkIcon color="action" />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="body2" fontWeight={500}>{link.label || '—'}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-all' }}>
+            {link.url || '—'}
+          </Typography>
+        </Box>
+        <Tooltip title="Open in new tab">
+          <IconButton
+            component="a"
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            disabled={!link.url}
+            size="small"
+          >
+            <Box sx={{ display: 'grid', placeItems: 'center' }}>
+              <LaunchIcon fontSize="small" />
+            </Box>
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Edit link">
+          <IconButton size="small" onClick={() => setEditing(true)}>
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Delete link">
+          <IconButton onClick={onDelete} color="error" size="small">
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+    )
+  }
+
+  return (
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <Box sx={{ display: 'grid', placeItems: 'center' }}>
+        <LinkIcon color="action" />
+      </Box>
+      <TextField
+        label="Label"
+        size="small"
+        value={link.label}
+        onChange={(e) => handle('label', e.target.value)}
+        sx={{ flex: 1 }}
+      />
+      <TextField
+        label="URL"
+        size="small"
+        value={link.url}
+        onChange={(e) => handle('url', e.target.value)}
+        sx={{ flex: 2 }}
+      />
+      <Tooltip title="Open in new tab">
+        <span>
+          <IconButton
+            component="a"
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            disabled={!link.url}
+            size="small"
+          >
+            <Box sx={{ display: 'grid', placeItems: 'center' }}>
+              <LaunchIcon fontSize="small" />
+            </Box>
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="Done editing">
+        <IconButton size="small" onClick={() => setEditing(false)} color="primary">
+          <CheckIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Delete link">
+        <IconButton onClick={onDelete} color="error" size="small">
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    </Stack>
+  )
+}
+
+ProfileLinkRow.propTypes = {
+  link: PropTypes.object.isRequired,
+  onChange: PropTypes.func.isRequired,
+  onDelete: PropTypes.func.isRequired,
+}
+
+export default function ProfileLinksTab({ links, newLink, setNewLink, adding, onAdd, onLinkChange, onDeleteLink }) {
+  return (
+    <Box sx={{ p: 3 }}>
+      <Stack spacing={2}>
+        {links.map((link) => (
+          <ProfileLinkRow
+            key={link.id}
+            link={link}
+            onChange={(patch) => onLinkChange(link.id, patch)}
+            onDelete={() => onDeleteLink(link.id)}
+          />
+        ))}
+
+        {links.length === 0 && (
+          <Typography variant="body2" color="text.secondary">
+            No links yet. Add one below — e.g. a Google Drive folder with your EPK.
+          </Typography>
+        )}
+
+        <Divider />
+
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+          <TextField
+            label="Label"
+            size="small"
+            value={newLink.label}
+            onChange={(e) => setNewLink((p) => ({ ...p, label: e.target.value }))}
+            sx={{ flex: 1 }}
+          />
+          <TextField
+            label="URL"
+            size="small"
+            value={newLink.url}
+            onChange={(e) => setNewLink((p) => ({ ...p, url: e.target.value }))}
+            sx={{ flex: 2 }}
+            placeholder="https://…"
+          />
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={onAdd}
+            disabled={!newLink.label.trim() || !newLink.url.trim() || adding}
+            sx={{ height: 40, whiteSpace: 'nowrap' }}
+          >
+            Add link
+          </Button>
+        </Stack>
+      </Stack>
+    </Box>
+  )
+}
+
+ProfileLinksTab.propTypes = {
+  links: PropTypes.array.isRequired,
+  newLink: PropTypes.object.isRequired,
+  setNewLink: PropTypes.func.isRequired,
+  adding: PropTypes.bool,
+  onAdd: PropTypes.func.isRequired,
+  onLinkChange: PropTypes.func.isRequired,
+  onDeleteLink: PropTypes.func.isRequired,
+}

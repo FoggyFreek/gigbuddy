@@ -68,8 +68,15 @@ export default function GigsPage() {
     setGigs((prev) => prev.map((g) => (g.id === gigId ? { ...g, ...patch } : g)))
   }, [])
 
+  const handleGigDelete = useCallback((gigId) => {
+    setGigs((prev) => prev.filter((g) => g.id !== gigId))
+  }, [])
+
   return (
-    <SplitView basePath="/gigs" outletContext={{ onGigUpdate: handleGigUpdate }}>
+    <SplitView
+      basePath="/gigs"
+      outletContext={{ onGigUpdate: handleGigUpdate, onGigDelete: handleGigDelete }}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1.5 }}>
         <Typography variant="h5" fontWeight={600}>
           Gigs

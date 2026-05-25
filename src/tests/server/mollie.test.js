@@ -234,6 +234,19 @@ describe('POST /api/invoices/:id/payment-link', () => {
     expect(mockPaymentLinksCreate).toHaveBeenCalledTimes(1)
   })
 
+  it('returns the stored link with 200 (and no leaked Mollie key) when already linked', async () => {
+    const inv = await createInvoiceA()
+    const first = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    expect(first.status).toBe(201)
+
+    const second = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    expect(second.status).toBe(200)
+    expect(second.body.mollie_payment_link_id).toBe('pl_test123')
+    expect(Array.isArray(second.body.lines)).toBe(true)
+    expect(second.body.tenant).not.toHaveProperty('mollie_api_key')
+    expect(mockPaymentLinksCreate).toHaveBeenCalledTimes(1)
+  })
+
   it('returns 400 for zero-total invoice', async () => {
     const inv = await createInvoiceA({
       lines: [{ description: 'Free', quantity: 1, unit_price_cents: 0, tax_percentage: 0 }],
@@ -396,6 +409,20 @@ describe('POST /api/invoices/:id/payment-link/sync', () => {
 
     const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
     expect(rows[0].status).toBe('sent')
+  })
+
+  it('returns paymentId (the field PaymentLinkPanel maps into mollie_payment_id)', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
+      status: 'paid',
+      payments: [{ id: 'tr_paid789', status: 'paid', paidAt: '2026-05-15T10:00:00+00:00' }],
+    }))
+
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link/sync`)).send()
+    expect(res.status).toBe(200)
+    expect(res.body.paymentId).toBe('tr_paid789')
   })
 
   it('is idempotent for paid status', async () => {

@@ -1,81 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import ButtonBase from '@mui/material/ButtonBase'
 import CircularProgress from '@mui/material/CircularProgress'
-import Divider from '@mui/material/Divider'
-import FormControlLabel from '@mui/material/FormControlLabel'
 import Grid from '@mui/material/Grid'
-import IconButton from '@mui/material/IconButton'
-import InputAdornment from '@mui/material/InputAdornment'
 import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
-import Switch from '@mui/material/Switch'
 import Tab from '@mui/material/Tab'
 import Tabs from '@mui/material/Tabs'
-import TextField from '@mui/material/TextField'
-import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import Snackbar from '@mui/material/Snackbar'
-import { alpha } from '@mui/material/styles'
-import AddIcon from '@mui/icons-material/Add'
-import CheckIcon from '@mui/icons-material/Check'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import DeleteIcon from '@mui/icons-material/Delete'
-import EditIcon from '@mui/icons-material/Edit'
-import FacebookIcon from '@mui/icons-material/Facebook'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import InstagramIcon from '@mui/icons-material/Instagram'
-import LaunchIcon from '@mui/icons-material/Launch'
-import LinkIcon from '@mui/icons-material/Link'
-import YouTubeIcon from '@mui/icons-material/YouTube'
-import BandsintownIcon from '../components/icons/BandsintownIcon.jsx'
-import SpotifyIcon from '../components/icons/SpotifyIcon.jsx'
-import TikTokIcon from '../components/icons/TikTokIcon.jsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { useAuth } from '../contexts/authContext.js'
 import { useProfile } from '../contexts/profileContext.js'
 import BandMembersSection from '../components/BandMembersSection.jsx'
 import ImageCropDialog from '../components/ImageCropDialog.jsx'
-import {
-  createLink,
-  deleteLink,
-  getProfile,
-  updateLink,
-  updateProfile,
-  uploadLogo,
-} from '../api/profile.js'
+import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '../api/profile.js'
 import { compressLogo } from '../utils/compressImage.js'
-
-const SOCIALS = [
-  { field: 'instagram_handle',       label: 'Instagram',              Icon: InstagramIcon,    prefix: 'instagram.com/' },
-  { field: 'facebook_handle',        label: 'Facebook',               Icon: FacebookIcon,     prefix: 'facebook.com/' },
-  { field: 'tiktok_handle',          label: 'TikTok',                 Icon: TikTokIcon,       prefix: 'tiktok.com/@' },
-  { field: 'youtube_handle',         label: 'YouTube',                Icon: YouTubeIcon,      prefix: 'youtube.com/@' },
-  { field: 'spotify_handle',         label: 'Spotify',                Icon: SpotifyIcon,      prefix: 'open.spotify.com/artist/' },
-  { field: 'bandsintown_artist_name', label: 'Bandsintown artist name', Icon: BandsintownIcon, prefix: '' },
-]
-
-const EMPTY_FORM = {
-  band_name: '',
-  bio: '',
-  instagram_handle: '',
-  facebook_handle: '',
-  tiktok_handle: '',
-  youtube_handle: '',
-  spotify_handle: '',
-  bandsintown_artist_name: '',
-  formal_name: '',
-  address_street: '',
-  address_postal_code: '',
-  address_city: '',
-  address_country: 'Netherlands',
-  kvk_number: '',
-  iban: '',
-  tax_id: '',
-  tax_percentage: 9,
-  applies_kor: false,
-}
+import { EMPTY_FORM, profileToForm } from '../components/profile/profileForm.js'
+import ProfileIdentityCard from '../components/profile/ProfileIdentityCard.jsx'
+import ProfileSocialsTab from '../components/profile/ProfileSocialsTab.jsx'
+import ProfileLinksTab from '../components/profile/ProfileLinksTab.jsx'
+import ProfileFinancialsTab from '../components/profile/ProfileFinancialsTab.jsx'
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -112,26 +56,7 @@ export default function ProfilePage() {
   useEffect(() => {
     getProfile()
       .then((data) => {
-        setForm({
-          band_name: data.band_name || '',
-          bio: data.bio || '',
-          instagram_handle: data.instagram_handle || '',
-          facebook_handle: data.facebook_handle || '',
-          tiktok_handle: data.tiktok_handle || '',
-          youtube_handle: data.youtube_handle || '',
-          spotify_handle: data.spotify_handle || '',
-          bandsintown_artist_name: data.bandsintown_artist_name || '',
-          formal_name: data.formal_name || '',
-          address_street: data.address_street || '',
-          address_postal_code: data.address_postal_code || '',
-          address_city: data.address_city || '',
-          address_country: data.address_country || 'Netherlands',
-          kvk_number: data.kvk_number || '',
-          iban: data.iban || '',
-          tax_id: data.tax_id || '',
-          tax_percentage: data.tax_percentage != null ? Number(data.tax_percentage) : 9,
-          applies_kor: !!data.applies_kor,
-        })
+        setForm(profileToForm(data))
         setLogoPath(data.logo_path || null)
         setLinks(data.links || [])
       })
@@ -200,14 +125,6 @@ export default function ProfilePage() {
     setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)))
   }
 
-  const saveLabel = {
-    idle: '',
-    saving: 'Saving…',
-    saved: 'Saved',
-    error: 'Save failed',
-  }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -220,480 +137,79 @@ export default function ProfilePage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>Profile</Typography>
-        <Typography variant="caption" color={saveColor}>{saveLabel}</Typography>
+        <SaveStatusLabel status={saveStatus} />
       </Box>
 
       <Grid container spacing={3} sx={{ mb: 3, alignItems: 'flex-start' }}>
-      <Grid size={{ xs: 12, lg: 8 }}>
-      <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
-        {/* Banner: accent strip with centered logo */}
-        <Box sx={(theme) => ({
-          mx: -3,
-          mt: -3,
-          mb: 3,
-          py: 3,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          background: theme.palette.mode === 'dark'
-            ? `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.55)}, ${alpha(theme.palette.primary.main, 0.35)})`
-            : `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.82)}, ${alpha(theme.palette.primary.main, 0.65)})`,
-          boxShadow: '0 3px 10px rgba(0,0,0,0.22)',
-          borderRadius: `${theme.shape.borderRadius}px ${theme.shape.borderRadius}px 0 0`,
-        })}>
-          <Tooltip title={isAdmin ? 'Click to change logo' : ''} disableHoverListener={!isAdmin}>
-            <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-              {isAdmin ? (
-                <>
-                  <input
-                    ref={logoInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    style={{ display: 'none' }}
-                    onChange={handleLogoFileChange}
-                  />
-                  <ButtonBase
-                    onClick={() => logoInputRef.current?.click()}
-                    disabled={logoUploading}
-                    sx={{ borderRadius: 1, overflow: 'hidden', cursor: 'pointer' }}
-                  >
-                    <Box
-                      component="img"
-                      src={logoPath ? `/api/files/${logoPath}` : '/share/logo.png'}
-                      alt="Band logo"
-                      sx={{ maxWidth: 200, maxHeight: 120, objectFit: 'contain', display: 'block' }}
-                      onError={(e) => { e.currentTarget.src = '/share/logo.png' }}
-                    />
-                  </ButtonBase>
-                  {logoUploading && (
-                    <Box sx={{
-                      position: 'absolute', inset: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 1,
-                    }}>
-                      <CircularProgress size={28} />
-                    </Box>
-                  )}
-                </>
-              ) : (
-                <Box
-                  component="img"
-                  src={logoPath ? `/api/files/${logoPath}` : '/share/logo.png'}
-                  alt="Band logo"
-                  sx={{ maxWidth: 200, maxHeight: 120, objectFit: 'contain', display: 'block' }}
-                  onError={(e) => { e.currentTarget.src = '/share/logo.png' }}
-                />
-              )}
-            </Box>
-          </Tooltip>
-        </Box>
-
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-          <Button
-            size="small"
-            startIcon={editingIdentity ? <CheckIcon /> : <EditIcon />}
-            onClick={() => setEditingIdentity((v) => !v)}
-            variant={editingIdentity ? 'contained' : 'outlined'}
-          >
-            {editingIdentity ? 'Done' : 'Edit'}
-          </Button>
-        </Box>
-
-        {editingIdentity ? (
-          <Grid container spacing={2}>
-            <Grid size={12}>
-              <TextField
-                label="Band name"
-                fullWidth
-                value={form.band_name}
-                onChange={(e) => handleChange('band_name', e.target.value)}
-              />
-            </Grid>
-            <Grid size={12}>
-              <TextField
-                label="Bio"
-                fullWidth
-                multiline
-                minRows={4}
-                value={form.bio}
-                onChange={(e) => handleChange('bio', e.target.value)}
-              />
-            </Grid>
-          </Grid>
-        ) : (
-          <Stack spacing={2}>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Band name</Typography>
-              <Typography>{form.band_name || '—'}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Bio</Typography>
-              <Typography sx={{ whiteSpace: 'pre-wrap' }}>{form.bio || '—'}</Typography>
-            </Box>
-          </Stack>
-        )}
-      </Paper>
-      </Grid>
-
-      <Grid size={{ xs: 12, lg: 4 }}>
-        <BandMembersSection />
-      </Grid>
+        <Grid size={{ xs: 12, lg: 8 }}>
+          <ProfileIdentityCard
+            form={form}
+            isAdmin={isAdmin}
+            editing={editingIdentity}
+            onToggleEditing={() => setEditingIdentity((v) => !v)}
+            onChange={handleChange}
+            logoPath={logoPath}
+            logoUploading={logoUploading}
+            logoInputRef={logoInputRef}
+            onLogoFileChange={handleLogoFileChange}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <BandMembersSection />
+        </Grid>
       </Grid>
 
       <Grid container spacing={3} sx={{ mb: 3, alignItems: 'flex-start' }}>
-      <Grid size={{ xs: 12, lg: 8 }}>
-      <Paper variant="outlined">
-        <Tabs
-          value={activeTab}
-          onChange={(_e, v) => setActiveTab(v)}
-          variant="standard"
-          textColor="primary"
-          indicatorColor="primary"
-        >
-          <Tab value="socials" label="Social profiles" />
-          <Tab value="links" label="Links" />
-          <Tab value="financials" label="Financial details" />
-        </Tabs>
+        <Grid size={{ xs: 12, lg: 8 }}>
+          <Paper variant="outlined">
+            <Tabs
+              value={activeTab}
+              onChange={(_e, v) => setActiveTab(v)}
+              variant="standard"
+              textColor="primary"
+              indicatorColor="primary"
+            >
+              <Tab value="socials" label="Social profiles" />
+              <Tab value="links" label="Links" />
+              <Tab value="financials" label="Financial details" />
+            </Tabs>
 
-        {activeTab === 'socials' && (
-        <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-          <Button
-            size="small"
-            startIcon={editingSocials ? <CheckIcon /> : <EditIcon />}
-            onClick={() => setEditingSocials((v) => !v)}
-            variant={editingSocials ? 'contained' : 'outlined'}
-          >
-            {editingSocials ? 'Done' : 'Edit'}
-          </Button>
-        </Box>
+            {activeTab === 'socials' && (
+              <ProfileSocialsTab
+                form={form}
+                editing={editingSocials}
+                onToggleEditing={() => setEditingSocials((v) => !v)}
+                onChange={handleChange}
+                copiedField={copiedField}
+                onCopy={handleCopy}
+              />
+            )}
 
-        <Grid container spacing={2}>
-          {SOCIALS.map((social) => {
-            const Icon = social.Icon
-            const handle = form[social.field]
-            const fullUrl = `https://${social.prefix}${handle}`
+            {activeTab === 'links' && (
+              <ProfileLinksTab
+                links={links}
+                newLink={newLink}
+                setNewLink={setNewLink}
+                adding={adding}
+                onAdd={handleAddLink}
+                onLinkChange={handleLinkChange}
+                onDeleteLink={handleDeleteLink}
+              />
+            )}
 
-            if (!editingSocials) {
-              return (
-                <Grid key={social.field} size={{ xs: 12, sm: 6 }}>
-                  <Stack direction="row" spacing={1.5} sx={{ py: 0.5, alignItems: 'center' }}>
-                    <Box sx={{ display: 'grid', placeItems: 'center' }}>
-                      <Icon fontSize="small" color="action" />
-                    </Box>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="caption" color="text.secondary">{social.label}</Typography>
-                      <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
-                        {handle ? social.prefix + handle : '—'}
-                      </Typography>
-                    </Box>
-                    {handle && (
-                      <Tooltip title={copiedField === social.field ? 'Copied' : 'Copy URL'}>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleCopy(social.field, fullUrl)}
-                          aria-label={`Copy ${social.label} URL`}
-                        >
-                          {copiedField === social.field
-                            ? <CheckIcon fontSize="small" />
-                            : <ContentCopyIcon fontSize="small" />}
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </Stack>
-                </Grid>
-              )
-            }
-
-            return (
-              <Grid key={social.field} size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  label={social.label}
-                  fullWidth
-                  value={handle}
-                  onChange={(e) => handleChange(social.field, e.target.value)}
-                  placeholder="yourhandle"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Box sx={{ display: 'grid', placeItems: 'center' }}>
-                          <Icon fontSize="small" />
-                        </Box>
-                      </InputAdornment>
-                    ),
-                  }}
-                  FormHelperTextProps={{ component: 'div' }}
-                  helperText={(
-                    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-                      <span>{social.prefix + (handle || '…')}</span>
-                      {handle && (
-                        <Tooltip title={copiedField === social.field ? 'Copied' : 'Copy URL'}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleCopy(social.field, fullUrl)}
-                            sx={{ color: 'inherit', p: 0.25 }}
-                            aria-label={`Copy ${social.label} URL`}
-                          >
-                            {copiedField === social.field
-                              ? <CheckIcon sx={{ fontSize: 14 }} />
-                              : <ContentCopyIcon sx={{ fontSize: 14 }} />}
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </Box>
-                  )}
-                />
-              </Grid>
-            )
-          })}
+            {activeTab === 'financials' && (
+              <ProfileFinancialsTab
+                form={form}
+                isAdmin={isAdmin}
+                editing={editingFinancials}
+                onToggleEditing={() => setEditingFinancials((v) => !v)}
+                onChange={handleChange}
+                onFormChange={setForm}
+                schedule={schedule}
+              />
+            )}
+          </Paper>
         </Grid>
-        </Box>
-        )}
-
-        {activeTab === 'links' && (
-        <Box sx={{ p: 3 }}>
-        <Stack spacing={2}>
-          {links.map((link) => (
-            <ProfileLinkRow
-              key={link.id}
-              link={link}
-              onChange={(patch) => handleLinkChange(link.id, patch)}
-              onDelete={() => handleDeleteLink(link.id)}
-            />
-          ))}
-
-          {links.length === 0 && (
-            <Typography variant="body2" color="text.secondary">
-              No links yet. Add one below — e.g. a Google Drive folder with your EPK.
-            </Typography>
-          )}
-
-          <Divider />
-
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-            <TextField
-              label="Label"
-              size="small"
-              value={newLink.label}
-              onChange={(e) => setNewLink((p) => ({ ...p, label: e.target.value }))}
-              sx={{ flex: 1 }}
-            />
-            <TextField
-              label="URL"
-              size="small"
-              value={newLink.url}
-              onChange={(e) => setNewLink((p) => ({ ...p, url: e.target.value }))}
-              sx={{ flex: 2 }}
-              placeholder="https://…"
-            />
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleAddLink}
-              disabled={!newLink.label.trim() || !newLink.url.trim() || adding}
-              sx={{ height: 40, whiteSpace: 'nowrap' }}
-            >
-              Add link
-            </Button>
-          </Stack>
-        </Stack>
-        </Box>
-        )}
-
-        {activeTab === 'financials' && (
-        <Box sx={{ p: 3 }}>
-        {isAdmin && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-            <Button
-              size="small"
-              startIcon={editingFinancials ? <CheckIcon /> : <EditIcon />}
-              onClick={() => setEditingFinancials((v) => !v)}
-              variant={editingFinancials ? 'contained' : 'outlined'}
-              aria-label={editingFinancials ? 'Done editing financial details' : 'Edit financial details'}
-            >
-              {editingFinancials ? 'Done' : 'Edit'}
-            </Button>
-          </Box>
-        )}
-
-        {editingFinancials && isAdmin ? (
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Formal name (KvK)"
-                fullWidth
-                value={form.formal_name}
-                onChange={(e) => handleChange('formal_name', e.target.value)}
-                inputProps={{ maxLength: 200 }}
-                placeholder="As registered at the Chamber of Commerce"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="KvK number"
-                fullWidth
-                value={form.kvk_number}
-                onChange={(e) => {
-                  const cleaned = e.target.value.replace(/\D/g, '').slice(0, 8)
-                  handleChange('kvk_number', cleaned)
-                }}
-                inputProps={{ maxLength: 8, inputMode: 'numeric', pattern: '[0-9]{8}' }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 8 }}>
-              <TextField
-                label="Street + number"
-                fullWidth
-                value={form.address_street}
-                onChange={(e) => handleChange('address_street', e.target.value)}
-                inputProps={{ maxLength: 200 }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <TextField
-                label="Postal code"
-                fullWidth
-                value={form.address_postal_code}
-                onChange={(e) => handleChange('address_postal_code', e.target.value)}
-                inputProps={{ maxLength: 10 }}
-                placeholder="1234 AB"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="City"
-                fullWidth
-                value={form.address_city}
-                onChange={(e) => handleChange('address_city', e.target.value)}
-                inputProps={{ maxLength: 200 }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Country"
-                fullWidth
-                value={form.address_country}
-                onChange={(e) => handleChange('address_country', e.target.value)}
-                inputProps={{ maxLength: 200 }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="IBAN"
-                fullWidth
-                value={form.iban}
-                onChange={(e) => {
-                  const cleaned = e.target.value.toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 34)
-                  handleChange('iban', cleaned)
-                }}
-                inputProps={{ maxLength: 34, style: { textTransform: 'uppercase' } }}
-                helperText="e.g. NL91 ABNA 0417 1643 00"
-              />
-            </Grid>
-            <Grid size={{ xs: 8, md: 4 }}>
-              <TextField
-                label="Tax ID (BTW)"
-                fullWidth
-                value={form.tax_id}
-                onChange={(e) => {
-                  const cleaned = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14)
-                  handleChange('tax_id', cleaned)
-                }}
-                inputProps={{ maxLength: 14, style: { textTransform: 'uppercase' }, pattern: 'NL[0-9]{9}B[0-9]{2}' }}
-                helperText="Format: NL123456789B01"
-              />
-            </Grid>
-            <Grid size={{ xs: 4, md: 2 }}>
-              <TextField
-                label="Tax %"
-                fullWidth
-                type="number"
-                value={form.tax_percentage}
-                onChange={(e) => {
-                  const raw = e.target.value
-                  setForm((prev) => ({ ...prev, tax_percentage: raw }))
-                  if (raw === '') return
-                  const n = Number(raw)
-                  if (Number.isFinite(n) && n >= 0 && n <= 100) {
-                    schedule({ tax_percentage: n })
-                  }
-                }}
-                onBlur={() => {
-                  if (form.tax_percentage === '' || form.tax_percentage == null) {
-                    setForm((prev) => ({ ...prev, tax_percentage: 9 }))
-                    schedule({ tax_percentage: 9 })
-                  }
-                }}
-                inputProps={{ min: 0, max: 100, step: 0.1 }}
-                InputProps={{
-                  endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                }}
-              />
-            </Grid>
-            <Grid size={12}>
-              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                <FormControlLabel
-                  control={(
-                    <Switch
-                      checked={!!form.applies_kor}
-                      onChange={(e) => handleChange('applies_kor', e.target.checked)}
-                    />
-                  )}
-                  label="KOR"
-                />
-                <Tooltip title="kleineondernemingsregeling">
-                  <InfoOutlinedIcon fontSize="small" color="action" />
-                </Tooltip>
-              </Stack>
-            </Grid>
-          </Grid>
-        ) : (
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Typography variant="caption" color="text.secondary">Formal name (KvK)</Typography>
-              <Typography>{form.formal_name || '—'}</Typography>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Typography variant="caption" color="text.secondary">KvK number</Typography>
-              <Typography>{form.kvk_number || '—'}</Typography>
-            </Grid>
-            <Grid size={12}>
-              <Typography variant="caption" color="text.secondary">Address</Typography>
-              <Typography sx={{ whiteSpace: 'pre-wrap' }}>
-                {[
-                  form.address_street,
-                  [form.address_postal_code, form.address_city].filter(Boolean).join(' '),
-                  form.address_country,
-                ].filter(Boolean).join('\n') || '—'}
-              </Typography>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Typography variant="caption" color="text.secondary">IBAN</Typography>
-              <Typography sx={{ wordBreak: 'break-all' }}>{form.iban || '—'}</Typography>
-            </Grid>
-            <Grid size={{ xs: 8, md: 4 }}>
-              <Typography variant="caption" color="text.secondary">Tax ID (BTW)</Typography>
-              <Typography>{form.tax_id || '—'}</Typography>
-            </Grid>
-            <Grid size={{ xs: 4, md: 2 }}>
-              <Typography variant="caption" color="text.secondary">Tax %</Typography>
-              <Typography>{form.tax_percentage != null && form.tax_percentage !== '' ? `${form.tax_percentage}%` : '—'}</Typography>
-            </Grid>
-            <Grid size={12}>
-              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>KOR</Typography>
-                <Typography>{form.applies_kor ? 'Yes' : 'No'}</Typography>
-                <Tooltip title="kleineondernemingsregeling">
-                  <InfoOutlinedIcon fontSize="small" color="action" />
-                </Tooltip>
-              </Stack>
-            </Grid>
-          </Grid>
-        )}
-        </Box>
-        )}
-      </Paper>
-      </Grid>
       </Grid>
 
       <Snackbar
@@ -711,107 +227,5 @@ export default function ProfilePage() {
         onCancel={handleLogoCropCancel}
       />
     </Box>
-  )
-}
-
-function ProfileLinkRow({ link, onChange, onDelete }) {
-  const [editing, setEditing] = useState(false)
-  const saveFn = useCallback(
-    async (patch) => { await updateLink(link.id, patch) },
-    [link.id]
-  )
-  const { schedule } = useDebouncedSave(saveFn)
-
-  function handle(field, value) {
-    onChange({ [field]: value })
-    schedule({ [field]: value })
-  }
-
-  if (!editing) {
-    return (
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Box sx={{ display: 'grid', placeItems: 'center' }}>
-          <LinkIcon color="action" />
-        </Box>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="body2" fontWeight={500}>{link.label || '—'}</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-all' }}>
-            {link.url || '—'}
-          </Typography>
-        </Box>
-        <Tooltip title="Open in new tab">
-            <IconButton
-              component="a"
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              disabled={!link.url}
-              size="small"
-            >
-              <Box sx={{ display: 'grid', placeItems: 'center' }}>
-                <LaunchIcon fontSize="small" />
-              </Box>
-            </IconButton>
-        </Tooltip>
-        <Tooltip title="Edit link">
-          <IconButton size="small" onClick={() => setEditing(true)}>
-            <EditIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Delete link">
-          <IconButton onClick={onDelete} color="error" size="small">
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Stack>
-    )
-  }
-
-  return (
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-      <Box sx={{ display: 'grid', placeItems: 'center' }}>
-        <LinkIcon color="action" />
-      </Box>
-      <TextField
-        label="Label"
-        size="small"
-        value={link.label}
-        onChange={(e) => handle('label', e.target.value)}
-        sx={{ flex: 1 }}
-      />
-      <TextField
-        label="URL"
-        size="small"
-        value={link.url}
-        onChange={(e) => handle('url', e.target.value)}
-        sx={{ flex: 2 }}
-      />
-      <Tooltip title="Open in new tab">
-        <span>
-          <IconButton
-            component="a"
-            href={link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            disabled={!link.url}
-            size="small"
-          >
-            <Box sx={{ display: 'grid', placeItems: 'center' }}>
-              <LaunchIcon fontSize="small" />
-            </Box>
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Tooltip title="Done editing">
-        <IconButton size="small" onClick={() => setEditing(false)} color="primary">
-          <CheckIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title="Delete link">
-        <IconButton onClick={onDelete} color="error" size="small">
-          <DeleteIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-    </Stack>
   )
 }

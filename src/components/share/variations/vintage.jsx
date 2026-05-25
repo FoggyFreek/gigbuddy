@@ -11,6 +11,7 @@ import FilmFrame from '../primitives/FilmFrame.jsx'
 import PhotoBackdrop from '../primitives/PhotoBackdrop.jsx'
 import SocialsRow from '../SocialsRow.jsx'
 import StickerOverlay from '../StickerOverlay.jsx'
+import { shareLayoutPropTypes } from '../../../propTypes/shareCardProps.js'
 
 const FALLBACK_LOGO = '/share/logo.png'
 const ACCENT = '#f5c542'
@@ -356,5 +357,8 @@ function VintageStory({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, 
     </FilmFrame>
   )
 }
+
+VintageSquare.propTypes = shareLayoutPropTypes
+VintageStory.propTypes = shareLayoutPropTypes
 
 export { VintageSquare as Square, VintageStory as Story }

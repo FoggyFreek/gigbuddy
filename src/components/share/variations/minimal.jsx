@@ -6,10 +6,12 @@ import {
   formatGigVenueName,
   SHARE_FORMATS,
 } from '../../../utils/shareCard.js'
+import PropTypes from 'prop-types'
 import CardFrame from '../primitives/CardFrame.jsx'
 import PhotoBackdrop from '../primitives/PhotoBackdrop.jsx'
 import SocialsRow from '../SocialsRow.jsx'
 import StickerOverlay from '../StickerOverlay.jsx'
+import { shareLayoutPropTypes } from '../../../propTypes/shareCardProps.js'
 
 const FALLBACK_LOGO = '/share/logo.png'
 const PAPER = '#f4efe6'
@@ -18,6 +20,11 @@ const SUBTLE = '#6b6259'
 
 function Hairline({ accent, style }) {
   return <div style={{ background: accent, height: 4, ...style }} />
+}
+
+Hairline.propTypes = {
+  accent: PropTypes.string,
+  style: PropTypes.object,
 }
 
 function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }) {
@@ -37,6 +44,14 @@ function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }
       {children}
     </div>
   )
+}
+
+SmallCaps.propTypes = {
+  children: PropTypes.node,
+  color: PropTypes.string,
+  size: PropTypes.number,
+  gap: PropTypes.number,
+  style: PropTypes.object,
 }
 
 function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }) {
@@ -314,5 +329,8 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
     </CardFrame>
   )
 }
+
+MinimalSquare.propTypes = shareLayoutPropTypes
+MinimalStory.propTypes = shareLayoutPropTypes
 
 export { MinimalSquare as Square, MinimalStory as Story }

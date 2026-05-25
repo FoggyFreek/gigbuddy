@@ -16,6 +16,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import { deleteVenue, getVenue, getVenueCategoryImpact, updateVenue } from '../api/venues.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
+import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 import VenueFields from '../components/VenueFields.jsx'
 
 const REQUIRED_FIELDS = ['name']
@@ -58,7 +59,11 @@ export default function VenueDetailPage() {
     async (patch) => { await updateVenue(venueId, patch) },
     [venueId]
   )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn)
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(
+    saveFn,
+    600,
+    (patch) => outletCtx.onVenueUpdate?.(venueId, patch)
+  )
 
   useEffect(() => {
     getVenue(venueId)
@@ -103,6 +108,7 @@ export default function VenueDetailPage() {
     setCategorySaving(true)
     try {
       await updateVenue(venueId, { category: newCategory, on_affected_gigs: action })
+      outletCtx.onVenueUpdate?.(venueId, { category: newCategory })
     } finally {
       setCategorySaving(false)
     }
@@ -125,6 +131,7 @@ export default function VenueDetailPage() {
 
   async function handleDelete() {
     await deleteVenue(venueId)
+    outletCtx.onVenueDelete?.(venueId)
     closeView()
   }
 
@@ -132,9 +139,6 @@ export default function VenueDetailPage() {
     await flush()
     closeView()
   }
-
-  const saveLabel = { idle: '', saving: 'Saving…', saved: 'Saved', error: 'Save failed' }[saveStatus]
-  const saveColor = saveStatus === 'error' ? 'error.main' : 'text.secondary'
 
   return (
     <>
@@ -171,9 +175,7 @@ export default function VenueDetailPage() {
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <Typography variant="caption" color={categorySaving ? 'text.secondary' : saveColor}>
-          {categorySaving ? 'Saving…' : saveLabel}
-        </Typography>
+        <SaveStatusLabel status={categorySaving ? 'saving' : saveStatus} />
       </Box>
 
       <Box sx={{ mt: 4 }}>

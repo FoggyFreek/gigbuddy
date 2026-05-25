@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -24,7 +24,7 @@ vi.mock('../api/bandEvents.js', () => ({
 
 import BandEventsPage from '../pages/BandEventsPage.jsx'
 import BandEventDetailPage from '../pages/BandEventDetailPage.jsx'
-import { listBandEvents } from '../api/bandEvents.js'
+import { deleteBandEvent, listBandEvents, getBandEvent, updateBandEvent } from '../api/bandEvents.js'
 import theme from '../theme.js'
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
@@ -68,6 +68,7 @@ describe('BandEventsPage', () => {
   beforeEach(() => {
     listBandEvents.mockReset()
     listBandEvents.mockResolvedValue(EVENTS)
+    deleteBandEvent.mockClear()
   })
 
   it('renders header and Add event button', async () => {
@@ -90,6 +91,36 @@ describe('BandEventsPage', () => {
     expect(screen.getByText('Add band event', { selector: 'h2' })).toBeInTheDocument()
   })
 
+  it('updates the list row when the detail title is saved', async () => {
+    // Provide start_date (required field) so title changes pass validation and trigger a save
+    getBandEvent.mockResolvedValueOnce({
+      id: 1,
+      title: 'Studio session',
+      start_date: '2099-06-15',
+      end_date: null,
+      start_time: null,
+      end_time: null,
+      location: null,
+      notes: '',
+    })
+    wrapWithRoutes({ initialEntries: ['/events/1'] })
+
+    // Wait for detail to load
+    const titleInput = await waitFor(() => screen.getByDisplayValue('Studio session'))
+
+    // Use fireEvent.change to atomically set the new title (avoids clear→type
+    // multi-step sequence that could race with required-field validation)
+    fireEvent.change(titleInput, { target: { value: 'Rehearsal day' } })
+
+    // After debounce fires and save completes, the list should reflect the new title
+    await waitFor(
+      () => expect(screen.getByText(/Rehearsal day/)).toBeInTheDocument(),
+      { timeout: 2000 }
+    )
+    expect(updateBandEvent).toHaveBeenCalledWith(1, expect.objectContaining({ title: 'Rehearsal day' }))
+    expect(listBandEvents).toHaveBeenCalledTimes(1)
+  })
+
   it('renders detail alongside the list at /events/:id and the Close button returns to /events', async () => {
     const user = userEvent.setup()
     wrapWithRoutes({ initialEntries: ['/events/1'] })
@@ -102,5 +133,18 @@ describe('BandEventsPage', () => {
 
     await waitFor(() => expect(screen.queryByText('Band event details')).not.toBeInTheDocument())
     expect(screen.getByRole('heading', { name: /band events/i })).toBeInTheDocument()
+  })
+
+  it('removes an event from the still-mounted list after deleting it in detail', async () => {
+    const user = userEvent.setup()
+    wrapWithRoutes({ initialEntries: ['/events/1'] })
+
+    await waitFor(() => expect(screen.getByText('Band event details')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^delete$/i }))
+
+    await waitFor(() => expect(deleteBandEvent).toHaveBeenCalledWith(1))
+    expect(screen.queryByText('Studio session')).not.toBeInTheDocument()
+    expect(screen.getByText(/no events yet/i)).toBeInTheDocument()
   })
 })

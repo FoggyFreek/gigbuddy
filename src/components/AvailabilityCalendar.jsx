@@ -1,142 +1,30 @@
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
-import '@material/web/menu/menu.js'
-import '@material/web/menu/menu-item.js'
+import { useMemo } from 'react'
+import PropTypes from 'prop-types'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import { useTheme, alpha } from '@mui/material/styles'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
+import { normalizeIsoDate, toIsoDate } from '../utils/availabilityUtils.js'
 import {
-  GIG_STATUS_COLORS,
-  REHEARSAL_STATUS_COLORS,
-  BAND_EVENT_COLOR,
-  toIsoDate,
-  normalizeIsoDate,
-  getMemberColor,
-} from '../utils/availabilityUtils.js'
-import { venueHeadline } from '../utils/venueDisplay.js'
-
-const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-function getISOWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const day = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - day)
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  return Math.ceil(((d - yearStart) / 86400000 + 1) / 7)
-}
-
-function addDays(date, n) {
-  const d = new Date(date)
-  d.setDate(d.getDate() + n)
-  return d
-}
-
-function inRange(dateStr, start, end) {
-  return dateStr >= start && dateStr <= end
-}
-
-function buildCalendarCells(year, month) {
-  const firstOfMonth = new Date(year, month - 1, 1)
-  // day-of-week Monday=0, Sunday=6
-  let dow = firstOfMonth.getDay() - 1
-  if (dow < 0) dow = 6
-  const start = addDays(firstOfMonth, -dow)
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = addDays(start, i)
-    return { date: d, iso: toIsoDate(d), inMonth: d.getMonth() === month - 1 }
-  })
-}
-
-const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>
-  new Date(2000, i, 1).toLocaleString('en', { month: 'long' })
-)
-
-function resolvePaletteColor(theme, color) {
-  if (typeof color !== 'string' || !color.includes('.')) return color
-
-  return color.split('.').reduce((value, key) => value?.[key], theme.palette) || color
-}
-
-function getEventTextColor(theme, backgroundColor) {
-  return theme.palette.getContrastText(resolvePaletteColor(theme, backgroundColor))
-}
-
-function MonthMenu({ year, month, onMonthJump }) {
-  const anchorRef = useRef(null)
-  const menuRef = useRef(null)
-  const [open, setOpen] = useState(false)
-  const theme = useTheme()
-  const uid = useId().replace(/:/g, '')
-
-  const toggle = useCallback(() => setOpen((v) => !v), [])
-
-  useEffect(() => {
-    const menu = menuRef.current
-    if (!menu) return
-    const onClosed = () => setOpen(false)
-    menu.addEventListener('closed', onClosed)
-    return () => menu.removeEventListener('closed', onClosed)
-  }, [])
-
-  useEffect(() => {
-    const menu = menuRef.current
-    if (!menu) return
-    menu.open = open
-  }, [open])
-
-  const handleSelect = useCallback((e) => {
-    const idx = Number(e.currentTarget.dataset.idx)
-    setOpen(false)
-    onMonthJump(year, idx + 1)
-  }, [year, onMonthJump])
-
-  return (
-    <Box sx={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-      <button
-        ref={anchorRef}
-        id={uid}
-        onClick={toggle}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-          fontSize: '1rem',
-          fontWeight: 600,
-          padding: '4px 8px',
-          borderRadius: 4,
-          minWidth: 140,
-          textAlign: 'center',
-          color: theme.palette.text.primary,
-        }}
-      >
-        {MONTH_NAMES[month - 1]} {year}
-      </button>
-      <md-menu
-        ref={menuRef}
-        anchor={uid}
-        positioning="absolute"
-        quick
-      >
-        {MONTH_NAMES.map((name, i) => (
-          <md-menu-item
-            key={i}
-            data-idx={i}
-            selected={i === month - 1}
-            onClick={handleSelect}
-          >
-            <div slot="headline">{name}</div>
-          </md-menu-item>
-        ))}
-      </md-menu>
-    </Box>
-  )
-}
+  DAY_HEADERS,
+  buildCalendarCells,
+  buildCalendarCellViewModel,
+  indexByDate,
+  indexByDateRange,
+} from './calendar/calendarGrid.js'
+import MonthMenu from './calendar/MonthMenu.jsx'
+import CalendarCell from './calendar/CalendarCell.jsx'
+import {
+  memberShape,
+  slotShape,
+  gigShape,
+  rehearsalShape,
+  bandEventShape,
+} from '../propTypes/shared.js'
 
 export default function AvailabilityCalendar({
   year,
@@ -159,21 +47,36 @@ export default function AvailabilityCalendar({
   onMonthJump,
   onExport,
 }) {
-  const theme = useTheme()
   const today = toIsoDate(new Date())
-  const cells = buildCalendarCells(year, month)
-  const gigsByDate = gigs.reduce((acc, g) => {
-    const key = normalizeIsoDate(g.event_date)
-    if (!key) return acc
-    ;(acc[key] ||= []).push(g)
-    return acc
-  }, {})
-  const rehearsalsByDate = rehearsals.reduce((acc, r) => {
-    const key = normalizeIsoDate(r.proposed_date)
-    if (!key) return acc
-    ;(acc[key] ||= []).push(r)
-    return acc
-  }, {})
+  const cells = useMemo(() => buildCalendarCells(year, month), [year, month])
+
+  const gigsByDate = useMemo(
+    () => indexByDate(gigs, (g) => normalizeIsoDate(g.event_date)),
+    [gigs],
+  )
+  const rehearsalsByDate = useMemo(
+    () => indexByDate(rehearsals, (r) => normalizeIsoDate(r.proposed_date)),
+    [rehearsals],
+  )
+  const bandEventsByDate = useMemo(
+    () => indexByDateRange(
+      bandEvents,
+      (ev) => normalizeIsoDate(ev.start_date),
+      (ev) => normalizeIsoDate(ev.end_date) || normalizeIsoDate(ev.start_date),
+      cells,
+    ),
+    [bandEvents, cells],
+  )
+  const slotsByDate = useMemo(
+    () => indexByDateRange(slots, (s) => s.start_date, (s) => s.end_date, cells),
+    [slots, cells],
+  )
+
+  const cellViewModels = useMemo(() => {
+    const cellCtx = { slotsByDate, gigsByDate, rehearsalsByDate, bandEventsByDate, selectionStart, selectedDay, mobile, today }
+    return cells.map((cell, idx) => buildCalendarCellViewModel(cell, idx, cellCtx))
+  }, [cells, slotsByDate, gigsByDate, rehearsalsByDate, bandEventsByDate, selectionStart, selectedDay, mobile, today])
+
   return (
     <Box sx={{ maxWidth: 1024, mx: 'auto' }}>
       <Stack direction="row" sx={{ mb: 1, width: '100%', alignItems: 'center' }}>
@@ -205,337 +108,42 @@ export default function AvailabilityCalendar({
           </Typography>
         ))}
 
-        {cells.map(({ iso, date, inMonth }, idx) => {
-          const isRowStart = idx % 7 === 0
-          const cellSlots = slots.filter((s) => inRange(iso, s.start_date, s.end_date))
-          const cellGigs = gigsByDate[iso] || []
-          const cellRehearsals = rehearsalsByDate[iso] || []
-          const cellBandEvents = bandEvents.filter((ev) =>
-            inRange(iso, normalizeIsoDate(ev.start_date), normalizeIsoDate(ev.end_date) || normalizeIsoDate(ev.start_date))
-          )
-          const isSelected = selectionStart === iso || (mobile && selectedDay === iso)
-          const isToday = iso === today
-          const dow = date.getDay()
-          const isWeekend = dow === 0 || dow === 6
-
-          let bgcolor = 'background.paper'
-          if (mobile) {
-            bgcolor = 'transparent'
-          } else if (isSelected) bgcolor = 'action.selected'
-          else if (!inMonth) bgcolor = 'action.hover'
-          else if (isWeekend) bgcolor = 'background.paper'
-
-          return (
-            <React.Fragment key={iso}>
-              {isRowStart && (
-                <Typography
-                  key={`wk-${iso}`}
-                  variant="caption"
-                  align="center"
-                  color="text.disabled"
-                  sx={{
-                    display: 'flex',
-                    alignItems: mobile ? 'center' : 'flex-start',
-                    justifyContent: 'center',
-                    pt: mobile ? 0 : 0.5,
-                    fontSize: '0.65rem',
-                  }}
-                >
-                  {getISOWeek(date)}
-                </Typography>
-              )}
-            <Box
-              data-date={iso}
-              onClick={(e) => onDayClick(iso, e.shiftKey, e.currentTarget)}
-              sx={{
-                aspectRatio: '1 / 1',
-                borderRadius: 0,
-                bgcolor,
-                border: mobile ? 'none' : '1px solid',
-                borderColor: 'divider',
-                mr: mobile ? 0 : '-1px',
-                mb: mobile ? 0 : '-1px',
-                cursor: 'pointer',
-                p: mobile ? 0 : 0.5,
-                minWidth: 0,
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: mobile ? 'center' : 'stretch',
-                justifyContent: 'flex-start',
-                pt: 0.5,
-                '&:hover': { bgcolor: mobile ? 'transparent' : 'action.hover' },
-              }}
-            >
-              {mobile ? (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    bgcolor: isToday
-                      ? 'primary.main'
-                      : isSelected
-                        ? alpha(theme.palette.primary.main, 0.6)
-                        : 'transparent',
-                    color: (isToday || isSelected)
-                      ? 'primary.contrastText'
-                      : (inMonth ? 'text.primary' : 'text.disabled'),
-                  }}
-                >
-                  <Typography variant="caption" sx={{ lineHeight: 1, color: 'inherit' }}>
-                    {date.getDate()}
-                  </Typography>
-                </Box>
-              ) : isToday ? (
-                <Box
-                  sx={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    bgcolor: 'primary.main',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{ lineHeight: 1, color: 'primary.contrastText', fontSize: '0.7rem', fontWeight: 700 }}
-                  >
-                    {date.getDate()}
-                  </Typography>
-                </Box>
-              ) : (
-                <Typography
-                  variant="caption"
-                  sx={{ display: 'block', color: inMonth ? 'text.primary' : 'text.disabled' }}
-                >
-                  {date.getDate()}
-                </Typography>
-              )}
-              {mobile ? (
-                <Stack
-                  direction="row"
-                  spacing={0.5}
-                  sx={{ mt: 0.5, justifyContent: 'center', flexWrap: 'wrap', gap: 0.5, rowGap: 0.25 }}
-                >
-                  {cellGigs.map((gig) => (
-                    <Box
-                      key={`g-${gig.id}`}
-                      data-gig-id={gig.id}
-                      sx={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        bgcolor: GIG_STATUS_COLORS[gig.status] || 'grey.500',
-                      }}
-                    />
-                  ))}
-                  {cellRehearsals.map((reh) => (
-                    <Box
-                      key={`r-${reh.id}`}
-                      data-rehearsal-id={reh.id}
-                      sx={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        bgcolor: REHEARSAL_STATUS_COLORS[reh.status] || 'grey.400',
-                        opacity: reh.status === 'option' ? 0.7 : 1,
-                      }}
-                    />
-                  ))}
-                  {cellBandEvents.map((ev) => (
-                    <Box
-                      key={`be-${ev.id}`}
-                      data-band-event-id={ev.id}
-                      sx={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        bgcolor: BAND_EVENT_COLOR,
-                      }}
-                    />
-                  ))}
-                  {cellSlots.map((slot) => (
-                    <Box
-                      key={`s-${slot.id}`}
-                      data-slot-id={slot.id}
-                      sx={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        bgcolor: getMemberColor(slot, members),
-                      }}
-                    />
-                  ))}
-                </Stack>
-              ) : (
-                <>
-                  <Stack spacing={0.375} sx={{ mt: 0.25 }}>
-                    {cellGigs.map((gig) => {
-                      const backgroundColor = GIG_STATUS_COLORS[gig.status] || 'grey.500'
-                      return (
-                      <Tooltip
-                        key={gig.id}
-                        title={[
-                          gig.event_description,
-                          venueHeadline(gig.venue ?? gig.festival),
-                          gig.status,
-                        ].filter(Boolean).join(' — ')}
-                      >
-                        <Box
-                          data-gig-id={gig.id}
-                          onClick={(e) => { e.stopPropagation(); onGigClick?.(gig) }}
-                          sx={{
-                            minHeight: 20,
-                            width: '100%',
-                            px: 0.5,
-                            py: 0.25,
-                            borderRadius: 0.5,
-                            bgcolor: backgroundColor,
-                            color: getEventTextColor(theme, backgroundColor),
-                            cursor: onGigClick ? 'pointer' : 'default',
-                            fontSize: '0.7rem',
-                            lineHeight: 1.2,
-                            fontWeight: 600,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {gig.event_description || venueHeadline(gig.venue ?? gig.festival) || 'Gig'}
-                        </Box>
-                      </Tooltip>
-                      )
-                    })}
-                    {cellRehearsals.map((reh) => {
-                      const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
-                      const total = reh.participants?.length ?? 0
-                      const isOption = reh.status === 'option'
-                      const backgroundColor = REHEARSAL_STATUS_COLORS[reh.status] || 'grey.400'
-                      return (
-                        <Tooltip
-                          key={`reh-${reh.id}`}
-                          title={[
-                            `Rehearsal — ${reh.status}`,
-                            reh.location,
-                            `${yes}/${total} yes`,
-                          ].filter(Boolean).join(' — ')}
-                        >
-                          <Box
-                            data-rehearsal-id={reh.id}
-                            onClick={(e) => { e.stopPropagation(); onRehearsalClick?.(reh) }}
-                            sx={{
-                              minHeight: 20,
-                              width: '100%',
-                              px: 0.5,
-                              py: 0.25,
-                              borderRadius: 0.5,
-                              bgcolor: isOption ? 'transparent' : backgroundColor,
-                              border: isOption ? '1px dashed' : 'none',
-                              borderColor: isOption ? 'grey.500' : 'transparent',
-                              color: isOption ? 'text.primary' : getEventTextColor(theme, backgroundColor),
-                              cursor: onRehearsalClick ? 'pointer' : 'default',
-                              fontSize: '0.7rem',
-                              lineHeight: 1.2,
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {`Reh ${yes}/${total}`}
-                          </Box>
-                        </Tooltip>
-                      )
-                    })}
-                    {cellBandEvents.map((ev) => (
-                      <Tooltip
-                        key={`be-${ev.id}`}
-                        title={[ev.title, ev.location].filter(Boolean).join(' — ')}
-                      >
-                        <Box
-                          data-band-event-id={ev.id}
-                          onClick={(e) => { e.stopPropagation(); onBandEventClick?.(ev) }}
-                          sx={{
-                            minHeight: 20,
-                            width: '100%',
-                            px: 0.5,
-                            py: 0.25,
-                            borderRadius: 0.5,
-                            bgcolor: BAND_EVENT_COLOR,
-                            color: getEventTextColor(theme, BAND_EVENT_COLOR),
-                            cursor: onBandEventClick ? 'pointer' : 'default',
-                            fontSize: '0.7rem',
-                            lineHeight: 1.2,
-                            fontWeight: 600,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {ev.title}
-                        </Box>
-                      </Tooltip>
-                    ))}
-                  </Stack>
-                  <Stack spacing={0.375} sx={{ mt: 0.375 }}>
-                    {cellSlots.map((slot) => {
-                      const color = getMemberColor(slot, members)
-                      const isUnavailable = slot.status === 'unavailable'
-                      const memberName = slot.band_member_id === null
-                        ? 'Band'
-                        : members.find((m) => m.id === slot.band_member_id)?.name || ''
-                      return (
-                        <Tooltip
-                          key={slot.id}
-                          title={[
-                            slot.band_member_id === null ? 'Band-wide' : memberName,
-                            slot.status,
-                            slot.reason,
-                          ].filter(Boolean).join(' — ')}
-                        >
-                          <Box
-                            data-slot-id={slot.id}
-                            onClick={(e) => { e.stopPropagation(); onSlotClick(slot) }}
-                            sx={{
-                              minHeight: 20,
-                              width: '100%',
-                              px: 0.5,
-                              py: 0.25,
-                              borderRadius: 0.5,
-                              bgcolor: color,
-                              color: getEventTextColor(theme, color),
-                              fontSize: '0.7rem',
-                              lineHeight: 1.2,
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              cursor: 'pointer',
-                              backgroundImage: isUnavailable
-                                ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.35) 3px, rgba(0,0,0,0.35) 6px)'
-                                : 'none',
-                            }}
-                          >
-                            {memberName}
-                          </Box>
-                        </Tooltip>
-                      )
-                    })}
-                  </Stack>
-                </>
-              )}
-            </Box>
-            </React.Fragment>
-          )
-        })}
+        {cellViewModels.map((cell) => (
+          <CalendarCell
+            key={cell.iso}
+            cell={cell}
+            members={members}
+            mobile={mobile}
+            onDayClick={onDayClick}
+            onSlotClick={onSlotClick}
+            onGigClick={onGigClick}
+            onRehearsalClick={onRehearsalClick}
+            onBandEventClick={onBandEventClick}
+          />
+        ))}
       </Box>
     </Box>
   )
+}
+
+AvailabilityCalendar.propTypes = {
+  year: PropTypes.number.isRequired,
+  month: PropTypes.number.isRequired,
+  slots: PropTypes.arrayOf(slotShape).isRequired,
+  gigs: PropTypes.arrayOf(gigShape),
+  rehearsals: PropTypes.arrayOf(rehearsalShape),
+  bandEvents: PropTypes.arrayOf(bandEventShape),
+  members: PropTypes.arrayOf(memberShape).isRequired,
+  selectionStart: PropTypes.string,
+  selectedDay: PropTypes.string,
+  mobile: PropTypes.bool,
+  onDayClick: PropTypes.func.isRequired,
+  onSlotClick: PropTypes.func.isRequired,
+  onGigClick: PropTypes.func,
+  onRehearsalClick: PropTypes.func,
+  onBandEventClick: PropTypes.func,
+  onPrev: PropTypes.func.isRequired,
+  onNext: PropTypes.func.isRequired,
+  onMonthJump: PropTypes.func.isRequired,
+  onExport: PropTypes.func,
 }

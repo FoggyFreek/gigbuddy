@@ -27,7 +27,7 @@ import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 25
 const COLUMN_COUNT = 7
 
 const ALL_CATEGORIES = ['venue', 'festival']

@@ -35,6 +35,14 @@ export default function VenuesPage() {
     }
   }, [])
 
+  const handleVenueUpdate = useCallback((id, patch) => {
+    setVenues((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)))
+  }, [])
+
+  const handleVenueDelete = useCallback((id) => {
+    setVenues((prev) => prev.filter((v) => v.id !== id))
+  }, [])
+
   useEffect(() => { load() }, [load])
 
   function handleClose() {
@@ -43,7 +51,10 @@ export default function VenuesPage() {
   }
 
   return (
-    <SplitView basePath="/venues">
+    <SplitView
+      basePath="/venues"
+      outletContext={{ onVenueUpdate: handleVenueUpdate, onVenueDelete: handleVenueDelete }}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Venues

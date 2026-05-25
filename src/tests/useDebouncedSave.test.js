@@ -70,4 +70,43 @@ describe('useDebouncedSave', () => {
     await act(async () => { await result.current.flush() })
     expect(saveFn).not.toHaveBeenCalled()
   })
+
+  it('calls onSaved with the payload after a successful save', async () => {
+    const saveFn = vi.fn().mockResolvedValue(undefined)
+    const onSaved = vi.fn()
+    const { result } = renderHook(() => useDebouncedSave(saveFn, 300, onSaved))
+
+    act(() => { result.current.schedule({ name: 'Bob' }) })
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    expect(onSaved).toHaveBeenCalledTimes(1)
+    expect(onSaved).toHaveBeenCalledWith({ name: 'Bob' })
+  })
+
+  it('calls onSaved with the merged patch when multiple fields are scheduled', async () => {
+    const saveFn = vi.fn().mockResolvedValue(undefined)
+    const onSaved = vi.fn()
+    const { result } = renderHook(() => useDebouncedSave(saveFn, 300, onSaved))
+
+    act(() => {
+      result.current.schedule({ name: 'Bob' })
+      result.current.schedule({ email: 'bob@test.com' })
+    })
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    expect(onSaved).toHaveBeenCalledTimes(1)
+    expect(onSaved).toHaveBeenCalledWith({ name: 'Bob', email: 'bob@test.com' })
+  })
+
+  it('does not call onSaved when saveFn rejects', async () => {
+    const saveFn = vi.fn().mockRejectedValue(new Error('Network error'))
+    const onSaved = vi.fn()
+    const { result } = renderHook(() => useDebouncedSave(saveFn, 300, onSaved))
+
+    act(() => { result.current.schedule({ name: 'Bob' }) })
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    expect(result.current.status).toBe('error')
+    expect(onSaved).not.toHaveBeenCalled()
+  })
 })
