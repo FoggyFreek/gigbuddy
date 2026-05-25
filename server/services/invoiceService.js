@@ -120,15 +120,22 @@ function createUpdateBuilder() {
   }
 }
 
+// Copies the straight-through columns into the update. discount_cents is
+// deliberately NOT here: it is a derived column written only by recomputeTotals
+// (the stored value is the *effective* discount), so assigning it here too would
+// produce a duplicate column in the UPDATE. It still counts as a content field
+// (see hasContentChange) so a discount_cents-only PATCH triggers a recompute.
 function collectSimpleFields(body, builder) {
-  let contentChanged = false
   for (const key of SIMPLE_PATCH_FIELDS) {
-    if (key in body) {
-      builder.set(key, body[key])
-      if (CONTENT_FIELDS_SET.has(key)) contentChanged = true
-    }
+    if (key in body) builder.set(key, body[key])
   }
-  return contentChanged
+}
+
+// True when the patch touches any field of the invoice content model (lines,
+// discount inputs incl. discount_cents, customer fields, …) — i.e. anything
+// that should re-derive totals and re-render the PDF.
+function hasContentChange(body) {
+  return Object.keys(body).some((key) => CONTENT_FIELDS_SET.has(key))
 }
 
 function applyStatusFields(body, existing, builder) {
@@ -183,10 +190,10 @@ async function runPatchTransaction({ pool, tenantId, invoiceId, body, existing, 
   try {
     await client.query('BEGIN')
     const builder = createUpdateBuilder()
-    let contentChanged = collectSimpleFields(body, builder)
+    collectSimpleFields(body, builder)
+    const contentChanged = hasContentChange(body)
 
     if ('lines' in body) {
-      contentChanged = true
       const lines = normalizeLines(body.lines)
       if (!lines.length) {
         await client.query('ROLLBACK')

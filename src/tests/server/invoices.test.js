@@ -326,6 +326,31 @@ describe('invoices — discount', () => {
     expect(patched.body.tax_cents).toBe(3150)
     expect(patched.body.total_cents).toBe(38150)
   })
+
+  it('PATCH with only discount_cents recomputes totals on a eur-discount invoice', async () => {
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({ discount_type: 'eur', discount_cents: 10000 })).expect(201)
+    expect(created.body.total_cents).toBe(43600)
+
+    const patched = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
+      .send({ discount_cents: 15000 })
+    expect(patched.status).toBe(200)
+    // subtotal=50000, eur=15000 → net 35000; VAT round(35000*9/100)=3150; total 38150
+    expect(patched.body.discount_cents).toBe(15000)
+    expect(patched.body.tax_cents).toBe(3150)
+    expect(patched.body.total_cents).toBe(38150)
+  })
+
+  it('PATCH with only discount_cents is blocked on a finalized invoice (409)', async () => {
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({ discount_type: 'eur', discount_cents: 10000 })).expect(201)
+    await asUserA(request(app).patch(`/api/invoices/${created.body.id}`)).send({ status: 'sent' }).expect(200)
+
+    const res = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
+      .send({ discount_cents: 5000 })
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('invoice_finalized')
+  })
 })
 
 describe('invoices — PATCH gig_id + recompute', () => {
