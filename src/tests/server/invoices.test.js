@@ -353,6 +353,22 @@ describe('invoices — discount', () => {
   })
 })
 
+describe('invoices — PATCH field taxonomy', () => {
+  it('SIMPLE_PATCH_FIELDS is exactly CONTENT_FIELDS minus the derived/replaced columns', async () => {
+    const v = await import('../../../server/validators/invoiceValidators.js')
+    // discount_cents and lines are part of the content model...
+    expect(v.CONTENT_FIELDS).toContain('discount_cents')
+    expect(v.CONTENT_FIELDS).toContain('lines')
+    // ...but are intentionally not straight-through SET assignments.
+    expect(v.SIMPLE_PATCH_FIELDS).not.toContain('discount_cents')
+    expect(v.SIMPLE_PATCH_FIELDS).not.toContain('lines')
+    // The two lists are derived from one another, so they cannot drift.
+    expect(v.SIMPLE_PATCH_FIELDS).toEqual(
+      v.CONTENT_FIELDS.filter((f) => !v.DERIVED_CONTENT_FIELDS.has(f)),
+    )
+  })
+})
+
 describe('invoices — PATCH gig_id + recompute', () => {
   it('normalizes a numeric-string gig_id and persists the integer', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)

@@ -29,16 +29,18 @@ export const FINALIZED_LOCKED_FIELDS_SET = new Set(CONTENT_FIELDS.filter((field)
 export const STATUS_VALUES = new Set(['draft', 'sent', 'paid', 'void'])
 export const PAYMENT_TERM_DAYS = new Set([7, 14, 30, 60])
 
-// Columns the PATCH handler copies straight through (everything except lines,
-// which need their own replacement, and the derived total columns).
-export const SIMPLE_PATCH_FIELDS = [
-  'gig_id', 'issue_date', 'due_date', 'payment_term_days',
-  'customer_name', 'customer_contact_title', 'customer_contact_given_name', 'customer_contact_family_name',
-  'customer_address_street', 'customer_address_postal_code',
-  'customer_address_city', 'customer_address_country', 'customer_email',
-  'customer_kvk', 'customer_tax_id', 'memo', 'tax_inclusive',
-  'discount_type', 'discount_pct', 'invert_logo',
-]
+// Content fields the PATCH does NOT copy through verbatim:
+//   - lines:          replaced wholesale in the invoice_lines table
+//   - discount_cents: a DERIVED column — recomputeTotals writes the *effective*
+//                     discount, so it's never copied from the raw request body.
+// They stay in CONTENT_FIELDS (so they lock after finalization and a PATCH that
+// touches them still triggers a totals recompute); they just aren't straight
+// SET assignments.
+export const DERIVED_CONTENT_FIELDS = new Set(['lines', 'discount_cents'])
+
+// Columns the PATCH handler copies straight through. Derived from CONTENT_FIELDS
+// (minus the derived/replaced ones) so the two lists can't drift apart.
+export const SIMPLE_PATCH_FIELDS = CONTENT_FIELDS.filter((field) => !DERIVED_CONTENT_FIELDS.has(field))
 
 // Mollie payment methods we explicitly accept; restricting up front gives a
 // clearer error than a generic Mollie API error and prevents typos from
