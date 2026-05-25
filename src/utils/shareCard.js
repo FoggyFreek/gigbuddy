@@ -1,5 +1,3 @@
-import * as htmlToImage from 'html-to-image'
-import jsPDF from 'jspdf'
 import { venueHeadline, venueCity } from './venueDisplay.js'
 
 let shareCardFontCssPromise = null
@@ -150,6 +148,8 @@ export function formatEventName(gig) {
 }
 
 export async function renderNodeToBlob(node, { width, height }) {
+  const htmlToImage = await import('html-to-image')
+
   if (document.fonts && 'ready' in document.fonts) {
     await document.fonts.ready
   }
@@ -203,7 +203,11 @@ export function buildTourShareFilename(year, formatId) {
 }
 
 export async function renderLayeredPdf(node, { width, height }) {
-  const fontEmbedCSS = await getShareCardFontCss()
+  const [{ default: jsPDF }, htmlToImage, fontEmbedCSS] = await Promise.all([
+    import('jspdf'),
+    import('html-to-image'),
+    getShareCardFontCss(),
+  ])
 
   // Collect unique layers in DOM order
   const seen = new Set()
