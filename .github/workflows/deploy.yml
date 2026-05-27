@@ -25,6 +25,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            cd /opt/gigbuddy  
             cat > .env <<'EOF'
             PGHOST=postgres
             PGDATABASE=${{ secrets.PGDATABASE }}
