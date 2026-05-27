@@ -39,7 +39,7 @@ export async function truncateAll() {
       band_events, availability_slots,
       band_members,
       profile_links,
-      email_templates, venues, contacts, share_photos,
+      email_templates, venue_contacts, venues, contact_notes, contacts, share_photos,
       memberships,
       tenant_invites,
       push_subscriptions,

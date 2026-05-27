@@ -168,7 +168,6 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   const {
     event_date, event_description, venue_id, festival_id, start_time, end_time, status,
-    contact_name, contact_email, contact_phone,
     has_pa_system, has_drumkit, has_stage_lights,
   } = req.body
   if (!event_date || !event_description) {
@@ -204,9 +203,8 @@ router.post('/', async (req, res) => {
     const { rows } = await client.query(
       `WITH inserted AS (
          INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id, start_time, end_time, status,
-                           contact_name, contact_email, contact_phone,
                            has_pa_system, has_drumkit, has_stage_lights)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *
        )
        SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
@@ -217,7 +215,6 @@ router.post('/', async (req, res) => {
         req.tenantId,
         event_date, event_description, venueId, festivalId,
         start_time || null, end_time || null, finalStatus,
-        contact_name || null, contact_email || null, contact_phone || null,
         !!has_pa_system, !!has_drumkit, !!has_stage_lights,
       ],
     )

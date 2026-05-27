@@ -15,3 +15,11 @@ export const searchVenues = (q, category) => {
 }
 export const getVenueCategoryImpact = (id, newCategory) =>
   api(`/${id}/category-impact?new_category=${encodeURIComponent(newCategory)}`)
+
+export const listVenueContacts = (id) => api(`/${id}/contacts`)
+export const addVenueContact = (id, contactId) =>
+  api(`/${id}/contacts`, { method: 'POST', body: JSON.stringify({ contact_id: contactId }) })
+export const setVenueContactPrimary = (id, contactId, isPrimary) =>
+  api(`/${id}/contacts/${contactId}`, { method: 'PATCH', body: JSON.stringify({ is_primary: isPrimary }) })
+export const removeVenueContact = (id, contactId) =>
+  api(`/${id}/contacts/${contactId}`, { method: 'DELETE' })

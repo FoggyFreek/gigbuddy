@@ -23,8 +23,8 @@ const EMPTY_FORM = {
   category: 'press',
 }
 
-export default function ContactFormModal({ mode, contactId, onClose, onDelete }) {
-  const [form, setForm] = useState(EMPTY_FORM)
+export default function ContactFormModal({ mode, contactId, onClose, onDelete, initial, onCreated }) {
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...(initial || {}) }))
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -62,12 +62,13 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete })
     const errs = {}
     if (!form.name.trim()) errs.name = 'Required'
     if (Object.keys(errs).length) { setErrors(errs); return }
-    await createContact({
+    const contact = await createContact({
       name:     form.name.trim(),
       email:    form.email || null,
       phone:    form.phone || null,
       category: form.category,
     })
+    onCreated?.(contact)
     onClose()
   }
 

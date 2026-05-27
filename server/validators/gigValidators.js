@@ -7,7 +7,7 @@ export const VALID_VOTES = ['yes', 'no']
 export const GIG_PATCH_FIELDS = [
   'event_date', 'event_description', 'venue_id', 'festival_id', 'event_link',
   'start_time', 'end_time', 'status', 'booking_fee_cents', 'admission',
-  'ticket_link', 'notes', 'contact_name', 'contact_email', 'contact_phone',
+  'ticket_link', 'notes',
   'has_pa_system', 'has_drumkit', 'has_stage_lights',
 ]
 

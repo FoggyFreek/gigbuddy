@@ -16,7 +16,6 @@ import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
@@ -66,9 +65,6 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
     admission: 'free',
     ticket_link: '',
     notes: '',
-    contact_name: '',
-    contact_email: '',
-    contact_phone: '',
     has_pa_system: false,
     has_drumkit: false,
     has_stage_lights: false,
@@ -81,20 +77,12 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
   const [gig, setGig] = useState(null)
   const [members, setMembers] = useState([])
   const [addMemberId, setAddMemberId] = useState('')
-  const [emailCopied, setEmailCopied] = useState(false)
   const [bannerPath, setBannerPath] = useState(null)
   const [bannerBusy, setBannerBusy] = useState(false)
   const [bannerError, setBannerError] = useState(null)
   const [cropOpen, setCropOpen] = useState(false)
   const [cropImageSrc, setCropImageSrc] = useState(null)
   const bannerInputRef = useRef(null)
-
-  const handleCopyEmail = () => {
-    if (!form.contact_email) return
-    navigator.clipboard.writeText(form.contact_email)
-    setEmailCopied(true)
-    setTimeout(() => setEmailCopied(false), 1500)
-  }
 
   const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
   const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
@@ -134,9 +122,6 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
       admission: g.admission ?? 'free',
       ticket_link: g.ticket_link ?? '',
       notes: g.notes || '',
-      contact_name: g.contact_name || '',
-      contact_email: g.contact_email || '',
-      contact_phone: g.contact_phone || '',
       has_pa_system: !!g.has_pa_system,
       has_drumkit: !!g.has_drumkit,
       has_stage_lights: !!g.has_stage_lights,
@@ -425,53 +410,6 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
             />
           </Grid>
         )}
-
-        {/* Contact person */}
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-            Contact person
-          </Typography>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <TextField
-            label="Name"
-            fullWidth
-            value={form.contact_name}
-            onChange={(e) => handleChange('contact_name', e.target.value)}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <TextField
-            label="Email"
-            type="email"
-            fullWidth
-            value={form.contact_email}
-            onChange={(e) => handleChange('contact_email', e.target.value)}
-            slotProps={{
-              input: {
-                endAdornment: form.contact_email ? (
-                  <InputAdornment position="end">
-                    <Tooltip title={emailCopied ? 'Copied!' : 'Copy email'}>
-                      <IconButton size="small" onClick={handleCopyEmail} edge="end">
-                        <ContentCopyIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </InputAdornment>
-                ) : null,
-              },
-            }}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <TextField
-            label="Phone"
-            type="tel"
-            fullWidth
-            value={form.contact_phone}
-            onChange={(e) => handleChange('contact_phone', e.target.value)}
-          />
-        </Grid>
 
         {/* Equipment */}
         <Grid size={12}>

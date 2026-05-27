@@ -36,9 +36,6 @@ const EMPTY_FORM = {
   end_time: '',
   status: 'option',
   notes: '',
-  contact_name: '',
-  contact_email: '',
-  contact_phone: '',
   has_pa_system: false,
   has_drumkit: false,
   has_stage_lights: false,
@@ -95,9 +92,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
       start_time: form.start_time || null,
       end_time: form.end_time || null,
       status: form.status,
-      contact_name: form.contact_name || null,
-      contact_email: form.contact_email || null,
-      contact_phone: form.contact_phone || null,
       has_pa_system: form.has_pa_system,
       has_drumkit: form.has_drumkit,
       has_stage_lights: form.has_stage_lights,
@@ -207,39 +201,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
                   <MenuItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
                 ))}
               </TextField>
-            </Grid>
-
-            <Grid size={12}>
-              <Divider sx={{ my: 1 }} />
-              <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                Contact person
-              </Typography>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField
-                label="Name"
-                fullWidth
-                value={form.contact_name}
-                onChange={(e) => handleChange('contact_name', e.target.value)}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField
-                label="Email"
-                type="email"
-                fullWidth
-                value={form.contact_email}
-                onChange={(e) => handleChange('contact_email', e.target.value)}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField
-                label="Phone"
-                type="tel"
-                fullWidth
-                value={form.contact_phone}
-                onChange={(e) => handleChange('contact_phone', e.target.value)}
-              />
             </Grid>
 
             <Grid size={12}>

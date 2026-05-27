@@ -8,12 +8,15 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import { deleteContact, getContact, updateContact } from '../api/contacts.js'
+import DeleteIcon from '@mui/icons-material/Delete'
+import { addContactNote, deleteContactNote, deleteContact, getContact, updateContact } from '../api/contacts.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import ContactFields from '../components/ContactFields.jsx'
@@ -34,6 +37,8 @@ export default function ContactDetailPage() {
   }
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', category: 'press' })
+  const [notes, setNotes] = useState([])
+  const [newNote, setNewNote] = useState('')
   const [loading, setLoading] = useState(true)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
@@ -56,9 +61,23 @@ export default function ContactDetailPage() {
           phone:    c.phone || '',
           category: c.category || 'press',
         })
+        setNotes(c.notes || [])
       })
       .finally(() => setLoading(false))
   }, [contactId])
+
+  async function handleAddNote() {
+    const trimmed = newNote.trim()
+    if (!trimmed) return
+    const note = await addContactNote(contactId, trimmed)
+    setNotes((prev) => [note, ...prev])
+    setNewNote('')
+  }
+
+  async function handleDeleteNote(noteId) {
+    await deleteContactNote(contactId, noteId)
+    setNotes((prev) => prev.filter((n) => n.id !== noteId))
+  }
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -101,13 +120,68 @@ export default function ContactDetailPage() {
           <CircularProgress />
         </Box>
       ) : (
-        <Grid container spacing={2}>
-          <ContactFields
-            form={form}
-            onChange={handleChange}
-            errors={getRequiredErrors(form, REQUIRED_FIELDS)}
-          />
-        </Grid>
+        <>
+          <Grid container spacing={2}>
+            <ContactFields
+              form={form}
+              onChange={handleChange}
+              errors={getRequiredErrors(form, REQUIRED_FIELDS)}
+            />
+          </Grid>
+
+          <Divider sx={{ my: 3 }} />
+
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+            Notes
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Add a note…"
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+            />
+            <Button
+              variant="contained"
+              disabled={!newNote.trim()}
+              onClick={handleAddNote}
+              sx={{ alignSelf: 'flex-end' }}
+            >
+              Add
+            </Button>
+          </Box>
+
+          {notes.map((n) => (
+            <Box
+              key={n.id}
+              sx={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1,
+                mb: 1.5,
+                p: 1.5,
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+              }}
+            >
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {new Date(n.created_at).toLocaleString()}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
+                  {n.note}
+                </Typography>
+              </Box>
+              <IconButton size="small" onClick={() => handleDeleteNote(n.id)} aria-label="delete note">
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
+        </>
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>

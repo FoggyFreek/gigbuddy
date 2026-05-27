@@ -2,20 +2,37 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import { deleteVenue, getVenue, getVenueCategoryImpact, updateVenue } from '../api/venues.js'
+import DeleteIcon from '@mui/icons-material/Delete'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import StarIcon from '@mui/icons-material/Star'
+import StarBorderIcon from '@mui/icons-material/StarBorder'
+import {
+  addVenueContact,
+  deleteVenue,
+  getVenue,
+  getVenueCategoryImpact,
+  listVenueContacts,
+  removeVenueContact,
+  setVenueContactPrimary,
+  updateVenue,
+} from '../api/venues.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
+import ContactPicker from '../components/ContactPicker.jsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 import VenueFields from '../components/VenueFields.jsx'
 
@@ -50,6 +67,7 @@ export default function VenueDetailPage() {
     phone: '',
     email: '',
   })
+  const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [categoryChange, setCategoryChange] = useState(null) // { newCategory, prevCategory, affectedGigs }
@@ -88,6 +106,31 @@ export default function VenueDetailPage() {
       })
       .finally(() => setLoading(false))
   }, [venueId])
+
+  useEffect(() => {
+    listVenueContacts(venueId).then(setContacts).catch(() => setContacts([]))
+  }, [venueId])
+
+  async function handleAddContact(contact) {
+    if (contacts.some((c) => c.id === contact.id)) return
+    const linked = await addVenueContact(venueId, contact.id)
+    setContacts((prev) => [...prev, linked])
+  }
+
+  async function handleSetPrimary(contactId, isPrimary) {
+    await setVenueContactPrimary(venueId, contactId, isPrimary)
+    setContacts((prev) =>
+      prev.map((c) => ({
+        ...c,
+        is_primary: c.id === contactId ? isPrimary : false,
+      })),
+    )
+  }
+
+  async function handleRemoveContact(contactId) {
+    await removeVenueContact(venueId, contactId)
+    setContacts((prev) => prev.filter((c) => c.id !== contactId))
+  }
 
   async function handleCategoryChangeCheck(newCategory, prevCategory) {
     try {
@@ -165,13 +208,81 @@ export default function VenueDetailPage() {
           <CircularProgress />
         </Box>
       ) : (
-        <Grid container spacing={2}>
-          <VenueFields
-            form={form}
-            onChange={handleChange}
-            errors={getRequiredErrors(form, REQUIRED_FIELDS)}
-          />
-        </Grid>
+        <>
+          <Grid container spacing={2}>
+            <VenueFields
+              form={form}
+              onChange={handleChange}
+              errors={getRequiredErrors(form, REQUIRED_FIELDS)}
+            />
+          </Grid>
+
+          <Divider sx={{ my: 3 }} />
+
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+            Contacts
+          </Typography>
+
+          {contacts.map((c) => (
+            <Box
+              key={c.id}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                mb: 1,
+                p: 1,
+                pl: 1.5,
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+              }}
+            >
+              <Chip label={c.category} size="small" variant="outlined" sx={{ alignSelf: 'center' }} />
+              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Typography variant="body2" noWrap>
+                  {c.name}{c.email ? ` (${c.email})` : ''}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {c.phone || ' '}
+                </Typography>
+              </Box>
+              <Tooltip title={c.is_primary ? 'Primary contact — click to unset' : 'Mark as primary'}>
+                <IconButton
+                  size="small"
+                  color={c.is_primary ? 'warning' : 'default'}
+                  onClick={() => handleSetPrimary(c.id, !c.is_primary)}
+                  aria-label={c.is_primary ? 'unset primary' : 'set primary'}
+                >
+                  {c.is_primary ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Open contact">
+                <IconButton
+                  size="small"
+                  onClick={async () => { await flush(); navigate(`/contacts/${c.id}`) }}
+                  aria-label="open contact"
+                >
+                  <OpenInNewIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <IconButton
+                size="small"
+                onClick={() => handleRemoveContact(c.id)}
+                aria-label="remove contact"
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
+
+          <Box sx={{ mt: 1 }}>
+            <ContactPicker
+              onSelect={handleAddContact}
+              excludeIds={contacts.map((c) => c.id)}
+            />
+          </Box>
+        </>
       )}
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
