@@ -622,7 +622,7 @@ function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting,
 // RFC 5322 "specials" that force a display name to be quoted or MIME-encoded.
 const HEADER_ADDR_SPECIALS_RE = /[()<>[\]:;@\\,."]/
 // Conservative email check: no whitespace/control chars, a single @, a dotted domain.
-const HEADER_EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/
+const HEADER_EMAIL_RE = /^[^\s@<>]+@[^.\s@<>]+(?:\.[^.\s@<>]+)+$/
 
 function stripHeaderControlChars(value) {
   // Drop CR, LF, and other C0 control chars so user fields can't inject headers.
