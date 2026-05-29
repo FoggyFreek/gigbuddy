@@ -25,6 +25,7 @@ import GigAttachments from './GigAttachments.jsx'
 import GigTasks from './GigTasks.jsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
 import GigParticipantsSection from './GigParticipantsSection.jsx'
+import GigContactsSection from './GigContactsSection.jsx'
 import ImageCropDialog from './ImageCropDialog.jsx'
 import VenuePicker from './VenuePicker.jsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
@@ -410,6 +411,20 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
             />
           </Grid>
         )}
+
+        {/* Contacts */}
+        <Grid size={12}>
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+            Contacts
+          </Typography>
+          <GigContactsSection
+            gigId={gigId}
+            venueId={selectedVenue?.id ?? null}
+            festivalId={selectedFestival?.id ?? null}
+            flush={flush}
+          />
+        </Grid>
 
         {/* Equipment */}
         <Grid size={12}>

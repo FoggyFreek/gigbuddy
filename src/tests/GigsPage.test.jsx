@@ -12,6 +12,14 @@ vi.mock('../api/gigs.js', () => ({
   createGig: vi.fn(),
   updateGig: vi.fn(),
   deleteGig: vi.fn().mockResolvedValue({}),
+  listGigContacts: vi.fn().mockResolvedValue([]),
+  addGigContact: vi.fn().mockResolvedValue({}),
+  setGigContactPrimary: vi.fn().mockResolvedValue({}),
+  removeGigContact: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock('../api/venues.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('../api/availability.js', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),

@@ -469,4 +469,114 @@ router.patch('/:id/participants/:bandMemberId', async (req, res) => {
   res.json({ ...gig, tasks, participants: byGig.get(gigId) || [] })
 })
 
+// --- Gig contacts (mirrors venue_contacts; links are informational) ---
+
+async function getContactInTenant(tenantId, contactId) {
+  const { rows } = await pool.query(
+    'SELECT id, name, email, phone, category FROM contacts WHERE id = $1 AND tenant_id = $2',
+    [contactId, tenantId],
+  )
+  return rows[0] ?? null
+}
+
+router.get('/:id/contacts', async (req, res) => {
+  const gigId = requireId(req, res); if (gigId === null) return
+  if (!(await gigExistsInTenant(pool, gigId, req.tenantId))) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+
+  const { rows } = await pool.query(
+    `SELECT c.id, c.name, c.email, c.phone, c.category, gc.is_primary
+       FROM gig_contacts gc
+       JOIN contacts c ON c.id = gc.contact_id AND c.tenant_id = gc.tenant_id
+      WHERE gc.gig_id = $1 AND gc.tenant_id = $2
+      ORDER BY gc.is_primary DESC, c.name ASC`,
+    [gigId, req.tenantId],
+  )
+  res.json(rows)
+})
+
+router.post('/:id/contacts', async (req, res) => {
+  const gigId = requireId(req, res); if (gigId === null) return
+  const contactId = parseId(req.body.contact_id)
+  if (contactId === null) return res.status(400).json({ error: 'contact_id is required' })
+
+  if (!(await gigExistsInTenant(pool, gigId, req.tenantId))) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+  const contact = await getContactInTenant(req.tenantId, contactId)
+  if (!contact) return res.status(404).json({ error: 'Not found' })
+
+  try {
+    await pool.query(
+      'INSERT INTO gig_contacts (gig_id, contact_id, tenant_id) VALUES ($1, $2, $3)',
+      [gigId, contactId, req.tenantId],
+    )
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Contact is already linked to this gig' })
+    throw err
+  }
+  res.status(201).json({ ...contact, is_primary: false })
+})
+
+router.patch('/:id/contacts/:contactId', async (req, res) => {
+  const gigId = requireId(req, res); if (gigId === null) return
+  const contactId = parseId(req.params.contactId)
+  if (contactId === null) return res.status(400).json({ error: 'Invalid contactId' })
+
+  if (typeof req.body.is_primary !== 'boolean') {
+    return res.status(400).json({ error: 'is_primary (boolean) is required' })
+  }
+  const makePrimary = req.body.is_primary
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const { rows: links } = await client.query(
+      'SELECT contact_id FROM gig_contacts WHERE gig_id = $1 AND tenant_id = $2 FOR UPDATE',
+      [gigId, req.tenantId],
+    )
+    if (!links.some((link) => link.contact_id === contactId)) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Not found' })
+    }
+
+    if (makePrimary) {
+      await client.query(
+        'UPDATE gig_contacts SET is_primary = false WHERE gig_id = $1 AND tenant_id = $2 AND is_primary',
+        [gigId, req.tenantId],
+      )
+    }
+
+    const { rows } = await client.query(
+      `UPDATE gig_contacts SET is_primary = $3
+        WHERE gig_id = $1 AND contact_id = $2 AND tenant_id = $4
+        RETURNING contact_id, is_primary`,
+      [gigId, contactId, makePrimary, req.tenantId],
+    )
+    await client.query('COMMIT')
+    res.json(rows[0])
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    if (err.code === '23505') return res.status(409).json({ error: 'Another contact is already primary' })
+    throw err
+  } finally {
+    client.release()
+  }
+})
+
+router.delete('/:id/contacts/:contactId', async (req, res) => {
+  const gigId = requireId(req, res); if (gigId === null) return
+  const contactId = parseId(req.params.contactId)
+  if (contactId === null) return res.status(400).json({ error: 'Invalid contactId' })
+
+  const { rowCount } = await pool.query(
+    'DELETE FROM gig_contacts WHERE gig_id = $1 AND contact_id = $2 AND tenant_id = $3',
+    [gigId, contactId, req.tenantId],
+  )
+  if (!rowCount) return res.status(404).json({ error: 'Not found' })
+  res.status(204).end()
+})
+
 export default router

@@ -99,8 +99,8 @@ export default function AvailabilityCalendar({
         )}
       </Stack>
 
-      <Card sx={{ borderRadius: 3, display: { xs: 'none', sm: 'block' } }}>
-        <Box sx={{ p: 2, display: 'grid', gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}>
+      {mobile ? (
+        <Box sx={{ display: 'grid', gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}>
           <Typography variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
             Wk
           </Typography>
@@ -124,32 +124,34 @@ export default function AvailabilityCalendar({
             />
           ))}
         </Box>
-      </Card>
+      ) : (
+        <Card variant="outlined" sx={{ borderRadius: '12px' }}>
+          <Box sx={{ pt: 0.5, pr: '22px', pb: 2, pl: 0, display: 'grid', gridTemplateColumns: '22px repeat(7, 1fr)', gap: 0 }}>
+            <Typography variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
+              Wk
+            </Typography>
+            {DAY_HEADERS.map((d) => (
+              <Typography key={d} variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
+                {d}
+              </Typography>
+            ))}
 
-      <Box sx={{ display: { xs: 'grid', sm: 'none' }, gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}>
-        <Typography variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
-          Wk
-        </Typography>
-        {DAY_HEADERS.map((d) => (
-          <Typography key={d} variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
-            {d}
-          </Typography>
-        ))}
-
-        {cellViewModels.map((cell) => (
-          <CalendarCell
-            key={cell.iso}
-            cell={cell}
-            members={members}
-            mobile={mobile}
-            onDayClick={onDayClick}
-            onSlotClick={onSlotClick}
-            onGigClick={onGigClick}
-            onRehearsalClick={onRehearsalClick}
-            onBandEventClick={onBandEventClick}
-          />
-        ))}
-      </Box>
+            {cellViewModels.map((cell) => (
+              <CalendarCell
+                key={cell.iso}
+                cell={cell}
+                members={members}
+                mobile={mobile}
+                onDayClick={onDayClick}
+                onSlotClick={onSlotClick}
+                onGigClick={onGigClick}
+                onRehearsalClick={onRehearsalClick}
+                onBandEventClick={onBandEventClick}
+              />
+            ))}
+          </Box>
+        </Card>
+      )}
     </Box>
   )
 }

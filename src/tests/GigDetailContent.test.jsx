@@ -47,6 +47,15 @@ vi.mock('../api/gigs.js', () => ({
   setGigVote: vi.fn().mockResolvedValue({}),
   uploadGigBanner: vi.fn().mockResolvedValue({ banner_path: 'test/banner.jpg' }),
   deleteGigBanner: vi.fn().mockResolvedValue({}),
+  listGigContacts: vi.fn().mockResolvedValue([]),
+  addGigContact: vi.fn().mockResolvedValue({}),
+  setGigContactPrimary: vi.fn().mockResolvedValue({}),
+  removeGigContact: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../api/venues.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 
 import { getGig, updateGig } from '../api/gigs.js'

@@ -66,10 +66,11 @@ describe('GigsTable', () => {
     expect(screen.getByText('option')).toBeInTheDocument()
   })
 
-  it('renders open task counts', () => {
+  it('renders the open-task badge only when there are open tasks', () => {
     wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+    // Jazz Night has 2 open tasks → badge visible; Summer Festival has 0 → no badge.
     expect(screen.getByText('2')).toBeInTheDocument()
-    expect(screen.getByText('0')).toBeInTheDocument()
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
   })
 
   it('calls onRowClick with the gig when a row is clicked', async () => {

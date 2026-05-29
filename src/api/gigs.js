@@ -37,3 +37,11 @@ export const removeGigParticipant = (gigId, bandMemberId) =>
   api(`/${gigId}/participants/${bandMemberId}`, { method: 'DELETE' })
 export const setGigVote = (gigId, bandMemberId, vote) =>
   api(`/${gigId}/participants/${bandMemberId}`, { method: 'PATCH', body: JSON.stringify({ vote }) })
+
+export const listGigContacts = (gigId) => api(`/${gigId}/contacts`)
+export const addGigContact = (gigId, contactId) =>
+  api(`/${gigId}/contacts`, { method: 'POST', body: JSON.stringify({ contact_id: contactId }) })
+export const setGigContactPrimary = (gigId, contactId, isPrimary) =>
+  api(`/${gigId}/contacts/${contactId}`, { method: 'PATCH', body: JSON.stringify({ is_primary: isPrimary }) })
+export const removeGigContact = (gigId, contactId) =>
+  api(`/${gigId}/contacts/${contactId}`, { method: 'DELETE' })

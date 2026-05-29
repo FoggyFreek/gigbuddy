@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import List from '@mui/material/List'
@@ -215,7 +214,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
     : []
 
   return (
-    <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
+    <Box sx={{ mb: 3 }}>
       <AvailabilityCalendar
         year={viewYear}
         month={viewMonth}
@@ -476,6 +475,6 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
           </Button>
         </DialogActions>
       </Dialog>
-    </Paper>
+    </Box>
   )
 }
