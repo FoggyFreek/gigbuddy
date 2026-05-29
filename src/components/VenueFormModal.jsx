@@ -35,7 +35,7 @@ const EMPTY_FORM = {
 }
 
 export default function VenueFormModal({ mode, venueId, onClose, onDelete, initial, onCreated, lockedCategory }) {
-  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...(initial || {}) }))
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...initial }))
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
   const [confirmingDelete, setConfirmingDelete] = useState(false)

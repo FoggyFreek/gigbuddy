@@ -1,8 +1,8 @@
 // Gig domain logic. Route handlers stay thin and delegate here. Functions that
 // can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function).
-import { randomUUID } from 'crypto'
-import path from 'path'
+import { randomUUID } from 'node:crypto'
+import path from 'node:path'
 import { storageClient, BUCKET } from '../utils/storage.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'

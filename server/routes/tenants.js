@@ -44,7 +44,7 @@ router.post('/', async (req, res, next) => {
   // Default the seed admin to the creating super admin so the new tenant is
   // immediately usable. Pass `adminUserId` to assign someone else; pass `null`
   // to skip (creating an unreachable tenant — only useful for tooling).
-  const hasAdminUserIdField = req.body && Object.prototype.hasOwnProperty.call(req.body, 'adminUserId')
+  const hasAdminUserIdField = req.body && Object.hasOwn(req.body, 'adminUserId')
   let adminUserId = hasAdminUserIdField ? req.body.adminUserId : req.user.id
   if (adminUserId !== null && adminUserId !== undefined) {
     adminUserId = Number(adminUserId)

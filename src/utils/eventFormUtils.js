@@ -7,7 +7,7 @@ export function timeStringToDayjs(val) {
 }
 
 export function dayjsToTimeString(d) {
-  if (!d || !d.isValid()) return ''
+  if (!d?.isValid()) return ''
   return d.format('HH:mm')
 }
 

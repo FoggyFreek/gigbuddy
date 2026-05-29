@@ -4,8 +4,8 @@ import { sendPushToTenant } from '../utils/sendPush.js'
 
 const router = Router()
 
-const VALID_STATUSES = ['option', 'planned']
-const VALID_VOTES = ['yes', 'no']
+const VALID_STATUSES = new Set(['option', 'planned'])
+const VALID_VOTES = new Set(['yes', 'no'])
 
 function parseId(val) {
   const n = Number(val)
@@ -204,7 +204,7 @@ router.patch('/:id', async (req, res) => {
   const allowed = ['proposed_date', 'start_time', 'end_time', 'location', 'notes', 'status']
 
   if ('status' in req.body) {
-    if (!VALID_STATUSES.includes(req.body.status)) {
+    if (!VALID_STATUSES.has(req.body.status)) {
       return res.status(400).json({ error: 'Invalid status value' })
     }
     if (req.body.status === 'planned') {
@@ -341,7 +341,7 @@ router.patch('/:id/participants/:bandMemberId', async (req, res) => {
 
   if (!('vote' in req.body)) return res.status(400).json({ error: 'vote is required' })
   const vote = req.body.vote
-  if (vote !== null && !VALID_VOTES.includes(vote)) {
+  if (vote !== null && !VALID_VOTES.has(vote)) {
     return res.status(400).json({ error: 'Invalid vote value' })
   }
 

@@ -144,6 +144,10 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
     await refresh()
   }
 
+  function toggleExtraMember(id, isSelected) {
+    setExtraMemberIds((prev) => isSelected ? prev.filter((x) => x !== id) : [...prev, id])
+  }
+
   const createExtras = members.filter((m) => m.position !== 'lead')
 
   return (
@@ -184,11 +188,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
                         clickable
                         color={selected ? 'primary' : 'default'}
                         variant={selected ? 'filled' : 'outlined'}
-                        onClick={() =>
-                          setExtraMemberIds((prev) =>
-                            selected ? prev.filter((id) => id !== m.id) : [...prev, m.id]
-                          )
-                        }
+                        onClick={() => toggleExtraMember(m.id, selected)}
                       />
                     )
                   })}

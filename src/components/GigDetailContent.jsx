@@ -47,7 +47,7 @@ function feeToDisplay(cents) {
 
 function feeToCents(str) {
   const n = parseFloat(str)
-  if (isNaN(n)) return null
+  if (Number.isNaN(n)) return null
   return Math.round(n * 100)
 }
 

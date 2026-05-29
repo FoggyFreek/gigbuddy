@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ProfileContext } from './profileContext.js'
 import { getProfile } from '../api/profile.js'
 import { useAuth } from './authContext.js'
@@ -23,8 +23,13 @@ export function ProfileProvider({ children }) {
     }
   }, [activeTenantId])
 
+  const value = useMemo(
+    () => ({ bandName, setBandName, accentColor, setAccentColor }),
+    [bandName, accentColor],
+  )
+
   return (
-    <ProfileContext.Provider value={{ bandName, setBandName, accentColor, setAccentColor }}>
+    <ProfileContext.Provider value={value}>
       {children}
     </ProfileContext.Provider>
   )

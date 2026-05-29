@@ -4,7 +4,7 @@ import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../utils/urls.js'
 
 const router = Router()
 
-const VALID_CATEGORIES = ['venue', 'festival']
+const VALID_CATEGORIES = new Set(['venue', 'festival'])
 const VALID_GIG_ACTIONS = new Set(['migrate', 'remove'])
 
 const EDITABLE_FIELDS = [
@@ -85,7 +85,7 @@ function normalizeInsertWebsite(body) {
 }
 
 function normalizeInsertField(key, body) {
-  if (key === 'category') return VALID_CATEGORIES.includes(body.category) ? body.category : 'venue'
+  if (key === 'category') return VALID_CATEGORIES.has(body.category) ? body.category : 'venue'
   if (key === 'name') return String(body.name).trim()
   if (key === 'website') return normalizeInsertWebsite(body)
   return body[key] || null
@@ -107,7 +107,7 @@ function parseSearchLimit(value) {
 }
 
 function buildCategoryClause(category, params) {
-  if (!VALID_CATEGORIES.includes(category)) return ''
+  if (!VALID_CATEGORIES.has(category)) return ''
   return `AND category = $${params.push(category)}`
 }
 
@@ -140,7 +140,7 @@ async function getAffectedGigs(db, id, tenantId, currentCategory) {
 }
 
 async function getCategoryImpact(id, tenantId, newCategory) {
-  if (!VALID_CATEGORIES.includes(newCategory)) {
+  if (!VALID_CATEGORIES.has(newCategory)) {
     return badRequest('Invalid new_category')
   }
 
@@ -196,7 +196,7 @@ function buildPatchFields(body) {
 
   for (const key of EDITABLE_FIELDS) {
     if (!(key in body)) continue
-    if (key === 'category' && !VALID_CATEGORIES.includes(body[key])) {
+    if (key === 'category' && !VALID_CATEGORIES.has(body[key])) {
       return { error: 'Invalid category value' }
     }
     fields.push(`${key} = $${idx++}`)

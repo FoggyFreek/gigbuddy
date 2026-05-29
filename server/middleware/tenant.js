@@ -25,7 +25,7 @@ export async function resolveTenantId(req, res, next) {
         return res.status(403).json({ error: 'No active tenant' })
       }
       const membership = await fetchMembership(req.user.id, tenantId)
-      if (!membership || membership.status !== 'approved') {
+      if (membership?.status !== 'approved') {
         return res.status(403).json({ error: 'No active tenant' })
       }
       if (membership.tenant_archived_at) {
@@ -41,7 +41,7 @@ export async function resolveTenantId(req, res, next) {
 }
 
 export function requireTenantMember(req, res, next) {
-  if (!req.membership || req.membership.status !== 'approved') {
+  if (req.membership?.status !== 'approved') {
     return res.status(403).json({ error: 'Forbidden' })
   }
   next()

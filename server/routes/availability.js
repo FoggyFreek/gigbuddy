@@ -48,10 +48,10 @@ router.get('/on/:date', async (req, res) => {
     [req.tenantId, date],
   )
 
-  const bandWide = slots.filter((s) => s.band_member_id === null).at(-1) ?? null
+  const bandWide = slots.findLast((s) => s.band_member_id === null) ?? null
 
   const result = members.map((m) => {
-    const memberSlot = slots.filter((s) => s.band_member_id === m.id).at(-1)
+    const memberSlot = slots.findLast((s) => s.band_member_id === m.id)
     const winner = bandWide ?? memberSlot
     return {
       member_id: m.id,

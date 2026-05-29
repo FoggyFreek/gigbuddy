@@ -27,6 +27,7 @@ export default function ContactPicker({ onSelect, excludeIds = [], disabled, lab
 
   useEffect(() => {
     const myReqId = ++reqIdRef.current
+    const notExcluded = (r) => !excluded.has(r.id)
     if (tooShort) {
       const handle = setTimeout(() => {
         if (reqIdRef.current !== myReqId) return
@@ -43,7 +44,7 @@ export default function ContactPicker({ onSelect, excludeIds = [], disabled, lab
       searchContacts(trimmed)
         .then((rows) => {
           if (reqIdRef.current !== myReqId) return
-          setOptions(rows.filter((r) => !excluded.has(r.id)))
+          setOptions(rows.filter(notExcluded))
         })
         .catch(() => {
           if (reqIdRef.current !== myReqId) return

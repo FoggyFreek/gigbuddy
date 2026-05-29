@@ -4,7 +4,7 @@
 // to status codes without knowing the rules:
 //   { error: { status, body } }   — caller should respond with that status/body
 //   anything else                 — success payload (see each function)
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { storageClient, BUCKET } from '../utils/storage.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'

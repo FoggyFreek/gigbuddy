@@ -22,7 +22,7 @@ export default function GigAvailabilityPanel({ eventDate, onDataLoad }) {
     return () => clearTimeout(timerRef.current)
   }, [eventDate, onDataLoad])
 
-  if (!eventDate || !data || !data.members?.length) return null
+  if (!eventDate || !data?.members?.length) return null
 
   const visible = data.members.filter((m) =>
     m.position === 'lead' || !m.position || m.status === 'available'

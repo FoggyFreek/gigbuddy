@@ -1,6 +1,6 @@
-import { readdir, readFile } from 'fs/promises'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { readdir, readFile } from 'node:fs/promises'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import pool from './index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -36,7 +36,9 @@ async function migrate() {
   console.log('Migrations complete.')
 }
 
-migrate().catch((err) => {
+try {
+  await migrate()
+} catch (err) {
   console.error(err)
   process.exit(1)
-})
+}

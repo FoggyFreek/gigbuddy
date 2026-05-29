@@ -44,9 +44,10 @@ export default function ProfilePage() {
   const { setBandName } = useProfile()
 
   function handleCopy(field, text) {
+    const clearIfSame = (c) => (c === field ? null : c)
     navigator.clipboard.writeText(text).then(() => {
       setCopiedField(field)
-      setTimeout(() => setCopiedField((c) => (c === field ? null : c)), 1500)
+      setTimeout(() => setCopiedField(clearIfSame), 1500)
     }).catch(() => {})
   }
 

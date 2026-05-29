@@ -138,7 +138,23 @@ function DesktopRow({ gig, active, onClick }) {
       <TableCell>
         <MemberAvatarStack members={gig.members_availability} />
       </TableCell>
-      <TableCell align="center">{gig.open_task_count ?? 0}</TableCell>
+      <TableCell align="center">
+        {(gig.open_task_count ?? 0) > 0 && (
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              bgcolor: 'action.hover',
+            }}
+          >
+            {gig.open_task_count}
+          </Box>
+        )}
+      </TableCell>
       <TableCell align="right" padding="none" sx={{ pr: 1 }}>
         <GigShareMenu gig={gig} />
       </TableCell>

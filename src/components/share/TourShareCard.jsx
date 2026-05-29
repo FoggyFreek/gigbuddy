@@ -6,15 +6,16 @@ import { gigShape, tourLayoutPropTypes } from '../../propTypes/shareCardProps.js
 import PhotoBackdrop from './primitives/PhotoBackdrop.jsx'
 import SocialsRow from './SocialsRow.jsx'
 
-const rowPropTypes = {
-  gig: gigShape,
-  gigs: PropTypes.arrayOf(gigShape),
+const sharedRowPropTypes = {
   today: PropTypes.string,
   fontSize: PropTypes.number,
   rowHeight: PropTypes.number,
   accent: PropTypes.string,
   showBanners: PropTypes.bool,
 }
+
+const gigRowPropTypes = { gig: gigShape, ...sharedRowPropTypes }
+const gigListPropTypes = { gigs: PropTypes.arrayOf(gigShape), ...sharedRowPropTypes }
 
 const FALLBACK_LOGO = '/share/logo.png'
 
@@ -223,7 +224,7 @@ function GigRow({ gig, today, fontSize, rowHeight, accent, showBanners }) {
   )
 }
 
-GigRow.propTypes = rowPropTypes
+GigRow.propTypes = gigRowPropTypes
 
 function GigList({ gigs, today, fontSize, rowHeight, accent, showBanners }) {
   if (gigs.length === 0) {
@@ -255,7 +256,7 @@ function GigList({ gigs, today, fontSize, rowHeight, accent, showBanners }) {
   ))
 }
 
-GigList.propTypes = rowPropTypes
+GigList.propTypes = gigListPropTypes
 
 // Square layout: compact, graphic, medium logo
 // List available height: 1080 - 65(top) - 90(logo) - 20(gap) - 64(title) - 16(gap) - 3(hair) - 20(gap) - 20(gap) - 3(hair) - 75(bot) ≈ 704

@@ -22,7 +22,7 @@ import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import { importContacts } from '../api/contacts.js'
 
-const VALID_CATEGORIES = ['press', 'radio & tv', 'booker', 'promotion', 'network']
+const VALID_CATEGORIES = new Set(['press', 'radio & tv', 'booker', 'promotion', 'network'])
 
 const CONTACT_FIELDS = [
   { key: 'name',     label: 'Name',     required: true,  aliases: ['name', 'contact name', 'full name'] },
@@ -34,7 +34,7 @@ const CONTACT_FIELDS = [
 function coerceCategory(raw) {
   if (!raw) return 'press'
   const lower = raw.toLowerCase().trim()
-  if (VALID_CATEGORIES.includes(lower)) return lower
+  if (VALID_CATEGORIES.has(lower)) return lower
   // fuzzy matches
   if (lower.includes('radio') || lower.includes('tv') || lower.includes('television')) return 'radio & tv'
   if (lower.includes('book')) return 'booker'

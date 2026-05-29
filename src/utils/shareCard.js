@@ -99,7 +99,7 @@ export function formatGigDateLong(gig) {
 }
 
 export function formatGigDateShort(gig) {
-  if (!gig?.event_date) return ''
+  if (!gig?.event_date) return { weekday: '', day: '', month: '', year: '' }
   const d = new Date(gig.event_date)
   return {
     weekday: d.toLocaleDateString('nl-NL', { weekday: 'long' }),
@@ -248,7 +248,7 @@ export async function renderLayeredPdf(node, { width, height }) {
     document.head.appendChild(styleEl)
     await new Promise((r) => requestAnimationFrame(r))
     const fullPng = await htmlToImage.toPng(node, { width, height, pixelRatio: 1, cacheBust: true, fontEmbedCSS })
-    document.head.removeChild(styleEl)
+    styleEl.remove()
 
     // Crop to element bounds
     const img = new Image()

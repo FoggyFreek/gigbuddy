@@ -157,12 +157,10 @@ function buildMembershipUpdate({ status, role, approverUserId }) {
     sets.push(`status = $${i++}`)
     values.push(status)
     if (status === 'approved') {
-      sets.push(`approved_at = NOW()`)
-      sets.push(`approved_by_user_id = $${i++}`)
+      sets.push(`approved_at = NOW()`, `approved_by_user_id = $${i++}`)
       values.push(approverUserId)
     } else {
-      sets.push(`approved_at = NULL`)
-      sets.push(`approved_by_user_id = NULL`)
+      sets.push(`approved_at = NULL`, `approved_by_user_id = NULL`)
     }
   }
   if (role !== undefined) {

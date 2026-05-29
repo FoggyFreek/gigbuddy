@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import PropTypes from 'prop-types'
 import Box from '@mui/material/Box'
+import Card from '@mui/material/Card'
 import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
@@ -98,7 +99,34 @@ export default function AvailabilityCalendar({
         )}
       </Stack>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}>
+      <Card sx={{ borderRadius: 3, display: { xs: 'none', sm: 'block' } }}>
+        <Box sx={{ p: 2, display: 'grid', gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}>
+          <Typography variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
+            Wk
+          </Typography>
+          {DAY_HEADERS.map((d) => (
+            <Typography key={d} variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
+              {d}
+            </Typography>
+          ))}
+
+          {cellViewModels.map((cell) => (
+            <CalendarCell
+              key={cell.iso}
+              cell={cell}
+              members={members}
+              mobile={mobile}
+              onDayClick={onDayClick}
+              onSlotClick={onSlotClick}
+              onGigClick={onGigClick}
+              onRehearsalClick={onRehearsalClick}
+              onBandEventClick={onBandEventClick}
+            />
+          ))}
+        </Box>
+      </Card>
+
+      <Box sx={{ display: { xs: 'grid', sm: 'none' }, gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}>
         <Typography variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
           Wk
         </Typography>

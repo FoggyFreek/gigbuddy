@@ -4,7 +4,7 @@ const HEADER = 'Artist Name,Venue*,Country*,Address,City*,Region*,Postal Code,Ti
 
 function csvEscape(val) {
   const s = val == null ? '' : String(val)
-  return /[,"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  return /[,"\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
 }
 
 function gigToRow(gig, artistName) {

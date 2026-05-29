@@ -66,7 +66,7 @@ function foldICSLine(line) {
   let result = ''
   let lineBytes = 0
   let first = true
-  for (const char of [...line]) {
+  for (const char of line) {
     const cb = byteLen(char)
     const limit = first ? 75 : 74
     if (lineBytes + cb > limit) {
@@ -128,16 +128,13 @@ export function exportMonthToICS(gigs, rehearsals, bandEvents, year, month) {
     const desc = [gig.status, venueCity(calVenue)].filter(Boolean).join(', ')
     out.push('BEGIN:VEVENT')
     dtStartEnd(out, d, gig.start_time, gig.end_time, null)
-    out.push(`DTSTAMP:${dtstamp}`)
-    out.push(`SUMMARY:${escapeICS('Gig: ' + summary)}`)
+    out.push(`DTSTAMP:${dtstamp}`, `SUMMARY:${escapeICS('Gig: ' + summary)}`)
     const gigUrl = `${APP_URL}/gigs?open=${gig.id}`
     const gigDesc = [desc, `Open in GigBuddy: ${gigUrl}`].filter(Boolean).join('\n')
     out.push(`DESCRIPTION:${escapeICS(gigDesc)}`)
     const location = [venueHeadline(calVenue), venueCity(calVenue)].filter(Boolean).join(', ')
     if (location) out.push(`LOCATION:${escapeICS(location)}`)
-    out.push(`URL:${gigUrl}`)
-    out.push(`UID:gigbuddy-gig-${gig.id}@gigbuddy`)
-    out.push('END:VEVENT')
+    out.push(`URL:${gigUrl}`, `UID:gigbuddy-gig-${gig.id}@gigbuddy`, 'END:VEVENT')
   }
 
   for (const reh of rehearsals) {
@@ -148,15 +145,13 @@ export function exportMonthToICS(gigs, rehearsals, bandEvents, year, month) {
     const desc = [reh.location, `${yes}/${total} yes`, reh.notes].filter(Boolean).join(' — ')
     out.push('BEGIN:VEVENT')
     dtStartEnd(out, d, reh.start_time, reh.end_time, null)
-    out.push(`DTSTAMP:${dtstamp}`)
-    out.push(`SUMMARY:${escapeICS('Rehearsal' + (reh.status ? ` (${reh.status})` : ''))}`)
+    const statusSuffix = reh.status ? ` (${reh.status})` : ''
+    out.push(`DTSTAMP:${dtstamp}`, `SUMMARY:${escapeICS(`Rehearsal${statusSuffix}`)}`)
     const rehUrl = `${APP_URL}/rehearsals?open=${reh.id}`
     const rehDesc = [desc, `Open in GigBuddy: ${rehUrl}`].filter(Boolean).join('\n')
     out.push(`DESCRIPTION:${escapeICS(rehDesc)}`)
     if (reh.location) out.push(`LOCATION:${escapeICS(reh.location)}`)
-    out.push(`URL:${rehUrl}`)
-    out.push(`UID:gigbuddy-rehearsal-${reh.id}@gigbuddy`)
-    out.push('END:VEVENT')
+    out.push(`URL:${rehUrl}`, `UID:gigbuddy-rehearsal-${reh.id}@gigbuddy`, 'END:VEVENT')
   }
 
   for (const ev of bandEvents) {
@@ -165,15 +160,12 @@ export function exportMonthToICS(gigs, rehearsals, bandEvents, year, month) {
     if (!start || end < monthStart || start > monthEnd) continue
     out.push('BEGIN:VEVENT')
     dtStartEnd(out, start, ev.start_time, ev.end_time, end)
-    out.push(`DTSTAMP:${dtstamp}`)
-    out.push(`SUMMARY:${escapeICS(ev.title || 'Band Event')}`)
+    out.push(`DTSTAMP:${dtstamp}`, `SUMMARY:${escapeICS(ev.title || 'Band Event')}`)
     const evUrl = `${APP_URL}/events?open=${ev.id}`
     const evDesc = [ev.notes, `Open in GigBuddy: ${evUrl}`].filter(Boolean).join('\n')
     out.push(`DESCRIPTION:${escapeICS(evDesc)}`)
     if (ev.location) out.push(`LOCATION:${escapeICS(ev.location)}`)
-    out.push(`URL:${evUrl}`)
-    out.push(`UID:gigbuddy-bandevent-${ev.id}@gigbuddy`)
-    out.push('END:VEVENT')
+    out.push(`URL:${evUrl}`, `UID:gigbuddy-bandevent-${ev.id}@gigbuddy`, 'END:VEVENT')
   }
 
   out.push('END:VCALENDAR')

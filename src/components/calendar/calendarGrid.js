@@ -43,7 +43,8 @@ export function indexByDate(items, getKey) {
   return items.reduce((acc, item) => {
     const key = getKey(item)
     if (!key) return acc
-    ;(acc[key] ||= []).push(item)
+    acc[key] ||= []
+    acc[key].push(item)
     return acc
   }, {})
 }

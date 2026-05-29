@@ -24,7 +24,7 @@ const EMPTY_FORM = {
 }
 
 export default function ContactFormModal({ mode, contactId, onClose, onDelete, initial, onCreated }) {
-  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...(initial || {}) }))
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...initial }))
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
   const [confirmingDelete, setConfirmingDelete] = useState(false)

@@ -124,10 +124,10 @@ router.get('/', async (req, res) => {
     const gigSlots = slots.filter(
       s => toDateStr(s.start_date) <= dateStr && toDateStr(s.end_date) >= dateStr,
     )
-    const bandWide = gigSlots.filter(s => s.band_member_id === null).at(-1) ?? null
+    const bandWide = gigSlots.findLast(s => s.band_member_id === null) ?? null
 
     const membersAvail = members.map(m => {
-      const memberSlot = gigSlots.filter(s => s.band_member_id === m.id).at(-1)
+      const memberSlot = gigSlots.findLast(s => s.band_member_id === m.id)
       const winner = bandWide ?? memberSlot
       return {
         member_id: m.id,

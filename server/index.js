@@ -3,8 +3,8 @@ import express from 'express'
 import cors from 'cors'
 import session from 'express-session'
 import connectPgSimple from 'connect-pg-simple'
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import pool from './db/index.js'
 import routes from './routes/index.js'
 import { initOidc } from './oidc.js'
@@ -19,6 +19,7 @@ if (!process.env.SESSION_SECRET) {
 const app = express()
 const PORT = process.env.SERVER_PORT || 3002
 
+app.disable('x-powered-by')
 app.set('trust proxy', 1)
 
 app.use(securityHeaders())
@@ -31,6 +32,7 @@ app.use(cors({
   exposedHeaders: ['X-CSRF-Token'],
 }))
 app.use(express.json())
+app.use(express.static(join(__dirname, '../dist')))
 app.use(
   session({
     store: new PgSession({ pool, tableName: 'session', createTableIfMissing: false }),
@@ -47,8 +49,6 @@ app.use(
 )
 
 app.use('/api', routes)
-
-app.use(express.static(join(__dirname, '../dist')))
 app.use((_req, res) => {
   res.sendFile(join(__dirname, '../dist/index.html'))
 })

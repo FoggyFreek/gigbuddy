@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'

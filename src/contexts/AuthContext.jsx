@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthContext } from './authContext.js'
 import {
@@ -55,10 +55,13 @@ export function AuthProvider({ children }) {
     return updated
   }, [])
 
+  const value = useMemo(
+    () => ({ user, setUser, logout, switchTenant, refreshUser }),
+    [user, logout, switchTenant, refreshUser],
+  )
+
   return (
-    <AuthContext.Provider
-      value={{ user, setUser, logout, switchTenant, refreshUser }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

@@ -52,7 +52,7 @@ function readZipLocalFileNames(buffer) {
 
     if (filenameEnd > buffer.length || dataStart > buffer.length) return names
 
-    names.add(buffer.toString('utf8', filenameStart, filenameEnd).replace(/\\/g, '/'))
+    names.add(buffer.toString('utf8', filenameStart, filenameEnd).replaceAll('\\', '/'))
 
     // Bit 3 means sizes are stored in a data descriptor after the payload.
     // Avoid guessing through arbitrary bytes; valid OOXML uploads from normal

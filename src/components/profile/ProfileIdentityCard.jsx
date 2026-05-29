@@ -12,7 +12,6 @@ import Typography from '@mui/material/Typography'
 import { alpha } from '@mui/material/styles'
 import CheckIcon from '@mui/icons-material/Check'
 import EditIcon from '@mui/icons-material/Edit'
-import { tenantShape } from '../../propTypes/shared.js'
 
 const LOGO_IMG_SX = { maxWidth: 200, maxHeight: 120, objectFit: 'contain', display: 'block' }
 
@@ -137,7 +136,6 @@ export default function ProfileIdentityCard({
 
 ProfileIdentityCard.propTypes = {
   form: PropTypes.object.isRequired,
-  tenant: tenantShape,
   isAdmin: PropTypes.bool,
   editing: PropTypes.bool,
   onToggleEditing: PropTypes.func.isRequired,

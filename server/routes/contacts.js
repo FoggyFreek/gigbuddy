@@ -3,7 +3,7 @@ import pool from '../db/index.js'
 
 const router = Router()
 
-const VALID_CATEGORIES = ['press', 'radio & tv', 'booker', 'promotion', 'network']
+const VALID_CATEGORIES = new Set(['press', 'radio & tv', 'booker', 'promotion', 'network'])
 
 function parseId(val) {
   const n = Number(val)
@@ -74,7 +74,7 @@ router.post('/', async (req, res) => {
   if (!name || !String(name).trim()) {
     return res.status(400).json({ error: 'name is required' })
   }
-  const finalCategory = VALID_CATEGORIES.includes(category) ? category : 'press'
+  const finalCategory = VALID_CATEGORIES.has(category) ? category : 'press'
   const { rows } = await pool.query(
     `INSERT INTO contacts (tenant_id, name, email, phone, category)
      VALUES ($1, $2, $3, $4, $5)
@@ -92,7 +92,7 @@ router.patch('/:id', async (req, res) => {
   let idx = 1
   for (const key of allowed) {
     if (key in req.body) {
-      if (key === 'category' && !VALID_CATEGORIES.includes(req.body[key])) {
+      if (key === 'category' && !VALID_CATEGORIES.has(req.body[key])) {
         return res.status(400).json({ error: 'Invalid category value' })
       }
       fields.push(`${key} = $${idx++}`)
@@ -176,7 +176,7 @@ function normalizeImportRow(row) {
     name: String(row.name ?? '').trim(),
     email: String(row.email ?? '').trim(),
     phone: String(row.phone ?? '').trim(),
-    category: VALID_CATEGORIES.includes(row.category) ? row.category : 'press',
+    category: VALID_CATEGORIES.has(row.category) ? row.category : 'press',
   }
 }
 

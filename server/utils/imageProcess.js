@@ -45,7 +45,7 @@ export function extensionForImageMime(mimetype) {
  */
 export async function validateAndReencodeImage(buffer, mimetype) {
   const checkMagic = MAGIC_BYTES[mimetype]
-  if (!checkMagic || !checkMagic(buffer)) {
+  if (!checkMagic?.(buffer)) {
     const err = new Error('File content does not match declared type')
     err.status = 400
     throw err

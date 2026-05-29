@@ -1,4 +1,4 @@
-import crypto from 'crypto'
+import crypto from 'node:crypto'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 

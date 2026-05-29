@@ -1,5 +1,5 @@
-import { randomUUID } from 'crypto'
-import path from 'path'
+import { randomUUID } from 'node:crypto'
+import path from 'node:path'
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'

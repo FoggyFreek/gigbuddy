@@ -337,7 +337,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
                     <MenuItem value="">None</MenuItem>
                     {Object.keys(STICKER_CONFIGS).map((id) => (
                       <MenuItem key={id} value={id}>
-                        {id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                        {id.replaceAll('-', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                       </MenuItem>
                     ))}
                   </Select>
