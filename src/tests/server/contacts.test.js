@@ -66,15 +66,17 @@ describe('POST /api/contacts/:id/notes', () => {
 
   it('returns 400 for blank note', async () => {
     const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id
-    await asUserA(
+    const res = await asUserA(
       request(app).post(`/api/contacts/${contactId}/notes`).send({ note: '   ' }),
     ).expect(400)
+    expect(res.status).toBe(400)
   })
 
   it('returns 404 for unknown contact', async () => {
-    await asUserA(
+    const res = await asUserA(
       request(app).post('/api/contacts/99999/notes').send({ note: 'x' }),
     ).expect(404)
+    expect(res.status).toBe(404)
   })
 
   it('tenant isolation — user A cannot add notes to tenant B contact', async () => {
@@ -82,6 +84,8 @@ describe('POST /api/contacts/:id/notes', () => {
     await asUserA(
       request(app).post(`/api/contacts/${contactB.id}/notes`).send({ note: 'cross-tenant' }),
     ).expect(404)
+    const { rows } = await pool.query('SELECT id FROM contact_notes WHERE contact_id = $1', [contactB.id])
+    expect(rows).toHaveLength(0)
   })
 })
 
@@ -104,9 +108,10 @@ describe('DELETE /api/contacts/:id/notes/:noteId', () => {
 
   it('returns 404 for unknown note', async () => {
     const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id
-    await asUserA(
+    const res = await asUserA(
       request(app).delete(`/api/contacts/${contactId}/notes/99999`),
     ).expect(404)
+    expect(res.status).toBe(404)
   })
 
   it('tenant isolation — user A cannot delete notes on tenant B contact', async () => {
@@ -119,5 +124,7 @@ describe('DELETE /api/contacts/:id/notes/:noteId', () => {
     await asUserA(
       request(app).delete(`/api/contacts/${contactB.id}/notes/${noteId}`),
     ).expect(404)
+    const { rows: remaining } = await pool.query('SELECT id FROM contact_notes WHERE id = $1', [noteId])
+    expect(remaining).toHaveLength(1)
   })
 })

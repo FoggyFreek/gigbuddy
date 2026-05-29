@@ -70,18 +70,27 @@ describe('POST /api/venues/:id/contacts — link', () => {
     await asUserA(
       request(app).post(`/api/venues/${venueA().id}/contacts`).send({ contact_id: contactA().id }),
     ).expect(409)
+    const { rows } = await pool.query(
+      'SELECT 1 FROM venue_contacts WHERE venue_id = $1 AND contact_id = $2',
+      [venueA().id, contactA().id],
+    )
+    expect(rows).toHaveLength(1)
   })
 
   it('returns 404 linking to a venue in another tenant', async () => {
     await asUserA(
       request(app).post(`/api/venues/${venueB().id}/contacts`).send({ contact_id: contactA().id }),
     ).expect(404)
+    const { rows } = await pool.query('SELECT 1 FROM venue_contacts WHERE venue_id = $1', [venueB().id])
+    expect(rows).toHaveLength(0)
   })
 
   it('returns 404 linking a contact from another tenant', async () => {
     await asUserA(
       request(app).post(`/api/venues/${venueA().id}/contacts`).send({ contact_id: contactB().id }),
     ).expect(404)
+    const { rows } = await pool.query('SELECT 1 FROM venue_contacts WHERE contact_id = $1', [contactB().id])
+    expect(rows).toHaveLength(0)
   })
 })
 
@@ -100,7 +109,8 @@ describe('GET /api/venues/:id/contacts — list', () => {
   })
 
   it('returns 404 for a venue in another tenant', async () => {
-    await asUserA(request(app).get(`/api/venues/${venueB().id}/contacts`)).expect(404)
+    const res = await asUserA(request(app).get(`/api/venues/${venueB().id}/contacts`)).expect(404)
+    expect(res.status).toBe(404)
   })
 })
 
@@ -134,9 +144,10 @@ describe('PATCH /api/venues/:id/contacts/:contactId — primary', () => {
   })
 
   it('returns 404 for a link in another tenant', async () => {
-    await asUserA(
+    const res = await asUserA(
       request(app).patch(`/api/venues/${venueB().id}/contacts/${contactB().id}`).send({ is_primary: true }),
     ).expect(404)
+    expect(res.status).toBe(404)
   })
 })
 
@@ -149,7 +160,8 @@ describe('DELETE /api/venues/:id/contacts/:contactId — unlink', () => {
   })
 
   it('returns 404 for an unlinked contact', async () => {
-    await asUserA(request(app).delete(`/api/venues/${venueA().id}/contacts/${contactA().id}`)).expect(404)
+    const res = await asUserA(request(app).delete(`/api/venues/${venueA().id}/contacts/${contactA().id}`)).expect(404)
+    expect(res.status).toBe(404)
   })
 })
 
