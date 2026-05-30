@@ -8,13 +8,17 @@ import Typography from '@mui/material/Typography'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 
 /**
- * Presentational dashboard card: a titled MUI Card with an optional "View all"
- * link, plus error / empty / content states. Content (the item list) is passed
- * as children so the page stays thin.
+ * Presentational dashboard card: a titled MUI Card with a leading icon, an
+ * optional count badge after the title, an optional "View all" link, plus
+ * error / empty / content states. Content (the item list) is passed as
+ * children so the page stays thin.
  */
 export default function DashboardCard({
   title,
+  icon: Icon,
+  count,
   viewAllTo,
+  viewAllLabel = 'View all',
   status = 'ok',
   isEmpty = false,
   emptyText = 'Nothing to show',
@@ -23,10 +27,32 @@ export default function DashboardCard({
   return (
     <Card variant="outlined" sx={{ height: '100%' }}>
       <CardContent sx={{ pb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          {Icon && <Icon fontSize="small" sx={{ color: 'text.secondary' }} />}
+          <Typography variant="subtitle1" fontWeight={600}>
             {title}
           </Typography>
+          {count > 0 && (
+            <Box
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                width: 22,
+                height: 22,
+                borderRadius: '50%',
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                lineHeight: 1,
+              }}
+            >
+              {count}
+            </Box>
+          )}
+          <Box sx={{ flexGrow: 1 }} />
           {viewAllTo && (
             <Button
               component={RouterLink}
@@ -35,7 +61,7 @@ export default function DashboardCard({
               endIcon={<ChevronRightIcon />}
               sx={{ textTransform: 'none' }}
             >
-              View all
+              {viewAllLabel}
             </Button>
           )}
         </Box>
@@ -58,7 +84,10 @@ export default function DashboardCard({
 
 DashboardCard.propTypes = {
   title: PropTypes.string.isRequired,
+  icon: PropTypes.elementType,
+  count: PropTypes.number,
   viewAllTo: PropTypes.string,
+  viewAllLabel: PropTypes.string,
   status: PropTypes.oneOf(['ok', 'error']),
   isEmpty: PropTypes.bool,
   emptyText: PropTypes.string,

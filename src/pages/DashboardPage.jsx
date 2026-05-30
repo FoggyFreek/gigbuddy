@@ -9,6 +9,11 @@ import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import Typography from '@mui/material/Typography'
+import EventIcon from '@mui/icons-material/Event'
+import ChecklistIcon from '@mui/icons-material/Checklist'
+import MusicNoteIcon from '@mui/icons-material/MusicNote'
+import EventNoteIcon from '@mui/icons-material/EventNote'
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import DashboardCard from '../components/dashboard/DashboardCard.jsx'
 import { useAuth } from '../contexts/authContext.js'
 import { listGigs } from '../api/gigs.js'
@@ -19,6 +24,7 @@ import { listAllTasks } from '../api/tasks.js'
 import { formatShortDate } from '../utils/dateFormat.js'
 import { formatEur } from '../utils/invoiceTotals.js'
 import { invoiceStatusColor } from '../utils/invoiceStatus.js'
+import { venueHeadline, venueCity } from '../utils/venueDisplay.js'
 
 const OPEN_INVOICE_STATUSES = new Set(['draft', 'sent'])
 const GIG_STATUS_COLOR = { confirmed: 'success', announced: 'info', option: 'default' }
@@ -65,36 +71,43 @@ function buildSections(results) {
   const invSettled = settle(invR)
   const taskSettled = settle(taskR)
 
+  // Featured "next gig" is dropped from the shows list, so total excludes it too.
+  const upcomingShows = upcomingGigs.slice(1)
+  const upcomingRehearsals = rehSettled.data
+    .filter((r) => dateKey(r.proposed_date) >= today)
+    .sort(byDateAscNullsLast('proposed_date'))
+  const upcomingEvents = evSettled.data
+    .filter((e) => dateKey(e.end_date) >= today)
+    .sort(byDateAscNullsLast('start_date'))
+  const openInvoices = invSettled.data
+    .filter((i) => OPEN_INVOICE_STATUSES.has(i.status))
+    .sort(byDateAscNullsLast('due_date'))
+  const myTasks = taskSettled.data
+    .filter((t) => !t.done && bandMemberId != null && t.assigned_to === bandMemberId)
+    .sort(byDateAscNullsLast('due_date'))
+
   return {
     nextGig: { status: gigsSettled.status, data: upcomingGigs[0] || null },
-    shows: { status: gigsSettled.status, data: upcomingGigs.slice(1, 1 + MAX_ROWS) },
+    shows: { status: gigsSettled.status, total: upcomingShows.length, data: upcomingShows.slice(0, MAX_ROWS) },
     rehearsals: {
       status: rehSettled.status,
-      data: rehSettled.data
-        .filter((r) => dateKey(r.proposed_date) >= today)
-        .sort(byDateAscNullsLast('proposed_date'))
-        .slice(0, MAX_ROWS),
+      total: upcomingRehearsals.length,
+      data: upcomingRehearsals.slice(0, MAX_ROWS),
     },
     events: {
       status: evSettled.status,
-      data: evSettled.data
-        .filter((e) => dateKey(e.end_date) >= today)
-        .sort(byDateAscNullsLast('start_date'))
-        .slice(0, MAX_ROWS),
+      total: upcomingEvents.length,
+      data: upcomingEvents.slice(0, MAX_ROWS),
     },
     invoices: {
       status: invSettled.status,
-      data: invSettled.data
-        .filter((i) => OPEN_INVOICE_STATUSES.has(i.status))
-        .sort(byDateAscNullsLast('due_date'))
-        .slice(0, MAX_ROWS),
+      total: openInvoices.length,
+      data: openInvoices.slice(0, MAX_ROWS),
     },
     tasks: {
       status: taskSettled.status,
-      data: taskSettled.data
-        .filter((t) => !t.done && bandMemberId != null && t.assigned_to === bandMemberId)
-        .sort(byDateAscNullsLast('due_date'))
-        .slice(0, MAX_ROWS),
+      total: myTasks.length,
+      data: myTasks.slice(0, MAX_ROWS),
     },
   }
 }
@@ -168,7 +181,9 @@ export default function DashboardPage() {
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
             title="Next gig"
-            viewAllTo="/gigs"
+            icon={EventIcon}
+            viewAllTo={nextGig.data ? `/gigs/${nextGig.data.id}` : undefined}
+            viewAllLabel="View details"
             status={nextGig.status}
             isEmpty={!nextGig.data}
             emptyText="No upcoming gigs"
@@ -187,13 +202,11 @@ export default function DashboardPage() {
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     <Typography variant="body2" color="text.secondary">
-                      {[nextGig.data.venue, nextGig.data.city].filter(Boolean).join(' · ')}
+                      {(() => {
+                        const place = nextGig.data.venue ?? nextGig.data.festival
+                        return [venueHeadline(place), venueCity(place)].filter(Boolean).join(' · ')
+                      })()}
                     </Typography>
-                    <Chip
-                      size="small"
-                      label={nextGig.data.status}
-                      color={GIG_STATUS_COLOR[nextGig.data.status] || 'default'}
-                    />
                   </Box>
                 </Box>
                 {nextGig.data.banner_path && (
@@ -220,6 +233,8 @@ export default function DashboardPage() {
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
             title="My tasks"
+            icon={ChecklistIcon}
+            count={tasks.total}
             viewAllTo="/tasks"
             status={tasks.status}
             isEmpty={tasks.data.length === 0}
@@ -244,17 +259,21 @@ export default function DashboardPage() {
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
             title="Upcoming shows"
+            icon={EventIcon}
+            count={shows.total}
             viewAllTo="/gigs"
             status={shows.status}
             isEmpty={shows.data.length === 0}
             emptyText="No upcoming shows"
           >
             <List dense disablePadding>
-              {shows.data.map((g) => (
+              {shows.data.map((g) => {
+                const city = venueCity(g.venue ?? g.festival)
+                return (
                 <Row
                   key={g.id}
                   primary={g.event_description}
-                  secondary={`${formatShortDate(g.event_date)}${g.city ? ` · ${g.city}` : ''}`}
+                  secondary={`${formatShortDate(g.event_date)}${city ? ` · ${city}` : ''}`}
                   chip={
                     <Chip
                       size="small"
@@ -264,7 +283,8 @@ export default function DashboardPage() {
                   }
                   onClick={() => navigate(`/gigs/${g.id}`)}
                 />
-              ))}
+                )
+              })}
             </List>
           </DashboardCard>
         </Grid>
@@ -273,6 +293,7 @@ export default function DashboardPage() {
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
             title="Rehearsals"
+            icon={MusicNoteIcon}
             viewAllTo="/rehearsals"
             status={rehearsals.status}
             isEmpty={rehearsals.data.length === 0}
@@ -295,6 +316,7 @@ export default function DashboardPage() {
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
             title="Calendar events"
+            icon={EventNoteIcon}
             viewAllTo="/events"
             status={events.status}
             isEmpty={events.data.length === 0}
@@ -317,6 +339,8 @@ export default function DashboardPage() {
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
             title="Open invoices"
+            icon={ReceiptLongIcon}
+            count={invoices.total}
             viewAllTo="/invoices"
             status={invoices.status}
             isEmpty={invoices.data.length === 0}

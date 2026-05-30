@@ -39,10 +39,12 @@ function wrap(ui) {
 }
 
 // "today" is fixed at 2026-05-30 for all tests below.
+// venue/festival arrive as nested objects (see gigRepository VENUE_JSON_SELECT);
+// city lives inside them, there is no flat gig.city.
 const GIGS = [
-  { id: 1, event_date: '2026-01-10', event_description: 'Past Show', venue: 'Old Hall', city: 'Utrecht', status: 'confirmed' },
-  { id: 2, event_date: '2026-06-15', event_description: 'Jazz Night', venue: 'Cafe X', city: 'Amsterdam', status: 'confirmed', banner_path: 'tenants/1/gig-banners/abc.png' },
-  { id: 3, event_date: '2026-07-01', event_description: 'Summer Festival', venue: 'Park', city: 'Rotterdam', status: 'announced' },
+  { id: 1, event_date: '2026-01-10', event_description: 'Past Show', venue: { id: 11, name: 'Old Hall', city: 'Utrecht' }, festival: null, status: 'confirmed' },
+  { id: 2, event_date: '2026-06-15', event_description: 'Jazz Night', venue: { id: 12, name: 'Cafe X', city: 'Amsterdam' }, festival: null, status: 'confirmed', banner_path: 'tenants/1/gig-banners/abc.png' },
+  { id: 3, event_date: '2026-07-01', event_description: 'Summer Festival', venue: null, festival: { id: 13, name: 'Park Fest', city: 'Rotterdam' }, status: 'announced' },
 ]
 const REHEARSALS = [
   { id: 20, proposed_date: '2026-06-01', location: 'Studio A', status: 'planned' },
@@ -88,6 +90,15 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
     expect(screen.getByText('Summer Festival')).toBeInTheDocument()
     expect(screen.queryByText('Past Show')).not.toBeInTheDocument()
+  })
+
+  it('shows the next gig venue and city, and the festival city for a festival show', async () => {
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+    // Next gig: venue name and its city, derived from the nested venue object.
+    expect(screen.getByText('Cafe X · Amsterdam')).toBeInTheDocument()
+    // Upcoming show backed by a festival: city comes from the festival object.
+    expect(screen.getByText(/Rotterdam/)).toBeInTheDocument()
   })
 
   it('shows the next gig banner when the gig has one', async () => {
@@ -144,6 +155,25 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(screen.getByText(/no upcoming shows/i)).toBeInTheDocument())
     expect(screen.getByText(/no open invoices/i)).toBeInTheDocument()
     expect(screen.getByText(/no open tasks/i)).toBeInTheDocument()
+  })
+
+  it('shows a count badge reflecting the full total, not the capped 5 rows', async () => {
+    // 7 open invoices: only 5 rows render, but the badge must read 7.
+    const manyInvoices = Array.from({ length: 7 }, (_, i) => ({
+      id: 100 + i,
+      invoice_number: `2026-1${i}`,
+      customer_name: `Customer ${i}`,
+      total_cents: 1000,
+      status: 'sent',
+      due_date: '2026-06-10',
+    }))
+    listInvoices.mockResolvedValue(manyInvoices)
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Open invoices')).toBeInTheDocument())
+    expect(screen.getByText('7')).toBeInTheDocument()
+    // Capped at 5 rendered rows.
+    expect(screen.getByText('Customer 0')).toBeInTheDocument()
+    expect(screen.queryByText('Customer 5')).not.toBeInTheDocument()
   })
 
   it('shows a per-card error when one source fails, while the others still render', async () => {
