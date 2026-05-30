@@ -47,7 +47,9 @@ function byDateAscNullsLast(field) {
     if (!av && !bv) return 0
     if (!av) return 1
     if (!bv) return -1
-    return av < bv ? -1 : av > bv ? 1 : 0
+    if (av < bv) return -1
+    if (av > bv) return 1
+    return 0
   }
 }
 
@@ -269,11 +271,12 @@ export default function DashboardPage() {
             <List dense disablePadding>
               {shows.data.map((g) => {
                 const city = venueCity(g.venue ?? g.festival)
+                const citySuffix = city ? ` · ${city}` : ''
                 return (
                 <Row
                   key={g.id}
                   primary={g.event_description}
-                  secondary={`${formatShortDate(g.event_date)}${city ? ` · ${city}` : ''}`}
+                  secondary={`${formatShortDate(g.event_date)}${citySuffix}`}
                   chip={
                     <Chip
                       size="small"

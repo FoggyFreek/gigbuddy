@@ -146,7 +146,8 @@ export function exportMonthToICS(gigs, rehearsals, bandEvents, year, month) {
     out.push('BEGIN:VEVENT')
     dtStartEnd(out, d, reh.start_time, reh.end_time, null)
     const statusSuffix = reh.status ? ` (${reh.status})` : ''
-    out.push(`DTSTAMP:${dtstamp}`, `SUMMARY:${escapeICS(`Rehearsal${statusSuffix}`)}`)
+    const rehSummary = `Rehearsal${statusSuffix}`
+    out.push(`DTSTAMP:${dtstamp}`, `SUMMARY:${escapeICS(rehSummary)}`)
     const rehUrl = `${APP_URL}/rehearsals?open=${reh.id}`
     const rehDesc = [desc, `Open in GigBuddy: ${rehUrl}`].filter(Boolean).join('\n')
     out.push(`DESCRIPTION:${escapeICS(rehDesc)}`)

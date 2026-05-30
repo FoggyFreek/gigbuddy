@@ -24,6 +24,21 @@ export default function DashboardCard({
   emptyText = 'Nothing to show',
   children,
 }) {
+  let body = children
+  if (status === 'error') {
+    body = (
+      <Typography variant="body2" sx={{ py: 2, color: 'error.main' }}>
+        ⚠ Couldn&apos;t load
+      </Typography>
+    )
+  } else if (isEmpty) {
+    body = (
+      <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+        {emptyText}
+      </Typography>
+    )
+  }
+
   return (
     <Card variant="outlined" sx={{ height: '100%' }}>
       <CardContent sx={{ pb: 1 }}>
@@ -66,17 +81,7 @@ export default function DashboardCard({
           )}
         </Box>
 
-        {status === 'error' ? (
-          <Typography variant="body2" sx={{ py: 2, color: 'error.main' }}>
-            ⚠ Couldn&apos;t load
-          </Typography>
-        ) : isEmpty ? (
-          <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-            {emptyText}
-          </Typography>
-        ) : (
-          children
-        )}
+        {body}
       </CardContent>
     </Card>
   )

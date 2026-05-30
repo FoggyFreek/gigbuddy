@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import PropTypes from 'prop-types'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
@@ -62,6 +63,17 @@ function InheritedRow({ contact, source, onOpen }) {
       </Tooltip>
     </Box>
   )
+}
+
+InheritedRow.propTypes = {
+  contact: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+    name: PropTypes.string,
+    email: PropTypes.string,
+    phone: PropTypes.string,
+  }).isRequired,
+  source: PropTypes.string.isRequired,
+  onOpen: PropTypes.func.isRequired,
 }
 
 export default function GigContactsSection({ gigId, venueId, festivalId, flush }) {
@@ -174,4 +186,11 @@ export default function GigContactsSection({ gigId, venueId, festivalId, flush }
       </Box>
     </Box>
   )
+}
+
+GigContactsSection.propTypes = {
+  gigId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+  venueId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  festivalId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  flush: PropTypes.func,
 }

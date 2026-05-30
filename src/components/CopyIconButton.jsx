@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import PropTypes from 'prop-types'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import CheckIcon from '@mui/icons-material/Check'
@@ -19,4 +20,10 @@ export default function CopyIconButton({ value, edge = false, ariaLabel = 'copy'
       </IconButton>
     </Tooltip>
   )
+}
+
+CopyIconButton.propTypes = {
+  value: PropTypes.string,
+  edge: PropTypes.oneOf(['start', 'end', false]),
+  ariaLabel: PropTypes.string,
 }
