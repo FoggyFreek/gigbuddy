@@ -14,6 +14,7 @@ import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import ApartmentIcon from '@mui/icons-material/Apartment'
+import DashboardIcon from '@mui/icons-material/Dashboard'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import EmailIcon from '@mui/icons-material/Email'
 import EventIcon from '@mui/icons-material/Event'
@@ -46,7 +47,8 @@ const DRAWER_WIDTH = 220
 const COLLAPSED_DRAWER_WIDTH = 72
 
 const BASE_NAV_ITEMS = [
-  { to: '/', label: 'Profile', icon: PersonIcon },
+  { to: '/', label: 'Dashboard', icon: DashboardIcon },
+  { to: '/profile', label: 'Profile', icon: PersonIcon },
   { to: '/gigs', label: 'Gigs', icon: EventIcon },
   { to: '/rehearsals', label: 'Rehearsals', icon: MusicNoteIcon },
   { to: '/events', label: 'Band Events', icon: EventNoteIcon },
