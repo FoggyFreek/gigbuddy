@@ -6,21 +6,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/gigs.js', () => ({ listGigs: vi.fn() }))
 vi.mock('../api/rehearsals.js', () => ({ listRehearsals: vi.fn() }))
-vi.mock('../api/bandEvents.js', () => ({ listBandEvents: vi.fn() }))
 vi.mock('../api/invoices.js', () => ({ listInvoices: vi.fn() }))
 vi.mock('../api/tasks.js', () => ({ listAllTasks: vi.fn() }))
-vi.mock('../api/availability.js', () => ({ listAvailability: vi.fn() }))
-vi.mock('../api/bandMembers.js', () => ({ listMembers: vi.fn() }))
 vi.mock('../contexts/authContext.js', () => ({ useAuth: vi.fn() }))
+// The world-map tile loads its own data (and Leaflet); stub it so these tests stay
+// focused on the dashboard sections and listGigs is only called by the page itself.
+vi.mock('../components/dashboard/GigMapTile.jsx', () => ({
+  default: () => <div data-testid="gig-map-tile" />,
+}))
+vi.mock('../api/profile.js', () => ({ getProfile: vi.fn() }))
 
 import DashboardPage from '../pages/DashboardPage.jsx'
 import { listGigs } from '../api/gigs.js'
 import { listRehearsals } from '../api/rehearsals.js'
-import { listBandEvents } from '../api/bandEvents.js'
 import { listInvoices } from '../api/invoices.js'
 import { listAllTasks } from '../api/tasks.js'
-import { listAvailability } from '../api/availability.js'
-import { listMembers } from '../api/bandMembers.js'
+import { getProfile } from '../api/profile.js'
 import { useAuth } from '../contexts/authContext.js'
 import theme from '../theme.js'
 
@@ -54,10 +55,6 @@ const REHEARSALS = [
   { id: 20, proposed_date: '2026-06-01', location: 'Studio A', status: 'planned' },
   { id: 21, proposed_date: '2026-02-01', location: 'Old Studio', status: 'planned' },
 ]
-const EVENTS = [
-  { id: 30, title: 'Band Meeting', start_date: '2026-06-05', end_date: '2026-06-05', location: 'Bar' },
-  { id: 31, title: 'Old Event', start_date: '2026-01-01', end_date: '2026-01-01', location: 'Somewhere' },
-]
 const INVOICES = [
   { id: 40, invoice_number: '2026-001', customer_name: 'Acme', total_cents: 50000, status: 'sent', due_date: '2026-06-10' },
   { id: 41, invoice_number: '2026-002', customer_name: 'Beta', total_cents: 20000, status: 'draft', due_date: null },
@@ -69,25 +66,12 @@ const TASKS = [
   { id: 51, gig_id: 2, title: 'Confirm rider', done: false, due_date: '2026-06-01', assigned_to: 9, event_description: 'Jazz Night' },
   { id: 52, gig_id: 5, title: 'Book hotel', done: true, due_date: null, assigned_to: 7, event_description: 'Winter Tour' },
 ]
-// availability_slots: band_member_id null means the whole band; DATE columns.
-const AVAILABILITY = [
-  { id: 60, band_member_id: 7, start_date: '2026-06-20', end_date: '2026-06-22', status: 'unavailable', reason: 'Holiday' },
-  { id: 61, band_member_id: null, start_date: '2026-06-25', end_date: '2026-06-25', status: 'available', reason: null },
-  { id: 62, band_member_id: 9, start_date: '2026-01-01', end_date: '2026-01-02', status: 'unavailable', reason: 'old' },
-]
-const MEMBERS = [
-  { id: 7, name: 'Alice', color: '#f00' },
-  { id: 9, name: 'Bob', color: '#0f0' },
-]
-
 function resolveAll() {
   listGigs.mockResolvedValue(GIGS)
   listRehearsals.mockResolvedValue(REHEARSALS)
-  listBandEvents.mockResolvedValue(EVENTS)
   listInvoices.mockResolvedValue(INVOICES)
   listAllTasks.mockResolvedValue(TASKS)
-  listAvailability.mockResolvedValue(AVAILABILITY)
-  listMembers.mockResolvedValue(MEMBERS)
+  getProfile.mockResolvedValue({ logo_path: null })
 }
 
 describe('DashboardPage', () => {
@@ -130,12 +114,10 @@ describe('DashboardPage', () => {
     expect(listGigs).toHaveBeenCalledTimes(1)
   })
 
-  it('shows upcoming rehearsals and events, excluding past ones', async () => {
+  it('shows upcoming rehearsals, excluding past ones', async () => {
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Studio A')).toBeInTheDocument())
-    expect(screen.getByText('Band Meeting')).toBeInTheDocument()
     expect(screen.queryByText('Old Studio')).not.toBeInTheDocument()
-    expect(screen.queryByText('Old Event')).not.toBeInTheDocument()
   })
 
   it('shows only open invoices, excluding paid and void', async () => {
@@ -164,11 +146,8 @@ describe('DashboardPage', () => {
   it('renders empty states when sources return nothing', async () => {
     listGigs.mockResolvedValue([])
     listRehearsals.mockResolvedValue([])
-    listBandEvents.mockResolvedValue([])
     listInvoices.mockResolvedValue([])
     listAllTasks.mockResolvedValue([])
-    listAvailability.mockResolvedValue([])
-    listMembers.mockResolvedValue([])
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText(/no upcoming shows/i)).toBeInTheDocument())
     expect(screen.getByText(/no open invoices/i)).toBeInTheDocument()
@@ -192,35 +171,6 @@ describe('DashboardPage', () => {
     // Capped at 5 rendered rows.
     expect(screen.getByText('Customer 0')).toBeInTheDocument()
     expect(screen.queryByText('Customer 5')).not.toBeInTheDocument()
-  })
-
-  it('shows availability records alongside band events, by member, excluding past slots', async () => {
-    wrap(<DashboardPage />)
-    await waitFor(() => expect(screen.getByText('Band Meeting')).toBeInTheDocument())
-    // member-scoped slot shows the member name; band-wide slot shows "Band"
-    expect(screen.getByText('Alice')).toBeInTheDocument()
-    expect(screen.getByText('Band')).toBeInTheDocument()
-    // a past slot (ended in January) is excluded — Bob has no upcoming slot
-    expect(screen.queryByText('Bob')).not.toBeInTheDocument()
-    // status is shown in the secondary line, alongside the date range
-    expect(screen.getByText(/22 jun 2026\) unavailable/i)).toBeInTheDocument()
-    expect(screen.getByText(/25 jun 2026\) available/i)).toBeInTheDocument()
-  })
-
-  it('renders an availability date range only when end differs from start', async () => {
-    wrap(<DashboardPage />)
-    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
-    // multi-day slot (20–22 Jun) renders a range with a dash; single-day does not
-    expect(screen.getByText(/20 jun 2026 – 22 jun 2026/)).toBeInTheDocument()
-    expect(screen.queryByText(/25 jun 2026 –/)).not.toBeInTheDocument()
-  })
-
-  it('points the calendar card "view all" at the calendar, not the band-events page', async () => {
-    wrap(<DashboardPage />)
-    await waitFor(() => expect(screen.getByText('Calendar events')).toBeInTheDocument())
-    const links = screen.getAllByRole('link')
-    expect(links.some((l) => l.getAttribute('href') === '/availability')).toBe(true)
-    expect(links.some((l) => l.getAttribute('href') === '/events')).toBe(false)
   })
 
   it('shows a per-card error when one source fails, while the others still render', async () => {

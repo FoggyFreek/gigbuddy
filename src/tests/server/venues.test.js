@@ -156,6 +156,70 @@ describe('GET /api/venues/search', () => {
   })
 })
 
+describe('GET /api/venues — years field', () => {
+  it('returns [] for a venue with no gigs', async () => {
+    const v = venueA()
+    const res = await asUserA(request(app).get('/api/venues')).expect(200)
+    const row = res.body.find((r) => r.id === v.id)
+    expect(row.years).toEqual([])
+  })
+
+  it('returns the year when a gig is linked via venue_id', async () => {
+    const v = venueA()
+    await pool.query('UPDATE gigs SET venue_id = $1 WHERE id = $2', [v.id, seed.gigA.id])
+    const res = await asUserA(request(app).get('/api/venues')).expect(200)
+    const row = res.body.find((r) => r.id === v.id)
+    expect(row.years).toEqual([2026])
+  })
+
+  it('returns the year when a gig is linked via festival_id', async () => {
+    const { rows: [fest] } = await pool.query(
+      `INSERT INTO venues (tenant_id, category, name) VALUES ($1, 'festival', 'Alpha Fest') RETURNING id`,
+      [seed.tenantA.id],
+    )
+    await pool.query('UPDATE gigs SET festival_id = $1 WHERE id = $2', [fest.id, seed.gigA.id])
+    const res = await asUserA(request(app).get('/api/venues')).expect(200)
+    const row = res.body.find((r) => r.id === fest.id)
+    expect(row.years).toEqual([2026])
+  })
+
+  it('returns sorted distinct years from gigs via both venue_id and festival_id', async () => {
+    const v = venueA()
+    await pool.query('UPDATE gigs SET venue_id = $1 WHERE id = $2', [v.id, seed.gigA.id])
+    // Insert a second gig in a different year (2024) also via venue_id
+    await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description, venue_id)
+       VALUES ($1, '2024-08-15', 'Earlier Gig', $2)`,
+      [seed.tenantA.id, v.id],
+    )
+    // Insert a third gig in same year 2026 via festival_id (duplicate year — should deduplicate)
+    const { rows: [fest] } = await pool.query(
+      `INSERT INTO venues (tenant_id, category, name) VALUES ($1, 'festival', 'Dup Fest') RETURNING id`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description, festival_id)
+       VALUES ($1, '2026-09-01', 'Festival Gig', $2)`,
+      [seed.tenantA.id, fest.id],
+    )
+    // Also link that festival gig to v as venue_id — but the DISTINCT means 2026 appears once
+    await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description, venue_id)
+       VALUES ($1, '2025-03-10', 'Mid Gig', $2)`,
+      [seed.tenantA.id, v.id],
+    )
+    const res = await asUserA(request(app).get('/api/venues')).expect(200)
+    const row = res.body.find((r) => r.id === v.id)
+    expect(row.years).toEqual([2024, 2025, 2026])
+  })
+
+  it('tenant A response does not contain tenant B venues', async () => {
+    const res = await asUserA(request(app).get('/api/venues')).expect(200)
+    const ids = res.body.map((r) => r.tenant_id)
+    expect(ids.every((tid) => tid === seed.tenantA.id)).toBe(true)
+  })
+})
+
 describe('PATCH venue category — server enforces invariant', () => {
   it('rejects category change without on_affected_gigs when gig references exist', async () => {
     const v = venueA()

@@ -20,6 +20,7 @@ import GigFormModal from '../components/GigFormModal.jsx'
 import SplitView from '../components/SplitView.jsx'
 import TourShareDialog from '../components/TourShareDialog.jsx'
 import TourExportDialog from '../components/TourExportDialog.jsx'
+import BannerMosaicDialog from '../components/BannerMosaicDialog.jsx'
 import { listGigs } from '../api/gigs.js'
 import { getProfile } from '../api/profile.js'
 import { downloadBandsintownCsv } from '../utils/bandsintownExport.js'
@@ -38,6 +39,7 @@ export default function GigsPage() {
   const [tourIncludeAnnounced, setTourIncludeAnnounced] = useState(true)
   const [tourShareOpen, setTourShareOpen] = useState(false)
   const [tourExportOpen, setTourExportOpen] = useState(false)
+  const [mosaicOpen, setMosaicOpen] = useState(false)
   const [bandsintownArtistName, setBandsintownArtistName] = useState('')
 
   const load = useCallback(async () => {
@@ -71,6 +73,13 @@ export default function GigsPage() {
   const handleGigDelete = useCallback((gigId) => {
     setGigs((prev) => prev.filter((g) => g.id !== gigId))
   }, [])
+
+  const filteredForShare = gigs
+    .filter((g) =>
+      (tourIncludeConfirmed && g.status === 'confirmed') ||
+      (tourIncludeAnnounced && g.status === 'announced'),
+    )
+    .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))
 
   return (
     <SplitView
@@ -122,6 +131,16 @@ export default function GigsPage() {
               Create Tour Card
             </Button>
           </MenuItem>
+           <MenuItem
+            disabled={!tourIncludeConfirmed && !tourIncludeAnnounced}
+            onClick={() => { setTourMenuAnchor(null); setMosaicOpen(true) }}
+            dense
+          >
+            <Button variant="contained" size="small" fullWidth>
+              Banner Mosaic
+            </Button>
+          </MenuItem>
+          <Divider />
           <MenuItem
             disabled={!tourIncludeConfirmed && !tourIncludeAnnounced}
             onClick={() => { setTourMenuAnchor(null); setTourExportOpen(true) }}
@@ -135,15 +154,7 @@ export default function GigsPage() {
             disabled={!tourIncludeConfirmed && !tourIncludeAnnounced}
             onClick={() => {
               setTourMenuAnchor(null)
-              downloadBandsintownCsv(
-                gigs
-                  .filter((g) =>
-                    (tourIncludeConfirmed && g.status === 'confirmed') ||
-                    (tourIncludeAnnounced && g.status === 'announced'),
-                  )
-                  .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date))),
-                bandsintownArtistName,
-              )
+              downloadBandsintownCsv(filteredForShare, bandsintownArtistName)
             }}
             dense
           >
@@ -151,6 +162,8 @@ export default function GigsPage() {
               Export to Bandsintown
             </Button>
           </MenuItem>
+          
+         
         </Menu>
         <Button
           variant="contained"
@@ -191,23 +204,19 @@ export default function GigsPage() {
       <TourShareDialog
         open={tourShareOpen}
         onClose={() => setTourShareOpen(false)}
-        gigs={gigs
-          .filter((g) =>
-            (tourIncludeConfirmed && g.status === 'confirmed') ||
-            (tourIncludeAnnounced && g.status === 'announced'),
-          )
-          .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))}
+        gigs={filteredForShare}
       />
 
       <TourExportDialog
         open={tourExportOpen}
         onClose={() => setTourExportOpen(false)}
-        gigs={gigs
-          .filter((g) =>
-            (tourIncludeConfirmed && g.status === 'confirmed') ||
-            (tourIncludeAnnounced && g.status === 'announced'),
-          )
-          .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))}
+        gigs={filteredForShare}
+      />
+
+      <BannerMosaicDialog
+        open={mosaicOpen}
+        onClose={() => setMosaicOpen(false)}
+        gigs={filteredForShare}
       />
     </SplitView>
   )

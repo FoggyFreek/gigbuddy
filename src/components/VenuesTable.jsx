@@ -28,7 +28,7 @@ import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 
 const PAGE_SIZE = 25
-const COLUMN_COUNT = 7
+const COLUMN_COUNT = 6
 
 const ALL_CATEGORIES = ['venue', 'festival']
 const CATEGORY_LABELS = { venue: 'Venues', festival: 'Festivals' }
@@ -38,8 +38,7 @@ const COLUMNS = [
   { id: 'name',     label: 'Name' },
   { id: 'city',     label: 'City / Country' },
   { id: 'contact',  label: 'Contact' },
-  { id: 'phone',    label: 'Phone' },
-  { id: 'email',    label: 'Email' },
+  { id: 'years',    label: 'Performed', sortable: false },
 ]
 
 function contactName(venue) {
@@ -71,8 +70,6 @@ function sortValue(venue, col) {
     case 'name':     return displayName(venue)
     case 'city':     return venue.city || ''
     case 'contact':  return venue.primary_contact_name || ''
-    case 'phone':    return venue.phone || ''
-    case 'email':    return venue.email || ''
     default:         return ''
   }
 }
@@ -135,10 +132,19 @@ function VenueCard({ venue, selected, active, onToggle, onClick }) {
           </Box>
           <CategoryChip category={venue.category} />
         </Box>
-        {(contactName(venue) || venue.email) && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            {[contactName(venue), venue.email].filter(Boolean).join(' · ')}
-          </Typography>
+        {(contactName(venue) || (venue.years ?? []).length > 0) && (
+          <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+            {contactName(venue) ? (
+              <Typography variant="caption" color="text.secondary">
+                {contactName(venue)}
+              </Typography>
+            ) : <Box />}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end' }}>
+              {(venue.years ?? []).map((yr) => (
+                <Chip key={yr} label={yr} size="small" variant="outlined" />
+              ))}
+            </Box>
+          </Box>
         )}
       </Box>
     </Box>
@@ -356,17 +362,21 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }) {
                     onChange={toggleAll}
                   />
                 </TableCell>
-                {COLUMNS.map((col) => (
-                  <TableCell key={col.id}>
-                    <TableSortLabel
-                      active={sortBy === col.id}
-                      direction={sortBy === col.id ? sortDir : 'asc'}
-                      onClick={() => handleSort(col.id)}
-                    >
-                      {col.label}
-                    </TableSortLabel>
-                  </TableCell>
-                ))}
+                {COLUMNS.map((col) =>
+                  col.sortable === false ? (
+                    <TableCell key={col.id}>{col.label}</TableCell>
+                  ) : (
+                    <TableCell key={col.id}>
+                      <TableSortLabel
+                        active={sortBy === col.id}
+                        direction={sortBy === col.id ? sortDir : 'asc'}
+                        onClick={() => handleSort(col.id)}
+                      >
+                        {col.label}
+                      </TableSortLabel>
+                    </TableCell>
+                  )
+                )}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -407,8 +417,13 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }) {
                   <TableCell>{displayName(v)}</TableCell>
                   <TableCell>{cityCountry(v)}</TableCell>
                   <TableCell>{contactName(v)}</TableCell>
-                  <TableCell>{v.phone || '—'}</TableCell>
-                  <TableCell>{v.email || '—'}</TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                      {(v.years ?? []).map((yr) => (
+                        <Chip key={yr} label={yr} size="small" variant="outlined" />
+                      ))}
+                    </Box>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

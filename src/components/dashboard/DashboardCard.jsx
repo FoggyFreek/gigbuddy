@@ -22,6 +22,7 @@ export default function DashboardCard({
   status = 'ok',
   isEmpty = false,
   emptyText = 'Nothing to show',
+  sx,
   children,
 }) {
   let body = children
@@ -40,7 +41,7 @@ export default function DashboardCard({
   }
 
   return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
+    <Card variant="outlined" sx={{ height: '100%', ...sx }}>
       <CardContent sx={{ pb: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           {Icon && <Icon fontSize="small" sx={{ color: 'text.secondary' }} />}
@@ -96,5 +97,6 @@ DashboardCard.propTypes = {
   status: PropTypes.oneOf(['ok', 'error']),
   isEmpty: PropTypes.bool,
   emptyText: PropTypes.string,
+  sx: PropTypes.object,
   children: PropTypes.node,
 }

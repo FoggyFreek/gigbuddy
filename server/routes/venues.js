@@ -510,7 +510,17 @@ router.get('/', async (req, res) => {
                FROM venue_contacts vc
                JOIN contacts c ON c.id = vc.contact_id AND c.tenant_id = vc.tenant_id
               WHERE vc.venue_id = v.id AND vc.tenant_id = v.tenant_id AND vc.is_primary
-              LIMIT 1) AS primary_contact_name
+              LIMIT 1) AS primary_contact_name,
+            COALESCE(
+              (SELECT ARRAY_AGG(year ORDER BY year)
+                 FROM (
+                   SELECT DISTINCT EXTRACT(YEAR FROM g.event_date)::INT AS year
+                     FROM gigs g
+                    WHERE g.tenant_id = v.tenant_id
+                      AND (g.venue_id = v.id OR g.festival_id = v.id)
+                 ) gy),
+              '{}'
+            ) AS years
        FROM venues v
       WHERE v.tenant_id = $1
       ORDER BY v.name ASC`,

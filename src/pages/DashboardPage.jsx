@@ -5,28 +5,34 @@ import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Grid from '@mui/material/Grid'
+import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
+import Skeleton from '@mui/material/Skeleton'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import EventIcon from '@mui/icons-material/Event'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
-import EventNoteIcon from '@mui/icons-material/EventNote'
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import DashboardCard from '../components/dashboard/DashboardCard.jsx'
+import GigMapTile from '../components/dashboard/GigMapTile.jsx'
+import { SOCIALS } from '../components/profile/profileForm.js'
 import { useAuth } from '../contexts/authContext.js'
 import { listGigs } from '../api/gigs.js'
 import { listRehearsals } from '../api/rehearsals.js'
-import { listBandEvents } from '../api/bandEvents.js'
 import { listInvoices } from '../api/invoices.js'
 import { listAllTasks } from '../api/tasks.js'
-import { listAvailability } from '../api/availability.js'
-import { listMembers } from '../api/bandMembers.js'
+import { getProfile } from '../api/profile.js'
 import { formatShortDate } from '../utils/dateFormat.js'
 import { formatEur } from '../utils/invoiceTotals.js'
 import { invoiceStatusColor } from '../utils/invoiceStatus.js'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.js'
+
+function logoSrc(logoPath) {
+  return logoPath ? `/api/files/${logoPath}` : '/share/logo.png'
+}
 
 const OPEN_INVOICE_STATUSES = new Set(['draft', 'sent'])
 const GIG_STATUS_COLOR = { confirmed: 'success', announced: 'info', option: 'default' }
@@ -62,7 +68,7 @@ const settle = (r) =>
 
 // Build the whole view-model in the effect (not in render) so render stays pure.
 function buildSections(results) {
-  const [gigsR, rehR, evR, invR, taskR, availR, membersR, bandMemberId] = results
+  const [gigsR, rehR, invR, taskR, bandMemberId] = results
   const today = todayStr()
 
   const gigsSettled = settle(gigsR)
@@ -71,38 +77,14 @@ function buildSections(results) {
     .sort(byDateAscNullsLast('event_date'))
 
   const rehSettled = settle(rehR)
-  const evSettled = settle(evR)
   const invSettled = settle(invR)
   const taskSettled = settle(taskR)
-  const availSettled = settle(availR)
-  const membersSettled = settle(membersR)
-  const memberName = (id) =>
-    id == null ? 'Band' : membersSettled.data.find((m) => m.id === id)?.name || 'Unknown'
 
   // Featured "next gig" is dropped from the shows list, so total excludes it too.
   const upcomingShows = upcomingGigs.slice(1)
   const upcomingRehearsals = rehSettled.data
     .filter((r) => dateKey(r.proposed_date) >= today)
     .sort(byDateAscNullsLast('proposed_date'))
-  const upcomingEvents = evSettled.data
-    .filter((e) => dateKey(e.end_date) >= today)
-  // Calendar card merges band events and availability slots into one date-sorted list.
-  const upcomingAvailability = availSettled.data
-    .filter((s) => dateKey(s.end_date) >= today)
-  const calendarItems = [
-    ...upcomingEvents.map((e) => ({
-      kind: 'event',
-      id: e.id,
-      sortDate: dateKey(e.start_date),
-      data: e,
-    })),
-    ...upcomingAvailability.map((s) => ({
-      kind: 'availability',
-      id: s.id,
-      sortDate: dateKey(s.start_date),
-      data: { ...s, member_name: memberName(s.band_member_id) },
-    })),
-  ].sort(byDateAscNullsLast('sortDate'))
   const openInvoices = invSettled.data
     .filter((i) => OPEN_INVOICE_STATUSES.has(i.status))
     .sort(byDateAscNullsLast('due_date'))
@@ -117,12 +99,6 @@ function buildSections(results) {
       status: rehSettled.status,
       total: upcomingRehearsals.length,
       data: upcomingRehearsals.slice(0, MAX_ROWS),
-    },
-    calendar: {
-      // Surface an error only if both sources fail; otherwise show what loaded.
-      status: evSettled.status === 'error' && availSettled.status === 'error' ? 'error' : 'ok',
-      total: calendarItems.length,
-      data: calendarItems.slice(0, MAX_ROWS),
     },
     invoices: {
       status: invSettled.status,
@@ -166,21 +142,25 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [sections, setSections] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [profileLoading, setProfileLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    getProfile()
+      .then((data) => { if (!cancelled) { setProfile(data); setProfileLoading(false) } })
+      .catch(() => { if (!cancelled) setProfileLoading(false) })
+    return () => { cancelled = true }
+  }, [])
 
   const load = useCallback(async () => {
     try {
       setLoading(true)
-      // Availability is windowed (from/to required); fetch from today forward.
-      const from = todayStr()
-      const to = `${Number(from.slice(0, 4)) + 2}-12-31`
       const results = await Promise.allSettled([
         listGigs(),
         listRehearsals(),
-        listBandEvents(),
         listInvoices(),
         listAllTasks(),
-        listAvailability({ from, to }),
-        listMembers(),
       ])
       setSections(buildSections([...results, bandMemberId]))
     } finally {
@@ -198,92 +178,104 @@ export default function DashboardPage() {
     )
   }
 
-  const { nextGig, shows, rehearsals, calendar, invoices, tasks } = sections
+  const { nextGig, shows, rehearsals, invoices, tasks } = sections
+  const activeSocials = SOCIALS.filter(({ field, prefix }) => prefix && profile?.[field])
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }}>
-        Dashboard
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        {profileLoading ? (
+          <Skeleton variant="rectangular" width={80} height={40} sx={{ borderRadius: 1 }} />
+        ) : (
+          <Box
+            component="img"
+            src={logoSrc(profile?.logo_path)}
+            alt="Band logo"
+            onError={(e) => { e.currentTarget.src = '/share/logo.png' }}
+            sx={{ maxHeight: 48, maxWidth: 120, objectFit: 'contain', display: 'block' }}
+          />
+        )}
+        {activeSocials.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            {activeSocials.map(({ field, label, Icon, prefix }) => (
+              <Tooltip key={field} title={label}>
+                <IconButton
+                  component="a"
+                  href={`https://${prefix}${profile[field]}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  size="small"
+                  aria-label={label}
+                >
+                  {Icon && <Icon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+            ))}
+          </Box>
+        )}
+      </Box>
 
       <Grid container spacing={3} sx={{ alignItems: 'stretch' }}>
-        {/* Next gig */}
+
+        {/* Next gig + Played here stacked in one column */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-          <DashboardCard
-            title="Next gig"
-            icon={EventIcon}
-            viewAllTo={nextGig.data ? `/gigs/${nextGig.data.id}` : undefined}
-            viewAllLabel="View details"
-            status={nextGig.status}
-            isEmpty={!nextGig.data}
-            emptyText="No upcoming gigs"
-          >
-            {nextGig.data && (
-              <Box
-                onClick={() => navigate(`/gigs/${nextGig.data.id}`)}
-                sx={{ cursor: 'pointer', py: 1, display: 'flex', alignItems: 'center', gap: 2 }}
-              >
-                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                  <Typography variant="overline" color="text.secondary">
-                    {formatShortDate(nextGig.data.event_date)}
-                  </Typography>
-                  <Typography variant="h6" fontWeight={600} sx={{ mb: 0.5 }}>
-                    {nextGig.data.event_description}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {(() => {
-                        const place = nextGig.data.venue ?? nextGig.data.festival
-                        return [venueHeadline(place), venueCity(place)].filter(Boolean).join(' · ')
-                      })()}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%' }}>
+            <DashboardCard
+              title="Next gig"
+              icon={EventIcon}
+              viewAllTo={nextGig.data ? `/gigs/${nextGig.data.id}` : undefined}
+              viewAllLabel="View details"
+              status={nextGig.status}
+              isEmpty={!nextGig.data}
+              emptyText="No upcoming gigs"
+              sx={{ height: 'auto', flexShrink: 0 }}
+            >
+              {nextGig.data && (
+                <Box
+                  onClick={() => navigate(`/gigs/${nextGig.data.id}`)}
+                  sx={{ cursor: 'pointer', py: 0.5, display: 'flex', alignItems: 'center', gap: 2 }}
+                >
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Typography variant="overline" color="text.secondary">
+                      {formatShortDate(nextGig.data.event_date)}
                     </Typography>
+                    <Typography variant="h6" fontWeight={600} sx={{ mb: 0.5 }}>
+                      {nextGig.data.event_description}
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {(() => {
+                          const place = nextGig.data.venue ?? nextGig.data.festival
+                          return [venueHeadline(place), venueCity(place)].filter(Boolean).join(' · ')
+                        })()}
+                      </Typography>
+                    </Box>
                   </Box>
+                  {nextGig.data.banner_path && (
+                    <Box
+                      component="img"
+                      src={`/api/files/${nextGig.data.banner_path}`}
+                      alt=""
+                      sx={{
+                        width: 56,
+                        height: 56,
+                        objectFit: 'cover',
+                        borderRadius: 1,
+                        flexShrink: 0,
+                        display: 'block',
+                      }}
+                    />
+                  )}
                 </Box>
-                {nextGig.data.banner_path && (
-                  <Box
-                    component="img"
-                    src={`/api/files/${nextGig.data.banner_path}`}
-                    alt=""
-                    sx={{
-                      width: 88,
-                      height: 88,
-                      objectFit: 'cover',
-                      borderRadius: 1,
-                      flexShrink: 0,
-                      display: 'block',
-                    }}
-                  />
-                )}
-              </Box>
-            )}
-          </DashboardCard>
+              )}
+            </DashboardCard>
+            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <GigMapTile />
+            </Box>
+          </Box>
         </Grid>
 
-        {/* My tasks */}
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-          <DashboardCard
-            title="My tasks"
-            icon={ChecklistIcon}
-            count={tasks.total}
-            viewAllTo="/tasks"
-            status={tasks.status}
-            isEmpty={tasks.data.length === 0}
-            emptyText="No open tasks"
-          >
-            <List dense disablePadding>
-              {tasks.data.map((t) => (
-                <Row
-                  key={t.id}
-                  primary={t.title}
-                  secondary={[t.event_description, t.due_date && formatShortDate(t.due_date)]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  onClick={() => navigate(`/gigs/${t.gig_id}`)}
-                />
-              ))}
-            </List>
-          </DashboardCard>
-        </Grid>
+        
 
         {/* Upcoming shows */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
@@ -320,6 +312,32 @@ export default function DashboardPage() {
           </DashboardCard>
         </Grid>
 
+        {/* My tasks */}
+        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+          <DashboardCard
+            title="My tasks"
+            icon={ChecklistIcon}
+            count={tasks.total}
+            viewAllTo="/tasks"
+            status={tasks.status}
+            isEmpty={tasks.data.length === 0}
+            emptyText="No open tasks"
+          >
+            <List dense disablePadding>
+              {tasks.data.map((t) => (
+                <Row
+                  key={t.id}
+                  primary={t.title}
+                  secondary={[t.event_description, t.due_date && formatShortDate(t.due_date)]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  onClick={() => navigate(`/gigs/${t.gig_id}`)}
+                />
+              ))}
+            </List>
+          </DashboardCard>
+        </Grid>
+
         {/* Rehearsals */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
@@ -343,50 +361,7 @@ export default function DashboardPage() {
           </DashboardCard>
         </Grid>
 
-        {/* Calendar events: band events + availability slots */}
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-          <DashboardCard
-            title="Calendar events"
-            icon={EventNoteIcon}
-            count={calendar.total}
-            viewAllTo="/availability"
-            status={calendar.status}
-            isEmpty={calendar.data.length === 0}
-            emptyText="No upcoming events"
-          >
-            <List dense disablePadding>
-              {calendar.data.map((item) =>
-                item.kind === 'event' ? (
-                  <Row
-                    key={`event-${item.id}`}
-                    primary={item.data.title}
-                    secondary={[formatShortDate(item.data.start_date), item.data.location]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    onClick={() => navigate(`/events/${item.id}`)}
-                  />
-                ) : (
-                  <Row
-                    key={`avail-${item.id}`}
-                    primary={item.data.member_name}
-                    secondary={(() => {
-                      const begin = formatShortDate(item.data.start_date)
-                      const end =
-                        dateKey(item.data.end_date) !== dateKey(item.data.start_date)
-                          ? formatShortDate(item.data.end_date)
-                          : null
-                      const range = end ? `${begin} – ${end}` : begin
-                      return `(${range}) ${item.data.status}`
-                    })()}
-                    onClick={() => navigate('/availability')}
-                  />
-                )
-              )}
-            </List>
-          </DashboardCard>
-        </Grid>
-
-        {/* Open invoices */}
+ {/* Open invoices */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
             title="Open invoices"
@@ -412,6 +387,10 @@ export default function DashboardPage() {
             </List>
           </DashboardCard>
         </Grid>
+
+
+
+
       </Grid>
     </Box>
   )

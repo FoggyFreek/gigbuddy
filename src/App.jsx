@@ -13,6 +13,7 @@ const ContactDetailPage = lazy(() => import('./pages/ContactDetailPage.jsx'))
 const ContactsPage = lazy(() => import('./pages/ContactsPage.jsx'))
 const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage.jsx'))
 const GigDetailPage = lazy(() => import('./pages/GigDetailPage.jsx'))
+const GigMapPage = lazy(() => import('./pages/GigMapPage.jsx'))
 const GigsPage = lazy(() => import('./pages/GigsPage.jsx'))
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 const MembersPage = lazy(() => import('./pages/MembersPage.jsx'))
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/gigs" element={<GigsPage />}>
               <Route path=":id" element={<GigDetailPage />} />
             </Route>
+            <Route path="/map" element={<GigMapPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/rehearsals" element={<RehearsalsPage />}>
               <Route path=":id" element={<RehearsalDetailPage />} />

@@ -18,6 +18,7 @@ import tenantsRouter from './tenants.js'
 import adminUsersRouter from './adminUsers.js'
 import sharePhotosRouter from './sharePhotos.js'
 import filesRouter from './files.js'
+import geocodeRouter from './geocode.js'
 import { adminRouter as invitesAdminRouter, redeemRouter as invitesRedeemRouter } from './invites.js'
 import publicMollieRouter from './publicMollie.js'
 import publicInvoicesRouter from './publicInvoices.js'
@@ -111,6 +112,7 @@ router.use('/admin/users', superAdmin, adminUsersRouter)
 router.use('/invites', tenantAdmin, invitesAdminRouter)
 router.use('/users', tenantAdmin, usersRouter)
 router.use('/gigs', tenantMember, gigsRouter)
+router.use('/geocode', tenantMember, geocodeRouter)
 router.use('/tasks', tenantMember, tasksRouter)
 router.use('/profile', tenantMember, profileRouter)
 router.use('/band-members', tenantMember, bandMembersRouter)

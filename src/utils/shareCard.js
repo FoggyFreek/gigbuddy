@@ -202,6 +202,10 @@ export function buildTourShareFilename(year, formatId) {
   return `tour-${year}-${formatId}.png`
 }
 
+export function buildBannerMosaicFilename(yearLabel, formatId) {
+  return `banner-mosaic-${yearLabel}-${formatId}.png`
+}
+
 export async function renderLayeredPdf(node, { width, height }) {
   const [{ default: jsPDF }, htmlToImage, fontEmbedCSS] = await Promise.all([
     import('jspdf'),
