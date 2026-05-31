@@ -581,8 +581,8 @@ function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting,
                            style="background:#f8f8f8;border-left:4px solid #1a1a2e;padding:16px 20px;">
                       <tr>
                         <td>
-                          <p style="margin:0 0 2px 0;font-size:12px;color:#888888;">Factuurnummer</p>
-                          <p style="margin:0;font-size:17px;font-weight:bold;color:#1a1a2e;">${escHtml(invoiceNumber)}</p>
+                          <p style="margin:6px;font-size:12px;color:#888888;">Factuurnummer</p>
+                          <p style="margin:6px;font-size:17px;font-weight:bold;color:#1a1a2e;">${escHtml(invoiceNumber)}</p>
                         </td>
                         ${issueDateCell}
                       </tr>
@@ -675,8 +675,9 @@ async function resolveEmlData(id, tenantId) {
   const invoiceNumber = invoice.invoice_number || 'concept'
 
   const subjectDate = gigDate || issueDate || ''
+  const subjectVenue = invoice.event_description ? ` – ${invoice.event_description}` : ''
   const subjectDateSuffix = subjectDate ? ` – ${subjectDate}` : ''
-  const subject = `Factuur ${invoiceNumber} – ${bandName}${subjectDateSuffix}`
+  const subject = `Factuur ${invoiceNumber} – ${bandName}${subjectDateSuffix}${subjectVenue}`
 
   const titlePart  = invoice.customer_contact_title ? `${invoice.customer_contact_title} ` : ''
   const familyName = invoice.customer_contact_family_name || ''

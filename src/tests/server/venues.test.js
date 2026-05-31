@@ -39,6 +39,38 @@ function asUserB(req) {
 }
 
 const venueA = () => seed.venues.find((v) => v.tenant_id === seed.tenantA.id)
+const contactA = () => seed.contacts.find((c) => c.tenant_id === seed.tenantA.id)
+
+describe('GET /api/venues — list includes primary contact name', () => {
+  it('returns the primary linked contact name in primary_contact_name', async () => {
+    const v = venueA()
+    const c = contactA()
+    await pool.query(
+      `INSERT INTO venue_contacts (venue_id, contact_id, tenant_id, is_primary)
+       VALUES ($1, $2, $3, true)`,
+      [v.id, c.id, seed.tenantA.id],
+    )
+
+    const res = await asUserA(request(app).get('/api/venues')).expect(200)
+    const row = res.body.find((r) => r.id === v.id)
+    expect(row.primary_contact_name).toBe('Alpha Contact')
+  })
+
+  it('leaves primary_contact_name null when no primary contact is linked', async () => {
+    const v = venueA()
+    const c = contactA()
+    // linked but not primary → still null
+    await pool.query(
+      `INSERT INTO venue_contacts (venue_id, contact_id, tenant_id, is_primary)
+       VALUES ($1, $2, $3, false)`,
+      [v.id, c.id, seed.tenantA.id],
+    )
+
+    const res = await asUserA(request(app).get('/api/venues')).expect(200)
+    const row = res.body.find((r) => r.id === v.id)
+    expect(row.primary_contact_name).toBeNull()
+  })
+})
 
 describe('POST /api/venues — create venue', () => {
   it('creates a venue and returns 201 with the new row', async () => {

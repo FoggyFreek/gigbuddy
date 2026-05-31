@@ -21,6 +21,8 @@ import { listRehearsals } from '../api/rehearsals.js'
 import { listBandEvents } from '../api/bandEvents.js'
 import { listInvoices } from '../api/invoices.js'
 import { listAllTasks } from '../api/tasks.js'
+import { listAvailability } from '../api/availability.js'
+import { listMembers } from '../api/bandMembers.js'
 import { formatShortDate } from '../utils/dateFormat.js'
 import { formatEur } from '../utils/invoiceTotals.js'
 import { invoiceStatusColor } from '../utils/invoiceStatus.js'
@@ -60,7 +62,7 @@ const settle = (r) =>
 
 // Build the whole view-model in the effect (not in render) so render stays pure.
 function buildSections(results) {
-  const [gigsR, rehR, evR, invR, taskR, bandMemberId] = results
+  const [gigsR, rehR, evR, invR, taskR, availR, membersR, bandMemberId] = results
   const today = todayStr()
 
   const gigsSettled = settle(gigsR)
@@ -72,6 +74,10 @@ function buildSections(results) {
   const evSettled = settle(evR)
   const invSettled = settle(invR)
   const taskSettled = settle(taskR)
+  const availSettled = settle(availR)
+  const membersSettled = settle(membersR)
+  const memberName = (id) =>
+    id == null ? 'Band' : membersSettled.data.find((m) => m.id === id)?.name || 'Unknown'
 
   // Featured "next gig" is dropped from the shows list, so total excludes it too.
   const upcomingShows = upcomingGigs.slice(1)
@@ -80,7 +86,23 @@ function buildSections(results) {
     .sort(byDateAscNullsLast('proposed_date'))
   const upcomingEvents = evSettled.data
     .filter((e) => dateKey(e.end_date) >= today)
-    .sort(byDateAscNullsLast('start_date'))
+  // Calendar card merges band events and availability slots into one date-sorted list.
+  const upcomingAvailability = availSettled.data
+    .filter((s) => dateKey(s.end_date) >= today)
+  const calendarItems = [
+    ...upcomingEvents.map((e) => ({
+      kind: 'event',
+      id: e.id,
+      sortDate: dateKey(e.start_date),
+      data: e,
+    })),
+    ...upcomingAvailability.map((s) => ({
+      kind: 'availability',
+      id: s.id,
+      sortDate: dateKey(s.start_date),
+      data: { ...s, member_name: memberName(s.band_member_id) },
+    })),
+  ].sort(byDateAscNullsLast('sortDate'))
   const openInvoices = invSettled.data
     .filter((i) => OPEN_INVOICE_STATUSES.has(i.status))
     .sort(byDateAscNullsLast('due_date'))
@@ -96,10 +118,11 @@ function buildSections(results) {
       total: upcomingRehearsals.length,
       data: upcomingRehearsals.slice(0, MAX_ROWS),
     },
-    events: {
-      status: evSettled.status,
-      total: upcomingEvents.length,
-      data: upcomingEvents.slice(0, MAX_ROWS),
+    calendar: {
+      // Surface an error only if both sources fail; otherwise show what loaded.
+      status: evSettled.status === 'error' && availSettled.status === 'error' ? 'error' : 'ok',
+      total: calendarItems.length,
+      data: calendarItems.slice(0, MAX_ROWS),
     },
     invoices: {
       status: invSettled.status,
@@ -147,12 +170,17 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true)
+      // Availability is windowed (from/to required); fetch from today forward.
+      const from = todayStr()
+      const to = `${Number(from.slice(0, 4)) + 2}-12-31`
       const results = await Promise.allSettled([
         listGigs(),
         listRehearsals(),
         listBandEvents(),
         listInvoices(),
         listAllTasks(),
+        listAvailability({ from, to }),
+        listMembers(),
       ])
       setSections(buildSections([...results, bandMemberId]))
     } finally {
@@ -170,7 +198,7 @@ export default function DashboardPage() {
     )
   }
 
-  const { nextGig, shows, rehearsals, events, invoices, tasks } = sections
+  const { nextGig, shows, rehearsals, calendar, invoices, tasks } = sections
 
   return (
     <Box>
@@ -315,25 +343,45 @@ export default function DashboardPage() {
           </DashboardCard>
         </Grid>
 
-        {/* Calendar events */}
+        {/* Calendar events: band events + availability slots */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
             title="Calendar events"
             icon={EventNoteIcon}
-            viewAllTo="/events"
-            status={events.status}
-            isEmpty={events.data.length === 0}
+            count={calendar.total}
+            viewAllTo="/availability"
+            status={calendar.status}
+            isEmpty={calendar.data.length === 0}
             emptyText="No upcoming events"
           >
             <List dense disablePadding>
-              {events.data.map((e) => (
-                <Row
-                  key={e.id}
-                  primary={e.title}
-                  secondary={[formatShortDate(e.start_date), e.location].filter(Boolean).join(' · ')}
-                  onClick={() => navigate(`/events/${e.id}`)}
-                />
-              ))}
+              {calendar.data.map((item) =>
+                item.kind === 'event' ? (
+                  <Row
+                    key={`event-${item.id}`}
+                    primary={item.data.title}
+                    secondary={[formatShortDate(item.data.start_date), item.data.location]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    onClick={() => navigate(`/events/${item.id}`)}
+                  />
+                ) : (
+                  <Row
+                    key={`avail-${item.id}`}
+                    primary={item.data.member_name}
+                    secondary={(() => {
+                      const begin = formatShortDate(item.data.start_date)
+                      const end =
+                        dateKey(item.data.end_date) !== dateKey(item.data.start_date)
+                          ? formatShortDate(item.data.end_date)
+                          : null
+                      const range = end ? `${begin} – ${end}` : begin
+                      return `(${range}) ${item.data.status}`
+                    })()}
+                    onClick={() => navigate('/availability')}
+                  />
+                )
+              )}
             </List>
           </DashboardCard>
         </Grid>

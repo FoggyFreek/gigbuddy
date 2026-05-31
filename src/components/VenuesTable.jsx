@@ -43,7 +43,7 @@ const COLUMNS = [
 ]
 
 function contactName(venue) {
-  return [venue.title, venue.given_name, venue.family_name].filter(Boolean).join(' ')
+  return venue.primary_contact_name || ''
 }
 
 function displayName(venue) {
@@ -70,7 +70,7 @@ function sortValue(venue, col) {
     case 'category': return venue.category || ''
     case 'name':     return displayName(venue)
     case 'city':     return venue.city || ''
-    case 'contact':  return venue.family_name || venue.given_name || ''
+    case 'contact':  return venue.primary_contact_name || ''
     case 'phone':    return venue.phone || ''
     case 'email':    return venue.email || ''
     default:         return ''
@@ -91,7 +91,7 @@ function applySearch(list, q) {
     [
       v.name, v.category, v.city, v.country, v.region,
       v.street_and_number, v.street_additional, v.postal_code,
-      v.website, v.title, v.given_name, v.family_name, v.phone, v.email,
+      v.website, v.primary_contact_name, v.phone, v.email,
     ].some((f) => f && String(f).toLowerCase().includes(lower))
   )
 }
@@ -406,7 +406,7 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }) {
                   <TableCell><CategoryChip category={v.category} /></TableCell>
                   <TableCell>{displayName(v)}</TableCell>
                   <TableCell>{cityCountry(v)}</TableCell>
-                  <TableCell>{contactName(v) || '—'}</TableCell>
+                  <TableCell>{contactName(v)}</TableCell>
                   <TableCell>{v.phone || '—'}</TableCell>
                   <TableCell>{v.email || '—'}</TableCell>
                 </TableRow>

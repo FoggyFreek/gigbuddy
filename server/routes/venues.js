@@ -505,7 +505,15 @@ async function importVenues(tenantId, body) {
 
 router.get('/', async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT * FROM venues WHERE tenant_id = $1 ORDER BY name ASC',
+    `SELECT v.*,
+            (SELECT c.name
+               FROM venue_contacts vc
+               JOIN contacts c ON c.id = vc.contact_id AND c.tenant_id = vc.tenant_id
+              WHERE vc.venue_id = v.id AND vc.tenant_id = v.tenant_id AND vc.is_primary
+              LIMIT 1) AS primary_contact_name
+       FROM venues v
+      WHERE v.tenant_id = $1
+      ORDER BY v.name ASC`,
     [req.tenantId],
   )
   res.json(rows)
