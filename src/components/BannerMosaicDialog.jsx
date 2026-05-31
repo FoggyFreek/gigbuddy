@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
+import PropTypes from 'prop-types'
+import { gigShape } from '../propTypes/shared.js'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import ButtonBase from '@mui/material/ButtonBase'
@@ -214,7 +216,7 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }) {
             </Box>
 
             <Typography variant="caption" color="text.secondary">
-              {filteredGigs.length} banner{filteredGigs.length !== 1 ? 's' : ''}
+              {filteredGigs.length} banner{filteredGigs.length === 1 ? '' : 's'}
             </Typography>
 
           </Stack>
@@ -249,4 +251,10 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }) {
       />
     </>
   )
+}
+
+BannerMosaicDialog.propTypes = {
+  open: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  gigs: PropTypes.arrayOf(gigShape),
 }

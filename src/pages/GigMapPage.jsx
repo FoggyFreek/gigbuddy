@@ -10,6 +10,19 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 export default function GigMapPage() {
   const { status, loading, cityCount, gigCount, markers } = useGigMapData()
 
+  let mapContent
+  if (status === 'error') {
+    mapContent = <Alert severity="error">Couldn&apos;t load the gig map.</Alert>
+  } else if (loading && markers.length === 0) {
+    mapContent = (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+        <CircularProgress />
+      </Box>
+    )
+  } else {
+    mapContent = <GigWorldMap markers={markers} interactive height="100%" />
+  }
+
   return (
     // Leaflet needs a concrete height; AppShell adds a toolbar + p:3 padding, so
     // size the column off the viewport and let the map fill the remaining space.
@@ -22,15 +35,7 @@ export default function GigMapPage() {
       </Typography>
 
       <Box sx={{ flex: 1, minHeight: 0 }}>
-        {status === 'error' ? (
-          <Alert severity="error">Couldn&apos;t load the gig map.</Alert>
-        ) : loading && markers.length === 0 ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <GigWorldMap markers={markers} interactive height="100%" />
-        )}
+        {mapContent}
       </Box>
     </Box>
   )

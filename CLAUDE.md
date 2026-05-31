@@ -88,3 +88,4 @@ New migrations go in `server/db/migrations/` as `NNN_name.sql` and run on the ne
 - New resource routers are registered in `server/routes/index.js`; each frontend resource gets one thin `src/api/*.js` wrapper around `_client.request` (the only place that knows the `/api/*` path).
 - Auto-save fields use `useDebouncedSave` (600 ms debounce; `flush()` on modal close).
 - When giving the user a multi-line vs. line-by-line command, say which — don't leave a block ambiguous.
+- PropTypes are used extensively. Every component must declare `ComponentName.propTypes = { ... }`. Shared entity shapes live in `src/propTypes/shared.js` (`venueShape`, `gigShape`, `memberShape`, etc.) — import and reuse them rather than redeclaring inline. Add new fields to the shared shapes when a component uses a prop that isn't there yet.

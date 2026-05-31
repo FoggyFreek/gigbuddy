@@ -13,6 +13,8 @@ export const venueShape = PropTypes.shape({
   region: PropTypes.string,
   postal_code: PropTypes.string,
   country: PropTypes.string,
+  primary_contact_name: PropTypes.string,
+  years: PropTypes.arrayOf(PropTypes.number),
 })
 
 export const gigShape = PropTypes.shape({

@@ -25,6 +25,8 @@ import Typography from '@mui/material/Typography'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
+import PropTypes from 'prop-types'
+import { idProp, venueShape } from '../propTypes/shared.js'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 
 const PAGE_SIZE = 25
@@ -149,6 +151,14 @@ function VenueCard({ venue, selected, active, onToggle, onClick }) {
       </Box>
     </Box>
   )
+}
+
+VenueCard.propTypes = {
+  venue: venueShape.isRequired,
+  selected: PropTypes.bool.isRequired,
+  active: PropTypes.bool.isRequired,
+  onToggle: PropTypes.func.isRequired,
+  onClick: PropTypes.func.isRequired,
 }
 
 export default function VenuesTable({ venues, onRowClick, selectedId = null }) {
@@ -441,4 +451,10 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }) {
       </Paper>
     </Stack>
   )
+}
+
+VenuesTable.propTypes = {
+  venues: PropTypes.arrayOf(venueShape).isRequired,
+  onRowClick: PropTypes.func.isRequired,
+  selectedId: idProp,
 }
