@@ -6,6 +6,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { ThemeContextProvider } from './contexts/ThemeContext.jsx'
 import { TenantThemeProvider } from './contexts/TenantThemeProvider.jsx'
+import { ToastProvider } from './contexts/ToastContext.jsx'
 import App from './App.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { ProfileProvider } from './contexts/ProfileContext.jsx'
@@ -25,7 +26,9 @@ createRoot(document.getElementById('root')).render(
           <AuthProvider>
             <ProfileProvider>
               <TenantThemeProvider>
-                <App />
+                <ToastProvider>
+                  <App />
+                </ToastProvider>
               </TenantThemeProvider>
             </ProfileProvider>
           </AuthProvider>

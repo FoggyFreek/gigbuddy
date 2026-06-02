@@ -86,7 +86,7 @@ describe('GigsPage', () => {
   it('renders header, Add button, and loaded gigs', async () => {
     wrap(<GigsPage />)
     expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /add gig/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^add$/i })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
   })
 })

@@ -134,7 +134,7 @@ export default function VenueImportDialog({ onClose }) {
               and number, street additional, postal code, city, region, country, website, phone,
               email.
             </Typography>
-            <Button variant="outlined" component="label">
+            <Button component="label">
               Choose CSV file
               <input
                 ref={fileRef}

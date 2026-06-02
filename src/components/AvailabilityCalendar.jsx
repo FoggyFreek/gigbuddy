@@ -84,12 +84,13 @@ export default function AvailabilityCalendar({
         <IconButton size="small" onClick={onPrev} aria-label="previous month">
           <ChevronLeftIcon />
         </IconButton>
+          <IconButton size="small" onClick={onNext} aria-label="next month">
+          <ChevronRightIcon />
+        </IconButton>
         <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
           <MonthMenu year={year} month={month} onMonthJump={onMonthJump} />
         </Box>
-        <IconButton size="small" onClick={onNext} aria-label="next month">
-          <ChevronRightIcon />
-        </IconButton>
+      
         {onExport && (
           <Tooltip title="Export month to calendar (.ics)">
             <IconButton size="small" onClick={onExport} aria-label="export to calendar">

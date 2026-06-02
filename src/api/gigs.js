@@ -7,6 +7,7 @@ export const getGig = (id, opts) => api(`/${id}`, opts)
 export const createGig = (body) => api('/', { method: 'POST', body: JSON.stringify(body) })
 export const updateGig = (id, body) => api(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteGig = (id) => api(`/${id}`, { method: 'DELETE' })
+export const importGigs = (rows) => api('/import', { method: 'POST', body: JSON.stringify(rows) })
 
 export const createTask = (gigId, body) =>
   api(`/${gigId}/tasks`, { method: 'POST', body: JSON.stringify(body) })

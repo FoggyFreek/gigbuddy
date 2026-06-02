@@ -71,10 +71,10 @@ describe('BandEventsPage', () => {
     deleteBandEvent.mockClear()
   })
 
-  it('renders header and Add event button', async () => {
+  it('renders header and Add button', async () => {
     wrap(<BandEventsPage />)
     expect(screen.getByRole('heading', { name: /band events/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /add event/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^add$/i })).toBeInTheDocument()
     await waitFor(() => expect(listBandEvents).toHaveBeenCalled())
   })
 
@@ -83,11 +83,11 @@ describe('BandEventsPage', () => {
     await waitFor(() => expect(screen.getByText('Studio session')).toBeInTheDocument())
   })
 
-  it('opens the create modal when Add event is clicked', async () => {
+  it('opens the create modal when Add is clicked', async () => {
     const user = userEvent.setup()
     wrap(<BandEventsPage />)
     await waitFor(() => expect(listBandEvents).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /add event/i }))
+    await user.click(screen.getByRole('button', { name: /^add$/i }))
     expect(screen.getByText('Add band event', { selector: 'h2' })).toBeInTheDocument()
   })
 

@@ -81,7 +81,7 @@ export default function BandEventsPage() {
           startIcon={<AddIcon />}
           onClick={() => setModal({ mode: 'create' })}
         >
-          Add event
+          Add
         </Button>
       </Box>
 

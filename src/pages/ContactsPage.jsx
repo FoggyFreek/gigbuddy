@@ -2,15 +2,17 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import IconButton from '@mui/material/IconButton'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
-import UploadFileIcon from '@mui/icons-material/UploadFile'
+import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import ContactsTable from '../components/ContactsTable.jsx'
 import ContactFormModal from '../components/ContactFormModal.jsx'
 import ContactImportDialog from '../components/ContactImportDialog.jsx'
 import SplitView from '../components/SplitView.jsx'
 import { listContacts } from '../api/contacts.js'
+import Tooltip from '@mui/material/Tooltip'
 
 export default function ContactsPage() {
   const navigate = useNavigate()
@@ -59,18 +61,17 @@ export default function ContactsPage() {
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Contacts
         </Typography>
-        <Button
-          startIcon={<UploadFileIcon />}
-          onClick={() => setImportOpen(true)}
-        >
-          Import CSV
-        </Button>
+        <Tooltip title="Import">
+          <IconButton onClick={() => setImportOpen(true)}>
+            <FileUploadOutlinedIcon />
+          </IconButton>
+        </Tooltip>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setModal({ mode: 'create' })}
         >
-          Add contact
+          Add
         </Button>
       </Box>
 

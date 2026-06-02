@@ -110,7 +110,7 @@ describe('ContactsPage — split-view list refresh', () => {
     await waitFor(() => expect(screen.getByDisplayValue('Alice')).toBeInTheDocument())
 
     await user.type(screen.getByPlaceholderText(/add a note/i), 'Test note')
-    await user.click(screen.getByRole('button', { name: /^add$/i }))
+    await user.click(screen.getByRole('button', { name: /^add note$/i }))
 
     await waitFor(() => expect(addContactNote).toHaveBeenCalledWith(1, 'Test note'))
     expect(screen.getByText('Test note')).toBeInTheDocument()

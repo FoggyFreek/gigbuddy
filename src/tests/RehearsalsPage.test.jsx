@@ -76,10 +76,10 @@ describe('RehearsalsPage', () => {
     deleteRehearsal.mockClear()
   })
 
-  it('renders header and Add rehearsal button', async () => {
+  it('renders header and Add button', async () => {
     wrap(<RehearsalsPage />)
     expect(screen.getByRole('heading', { name: /rehearsals/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /add rehearsal/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^add$/i })).toBeInTheDocument()
     await waitFor(() => expect(listRehearsals).toHaveBeenCalled())
   })
 
@@ -88,10 +88,10 @@ describe('RehearsalsPage', () => {
     await waitFor(() => expect(screen.getByText('Studio A')).toBeInTheDocument())
   })
 
-  it('opens create modal when Add rehearsal clicked', async () => {
+  it('opens create modal when Add clicked', async () => {
     const user = userEvent.setup()
     wrap(<RehearsalsPage />)
-    await user.click(screen.getByRole('button', { name: /add rehearsal/i }))
+    await user.click(screen.getByRole('button', { name: /^add$/i }))
     expect(screen.getByText('Propose rehearsal', { selector: 'h2' })).toBeInTheDocument()
   })
 

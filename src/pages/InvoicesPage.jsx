@@ -107,7 +107,7 @@ export default function InvoicesPage() {
           startIcon={<AddIcon />}
           onClick={() => setNewDialog(true)}
         >
-          Add invoice
+          Add
         </Button>
       </Box>
 

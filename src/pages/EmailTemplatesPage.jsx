@@ -57,7 +57,7 @@ export default function EmailTemplatesPage() {
           startIcon={<AddIcon />}
           onClick={() => setModal({ mode: 'create' })}
         >
-          Add template
+          Add
         </Button>
       </Box>
 

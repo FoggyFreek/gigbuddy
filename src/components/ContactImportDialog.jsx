@@ -135,7 +135,7 @@ export default function ContactImportDialog({ onClose }) {
               Upload a UTF-8 CSV file with column headers. Supported fields: name, email, phone, category.
               Category values: press, radio &amp; tv, booker, promotion, network (defaults to press if unrecognised).
             </Typography>
-            <Button variant="outlined" component="label">
+            <Button component="label">
               Choose CSV file
               <input
                 ref={fileRef}

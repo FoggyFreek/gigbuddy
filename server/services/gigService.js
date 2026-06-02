@@ -46,6 +46,15 @@ export function notifyGigConfirmed(tenantId, gig) {
   }).catch((err) => console.error('[push] sendPushToTenant failed', err))
 }
 
+export function notifyGigsImported(tenantId, count) {
+  sendPushToTenant(tenantId, {
+    title: `${count} gig${count !== 1 ? 's' : ''} imported`,
+    body: 'Your Bandsintown import is complete.',
+    tag: 'gig-import',
+    url: '/gigs',
+  }).catch((err) => console.error('[push] sendPushToTenant failed', err))
+}
+
 async function notifyTaskAssignment(db, tenantId, gigId, task) {
   const { rows: gigs } = await db.query(
     'SELECT event_description FROM gigs WHERE id = $1 AND tenant_id = $2',

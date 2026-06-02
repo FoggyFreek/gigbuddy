@@ -27,6 +27,7 @@ import {
   createGigAttachment,
   notifyGigCreated,
   notifyGigConfirmed,
+  notifyGigsImported,
 } from '../services/gigService.js'
 
 const BANNER_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -162,6 +163,126 @@ router.get('/:id', async (req, res) => {
   )
   const byGig = await loadParticipants(pool, [id], req.tenantId)
   res.json({ ...gig, tasks, participants: byGig.get(id) || [], attachments })
+})
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+// Bulk import gigs from Bandsintown CSV export
+router.post('/import', async (req, res) => {
+  const body = req.body
+  if (!Array.isArray(body) || body.length === 0)
+    return res.status(400).json({ error: 'Expected non-empty array' })
+  if (body.length > 200)
+    return res.status(400).json({ error: 'Maximum 200 gigs per import' })
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const { rows: leadRows } = await client.query(
+      `SELECT id FROM band_members WHERE tenant_id = $1 AND position = 'lead'`,
+      [req.tenantId],
+    )
+
+    let created = 0
+    let skipped = 0
+
+    for (const item of body) {
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'Each import row must be an object' })
+      }
+
+      const {
+        event_date, event_description, venue_id, festival_id,
+        start_time, end_time, status, admission, event_link, ticket_link,
+      } = item
+
+      if (!event_date || !event_description) { skipped++; continue }
+
+      if (!DATE_RE.test(event_date)) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `Invalid event_date: ${event_date}` })
+      }
+      if (start_time && !TIME_RE.test(start_time)) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `Invalid start_time: ${start_time}` })
+      }
+      if (end_time && !TIME_RE.test(end_time)) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `Invalid end_time: ${end_time}` })
+      }
+
+      let venueId = null
+      if (venue_id != null) {
+        venueId = parseId(venue_id)
+        if (venueId === null) {
+          await client.query('ROLLBACK')
+          return res.status(400).json({ error: 'Invalid venue_id' })
+        }
+      }
+      let festivalId = null
+      if (festival_id != null) {
+        festivalId = parseId(festival_id)
+        if (festivalId === null) {
+          await client.query('ROLLBACK')
+          return res.status(400).json({ error: 'Invalid festival_id' })
+        }
+      }
+
+      const finalStatus = status == null
+        ? 'confirmed'
+        : VALID_STATUSES.includes(status) ? status : null
+      if (finalStatus === null) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `Invalid status: ${status}` })
+      }
+
+      try {
+        await assertVenueInTenant(client, venueId, req.tenantId, 'venue')
+        await assertVenueInTenant(client, festivalId, req.tenantId, 'festival')
+      } catch (err) {
+        if (err.status === 400) {
+          await client.query('ROLLBACK')
+          return res.status(400).json({ error: err.message })
+        }
+        throw err
+      }
+
+      const finalAdmission = admission === 'paid' ? 'paid' : 'free'
+
+      const { rows: gigRows } = await client.query(
+        `INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id,
+           start_time, end_time, status, admission, event_link, ticket_link)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+        [
+          req.tenantId, event_date, event_description, venueId, festivalId,
+          start_time || null, end_time || null, finalStatus, finalAdmission,
+          event_link || null, ticket_link || null,
+        ],
+      )
+      const gigId = gigRows[0].id
+
+      for (const { id: memberId } of leadRows) {
+        await client.query(
+          `INSERT INTO gig_participants (tenant_id, gig_id, band_member_id, updated_by_user_id)
+           VALUES ($1,$2,$3,$4)`,
+          [req.tenantId, gigId, memberId, req.user.id],
+        )
+      }
+      created++
+    }
+
+    await client.query('COMMIT')
+    res.status(201).json({ created, skipped })
+    if (created > 0) notifyGigsImported(req.tenantId, created)
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
 })
 
 // Create gig

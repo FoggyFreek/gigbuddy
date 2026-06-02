@@ -2,17 +2,19 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import IconButton from '@mui/material/IconButton'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
-import UploadFileIcon from '@mui/icons-material/UploadFile'
+import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import SplitView from '../components/SplitView.jsx'
 import VenuesTable from '../components/VenuesTable.jsx'
 import VenueFormModal from '../components/VenueFormModal.jsx'
 import VenueImportDialog from '../components/VenueImportDialog.jsx'
 import { listVenues } from '../api/venues.js'
+import Tooltip from '@mui/material/Tooltip'
 
-export default function VenuesPage() {
+export default function VenuesPage() {  
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -59,18 +61,17 @@ export default function VenuesPage() {
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
           Venues
         </Typography>
-        <Button
-          startIcon={<UploadFileIcon />}
-          onClick={() => setImportOpen(true)}
-        >
-          Import CSV
-        </Button>
+        <Tooltip title="Import">
+          <IconButton onClick={() => setImportOpen(true)}>
+            <FileUploadOutlinedIcon />
+          </IconButton>
+        </Tooltip>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setModal({ mode: 'create' })}
         >
-          Add venue
+          Add
         </Button>
       </Box>
 

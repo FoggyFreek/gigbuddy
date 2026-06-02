@@ -50,10 +50,10 @@ describe('EmailTemplatesPage', () => {
     deleteEmailTemplate.mockClear()
   })
 
-  it('renders the page heading and Add template button', async () => {
+  it('renders the page heading and Add button', async () => {
     wrap(<EmailTemplatesPage />)
     expect(screen.getByRole('heading', { name: /email templates/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /add template/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^add$/i })).toBeInTheDocument()
     await waitFor(() => expect(listEmailTemplates).toHaveBeenCalled())
   })
 
@@ -70,11 +70,11 @@ describe('EmailTemplatesPage', () => {
     await waitFor(() => expect(screen.getByText(/no templates yet/i)).toBeInTheDocument())
   })
 
-  it('opens the create modal when Add template is clicked', async () => {
+  it('opens the create modal when Add is clicked', async () => {
     const user = userEvent.setup()
     wrap(<EmailTemplatesPage />)
     await waitFor(() => expect(listEmailTemplates).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /add template/i }))
+    await user.click(screen.getByRole('button', { name: /^add$/i }))
     expect(screen.getByText('New email template', { selector: 'h2' })).toBeInTheDocument()
   })
 

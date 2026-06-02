@@ -146,6 +146,7 @@ export default function ContactDetailPage() {
             />
             <Button
               variant="contained"
+              aria-label="Add note"
               disabled={!newNote.trim()}
               onClick={handleAddNote}
               sx={{ alignSelf: 'flex-end' }}

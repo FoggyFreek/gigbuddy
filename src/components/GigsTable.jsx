@@ -1,5 +1,12 @@
 import { useState } from 'react'
+import Button from '@mui/material/Button'
+import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
+import Divider from '@mui/material/Divider'
+import InputAdornment from '@mui/material/InputAdornment'
+import ListItemText from '@mui/material/ListItemText'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
@@ -9,10 +16,13 @@ import TableRow from '@mui/material/TableRow'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import Collapse from '@mui/material/Collapse'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import FilterListIcon from '@mui/icons-material/FilterList'
+import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.js'
 import MemberAvatarStack from './MemberAvatarStack.jsx'
@@ -25,6 +35,9 @@ const STATUS_COLORS = {
   confirmed: 'primary',
   announced: 'success',
 }
+
+const ALL_STATUSES = ['option', 'confirmed', 'announced']
+const STATUS_LABELS = { option: 'Option', confirmed: 'Confirmed', announced: 'Announced' }
 
 const COLUMN_COUNT = 8
 
@@ -45,6 +58,18 @@ function isPastDate(val) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return d < today
+}
+
+function applySearch(list, q) {
+  if (!q) return list
+  const lower = q.toLowerCase()
+  return list.filter((g) =>
+    [
+      g.event_description,
+      g.venue?.name, g.venue?.city, g.venue?.country,
+      g.festival?.name, g.festival?.city, g.festival?.country,
+    ].some((f) => f && String(f).toLowerCase().includes(lower))
+  )
 }
 
 function GigCard({ gig, active, onClick }) {
@@ -123,8 +148,8 @@ function DesktopRow({ gig, active, onClick }) {
       </TableCell>
       <TableCell>
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-          <span>{venueHeadline(gig.venue ?? gig.festival) || ' '}</span>
-          <Typography variant="caption" color="text.secondary">{venueCity(gig.venue ?? gig.festival) || ' '}</Typography>
+          <span>{venueHeadline(gig.venue ?? gig.festival) || ' '}</span>
+          <Typography variant="caption" color="text.secondary">{venueCity(gig.venue ?? gig.festival) || ' '}</Typography>
         </Box>
       </TableCell>
       <TableCell>{formatTime(gig.start_time)}–{formatTime(gig.end_time)}</TableCell>
@@ -209,16 +234,89 @@ function PastGigsHeader({ open, count, onToggle }) {
 
 export default function GigsTable({ gigs, onRowClick, selectedId = null }) {
   const [pastOpen, setPastOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [selectedStatuses, setSelectedStatuses] = useState(new Set(ALL_STATUSES))
+  const [filterAnchor, setFilterAnchor] = useState(null)
   const isCompact = useCompactLayout()
 
-  const upcoming = gigs.filter((g) => !isPastDate(g.event_date))
-  const past = gigs.filter((g) => isPastDate(g.event_date))
+  function toggleStatus(s) {
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev)
+      next.has(s) ? next.delete(s) : next.add(s)
+      return next
+    })
+  }
 
+  function toggleAllStatuses() {
+    setSelectedStatuses((prev) =>
+      prev.size === ALL_STATUSES.length ? new Set() : new Set(ALL_STATUSES)
+    )
+  }
+
+  const allStatusesSelected = selectedStatuses.size === ALL_STATUSES.length
+  const someStatusesSelected = selectedStatuses.size > 0 && !allStatusesSelected
+
+  let filtered = applySearch(gigs, search)
+  if (!allStatusesSelected) filtered = filtered.filter((g) => selectedStatuses.has(g.status))
+
+  const upcoming = filtered.filter((g) => !isPastDate(g.event_date))
+  const past = filtered.filter((g) => isPastDate(g.event_date))
   const emptyAll = gigs.length === 0
+
+  const controls = (
+    <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+      <TextField
+        size="small"
+        placeholder="Search gigs…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        sx={{ flex: '1 1 200px', minWidth: 160 }}
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+      <Button
+        size="small"
+        variant={someStatusesSelected ? 'contained' : 'outlined'}
+        startIcon={<FilterListIcon />}
+        onClick={(e) => setFilterAnchor(e.currentTarget)}
+      >
+        {someStatusesSelected ? `Filter (${selectedStatuses.size})` : 'Filter'}
+      </Button>
+      <Menu
+        anchorEl={filterAnchor}
+        open={Boolean(filterAnchor)}
+        onClose={() => setFilterAnchor(null)}
+      >
+        <MenuItem dense onClick={toggleAllStatuses}>
+          <Checkbox
+            size="small"
+            checked={allStatusesSelected}
+            indeterminate={someStatusesSelected}
+          />
+          <ListItemText primary="All statuses" />
+        </MenuItem>
+        <Divider />
+        {ALL_STATUSES.map((s) => (
+          <MenuItem key={s} dense onClick={() => toggleStatus(s)}>
+            <Checkbox size="small" checked={selectedStatuses.has(s)} />
+            <ListItemText primary={STATUS_LABELS[s]} />
+          </MenuItem>
+        ))}
+      </Menu>
+    </Box>
+  )
 
   if (isCompact) {
     return (
       <Stack spacing={1.5}>
+        {controls}
         <Paper variant="outlined">
           {emptyAll ? (
             <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
@@ -256,6 +354,7 @@ export default function GigsTable({ gigs, onRowClick, selectedId = null }) {
 
   return (
     <Stack spacing={2}>
+      {controls}
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
           <DesktopHead />
