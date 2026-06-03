@@ -3,7 +3,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import QRCode from 'qrcode'
 import pool from '../db/index.js'
-import { storageClient, BUCKET } from '../utils/storage.js'
+import { uploadObject, removeObject, safeRemove, getObject, invoiceLogoKey } from '../services/storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { assertMollieConfigured, createTenantMollieClient } from '../utils/mollieClient.js'
 import {
@@ -33,11 +33,29 @@ import {
 
 const router = Router()
 
+const PAYMENT_LINK_LOCK_NAMESPACE = 53001
 const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const logoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
 })
+
+async function withPaymentLinkCreationLock(db, invoiceId, fn) {
+  const client = await db.connect()
+  let releaseError = null
+  try {
+    await client.query('SELECT pg_advisory_lock($1, $2)', [PAYMENT_LINK_LOCK_NAMESPACE, invoiceId])
+    return await fn()
+  } finally {
+    try {
+      await client.query('SELECT pg_advisory_unlock($1, $2)', [PAYMENT_LINK_LOCK_NAMESPACE, invoiceId])
+    } catch (err) {
+      releaseError = err
+      console.error('[invoices] failed to release payment-link advisory lock:', err)
+    }
+    client.release(releaseError)
+  }
+}
 
 function requireId(req, res) {
   const id = parseId(req.params.id)
@@ -318,12 +336,8 @@ router.delete('/:id', async (req, res) => {
     return res.status(409).json({ error: 'Only draft invoices can be deleted', code: 'invoice_finalized' })
   }
   await pool.query('DELETE FROM invoices WHERE id = $1 AND tenant_id = $2', [id, req.tenantId])
-  if (rows[0].pdf_path) {
-    storageClient.removeObject(BUCKET, rows[0].pdf_path).catch(() => {})
-  }
-  if (rows[0].custom_logo_path) {
-    storageClient.removeObject(BUCKET, rows[0].custom_logo_path).catch(() => {})
-  }
+  safeRemove(rows[0].pdf_path, '[invoices] failed to delete pdf on invoice delete:')
+  safeRemove(rows[0].custom_logo_path, '[invoices] failed to delete custom logo on invoice delete:')
   res.status(204).end()
 })
 
@@ -363,11 +377,9 @@ router.post('/:id/logo', logoUpload.single('logo'), async (req, res) => {
 
   const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
   const ext = extensionForImageMime(image.mimetype)
-  const objectKey = `tenants/${req.tenantId}/invoices/logo-${randomUUID()}${ext}`
+  const objectKey = invoiceLogoKey(req.tenantId, randomUUID(), ext)
 
-  await storageClient.putObject(BUCKET, objectKey, image.buffer, image.size, {
-    'Content-Type': image.mimetype,
-  })
+  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
 
   try {
     await pool.query(
@@ -375,15 +387,11 @@ router.post('/:id/logo', logoUpload.single('logo'), async (req, res) => {
       [objectKey, id, req.tenantId],
     )
   } catch (err) {
-    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
+    removeObject(objectKey).catch(() => {})
     throw err
   }
 
-  if (oldKey) {
-    storageClient.removeObject(BUCKET, oldKey).catch((e) =>
-      console.warn('[invoices] failed to delete old custom logo:', e.message),
-    )
-  }
+  safeRemove(oldKey, '[invoices] failed to delete old custom logo:')
 
   try {
     await renderAndStorePdf(pool, id, req.tenantId)
@@ -401,39 +409,40 @@ router.post('/:id/payment-link', async (req, res) => {
   const opts = validatePaymentLinkOptions(req.body || {})
   if (opts.error) return res.status(400).json({ error: opts.error })
 
-  // Finalize the invoice (committing finalization) BEFORE calling Mollie, so a
-  // concurrent PATCH re-checking finalized_at under its own row lock 409s
-  // instead of mutating content the Mollie amount is already pinned to.
-  const finalize = await finalizeInvoiceForPaymentLink(pool, req.tenantId, id)
-  if (finalize.error) return res.status(finalize.error.status).json(finalize.error.body)
+  return withPaymentLinkCreationLock(pool, id, async () => {
+    // Finalize the invoice before calling Mollie, so a concurrent PATCH sees
+    // finalized_at. The advisory lock also makes the Mollie create single-flight.
+    const finalize = await finalizeInvoiceForPaymentLink(pool, req.tenantId, id)
+    if (finalize.error) return res.status(finalize.error.status).json(finalize.error.body)
 
-  const tenant = await fetchTenant(pool, req.tenantId)
+    const tenant = await fetchTenant(pool, req.tenantId)
 
-  if (finalize.alreadyLinked) {
+    if (finalize.alreadyLinked) {
+      const lines = await fetchLines(pool, id, req.tenantId)
+      return res.json({ ...finalize.alreadyLinked, lines, tenant: stripMollieKey(tenant) })
+    }
+
+    assertMollieConfigured(tenant)
+    const created = await createMolliePaymentLink({
+      pool, tenant, invoice: finalize.invoice, tenantId: req.tenantId, invoiceId: id, opts,
+    })
+    if (created.error) return res.status(created.error.status).json(created.error.body)
+
+    // Re-render the PDF so it includes the QR code. Await so the response carries
+    // the freshly-rendered pdf_path; renderAndStorePdf deletes the previous PDF,
+    // so returning the stale key would 404 on download.
+    let finalInvoice = created.invoice
+    try {
+      await renderAndStorePdf(pool, id, req.tenantId)
+      const refreshed = await fetchInvoice(pool, req.tenantId, id)
+      if (refreshed) finalInvoice = refreshed
+    } catch (err) {
+      console.error('[invoices] PDF re-render after payment-link creation failed:', err)
+    }
+
     const lines = await fetchLines(pool, id, req.tenantId)
-    return res.json({ ...finalize.alreadyLinked, lines, tenant: stripMollieKey(tenant) })
-  }
-
-  assertMollieConfigured(tenant)
-  const created = await createMolliePaymentLink({
-    pool, tenant, invoice: finalize.invoice, tenantId: req.tenantId, invoiceId: id, opts,
+    return res.status(201).json({ ...finalInvoice, lines, tenant: stripMollieKey(tenant) })
   })
-  if (created.error) return res.status(created.error.status).json(created.error.body)
-
-  // Re-render the PDF so it includes the QR code. Await so the response carries
-  // the freshly-rendered pdf_path — renderAndStorePdf deletes the previous PDF,
-  // so returning the stale key would 404 on download.
-  let finalInvoice = created.invoice
-  try {
-    await renderAndStorePdf(pool, id, req.tenantId)
-    const refreshed = await fetchInvoice(pool, req.tenantId, id)
-    if (refreshed) finalInvoice = refreshed
-  } catch (err) {
-    console.error('[invoices] PDF re-render after payment-link creation failed:', err)
-  }
-
-  const lines = await fetchLines(pool, id, req.tenantId)
-  res.status(201).json({ ...finalInvoice, lines, tenant: stripMollieKey(tenant) })
 })
 
 // ---------- payment link sync ----------
@@ -478,9 +487,7 @@ router.delete('/:id/logo', async (req, res) => {
     'UPDATE invoices SET custom_logo_path = NULL, updated_at = NOW() WHERE id = $1 AND tenant_id = $2',
     [id, req.tenantId],
   )
-  if (oldKey) {
-    storageClient.removeObject(BUCKET, oldKey).catch(() => {})
-  }
+  safeRemove(oldKey, '[invoices] failed to delete custom logo on remove:')
   try {
     await renderAndStorePdf(pool, id, req.tenantId)
   } catch (err) {
@@ -734,7 +741,7 @@ router.post('/:id/eml', async (req, res) => {
   let pdfBase64 = null
   if (invoice.pdf_path) {
     try {
-      const stream = await storageClient.getObject(BUCKET, invoice.pdf_path)
+      const stream = await getObject(invoice.pdf_path)
       const chunks = []
       for await (const chunk of stream) chunks.push(chunk)
       pdfBase64 = Buffer.concat(chunks).toString('base64')

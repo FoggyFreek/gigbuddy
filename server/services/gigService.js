@@ -3,7 +3,7 @@
 // success returns a domain payload (see each function).
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { storageClient, BUCKET } from '../utils/storage.js'
+import { uploadObject, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { sendPushToTenant, sendPushToMember } from '../utils/sendPush.js'
@@ -154,11 +154,9 @@ export async function replaceGigBanner({ db, tenantId, gigId, file }) {
   const oldKey = before[0].banner_path
 
   const ext = extensionForImageMime(image.mimetype)
-  const objectKey = `tenants/${tenantId}/gig-banners/${randomUUID()}${ext}`
+  const objectKey = gigBannerKey(tenantId, randomUUID(), ext)
 
-  await storageClient.putObject(BUCKET, objectKey, image.buffer, image.size, {
-    'Content-Type': image.mimetype,
-  })
+  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
 
   let updatedKey
   try {
@@ -169,15 +167,11 @@ export async function replaceGigBanner({ db, tenantId, gigId, file }) {
     )
     updatedKey = rows[0].banner_path
   } catch (err) {
-    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
+    removeObject(objectKey).catch(() => {})
     throw err
   }
 
-  if (oldKey) {
-    storageClient.removeObject(BUCKET, oldKey).catch((e) =>
-      console.warn('Failed to delete old gig banner object:', e.message),
-    )
-  }
+  safeRemove(oldKey, 'Failed to delete old gig banner object:')
 
   return { bannerPath: updatedKey }
 }
@@ -195,11 +189,7 @@ export async function deleteGigBanner({ db, tenantId, gigId }) {
     [gigId, tenantId],
   )
 
-  if (key) {
-    storageClient.removeObject(BUCKET, key).catch((e) =>
-      console.warn('Failed to delete gig banner object:', e.message),
-    )
-  }
+  safeRemove(key, 'Failed to delete gig banner object:')
   return {}
 }
 
@@ -219,11 +209,9 @@ export async function createGigAttachment({ db, tenantId, gigId, file }) {
   }
 
   const ext = path.extname(file.originalname).toLowerCase()
-  const objectKey = `tenants/${tenantId}/gig_attachments/${randomUUID()}${ext}`
+  const objectKey = gigAttachmentKey(tenantId, randomUUID(), ext)
 
-  await storageClient.putObject(BUCKET, objectKey, file.buffer, file.size, {
-    'Content-Type': file.mimetype,
-  })
+  await uploadObject(objectKey, file.buffer, file.size, file.mimetype)
 
   try {
     const { rows: inserted } = await db.query(
@@ -234,7 +222,7 @@ export async function createGigAttachment({ db, tenantId, gigId, file }) {
     )
     return { attachment: inserted[0] }
   } catch (err) {
-    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
+    removeObject(objectKey).catch(() => {})
     throw err
   }
 }

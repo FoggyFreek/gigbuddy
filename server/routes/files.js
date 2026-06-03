@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
-import { storageClient, BUCKET } from '../utils/storage.js'
+import { statObject, getObject } from '../services/storageService.js'
 import { sanitizeFilename } from '../utils/sanitizeFilename.js'
 
 const router = Router()
@@ -39,7 +39,7 @@ router.get('/*objectKey', async (req, res) => {
   )
 
   try {
-    const stat = await storageClient.statObject(BUCKET, objectKey)
+    const stat = await statObject(objectKey)
     res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream')
     res.setHeader('Content-Length', stat.size)
     if (meta.length) {
@@ -47,7 +47,7 @@ router.get('/*objectKey', async (req, res) => {
       const safeName = sanitizeFilename(meta[0].original_filename)
       res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`)
     }
-    const stream = await storageClient.getObject(BUCKET, objectKey)
+    const stream = await getObject(objectKey)
     // Handle stream errors that occur after headers are sent; pipe() won't
     // propagate these to Express's error handler (OWASP A10).
     stream.on('error', (streamErr) => {

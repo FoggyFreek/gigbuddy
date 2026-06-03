@@ -90,10 +90,8 @@ describe('GigTasks', () => {
     const user = userEvent.setup()
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
 
-    const allButtons = screen.getAllByRole('button')
-    const taskDeleteBtns = allButtons.slice(-2)
-    await user.click(taskDeleteBtns[0])
-    await waitFor(() => expect(deleteTask).toHaveBeenCalled())
+    await user.click(screen.getByRole('button', { name: /delete task book sound engineer/i }))
+    await waitFor(() => expect(deleteTask).toHaveBeenCalledWith(42, 1))
   })
 
   it('renders assignment selects with member names when members are provided', () => {

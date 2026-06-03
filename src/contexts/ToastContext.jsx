@@ -1,9 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import PropTypes from 'prop-types'
 import Snackbar from '@mui/material/Snackbar'
 import Alert from '@mui/material/Alert'
-
-const ToastContext = createContext(null)
+import { ToastContext } from './toastContext.js'
 
 export function ToastProvider({ children }) {
   const [toast, setToast] = useState(null)
@@ -60,8 +59,4 @@ export function ToastProvider({ children }) {
 
 ToastProvider.propTypes = {
   children: PropTypes.node.isRequired,
-}
-
-export function useToast() {
-  return useContext(ToastContext)
 }

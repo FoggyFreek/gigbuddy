@@ -43,6 +43,7 @@ export async function truncateAll() {
       memberships,
       tenant_invites,
       push_subscriptions,
+      tenant_statistics,
       tenants,
       users
     RESTART IDENTITY CASCADE

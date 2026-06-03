@@ -618,15 +618,19 @@ describe('GET /api/invoices/:id — Mollie key hardening (review #1)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Review finding #4: Webhook must verify the posted payment id matches Mollie
+// Webhook trusts authoritative Mollie status, not the posted payment id.
+// (Supersedes the old review-#4 "posted id must match latest payment" guard,
+// which blocked legitimate webhooks when a link had >1 payment attempt.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Webhook payment id verification (review #4)', () => {
-  it('does not update invoice when posted payment id mismatches Mollie payment', async () => {
+describe('Webhook reflects authoritative Mollie status', () => {
+  it('marks paid even when the posted id is not the latest payment under the link', async () => {
     const inv = await createInvoiceA()
     await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
 
-    // Mollie reports paid for tr_real456 — but the webhook posts a different id.
+    // Mollie authoritatively reports the link is paid via tr_real456. The webhook
+    // posts a *different* id (e.g. an earlier attempt, or Mollie's link-suffix
+    // hint). The verdict must come from Mollie, so the invoice is marked paid.
     mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
       status: 'paid',
       payments: [{
@@ -636,15 +640,13 @@ describe('Webhook payment id verification (review #4)', () => {
 
     const res = await request(app)
       .post(`/api/public/mollie/payment-links/webhook?invoice=${inv.id}`)
-      .send('id=tr_forged999')
+      .send('id=tr_does_not_match')
       .set('Content-Type', 'application/x-www-form-urlencoded')
     expect(res.status).toBe(200)
 
     const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
-    // Payment-link creation finalized the invoice to 'sent'; the forged-id
-    // webhook does not promote it further, so it stays at 'sent'.
-    expect(rows[0].status).toBe('sent')
-    expect(rows[0].mollie_payment_id).toBeNull()  // unchanged by the forged webhook
+    expect(rows[0].status).toBe('paid')
+    expect(rows[0].mollie_payment_id).toBe('tr_real456')  // Mollie's id, not the posted one
   })
 
   it('does update invoice when posted payment id matches Mollie payment', async () => {
@@ -821,40 +823,45 @@ describe('Payment-link missing checkout URL (review #7)', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Concurrent payment-link creation (review #3)', () => {
-  it('two concurrent calls leave only one stored link on the invoice', async () => {
+  it('two concurrent calls create only one Mollie link and return the stored link', async () => {
     const inv = await createInvoiceA()
 
-    // Give each concurrent call a distinct Mollie id so we can tell which one
-    // won the race; only one should make it into the DB.
-    let count = 0
-    mockPaymentLinksCreate.mockImplementation(async () => {
-      count += 1
+    let releaseMollieCreate
+    let mollieCreateStarted
+    const mollieCreateStartedPromise = new Promise((resolve) => { mollieCreateStarted = resolve })
+    const releaseMollieCreatePromise = new Promise((resolve) => { releaseMollieCreate = resolve })
+
+    mockPaymentLinksCreate.mockImplementationOnce(async () => {
+      mollieCreateStarted()
+      await releaseMollieCreatePromise
       return {
-        id: `pl_race_${count}`,
-        _links: { paymentLink: { href: `https://paymentlink.mollie.com/payment/race_${count}` } },
+        id: 'pl_race_1',
+        _links: { paymentLink: { href: 'https://paymentlink.mollie.com/payment/race_1' } },
       }
     })
 
-    const [r1, r2] = await Promise.all([
-      asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({}),
-      asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({}),
-    ])
+    const firstRequest = asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({}).then((res) => res)
+    await mollieCreateStartedPromise
 
-    // Both calls create successfully — the second one's Mollie link is
-    // orphaned by the `mollie_payment_link_id IS NULL` guard on the final
-    // UPDATE. (Finalize-first means both pass the in-tx existing-link check
-    // before either has stored its id, so we cannot short-circuit B with a
-    // 200 the way a strict serial sequential path would.)
-    expect([r1.status, r2.status]).toEqual([201, 201])
+    const secondRequest = asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({}).then((res) => res)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(mockPaymentLinksCreate).toHaveBeenCalledTimes(1)
+
+    releaseMollieCreate()
+    const [r1, r2] = await Promise.all([firstRequest, secondRequest])
+
+    // One request creates the link; the other waits and returns the stored link.
+    expect([r1.status, r2.status].sort((a, b) => a - b)).toEqual([200, 201])
+    expect(mockPaymentLinksCreate).toHaveBeenCalledTimes(1)
 
     // Both responses report the same stored link
     expect(r1.body.mollie_payment_link_id).toBe(r2.body.mollie_payment_link_id)
     expect(r1.body.mollie_payment_link_url).toBe(r2.body.mollie_payment_link_url)
 
-    // DB has exactly one of the two generated ids
+    // DB has the single generated id.
     const { rows } = await pool.query(
       'SELECT mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
-    expect(['pl_race_1', 'pl_race_2']).toContain(rows[0].mollie_payment_link_id)
+    expect(rows[0].mollie_payment_link_id).toBe('pl_race_1')
   })
 })
 

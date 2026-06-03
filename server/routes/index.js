@@ -20,6 +20,7 @@ import sharePhotosRouter from './sharePhotos.js'
 import filesRouter from './files.js'
 import geocodeRouter from './geocode.js'
 import { adminRouter as invitesAdminRouter, redeemRouter as invitesRedeemRouter } from './invites.js'
+import { tenantRouter as statisticsRouter, adminRouter as adminStatisticsRouter } from './statistics.js'
 import publicMollieRouter from './publicMollie.js'
 import publicInvoicesRouter from './publicInvoices.js'
 import { loadUser, requireApproved } from '../middleware/auth.js'
@@ -109,8 +110,10 @@ const superAdmin = [requireApproved, requireSuperAdmin]
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 router.use('/admin/tenants', superAdmin, tenantsRouter)
 router.use('/admin/users', superAdmin, adminUsersRouter)
+router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
 router.use('/invites', tenantAdmin, invitesAdminRouter)
 router.use('/users', tenantAdmin, usersRouter)
+router.use('/statistics', tenantAdmin, statisticsRouter)
 router.use('/gigs', tenantMember, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
 router.use('/tasks', tenantMember, tasksRouter)

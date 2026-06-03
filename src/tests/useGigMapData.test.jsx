@@ -12,7 +12,7 @@ import { useGigMapData } from '../hooks/useGigMapData.js'
 beforeEach(() => {
   vi.setSystemTime(new Date('2026-05-30T12:00:00Z'))
   geocodePlace.mockImplementation(async ({ city, region }) => ({
-    lat: `${city}${region ?? ''}`.length,
+    lat: Array.from(`${city}|${region ?? ''}`).reduce((sum, ch) => sum + ch.charCodeAt(0), 0) / 100,
     lon: 0,
   }))
 })
@@ -56,6 +56,23 @@ describe('useGigMapData', () => {
 
     expect(result.current.cityCount).toBe(2)
     expect(result.current.markers).toHaveLength(2)
+  })
+
+  it('coalesces groups that geocode to the same location into one marker with the combined gig count', async () => {
+    listGigs.mockResolvedValue([
+      { id: 1, event_date: '2026-01-10', event_description: 'A', venue: { city: 'Groningen', region: '', country: 'NL' }, festival: null },
+      { id: 2, event_date: '2026-02-10', event_description: 'B', venue: { city: 'Groningen', region: 'GR', country: 'NL' }, festival: null },
+      { id: 3, event_date: '2026-03-10', event_description: 'C', venue: { city: 'Groningen', region: '', country: 'Netherlands' }, festival: null },
+    ])
+    geocodePlace.mockResolvedValue({ lat: 53.2194, lon: 6.5665 })
+
+    const { result } = renderHook(() => useGigMapData())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.cityCount).toBe(1)
+    expect(result.current.gigCount).toBe(3)
+    expect(result.current.markers).toHaveLength(1)
+    expect(result.current.markers[0].gigs.map((g) => g.id)).toEqual([3, 2, 1])
   })
 
   it('drops cities that fail to geocode without erroring', async () => {

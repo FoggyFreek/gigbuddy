@@ -16,6 +16,7 @@ import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import DeleteIcon from '@mui/icons-material/Delete'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
@@ -84,12 +85,39 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
   const [cropOpen, setCropOpen] = useState(false)
   const [cropImageSrc, setCropImageSrc] = useState(null)
   const bannerInputRef = useRef(null)
+  const dateInputRef = useRef(null)
 
   const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
   const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
+  const openDatePicker = () => {
+    dateInputRef.current?.focus()
+    dateInputRef.current?.showPicker?.()
+  }
+  const dateSlotProps = {
+    htmlInput: { ref: dateInputRef },
+    input: {
+      endAdornment: (
+        <InputAdornment position="end">
+          <IconButton
+            edge="end"
+            size="small"
+            aria-label="open date picker"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={openDatePicker}
+          >
+            <CalendarMonthIcon fontSize="small" sx={{ color: 'action.active' }} />
+          </IconButton>
+        </InputAdornment>
+      ),
+    },
+    inputLabel: { shrink: focused.event_date || !!form.event_date },
+  }
   const maskSx = (field) => ({
     '& input::-webkit-datetime-edit': {
       opacity: focused[field] || form[field] ? 1 : 0,
+    },
+    '& input::-webkit-calendar-picker-indicator': {
+      display: 'none',
     },
   })
 
@@ -258,7 +286,7 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
             onBlur={onBlur('event_date')}
             error={!!requiredErrors.event_date}
             helperText={requiredErrors.event_date}
-            slotProps={{ inputLabel: { shrink: focused.event_date || !!form.event_date } }}
+            slotProps={dateSlotProps}
             sx={maskSx('event_date')}
           />
         </Grid>

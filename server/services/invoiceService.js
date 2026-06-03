@@ -5,7 +5,7 @@
 //   { error: { status, body } }   — caller should respond with that status/body
 //   anything else                 — success payload (see each function)
 import { randomUUID } from 'node:crypto'
-import { storageClient, BUCKET } from '../utils/storage.js'
+import { getObject, uploadObject, removeObject, safeRemove, invoicePdfKey } from './storageService.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
 import {
@@ -46,7 +46,7 @@ async function loadLogoBuffer(tenant, customLogoPath) {
   const key = customLogoPath || tenant.logo_path
   if (!key) return null
   try {
-    const stream = await storageClient.getObject(BUCKET, key)
+    const stream = await getObject(key)
     const chunks = []
     for await (const chunk of stream) chunks.push(chunk)
     return Buffer.concat(chunks)
@@ -65,11 +65,9 @@ export async function renderAndStorePdf(pool, invoiceId, tenantId) {
 
   const pdfBuffer = await renderInvoicePdf({ invoice, lines, tenant, logoBuffer })
   const previousKey = invoice.pdf_path
-  const newKey = `tenants/${tenantId}/invoices/${randomUUID()}.pdf`
+  const newKey = invoicePdfKey(tenantId, randomUUID())
 
-  await storageClient.putObject(BUCKET, newKey, pdfBuffer, pdfBuffer.length, {
-    'Content-Type': 'application/pdf',
-  })
+  await uploadObject(newKey, pdfBuffer, pdfBuffer.length, 'application/pdf')
 
   try {
     await pool.query(
@@ -77,15 +75,11 @@ export async function renderAndStorePdf(pool, invoiceId, tenantId) {
       [newKey, invoiceId, tenantId],
     )
   } catch (err) {
-    storageClient.removeObject(BUCKET, newKey).catch(() => {})
+    removeObject(newKey).catch(() => {})
     throw err
   }
 
-  if (previousKey && previousKey !== newKey) {
-    storageClient.removeObject(BUCKET, previousKey).catch((e) =>
-      console.warn('[invoices] failed to remove previous pdf:', e.message),
-    )
-  }
+  safeRemove(previousKey !== newKey ? previousKey : null, '[invoices] failed to remove previous pdf:')
 
   return newKey
 }
@@ -383,17 +377,17 @@ async function getLatestPayment(paymentLink) {
 }
 
 // Shared payment-status update logic used by both the sync endpoint and the
-// webhook. `expectedPaymentId` — when called from the webhook, this is the id
-// Mollie posted. We refuse to mutate state unless the posted id matches the
-// payment Mollie actually reports under the link, so callers who guess invoice
-// ids can't trigger a status flip with a random payment id.
-export async function syncInvoicePaymentStatus(mollie, db, invoice, expectedPaymentId = null) {
+// webhook. Authoritative payment state always comes from re-fetching the
+// payment link from Mollie with the tenant's secret key — never from the
+// caller. The webhook body's payment id is only a "go check now" hint and is
+// intentionally NOT used as a gate: a caller who guesses an invoice id cannot
+// forge a paid status, because paid/open is read from Mollie, not the request.
+// (An earlier review-#4 guard matched the posted id against the link's single
+// latest payment; that wrongly blocked legitimate webhooks whenever a link had
+// more than one payment attempt, so it was removed.)
+export async function syncInvoicePaymentStatus(mollie, db, invoice) {
   const paymentLink = await mollie.paymentLinks.get(invoice.mollie_payment_link_id)
   const latestPayment = await getLatestPayment(paymentLink)
-
-  if (expectedPaymentId && (!latestPayment || latestPayment.id !== expectedPaymentId)) {
-    return invoice
-  }
 
   let mollieStatus = paymentLink.status ?? 'open'
   let paymentId = invoice.mollie_payment_id

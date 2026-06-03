@@ -13,11 +13,15 @@ import Typography from '@mui/material/Typography'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import KeyIcon from '@mui/icons-material/Key'
+import RefreshIcon from '@mui/icons-material/Refresh'
+import StorageIcon from '@mui/icons-material/Storage'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import { useAuth } from '../contexts/authContext.js'
 import { useProfile } from '../contexts/profileContext.js'
 import { clearMollieKey, getMollieKey, setMollieKey, updateProfile } from '../api/profile.js'
+import { getMyStorageStats, refreshMyStorageStats } from '../api/statistics.js'
+import { formatBytes } from '../utils/formatBytes.js'
 
 const PRESET_COLORS = [
   { hex: '#6750A4', label: 'Purple (default)' },
@@ -154,8 +158,65 @@ export default function TenantSettingsPage() {
         )}
       </Paper>
 
+      {isAdmin && <StorageUsageSection />}
       {isAdmin && <MollieKeySection />}
     </Box>
+  )
+}
+
+function StorageUsageSection() {
+  const [stats, setStats] = useState(null) // { storage_bytes, object_count } | null
+  const [refreshing, setRefreshing] = useState(false)
+
+  useEffect(() => {
+    getMyStorageStats().then(setStats).catch(() => {})
+  }, [])
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    try {
+      setStats(await refreshMyStorageStats())
+    } catch {
+      // best-effort; leave the previous value in place
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  return (
+    <Paper variant="outlined" sx={{ p: 3, mt: 3 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
+        <StorageIcon fontSize="small" color="action" />
+        <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
+          Storage used
+        </Typography>
+        <Tooltip title="Recompute now">
+          <span>
+            <IconButton
+              size="small"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              aria-label="recompute storage usage"
+            >
+              {refreshing ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Stack>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        Total size of this band&apos;s uploaded files (banners, attachments, photos, logos, invoices).
+      </Typography>
+      {stats === null ? (
+        <CircularProgress size={18} />
+      ) : (
+        <Typography variant="body1" fontWeight={600}>
+          {formatBytes(stats.storage_bytes)}
+          <Typography component="span" variant="body2" color="text.secondary">
+            {' · '}{stats.object_count} {stats.object_count === 1 ? 'file' : 'files'}
+          </Typography>
+        </Typography>
+      )}
+    </Paper>
   )
 }
 

@@ -32,6 +32,7 @@ import AddIcon from '@mui/icons-material/Add'
 import ArchiveIcon from '@mui/icons-material/Archive'
 import LoginIcon from '@mui/icons-material/Login'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import UnarchiveIcon from '@mui/icons-material/Unarchive'
 import {
   listTenants,
@@ -41,6 +42,8 @@ import {
   grantMembership,
 } from '../../api/tenants.js'
 import { listAllUsers } from '../../api/adminUsers.js'
+import { getAllStorageStats, refreshAllStorageStats } from '../../api/statistics.js'
+import { formatBytes } from '../../utils/formatBytes.js'
 import { useAuth } from '../../contexts/authContext.js'
 
 export default function TenantsPage() {
@@ -48,6 +51,8 @@ export default function TenantsPage() {
   const { user, switchTenant } = useAuth()
   const [tenants, setTenants] = useState([])
   const [users, setUsers] = useState([])
+  const [storageByTenant, setStorageByTenant] = useState({})
+  const [recomputing, setRecomputing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [slug, setSlug] = useState('')
@@ -63,10 +68,11 @@ export default function TenantsPage() {
 
   const refresh = () => {
     setLoading(true)
-    Promise.all([listTenants(), listAllUsers()])
-      .then(([t, u]) => {
+    Promise.all([listTenants(), listAllUsers(), getAllStorageStats()])
+      .then(([t, u, stats]) => {
         setTenants(t)
         setUsers(u)
+        setStorageByTenant(Object.fromEntries(stats.map((s) => [s.tenant_id, s])))
       })
       .finally(() => setLoading(false))
   }
@@ -74,6 +80,18 @@ export default function TenantsPage() {
   useEffect(() => {
     refresh()
   }, [])
+
+  const handleRecomputeStorage = async () => {
+    setRecomputing(true)
+    try {
+      const stats = await refreshAllStorageStats()
+      setStorageByTenant(Object.fromEntries(stats.map((s) => [s.tenant_id, s])))
+    } catch (err) {
+      setError(err.message || 'Recompute failed')
+    } finally {
+      setRecomputing(false)
+    }
+  }
 
   const handleCreate = async () => {
     setSubmitting(true)
@@ -149,6 +167,15 @@ export default function TenantsPage() {
           Tenants
         </Typography>
         <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={handleRecomputeStorage}
+          disabled={recomputing}
+          sx={{ mr: 1 }}
+        >
+          {recomputing ? 'Recomputing…' : 'Recompute storage'}
+        </Button>
+        <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setCreateOpen(true)}
@@ -171,6 +198,7 @@ export default function TenantsPage() {
               <TableCell>Slug</TableCell>
               <TableCell>Band name</TableCell>
               <TableCell align="right">Members</TableCell>
+              <TableCell align="right">Storage</TableCell>
               <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -179,12 +207,18 @@ export default function TenantsPage() {
             {tenants.map((t) => {
               const isActive = user?.activeTenantId === t.id
               const archived = !!t.archived_at
+              const stats = storageByTenant[t.id]
               return (
                 <TableRow key={t.id} selected={isActive}>
                   <TableCell>{t.id}</TableCell>
                   <TableCell>{t.slug}</TableCell>
                   <TableCell>{t.band_name}</TableCell>
                   <TableCell align="right">{t.member_count}</TableCell>
+                  <TableCell align="right">
+                    <Tooltip title={stats ? `${stats.object_count} files` : ''}>
+                      <span>{formatBytes(stats?.storage_bytes)}</span>
+                    </Tooltip>
+                  </TableCell>
                   <TableCell>
                     {archived ? (
                       <Chip size="small" label="archived" color="warning" />
@@ -249,6 +283,7 @@ export default function TenantsPage() {
         {tenants.map((t) => {
           const isActive = user?.activeTenantId === t.id
           const archived = !!t.archived_at
+          const stats = storageByTenant[t.id]
           return (
             <Card
               key={t.id}
@@ -278,6 +313,10 @@ export default function TenantsPage() {
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Members: {t.member_count}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Storage: {formatBytes(stats?.storage_bytes)}
+                  {stats ? ` · ${stats.object_count} files` : ''}
                 </Typography>
               </CardContent>
               <Divider />

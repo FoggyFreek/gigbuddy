@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Grid from '@mui/material/Grid'
+import IconButton from '@mui/material/IconButton'
+import InputAdornment from '@mui/material/InputAdornment'
 import TextField from '@mui/material/TextField'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
@@ -10,12 +13,42 @@ dayjs.extend(customParseFormat)
 
 export default function BandEventFields({ form, onChange, errors = {} }) {
   const [focused, setFocused] = useState({ start_date: false, end_date: false })
+  const startDateInputRef = useRef(null)
+  const endDateInputRef = useRef(null)
+  const dateInputRefs = { start_date: startDateInputRef, end_date: endDateInputRef }
 
   const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
   const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
+  const openDatePicker = (field) => () => {
+    const input = dateInputRefs[field].current
+    input?.focus()
+    input?.showPicker?.()
+  }
+  const dateSlotProps = (field, iconLabel) => ({
+    htmlInput: { ref: dateInputRefs[field] },
+    input: {
+      endAdornment: (
+        <InputAdornment position="end">
+          <IconButton
+            edge="end"
+            size="small"
+            aria-label={iconLabel}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={openDatePicker(field)}
+          >
+            <CalendarMonthIcon fontSize="small" sx={{ color: 'action.active' }} />
+          </IconButton>
+        </InputAdornment>
+      ),
+    },
+    inputLabel: { shrink: focused[field] || !!form[field] },
+  })
   const maskSx = (field) => ({
     '& input::-webkit-datetime-edit': {
       opacity: focused[field] || form[field] ? 1 : 0,
+    },
+    '& input::-webkit-calendar-picker-indicator': {
+      display: 'none',
     },
   })
 
@@ -45,7 +78,7 @@ export default function BandEventFields({ form, onChange, errors = {} }) {
           onBlur={onBlur('start_date')}
           error={!!errors.start_date}
           helperText={errors.start_date}
-          slotProps={{ inputLabel: { shrink: focused.start_date || !!form.start_date } }}
+          slotProps={dateSlotProps('start_date', 'open start picker')}
           sx={maskSx('start_date')}
         />
       </Grid>
@@ -60,7 +93,7 @@ export default function BandEventFields({ form, onChange, errors = {} }) {
           onBlur={onBlur('end_date')}
           error={!!errors.end_date}
           helperText={errors.end_date || 'Leave blank for single day'}
-          slotProps={{ inputLabel: { shrink: focused.end_date || !!form.end_date } }}
+          slotProps={dateSlotProps('end_date', 'open end picker')}
           sx={maskSx('end_date')}
         />
       </Grid>

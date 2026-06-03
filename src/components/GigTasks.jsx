@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
 import IconButton from '@mui/material/IconButton'
+import InputAdornment from '@mui/material/InputAdornment'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { createTask, deleteTask, updateTask } from '../api/gigs.js'
 
@@ -22,6 +24,41 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
   const [newDue, setNewDue] = useState('')
   const [dueFocused, setDueFocused] = useState(false)
   const [focusedDueTaskId, setFocusedDueTaskId] = useState(null)
+  const newDueInputRef = useRef(null)
+  const dueInputRefs = useRef(new Map())
+
+  const openNewDuePicker = () => {
+    newDueInputRef.current?.focus()
+    newDueInputRef.current?.showPicker?.()
+  }
+
+  const openTaskDuePicker = (taskId) => () => {
+    const input = dueInputRefs.current.get(taskId)
+    input?.focus()
+    input?.showPicker?.()
+  }
+
+  const setTaskDueInputRef = (taskId) => (input) => {
+    if (input) {
+      dueInputRefs.current.set(taskId, input)
+    } else {
+      dueInputRefs.current.delete(taskId)
+    }
+  }
+
+  const dueDateIconButton = (label, onClick) => (
+    <InputAdornment position="end">
+      <IconButton
+        edge="end"
+        size="small"
+        aria-label={label}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onClick}
+      >
+        <CalendarMonthIcon fontSize="small" sx={{ color: 'action.active' }} />
+      </IconButton>
+    </InputAdornment>
+  )
 
   async function handleAdd() {
     if (!newTitle.trim()) return
@@ -70,12 +107,21 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
           onChange={(e) => setNewDue(e.target.value)}
           onFocus={() => setDueFocused(true)}
           onBlur={() => setDueFocused(false)}
-          slotProps={{ inputLabel: { shrink: dueFocused || !!newDue } }}
+          slotProps={{
+            htmlInput: { ref: newDueInputRef },
+            input: {
+              endAdornment: dueDateIconButton('open due date picker', openNewDuePicker),
+            },
+            inputLabel: { shrink: dueFocused || !!newDue },
+          }}
           label="Due"
           sx={{
             width: 160,
             '& input::-webkit-datetime-edit': {
               opacity: dueFocused || newDue ? 1 : 0,
+            },
+            '& input::-webkit-calendar-picker-indicator': {
+              display: 'none',
             },
           }}
         />
@@ -141,12 +187,26 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
               onChange={(e) => handleDueChange(task, e.target.value)}
               onFocus={() => setFocusedDueTaskId(task.id)}
               onBlur={() => setFocusedDueTaskId(null)}
-              slotProps={{ htmlInput: { 'aria-label': `Due date for ${task.title}` } }}
+              slotProps={{
+                htmlInput: {
+                  ref: setTaskDueInputRef(task.id),
+                  'aria-label': `Due date for ${task.title}`,
+                },
+                input: {
+                  endAdornment: dueDateIconButton(
+                    `open due date picker for ${task.title}`,
+                    openTaskDuePicker(task.id)
+                  ),
+                },
+              }}
               sx={{
                 flexShrink: 0,
                 width: { xs: 140, sm: 150 },
                 '& input::-webkit-datetime-edit': {
                   opacity: task.due_date || focusedDueTaskId === task.id ? 1 : 0,
+                },
+                '& input::-webkit-calendar-picker-indicator': {
+                  display: 'none',
                 },
               }}
             />
@@ -168,6 +228,7 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
           </Box>
           <IconButton
             size="small"
+            aria-label={`Delete task ${task.title}`}
             onClick={() => handleDelete(task.id)}
             sx={{ flexShrink: 0, gridRow: '1 / 3', alignSelf: 'center' }}
           >

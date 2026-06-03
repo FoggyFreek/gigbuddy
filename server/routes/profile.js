@@ -3,7 +3,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
 import { requireTenantAdmin } from '../middleware/tenant.js'
-import { storageClient, BUCKET } from '../utils/storage.js'
+import { uploadObject, removeObject, safeRemove, bandLogoKey } from '../services/storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
@@ -309,7 +309,7 @@ router.post('/logo', requireTenantAdmin, logoUpload.single('logo'), async (req, 
   const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
 
   const ext = extensionForImageMime(image.mimetype)
-  const objectKey = `tenants/${req.tenantId}/logo/${randomUUID()}${ext}`
+  const objectKey = bandLogoKey(req.tenantId, randomUUID(), ext)
 
   const { rows: before } = await pool.query(
     'SELECT logo_path FROM tenants WHERE id = $1',
@@ -317,9 +317,7 @@ router.post('/logo', requireTenantAdmin, logoUpload.single('logo'), async (req, 
   )
   const oldKey = before[0]?.logo_path || null
 
-  await storageClient.putObject(BUCKET, objectKey, image.buffer, image.size, {
-    'Content-Type': image.mimetype,
-  })
+  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
 
   let updatedKey
   try {
@@ -329,15 +327,11 @@ router.post('/logo', requireTenantAdmin, logoUpload.single('logo'), async (req, 
     )
     updatedKey = rows[0].logo_path
   } catch (err) {
-    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
+    removeObject(objectKey).catch(() => {})
     throw err
   }
 
-  if (oldKey) {
-    storageClient.removeObject(BUCKET, oldKey).catch((e) =>
-      console.warn('Failed to delete old logo object:', e.message),
-    )
-  }
+  safeRemove(oldKey, 'Failed to delete old logo object:')
 
   res.json({ logo_path: updatedKey })
 })

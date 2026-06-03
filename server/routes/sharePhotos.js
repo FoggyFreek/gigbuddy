@@ -4,7 +4,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
 import { requireTenantAdmin } from '../middleware/tenant.js'
-import { storageClient, BUCKET } from '../utils/storage.js'
+import { uploadObject, removeObject, safeRemove, sharePhotoKey } from '../services/storageService.js'
 import { validateAndReencodeImage } from '../utils/imageProcess.js'
 
 const router = Router()
@@ -35,7 +35,7 @@ router.post('/', requireTenantAdmin, upload.single('photo'), async (req, res) =>
   const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
 
   const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
-  const objectKey = `tenants/${req.tenantId}/share/${randomUUID()}${ext}`
+  const objectKey = sharePhotoKey(req.tenantId, randomUUID(), ext)
   const label = path.basename(req.file.originalname, ext) || 'Photo'
 
   const { rows: maxRows } = await pool.query(
@@ -44,9 +44,7 @@ router.post('/', requireTenantAdmin, upload.single('photo'), async (req, res) =>
   )
   const sortOrder = maxRows[0].next
 
-  await storageClient.putObject(BUCKET, objectKey, image.buffer, image.size, {
-    'Content-Type': image.mimetype,
-  })
+  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
 
   let row
   try {
@@ -57,7 +55,7 @@ router.post('/', requireTenantAdmin, upload.single('photo'), async (req, res) =>
     )
     row = rows[0]
   } catch (err) {
-    storageClient.removeObject(BUCKET, objectKey).catch(() => {})
+    removeObject(objectKey).catch(() => {})
     throw err
   }
 
@@ -82,9 +80,7 @@ router.delete('/:id', requireTenantAdmin, async (req, res) => {
   )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
 
-  storageClient.removeObject(BUCKET, object_key).catch((e) =>
-    console.warn('Failed to delete share photo object:', e.message),
-  )
+  safeRemove(object_key, 'Failed to delete share photo object:')
 
   res.status(204).end()
 })

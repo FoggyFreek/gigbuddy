@@ -15,15 +15,10 @@ import Typography from '@mui/material/Typography'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { deleteGigAttachment, uploadGigAttachment } from '../api/gigs.js'
+import { formatBytes } from '../utils/formatBytes.js'
 
 const MAX_BYTES = 1 * 1024 * 1024
 const ACCEPT = '.pdf,.xls,.xlsx,.doc,.docx,.txt'
-
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 export default function GigAttachments({ gigId, initialAttachments = [] }) {
   const [attachments, setAttachments] = useState(initialAttachments)

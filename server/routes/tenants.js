@@ -73,6 +73,13 @@ router.post('/', async (req, res, next) => {
     )
     const tenant = rows[0]
 
+    // Ensure the new tenant always has a stats row (reads also COALESCE as a
+    // backstop, but this keeps the row present from creation).
+    await client.query(
+      `INSERT INTO tenant_statistics (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+      [tenant.id],
+    )
+
     if (adminUserId) {
       await client.query(
         `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, approved_by_user_id)

@@ -34,8 +34,11 @@ router.post('/payment-links/webhook', async (req, res) => {
       const invoice = rows[0]
       const mollieApiKey = invoice.mollie_api_key
       if (mollieApiKey) {
+        // paymentId is only a "go check now" hint from Mollie — authoritative
+        // status is re-fetched from Mollie inside syncInvoicePaymentStatus using
+        // the secret key, so we never trust the posted id alone.
         const mollie = createTenantMollieClient(mollieApiKey)
-        await syncInvoicePaymentStatus(mollie, pool, invoice, paymentId)
+        await syncInvoicePaymentStatus(mollie, pool, invoice)
       }
     }
   } catch (err) {

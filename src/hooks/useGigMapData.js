@@ -20,6 +20,25 @@ function cityLabel(city, region, country) {
   return [city, region, country].filter(Boolean).join(', ')
 }
 
+function coordinateKey(lat, lon) {
+  return `${Number(lat).toFixed(5)}|${Number(lon).toFixed(5)}`
+}
+
+function mergeMarkerByLocation(markers, marker) {
+  const locationKey = coordinateKey(marker.lat, marker.lon)
+  const existingIndex = markers.findIndex((m) => m.locationKey === locationKey)
+  if (existingIndex === -1) return [...markers, { ...marker, locationKey }]
+
+  return markers.map((m, index) => {
+    if (index !== existingIndex) return m
+    return {
+      ...m,
+      gigs: [...m.gigs, ...marker.gigs]
+        .sort((a, b) => dateKey(b.event_date).localeCompare(dateKey(a.event_date))),
+    }
+  })
+}
+
 // Group past gigs by city (city|region|country), venue-first then festival. Gigs
 // without a city can't be placed on the map and are skipped.
 function buildCityGroups(gigs, today) {
@@ -76,16 +95,16 @@ export function useGigMapData() {
       if (cancelled) return
       setState({ status: 'ok', loading: true, cityCount: groups.length, gigCount, markers: [] })
 
-      const markers = []
+      let markers = []
       for (const group of groups) {
         const coords = await geocodePlace({ city: group.city, region: group.region, country: group.country })
         if (cancelled) return
         if (coords) {
-          markers.push({ ...group, lat: coords.lat, lon: coords.lon })
-          setState((s) => ({ ...s, markers: [...markers] }))
+          markers = mergeMarkerByLocation(markers, { ...group, lat: coords.lat, lon: coords.lon })
+          setState((s) => ({ ...s, cityCount: markers.length, markers: [...markers] }))
         }
       }
-      if (!cancelled) setState((s) => ({ ...s, loading: false }))
+      if (!cancelled) setState((s) => ({ ...s, cityCount: markers.length, loading: false }))
     }
 
     run()

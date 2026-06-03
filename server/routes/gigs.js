@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
-import { storageClient, BUCKET } from '../utils/storage.js'
+import { safeRemove } from '../services/storageService.js'
 import {
   parseId,
   toDateStr,
@@ -394,11 +394,7 @@ router.delete('/:id', async (req, res) => {
   )
   if (!rowCount) return res.status(404).json({ error: 'Not found' })
 
-  if (bannerKey) {
-    storageClient.removeObject(BUCKET, bannerKey).catch((e) =>
-      console.warn('Failed to delete gig banner object:', e.message),
-    )
-  }
+  safeRemove(bannerKey, 'Failed to delete gig banner object:')
 
   res.status(204).end()
 })
@@ -450,9 +446,7 @@ router.delete('/:id/attachments/:attachmentId', async (req, res) => {
   )
   if (!rows.length) return res.status(404).json({ error: 'Not found' })
 
-  storageClient.removeObject(BUCKET, rows[0].object_key).catch((e) =>
-    console.warn('Failed to delete gig attachment object:', e.message),
-  )
+  safeRemove(rows[0].object_key, 'Failed to delete gig attachment object:')
 
   res.status(204).end()
 })

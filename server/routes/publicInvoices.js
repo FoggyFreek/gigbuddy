@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
-import { storageClient, BUCKET } from '../utils/storage.js'
+import { statObject, getObject } from '../services/storageService.js'
 
 const router = Router()
 
@@ -23,11 +23,11 @@ router.get('/:id/logo', async (req, res) => {
   if (!logoPath) return res.status(404).end()
 
   try {
-    const stat = await storageClient.statObject(BUCKET, logoPath)
+    const stat = await statObject(logoPath)
     res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream')
     res.setHeader('Content-Length', stat.size)
     res.setHeader('Cache-Control', 'public, max-age=3600')
-    const stream = await storageClient.getObject(BUCKET, logoPath)
+    const stream = await getObject(logoPath)
     stream.on('error', (streamErr) => {
       console.error('[public-invoices] storage stream error:', streamErr)
       if (!res.headersSent) res.status(502).end()
