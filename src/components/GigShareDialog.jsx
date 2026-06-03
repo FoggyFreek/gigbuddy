@@ -543,7 +543,7 @@ export default function GigShareDialog({ open, onClose, gig }) {
             anchorEl={downloadMenuAnchor}
             open={Boolean(downloadMenuAnchor)}
             onClose={handleDownloadMenuClose}
-            MenuListProps={{ 'aria-labelledby': 'gig-share-download-button' }}
+            slotProps={{ list: { 'aria-labelledby': 'gig-share-download-button' } }}
           >
             <MenuItem onClick={() => handleDownloadOption(handleDownload)}>png</MenuItem>
             <MenuItem onClick={() => handleDownloadOption(handleDownloadPdf)}>pdf</MenuItem>

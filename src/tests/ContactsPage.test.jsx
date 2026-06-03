@@ -13,6 +13,15 @@ vi.mock('../api/contacts.js', () => ({
   importContacts: vi.fn(),
   addContactNote: vi.fn(),
   deleteContactNote: vi.fn().mockResolvedValue({}),
+  // ContactDetailPage's "Venues & festivals" section loads/edits these.
+  listContactVenues: vi.fn().mockResolvedValue([]),
+  addContactVenue: vi.fn(),
+  removeContactVenue: vi.fn().mockResolvedValue({}),
+}))
+
+// The embedded VenuePicker searches venues; nothing else is exercised here.
+vi.mock('../api/venues.js', () => ({
+  searchVenues: vi.fn().mockResolvedValue([]),
 }))
 
 import ContactsPage from '../pages/ContactsPage.jsx'

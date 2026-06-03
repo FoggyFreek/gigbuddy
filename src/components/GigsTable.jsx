@@ -75,12 +75,16 @@ function applySearch(list, q) {
 function GigCard({ gig, active, onClick }) {
   const taskCount = gig.open_task_count ?? 0
   const displayVenue = gig.venue ?? gig.festival
-  const metaParts = [gig.event_description, venueHeadline(displayVenue), venueCity(displayVenue)].filter(Boolean)
+  const eventText = [gig.event_description, venueHeadline(displayVenue), venueCity(displayVenue)].filter(Boolean)
   return (
     <Box
       onClick={onClick}
       sx={{
+        position: 'relative',
+        overflow: 'hidden',
         p: 1.25,
+        // Leave room on the left so the banner shows and fades out before the text begins.
+        pl: 1.25,
         borderBottom: '1px solid',
         borderColor: 'divider',
         cursor: 'pointer',
@@ -89,34 +93,36 @@ function GigCard({ gig, active, onClick }) {
         '&:hover': { bgcolor: 'action.hover' },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="body2">
-          {formatDate(gig.event_date)}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          ({formatTime(gig.start_time)} – {formatTime(gig.end_time)})
-        </Typography>
-        {taskCount > 0 && (
-          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.25, color: 'text.secondary' }}>
-            <ChecklistIcon fontSize="small" />
-            <Typography variant="caption">{taskCount}</Typography>
+      <Box sx={{ position: 'relative' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body1">
+            {formatDate(gig.event_date)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            ({formatTime(gig.start_time)} – {formatTime(gig.end_time)})
+          </Typography>
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
+            {taskCount > 0 && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, color: 'text.secondary' }}>
+                <ChecklistIcon fontSize="small" />
+                <Typography variant="caption">{taskCount}</Typography>
+              </Box>
+            )}
+            
           </Box>
-        )}
-        <Box sx={{ ml: taskCount > 0 ? 0.5 : 'auto', mt: -0.5 }}>
-          <GigShareMenu gig={gig} />
         </Box>
-      </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-        {metaParts.length ? metaParts.join(' · ') : '—'}
-      </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-        <MemberAvatarStack members={gig.members_availability} />
-        <Chip
-          label={gig.status}
-          color={STATUS_COLORS[gig.status] || 'default'}
-          size="small"
-          sx={{ ml: 'auto' }}
-        />
+        <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+          {eventText.length ? eventText.join(' · ') : '—'}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+          <MemberAvatarStack members={gig.members_availability} />
+          <Chip
+            label={gig.status}
+            color={STATUS_COLORS[gig.status] || 'default'}
+            size="small"
+            sx={{ ml: 'auto' }}
+          />
+        </Box>
       </Box>
     </Box>
   )

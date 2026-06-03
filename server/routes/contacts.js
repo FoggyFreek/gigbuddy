@@ -159,6 +159,75 @@ router.delete('/:id/notes/:noteId', async (req, res) => {
   res.status(204).end()
 })
 
+// Reverse side of the venue_contacts link: manage a contact's venues/festivals
+// from the contact. The link row is shared with the venue side (venues.js); both
+// festivals (category='festival') and venues live in the same venues table.
+async function requireContactInTenant(tenantId, contactId) {
+  const { rows } = await pool.query(
+    'SELECT 1 FROM contacts WHERE id = $1 AND tenant_id = $2',
+    [contactId, tenantId],
+  )
+  return rows.length > 0
+}
+
+router.get('/:id/venues', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  if (!(await requireContactInTenant(req.tenantId, id))) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+  const { rows } = await pool.query(
+    `SELECT v.id, v.name, v.category, v.organization_name, v.city, v.region, v.country, vc.is_primary
+       FROM venue_contacts vc
+       JOIN venues v ON v.id = vc.venue_id AND v.tenant_id = vc.tenant_id
+      WHERE vc.contact_id = $1 AND vc.tenant_id = $2
+      ORDER BY v.category ASC, v.name ASC`,
+    [id, req.tenantId],
+  )
+  res.json(rows)
+})
+
+router.post('/:id/venues', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  const venueId = parseId(req.body.venue_id)
+  if (venueId === null) return res.status(400).json({ error: 'venue_id is required' })
+
+  if (!(await requireContactInTenant(req.tenantId, id))) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+  const { rows: venueRows } = await pool.query(
+    `SELECT id, name, category, organization_name, city, region, country
+       FROM venues WHERE id = $1 AND tenant_id = $2`,
+    [venueId, req.tenantId],
+  )
+  if (!venueRows.length) return res.status(404).json({ error: 'Not found' })
+
+  try {
+    await pool.query(
+      'INSERT INTO venue_contacts (venue_id, contact_id, tenant_id) VALUES ($1, $2, $3)',
+      [venueId, id, req.tenantId],
+    )
+    return res.status(201).json({ ...venueRows[0], is_primary: false })
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Venue is already linked to this contact' })
+    }
+    throw err
+  }
+})
+
+router.delete('/:id/venues/:venueId', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  const venueId = parseId(req.params.venueId)
+  if (venueId === null) return res.status(400).json({ error: 'Invalid venueId' })
+
+  const { rowCount } = await pool.query(
+    'DELETE FROM venue_contacts WHERE contact_id = $1 AND venue_id = $2 AND tenant_id = $3',
+    [id, venueId, req.tenantId],
+  )
+  if (!rowCount) return res.status(404).json({ error: 'Not found' })
+  res.status(204).end()
+})
+
 async function fetchExistingImportKeys(client, tenantId, names) {
   if (!names.length) return new Set()
   const { rows } = await client.query(

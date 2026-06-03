@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import PropTypes from 'prop-types'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -35,6 +36,7 @@ import { listMembers } from '../api/bandMembers.js'
 import { compressBanner } from '../utils/compressImage.js'
 import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
+import { idProp } from '../propTypes/shared.js'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
 
@@ -53,7 +55,7 @@ function feeToCents(str) {
   return Math.round(n * 100)
 }
 
-const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerUpdate }, ref) {
+const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded }, ref) {
   const [form, setForm] = useState({
     event_date: '',
     event_description: '',
@@ -135,6 +137,7 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
 
   const applyGig = useCallback((g) => {
     setGig(g)
+    onGigLoaded?.(g)
     setBannerPath(g.banner_path || null)
     setSelectedVenue(g.venue || null)
     setSelectedFestival(g.festival || null)
@@ -156,7 +159,7 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
       has_stage_lights: !!g.has_stage_lights,
     })
     setInitialTasks(g.tasks || [])
-  }, [])
+  }, [onGigLoaded])
 
   const refresh = useCallback(async () => {
     const g = await getGig(gigId)
@@ -631,5 +634,11 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
     </>
   )
 })
+
+GigDetailContent.propTypes = {
+  gigId: idProp.isRequired,
+  onBannerUpdate: PropTypes.func,
+  onGigLoaded: PropTypes.func,
+}
 
 export default GigDetailContent

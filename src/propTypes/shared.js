@@ -15,6 +15,7 @@ export const venueShape = PropTypes.shape({
   country: PropTypes.string,
   primary_contact_name: PropTypes.string,
   years: PropTypes.arrayOf(PropTypes.number),
+  is_primary: PropTypes.bool,
 })
 
 export const gigShape = PropTypes.shape({

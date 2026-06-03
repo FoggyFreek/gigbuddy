@@ -37,6 +37,17 @@ vi.mock('../../../server/utils/mollieClient.js', async (importOriginal) => {
   }
 })
 
+// Stub the push fan-out so we can assert *which* tenant gets notified without
+// seeding subscriptions. Callers do `sendPushToTenant(...).catch(...)`, so the
+// mock must resolve a promise.
+const mockSendPushToTenant = vi.fn().mockResolvedValue(undefined)
+const mockSendPushToMember = vi.fn().mockResolvedValue(undefined)
+
+vi.mock('../../../server/utils/sendPush.js', () => ({
+  sendPushToTenant: mockSendPushToTenant,
+  sendPushToMember: mockSendPushToMember,
+}))
+
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let seed
 
@@ -79,6 +90,10 @@ beforeEach(async () => {
 
   // Default sync mock: open status, no payment yet.
   mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({ status: 'open' }))
+
+  // Keep push stubs returning a thenable after clearAllMocks.
+  mockSendPushToTenant.mockResolvedValue(undefined)
+  mockSendPushToMember.mockResolvedValue(undefined)
 })
 
 afterAll(async () => {
@@ -533,6 +548,107 @@ describe('POST /api/public/mollie/payment-links/webhook', () => {
 
     const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
     expect(rows[0].status).toBe('paid')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Webhook notifies tenant subscribers when an invoice transitions to paid.
+// Fires only on the paid transition, only from the webhook, never for void.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Webhook notifies tenant on paid transition', () => {
+  async function linkedInvoiceA() {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    return inv
+  }
+
+  function mollieReportsPaid() {
+    mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
+      status: 'paid',
+      payments: [{ id: 'tr_paid', status: 'paid', paidAt: '2026-05-20T12:00:00+00:00' }],
+    }))
+  }
+
+  async function postWebhook(invoiceId) {
+    return request(app)
+      .post(`/api/public/mollie/payment-links/webhook?invoice=${invoiceId}`)
+      .send('id=tr_paid')
+      .set('Content-Type', 'application/x-www-form-urlencoded')
+  }
+
+  it('sends one push to the invoice tenant on the paid transition', async () => {
+    const inv = await linkedInvoiceA()
+    mollieReportsPaid()
+
+    await postWebhook(inv.id)
+
+    expect(mockSendPushToTenant).toHaveBeenCalledTimes(1)
+    expect(mockSendPushToTenant).toHaveBeenCalledWith(
+      seed.tenantA.id,
+      expect.objectContaining({
+        tag: 'invoice-paid',
+        url: `/invoices/${inv.id}`,
+        body: expect.stringContaining(inv.invoice_number),
+      }),
+    )
+  })
+
+  it('does not notify again on a duplicate paid webhook (already paid)', async () => {
+    const inv = await linkedInvoiceA()
+    mollieReportsPaid()
+
+    await postWebhook(inv.id)
+    expect(mockSendPushToTenant).toHaveBeenCalledTimes(1)
+
+    mockSendPushToTenant.mockClear()
+    await postWebhook(inv.id)
+    expect(mockSendPushToTenant).not.toHaveBeenCalled()
+  })
+
+  it('does not notify for a non-paid status', async () => {
+    const inv = await linkedInvoiceA()
+    mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
+      status: 'expired',
+      payments: [{ id: 'tr_x', status: 'expired' }],
+    }))
+
+    await postWebhook(inv.id)
+    expect(mockSendPushToTenant).not.toHaveBeenCalled()
+  })
+
+  it('does not notify from the manual sync endpoint', async () => {
+    const inv = await linkedInvoiceA()
+    mollieReportsPaid()
+
+    const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link/sync`)).send()
+    expect(res.status).toBe(200)
+    expect(res.body.invoiceStatus).toBe('paid')
+    expect(mockSendPushToTenant).not.toHaveBeenCalled()
+  })
+
+  it('does not notify for a void invoice even when Mollie reports paid', async () => {
+    const inv = await linkedInvoiceA()
+    await pool.query(`UPDATE invoices SET status = 'void' WHERE id = $1`, [inv.id])
+    mollieReportsPaid()
+
+    await postWebhook(inv.id)
+
+    expect(mockSendPushToTenant).not.toHaveBeenCalled()
+    const { rows } = await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('void')
+  })
+
+  it('isolation: a paid webhook for tenant A never targets tenant B', async () => {
+    const inv = await linkedInvoiceA()
+    mollieReportsPaid()
+
+    await postWebhook(inv.id)
+
+    // The push is scoped to the invoice's own tenant only — tenant B is never a target.
+    expect(mockSendPushToTenant).toHaveBeenCalledTimes(1)
+    expect(mockSendPushToTenant).toHaveBeenCalledWith(seed.tenantA.id, expect.any(Object))
+    expect(mockSendPushToTenant).not.toHaveBeenCalledWith(seed.tenantB.id, expect.anything())
   })
 })
 

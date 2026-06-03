@@ -77,6 +77,23 @@ describe('GigContactsSection — inherited contacts', () => {
     await user.click(screen.getByLabelText('copy email'))
     expect(writeText).toHaveBeenCalledWith('v@hall.com')
   })
+
+  it('does not refetch inherited contacts when ids are unchanged', async () => {
+    const flush = vi.fn()
+    const { rerender } = wrap(<GigContactsSection gigId={1} venueId={11} festivalId={22} flush={flush} />)
+
+    await waitFor(() => expect(listVenueContacts).toHaveBeenCalledTimes(2))
+
+    rerender(
+      <MemoryRouter>
+        <ThemeProvider theme={theme}>
+          <GigContactsSection gigId={1} venueId={11} festivalId={22} flush={flush} />
+        </ThemeProvider>
+      </MemoryRouter>,
+    )
+
+    expect(listVenueContacts).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('GigContactsSection — gig contacts', () => {

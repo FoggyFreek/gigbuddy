@@ -87,6 +87,11 @@ describe('GigsTable', () => {
     expect(screen.getByText('—–—')).toBeInTheDocument()
   })
 
+  it('keeps a share button on each desktop row', () => {
+    wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+    expect(screen.getAllByLabelText('share gig')).toHaveLength(GIGS.length)
+  })
+
   describe('mobile (compact card layout)', () => {
     beforeEach(() => { mockIsMobile = true })
     afterEach(() => { mockIsMobile = false })
@@ -125,6 +130,23 @@ describe('GigsTable', () => {
     it('shows empty state when no gigs', () => {
       wrap(<GigsTable gigs={[]} onRowClick={() => {}} />)
       expect(screen.getByText(/No gigs yet/i)).toBeInTheDocument()
+    })
+
+    it('does not render a share button on compact cards', () => {
+      wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+      expect(screen.queryByLabelText('share gig')).not.toBeInTheDocument()
+    })
+
+    it('renders the event banner as a faded background when banner_path is set', () => {
+      const withBanner = [{ ...GIGS[0], banner_path: 'tenants/1/gig-banners/abc.jpg' }]
+      wrap(<GigsTable gigs={withBanner} onRowClick={() => {}} />)
+      const banner = screen.getByTestId('gig-card-banner-1')
+      expect(banner.style.backgroundImage).toContain('/api/files/tenants/1/gig-banners/abc.jpg')
+    })
+
+    it('does not render a banner background when banner_path is missing', () => {
+      wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+      expect(screen.queryByTestId('gig-card-banner-1')).not.toBeInTheDocument()
     })
   })
 })

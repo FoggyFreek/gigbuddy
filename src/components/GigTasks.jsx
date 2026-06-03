@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import PropTypes from 'prop-types'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
 import IconButton from '@mui/material/IconButton'
@@ -16,6 +17,30 @@ import { createTask, deleteTask, updateTask } from '../api/gigs.js'
 function toDateInputValue(val) {
   if (!val) return ''
   return String(val).slice(0, 10)
+}
+
+// A component (not a render-time helper) so the ref-reading onClick is passed as
+// an event-handler prop — react-hooks/refs forbids handing such functions to a
+// plain function invoked during render.
+function DueDateAdornment({ label, onClick }) {
+  return (
+    <InputAdornment position="end">
+      <IconButton
+        edge="end"
+        size="small"
+        aria-label={label}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onClick}
+      >
+        <CalendarMonthIcon fontSize="small" sx={{ color: 'action.active' }} />
+      </IconButton>
+    </InputAdornment>
+  )
+}
+
+DueDateAdornment.propTypes = {
+  label: PropTypes.string.isRequired,
+  onClick: PropTypes.func.isRequired,
 }
 
 export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
@@ -45,20 +70,6 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
       dueInputRefs.current.delete(taskId)
     }
   }
-
-  const dueDateIconButton = (label, onClick) => (
-    <InputAdornment position="end">
-      <IconButton
-        edge="end"
-        size="small"
-        aria-label={label}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={onClick}
-      >
-        <CalendarMonthIcon fontSize="small" sx={{ color: 'action.active' }} />
-      </IconButton>
-    </InputAdornment>
-  )
 
   async function handleAdd() {
     if (!newTitle.trim()) return
@@ -110,7 +121,7 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
           slotProps={{
             htmlInput: { ref: newDueInputRef },
             input: {
-              endAdornment: dueDateIconButton('open due date picker', openNewDuePicker),
+              endAdornment: <DueDateAdornment label="open due date picker" onClick={openNewDuePicker} />,
             },
             inputLabel: { shrink: dueFocused || !!newDue },
           }}
@@ -193,9 +204,11 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }) {
                   'aria-label': `Due date for ${task.title}`,
                 },
                 input: {
-                  endAdornment: dueDateIconButton(
-                    `open due date picker for ${task.title}`,
-                    openTaskDuePicker(task.id)
+                  endAdornment: (
+                    <DueDateAdornment
+                      label={`open due date picker for ${task.title}`}
+                      onClick={openTaskDuePicker(task.id)}
+                    />
                   ),
                 },
               }}

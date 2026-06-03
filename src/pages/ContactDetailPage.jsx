@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
@@ -12,15 +13,29 @@ import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
-import { addContactNote, deleteContactNote, deleteContact, getContact, updateContact } from '../api/contacts.js'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import StarIcon from '@mui/icons-material/Star'
+import {
+  addContactNote,
+  addContactVenue,
+  deleteContactNote,
+  deleteContact,
+  getContact,
+  listContactVenues,
+  removeContactVenue,
+  updateContact,
+} from '../api/contacts.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
+import { venueHeadline } from '../utils/venueDisplay.js'
 import ContactFields from '../components/ContactFields.jsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
+import VenuePicker from '../components/VenuePicker.jsx'
 
 const REQUIRED_FIELDS = ['name']
 
@@ -39,6 +54,7 @@ export default function ContactDetailPage() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', category: 'press' })
   const [notes, setNotes] = useState([])
   const [newNote, setNewNote] = useState('')
+  const [venues, setVenues] = useState([])
   const [loading, setLoading] = useState(true)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
@@ -64,7 +80,19 @@ export default function ContactDetailPage() {
         setNotes(c.notes || [])
       })
       .finally(() => setLoading(false))
+    listContactVenues(contactId).then(setVenues).catch(() => setVenues([]))
   }, [contactId])
+
+  async function handleAddVenue(venue) {
+    if (venues.some((v) => v.id === venue.id)) return
+    const linked = await addContactVenue(contactId, venue.id)
+    setVenues((prev) => [...prev, linked])
+  }
+
+  async function handleRemoveVenue(venueId) {
+    await removeContactVenue(contactId, venueId)
+    setVenues((prev) => prev.filter((v) => v.id !== venueId))
+  }
 
   async function handleAddNote() {
     const trimmed = newNote.trim()
@@ -128,6 +156,80 @@ export default function ContactDetailPage() {
               errors={getRequiredErrors(form, REQUIRED_FIELDS)}
             />
           </Grid>
+
+          <Divider sx={{ my: 3 }} />
+
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+            Venues &amp; festivals
+          </Typography>
+
+          {venues.map((v) => {
+            const location = [v.city, v.region, v.country].filter(Boolean).join(', ')
+            return (
+              <Box
+                key={v.id}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mb: 1,
+                  p: 1,
+                  pl: 1.5,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                }}
+              >
+                <Chip
+                  label={v.category === 'festival' ? 'festival' : 'venue'}
+                  size="small"
+                  variant="outlined"
+                  sx={{ alignSelf: 'center' }}
+                />
+                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                  <Typography variant="body2" noWrap>
+                    {venueHeadline(v) || '(unnamed)'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {location || ' '}
+                  </Typography>
+                </Box>
+                {v.is_primary && (
+                  <Tooltip title="This contact is the primary for this venue">
+                    <StarIcon
+                      color="warning"
+                      fontSize="small"
+                      titleAccess="primary contact for this venue"
+                    />
+                  </Tooltip>
+                )}
+                <Tooltip title="Open venue">
+                  <IconButton
+                    size="small"
+                    onClick={async () => { await flush(); navigate(`/venues/${v.id}`) }}
+                    aria-label="open venue"
+                  >
+                    <OpenInNewIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <IconButton
+                  size="small"
+                  onClick={() => handleRemoveVenue(v.id)}
+                  aria-label="remove venue"
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            )
+          })}
+
+          <Box sx={{ mt: 1 }}>
+            <VenuePicker
+              onSelect={handleAddVenue}
+              excludeIds={venues.map((v) => v.id)}
+              label="Add venue / festival"
+            />
+          </Box>
 
           <Divider sx={{ my: 3 }} />
 

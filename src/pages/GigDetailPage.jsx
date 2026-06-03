@@ -12,6 +12,7 @@ import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import GigDetailContent from '../components/GigDetailContent.jsx'
+import GigShareMenu from '../components/GigShareMenu.jsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 import { deleteGig } from '../api/gigs.js'
 
@@ -25,6 +26,7 @@ export default function GigDetailPage() {
   const contentRef = useRef()
   const [polledStatus, setPolledStatus] = useState('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [gig, setGig] = useState(null)
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -48,13 +50,14 @@ export default function GigDetailPage() {
           </IconButton>
         )}
         <Typography variant="h5" fontWeight={600}>Gig details</Typography>
+        <Box sx={{ flexGrow: 1 }} />
+        {/* Identity gate: the lifted gig lags during async loads / split-view id
+            changes, so only share once it matches the current id. */}
+        {gig?.id === gigId && <GigShareMenu gig={gig} />}
         {insideSplitView && (
-          <>
-            <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={handleBack} aria-label="close">
-              <CloseIcon />
-            </IconButton>
-          </>
+          <IconButton onClick={handleBack} aria-label="close">
+            <CloseIcon />
+          </IconButton>
         )}
       </Box>
 
@@ -62,6 +65,7 @@ export default function GigDetailPage() {
         ref={contentRef}
         gigId={gigId}
         onBannerUpdate={outletCtx.onGigUpdate}
+        onGigLoaded={setGig}
       />
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>

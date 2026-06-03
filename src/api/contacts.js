@@ -11,3 +11,9 @@ export const deleteContact  = (id)       => api(`/${id}`, { method: 'DELETE' })
 export const importContacts  = (rows)     => api('/import', { method: 'POST', body: JSON.stringify(rows) })
 export const addContactNote  = (id, note) => api(`/${id}/notes`, { method: 'POST', body: JSON.stringify({ note }) })
 export const deleteContactNote = (id, noteId) => api(`/${id}/notes/${noteId}`, { method: 'DELETE' })
+
+export const listContactVenues  = (id)         => api(`/${id}/venues`)
+export const addContactVenue    = (id, venueId) =>
+  api(`/${id}/venues`, { method: 'POST', body: JSON.stringify({ venue_id: venueId }) })
+export const removeContactVenue = (id, venueId) =>
+  api(`/${id}/venues/${venueId}`, { method: 'DELETE' })

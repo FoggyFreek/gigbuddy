@@ -12,6 +12,7 @@ import {
   createTenantMollieClient,
   formatMollieAmountFromCents,
 } from '../utils/mollieClient.js'
+import { sendPushToTenant } from '../utils/sendPush.js'
 import {
   fetchTenant,
   fetchInvoice,
@@ -415,4 +416,18 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice) {
     [mollieStatus, paymentId, paidAt, invoiceStatus, invoice.id, invoice.tenant_id],
   )
   return rows[0]
+}
+
+// Fire-and-forget push to all approved members of the invoice's tenant that an
+// invoice was paid. Mirrors the notify* helpers in gigService.js: the caller
+// owns the "should we notify?" decision; this owns payload + dispatch + logging.
+export function notifyInvoicePaid(tenantId, invoice) {
+  const amount = `€${((invoice.total_cents ?? 0) / 100).toFixed(2)}`
+  sendPushToTenant(tenantId, {
+    title: 'Invoice paid',
+    body: [invoice.invoice_number, invoice.customer_name, amount]
+      .filter(Boolean).join(' · '),
+    tag: 'invoice-paid',
+    url: `/invoices/${invoice.id}`,
+  }).catch((err) => console.error('[push] invoice paid notify failed', err))
 }
