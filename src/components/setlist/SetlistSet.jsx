@@ -21,6 +21,10 @@ import { formatDuration } from '../../utils/formatDuration.js'
 import { setlistSetShape } from '../../propTypes/shared.js'
 import { itemDomId, setDomId } from './ids.js'
 
+function countSongsThrough(items, index) {
+  return items.slice(0, index + 1).filter((item) => item.item_type === 'song').length
+}
+
 export default function SetlistSet({
   set,
   index,
@@ -35,6 +39,7 @@ export default function SetlistSet({
   onMoveDown,
   onDeleteItem,
   onUpdateItem,
+  songOrderStart = 0,
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: setDomId(set.id) })
   const itemIds = set.items.map((it) => itemDomId(it.id))
@@ -120,10 +125,12 @@ export default function SetlistSet({
           {set.items.map((it, i) => {
             const next = set.items[i + 1]
             const canSegue = it.item_type === 'song' && next?.item_type === 'song'
+            const itemSongOrder = it.item_type === 'song' ? songOrderStart + countSongsThrough(set.items, i) : null
             return (
               <Box key={it.id}>
                 <SetlistItemCard
                   item={it}
+                  songOrder={itemSongOrder}
                   onDelete={() => onDeleteItem(it.id)}
                   onUpdate={(patch) => onUpdateItem(it.id, patch)}
                 />
@@ -169,4 +176,5 @@ SetlistSet.propTypes = {
   onMoveDown: PropTypes.func.isRequired,
   onDeleteItem: PropTypes.func.isRequired,
   onUpdateItem: PropTypes.func.isRequired,
+  songOrderStart: PropTypes.number,
 }

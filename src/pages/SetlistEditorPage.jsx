@@ -77,6 +77,24 @@ function applyClearedLinks(sets, ids) {
   }))
 }
 
+function getSongOrder(sets, itemId) {
+  let order = 0
+  for (const s of sets) {
+    for (const item of s.items) {
+      if (item.item_type !== 'song') continue
+      order += 1
+      if (item.id === itemId) return order
+    }
+  }
+  return null
+}
+
+function countSongsBeforeSet(sets, setIndex) {
+  return sets
+    .slice(0, setIndex)
+    .reduce((total, s) => total + s.items.filter((it) => it.item_type === 'song').length, 0)
+}
+
 export default function SetlistEditorPage() {
   const { id } = useParams()
   const setlistId = Number(id)
@@ -363,6 +381,7 @@ export default function SetlistEditorPage() {
             set={s}
             index={index}
             setCount={sets.length}
+            songOrderStart={countSongsBeforeSet(sets, index)}
             onRename={(newName) => handleRenameSet(s.id, newName)}
             onToggleTotal={(value) => handleToggleTotal(s.id, value)}
             onDelete={() => handleDeleteSet(s.id)}
@@ -378,7 +397,13 @@ export default function SetlistEditorPage() {
 
         <DragOverlay>
           {activeItem ? (
-            <SetlistItemCard item={activeItem} onDelete={() => {}} onUpdate={() => {}} dragOverlay />
+            <SetlistItemCard
+              item={activeItem}
+              songOrder={getSongOrder(sets, activeItem.id)}
+              onDelete={() => {}}
+              onUpdate={() => {}}
+              dragOverlay
+            />
           ) : null}
         </DragOverlay>
       </DndContext>

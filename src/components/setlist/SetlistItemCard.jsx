@@ -21,7 +21,7 @@ function SongBody({ item }) {
   ].filter(Boolean).join(' · ')
   return (
     <Box sx={{ minWidth: 0 }}>
-      <Typography variant="body2" fontWeight={600} noWrap>
+      <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
         {item.title || '(unknown song)'}
       </Typography>
       {meta && (
@@ -73,7 +73,7 @@ BreakBody.propTypes = {
   onUpdate: PropTypes.func.isRequired,
 }
 
-export default function SetlistItemCard({ item, onDelete, onUpdate, dragOverlay = false }) {
+export default function SetlistItemCard({ item, onDelete, onUpdate, dragOverlay = false, songOrder = null }) {
   const sortable = useSortable({ id: itemDomId(item.id) })
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable
   const isSong = item.item_type === 'song'
@@ -106,6 +106,27 @@ export default function SetlistItemCard({ item, onDelete, onUpdate, dragOverlay 
       >
         <DragIndicatorIcon fontSize="small" />
       </IconButton>
+      {isSong && songOrder !== null && (
+        <Box
+          aria-label={`song order ${songOrder}`}
+          sx={{
+            mx: 0.5,
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            bgcolor: 'action.hover',
+            color: 'text.secondary',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+            {songOrder}
+          </span>
+        </Box>
+      )}
       {isSong ? <SongBody item={item} /> : <BreakBody item={item} onUpdate={onUpdate} />}
       <Box sx={{ flexGrow: isSong ? 1 : 0 }} />
       <IconButton size="small" color="error" onClick={onDelete} aria-label="delete item">
@@ -120,4 +141,5 @@ SetlistItemCard.propTypes = {
   onDelete: PropTypes.func.isRequired,
   onUpdate: PropTypes.func.isRequired,
   dragOverlay: PropTypes.bool,
+  songOrder: PropTypes.number,
 }

@@ -93,6 +93,42 @@ describe('SetlistEditorPage', () => {
     expect(screen.getByText(/^Total/).textContent).toContain('1:40')
   })
 
+  it('numbers song cards without counting pauses or breaks', async () => {
+    getSetlist.mockResolvedValue({
+      id: 5,
+      name: 'My List',
+      sets: [
+        {
+          id: 10,
+          name: 'Set 1',
+          include_in_total: true,
+          sort_order: 0,
+          items: [
+            song(100, 'Creep'),
+            { id: 200, set_id: 10, item_type: 'pause', duration_seconds: 60, label: null, sort_order: 1 },
+          ],
+        },
+        {
+          id: 11,
+          name: 'Set 2',
+          include_in_total: true,
+          sort_order: 1,
+          items: [
+            { id: 201, set_id: 11, item_type: 'break', duration_seconds: 600, label: null, sort_order: 0 },
+            song(101, 'No Surprises', { set_id: 11 }),
+          ],
+        },
+      ],
+    })
+
+    wrap()
+
+    expect(await screen.findByText('Creep')).toBeInTheDocument()
+    expect(screen.getAllByLabelText('song order 1')).toHaveLength(1)
+    expect(screen.getByLabelText('song order 2')).toBeInTheDocument()
+    expect(screen.queryByLabelText('song order 3')).not.toBeInTheDocument()
+  })
+
   it('toggling a set out of the total recomputes the displayed total', async () => {
     const user = userEvent.setup()
     wrap()
