@@ -18,6 +18,10 @@ async function objectKeyBelongsToTenant(objectKey, tenantId) {
      SELECT 1 FROM invoices WHERE tenant_id = $1 AND pdf_path = $2
      UNION ALL
      SELECT 1 FROM invoices WHERE tenant_id = $1 AND custom_logo_path = $2
+     UNION ALL
+     SELECT 1 FROM song_documents WHERE tenant_id = $1 AND object_key = $2
+     UNION ALL
+     SELECT 1 FROM song_recordings WHERE tenant_id = $1 AND object_key = $2
      LIMIT 1`,
     [tenantId, objectKey],
   )
@@ -34,7 +38,12 @@ router.get('/*objectKey', async (req, res) => {
   if (!allowed) return res.status(404).json({ error: 'Not found' })
 
   const { rows: meta } = await pool.query(
-    'SELECT original_filename FROM gig_attachments WHERE object_key = $1 AND tenant_id = $2',
+    `SELECT original_filename FROM gig_attachments WHERE object_key = $1 AND tenant_id = $2
+     UNION ALL
+     SELECT original_filename FROM song_documents WHERE object_key = $1 AND tenant_id = $2
+     UNION ALL
+     SELECT original_filename FROM song_recordings WHERE object_key = $1 AND tenant_id = $2
+     LIMIT 1`,
     [objectKey, req.tenantId],
   )
 

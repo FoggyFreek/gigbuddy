@@ -10,6 +10,8 @@ import bandEventsRouter from './bandEvents.js'
 import emailTemplatesRouter from './emailTemplates.js'
 import venuesRouter from './venues.js'
 import contactsRouter from './contacts.js'
+import songsRouter from './songs.js'
+import setlistsRouter from './setlists.js'
 import invoicesRouter from './invoices.js'
 import pushRouter from './push.js'
 import authRouter from './auth.js'
@@ -125,6 +127,8 @@ router.use('/band-events', tenantMember, bandEventsRouter)
 router.use('/email-templates', tenantMember, emailTemplatesRouter)
 router.use('/venues', tenantMember, venuesRouter)
 router.use('/contacts', tenantMember, contactsRouter)
+router.use('/songs', tenantMember, songsRouter)
+router.use('/setlists', tenantMember, setlistsRouter)
 router.use('/invoices', tenantMember, invoicesRouter)
 router.use('/push', tenantMember, pushRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)

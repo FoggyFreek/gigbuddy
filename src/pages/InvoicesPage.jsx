@@ -149,7 +149,7 @@ export default function InvoicesPage() {
                   </ListItemIcon>
                   <ListItemText
                     primary={status}
-                    primaryTypographyProps={{ sx: { textTransform: 'capitalize' } }}
+                    slotProps={{ primary: { sx: { textTransform: 'capitalize' } } }}
                   />
                 </MenuItem>
               ))}

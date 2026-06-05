@@ -1,73 +1,102 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import AppBar from '@mui/material/AppBar'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
-import Divider from '@mui/material/Divider'
 import Drawer from '@mui/material/Drawer'
 import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
-import ListSubheader from '@mui/material/ListSubheader'
 import Toolbar from '@mui/material/Toolbar'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
-import ApartmentIcon from '@mui/icons-material/Apartment'
-import DashboardIcon from '@mui/icons-material/Dashboard'
-import ChecklistIcon from '@mui/icons-material/Checklist'
-import EmailIcon from '@mui/icons-material/Email'
-import EventIcon from '@mui/icons-material/Event'
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
-import EventNoteIcon from '@mui/icons-material/EventNote'
-import GroupIcon from '@mui/icons-material/Group'
-import SettingsIcon from '@mui/icons-material/Settings'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
-import DarkModeIcon from '@mui/icons-material/DarkMode'
-import LightModeIcon from '@mui/icons-material/LightMode'
-import LogoutIcon from '@mui/icons-material/Logout'
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
-import MusicNoteIcon from '@mui/icons-material/MusicNote'
-import ContactsIcon from '@mui/icons-material/Contacts'
-import LocationOnIcon from '@mui/icons-material/LocationOn'
-import PersonIcon from '@mui/icons-material/Person'
-import PeopleAltIcon from '@mui/icons-material/PeopleAlt'
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
+// Group headers use TwoTone icons (slightly larger); children use Outlined.
+import SpaceDashboardTwoTone from '@mui/icons-material/SpaceDashboardTwoTone'
+import EventNoteTwoTone from '@mui/icons-material/EventNoteTwoTone'
+import HubTwoTone from '@mui/icons-material/HubTwoTone'
+import PaymentsTwoTone from '@mui/icons-material/PaymentsTwoTone'
+import LibraryMusicTwoTone from '@mui/icons-material/LibraryMusicTwoTone'
+import DashboardOutlined from '@mui/icons-material/DashboardOutlined'
+import PersonOutlined from '@mui/icons-material/PersonOutlined'
+import EventOutlined from '@mui/icons-material/EventOutlined'
+import CalendarMonthOutlined from '@mui/icons-material/CalendarMonthOutlined'
+import MusicNoteOutlined from '@mui/icons-material/MusicNoteOutlined'
+import ChecklistOutlined from '@mui/icons-material/ChecklistOutlined'
+import EventNoteOutlined from '@mui/icons-material/EventNoteOutlined'
+import EmailOutlined from '@mui/icons-material/EmailOutlined'
+import LocationOnOutlined from '@mui/icons-material/LocationOnOutlined'
+import ContactsOutlined from '@mui/icons-material/ContactsOutlined'
+import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined'
+import LibraryMusicOutlined from '@mui/icons-material/LibraryMusicOutlined'
+import QueueMusicOutlined from '@mui/icons-material/QueueMusicOutlined'
 import { useProfile } from '../contexts/profileContext.js'
 import { useAuth } from '../contexts/authContext.js'
 import { usePushNotifications } from '../hooks/usePushNotifications.js'
 import { useTenantQuerySync } from '../hooks/useTenantQuerySync.js'
 import { useThemeMode } from '../contexts/themeModeContext.js'
-import NavItem from './appShell/NavItem.jsx'
+import NavGroup from './appShell/NavGroup.jsx'
+import { isItemSelected } from './appShell/navSelection.js'
 import NotificationToggle from './appShell/NotificationToggle.jsx'
+import SettingsMenu from './appShell/SettingsMenu.jsx'
 import UserMenu from './appShell/UserMenu.jsx'
 
 const DRAWER_WIDTH = 220
 const COLLAPSED_DRAWER_WIDTH = 72
 
-const BASE_NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', icon: DashboardIcon },
-  { to: '/profile', label: 'Profile', icon: PersonIcon },
-  { to: '/gigs', label: 'Gigs', icon: EventIcon },
-  { to: '/rehearsals', label: 'Rehearsals', icon: MusicNoteIcon },
-  { to: '/events', label: 'Band Events', icon: EventNoteIcon },
-  { to: '/tasks', label: 'Tasks', icon: ChecklistIcon },
-  { to: '/availability', label: 'Calendar', icon: CalendarMonthIcon },
-  { to: '/email-templates', label: 'Email Templates', icon: EmailIcon },
-  { to: '/venues', label: 'Venues', icon: LocationOnIcon },
-  { to: '/contacts', label: 'Contacts', icon: ContactsIcon },
-  { to: '/invoices', label: 'Invoices', icon: ReceiptLongIcon },
-]
-
-const TENANT_ADMIN_NAV_ITEMS = [
-  { to: '/members', label: 'Members', icon: GroupIcon },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon },
-]
-
-const SUPER_ADMIN_NAV_ITEMS = [
-  { to: '/admin/tenants', label: 'Tenants', icon: ApartmentIcon },
-  { to: '/admin/users', label: 'All Users', icon: PeopleAltIcon },
+const NAV_GROUPS = [
+  {
+    key: 'overview',
+    label: 'Overview',
+    icon: SpaceDashboardTwoTone,
+    children: [
+      { to: '/', label: 'Dashboard', icon: DashboardOutlined },
+      { to: '/profile', label: 'Profile', icon: PersonOutlined },
+    ],
+  },
+  {
+    key: 'planning',
+    label: 'Planning',
+    icon: EventNoteTwoTone,
+    children: [
+      { to: '/gigs', label: 'Gigs', icon: EventOutlined },
+      { to: '/availability', label: 'Calendar', icon: CalendarMonthOutlined },
+      { to: '/rehearsals', label: 'Rehearsals', icon: MusicNoteOutlined },
+      { to: '/tasks', label: 'Tasks', icon: ChecklistOutlined },
+      { to: '/events', label: 'Band Events', icon: EventNoteOutlined },
+    ],
+  },
+  {
+    key: 'network',
+    label: 'Network',
+    icon: HubTwoTone,
+    children: [
+      { to: '/email-templates', label: 'Email Templates', icon: EmailOutlined },
+      { to: '/venues', label: 'Venues', icon: LocationOnOutlined },
+      { to: '/contacts', label: 'Contacts', icon: ContactsOutlined },
+    ],
+  },
+  {
+    key: 'financial',
+    label: 'Financial',
+    icon: PaymentsTwoTone,
+    children: [
+      { to: '/invoices', label: 'Invoices', icon: ReceiptLongOutlined },
+    ],
+  },
+  {
+    key: 'repertoire',
+    label: 'Repertoire',
+    icon: LibraryMusicTwoTone,
+    children: [
+      { to: '/songs', label: 'Songs', icon: LibraryMusicOutlined },
+      { to: '/setlists', label: 'Setlists', icon: QueueMusicOutlined },
+    ],
+  },
 ]
 
 export default function AppShell() {
@@ -81,12 +110,30 @@ export default function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState(null)
+  const [settingsMenuAnchor, setSettingsMenuAnchor] = useState(null)
 
   useTenantQuerySync()
 
   const handleNavClick = () => {
     if (isMobile) setMobileOpen(false)
   }
+
+  // Single-open accordion: the group containing the active route auto-expands,
+  // and clicking another header switches which one is open. We follow the route
+  // by adjusting state during render (React's recommended pattern) rather than
+  // an effect, so navigation re-opens the owning group while manual toggles in
+  // between are still honoured.
+  const activeGroupKey = useMemo(
+    () => NAV_GROUPS.find((g) => g.children.some((c) => isItemSelected(c.to, pathname)))?.key ?? null,
+    [pathname],
+  )
+  const [expandedKey, setExpandedKey] = useState(activeGroupKey)
+  const [prevActiveKey, setPrevActiveKey] = useState(activeGroupKey)
+  if (activeGroupKey && activeGroupKey !== prevActiveKey) {
+    setPrevActiveKey(activeGroupKey)
+    setExpandedKey(activeGroupKey)
+  }
+  const handleToggleGroup = (key) => setExpandedKey((k) => (k === key ? null : key))
 
   const isSuperAdmin = !!user?.isSuperAdmin
   const isTenantAdmin =
@@ -108,16 +155,6 @@ export default function AppShell() {
   const isNavCollapsed = !isMobile && navCollapsed
   const drawerWidth = isNavCollapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH
 
-  const renderNavItem = (item) => (
-    <NavItem
-      key={item.to}
-      item={item}
-      pathname={pathname}
-      isNavCollapsed={isNavCollapsed}
-      onClick={handleNavClick}
-    />
-  )
-
   const drawerContent = (
     <>
       <Toolbar />
@@ -135,39 +172,19 @@ export default function AppShell() {
             </Tooltip>
           </Box>
         )}
-        <List>{BASE_NAV_ITEMS.map(renderNavItem)}</List>
-        {isTenantAdmin && (
-          <>
-            <Divider />
-            <List
-              subheader={
-                !isNavCollapsed ? (
-                  <ListSubheader component="div" disableSticky>
-                    Tenant admin
-                  </ListSubheader>
-                ) : null
-              }
-            >
-              {TENANT_ADMIN_NAV_ITEMS.map(renderNavItem)}
-            </List>
-          </>
-        )}
-        {isSuperAdmin && (
-          <>
-            <Divider />
-            <List
-              subheader={
-                !isNavCollapsed ? (
-                  <ListSubheader component="div" disableSticky>
-                    Super admin
-                  </ListSubheader>
-                ) : null
-              }
-            >
-              {SUPER_ADMIN_NAV_ITEMS.map(renderNavItem)}
-            </List>
-          </>
-        )}
+        <List>
+          {NAV_GROUPS.map((group) => (
+            <NavGroup
+              key={group.key}
+              group={group}
+              pathname={pathname}
+              isNavCollapsed={isNavCollapsed}
+              expanded={expandedKey === group.key}
+              onToggle={handleToggleGroup}
+              onNavClick={handleNavClick}
+            />
+          ))}
+        </List>
       </Box>
     </>
   )
@@ -207,6 +224,28 @@ export default function AppShell() {
               </Typography>
             )}
           </Box>
+          <NotificationToggle
+            status={pushStatus}
+            onSubscribe={subscribe}
+            onUnsubscribe={unsubscribe}
+          />
+          <Tooltip title="Settings">
+            <IconButton
+              onClick={(e) => setSettingsMenuAnchor(e.currentTarget)}
+              aria-label="open settings menu"
+            >
+              <SettingsOutlinedIcon />
+            </IconButton>
+          </Tooltip>
+          <SettingsMenu
+            anchorEl={settingsMenuAnchor}
+            open={Boolean(settingsMenuAnchor)}
+            onClose={() => setSettingsMenuAnchor(null)}
+            mode={mode}
+            onToggleTheme={() => { toggleTheme(); setSettingsMenuAnchor(null) }}
+            isTenantAdmin={isTenantAdmin}
+            isSuperAdmin={isSuperAdmin}
+          />
           {user && (
             <>
               <Tooltip title={user.name || user.email}>
@@ -214,7 +253,7 @@ export default function AppShell() {
                   onClick={(e) => setUserMenuAnchor(e.currentTarget)}
                   size="small"
                   aria-label="open user menu"
-                  sx={{ mr: 1 }}
+                  sx={{ ml: 1 }}
                 >
                   <Avatar
                     src={user.pictureUrl}
@@ -236,21 +275,6 @@ export default function AppShell() {
               />
             </>
           )}
-          <NotificationToggle
-            status={pushStatus}
-            onSubscribe={subscribe}
-            onUnsubscribe={unsubscribe}
-          />
-          <Tooltip title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <IconButton onClick={toggleTheme} aria-label="toggle dark mode">
-              {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Log out">
-            <IconButton onClick={logout} aria-label="log out">
-              <LogoutIcon />
-            </IconButton>
-          </Tooltip>
         </Toolbar>
       </AppBar>
 

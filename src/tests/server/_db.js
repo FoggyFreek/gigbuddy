@@ -40,6 +40,8 @@ export async function truncateAll() {
       band_members,
       profile_links,
       email_templates, venue_contacts, venues, contact_notes, contacts, share_photos,
+      setlist_items, setlist_sets, setlists,
+      song_tag_links, song_links, song_documents, song_recordings, song_tags, songs,
       memberships,
       tenant_invites,
       push_subscriptions,

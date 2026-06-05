@@ -84,15 +84,18 @@ describe('AppShell tenant switcher', () => {
     expect(screen.queryByText('Switch band')).not.toBeInTheDocument()
   })
 
-  it('shows super-admin nav links only to super admins', async () => {
+  it('shows super-admin nav links in the settings menu only to super admins', async () => {
     useAuth.mockReturnValue({
       user: { ...TWO_TENANT_USER, isSuperAdmin: true },
       logout: vi.fn(),
       switchTenant: vi.fn(),
     })
+    const user = userEvent.setup()
     wrap(<AppShell />)
-    expect(screen.getByText('Tenants')).toBeInTheDocument()
-    expect(screen.getByText('All Users')).toBeInTheDocument()
+    await user.click(screen.getByLabelText('open settings menu'))
+    const menu = screen.getByRole('menu')
+    expect(within(menu).getByText('Tenants')).toBeInTheDocument()
+    expect(within(menu).getByText('All Users')).toBeInTheDocument()
   })
 
   it('does not show super-admin nav links to non-super', async () => {
@@ -101,19 +104,25 @@ describe('AppShell tenant switcher', () => {
       logout: vi.fn(),
       switchTenant: vi.fn(),
     })
+    const user = userEvent.setup()
     wrap(<AppShell />)
+    await user.click(screen.getByLabelText('open settings menu'))
     expect(screen.queryByText('Tenants')).not.toBeInTheDocument()
     expect(screen.queryByText('All Users')).not.toBeInTheDocument()
   })
 
-  it('shows Members nav link to tenant admins', async () => {
+  it('shows Members nav link in the settings menu to tenant admins', async () => {
     useAuth.mockReturnValue({
       user: { ...TWO_TENANT_USER, activeTenantRole: 'tenant_admin' },
       logout: vi.fn(),
       switchTenant: vi.fn(),
     })
+    const user = userEvent.setup()
     wrap(<AppShell />)
-    expect(screen.getByText('Members')).toBeInTheDocument()
+    await user.click(screen.getByLabelText('open settings menu'))
+    const menu = screen.getByRole('menu')
+    expect(within(menu).getByText('Members')).toBeInTheDocument()
+    expect(within(menu).getByText('Band Settings')).toBeInTheDocument()
   })
 
   it('hides Members nav link from regular members', async () => {
@@ -122,7 +131,9 @@ describe('AppShell tenant switcher', () => {
       logout: vi.fn(),
       switchTenant: vi.fn(),
     })
+    const user = userEvent.setup()
     wrap(<AppShell />)
+    await user.click(screen.getByLabelText('open settings menu'))
     expect(screen.queryByText('Members')).not.toBeInTheDocument()
   })
 })

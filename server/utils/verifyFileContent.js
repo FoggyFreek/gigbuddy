@@ -91,3 +91,19 @@ export function verifyDocumentContent(buffer, mimetype) {
   if (!sigs) return false
   return sigs.some((sig) => startsWith(buffer, sig))
 }
+
+/**
+ * Returns true if the buffer looks like an MP3.
+ *
+ * MP3 has no single universal magic number. Two reliable leading patterns cover
+ * real-world files: an ID3v2 metadata tag ("ID3"), or a raw MPEG audio frame
+ * whose 11-bit frame sync is all ones (0xFF followed by 0b111x_xxxx). Anything
+ * else (e.g. a renamed wav/m4a/ogg) is rejected.
+ */
+export function verifyAudioContent(buffer) {
+  if (buffer.length < 2) return false
+  // ID3v2 tag: 'I' 'D' '3'
+  if (startsWith(buffer, [0x49, 0x44, 0x33])) return true
+  // MPEG audio frame sync: 0xFF then top 3 bits of next byte set.
+  return buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0
+}

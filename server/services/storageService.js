@@ -21,6 +21,12 @@ export const invoicePdfKey = (tenantId, uuid) =>
 export const invoiceLogoKey = (tenantId, uuid, ext) =>
   `tenants/${tenantId}/invoices/logo-${uuid}${ext}`
 
+export const songDocumentKey = (tenantId, uuid, ext) =>
+  `tenants/${tenantId}/song_documents/${uuid}${ext}`
+
+export const songRecordingKey = (tenantId, uuid, ext) =>
+  `tenants/${tenantId}/song_recordings/${uuid}${ext}`
+
 // ---------- reads ----------
 
 export const statObject = (key) => storageClient.statObject(BUCKET, key)

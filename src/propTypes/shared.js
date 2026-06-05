@@ -117,6 +117,77 @@ export const invoiceShape = PropTypes.shape({
   tenant: tenantShape,
 })
 
+export const songTagShape = PropTypes.shape({
+  id: idProp,
+  name: PropTypes.string,
+})
+
+export const songLinkShape = PropTypes.shape({
+  id: idProp,
+  label: PropTypes.string,
+  url: PropTypes.string,
+  sort_order: PropTypes.number,
+})
+
+// Documents and recordings share this stored-file shape.
+export const songFileShape = PropTypes.shape({
+  id: idProp,
+  object_key: PropTypes.string,
+  original_filename: PropTypes.string,
+  content_type: PropTypes.string,
+  file_size: PropTypes.number,
+  uploaded_at: PropTypes.string,
+})
+
+export const songShape = PropTypes.shape({
+  id: idProp,
+  title: PropTypes.string,
+  artist: PropTypes.string,
+  song_key: PropTypes.string,
+  tempo: PropTypes.number,
+  duration_seconds: PropTypes.number,
+  lyrics_html: PropTypes.string,
+  notes: PropTypes.string,
+  tags: PropTypes.arrayOf(songTagShape),
+  links: PropTypes.arrayOf(songLinkShape),
+  documents: PropTypes.arrayOf(songFileShape),
+  recordings: PropTypes.arrayOf(songFileShape),
+})
+
+export const setlistItemShape = PropTypes.shape({
+  id: idProp,
+  item_type: PropTypes.oneOf(['song', 'pause', 'break']),
+  song_id: idProp,
+  duration_seconds: PropTypes.number,
+  label: PropTypes.string,
+  sort_order: PropTypes.number,
+  linked_to_next: PropTypes.bool,
+  transition_note: PropTypes.string,
+  // enrichment for song items (joined server-side)
+  title: PropTypes.string,
+  artist: PropTypes.string,
+  song_key: PropTypes.string,
+  tempo: PropTypes.number,
+  tag: PropTypes.string,
+})
+
+export const setlistSetShape = PropTypes.shape({
+  id: idProp,
+  name: PropTypes.string,
+  include_in_total: PropTypes.bool,
+  sort_order: PropTypes.number,
+  items: PropTypes.arrayOf(setlistItemShape),
+})
+
+export const setlistShape = PropTypes.shape({
+  id: idProp,
+  name: PropTypes.string,
+  total_seconds: PropTypes.number,
+  set_count: PropTypes.number,
+  song_count: PropTypes.number,
+  sets: PropTypes.arrayOf(setlistSetShape),
+})
+
 // The per-cell view model produced by buildCalendarCellViewModel.
 export const calendarCellShape = PropTypes.shape({
   iso: PropTypes.string.isRequired,

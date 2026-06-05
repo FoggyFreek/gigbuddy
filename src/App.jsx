@@ -11,6 +11,10 @@ const BandEventDetailPage = lazy(() => import('./pages/BandEventDetailPage.jsx')
 const BandEventsPage = lazy(() => import('./pages/BandEventsPage.jsx'))
 const ContactDetailPage = lazy(() => import('./pages/ContactDetailPage.jsx'))
 const ContactsPage = lazy(() => import('./pages/ContactsPage.jsx'))
+const SongsPage = lazy(() => import('./pages/SongsPage.jsx'))
+const SongDetailPage = lazy(() => import('./pages/SongDetailPage.jsx'))
+const SetlistsPage = lazy(() => import('./pages/SetlistsPage.jsx'))
+const SetlistEditorPage = lazy(() => import('./pages/SetlistEditorPage.jsx'))
 const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage.jsx'))
 const GigDetailPage = lazy(() => import('./pages/GigDetailPage.jsx'))
 const GigMapPage = lazy(() => import('./pages/GigMapPage.jsx'))
@@ -61,6 +65,11 @@ export default function App() {
             <Route path="/contacts" element={<ContactsPage />}>
               <Route path=":id" element={<ContactDetailPage />} />
             </Route>
+            <Route path="/songs" element={<SongsPage />}>
+              <Route path=":id" element={<SongDetailPage />} />
+            </Route>
+            <Route path="/setlists" element={<SetlistsPage />} />
+            <Route path="/setlists/:id" element={<SetlistEditorPage />} />
             <Route path="/invoices" element={<InvoicesPage />}>
               <Route path=":id" element={<InvoiceDetailPage />} />
             </Route>
