@@ -62,7 +62,19 @@ export default function SongDetailPage() {
   const [tags, setTags] = useState([])
   const [tagOptions, setTagOptions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingSongId, setLoadingSongId] = useState(songId)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  // Reset during render (not in an effect) when the song changes so the detail
+  // body unmounts while the new song loads — children seeded from `initial*`
+  // props (lyrics editor, links, files) only read them on mount, so they must
+  // remount to pick up the new song. See react.dev "adjusting state when a prop
+  // changes"; doing this in an effect triggers cascading renders.
+  if (loadingSongId !== songId) {
+    setLoadingSongId(songId)
+    setLoading(true)
+    setSong(null)
+  }
 
   const saveFn = useCallback(async (patch) => { await updateSong(songId, patch) }, [songId])
   const { schedule, flush, status: saveStatus } = useDebouncedSave(
@@ -73,11 +85,6 @@ export default function SongDetailPage() {
 
   useEffect(() => {
     let cancelled = false
-    // Reset so the detail body unmounts while the new song loads — children
-    // seeded from `initial*` props (lyrics editor, links, files) only read them
-    // on mount, so they must remount to pick up the new song.
-    setLoading(true)
-    setSong(null)
     getSong(songId)
       .then((s) => {
         if (cancelled) return

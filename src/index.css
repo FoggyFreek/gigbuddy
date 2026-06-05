@@ -10,3 +10,39 @@ html, body, #root {
   height: 100%;
   margin: 0;
 }
+
+/* Setlist print: a hidden portal (#setlist-print-portal) holds one page per set.
+   Normally hidden; @media print swaps the app out for the portal and paginates. */
+#setlist-print-portal {
+  display: none;
+}
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  body > *:not(#setlist-print-portal) {
+    display: none !important;
+  }
+  #setlist-print-portal {
+    display: block !important;
+  }
+  .setlist-print-page {
+    page-break-after: always;
+    break-after: page;
+    width: 210mm;
+    min-height: 297mm;
+    box-sizing: border-box;
+    padding: 20mm;
+    font-family: sans-serif;
+    /* MUI's default body color is rgba(0,0,0,0.87), which prints as gray.
+       Force pure black so the printed setlist is fully legible. */
+    color: #000;
+  }
+  .setlist-print-page:last-child {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+}

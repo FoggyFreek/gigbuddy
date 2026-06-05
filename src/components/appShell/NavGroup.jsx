@@ -85,7 +85,8 @@ export default function NavGroup({ group, pathname, isNavCollapsed, expanded, on
                 top: 0,
                 bottom: 0,
                 width: 3,
-                bgcolor: 'divider',
+                backgroundColor: (t) =>
+                  t.palette.mode === 'light' ? t.palette.grey[500] : t.palette.grey[400],
               },
             }
           : {}),
@@ -100,11 +101,15 @@ export default function NavGroup({ group, pathname, isNavCollapsed, expanded, on
     </ListItemButton>
   )
 
+  const expandedBg = expanded
+    ? { bgcolor: (t) => t.palette.mode === 'light' ? t.palette.grey[100] : t.palette.grey[800] }
+    : {}
+
   if (isNavCollapsed) {
     // Icon rail: group icon (with hover flyout) and, only for the expanded
     // group, its child icons beneath it.
     return (
-      <>
+      <Box sx={expandedBg}>
         <Tooltip
           // Once expanded the child icons are already visible, so skip the
           // redundant hover flyout (empty title = no tooltip).
@@ -113,8 +118,17 @@ export default function NavGroup({ group, pathname, isNavCollapsed, expanded, on
           // with square corners.
           placement="right-start"
           slotProps={{
-            popper: { modifiers: [{ name: 'offset', options: { offset: [0, 0] } }] },
-            tooltip: { sx: { m: 0, p: 0, borderRadius: 0 } },
+            popper: { modifiers: [{ name: 'offset', options: { offset: [0, -14] } }] },
+            tooltip: {
+              sx: {
+                m: 0,
+                p: 0,
+                bgcolor: 'background.paper',
+                color: 'text.primary',
+                boxShadow: 3,
+                borderRadius: 0,
+              },
+            },
           }}
         >
           {header}
@@ -130,12 +144,12 @@ export default function NavGroup({ group, pathname, isNavCollapsed, expanded, on
               onClick={onNavClick}
             />
           ))}
-      </>
+      </Box>
     )
   }
 
   return (
-    <>
+    <Box sx={expandedBg}>
       {header}
       <Collapse in={expanded} timeout="auto" unmountOnExit>
         <List disablePadding>
@@ -151,7 +165,7 @@ export default function NavGroup({ group, pathname, isNavCollapsed, expanded, on
           ))}
         </List>
       </Collapse>
-    </>
+    </Box>
   )
 }
 

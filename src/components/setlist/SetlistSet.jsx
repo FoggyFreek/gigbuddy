@@ -3,18 +3,18 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import FormControlLabel from '@mui/material/FormControlLabel'
 import IconButton from '@mui/material/IconButton'
-import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import DeleteIcon from '@mui/icons-material/Delete'
-import LibraryMusicIcon from '@mui/icons-material/LibraryMusic'
-import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutlined'
 import FreeBreakfastIcon from '@mui/icons-material/FreeBreakfast'
+import LibraryMusicIcon from '@mui/icons-material/LibraryMusic'
+import MoreTimeIcon from '@mui/icons-material/MoreTime'
+import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutlined'
 import SetlistItemCard from './SetlistItemCard.jsx'
 import SetlistTransition from './SetlistTransition.jsx'
 import { formatDuration } from '../../utils/formatDuration.js'
@@ -39,6 +39,7 @@ export default function SetlistSet({
   onMoveDown,
   onDeleteItem,
   onUpdateItem,
+  onUpdateNote,
   songOrderStart = 0,
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: setDomId(set.id) })
@@ -79,21 +80,21 @@ export default function SetlistSet({
           }}
           sx={{ flexGrow: 1 }}
         />
-        <Typography variant="caption" sx={{ opacity: 0.9 }}>
-          {formatDuration(setSeconds) || '0:00'}
-        </Typography>
-        <FormControlLabel
-          sx={{ mr: 0, color: 'inherit' }}
-          control={
-            <Switch
-              size="small"
-              checked={!!set.include_in_total}
-              onChange={(e) => onToggleTotal(e.target.checked)}
-              color="default"
-            />
-          }
-          label={<Typography variant="caption">In total</Typography>}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mx: 1, opacity: 0.9 }}>
+          <AccessTimeIcon fontSize="small" />
+          <Typography variant="caption">{formatDuration(setSeconds) || '0:00'}</Typography>
+        </Box>
+        <Tooltip title="Include in total time">
+          <IconButton
+            size="small"
+            color="inherit"
+            onClick={() => onToggleTotal(!set.include_in_total)}
+            aria-label="include in total time"
+            sx={{ mx: 1, opacity: set.include_in_total ? 0.9 : 0.3 }}
+          >
+            <MoreTimeIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Move set up">
           <span>
             <IconButton size="small" color="inherit" disabled={index === 0} onClick={onMoveUp} aria-label="move set up">
@@ -133,6 +134,7 @@ export default function SetlistSet({
                   songOrder={itemSongOrder}
                   onDelete={() => onDeleteItem(it.id)}
                   onUpdate={(patch) => onUpdateItem(it.id, patch)}
+                  onUpdateNote={(note) => onUpdateNote(it.id, note)}
                 />
                 {canSegue && (
                   <SetlistTransition
@@ -176,5 +178,6 @@ SetlistSet.propTypes = {
   onMoveDown: PropTypes.func.isRequired,
   onDeleteItem: PropTypes.func.isRequired,
   onUpdateItem: PropTypes.func.isRequired,
+  onUpdateNote: PropTypes.func.isRequired,
   songOrderStart: PropTypes.number,
 }

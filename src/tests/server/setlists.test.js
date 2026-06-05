@@ -32,6 +32,13 @@ function asUserA(req) {
     .set('x-test-tenant-id', String(seed.tenantA.id))
 }
 
+// Act as an arbitrary (user, tenant) pair — used to prove notes are per-member.
+function asUser(req, userId, tenantId) {
+  return req
+    .set('x-test-user-id', String(userId))
+    .set('x-test-tenant-id', String(tenantId))
+}
+
 async function createSong(tenantId, title, durationSeconds) {
   const { rows } = await pool.query(
     'INSERT INTO songs (tenant_id, title, duration_seconds) VALUES ($1, $2, $3) RETURNING *',
@@ -323,5 +330,80 @@ describe('tenant isolation', () => {
     const list = await asUserA(request(app).get('/api/setlists')).expect(200)
     expect(list.body).toHaveLength(1)
     expect(list.body[0].name).toBe('Mine')
+  })
+})
+
+describe('Per-member song notes', () => {
+  // A song item in set 1 of a fresh tenant-A setlist.
+  async function setupSongItem() {
+    const song = await createSong(seed.tenantA.id, 'Note song', 100)
+    const setlist = await createSetlistA()
+    const tree = await asUserA(request(app).get(`/api/setlists/${setlist.id}`)).expect(200)
+    const set1 = tree.body.sets[0].id
+    const item = (await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets/${set1}/items`)
+      .send({ item_type: 'song', song_id: song.id })).expect(201)).body
+    return { setlistId: setlist.id, set1, item }
+  }
+
+  function noteFor(userId, setlistId, itemId) {
+    return asUser(request(app).get(`/api/setlists/${setlistId}`), userId, seed.tenantA.id)
+      .expect(200)
+      .then((res) => res.body.sets[0].items.find((it) => it.id === itemId).my_note)
+  }
+
+  it('keeps each member’s note private to that member', async () => {
+    const { setlistId, item } = await setupSongItem()
+
+    // userA and superUser are both approved members of tenant A.
+    const a = await asUser(request(app).put(`/api/setlists/${setlistId}/items/${item.id}/note`)
+      .send({ note: 'capo 2' }), seed.userA.id, seed.tenantA.id).expect(200)
+    expect(a.body).toEqual({ my_note: 'capo 2' })
+
+    await asUser(request(app).put(`/api/setlists/${setlistId}/items/${item.id}/note`)
+      .send({ note: 'drop D' }), seed.superUser.id, seed.tenantA.id).expect(200)
+
+    expect(await noteFor(seed.userA.id, setlistId, item.id)).toBe('capo 2')
+    expect(await noteFor(seed.superUser.id, setlistId, item.id)).toBe('drop D')
+  })
+
+  it('round-trips a note and updates it in place', async () => {
+    const { setlistId, item } = await setupSongItem()
+    await asUserA(request(app).put(`/api/setlists/${setlistId}/items/${item.id}/note`)
+      .send({ note: 'first' })).expect(200)
+    await asUserA(request(app).put(`/api/setlists/${setlistId}/items/${item.id}/note`)
+      .send({ note: 'second' })).expect(200)
+    expect(await noteFor(seed.userA.id, setlistId, item.id)).toBe('second')
+  })
+
+  it('clears the note on an empty/whitespace body and returns null', async () => {
+    const { setlistId, item } = await setupSongItem()
+    await asUserA(request(app).put(`/api/setlists/${setlistId}/items/${item.id}/note`)
+      .send({ note: 'temp' })).expect(200)
+    const res = await asUserA(request(app).put(`/api/setlists/${setlistId}/items/${item.id}/note`)
+      .send({ note: '   ' })).expect(200)
+    expect(res.body).toEqual({ my_note: null })
+    expect(await noteFor(seed.userA.id, setlistId, item.id)).toBeNull()
+  })
+
+  it('rejects a note on a non-song item (400)', async () => {
+    const { setlistId, set1 } = await setupSongItem()
+    const pause = (await asUserA(request(app).post(`/api/setlists/${setlistId}/sets/${set1}/items`)
+      .send({ item_type: 'pause', duration_seconds: 30 })).expect(201)).body
+    await asUserA(request(app).put(`/api/setlists/${setlistId}/items/${pause.id}/note`)
+      .send({ note: 'nope' })).expect(400)
+  })
+
+  it('A cannot note a B item (404)', async () => {
+    const sl = (await pool.query(
+      'INSERT INTO setlists (tenant_id, name) VALUES ($1, $2) RETURNING id', [seed.tenantB.id, 'B'])).rows[0]
+    const st = (await pool.query(
+      'INSERT INTO setlist_sets (setlist_id, tenant_id, name) VALUES ($1, $2, $3) RETURNING id',
+      [sl.id, seed.tenantB.id, 'S'])).rows[0]
+    const songB = await createSong(seed.tenantB.id, 'b', 100)
+    const item = (await pool.query(
+      'INSERT INTO setlist_items (set_id, tenant_id, item_type, song_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      [st.id, seed.tenantB.id, 'song', songB.id])).rows[0]
+    await asUserA(request(app).put(`/api/setlists/${sl.id}/items/${item.id}/note`)
+      .send({ note: 'leak' })).expect(404)
   })
 })

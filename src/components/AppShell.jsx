@@ -156,22 +156,9 @@ export default function AppShell() {
   const drawerWidth = isNavCollapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH
 
   const drawerContent = (
-    <>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Toolbar />
-      <Box sx={{ overflow: 'auto', pt: 1 }}>
-        {!isMobile && (
-          <Box sx={{ display: 'flex', justifyContent: isNavCollapsed ? 'center' : 'flex-end', px: 1, mb: 1 }}>
-            <Tooltip title={isNavCollapsed ? 'Expand navigation' : 'Collapse navigation'}>
-              <IconButton
-                onClick={() => setNavCollapsed((collapsed) => !collapsed)}
-                aria-label={isNavCollapsed ? 'expand navigation' : 'collapse navigation'}
-                size="small"
-              >
-                {isNavCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-              </IconButton>
-            </Tooltip>
-          </Box>
-        )}
+      <Box sx={{ flex: 1, overflow: 'auto', pt: 1 }}>
         <List>
           {NAV_GROUPS.map((group) => (
             <NavGroup
@@ -186,7 +173,20 @@ export default function AppShell() {
           ))}
         </List>
       </Box>
-    </>
+      {!isMobile && (
+        <Box sx={{ display: 'flex', justifyContent: isNavCollapsed ? 'center' : 'flex-end', px: 1, py: 0.5 }}>
+          <Tooltip title={isNavCollapsed ? 'Expand navigation' : 'Collapse navigation'}>
+            <IconButton
+              onClick={() => setNavCollapsed((collapsed) => !collapsed)}
+              aria-label={isNavCollapsed ? 'expand navigation' : 'collapse navigation'}
+              size="small"
+            >
+              {isNavCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
+    </Box>
   )
 
   return (

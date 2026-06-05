@@ -15,6 +15,21 @@ export default function NavItem({ item, pathname, isNavCollapsed, indent, rail, 
       title={isNavCollapsed ? item.label : ''}
       placement="right"
       disableHoverListener={!isNavCollapsed}
+      slotProps={{
+        popper: { modifiers: [{ name: 'offset', options: { offset: [0, -20] } }] },
+        tooltip: {
+          sx: {
+            m: 0,
+            bgcolor: 'background.paper',
+            color: 'text.primary',
+            boxShadow: 3,
+            borderRadius: 1,
+            px: 1.5,
+            py: 0.75,
+            fontSize: '0.8125rem',
+          },
+        },
+      }}
     >
       <ListItemButton
         component={NavLink}
@@ -44,7 +59,12 @@ export default function NavItem({ item, pathname, isNavCollapsed, indent, rail, 
                   top: 0,
                   bottom: 0,
                   width: 3,
-                  bgcolor: selected ? 'primary.main' : 'divider',
+                  backgroundColor: (t) =>
+                    selected
+                      ? t.palette.primary.main
+                      : t.palette.mode === 'light'
+                        ? t.palette.grey[500]
+                        : t.palette.grey[400],
                 },
               }
             : {}),

@@ -59,8 +59,9 @@ export async function listSetlistsWithAggregates(db, tenantId) {
 }
 
 // Fetch one setlist as a nested tree, or null if it doesn't belong to the tenant.
-// Song items are enriched with title/artist/key/tempo/duration and their first tag.
-export async function fetchSetlistTree(db, tenantId, setlistId) {
+// Song items are enriched with title/artist/key/tempo/duration and their first tag,
+// plus `my_note`: the requesting user's personal note on that song-in-set (or null).
+export async function fetchSetlistTree(db, tenantId, setlistId, userId) {
   const { rows: head } = await db.query(
     'SELECT id, name, created_at, updated_at FROM setlists WHERE id = $1 AND tenant_id = $2',
     [setlistId, tenantId],
@@ -81,10 +82,13 @@ export async function fetchSetlistTree(db, tenantId, setlistId) {
        i.linked_to_next, i.transition_note,
        CASE WHEN i.item_type = 'song' THEN sg.duration_seconds ELSE i.duration_seconds END AS duration_seconds,
        sg.title, sg.artist, sg.song_key, sg.tempo,
-       tag.name AS tag
+       tag.name AS tag,
+       n.note AS my_note
      FROM setlist_items i
      JOIN setlist_sets st ON st.id = i.set_id AND st.tenant_id = i.tenant_id
      LEFT JOIN songs sg ON sg.id = i.song_id AND sg.tenant_id = i.tenant_id
+     LEFT JOIN setlist_item_notes n
+            ON n.setlist_item_id = i.id AND n.tenant_id = i.tenant_id AND n.user_id = $3
      LEFT JOIN LATERAL (
        SELECT t.name
          FROM song_tag_links l
@@ -95,7 +99,7 @@ export async function fetchSetlistTree(db, tenantId, setlistId) {
      ) tag ON true
      WHERE st.setlist_id = $1 AND i.tenant_id = $2
      ORDER BY i.set_id, i.sort_order ASC, i.id ASC`,
-    [setlistId, tenantId],
+    [setlistId, tenantId, userId],
   )
 
   const itemsBySet = new Map()

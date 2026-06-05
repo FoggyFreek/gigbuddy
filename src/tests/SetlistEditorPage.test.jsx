@@ -25,6 +25,7 @@ vi.mock('../api/setlists.js', () => ({
   updateItem: vi.fn(),
   deleteItem: vi.fn().mockResolvedValue(null),
   reorderItems: vi.fn().mockResolvedValue(null),
+  saveItemNote: vi.fn(),
 }))
 
 vi.mock('../api/songs.js', () => ({
@@ -32,7 +33,7 @@ vi.mock('../api/songs.js', () => ({
 }))
 
 import SetlistEditorPage from '../pages/SetlistEditorPage.jsx'
-import { addItem, deleteItem, getSetlist, updateItem, updateSet } from '../api/setlists.js'
+import { addItem, deleteItem, getSetlist, saveItemNote, updateItem, updateSet } from '../api/setlists.js'
 import { ToastProvider } from '../contexts/ToastContext.jsx'
 import theme from '../theme.js'
 
@@ -85,6 +86,7 @@ describe('SetlistEditorPage', () => {
     addItem.mockReset()
     updateItem.mockReset()
     deleteItem.mockReset()
+    saveItemNote.mockReset()
   })
 
   it('renders the song card and the computed total', async () => {
@@ -134,7 +136,7 @@ describe('SetlistEditorPage', () => {
     wrap()
     await screen.findByText('Creep')
 
-    await user.click(screen.getByRole('switch')) // the "In total" switch
+    await user.click(screen.getByLabelText('include in total time'))
 
     await waitFor(() => expect(updateSet).toHaveBeenCalledWith(5, 10, { include_in_total: false }))
     expect(screen.getByText(/^Total/).textContent).toContain('0:00')
@@ -157,7 +159,7 @@ describe('SetlistEditorPage', () => {
     wrap()
     await screen.findByText('Creep')
 
-    await user.click(screen.getByRole('switch')) // toggle "In total"
+    await user.click(screen.getByLabelText('include in total time'))
 
     await waitFor(() => expect(updateSet).toHaveBeenCalled())
     expect(await screen.findByText('Saved')).toBeInTheDocument()
@@ -170,11 +172,55 @@ describe('SetlistEditorPage', () => {
     await screen.findByText('Creep')
     getSetlist.mockClear() // so we can assert the revert reload
 
-    await user.click(screen.getByRole('switch'))
+    await user.click(screen.getByLabelText('include in total time'))
 
     expect(await screen.findByText('Failed to update set')).toBeInTheDocument()
     // The failed optimistic state is discarded by re-fetching the authoritative tree.
     await waitFor(() => expect(getSetlist).toHaveBeenCalledWith(5))
+  })
+
+  describe('print preview', () => {
+    it('renders a Preview button', async () => {
+      wrap()
+      await screen.findByText('Creep')
+      expect(screen.getByRole('button', { name: /preview/i })).toBeInTheDocument()
+    })
+
+    it('opens the preview modal when Preview is clicked', async () => {
+      const user = userEvent.setup()
+      wrap()
+      await screen.findByText('Creep')
+
+      await user.click(screen.getByRole('button', { name: /preview/i }))
+
+      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    })
+  })
+
+  describe('song notes', () => {
+    it('saves a personal note from the song note popover', async () => {
+      saveItemNote.mockResolvedValue({ my_note: 'capo 2' })
+      const user = userEvent.setup()
+      wrap()
+      await screen.findByText('Creep')
+
+      await user.click(screen.getByRole('button', { name: 'song note' }))
+      await user.type(await screen.findByLabelText('song note text'), 'capo 2')
+      await user.keyboard('{Escape}') // closing the popover persists the note
+
+      await waitFor(() => expect(saveItemNote).toHaveBeenCalledWith(5, 100, 'capo 2'))
+    })
+
+    it('prefills the popover with an existing note', async () => {
+      getSetlist.mockResolvedValue(treeWith([song(100, 'Creep', { my_note: 'drop D' })]))
+      const user = userEvent.setup()
+      wrap()
+      await screen.findByText('Creep')
+
+      await user.click(screen.getByRole('button', { name: 'song note' }))
+
+      expect(await screen.findByLabelText('song note text')).toHaveValue('drop D')
+    })
   })
 
   describe('song transitions', () => {

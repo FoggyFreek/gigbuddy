@@ -17,5 +17,7 @@ export const reorderSets = (id, orderedSetIds) =>
 export const addItem    = (id, setId, body)  => api(`/${id}/sets/${setId}/items`, { method: 'POST', body: JSON.stringify(body) })
 export const updateItem = (id, itemId, body) => api(`/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteItem = (id, itemId)       => api(`/${id}/items/${itemId}`, { method: 'DELETE' })
+export const saveItemNote = (id, itemId, note) =>
+  api(`/${id}/items/${itemId}/note`, { method: 'PUT', body: JSON.stringify({ note }) })
 export const reorderItems = (id, sets) =>
   api(`/${id}/items/reorder`, { method: 'PATCH', body: JSON.stringify({ sets }) })

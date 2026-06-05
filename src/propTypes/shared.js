@@ -163,6 +163,7 @@ export const setlistItemShape = PropTypes.shape({
   sort_order: PropTypes.number,
   linked_to_next: PropTypes.bool,
   transition_note: PropTypes.string,
+  my_note: PropTypes.string, // requesting member's personal note on this song-in-set
   // enrichment for song items (joined server-side)
   title: PropTypes.string,
   artist: PropTypes.string,

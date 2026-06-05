@@ -86,7 +86,7 @@ router.post('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
-  const tree = await fetchSetlistTree(pool, req.tenantId, id)
+  const tree = await fetchSetlistTree(pool, req.tenantId, id, req.user.id)
   if (!tree) return res.status(404).json({ error: 'Not found' })
   res.json(tree)
 })
@@ -334,6 +334,43 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     values,
   )
   res.json(await enrichSongItem(rows[0], req.tenantId))
+})
+
+// Upsert/clear the requesting user's personal note on a song item. The note is
+// per (item, user); an empty/whitespace body removes it. Notes apply to songs
+// only, mirroring the transition guard above.
+router.put('/:id/items/:itemId/note', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const itemId = requireParam(req, res, 'itemId'); if (itemId === null) return
+
+  // Scope the item to a set within this setlist + tenant; also read its type.
+  const { rows: existing } = await pool.query(
+    `SELECT i.id, i.item_type FROM setlist_items i
+       JOIN setlist_sets st ON st.id = i.set_id AND st.tenant_id = i.tenant_id
+      WHERE i.id = $1 AND i.tenant_id = $2 AND st.setlist_id = $3`,
+    [itemId, req.tenantId, id],
+  )
+  if (!existing.length) return res.status(404).json({ error: 'Not found' })
+  if (existing[0].item_type !== 'song') {
+    return res.status(400).json({ error: 'Notes are only valid on song items' })
+  }
+
+  const note = trimOrNull(req.body.note)
+  if (note === null) {
+    await pool.query(
+      'DELETE FROM setlist_item_notes WHERE setlist_item_id = $1 AND user_id = $2 AND tenant_id = $3',
+      [itemId, req.user.id, req.tenantId],
+    )
+  } else {
+    await pool.query(
+      `INSERT INTO setlist_item_notes (setlist_item_id, tenant_id, user_id, note)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (setlist_item_id, user_id)
+       DO UPDATE SET note = EXCLUDED.note, updated_at = NOW()`,
+      [itemId, req.tenantId, req.user.id, note],
+    )
+  }
+  res.json({ my_note: note })
 })
 
 router.delete('/:id/items/:itemId', async (req, res) => {

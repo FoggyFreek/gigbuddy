@@ -21,9 +21,11 @@ import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import AddIcon from '@mui/icons-material/Add'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import DeleteIcon from '@mui/icons-material/Delete'
+import PlagiarismOutlinedIcon from '@mui/icons-material/PlagiarismOutlined'
 import {
   addItem,
   addSet,
@@ -33,6 +35,7 @@ import {
   getSetlist,
   reorderItems,
   reorderSets,
+  saveItemNote,
   updateItem,
   updateSet,
   updateSetlist,
@@ -44,6 +47,7 @@ import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 import SongPickerDialog from '../components/SongPickerDialog.jsx'
 import SetlistItemCard from '../components/setlist/SetlistItemCard.jsx'
 import SetlistSet from '../components/setlist/SetlistSet.jsx'
+import SetlistPreviewModal from '../components/setlist/SetlistPreviewModal.jsx'
 import { setDomId, parseDomId } from '../components/setlist/ids.js'
 
 const PAUSE_DEFAULT_SECONDS = 60
@@ -107,6 +111,7 @@ export default function SetlistEditorPage() {
   const [activeItem, setActiveItem] = useState(null)
   const [picker, setPicker] = useState({ open: false, setId: null })
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [opStatus, setOpStatus] = useState('idle') // status for the immediate (non-debounced) saves
 
   // Latest sets, for drag handlers that need current state without stale closures.
@@ -336,6 +341,18 @@ export default function SetlistEditorPage() {
     }, 'Failed to save changes')
   }
 
+  // Save the current member's personal note on a song. Trust the server's
+  // canonical { my_note } (trimmed; null when cleared) over the raw typed value.
+  async function handleUpdateNote(itemId, note) {
+    await runSave(async () => {
+      const { my_note } = await saveItemNote(setlistId, itemId, note)
+      setSets((prev) => prev.map((s) => ({
+        ...s,
+        items: s.items.map((it) => (it.id === itemId ? { ...it, my_note } : it)),
+      })))
+    }, 'Failed to save note')
+  }
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -352,16 +369,29 @@ export default function SetlistEditorPage() {
         <IconButton onClick={handleBack} aria-label="back">
           <ArrowBackIcon />
         </IconButton>
-        <TextField
-          variant="standard"
-          value={name}
-          onChange={(e) => handleNameChange(e.target.value)}
-          slotProps={{ input: { sx: { fontSize: '1.5rem', fontWeight: 600 } }, htmlInput: { 'aria-label': 'setlist name' } }}
-          sx={{ flexGrow: 1 }}
-        />
-        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-          Total {formatDuration(total) || '0:00'}
-        </Typography>
+        <Box sx={{ flexGrow: 1 }}>
+          <TextField
+            variant="standard"
+            value={name}
+            onChange={(e) => handleNameChange(e.target.value)}
+            slotProps={{ input: { sx: { fontSize: '1.5rem', fontWeight: 600 } }, htmlInput: { 'aria-label': 'setlist name' } }}
+            fullWidth
+          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+            <AccessTimeIcon fontSize="small" color="disabled" />
+            <Typography variant="body2" color="text.secondary">
+              Total {formatDuration(total) || '0:00'}
+            </Typography>
+            <Button
+              startIcon={<PlagiarismOutlinedIcon />}
+              onClick={() => setPreviewOpen(true)}
+              size="small"
+              sx={{ ml: 'auto' }}
+            >
+              Preview
+            </Button>
+          </Box>
+        </Box>
       </Box>
       <Box sx={{ mb: 2, minHeight: 20 }}>
         <SaveStatusLabel status={combineStatus(nameStatus, opStatus)} />
@@ -392,6 +422,7 @@ export default function SetlistEditorPage() {
             onMoveDown={() => handleMoveSet(index, 1)}
             onDeleteItem={handleDeleteItem}
             onUpdateItem={handleUpdateItem}
+            onUpdateNote={handleUpdateNote}
           />
         ))}
 
@@ -423,6 +454,13 @@ export default function SetlistEditorPage() {
         open={picker.open}
         onClose={() => setPicker({ open: false, setId: null })}
         onSelect={handlePickSong}
+      />
+
+      <SetlistPreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        setlistName={name}
+        sets={sets}
       />
 
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
