@@ -40,6 +40,7 @@ export default function SetlistSet({
   onDeleteItem,
   onUpdateItem,
   onUpdateNote,
+  editing = true,
   songOrderStart = 0,
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: setDomId(set.id) })
@@ -67,60 +68,70 @@ export default function SetlistSet({
           color: 'primary.contrastText',
         }}
       >
-        <TextField
-          variant="standard"
-          defaultValue={set.name}
-          onBlur={(e) => {
-            const name = e.target.value.trim()
-            if (name && name !== set.name) onRename(name)
-          }}
-          slotProps={{
-            input: { disableUnderline: true, sx: { color: 'inherit', fontWeight: 700 } },
-            htmlInput: { 'aria-label': 'set name' },
-          }}
-          sx={{ flexGrow: 1 }}
-        />
+        {editing ? (
+          <TextField
+            variant="standard"
+            defaultValue={set.name}
+            onBlur={(e) => {
+              const name = e.target.value.trim()
+              if (name && name !== set.name) onRename(name)
+            }}
+            slotProps={{
+              input: { disableUnderline: true, sx: { color: 'inherit', fontWeight: 700 } },
+              htmlInput: { 'aria-label': 'set name' },
+            }}
+            sx={{ flexGrow: 1 }}
+          />
+        ) : (
+          <Typography sx={{ flexGrow: 1, fontWeight: 700 }} noWrap>
+            {set.name}
+          </Typography>
+        )}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mx: 1, opacity: 0.9 }}>
           <AccessTimeIcon fontSize="small" />
           <Typography variant="caption">{formatDuration(setSeconds) || '0:00'}</Typography>
         </Box>
-        <Tooltip title="Include in total time">
-          <IconButton
-            size="small"
-            color="inherit"
-            onClick={() => onToggleTotal(!set.include_in_total)}
-            aria-label="include in total time"
-            sx={{ mx: 1, opacity: set.include_in_total ? 0.9 : 0.3 }}
-          >
-            <MoreTimeIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Move set up">
-          <span>
-            <IconButton size="small" color="inherit" disabled={index === 0} onClick={onMoveUp} aria-label="move set up">
-              <ArrowUpwardIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Move set down">
-          <span>
-            <IconButton size="small" color="inherit" disabled={index === setCount - 1} onClick={onMoveDown} aria-label="move set down">
-              <ArrowDownwardIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Delete set">
-          <IconButton size="small" color="inherit" onClick={onDelete} aria-label="delete set">
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        {editing && (
+          <>
+            <Tooltip title="Include in total time">
+              <IconButton
+                size="small"
+                color="inherit"
+                onClick={() => onToggleTotal(!set.include_in_total)}
+                aria-label="include in total time"
+                sx={{ mx: 1, opacity: set.include_in_total ? 0.9 : 0.3 }}
+              >
+                <MoreTimeIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Move set up">
+              <span>
+                <IconButton size="small" color="inherit" disabled={index === 0} onClick={onMoveUp} aria-label="move set up">
+                  <ArrowUpwardIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Move set down">
+              <span>
+                <IconButton size="small" color="inherit" disabled={index === setCount - 1} onClick={onMoveDown} aria-label="move set down">
+                  <ArrowDownwardIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Delete set">
+              <IconButton size="small" color="inherit" onClick={onDelete} aria-label="delete set">
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </>
+        )}
       </Box>
 
       <Box ref={setNodeRef} sx={{ p: 1.5, bgcolor: isOver ? 'action.hover' : 'background.default', minHeight: 56 }}>
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
           {set.items.length === 0 && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', py: 1, textAlign: 'center' }}>
-              Empty — add songs, pauses or breaks, or drag items here.
+              {editing ? 'Empty — add songs, pauses or breaks, or drag items here.' : 'Empty'}
             </Typography>
           )}
           {set.items.map((it, i) => {
@@ -132,6 +143,7 @@ export default function SetlistSet({
                 <SetlistItemCard
                   item={it}
                   songOrder={itemSongOrder}
+                  editing={editing}
                   onDelete={() => onDeleteItem(it.id)}
                   onUpdate={(patch) => onUpdateItem(it.id, patch)}
                   onUpdateNote={(note) => onUpdateNote(it.id, note)}
@@ -140,6 +152,7 @@ export default function SetlistSet({
                   <SetlistTransition
                     linked={!!it.linked_to_next}
                     note={it.transition_note}
+                    editing={editing}
                     onUpdate={(patch) => onUpdateItem(it.id, patch)}
                   />
                 )}
@@ -148,17 +161,19 @@ export default function SetlistSet({
           })}
         </SortableContext>
 
-        <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-          <Button size="small" startIcon={<LibraryMusicIcon />} onClick={onAddSong}>
-            Add song
-          </Button>
-          <Button size="small" startIcon={<PauseCircleOutlineIcon />} onClick={onAddPause}>
-            Add pause
-          </Button>
-          <Button size="small" startIcon={<FreeBreakfastIcon />} onClick={onAddBreak}>
-            Add break
-          </Button>
-        </Box>
+        {editing && (
+          <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+            <Button size="small" startIcon={<LibraryMusicIcon />} onClick={onAddSong}>
+              Add song
+            </Button>
+            <Button size="small" startIcon={<PauseCircleOutlineIcon />} onClick={onAddPause}>
+              Add pause
+            </Button>
+            <Button size="small" startIcon={<FreeBreakfastIcon />} onClick={onAddBreak}>
+              Add break
+            </Button>
+          </Box>
+        )}
       </Box>
     </Box>
   )
@@ -179,5 +194,6 @@ SetlistSet.propTypes = {
   onDeleteItem: PropTypes.func.isRequired,
   onUpdateItem: PropTypes.func.isRequired,
   onUpdateNote: PropTypes.func.isRequired,
+  editing: PropTypes.bool,
   songOrderStart: PropTypes.number,
 }

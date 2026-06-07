@@ -63,11 +63,11 @@ const NAV_GROUPS = [
     label: 'Planning',
     icon: EventNoteTwoTone,
     children: [
-      { to: '/gigs', label: 'Gigs', icon: EventOutlined },
       { to: '/availability', label: 'Calendar', icon: CalendarMonthOutlined },
+      { to: '/gigs', label: 'Gigs', icon: EventOutlined },
       { to: '/rehearsals', label: 'Rehearsals', icon: MusicNoteOutlined },
-      { to: '/tasks', label: 'Tasks', icon: ChecklistOutlined },
       { to: '/events', label: 'Band Events', icon: EventNoteOutlined },
+      { to: '/tasks', label: 'Tasks', icon: ChecklistOutlined },
     ],
   },
   {
@@ -75,9 +75,9 @@ const NAV_GROUPS = [
     label: 'Network',
     icon: HubTwoTone,
     children: [
-      { to: '/email-templates', label: 'Email Templates', icon: EmailOutlined },
-      { to: '/venues', label: 'Venues', icon: LocationOnOutlined },
       { to: '/contacts', label: 'Contacts', icon: ContactsOutlined },
+      { to: '/venues', label: 'Venues', icon: LocationOnOutlined },
+      { to: '/email-templates', label: 'Email Templates', icon: EmailOutlined },
     ],
   },
   {

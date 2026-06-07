@@ -24,7 +24,6 @@ const PAGE_SIZE = 25
 
 const COLUMNS = [
   { id: 'title',    label: 'Title' },
-  { id: 'artist',   label: 'Artist' },
   { id: 'song_key', label: 'Key' },
   { id: 'tempo',    label: 'Tempo' },
   { id: 'duration', label: 'Duration' },
@@ -82,12 +81,6 @@ function TagChips({ song }) {
 TagChips.propTypes = { song: songShape.isRequired }
 
 function SongCard({ song, active, onClick }) {
-  const meta = [
-    song.artist,
-    song.song_key,
-    song.tempo ? `${song.tempo} BPM` : null,
-    formatDuration(song.duration_seconds),
-  ].filter(Boolean).join(' · ')
   return (
     <Box
       onClick={onClick}
@@ -101,17 +94,22 @@ function SongCard({ song, active, onClick }) {
         '&:last-of-type': { borderBottom: 'none' },
       }}
     >
-      <Typography variant="body2" fontWeight={600} noWrap>
-        {song.title}
-      </Typography>
-      {meta && (
-        <Typography variant="caption" color="text.secondary">
-          {meta}
-        </Typography>
-      )}
-      <Box sx={{ mt: 0.5 }}>
-        <TagChips song={song} />
-      </Box>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+        <Stack direction="column" spacing={0.0}>
+          <Typography sx={{ variant: "body2", fontWeight: 'medium' }} noWrap>
+            {song.title}
+          </Typography>
+          <Typography variant="subtitle2" noWrap sx={{ color: 'text.disabled' }}>
+            {song.artist}
+          </Typography>
+
+        </Stack>
+        <Stack direction="column" spacing={0.5} sx={{ mt: 0.5 }}>
+          <Typography variant="subtitle2" color="text.secondary" noWrap>
+            {formatDuration(song.duration_seconds)}
+          </Typography>
+        </Stack>
+      </Stack>
     </Box>
   )
 }
@@ -180,26 +178,32 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }) {
   ) : null
 
   if (isCompact) {
+    let compactBody
+    if (isEmpty) {
+      compactBody = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No songs yet — add one or import from CSV.
+        </Box>
+      )
+    } else if (sorted.length === 0) {
+      compactBody = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>No results.</Box>
+      )
+    } else {
+      compactBody = paged.map((s) => (
+        <SongCard
+          key={s.id}
+          song={s}
+          active={s.id === selectedId}
+          onClick={() => onRowClick(s)}
+        />
+      ))
+    }
     return (
       <Stack spacing={1.5}>
         {controls}
         <Paper variant="outlined">
-          {isEmpty ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No songs yet — add one or import from CSV.
-            </Box>
-          ) : sorted.length === 0 ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>No results.</Box>
-          ) : (
-            paged.map((s) => (
-              <SongCard
-                key={s.id}
-                song={s}
-                active={s.id === selectedId}
-                onClick={() => onRowClick(s)}
-              />
-            ))
-          )}
+          {compactBody}
         </Paper>
         {sorted.length > rowsPerPage && pagination}
       </Stack>
@@ -253,8 +257,16 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }) {
                     boxShadow: s.id === selectedId ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
                   }}
                 >
-                  <TableCell>{s.title}</TableCell>
-                  <TableCell>{s.artist || '—'}</TableCell>
+                  <TableCell>
+                    <Typography sx={{ variant: 'body2', fontWeight: 'medium' }} noWrap>
+                      {s.title}
+                    </Typography>
+                    {s.artist && (
+                      <Typography variant="subtitle2" noWrap sx={{ color: 'text.disabled' }}>
+                        {s.artist}
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell>{s.song_key || '—'}</TableCell>
                   <TableCell>{s.tempo || '—'}</TableCell>
                   <TableCell>{formatDuration(s.duration_seconds) || '—'}</TableCell>

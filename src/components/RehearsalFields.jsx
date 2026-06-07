@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import PropTypes from 'prop-types'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -95,4 +96,15 @@ export default function RehearsalFields({ form, onChange, errors = {} }) {
       </Grid>
     </>
   )
+}
+
+RehearsalFields.propTypes = {
+  form: PropTypes.shape({
+    proposed_date: PropTypes.string,
+    location: PropTypes.string,
+    start_time: PropTypes.string,
+    end_time: PropTypes.string,
+  }).isRequired,
+  onChange: PropTypes.func.isRequired,
+  errors: PropTypes.objectOf(PropTypes.string),
 }

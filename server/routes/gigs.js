@@ -168,6 +168,52 @@ router.get('/:id', async (req, res) => {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 
+// Validate and normalize a single import row. Returns one of:
+//   { skip: true }        — row is missing required fields, count as skipped
+//   { error: '...' }      — row is invalid, the import should abort with 400
+//   { data: {...} }       — normalized, ready-to-insert column values
+function normalizeImportRow(item) {
+  if (item === null || typeof item !== 'object' || Array.isArray(item))
+    return { error: 'Each import row must be an object' }
+
+  const {
+    event_date, event_description, venue_id, festival_id,
+    start_time, end_time, status, admission, event_link, ticket_link,
+  } = item
+
+  if (!event_date || !event_description) return { skip: true }
+
+  if (!DATE_RE.test(event_date)) return { error: `Invalid event_date: ${event_date}` }
+  if (start_time && !TIME_RE.test(start_time)) return { error: `Invalid start_time: ${start_time}` }
+  if (end_time && !TIME_RE.test(end_time)) return { error: `Invalid end_time: ${end_time}` }
+
+  let venueId = null
+  if (venue_id != null) {
+    venueId = parseId(venue_id)
+    if (venueId === null) return { error: 'Invalid venue_id' }
+  }
+  let festivalId = null
+  if (festival_id != null) {
+    festivalId = parseId(festival_id)
+    if (festivalId === null) return { error: 'Invalid festival_id' }
+  }
+
+  let finalStatus = 'confirmed'
+  if (status != null) {
+    if (!VALID_STATUSES.includes(status)) return { error: `Invalid status: ${status}` }
+    finalStatus = status
+  }
+
+  return {
+    data: {
+      event_date, event_description, venueId, festivalId,
+      start_time: start_time || null, end_time: end_time || null,
+      status: finalStatus, admission: admission === 'paid' ? 'paid' : 'free',
+      event_link: event_link || null, ticket_link: ticket_link || null,
+    },
+  }
+}
+
 // Bulk import gigs from Bandsintown CSV export
 router.post('/import', async (req, res) => {
   const body = req.body
@@ -189,59 +235,17 @@ router.post('/import', async (req, res) => {
     let skipped = 0
 
     for (const item of body) {
-      if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+      const parsed = normalizeImportRow(item)
+      if (parsed.error) {
         await client.query('ROLLBACK')
-        return res.status(400).json({ error: 'Each import row must be an object' })
+        return res.status(400).json({ error: parsed.error })
       }
-
-      const {
-        event_date, event_description, venue_id, festival_id,
-        start_time, end_time, status, admission, event_link, ticket_link,
-      } = item
-
-      if (!event_date || !event_description) { skipped++; continue }
-
-      if (!DATE_RE.test(event_date)) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: `Invalid event_date: ${event_date}` })
-      }
-      if (start_time && !TIME_RE.test(start_time)) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: `Invalid start_time: ${start_time}` })
-      }
-      if (end_time && !TIME_RE.test(end_time)) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: `Invalid end_time: ${end_time}` })
-      }
-
-      let venueId = null
-      if (venue_id != null) {
-        venueId = parseId(venue_id)
-        if (venueId === null) {
-          await client.query('ROLLBACK')
-          return res.status(400).json({ error: 'Invalid venue_id' })
-        }
-      }
-      let festivalId = null
-      if (festival_id != null) {
-        festivalId = parseId(festival_id)
-        if (festivalId === null) {
-          await client.query('ROLLBACK')
-          return res.status(400).json({ error: 'Invalid festival_id' })
-        }
-      }
-
-      const finalStatus = status == null
-        ? 'confirmed'
-        : VALID_STATUSES.includes(status) ? status : null
-      if (finalStatus === null) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: `Invalid status: ${status}` })
-      }
+      if (parsed.skip) { skipped++; continue }
+      const row = parsed.data
 
       try {
-        await assertVenueInTenant(client, venueId, req.tenantId, 'venue')
-        await assertVenueInTenant(client, festivalId, req.tenantId, 'festival')
+        await assertVenueInTenant(client, row.venueId, req.tenantId, 'venue')
+        await assertVenueInTenant(client, row.festivalId, req.tenantId, 'festival')
       } catch (err) {
         if (err.status === 400) {
           await client.query('ROLLBACK')
@@ -250,16 +254,14 @@ router.post('/import', async (req, res) => {
         throw err
       }
 
-      const finalAdmission = admission === 'paid' ? 'paid' : 'free'
-
       const { rows: gigRows } = await client.query(
         `INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id,
            start_time, end_time, status, admission, event_link, ticket_link)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
         [
-          req.tenantId, event_date, event_description, venueId, festivalId,
-          start_time || null, end_time || null, finalStatus, finalAdmission,
-          event_link || null, ticket_link || null,
+          req.tenantId, row.event_date, row.event_description, row.venueId, row.festivalId,
+          row.start_time, row.end_time, row.status, row.admission,
+          row.event_link, row.ticket_link,
         ],
       )
       const gigId = gigRows[0].id

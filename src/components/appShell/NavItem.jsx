@@ -59,12 +59,12 @@ export default function NavItem({ item, pathname, isNavCollapsed, indent, rail, 
                   top: 0,
                   bottom: 0,
                   width: 3,
-                  backgroundColor: (t) =>
-                    selected
-                      ? t.palette.primary.main
-                      : t.palette.mode === 'light'
-                        ? t.palette.grey[500]
-                        : t.palette.grey[400],
+                  backgroundColor: (t) => {
+                    if (selected) return t.palette.primary.main
+                    return t.palette.mode === 'light'
+                      ? t.palette.grey[500]
+                      : t.palette.grey[400]
+                  },
                 },
               }
             : {}),

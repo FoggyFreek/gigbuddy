@@ -136,6 +136,7 @@ export default function SongImportDialog({ onClose }) {
             </Typography>
             <Button component="label">
               Choose CSV file
+              {' '}
               <input ref={fileRef} type="file" accept=".csv" hidden onChange={handleFile} />
             </Button>
           </Box>
@@ -187,8 +188,8 @@ export default function SongImportDialog({ onClose }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {previewRows.map((row, i) => (
-                  <TableRow key={i}>
+                {previewRows.map((row) => (
+                  <TableRow key={`${row.title || ''}|${row.artist || ''}|${row.tempo ?? ''}`}>
                     <TableCell><strong>{row.title || '—'}</strong></TableCell>
                     <TableCell>{row.artist || '—'}</TableCell>
                     <TableCell>{row.song_key || '—'}</TableCell>

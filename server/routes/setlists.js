@@ -279,6 +279,35 @@ router.post('/:id/sets/:setId/items', async (req, res) => {
   res.status(201).json(item)
 })
 
+// Collect the SET clause for a setlist-item PATCH. Returns { error } on an invalid
+// field, otherwise { sets, rawSets }: `sets` are parameterized { col, value } pairs
+// and `rawSets` are literal assignments (e.g. clearing a note when unlinking).
+function buildItemPatch(body, itemType) {
+  const sets = []
+  const rawSets = []
+  if ('duration_seconds' in body) {
+    if (itemType === 'song') return { error: 'Cannot set duration on a song item' }
+    const dur = toNonNegInt(body.duration_seconds)
+    if (dur === null) return { error: 'Invalid duration_seconds' }
+    sets.push({ col: 'duration_seconds', value: dur })
+  }
+  if ('label' in body) {
+    sets.push({ col: 'label', value: trimOrNull(body.label) })
+  }
+  // Unlinking always clears the note, even if the client omitted it, so a stale
+  // note can't resurface on a later relink.
+  let noteForcedNull = false
+  if ('linked_to_next' in body) {
+    const linked = Boolean(body.linked_to_next)
+    sets.push({ col: 'linked_to_next', value: linked })
+    if (!linked) { rawSets.push('transition_note = NULL'); noteForcedNull = true }
+  }
+  if ('transition_note' in body && !noteForcedNull) {
+    sets.push({ col: 'transition_note', value: trimOrNull(body.transition_note) })
+  }
+  return { sets, rawSets }
+}
+
 router.patch('/:id/items/:itemId', async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const itemId = requireParam(req, res, 'itemId'); if (itemId === null) return
@@ -298,37 +327,20 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     return res.status(400).json({ error: 'Transitions are only valid on song items' })
   }
 
-  const fields = []
-  const values = []
-  let idx = 1
-  if ('duration_seconds' in req.body) {
-    if (existing[0].item_type === 'song') {
-      return res.status(400).json({ error: 'Cannot set duration on a song item' })
-    }
-    const dur = toNonNegInt(req.body.duration_seconds)
-    if (dur === null) return res.status(400).json({ error: 'Invalid duration_seconds' })
-    fields.push(`duration_seconds = $${idx++}`); values.push(dur)
+  const patch = buildItemPatch(req.body, existing[0].item_type)
+  if (patch.error) return res.status(400).json({ error: patch.error })
+  const { sets, rawSets } = patch
+  if (!sets.length && !rawSets.length) {
+    return res.status(400).json({ error: 'No valid fields to update' })
   }
-  if ('label' in req.body) {
-    fields.push(`label = $${idx++}`); values.push(trimOrNull(req.body.label))
-  }
-  // Unlinking always clears the note, even if the client omitted it, so a stale
-  // note can't resurface on a later relink.
-  let noteForcedNull = false
-  if ('linked_to_next' in req.body) {
-    const linked = Boolean(req.body.linked_to_next)
-    fields.push(`linked_to_next = $${idx++}`); values.push(linked)
-    if (!linked) { fields.push('transition_note = NULL'); noteForcedNull = true }
-  }
-  if ('transition_note' in req.body && !noteForcedNull) {
-    fields.push(`transition_note = $${idx++}`); values.push(trimOrNull(req.body.transition_note))
-  }
-  if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
 
+  const values = sets.map((s) => s.value)
+  const assignments = [...sets.map((s, i) => `${s.col} = $${i + 1}`), ...rawSets]
+  const n = sets.length
   values.push(itemId, req.tenantId)
   const { rows } = await pool.query(
-    `UPDATE setlist_items SET ${fields.join(', ')}
-       WHERE id = $${idx} AND tenant_id = $${idx + 1}
+    `UPDATE setlist_items SET ${assignments.join(', ')}
+       WHERE id = $${n + 1} AND tenant_id = $${n + 2}
        RETURNING id, set_id, item_type, song_id, duration_seconds, label, sort_order,
                  linked_to_next, transition_note`,
     values,

@@ -93,7 +93,22 @@ function GigCard({ gig, active, onClick }) {
         '&:hover': { bgcolor: 'action.hover' },
       }}
     >
-      <Box sx={{ position: 'relative' }}>
+      {gig.banner_path && (
+        <Box
+          aria-hidden="true"
+          data-testid={`gig-card-banner-${gig.id}`}
+          style={{ backgroundImage: `url(/api/files/${gig.banner_path})` }}
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.16,
+          }}
+        />
+      )}
+      <Box sx={{ position: 'relative', zIndex: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body1">
             {formatDate(gig.event_date)}

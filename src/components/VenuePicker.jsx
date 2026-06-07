@@ -54,6 +54,7 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
   useEffect(() => {
     const myReqId = ++reqIdRef.current
     const excluded = new Set(excludeIds)
+    const notExcluded = (r) => !excluded.has(r.id)
     if (tooShort) {
       const handle = setTimeout(() => {
         if (reqIdRef.current !== myReqId) return
@@ -70,7 +71,7 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
       searchVenues(trimmed, categoryFilter)
         .then((rows) => {
           if (reqIdRef.current !== myReqId) return
-          setOptions(rows.filter((r) => !excluded.has(r.id)))
+          setOptions(rows.filter(notExcluded))
         })
         .catch(() => {
           if (reqIdRef.current !== myReqId) return

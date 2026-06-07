@@ -23,7 +23,7 @@ import { itemDomId } from './ids.js'
 function SongNoteButton({ note, onUpdateNote }) {
   const [anchorEl, setAnchorEl] = useState(null)
   const inputRef = useRef(null)
-  const hasNote = Boolean(note && note.trim())
+  const hasNote = Boolean(note?.trim())
 
   function handleClose() {
     const value = inputRef.current?.value ?? ''
@@ -91,8 +91,27 @@ function SongBody({ item }) {
 }
 SongBody.propTypes = { item: setlistItemShape.isRequired }
 
-function BreakBody({ item, onUpdate }) {
+function BreakBody({ item, onUpdate, editing = true }) {
   const isPause = item.item_type === 'pause'
+  if (!editing) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1, minWidth: 0 }}>
+        <Chip
+          label={isPause ? 'Pause' : 'Break'}
+          size="small"
+          color={isPause ? 'default' : 'secondary'}
+        />
+        <Typography variant="body2" color="text.secondary">
+          {formatDuration(item.duration_seconds)}
+        </Typography>
+        {item.label && (
+          <Typography variant="body2" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
+            {item.label}
+          </Typography>
+        )}
+      </Box>
+    )
+  }
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1, minWidth: 0 }}>
       <Chip
@@ -128,10 +147,11 @@ function BreakBody({ item, onUpdate }) {
 BreakBody.propTypes = {
   item: setlistItemShape.isRequired,
   onUpdate: PropTypes.func.isRequired,
+  editing: PropTypes.bool,
 }
 
-export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote = () => {}, dragOverlay = false, songOrder = null }) {
-  const sortable = useSortable({ id: itemDomId(item.id) })
+export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote = () => {}, dragOverlay = false, songOrder = null, editing = true }) {
+  const sortable = useSortable({ id: itemDomId(item.id), disabled: !editing })
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable
   const isSong = item.item_type === 'song'
 
@@ -154,15 +174,17 @@ export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote
         boxShadow: dragOverlay ? 4 : 'none',
       }}
     >
-      <IconButton
-        size="small"
-        {...attributes}
-        {...listeners}
-        sx={{ cursor: 'grab', touchAction: 'none' }}
-        aria-label="drag"
-      >
-        <DragIndicatorIcon fontSize="small" />
-      </IconButton>
+      {editing && (
+        <IconButton
+          size="small"
+          {...attributes}
+          {...listeners}
+          sx={{ cursor: 'grab', touchAction: 'none' }}
+          aria-label="drag"
+        >
+          <DragIndicatorIcon fontSize="small" />
+        </IconButton>
+      )}
       {isSong && songOrder !== null && (
         <Box
           aria-label={`song order ${songOrder}`}
@@ -184,14 +206,16 @@ export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote
           </span>
         </Box>
       )}
-      {isSong ? <SongBody item={item} /> : <BreakBody item={item} onUpdate={onUpdate} />}
+      {isSong ? <SongBody item={item} /> : <BreakBody item={item} onUpdate={onUpdate} editing={editing} />}
       <Box sx={{ flexGrow: isSong ? 1 : 0 }} />
       {isSong && !dragOverlay && (
         <SongNoteButton note={item.my_note} onUpdateNote={onUpdateNote} />
       )}
-      <IconButton size="small" color="error" onClick={onDelete} aria-label="delete item">
-        <DeleteIcon fontSize="small" />
-      </IconButton>
+      {editing && (
+        <IconButton size="small" color="error" onClick={onDelete} aria-label="delete item">
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      )}
     </Box>
   )
 }
@@ -203,4 +227,5 @@ SetlistItemCard.propTypes = {
   onUpdateNote: PropTypes.func,
   dragOverlay: PropTypes.bool,
   songOrder: PropTypes.number,
+  editing: PropTypes.bool,
 }

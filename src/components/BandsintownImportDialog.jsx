@@ -237,7 +237,7 @@ export default function BandsintownImportDialog({ onClose }) {
                 <TableBody>
                   {rows.map((row, i) => (
                     <TableRow
-                      key={i}
+                      key={`${row.event_date}|${row.event_description}|${row.venueName}`}
                       sx={{ opacity: rowStates[i].included ? 1 : 0.45 }}
                     >
                       <TableCell padding="checkbox">

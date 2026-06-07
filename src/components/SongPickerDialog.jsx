@@ -29,7 +29,7 @@ export default function SongPickerDialog({ open, onClose, onSelect }) {
     const q = search.trim().toLowerCase()
     if (!q) return songs
     return songs.filter((s) =>
-      [s.title, s.artist].some((f) => f && f.toLowerCase().includes(q)))
+      [s.title, s.artist].some((f) => f?.toLowerCase().includes(q)))
   }, [songs, search])
 
   return (

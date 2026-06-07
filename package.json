@@ -14,7 +14,9 @@
     "migrate": "node server/db/migrate.js",
     "test": "vitest --exclude src/tests/server",
     "test:server": "vitest run --no-file-parallelism src/tests/server",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "coverage": "vitest run --exclude src/tests/server --coverage",
+    "coverage:server": "vitest run --no-file-parallelism src/tests/server --coverage --config vitest.server.config.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -69,6 +71,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.8",
     "@vitest/ui": "^4.1.4",
     "concurrently": "^9.2.1",
     "eslint": "^9.39.4",

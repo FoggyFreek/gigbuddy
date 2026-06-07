@@ -3,6 +3,7 @@ import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
 import AddLinkIcon from '@mui/icons-material/AddLink'
 import LinkIcon from '@mui/icons-material/Link'
 import LinkOffIcon from '@mui/icons-material/LinkOff'
@@ -12,7 +13,36 @@ import LinkOffIcon from '@mui/icons-material/LinkOff'
 // always-visible strip with a chain icon, an inline note, and an unlink button.
 // It's a sibling of the cards (never inside the sortable node), so drag transforms
 // don't move it.
-export default function SetlistTransition({ linked = false, note = null, onUpdate }) {
+export default function SetlistTransition({ linked = false, note = null, onUpdate, editing = true }) {
+  // Read-only: a linked pair shows a static segue strip; an unlinked pair shows
+  // nothing (the add-link affordance is editing-only).
+  if (!editing) {
+    if (!linked) return null
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          mx: 2,
+          mb: 0.75,
+          px: 1,
+          py: 0.25,
+          borderLeft: '2px solid',
+          borderColor: 'primary.main',
+          bgcolor: 'action.hover',
+        }}
+      >
+        <LinkIcon fontSize="small" color="primary" />
+        {note && (
+          <Typography variant="caption" sx={{ fontSize: '0.8rem' }}>
+            {note}
+          </Typography>
+        )}
+      </Box>
+    )
+  }
+
   if (!linked) {
     return (
       <Box
@@ -98,4 +128,5 @@ SetlistTransition.propTypes = {
   linked: PropTypes.bool,
   note: PropTypes.string,
   onUpdate: PropTypes.func.isRequired,
+  editing: PropTypes.bool,
 }

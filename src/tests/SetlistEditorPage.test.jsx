@@ -64,6 +64,10 @@ const TREE = {
   ],
 }
 
+async function enterEditMode(user) {
+  await user.click(screen.getByRole('button', { name: /^edit$/i }))
+}
+
 function wrap() {
   return render(
     <MemoryRouter initialEntries={['/setlists/5']}>
@@ -135,6 +139,7 @@ describe('SetlistEditorPage', () => {
     const user = userEvent.setup()
     wrap()
     await screen.findByText('Creep')
+    await enterEditMode(user)
 
     await user.click(screen.getByLabelText('include in total time'))
 
@@ -147,6 +152,7 @@ describe('SetlistEditorPage', () => {
     const user = userEvent.setup()
     wrap()
     await screen.findByText('Creep')
+    await enterEditMode(user)
 
     await user.click(screen.getByRole('button', { name: /add pause/i }))
 
@@ -158,6 +164,7 @@ describe('SetlistEditorPage', () => {
     const user = userEvent.setup()
     wrap()
     await screen.findByText('Creep')
+    await enterEditMode(user)
 
     await user.click(screen.getByLabelText('include in total time'))
 
@@ -170,6 +177,7 @@ describe('SetlistEditorPage', () => {
     const user = userEvent.setup()
     wrap()
     await screen.findByText('Creep')
+    await enterEditMode(user)
     getSetlist.mockClear() // so we can assert the revert reload
 
     await user.click(screen.getByLabelText('include in total time'))
@@ -194,6 +202,51 @@ describe('SetlistEditorPage', () => {
       await user.click(screen.getByRole('button', { name: /preview/i }))
 
       expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    })
+  })
+
+  describe('read-only mode', () => {
+    it('hides edit/rearrange/move/delete affordances by default', async () => {
+      wrap()
+      await screen.findByText('Creep')
+
+      // The view opens read-only: an Edit toggle, no editing controls.
+      expect(screen.getByRole('button', { name: /^edit$/i })).toBeInTheDocument()
+      expect(screen.queryByLabelText('drag')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /delete item/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /add song/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /delete set$/i })).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('move set up')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('include in total time')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /add set/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /delete setlist/i })).not.toBeInTheDocument()
+    })
+
+    it('reveals the editing affordances after clicking Edit, and the toggle becomes Done', async () => {
+      const user = userEvent.setup()
+      wrap()
+      await screen.findByText('Creep')
+      await enterEditMode(user)
+
+      expect(screen.getByRole('button', { name: /done/i })).toBeInTheDocument()
+      expect(screen.getByLabelText('drag')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /add song/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /delete setlist/i })).toBeInTheDocument()
+    })
+
+    it('keeps the song note affordance visible and editable in read-only mode', async () => {
+      saveItemNote.mockResolvedValue({ my_note: 'capo 2' })
+      const user = userEvent.setup()
+      wrap()
+      await screen.findByText('Creep')
+      // Still read-only — no Done button yet.
+      expect(screen.queryByRole('button', { name: /done/i })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'song note' }))
+      await user.type(await screen.findByLabelText('song note text'), 'capo 2')
+      await user.keyboard('{Escape}')
+
+      await waitFor(() => expect(saveItemNote).toHaveBeenCalledWith(5, 100, 'capo 2'))
     })
   })
 
@@ -230,6 +283,7 @@ describe('SetlistEditorPage', () => {
       const user = userEvent.setup()
       wrap()
       await screen.findByText('Creep')
+      await enterEditMode(user)
 
       await user.click(screen.getByRole('button', { name: /link songs as transition/i }))
 
@@ -245,6 +299,7 @@ describe('SetlistEditorPage', () => {
       const user = userEvent.setup()
       wrap()
       await screen.findByText('Creep')
+      await enterEditMode(user)
 
       await user.type(screen.getByLabelText('transition note'), 'segue')
       await user.tab()
@@ -262,6 +317,7 @@ describe('SetlistEditorPage', () => {
       const user = userEvent.setup()
       wrap()
       await screen.findByText('Creep')
+      await enterEditMode(user)
       // The linked strip (note field) is visible for the first pair.
       expect(screen.getByLabelText('transition note')).toBeInTheDocument()
 

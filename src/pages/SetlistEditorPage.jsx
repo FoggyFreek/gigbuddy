@@ -25,6 +25,8 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import AddIcon from '@mui/icons-material/Add'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import DeleteIcon from '@mui/icons-material/Delete'
+import DoneIcon from '@mui/icons-material/Done'
+import EditIcon from '@mui/icons-material/Edit'
 import PlagiarismOutlinedIcon from '@mui/icons-material/PlagiarismOutlined'
 import {
   addItem,
@@ -112,6 +114,7 @@ export default function SetlistEditorPage() {
   const [picker, setPicker] = useState({ open: false, setId: null })
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [editing, setEditing] = useState(false) // read-only by default; the Edit toggle enables it
   const [opStatus, setOpStatus] = useState('idle') // status for the immediate (non-debounced) saves
 
   // Latest sets, for drag handlers that need current state without stale closures.
@@ -214,11 +217,9 @@ export default function SetlistEditorPage() {
   }
 
   function persistOrder(nextSets) {
+    const order = nextSets.map((s) => ({ setId: s.id, itemIds: s.items.map((it) => it.id) }))
     runSave(async () => {
-      const res = await reorderItems(
-        setlistId,
-        nextSets.map((s) => ({ setId: s.id, itemIds: s.items.map((it) => it.id) })),
-      )
+      const res = await reorderItems(setlistId, order)
       if (res?.clearedIds?.length) setSets((prev) => applyClearedLinks(prev, res.clearedIds))
     }, 'Failed to reorder items')
   }
@@ -264,6 +265,11 @@ export default function SetlistEditorPage() {
     navigate('/setlists')
   }
 
+  async function handleToggleEditing() {
+    if (editing) await flushName() // persist a pending name edit before showing the clean view
+    setEditing((prev) => !prev)
+  }
+
   async function handleDeleteSetlist() {
     try {
       await deleteSetlist(setlistId)
@@ -307,6 +313,12 @@ export default function SetlistEditorPage() {
     setSets((prev) => prev.map((s) => (s.id === setId ? { ...s, items: [...s.items, item] } : s)))
   }
 
+  // Merge a partial update into a single item wherever it lives across the sets.
+  function applyItemUpdate(itemId, partial) {
+    const merge = (items) => items.map((it) => (it.id === itemId ? { ...it, ...partial } : it))
+    setSets((prev) => prev.map((s) => ({ ...s, items: merge(s.items) })))
+  }
+
   async function handlePickSong(song) {
     const setId = picker.setId
     setPicker({ open: false, setId: null })
@@ -324,7 +336,8 @@ export default function SetlistEditorPage() {
   }
 
   async function handleDeleteItem(itemId) {
-    setSets((prev) => prev.map((s) => ({ ...s, items: s.items.filter((it) => it.id !== itemId) })))
+    const without = (items) => items.filter((it) => it.id !== itemId)
+    setSets((prev) => prev.map((s) => ({ ...s, items: without(s.items) })))
     await runSave(async () => {
       const res = await deleteItem(setlistId, itemId)
       if (res?.clearedIds?.length) setSets((prev) => applyClearedLinks(prev, res.clearedIds))
@@ -334,10 +347,7 @@ export default function SetlistEditorPage() {
   async function handleUpdateItem(itemId, patch) {
     await runSave(async () => {
       const updated = await updateItem(setlistId, itemId, patch)
-      setSets((prev) => prev.map((s) => ({
-        ...s,
-        items: s.items.map((it) => (it.id === itemId ? { ...it, ...updated } : it)),
-      })))
+      applyItemUpdate(itemId, updated)
     }, 'Failed to save changes')
   }
 
@@ -346,10 +356,7 @@ export default function SetlistEditorPage() {
   async function handleUpdateNote(itemId, note) {
     await runSave(async () => {
       const { my_note } = await saveItemNote(setlistId, itemId, note)
-      setSets((prev) => prev.map((s) => ({
-        ...s,
-        items: s.items.map((it) => (it.id === itemId ? { ...it, my_note } : it)),
-      })))
+      applyItemUpdate(itemId, { my_note })
     }, 'Failed to save note')
   }
 
@@ -370,31 +377,46 @@ export default function SetlistEditorPage() {
           <ArrowBackIcon />
         </IconButton>
         <Box sx={{ flexGrow: 1 }}>
-          <TextField
-            variant="standard"
-            value={name}
-            onChange={(e) => handleNameChange(e.target.value)}
-            slotProps={{ input: { sx: { fontSize: '1.5rem', fontWeight: 600 } }, htmlInput: { 'aria-label': 'setlist name' } }}
-            fullWidth
-          />
+          {editing ? (
+            <TextField
+              variant="standard"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              slotProps={{ input: { sx: { fontSize: '1.5rem', fontWeight: 600 } }, htmlInput: { 'aria-label': 'setlist name' } }}
+              fullWidth
+            />
+          ) : (
+            <Typography variant="h5" sx={{ fontWeight: 600 }} noWrap>
+              {name || 'Untitled setlist'}
+            </Typography>
+          )}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
             <AccessTimeIcon fontSize="small" color="disabled" />
             <Typography variant="body2" color="text.secondary">
               Total {formatDuration(total) || '0:00'}
             </Typography>
-            <Button
-              startIcon={<PlagiarismOutlinedIcon />}
-              onClick={() => setPreviewOpen(true)}
-              size="small"
-              sx={{ ml: 'auto' }}
-            >
-              Preview
-            </Button>
+            <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
+              <Button
+                startIcon={editing ? <DoneIcon /> : <EditIcon />}
+                onClick={handleToggleEditing}
+                size="small"
+                variant={editing ? 'contained' : 'text'}
+              >
+                {editing ? 'Done' : 'Edit'}
+              </Button>
+              <Button
+                startIcon={<PlagiarismOutlinedIcon />}
+                onClick={() => setPreviewOpen(true)}
+                size="small"
+              >
+                Preview
+              </Button>
+            </Box>
           </Box>
         </Box>
       </Box>
       <Box sx={{ mb: 2, minHeight: 20 }}>
-        <SaveStatusLabel status={combineStatus(nameStatus, opStatus)} />
+        {editing && <SaveStatusLabel status={combineStatus(nameStatus, opStatus)} />}
       </Box>
 
       <DndContext
@@ -411,6 +433,7 @@ export default function SetlistEditorPage() {
             set={s}
             index={index}
             setCount={sets.length}
+            editing={editing}
             songOrderStart={countSongsBeforeSet(sets, index)}
             onRename={(newName) => handleRenameSet(s.id, newName)}
             onToggleTotal={(value) => handleToggleTotal(s.id, value)}
@@ -439,15 +462,19 @@ export default function SetlistEditorPage() {
         </DragOverlay>
       </DndContext>
 
-      <Button startIcon={<AddIcon />} onClick={handleAddSet} sx={{ mt: 1 }}>
-        Add set
-      </Button>
-
-      <Box sx={{ mt: 4 }}>
-        <Button color="error" startIcon={<DeleteIcon />} onClick={() => setConfirmingDelete(true)}>
-          Delete setlist
+      {editing && (
+        <Button startIcon={<AddIcon />} onClick={handleAddSet} sx={{ mt: 1 }}>
+          Add set
         </Button>
-      </Box>
+      )}
+
+      {editing && (
+        <Box sx={{ mt: 4 }}>
+          <Button color="error" startIcon={<DeleteIcon />} onClick={() => setConfirmingDelete(true)}>
+            Delete setlist
+          </Button>
+        </Box>
+      )}
 
       <SongPickerDialog
         key={picker.open ? `picker-${picker.setId}` : 'picker-closed'}
