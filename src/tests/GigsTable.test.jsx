@@ -92,6 +92,13 @@ describe('GigsTable', () => {
     expect(screen.getAllByLabelText('share gig')).toHaveLength(GIGS.length)
   })
 
+  it('renders the event banner thumbnail when banner_path is set', () => {
+    const withBanner = [{ ...GIGS[0], banner_path: 'tenants/1/gig-banners/abc.jpg' }]
+    const { container } = wrap(<GigsTable gigs={withBanner} onRowClick={() => {}} />)
+    const banner = container.querySelector('img[src="/api/files/tenants/1/gig-banners/abc.jpg"]')
+    expect(banner).toBeInTheDocument()
+  })
+
   describe('mobile (compact card layout)', () => {
     beforeEach(() => { mockIsMobile = true })
     afterEach(() => { mockIsMobile = false })
@@ -137,11 +144,10 @@ describe('GigsTable', () => {
       expect(screen.queryByLabelText('share gig')).not.toBeInTheDocument()
     })
 
-    it('renders the event banner as a faded background when banner_path is set', () => {
+    it('does not render a banner background on compact cards when banner_path is set', () => {
       const withBanner = [{ ...GIGS[0], banner_path: 'tenants/1/gig-banners/abc.jpg' }]
       wrap(<GigsTable gigs={withBanner} onRowClick={() => {}} />)
-      const banner = screen.getByTestId('gig-card-banner-1')
-      expect(banner.style.backgroundImage).toContain('/api/files/tenants/1/gig-banners/abc.jpg')
+      expect(screen.queryByTestId('gig-card-banner-1')).not.toBeInTheDocument()
     })
 
     it('does not render a banner background when banner_path is missing', () => {
