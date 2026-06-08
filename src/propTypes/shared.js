@@ -189,6 +189,15 @@ export const setlistShape = PropTypes.shape({
   sets: PropTypes.arrayOf(setlistSetShape),
 })
 
+export const periodShape = PropTypes.shape({
+  mode: PropTypes.oneOf(['fiscal_year', 'month', 'quarter', 'all_time', 'custom']).isRequired,
+  year: PropTypes.number,
+  month: PropTypes.number,
+  quarter: PropTypes.number,
+  from: PropTypes.string,
+  to: PropTypes.string,
+})
+
 // The per-cell view model produced by buildCalendarCellViewModel.
 export const calendarCellShape = PropTypes.shape({
   iso: PropTypes.string.isRequired,

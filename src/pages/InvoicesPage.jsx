@@ -4,34 +4,51 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
+import InputAdornment from '@mui/material/InputAdornment'
 import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
-import Checkbox from '@mui/material/Checkbox'
-import ListItemIcon from '@mui/material/ListItemIcon'
-import ListItemText from '@mui/material/ListItemText'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
-import FilterListIcon from '@mui/icons-material/FilterList'
+import SearchIcon from '@mui/icons-material/Search'
+import { alpha } from '@mui/material/styles'
+import PropTypes from 'prop-types'
 import NewInvoiceDialog from '../components/NewInvoiceDialog.jsx'
 import InvoiceDetails from '../components/InvoiceDetails.jsx'
-import InvoicePdfAction from '../components/InvoicePdfAction.jsx'
+import InvoicePeriodPicker from '../components/InvoicePeriodPicker.jsx'
 import SplitView from '../components/SplitView.jsx'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
-import { listInvoices, renderInvoice } from '../api/invoices.js'
+import { listInvoices } from '../api/invoices.js'
 import { formatEur } from '../utils/invoiceTotals.js'
 import { formatShortDate } from '../utils/dateFormat.js'
 import { invoiceStatusColor } from '../utils/invoiceStatus.js'
+import { invoiceInPeriod } from '../utils/invoicePeriod.js'
+import { invoiceShape, idProp } from '../propTypes/shared.js'
 
-const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'void']
-const DEFAULT_STATUS_FILTER = ['draft', 'sent']
+const SUMMARY_CARDS = [
+  { key: 'all', label: 'All invoices', chipColor: 'primary' },
+  { key: 'draft', label: 'Draft', chipColor: 'secondary' },
+  { key: 'overdue', label: 'Overdue', chipColor: 'error' },
+  { key: 'unpaid', label: 'Unpaid', chipColor: 'warning' },
+  { key: 'paid', label: 'Paid', chipColor: 'success' },
+]
+
+function getInvoiceState(inv) {
+  if (inv.status === 'paid') return 'paid'
+  if (inv.status === 'draft') return 'draft'
+  if (inv.status === 'void') return 'void'
+  // sent: overdue when today has passed the due date
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const dueDate = new Date(inv.issue_date)
+  dueDate.setDate(dueDate.getDate() + (Number(inv.payment_term_days) || 14))
+  return today > dueDate ? 'overdue' : 'unpaid'
+}
 
 export default function InvoicesPage() {
   const navigate = useNavigate()
@@ -42,21 +59,60 @@ export default function InvoicesPage() {
   const [error, setError] = useState(null)
   const [newDialog, setNewDialog] = useState(false)
   const [draftPayload, setDraftPayload] = useState(null)
-  const [statusFilter, setStatusFilter] = useState(DEFAULT_STATUS_FILTER)
-  const [filterAnchor, setFilterAnchor] = useState(null)
+  const [summaryFilter, setSummaryFilter] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [period, setPeriod] = useState(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
 
-  function toggleStatus(status) {
-    setStatusFilter((prev) => (
-      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
-    ))
-  }
+  // After load: if the current period is the default current-year FY and no
+  // invoices exist for that year, switch to the most recent year with invoices.
+  useEffect(() => {
+    if (!invoices.length) return
+    const currentYear = new Date().getFullYear()
+    const years = invoices
+      .filter((inv) => inv.issue_date)
+      .map((inv) => new Date(inv.issue_date).getFullYear())
+    if (!years.length || years.includes(currentYear)) return
+    setPeriod((prev) => {
+      if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
+      return { mode: 'fiscal_year', year: Math.max(...years) }
+    })
+  }, [invoices])
 
-  const visibleInvoices = useMemo(
-    () => (statusFilter.length === 0
-      ? invoices
-      : invoices.filter((inv) => statusFilter.includes(inv.status))),
-    [invoices, statusFilter],
-  )
+  const summaryStats = useMemo(() => {
+    const stats = {
+      all: { count: 0, total: 0 },
+      draft: { count: 0, total: 0 },
+      overdue: { count: 0, total: 0 },
+      unpaid: { count: 0, total: 0 },
+      paid: { count: 0, total: 0 },
+    }
+    for (const inv of invoices) {
+      if (!invoiceInPeriod(inv, period)) continue
+      const state = getInvoiceState(inv)
+      if (state === 'void') continue
+      stats[state].count++
+      stats[state].total += Number(inv.total_cents) || 0
+      stats.all.count++
+      stats.all.total += Number(inv.total_cents) || 0
+    }
+    return stats
+  }, [invoices, period])
+
+  const visibleInvoices = useMemo(() => {
+    let list = invoices.filter((inv) => invoiceInPeriod(inv, period))
+    if (summaryFilter !== 'all') {
+      list = list.filter((inv) => getInvoiceState(inv) === summaryFilter)
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      list = list.filter(
+        (inv) =>
+          (inv.invoice_number && inv.invoice_number.toLowerCase().includes(q)) ||
+          (inv.customer_name && inv.customer_name.toLowerCase().includes(q)),
+      )
+    }
+    return list
+  }, [invoices, period, summaryFilter, searchQuery])
 
   const load = useCallback(async () => {
     try {
@@ -73,15 +129,6 @@ export default function InvoicesPage() {
 
   useEffect(() => { load() }, [load])
 
-  async function handleRetryRender(invoice) {
-    try {
-      await renderInvoice(invoice.id)
-      load()
-    } catch (e) {
-      window.alert(e.message)
-    }
-  }
-
   function handleDraftReady(payload) {
     setNewDialog(false)
     setDraftPayload(payload)
@@ -96,6 +143,8 @@ export default function InvoicesPage() {
     setInvoices((prev) => prev.map((inv) => (inv.id === id ? { ...inv, ...patch } : inv)))
   }, [])
 
+  const activeSummaryLabel = SUMMARY_CARDS.find((c) => c.key === summaryFilter)?.label ?? 'All invoices'
+
   return (
     <SplitView basePath="/invoices" outletContext={{ onReload: load, onInvoiceUpdate: handleInvoiceUpdate }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
@@ -107,7 +156,7 @@ export default function InvoicesPage() {
           startIcon={<AddIcon />}
           onClick={() => setNewDialog(true)}
         >
-          Add
+          Create
         </Button>
       </Box>
 
@@ -122,44 +171,95 @@ export default function InvoicesPage() {
 
       {!loading && (
         <>
-          <Box sx={{ mb: 2 }}>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<FilterListIcon />}
-              onClick={(e) => setFilterAnchor(e.currentTarget)}
-            >
-              Status{statusFilter.length ? ` (${statusFilter.length})` : ''}
-            </Button>
-            <Menu
-              anchorEl={filterAnchor}
-              open={Boolean(filterAnchor)}
-              onClose={() => setFilterAnchor(null)}
-            >
-              {STATUS_OPTIONS.map((status) => (
-                <MenuItem key={status} onClick={() => toggleStatus(status)} dense>
-                  <ListItemIcon>
-                    <Checkbox
-                      edge="start"
-                      size="small"
-                      checked={statusFilter.includes(status)}
-                      tabIndex={-1}
-                      disableRipple
-                    />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={status}
-                    slotProps={{ primary: { sx: { textTransform: 'capitalize' } } }}
-                  />
-                </MenuItem>
-              ))}
-            </Menu>
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+            Summary
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1.5, mb: 3, flexWrap: 'wrap' }}>
+            {SUMMARY_CARDS.map((card) => {
+              const stats = summaryStats[card.key]
+              const isActive = summaryFilter === card.key
+              return (
+                <Paper
+                  key={card.key}
+                  variant="outlined"
+                  onClick={() => setSummaryFilter(card.key)}
+                  sx={{
+                    p: 1.5,
+                    minWidth: 120,
+                    flex: '1 1 120px',
+                    cursor: 'pointer',
+                    border: '1px solid',
+                    borderColor: isActive
+                      ? 'primary.main'
+                      : (t) => t.palette.mode === 'dark' ? t.palette.grey[600] : t.palette.grey[300],
+                    borderRadius: 1,
+                    transition: 'border-color 0.15s',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                    <Box
+                      sx={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: '50%',
+                        bgcolor: (t) => alpha(t.palette[card.chipColor]?.main ?? t.palette.primary.main, 0.18),
+                        color: `${card.chipColor}.main`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {stats.count}
+                    </Box>
+                    <Typography variant="body2" fontWeight={500} sx={{ color: `${card.chipColor}.main` }}>
+                      {card.label}
+                    </Typography>
+                  </Box>
+                  <Typography variant="h6" fontWeight={700}>
+                    {formatEur(stats.total)}
+                  </Typography>
+                </Paper>
+              )
+            })}
           </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+            <Typography variant="subtitle2" fontWeight={600}>
+              {activeSummaryLabel}
+            </Typography>
+            <Chip size="small" label={visibleInvoices.length} />
+            <TextField
+              size="small"
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ flex: '1 1 180px', maxWidth: 280 }}
+            />
+            <Box sx={{ flex: 1 }} />
+            <InvoicePeriodPicker
+              invoices={invoices}
+              value={period}
+              onChange={setPeriod}
+            />
+          </Box>
+
           <InvoicesList
             invoices={visibleInvoices}
             selectedId={selectedId}
             onRowClick={(inv) => navigate(`/invoices/${inv.id}`)}
-            onRetryRender={handleRetryRender}
           />
         </>
       )}
@@ -182,7 +282,7 @@ export default function InvoicesPage() {
   )
 }
 
-function InvoicesList({ invoices, selectedId, onRowClick, onRetryRender }) {
+function InvoicesList({ invoices, selectedId, onRowClick }) {
   const isCompact = useCompactLayout()
 
   if (isCompact) {
@@ -190,7 +290,7 @@ function InvoicesList({ invoices, selectedId, onRowClick, onRetryRender }) {
       <Paper variant="outlined">
         {!invoices.length && (
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No invoices yet. Tap <strong>Add invoice</strong> to create one.
+            No invoices found
           </Typography>
         )}
         {invoices.map((inv) => (
@@ -212,42 +312,25 @@ function InvoicesList({ invoices, selectedId, onRowClick, onRetryRender }) {
                 : 'none',
             }}
           >
+            <Box onClick={(e) => e.stopPropagation()} sx={{ flexShrink: 0 }}>
+              <Chip size="small" label={inv.status} color={invoiceStatusColor(inv.status)} />
+            </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5 }}>
                 <Typography variant="body2" fontWeight={600}>
                   #{inv.invoice_number}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {formatShortDate(inv.issue_date)}
                 </Typography>
-                <Typography variant="body2" fontWeight={500} sx={{ ml: 'auto' }}>
-                  {formatEur(inv.total_cents)}
-                </Typography>
               </Box>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                noWrap
-                sx={{ mt: 0.25 }}
-              >
+              <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 0.25 }}>
                 {inv.customer_name || '-'}
               </Typography>
             </Box>
-            <Box
-              onClick={(e) => e.stopPropagation()}
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-                justifyContent: 'center',
-                gap: 0.5,
-              }}
-            >
-              <Chip size="small" label={inv.status} color={invoiceStatusColor(inv.status)} />
-              <Stack direction="row" spacing={0.5}>
-                <InvoicePdfAction invoice={inv} onRetryRender={onRetryRender} />
-              </Stack>
-            </Box>
+            <Typography variant="body1" fontWeight={500} sx={{ flexShrink: 0 }}>
+              {formatEur(inv.total_cents)}
+            </Typography>
           </Box>
         ))}
       </Paper>
@@ -260,20 +343,19 @@ function InvoicesList({ invoices, selectedId, onRowClick, onRetryRender }) {
         <Table size="small">
           <TableHead>
             <TableRow>
+              <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }}>Status</TableCell>
               <TableCell>Invoice #</TableCell>
               <TableCell>Date</TableCell>
               <TableCell>Customer</TableCell>
               <TableCell align="right">Total</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {!invoices.length && (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={5}>
                   <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                    No invoices yet. Click <strong>New invoice</strong> to create one.
+                    No invoices found
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -286,18 +368,13 @@ function InvoicesList({ invoices, selectedId, onRowClick, onRetryRender }) {
                 sx={{ cursor: 'pointer' }}
                 onClick={() => onRowClick(inv)}
               >
+                <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }}>
+                  <Chip size="small" label={inv.status} color={invoiceStatusColor(inv.status)} />
+                </TableCell>
                 <TableCell>#{inv.invoice_number}</TableCell>
                 <TableCell>{formatShortDate(inv.issue_date)}</TableCell>
                 <TableCell>{inv.customer_name}</TableCell>
                 <TableCell align="right">{formatEur(inv.total_cents)}</TableCell>
-                <TableCell>
-                  <Chip size="small" label={inv.status} color={invoiceStatusColor(inv.status)} />
-                </TableCell>
-                <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                  <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                    <InvoicePdfAction invoice={inv} onRetryRender={onRetryRender} />
-                  </Stack>
-                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -305,4 +382,10 @@ function InvoicesList({ invoices, selectedId, onRowClick, onRetryRender }) {
       </TableContainer>
     </Paper>
   )
+}
+
+InvoicesList.propTypes = {
+  invoices: PropTypes.arrayOf(invoiceShape).isRequired,
+  selectedId: idProp,
+  onRowClick: PropTypes.func.isRequired,
 }
