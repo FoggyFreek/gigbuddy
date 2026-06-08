@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  createInvoice,
   deleteInvoice,
   getInvoice,
   updateInvoice,
@@ -16,23 +15,18 @@ import {
 // Owns the editable invoice form: data loading, derived totals, line/field
 // mutations, and the save/delete/status lifecycle. Logo and EML side effects
 // live in their own hooks (see useInvoiceDetailsState).
-export function useInvoiceFormState({ mode, draft, invoiceId, onClose, onInvoiceUpdate }) {
-  const isEdit = mode === 'edit'
-  const [loading, setLoading] = useState(isEdit)
+export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }) {
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [form, setForm] = useState(() => (draft ? draft.draft : emptyDraft()))
-  const [tenant, setTenant] = useState(draft?.tenant || null)
+  const [form, setForm] = useState(() => emptyDraft())
+  const [tenant, setTenant] = useState(null)
   const [invoice, setInvoice] = useState(null)
-  const [memoOpen, setMemoOpen] = useState(Boolean(draft?.draft?.memo))
-  const [discountOpen, setDiscountOpen] = useState(
-    Boolean(draft?.draft?.discount_pct > 0 || draft?.draft?.discount_cents > 0),
-  )
+  const [memoOpen, setMemoOpen] = useState(false)
+  const [discountOpen, setDiscountOpen] = useState(false)
 
-  // Load invoice when editing.
   useEffect(() => {
-    if (!isEdit) return undefined
     let cancelled = false
     setLoading(true)
     getInvoice(invoiceId)
@@ -47,10 +41,10 @@ export function useInvoiceFormState({ mode, draft, invoiceId, onClose, onInvoice
       .catch((e) => { if (!cancelled) setError(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [isEdit, invoiceId])
+  }, [invoiceId])
 
   const finalized = Boolean(invoice?.finalized_at)
-  const readOnly = isEdit && finalized
+  const readOnly = finalized
   const appliesKor = Boolean(tenant?.applies_kor)
 
   const totals = useMemo(() => computeInvoiceTotals({
@@ -115,11 +109,7 @@ export function useInvoiceFormState({ mode, draft, invoiceId, onClose, onInvoice
     try {
       setSaving(true)
       setError(null)
-      if (isEdit) {
-        await updateInvoice(invoiceId, buildInvoicePayload(form))
-      } else {
-        await createInvoice(buildInvoicePayload(form))
-      }
+      await updateInvoice(invoiceId, buildInvoicePayload(form))
       onClose(true)
     } catch (e) {
       setError(e.message)
@@ -129,7 +119,6 @@ export function useInvoiceFormState({ mode, draft, invoiceId, onClose, onInvoice
   }
 
   async function handleStatusChange(newStatus) {
-    if (!isEdit) return
     try {
       setSaving(true)
       setError(null)
@@ -144,7 +133,6 @@ export function useInvoiceFormState({ mode, draft, invoiceId, onClose, onInvoice
   }
 
   function handleDelete() {
-    if (!isEdit) return
     setDeleteDialogOpen(true)
   }
 
@@ -159,7 +147,6 @@ export function useInvoiceFormState({ mode, draft, invoiceId, onClose, onInvoice
   }
 
   return {
-    isEdit,
     loading,
     error,
     setError,

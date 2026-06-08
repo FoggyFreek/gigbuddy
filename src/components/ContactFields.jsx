@@ -6,7 +6,7 @@ import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import CopyAdornment from './CopyAdornment.jsx'
 
-const VALID_CATEGORIES = ['press', 'radio & tv', 'booker', 'promotion', 'network']
+const VALID_CATEGORIES = ['press', 'radio & tv', 'booker', 'promotion', 'network', 'supplier']
 
 const CATEGORY_LABELS = {
   'press':      'Press',
@@ -14,6 +14,7 @@ const CATEGORY_LABELS = {
   'booker':     'Booker',
   'promotion':  'Promotion',
   'network':    'Network',
+  'supplier':   'Supplier',
 }
 
 export default function ContactFields({ form, onChange, errors = {} }) {

@@ -15,9 +15,6 @@ vi.mock('../components/SplitView.jsx', () => ({
 vi.mock('../components/NewInvoiceDialog.jsx', () => ({
   default: ({ onClose }) => <button onClick={onClose}>close-new-dialog</button>,
 }))
-vi.mock('../components/InvoiceDetails.jsx', () => ({
-  default: () => <div>invoice-details</div>,
-}))
 vi.mock('../components/InvoicePeriodPicker.jsx', () => ({
   default: ({ value, onChange }) => (
     <button onClick={() => onChange(value)}>
@@ -28,6 +25,7 @@ vi.mock('../components/InvoicePeriodPicker.jsx', () => ({
 
 import { listInvoices } from '../api/invoices.js'
 import InvoicesPage from '../pages/InvoicesPage.jsx'
+import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
 import theme from '../theme.js'
 
 // Fix "today" to 2026-06-08 noon UTC so date comparisons are deterministic.
@@ -49,10 +47,14 @@ const INVOICES = [
   { id: 5, invoice_number: '2026-0005', status: 'void',  issue_date: '2026-03-01', payment_term_days: 14,    customer_name: 'Void BV',   total_cents: 5000  },
 ]
 
-function wrap(ui) {
+function wrap(ui, { compact = false } = {}) {
   return render(
     <MemoryRouter initialEntries={['/invoices']}>
-      <ThemeProvider theme={theme}>{ui}</ThemeProvider>
+      <ThemeProvider theme={theme}>
+        <CompactLayoutContext.Provider value={compact}>
+          {ui}
+        </CompactLayoutContext.Provider>
+      </ThemeProvider>
     </MemoryRouter>,
   )
 }
@@ -70,10 +72,10 @@ afterEach(() => {
 })
 
 describe('InvoicesPage', () => {
-  it('renders the Invoices heading and Create button', async () => {
+  it('renders the Invoices heading and Create Invoice button', async () => {
     wrap(<InvoicesPage />)
     expect(screen.getByRole('heading', { name: /^invoices$/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^create$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^create invoice$/i })).toBeInTheDocument()
     await waitFor(() => expect(listInvoices).toHaveBeenCalledTimes(1))
   })
 
@@ -108,6 +110,24 @@ describe('InvoicesPage', () => {
     expect(screen.queryByText('#2026-0002')).not.toBeInTheDocument()
     expect(screen.queryByText('#2026-0003')).not.toBeInTheDocument()
     expect(screen.queryByText('#2026-0004')).not.toBeInTheDocument()
+  })
+
+  it('renders invoice state as dot-only in the table view', async () => {
+    wrap(<InvoicesPage />)
+    await waitFor(() => expect(screen.getByText('#2026-0001')).toBeInTheDocument())
+
+    expect(screen.queryByText('Status')).not.toBeInTheDocument()
+    expect(screen.queryByText('sent')).not.toBeInTheDocument()
+    expect(screen.queryByText('void')).not.toBeInTheDocument()
+  })
+
+  it('renders invoice state as dot-only in the compact card view', async () => {
+    wrap(<InvoicesPage />, { compact: true })
+    await waitFor(() => expect(screen.getByText('#2026-0001')).toBeInTheDocument())
+
+    expect(screen.getByText('Beta Corp')).toBeInTheDocument()
+    expect(screen.queryByText('sent')).not.toBeInTheDocument()
+    expect(screen.queryByText('void')).not.toBeInTheDocument()
   })
 
   it('clicking the "Overdue" card shows only the past-due sent invoice', async () => {

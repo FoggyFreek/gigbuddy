@@ -9,6 +9,7 @@ import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
+import DateEntryField from '../DateEntryField.jsx'
 
 const PAYMENT_TERMS = [
   { value: 7, label: '7 days' },
@@ -25,18 +26,17 @@ const STATUS_OPTIONS = [
 ]
 
 export default function InvoiceCustomerFields({
-  form, patchForm, readOnly, isEdit, invoice, onStatusChange, memoOpen, setMemoOpen,
+  form, patchForm, readOnly, invoice, onStatusChange, memoOpen, setMemoOpen,
 }) {
   return (
     <>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2, mb: 2 }}>
-        <TextField
+        <DateEntryField
           label="Issue date"
-          type="date"
           size="small"
+          fullWidth
           value={form.issue_date || ''}
           onChange={(e) => patchForm({ issue_date: e.target.value })}
-          slotProps={{ inputLabel: { shrink: true } }}
           disabled={readOnly}
         />
         <FormControl size="small" disabled={readOnly}>
@@ -51,20 +51,18 @@ export default function InvoiceCustomerFields({
             ))}
           </Select>
         </FormControl>
-        {isEdit && (
-          <FormControl size="small">
-            <InputLabel>Status</InputLabel>
-            <Select
-              label="Status"
-              value={invoice?.status || 'draft'}
-              onChange={(e) => onStatusChange(e.target.value)}
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        )}
+        <FormControl size="small">
+          <InputLabel>Status</InputLabel>
+          <Select
+            label="Status"
+            value={invoice?.status || 'draft'}
+            onChange={(e) => onStatusChange(e.target.value)}
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       </Box>
 
       <Typography variant="subtitle2" sx={{ mb: 1 }}>Customer</Typography>
@@ -177,7 +175,6 @@ InvoiceCustomerFields.propTypes = {
   form: PropTypes.object.isRequired,
   patchForm: PropTypes.func.isRequired,
   readOnly: PropTypes.bool.isRequired,
-  isEdit: PropTypes.bool.isRequired,
   invoice: invoiceShape,
   onStatusChange: PropTypes.func.isRequired,
   memoOpen: PropTypes.bool.isRequired,

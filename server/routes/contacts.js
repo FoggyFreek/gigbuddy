@@ -3,7 +3,7 @@ import pool from '../db/index.js'
 
 const router = Router()
 
-const VALID_CATEGORIES = new Set(['press', 'radio & tv', 'booker', 'promotion', 'network'])
+const VALID_CATEGORIES = new Set(['press', 'radio & tv', 'booker', 'promotion', 'network', 'supplier'])
 
 function parseId(val) {
   const n = Number(val)
@@ -75,13 +75,22 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'name is required' })
   }
   const finalCategory = VALID_CATEGORIES.has(category) ? category : 'press'
-  const { rows } = await pool.query(
-    `INSERT INTO contacts (tenant_id, name, email, phone, category)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING *`,
-    [req.tenantId, String(name).trim(), email || null, phone || null, finalCategory],
-  )
-  res.status(201).json(rows[0])
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO contacts (tenant_id, name, email, phone, category)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [req.tenantId, String(name).trim(), email || null, phone || null, finalCategory],
+    )
+    res.status(201).json(rows[0])
+  } catch (err) {
+    // UNIQUE(lower(name), lower(category)) collision — surface a 409 with a
+    // stable code so callers (e.g. the supplier autocomplete) can recover.
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'A contact with that name already exists', code: 'contact_exists' })
+    }
+    throw err
+  }
 })
 
 router.patch('/:id', async (req, res) => {

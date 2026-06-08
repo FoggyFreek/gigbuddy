@@ -4,11 +4,11 @@ import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import InvoiceDetails from '../components/InvoiceDetails.jsx'
+import PurchaseDetails from '../components/PurchaseDetails.jsx'
 
-export default function InvoiceDetailPage() {
+export default function PurchaseDetailPage() {
   const { id } = useParams()
-  const invoiceId = Number(id)
+  const purchaseId = Number(id)
   const navigate = useNavigate()
   const outletCtx = useOutletContext() || {}
   const insideSplitView = !!outletCtx.insideSplitView
@@ -27,7 +27,7 @@ export default function InvoiceDetailPage() {
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" fontWeight={600}>Invoice</Typography>
+        <Typography variant="h5" fontWeight={600}>Purchase</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
@@ -38,11 +38,13 @@ export default function InvoiceDetailPage() {
         )}
       </Box>
 
-      <InvoiceDetails
-        key={invoiceId}
-        invoiceId={invoiceId}
+      <PurchaseDetails
+        key={purchaseId}
+        mode="edit"
+        purchaseId={purchaseId}
         onClose={(reload) => closeView(reload)}
-        onInvoiceUpdate={outletCtx.onInvoiceUpdate}
+        onPurchaseUpdate={outletCtx.onPurchaseUpdate}
+        embedded
       />
     </Box>
   )

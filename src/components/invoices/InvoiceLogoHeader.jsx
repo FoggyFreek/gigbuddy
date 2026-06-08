@@ -9,7 +9,7 @@ import Typography from '@mui/material/Typography'
 import ImageIcon from '@mui/icons-material/Image'
 
 export default function InvoiceLogoHeader({
-  isEdit, readOnly, logoKey, invoice, tenant, bandHeading,
+  readOnly, logoKey, invoice, tenant, bandHeading,
   logoBusy, logoInputRef, onLogoFile, onLogoRemove, form, patchForm,
 }) {
   const hasCustomLogo = Boolean(invoice?.custom_logo_path)
@@ -31,7 +31,7 @@ export default function InvoiceLogoHeader({
               alt="Invoice logo"
               sx={{ maxHeight: 64, maxWidth: 160, objectFit: 'contain', borderRadius: 1, border: '1px solid', borderColor: 'divider', p: 0.5 }}
             />
-            {!readOnly && isEdit && (
+            {!readOnly && (
               <Stack direction="row" spacing={0.5}>
                 <Button size="small" disabled={logoBusy} onClick={() => logoInputRef.current?.click()}>
                   Replace
@@ -47,32 +47,25 @@ export default function InvoiceLogoHeader({
         ) : (
           <Button
             startIcon={<ImageIcon />}
-            disabled={readOnly || !isEdit || logoBusy}
+            disabled={readOnly || logoBusy}
             onClick={() => logoInputRef.current?.click()}
             variant="outlined"
           >
             Add logo
           </Button>
         )}
-        {!isEdit && !logoKey && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            Save the invoice first to upload a custom logo.
-          </Typography>
-        )}
-        {(logoKey || isEdit) && (
-          <FormControlLabel
-            sx={{ mt: 0.5 }}
-            control={
-              <Switch
-                size="small"
-                checked={!!form.invert_logo}
-                onChange={(e) => patchForm({ invert_logo: e.target.checked })}
-                disabled={readOnly}
-              />
-            }
-            label={<Typography variant="caption">Invert logo colors</Typography>}
-          />
-        )}
+        <FormControlLabel
+          sx={{ mt: 0.5 }}
+          control={
+            <Switch
+              size="small"
+              checked={!!form.invert_logo}
+              onChange={(e) => patchForm({ invert_logo: e.target.checked })}
+              disabled={readOnly}
+            />
+          }
+          label={<Typography variant="caption">Invert logo colors</Typography>}
+        />
       </Box>
 
       <Box sx={{ textAlign: 'right' }}>
@@ -100,7 +93,6 @@ export default function InvoiceLogoHeader({
 }
 
 InvoiceLogoHeader.propTypes = {
-  isEdit: PropTypes.bool.isRequired,
   readOnly: PropTypes.bool.isRequired,
   logoKey: PropTypes.string,
   invoice: invoiceShape,

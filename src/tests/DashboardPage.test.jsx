@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../api/gigs.js', () => ({ listGigs: vi.fn() }))
 vi.mock('../api/rehearsals.js', () => ({ listRehearsals: vi.fn() }))
 vi.mock('../api/invoices.js', () => ({ listInvoices: vi.fn() }))
+vi.mock('../api/purchases.js', () => ({ listPurchases: vi.fn() }))
 vi.mock('../api/tasks.js', () => ({ listAllTasks: vi.fn() }))
 vi.mock('../contexts/authContext.js', () => ({ useAuth: vi.fn() }))
 // The world-map tile loads its own data (and Leaflet); stub it so these tests stay
@@ -20,6 +21,7 @@ import DashboardPage from '../pages/DashboardPage.jsx'
 import { listGigs } from '../api/gigs.js'
 import { listRehearsals } from '../api/rehearsals.js'
 import { listInvoices } from '../api/invoices.js'
+import { listPurchases } from '../api/purchases.js'
 import { listAllTasks } from '../api/tasks.js'
 import { getProfile } from '../api/profile.js'
 import { useAuth } from '../contexts/authContext.js'
@@ -61,6 +63,11 @@ const INVOICES = [
   { id: 42, invoice_number: '2026-003', customer_name: 'Gamma', total_cents: 10000, status: 'paid', due_date: '2026-05-01' },
   { id: 43, invoice_number: '2026-004', customer_name: 'Delta', total_cents: 30000, status: 'void', due_date: null },
 ]
+const PURCHASES = [
+  { id: 44, receipt_number: 1, supplier_name: 'Studio Hire', total_cents: 30000, status: 'approved', due_date: '2026-06-05' },
+  { id: 45, receipt_number: 2, supplier_name: 'Guitar Shop', total_cents: 12000, status: 'draft', due_date: null },
+  { id: 46, receipt_number: 3, supplier_name: 'Paid Supplier', total_cents: 9000, status: 'paid', due_date: '2026-06-01' },
+]
 const TASKS = [
   { id: 50, gig_id: 3, title: 'Send invoice', done: false, due_date: null, assigned_to: 7, event_description: 'Tour Stop' },
   { id: 51, gig_id: 2, title: 'Confirm rider', done: false, due_date: '2026-06-01', assigned_to: 9, event_description: 'Jazz Night' },
@@ -70,6 +77,7 @@ function resolveAll() {
   listGigs.mockResolvedValue(GIGS)
   listRehearsals.mockResolvedValue(REHEARSALS)
   listInvoices.mockResolvedValue(INVOICES)
+  listPurchases.mockResolvedValue(PURCHASES)
   listAllTasks.mockResolvedValue(TASKS)
   getProfile.mockResolvedValue({ logo_path: null })
 }
@@ -128,6 +136,14 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Delta')).not.toBeInTheDocument()
   })
 
+  it('shows only open purchases, excluding paid purchases', async () => {
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Studio Hire')).toBeInTheDocument())
+    expect(screen.getByText('Guitar Shop')).toBeInTheDocument()
+    expect(screen.queryByText('Paid Supplier')).not.toBeInTheDocument()
+    expect(screen.getByText('unpaid')).toBeInTheDocument()
+  })
+
   it('shows only open tasks assigned to the current member', async () => {
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
@@ -147,10 +163,12 @@ describe('DashboardPage', () => {
     listGigs.mockResolvedValue([])
     listRehearsals.mockResolvedValue([])
     listInvoices.mockResolvedValue([])
+    listPurchases.mockResolvedValue([])
     listAllTasks.mockResolvedValue([])
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText(/no upcoming shows/i)).toBeInTheDocument())
     expect(screen.getByText(/no open invoices/i)).toBeInTheDocument()
+    expect(screen.getByText(/no open purchases/i)).toBeInTheDocument()
     expect(screen.getByText(/no open tasks/i)).toBeInTheDocument()
   })
 
@@ -171,6 +189,23 @@ describe('DashboardPage', () => {
     // Capped at 5 rendered rows.
     expect(screen.getByText('Customer 0')).toBeInTheDocument()
     expect(screen.queryByText('Customer 5')).not.toBeInTheDocument()
+  })
+
+  it('caps open purchases at 5 rows while showing the full count', async () => {
+    const manyPurchases = Array.from({ length: 7 }, (_, i) => ({
+      id: 200 + i,
+      receipt_number: i + 1,
+      supplier_name: `Supplier ${i}`,
+      total_cents: 1000,
+      status: 'approved',
+      due_date: '2026-06-10',
+    }))
+    listPurchases.mockResolvedValue(manyPurchases)
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Open purchases')).toBeInTheDocument())
+    expect(screen.getByText('7')).toBeInTheDocument()
+    expect(screen.getByText('Supplier 0')).toBeInTheDocument()
+    expect(screen.queryByText('Supplier 5')).not.toBeInTheDocument()
   })
 
   it('shows a per-card error when one source fails, while the others still render', async () => {

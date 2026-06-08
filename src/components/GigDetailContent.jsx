@@ -17,12 +17,12 @@ import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import DeleteIcon from '@mui/icons-material/Delete'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
+import DateEntryField from './DateEntryField.jsx'
 import GigAttachments from './GigAttachments.jsx'
 import GigTasks from './GigTasks.jsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
@@ -77,7 +77,6 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
   const [initialTasks, setInitialTasks] = useState([])
   const [selectedVenue, setSelectedVenue] = useState(null)
   const [selectedFestival, setSelectedFestival] = useState(null)
-  const [focused, setFocused] = useState({ event_date: false })
   const [gig, setGig] = useState(null)
   const [members, setMembers] = useState([])
   const [addMemberId, setAddMemberId] = useState('')
@@ -87,41 +86,6 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
   const [cropOpen, setCropOpen] = useState(false)
   const [cropImageSrc, setCropImageSrc] = useState(null)
   const bannerInputRef = useRef(null)
-  const dateInputRef = useRef(null)
-
-  const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
-  const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
-  const openDatePicker = () => {
-    dateInputRef.current?.focus()
-    dateInputRef.current?.showPicker?.()
-  }
-  const dateSlotProps = {
-    htmlInput: { ref: dateInputRef },
-    input: {
-      endAdornment: (
-        <InputAdornment position="end">
-          <IconButton
-            edge="end"
-            size="small"
-            aria-label="open date picker"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={openDatePicker}
-          >
-            <CalendarMonthIcon fontSize="small" sx={{ color: 'action.active' }} />
-          </IconButton>
-        </InputAdornment>
-      ),
-    },
-    inputLabel: { shrink: focused.event_date || !!form.event_date },
-  }
-  const maskSx = (field) => ({
-    '& input::-webkit-datetime-edit': {
-      opacity: focused[field] || form[field] ? 1 : 0,
-    },
-    '& input::-webkit-calendar-picker-indicator': {
-      display: 'none',
-    },
-  })
 
   const saveFn = useCallback(
     async (patch) => { await updateGig(gigId, patch) },
@@ -278,19 +242,14 @@ const GigDetailContent = forwardRef(function GigDetailContent({ gigId, onBannerU
     <>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 3 }}>
-          <TextField
+          <DateEntryField
             label="Date"
-            type="date"
             fullWidth
             required
             value={form.event_date}
             onChange={(e) => handleChange('event_date', e.target.value)}
-            onFocus={onFocus('event_date')}
-            onBlur={onBlur('event_date')}
             error={!!requiredErrors.event_date}
             helperText={requiredErrors.event_date}
-            slotProps={dateSlotProps}
-            sx={maskSx('event_date')}
           />
         </Grid>
         <Grid size={{ xs: 6, sm: 3 }}>

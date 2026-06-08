@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import PropTypes from 'prop-types'
+import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
@@ -9,9 +11,10 @@ import Radio from '@mui/material/Radio'
 import RadioGroup from '@mui/material/RadioGroup'
 import Typography from '@mui/material/Typography'
 import GigPicker from './GigPicker.jsx'
-import { draftFromGig } from '../api/invoices.js'
+import { createInvoice, draftFromGig } from '../api/invoices.js'
+import { buildInvoicePayload, emptyDraft } from './invoices/invoiceFormHelpers.js'
 
-export default function NewInvoiceDialog({ onClose, onDraftReady }) {
+export default function NewInvoiceDialog({ onClose, onCreated }) {
   const [gig, setGig] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -19,6 +22,12 @@ export default function NewInvoiceDialog({ onClose, onDraftReady }) {
   const [billingTargets, setBillingTargets] = useState(null) // null = not loaded yet
   const [pendingPayload, setPendingPayload] = useState(null)
   const [selectedTarget, setSelectedTarget] = useState(null)
+
+  async function createFromDraft(payload) {
+    const form = { ...emptyDraft(), ...payload.draft, lines: payload.draft?.lines || [] }
+    const created = await createInvoice(buildInvoicePayload(form))
+    onCreated(created.id)
+  }
 
   async function handleContinue() {
     if (!gig) return
@@ -32,7 +41,7 @@ export default function NewInvoiceDialog({ onClose, onDraftReady }) {
         setSelectedTarget(payload.billing_targets[0].type)
         setPendingPayload(payload)
       } else {
-        onDraftReady(payload)
+        await createFromDraft(payload)
       }
     } catch (e) {
       setError(e.message)
@@ -41,10 +50,21 @@ export default function NewInvoiceDialog({ onClose, onDraftReady }) {
     }
   }
 
-  function handleTargetConfirm() {
+  async function handleTargetConfirm() {
     if (!pendingPayload || !selectedTarget) return
     const target = billingTargets.find((t) => t.type === selectedTarget)
-    if (!target) { onDraftReady(pendingPayload); return }
+    if (!target) {
+      try {
+        setBusy(true)
+        setError(null)
+        await createFromDraft(pendingPayload)
+      } catch (e) {
+        setError(e.message)
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
     // Override customer fields in draft with selected target
     const updated = {
       ...pendingPayload,
@@ -61,7 +81,15 @@ export default function NewInvoiceDialog({ onClose, onDraftReady }) {
         customer_email: target.email || null,
       },
     }
-    onDraftReady(updated)
+    try {
+      setBusy(true)
+      setError(null)
+      await createFromDraft(updated)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   // Step 2: billing target selection
@@ -73,6 +101,7 @@ export default function NewInvoiceDialog({ onClose, onDraftReady }) {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             This gig has both a festival and a venue. Choose which organisation to bill.
           </Typography>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <RadioGroup value={selectedTarget} onChange={(e) => setSelectedTarget(e.target.value)}>
             {billingTargets.map((t) => (
               <FormControlLabel
@@ -94,8 +123,8 @@ export default function NewInvoiceDialog({ onClose, onDraftReady }) {
           </RadioGroup>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setBillingTargets(null); setPendingPayload(null) }}>Back</Button>
-          <Button variant="contained" disabled={!selectedTarget} onClick={handleTargetConfirm}>
+          <Button disabled={busy} onClick={() => { setBillingTargets(null); setPendingPayload(null) }}>Back</Button>
+          <Button variant="contained" disabled={!selectedTarget || busy} onClick={handleTargetConfirm}>
             Continue
           </Button>
         </DialogActions>
@@ -110,17 +139,20 @@ export default function NewInvoiceDialog({ onClose, onDraftReady }) {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Pick a gig to draft the invoice from. The band fee, venue address, and a default line description will be filled in.
         </Typography>
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <GigPicker value={gig} onChange={setGig} autoFocus />
-        {error && (
-          <Typography color="error" sx={{ mt: 1 }}>{error}</Typography>
-        )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose} disabled={busy}>Cancel</Button>
         <Button variant="contained" disabled={!gig || busy} onClick={handleContinue}>
           Continue
         </Button>
       </DialogActions>
     </Dialog>
   )
+}
+
+NewInvoiceDialog.propTypes = {
+  onClose: PropTypes.func.isRequired,
+  onCreated: PropTypes.func.isRequired,
 }

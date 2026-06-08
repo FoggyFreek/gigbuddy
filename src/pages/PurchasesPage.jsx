@@ -18,42 +18,44 @@ import AddIcon from '@mui/icons-material/Add'
 import SearchIcon from '@mui/icons-material/Search'
 import { alpha } from '@mui/material/styles'
 import PropTypes from 'prop-types'
-import NewInvoiceDialog from '../components/NewInvoiceDialog.jsx'
+import NewPurchaseDialog from '../components/NewPurchaseDialog.jsx'
 import InvoicePeriodPicker from '../components/InvoicePeriodPicker.jsx'
 import SplitView from '../components/SplitView.jsx'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
-import { listInvoices } from '../api/invoices.js'
-import { formatEur } from '../utils/invoiceTotals.js'
+import { listPurchases } from '../api/purchases.js'
+import { formatEur } from '../utils/purchaseTotals.js'
 import { formatShortDate } from '../utils/dateFormat.js'
-import { invoiceStatusColor } from '../utils/invoiceStatus.js'
+import { purchaseStatusColor } from '../utils/purchaseStatus.js'
 import { invoiceInPeriod } from '../utils/invoicePeriod.js'
-import { invoiceShape, idProp } from '../propTypes/shared.js'
+import { purchaseShape, idProp } from '../propTypes/shared.js'
 
 const SUMMARY_CARDS = [
-  { key: 'all', label: 'All invoices', chipColor: 'primary' },
+  { key: 'all', label: 'Purchases', chipColor: 'primary' },
   { key: 'draft', label: 'Draft', chipColor: 'secondary' },
   { key: 'overdue', label: 'Overdue', chipColor: 'error' },
   { key: 'unpaid', label: 'Unpaid', chipColor: 'warning' },
   { key: 'paid', label: 'Paid', chipColor: 'success' },
 ]
 
-function getInvoiceState(inv) {
-  if (inv.status === 'paid') return 'paid'
-  if (inv.status === 'draft') return 'draft'
-  if (inv.status === 'void') return 'void'
-  // sent: overdue when today has passed the due date
+// The period helpers key off `issue_date`; purchases use `receipt_date`.
+const withIssueDate = (p) => ({ ...p, issue_date: p.receipt_date })
+const purchaseInPeriod = (p, period) => invoiceInPeriod(withIssueDate(p), period)
+
+function getPurchaseState(p) {
+  if (p.status === 'paid') return 'paid'
+  if (p.status === 'draft') return 'draft'
+  // approved: overdue once today passes the due date, otherwise unpaid.
+  if (!p.due_date) return 'unpaid'
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const dueDate = new Date(inv.issue_date)
-  dueDate.setDate(dueDate.getDate() + (Number(inv.payment_term_days) || 14))
-  return today > dueDate ? 'overdue' : 'unpaid'
+  return today > new Date(p.due_date) ? 'overdue' : 'unpaid'
 }
 
-export default function InvoicesPage() {
+export default function PurchasesPage() {
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
-  const [invoices, setInvoices] = useState([])
+  const [purchases, setPurchases] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [newDialog, setNewDialog] = useState(false)
@@ -61,20 +63,18 @@ export default function InvoicesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [period, setPeriod] = useState(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
 
-  // After load: if the current period is the default current-year FY and no
-  // invoices exist for that year, switch to the most recent year with invoices.
   useEffect(() => {
-    if (!invoices.length) return
+    if (!purchases.length) return
     const currentYear = new Date().getFullYear()
-    const years = invoices
-      .filter((inv) => inv.issue_date)
-      .map((inv) => new Date(inv.issue_date).getFullYear())
+    const years = purchases
+      .filter((p) => p.receipt_date)
+      .map((p) => new Date(p.receipt_date).getFullYear())
     if (!years.length || years.includes(currentYear)) return
     setPeriod((prev) => {
       if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
       return { mode: 'fiscal_year', year: Math.max(...years) }
     })
-  }, [invoices])
+  }, [purchases])
 
   const summaryStats = useMemo(() => {
     const stats = {
@@ -84,40 +84,42 @@ export default function InvoicesPage() {
       unpaid: { count: 0, total: 0 },
       paid: { count: 0, total: 0 },
     }
-    for (const inv of invoices) {
-      if (!invoiceInPeriod(inv, period)) continue
-      const state = getInvoiceState(inv)
-      if (state === 'void') continue
+    for (const p of purchases) {
+      if (!purchaseInPeriod(p, period)) continue
+      const state = getPurchaseState(p)
       stats[state].count++
-      stats[state].total += Number(inv.total_cents) || 0
+      stats[state].total += Number(p.total_cents) || 0
       stats.all.count++
-      stats.all.total += Number(inv.total_cents) || 0
+      stats.all.total += Number(p.total_cents) || 0
     }
     return stats
-  }, [invoices, period])
+  }, [purchases, period])
 
-  const visibleInvoices = useMemo(() => {
-    let list = invoices.filter((inv) => invoiceInPeriod(inv, period))
+  const visiblePurchases = useMemo(() => {
+    let list = purchases.filter((p) => purchaseInPeriod(p, period))
     if (summaryFilter !== 'all') {
-      list = list.filter((inv) => getInvoiceState(inv) === summaryFilter)
+      list = list.filter((p) => getPurchaseState(p) === summaryFilter)
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       list = list.filter(
-        (inv) =>
-          (inv.invoice_number && inv.invoice_number.toLowerCase().includes(q)) ||
-          (inv.customer_name && inv.customer_name.toLowerCase().includes(q)),
+        (p) =>
+          String(p.receipt_number).includes(q) ||
+          (p.supplier_name && p.supplier_name.toLowerCase().includes(q)) ||
+          (p.description && p.description.toLowerCase().includes(q)),
       )
     }
     return list
-  }, [invoices, period, summaryFilter, searchQuery])
+  }, [purchases, period, summaryFilter, searchQuery])
+
+  const periodInvoices = useMemo(() => purchases.map(withIssueDate), [purchases])
 
   const load = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const data = await listInvoices()
-      setInvoices(data)
+      const data = await listPurchases()
+      setPurchases(data)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -127,30 +129,28 @@ export default function InvoicesPage() {
 
   useEffect(() => { load() }, [load])
 
+  // The dialog creates the draft on the server, then we open it in the split-view
+  // detail editor and refresh the list so the new draft row appears.
   function handleCreated(id) {
     setNewDialog(false)
     load()
-    navigate(`/invoices/${id}`)
+    navigate(`/purchases/${id}`)
   }
 
-  const handleInvoiceUpdate = useCallback((id, patch) => {
-    setInvoices((prev) => prev.map((inv) => (inv.id === id ? { ...inv, ...patch } : inv)))
+  const handlePurchaseUpdate = useCallback((id, patch) => {
+    setPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
   }, [])
 
-  const activeSummaryLabel = SUMMARY_CARDS.find((c) => c.key === summaryFilter)?.label ?? 'All invoices'
+  const activeSummaryLabel = SUMMARY_CARDS.find((c) => c.key === summaryFilter)?.label ?? 'Purchases'
 
   return (
-    <SplitView basePath="/invoices" outletContext={{ onReload: load, onInvoiceUpdate: handleInvoiceUpdate }}>
+    <SplitView basePath="/purchases" outletContext={{ onReload: load, onPurchaseUpdate: handlePurchaseUpdate }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" fontWeight={600} sx={{ flexGrow: 1 }}>
-          Invoices
+          Purchases
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setNewDialog(true)}
-        >
-          Create Invoice
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewDialog(true)}>
+          Create purchase
         </Button>
       </Box>
 
@@ -159,15 +159,11 @@ export default function InvoicesPage() {
           <CircularProgress />
         </Box>
       )}
-      {error && (
-        <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>
-      )}
+      {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
 
       {!loading && (
         <>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-            Summary
-          </Typography>
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Summary</Typography>
           <Box sx={{ display: 'flex', gap: 1.5, mb: 3, flexWrap: 'wrap' }}>
             {SUMMARY_CARDS.map((card) => {
               const stats = summaryStats[card.key]
@@ -185,7 +181,7 @@ export default function InvoicesPage() {
                     border: '1px solid',
                     borderColor: isActive
                       ? 'primary.main'
-                      : (t) => t.palette.mode === 'dark' ? t.palette.grey[600] : t.palette.grey[300],
+                      : (t) => (t.palette.mode === 'dark' ? t.palette.grey[600] : t.palette.grey[300]),
                     borderRadius: 1,
                     transition: 'border-color 0.15s',
                     '&:hover': { bgcolor: 'action.hover' },
@@ -213,19 +209,15 @@ export default function InvoicesPage() {
                       {card.label}
                     </Typography>
                   </Box>
-                  <Typography variant="h6" fontWeight={700}>
-                    {formatEur(stats.total)}
-                  </Typography>
+                  <Typography variant="h6" fontWeight={700}>{formatEur(stats.total)}</Typography>
                 </Paper>
               )
             })}
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
-            <Typography variant="subtitle2" fontWeight={600}>
-              {activeSummaryLabel}
-            </Typography>
-            <Chip size="small" label={visibleInvoices.length} />
+            <Typography variant="subtitle2" fontWeight={600}>{activeSummaryLabel}</Typography>
+            <Chip size="small" label={visiblePurchases.length} />
             <TextField
               size="small"
               placeholder="Search"
@@ -242,26 +234,19 @@ export default function InvoicesPage() {
               }}
               sx={{ flex: '1 1 200px', minWidth: 160 }}
             />
-            <InvoicePeriodPicker
-              invoices={invoices}
-              value={period}
-              onChange={setPeriod}
-            />
+            <InvoicePeriodPicker invoices={periodInvoices} value={period} onChange={setPeriod} />
           </Box>
 
-          <InvoicesList
-            invoices={visibleInvoices}
+          <PurchasesList
+            purchases={visiblePurchases}
             selectedId={selectedId}
-            onRowClick={(inv) => navigate(`/invoices/${inv.id}`)}
+            onRowClick={(p) => navigate(`/purchases/${p.id}`)}
           />
         </>
       )}
 
       {newDialog && (
-        <NewInvoiceDialog
-          onClose={() => setNewDialog(false)}
-          onCreated={handleCreated}
-        />
+        <NewPurchaseDialog onClose={() => setNewDialog(false)} onCreated={handleCreated} />
       )}
     </SplitView>
   )
@@ -275,7 +260,7 @@ function StatusDot({ status }) {
         width: 8,
         height: 8,
         borderRadius: '50%',
-        bgcolor: (t) => t.palette[invoiceStatusColor(status)]?.main ?? t.palette.action.disabled,
+        bgcolor: `${purchaseStatusColor(status)}.main`,
         display: 'inline-block',
         flexShrink: 0,
       }}
@@ -284,21 +269,19 @@ function StatusDot({ status }) {
 }
 StatusDot.propTypes = { status: PropTypes.string }
 
-function InvoicesList({ invoices, selectedId, onRowClick }) {
+function PurchasesList({ purchases, selectedId, onRowClick }) {
   const isCompact = useCompactLayout()
 
   if (isCompact) {
     return (
       <Paper variant="outlined">
-        {!invoices.length && (
-          <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No invoices found
-          </Typography>
+        {!purchases.length && (
+          <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>No purchases found</Typography>
         )}
-        {invoices.map((inv) => (
+        {purchases.map((p) => (
           <Box
-            key={inv.id}
-            onClick={() => onRowClick(inv)}
+            key={p.id}
+            onClick={() => onRowClick(p)}
             sx={{
               display: 'flex',
               alignItems: 'center',
@@ -309,28 +292,20 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
               borderColor: 'divider',
               '&:last-of-type': { borderBottom: 'none' },
               '&:hover': { bgcolor: 'action.hover' },
-              boxShadow: inv.id === selectedId
-                ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}`
-                : 'none',
+              boxShadow: p.id === selectedId ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
             }}
           >
-            <StatusDot status={inv.status} />
+            <StatusDot status={p.status} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5 }}>
-                <Typography variant="body2" fontWeight={600}>
-                  #{inv.invoice_number}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {formatShortDate(inv.issue_date)}
-                </Typography>
+                <Typography variant="body2" fontWeight={600}>#{p.receipt_number}</Typography>
+                <Typography variant="caption" color="text.secondary">{formatShortDate(p.receipt_date)}</Typography>
               </Box>
               <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 0.25 }}>
-                {inv.customer_name || '-'}
+                {p.supplier_name || '-'}
               </Typography>
             </Box>
-            <Typography variant="body1" fontWeight={500} sx={{ flexShrink: 0 }}>
-              {formatEur(inv.total_cents)}
-            </Typography>
+            <Typography variant="body1" fontWeight={500} sx={{ flexShrink: 0 }}>{formatEur(p.total_cents)}</Typography>
           </Box>
         ))}
       </Paper>
@@ -344,37 +319,39 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
           <TableHead>
             <TableRow>
               <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }} />
-              <TableCell>Invoice #</TableCell>
+              <TableCell>Receipt #</TableCell>
               <TableCell>Date</TableCell>
-              <TableCell>Customer</TableCell>
-              <TableCell align="right">Total</TableCell>
+              <TableCell>Due date</TableCell>
+              <TableCell>Description</TableCell>
+              <TableCell>Supplier</TableCell>
+              <TableCell align="right">Excl. VAT</TableCell>
+              <TableCell align="right">Incl. VAT</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {!invoices.length && (
+            {!purchases.length && (
               <TableRow>
-                <TableCell colSpan={5}>
-                  <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                    No invoices found
-                  </Typography>
+                <TableCell colSpan={8}>
+                  <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>No purchases found</Typography>
                 </TableCell>
               </TableRow>
             )}
-            {invoices.map((inv) => (
+            {purchases.map((p) => (
               <TableRow
-                key={inv.id}
+                key={p.id}
                 hover
-                selected={inv.id === selectedId}
+                selected={p.id === selectedId}
                 sx={{ cursor: 'pointer' }}
-                onClick={() => onRowClick(inv)}
+                onClick={() => onRowClick(p)}
               >
-                <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }}>
-                  <StatusDot status={inv.status} />
-                </TableCell>
-                <TableCell>#{inv.invoice_number}</TableCell>
-                <TableCell>{formatShortDate(inv.issue_date)}</TableCell>
-                <TableCell>{inv.customer_name}</TableCell>
-                <TableCell align="right">{formatEur(inv.total_cents)}</TableCell>
+                <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }}><StatusDot status={p.status} /></TableCell>
+                <TableCell>{p.receipt_number}</TableCell>
+                <TableCell>{formatShortDate(p.receipt_date)}</TableCell>
+                <TableCell>{p.due_date ? formatShortDate(p.due_date) : ''}</TableCell>
+                <TableCell>{p.description || ''}</TableCell>
+                <TableCell>{p.supplier_name}</TableCell>
+                <TableCell align="right">{formatEur(p.subtotal_cents)}</TableCell>
+                <TableCell align="right">{formatEur(p.total_cents)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -384,8 +361,8 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
   )
 }
 
-InvoicesList.propTypes = {
-  invoices: PropTypes.arrayOf(invoiceShape).isRequired,
+PurchasesList.propTypes = {
+  purchases: PropTypes.arrayOf(purchaseShape).isRequired,
   selectedId: idProp,
   onRowClick: PropTypes.func.isRequired,
 }

@@ -117,6 +117,34 @@ export const invoiceShape = PropTypes.shape({
   tenant: tenantShape,
 })
 
+export const purchaseLineShape = PropTypes.shape({
+  id: idProp,
+  description: PropTypes.string,
+  expense_category: PropTypes.string,
+  tax_rate: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  amount_incl_cents: PropTypes.number,
+  position: PropTypes.number,
+})
+
+export const purchaseShape = PropTypes.shape({
+  id: idProp,
+  receipt_number: PropTypes.number,
+  status: PropTypes.string,
+  finalized_at: PropTypes.string,
+  receipt_date: PropTypes.string,
+  due_date: PropTypes.string,
+  currency: PropTypes.string,
+  supplier_name: PropTypes.string,
+  supplier_contact_id: idProp,
+  description: PropTypes.string,
+  memo: PropTypes.string,
+  subtotal_cents: PropTypes.number,
+  tax_cents: PropTypes.number,
+  total_cents: PropTypes.number,
+  paid_at: PropTypes.string,
+  lines: PropTypes.arrayOf(purchaseLineShape),
+})
+
 export const songTagShape = PropTypes.shape({
   id: idProp,
   name: PropTypes.string,

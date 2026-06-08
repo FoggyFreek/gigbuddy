@@ -3,7 +3,7 @@ import { getInvoice, removeInvoiceLogo, uploadInvoiceLogo } from '../../api/invo
 
 // Custom-logo upload/remove for an invoice. Reports the refreshed invoice and
 // any error back through the form-state setters it is given.
-export function useInvoiceLogoActions({ isEdit, invoiceId, setInvoice, setError }) {
+export function useInvoiceLogoActions({ invoiceId, setInvoice, setError }) {
   const [logoBusy, setLogoBusy] = useState(false)
   const logoInputRef = useRef(null)
 
@@ -11,10 +11,6 @@ export function useInvoiceLogoActions({ isEdit, invoiceId, setInvoice, setError 
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (!isEdit) {
-      setError('Save the invoice first, then upload a custom logo.')
-      return
-    }
     try {
       setLogoBusy(true)
       setError(null)
@@ -29,7 +25,6 @@ export function useInvoiceLogoActions({ isEdit, invoiceId, setInvoice, setError 
   }
 
   async function handleLogoRemove() {
-    if (!isEdit) return
     try {
       setLogoBusy(true)
       await removeInvoiceLogo(invoiceId)
