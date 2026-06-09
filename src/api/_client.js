@@ -21,7 +21,7 @@ export async function request(url, options = {}) {
     throw Object.assign(new Error(data.error || 'Unauthorized'), { status: 401 })
   }
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Request failed')
+  if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { status: res.status })
   return data
 }
 

@@ -217,6 +217,26 @@ export const setlistShape = PropTypes.shape({
   sets: PropTypes.arrayOf(setlistSetShape),
 })
 
+export const accountShape = PropTypes.shape({
+  id: idProp,
+  code: PropTypes.string,
+  name: PropTypes.string,
+  type: PropTypes.string,
+  parent_code: PropTypes.string,
+  is_active: PropTypes.bool,
+  is_system: PropTypes.bool,
+})
+
+export const accountingSettingsShape = PropTypes.shape({
+  tenant_id: idProp,
+  currency: PropTypes.string,
+  receivable_account_code: PropTypes.string,
+  default_revenue_account_code: PropTypes.string,
+  payable_account_code: PropTypes.string,
+  default_expense_account_code: PropTypes.string,
+  primary_checking_account_code: PropTypes.string,
+})
+
 export const periodShape = PropTypes.shape({
   mode: PropTypes.oneOf(['fiscal_year', 'month', 'quarter', 'all_time', 'custom']).isRequired,
   year: PropTypes.number,

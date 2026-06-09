@@ -2,6 +2,7 @@ import { readdir, readFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import pool from '../../../server/db/index.js'
+import { seedTenantAccounting } from '../../../server/db/defaultChartOfAccounts.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const migrationsDir = join(__dirname, '../../../server/db/migrations')
@@ -184,6 +185,11 @@ SELECT
 // for isolation assertions.
 export async function seedTwoTenants() {
   const { rows: [d] } = await pool.query(SEED_SQL)
+
+  const tenants = d.tenants
+  for (const t of tenants) {
+    await seedTenantAccounting(pool, t.id)
+  }
 
   const tenantA   = d.tenants.find(t => t.slug === 'alpha')
   const tenantB   = d.tenants.find(t => t.slug === 'beta')
