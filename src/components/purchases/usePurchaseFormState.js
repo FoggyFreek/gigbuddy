@@ -5,7 +5,7 @@ import {
   registerPurchasePayment,
   updatePurchase,
 } from '../../api/purchases.js'
-import { listAccounts } from '../../api/accounts.js'
+import { getAccountingSettings, listAccounts } from '../../api/accounts.js'
 import { listMembers } from '../../api/bandMembers.js'
 import { computePurchaseTotals } from '../../utils/purchaseTotals.js'
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.js'
@@ -25,8 +25,12 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [purchase, setPurchase] = useState(null)
+  const [accounts, setAccounts] = useState([])
   const [expenseAccounts, setExpenseAccounts] = useState([])
   const [accountsLoaded, setAccountsLoaded] = useState(false)
+  const [accountingSettings, setAccountingSettings] = useState(null)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [lineErrors, setLineErrors] = useState([])
   const [bandMembers, setBandMembers] = useState([])
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [paymentError, setPaymentError] = useState(null)
@@ -55,6 +59,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     listAccounts()
       .then((accounts) => {
         if (cancelled) return
+        setAccounts(accounts || [])
         setExpenseAccounts(
           (accounts || []).filter(
             (a) => a.is_active && (a.type === 'expense' || a.type === 'cost_of_goods_sold'),
@@ -63,6 +68,17 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
       })
       .catch(() => { /* best-effort; leave expenseAccounts empty */ })
       .finally(() => { if (!cancelled) setAccountsLoaded(true) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    getAccountingSettings()
+      .then((settings) => {
+        if (!cancelled) setAccountingSettings(settings || null)
+      })
+      .catch(() => { if (!cancelled) setAccountingSettings(null) })
+      .finally(() => { if (!cancelled) setSettingsLoaded(true) })
     return () => { cancelled = true }
   }, [])
 
@@ -84,12 +100,25 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     () => computePurchaseTotals({ lines: form?.lines || [] }),
     [form?.lines],
   )
+  const paymentAccount = useMemo(() => {
+    const code = accountingSettings?.primary_checking_account_code
+    if (!code) return null
+    return accounts.find((account) => account.code === code) || { code }
+  }, [accountingSettings?.primary_checking_account_code, accounts])
 
   function patchForm(patch) {
+    setError(null)
     setForm((prev) => ({ ...prev, ...patch }))
   }
 
   function patchLine(index, patch) {
+    setError(null)
+    setLineErrors((prev) => prev.map((err, i) => {
+      if (i !== index) return err
+      const next = { ...err }
+      for (const key of Object.keys(patch)) delete next[key]
+      return next
+    }))
     setForm((prev) => ({
       ...prev,
       lines: prev.lines.map((l, i) => (i === index ? { ...l, ...patch } : l)),
@@ -97,19 +126,73 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
   }
 
   function addLine() {
+    setError(null)
     setForm((prev) => ({ ...prev, lines: [...prev.lines, emptyLine(prev.lines.length)] }))
   }
 
   function removeLine(index) {
+    setError(null)
+    setLineErrors((prev) => prev.filter((_, i) => i !== index))
     setForm((prev) => ({ ...prev, lines: prev.lines.filter((_, i) => i !== index) }))
+  }
+
+  function validateApprovalFields() {
+    const needsExplicitExpenseAccount =
+      settingsLoaded && !accountingSettings?.default_expense_account_code
+    const nextLineErrors = form.lines.map((line) => {
+      const err = {}
+      if (!String(line.description || '').trim()) {
+        err.description = 'Enter a description'
+      }
+      if (needsExplicitExpenseAccount && !line.account_code) {
+        err.account_code = 'Choose an expense account'
+      }
+      if (Number(line.amount_incl_cents) <= 0) {
+        err.amount_incl_cents = 'Enter an amount greater than zero'
+      }
+      return err
+    })
+    const hasLineErrors = nextLineErrors.some((err) => Object.keys(err).length > 0)
+    setLineErrors(nextLineErrors)
+    if (hasLineErrors) {
+      setError('Complete the highlighted purchase line fields before approving.')
+      return false
+    }
+    return true
+  }
+
+  function applySaveError(e) {
+    if (e.code === 'accounting_not_configured' && e.field === 'default_expense_account_code') {
+      setLineErrors(form.lines.map((line) => (
+        line.account_code ? {} : { account_code: 'Choose an expense account' }
+      )))
+      setError('Choose an expense account for each line, or configure a default expense account in Accounting Settings.')
+      return
+    }
+    if (e.code === 'purchase_line_validation' && Array.isArray(e.fields)) {
+      const nextLineErrors = form.lines.map(() => ({}))
+      for (const fieldError of e.fields) {
+        if (fieldError.line == null || !fieldError.field) continue
+        nextLineErrors[fieldError.line] = {
+          ...nextLineErrors[fieldError.line],
+          [fieldError.field]: fieldError.message || 'Required',
+        }
+      }
+      setLineErrors(nextLineErrors)
+      setError(e.message)
+      return
+    }
+    setError(e.message)
   }
 
   // status is 'draft' (Save as draft) or 'approved' (Approve).
   async function handleSave(status) {
+    setLineErrors([])
     if (!form.supplier_name?.trim()) {
       setError('Supplier is required')
       return
     }
+    if (status === 'approved' && !validateApprovalFields()) return
     // Once accounts are known, block a line that still references an account that
     // is no longer an active expense account — the backend would reject it.
     if (accountsLoaded) {
@@ -126,7 +209,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
       await updatePurchase(purchaseId, buildPurchasePayload(form, status))
       onClose(true)
     } catch (e) {
-      setError(e.message)
+      applySaveError(e)
     } finally {
       setSaving(false)
     }
@@ -200,6 +283,8 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     isPaid,
     totals,
     expenseAccounts,
+    paymentAccount,
+    lineErrors,
     bandMembers,
     paymentDialogOpen,
     paymentError,

@@ -34,6 +34,7 @@ router.get('/settings', async (req, res, next) => {
       receivable_account_code: existingCodes.has('11200') ? '11200' : null,
       default_revenue_account_code: existingCodes.has('41000') ? '41000' : null,
       payable_account_code: existingCodes.has('21100') ? '21100' : null,
+      default_reimbursement_account_code: existingCodes.has('22000') ? '22000' : null,
       default_expense_account_code: existingCodes.has('61200') ? '61200' : null,
       primary_checking_account_code: existingCodes.has('11000') ? '11000' : null,
       output_vat_account_code: existingCodes.has('24000') ? '24000' : null,
@@ -43,10 +44,10 @@ router.get('/settings', async (req, res, next) => {
       `INSERT INTO tenant_accounting_settings (
          tenant_id, currency,
          receivable_account_code, default_revenue_account_code,
-         payable_account_code, default_expense_account_code,
+         payable_account_code, default_reimbursement_account_code, default_expense_account_code,
          primary_checking_account_code,
          output_vat_account_code, input_vat_account_code
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (tenant_id) DO UPDATE SET updated_at = NOW()
        RETURNING *`,
       [
@@ -55,6 +56,7 @@ router.get('/settings', async (req, res, next) => {
         defaults.receivable_account_code,
         defaults.default_revenue_account_code,
         defaults.payable_account_code,
+        defaults.default_reimbursement_account_code,
         defaults.default_expense_account_code,
         defaults.primary_checking_account_code,
         defaults.output_vat_account_code,
@@ -121,6 +123,7 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
         receivable_account_code: null,
         default_revenue_account_code: null,
         payable_account_code: null,
+        default_reimbursement_account_code: null,
         default_expense_account_code: null,
         primary_checking_account_code: null,
         output_vat_account_code: null,
@@ -131,14 +134,14 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
         `INSERT INTO tenant_accounting_settings (
            tenant_id, currency,
            receivable_account_code, default_revenue_account_code,
-           payable_account_code, default_expense_account_code,
+           payable_account_code, default_reimbursement_account_code, default_expense_account_code,
            primary_checking_account_code,
            output_vat_account_code, input_vat_account_code
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
         [
           req.tenantId, full.currency,
           full.receivable_account_code, full.default_revenue_account_code,
-          full.payable_account_code, full.default_expense_account_code,
+          full.payable_account_code, full.default_reimbursement_account_code, full.default_expense_account_code,
           full.primary_checking_account_code,
           full.output_vat_account_code, full.input_vat_account_code,
         ],
@@ -226,6 +229,7 @@ router.patch('/:id', requireTenantAdmin, async (req, res, next) => {
            receivable_account_code = $2 OR
            default_revenue_account_code = $2 OR
            payable_account_code = $2 OR
+           default_reimbursement_account_code = $2 OR
            default_expense_account_code = $2 OR
            primary_checking_account_code = $2 OR
            output_vat_account_code = $2 OR

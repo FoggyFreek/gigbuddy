@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS tenant_accounting_settings (
   receivable_account_code TEXT,
   default_revenue_account_code TEXT,
   payable_account_code TEXT,
+  default_reimbursement_account_code TEXT,
   default_expense_account_code TEXT,
   primary_checking_account_code TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -30,6 +31,8 @@ CREATE TABLE IF NOT EXISTS tenant_accounting_settings (
   FOREIGN KEY (tenant_id, receivable_account_code)        REFERENCES chart_of_accounts(tenant_id, code),
   FOREIGN KEY (tenant_id, default_revenue_account_code)   REFERENCES chart_of_accounts(tenant_id, code),
   FOREIGN KEY (tenant_id, payable_account_code)           REFERENCES chart_of_accounts(tenant_id, code),
+  CONSTRAINT tas_default_reimbursement_fk
+    FOREIGN KEY (tenant_id, default_reimbursement_account_code) REFERENCES chart_of_accounts(tenant_id, code),
   FOREIGN KEY (tenant_id, default_expense_account_code)   REFERENCES chart_of_accounts(tenant_id, code),
   FOREIGN KEY (tenant_id, primary_checking_account_code)  REFERENCES chart_of_accounts(tenant_id, code)
 );
@@ -59,6 +62,7 @@ CROSS JOIN (VALUES
   ('14000', 'Band Van or Vehicle',                  'asset',              '10000'),
   ('15000', 'Value Added Tax / VAT Receivable',     'asset',              '10000'),
   ('21000', 'Short-term Payables',                  'liability',          '20000'),
+  ('22000', 'Due to Band Members',                  'liability',          '20000'),
   ('24000', 'Sales Tax / VAT Payable',              'liability',          '20000'),
   ('31000', 'Band Member Capital Contributions',    'equity',             '30000'),
   ('32000', 'Band Member Draws (Payouts)',           'equity',             '30000'),
@@ -107,9 +111,9 @@ ON CONFLICT (tenant_id, code) DO NOTHING;
 INSERT INTO tenant_accounting_settings (
   tenant_id, currency,
   receivable_account_code, default_revenue_account_code,
-  payable_account_code, default_expense_account_code,
+  payable_account_code, default_reimbursement_account_code, default_expense_account_code,
   primary_checking_account_code
 )
-SELECT id, 'EUR', '11200', '41000', '21100', '62100', '11000'
+SELECT id, 'EUR', '11200', '41000', '21100', '22000', '62100', '11000'
 FROM tenants
 ON CONFLICT (tenant_id) DO NOTHING;

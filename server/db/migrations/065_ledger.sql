@@ -39,8 +39,8 @@ UPDATE purchase_lines pl SET account_code = tas.default_expense_account_code
   WHERE tas.tenant_id = pl.tenant_id AND pl.account_code IS NULL;
 
 -- ---------- Member-paid tracking on purchases ----------
--- Records how a bill was settled and which band member fronted the cash. Does
--- not change the payment journal (both methods: DR payable / CR checking).
+-- Records how a bill was settled and which band member fronted the cash.
+-- Member-paid bills credit the configured reimbursement liability account.
 ALTER TABLE purchases ADD COLUMN IF NOT EXISTS payment_method  TEXT;
 ALTER TABLE purchases ADD COLUMN IF NOT EXISTS paid_by_user_id INTEGER REFERENCES users(id);
 
@@ -65,7 +65,6 @@ CREATE TABLE ledger_entries (
   tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   transaction_id INTEGER NOT NULL,
   account_code TEXT NOT NULL,
-  contact_id INTEGER,             -- optional counterparty
   debit_cents  INTEGER NOT NULL DEFAULT 0 CHECK (debit_cents  >= 0),
   credit_cents INTEGER NOT NULL DEFAULT 0 CHECK (credit_cents >= 0),
   memo TEXT,
@@ -76,12 +75,7 @@ CREATE TABLE ledger_entries (
     FOREIGN KEY (transaction_id, tenant_id)
     REFERENCES ledger_transactions(id, tenant_id) ON DELETE CASCADE,
   CONSTRAINT ledger_entries_account_fkey
-    FOREIGN KEY (tenant_id, account_code) REFERENCES chart_of_accounts(tenant_id, code),
-  -- Column-list SET NULL so only contact_id is nulled, never tenant_id
-  -- (mirrors purchases.supplier_contact_id in 063_purchases.sql).
-  CONSTRAINT ledger_entries_contact_fkey
-    FOREIGN KEY (contact_id, tenant_id) REFERENCES contacts(id, tenant_id)
-    ON DELETE SET NULL (contact_id)
+    FOREIGN KEY (tenant_id, account_code) REFERENCES chart_of_accounts(tenant_id, code)
 );
 
 CREATE INDEX idx_ledger_entries_tenant_account ON ledger_entries(tenant_id, account_code);

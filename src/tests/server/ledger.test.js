@@ -55,7 +55,7 @@ async function journalsFor(tenantId, sourceType, sourceId) {
   const out = []
   for (const t of txns) {
     const { rows: entries } = await pool.query(
-      `SELECT account_code, contact_id, debit_cents, credit_cents
+      `SELECT account_code, debit_cents, credit_cents
          FROM ledger_entries WHERE transaction_id = $1 ORDER BY id`,
       [t.id],
     )
@@ -193,7 +193,7 @@ describe('ledger — purchasing (expenses)', () => {
     return r.body
   }
 
-  it('bill approved posts expense + input VAT / CR payable, with supplier contact', async () => {
+  it('bill approved posts expense + input VAT / CR payable', async () => {
     const bill = await createApprovedBill({ supplier_contact_id: contactA.id })
     const accrued = byEvent(await journalsFor(seed.tenantA.id, 'purchase', bill.id), 'accrued')
     expect(accrued).toBeTruthy()
@@ -201,9 +201,6 @@ describe('ledger — purchasing (expenses)', () => {
     expect(line(accrued, '62100').debit_cents).toBe(103306)
     expect(line(accrued, '15000').debit_cents).toBe(21694)
     expect(line(accrued, '21100').credit_cents).toBe(125000)
-    // counterparty recorded on payable + expense legs
-    expect(line(accrued, '21100').contact_id).toBe(contactA.id)
-    expect(line(accrued, '62100').contact_id).toBe(contactA.id)
   })
 
   it('groups expense debits per account code across lines', async () => {
@@ -246,7 +243,7 @@ describe('ledger — purchasing (expenses)', () => {
     expect(line(paid, '11000').credit_cents).toBe(125000)
   })
 
-  it('bill paid by band member posts the same journal and records who fronted it', async () => {
+  it('bill paid by band member posts to the reimbursement liability and records who fronted it', async () => {
     const bill = await createApprovedBill()
     const res = await asUserA(request(app).post(`/api/purchases/${bill.id}/payment`))
       .send({ method: 'member', paid_by_band_member_id: seed.memberA.id, paid_on: '2026-06-01' }).expect(200)
@@ -256,7 +253,23 @@ describe('ledger — purchasing (expenses)', () => {
     const paid = byEvent(await journalsFor(seed.tenantA.id, 'purchase', bill.id), 'paid')
     expectBalanced(paid)
     expect(line(paid, '21100').debit_cents).toBe(125000)
-    expect(line(paid, '11000').credit_cents).toBe(125000)
+    expect(line(paid, '22000').credit_cents).toBe(125000)
+    expect(line(paid, '11000')).toBeUndefined()
+  })
+
+  it('member payment requires the reimbursement account setting', async () => {
+    const bill = await createApprovedBill()
+    await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ default_reimbursement_account_code: null })
+      .expect(200)
+
+    const res = await asUserA(request(app).post(`/api/purchases/${bill.id}/payment`))
+      .send({ method: 'member', paid_by_band_member_id: seed.memberA.id, paid_on: '2026-06-01' })
+
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('accounting_not_configured')
+    expect(res.body.field).toBe('default_reimbursement_account_code')
+    expect(byEvent(await journalsFor(seed.tenantA.id, 'purchase', bill.id), 'paid')).toBeUndefined()
   })
 
   it('member payment requires a valid tenant band member', async () => {

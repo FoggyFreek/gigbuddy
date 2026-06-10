@@ -157,6 +157,28 @@ describe('purchases — finalization gate', () => {
     expect(patched.body.finalized_at).not.toBeNull()
   })
 
+  it('rejects approving an incomplete zero-amount line with structured field errors', async () => {
+    await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ default_expense_account_code: null })
+      .expect(200)
+    const r = await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({
+        lines: [{ description: '', tax_rate: 21, amount_incl_cents: 0 }],
+      }))
+      .expect(201)
+
+    const res = await asUserA(request(app).patch(`/api/purchases/${r.body.id}`))
+      .send({ status: 'approved' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('purchase_line_validation')
+    expect(res.body.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ line: 0, field: 'description' }),
+      expect.objectContaining({ line: 0, field: 'account_code' }),
+      expect.objectContaining({ line: 0, field: 'amount_incl_cents' }),
+    ]))
+  })
+
   it('content PATCH after finalize returns 409', async () => {
     const r = await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)
     await approve(r.body.id, asUserA)

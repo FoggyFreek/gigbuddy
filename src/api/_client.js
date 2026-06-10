@@ -18,10 +18,10 @@ export async function request(url, options = {}) {
   if (res.status === 401) {
     window.dispatchEvent(new Event('auth:unauthorized'))
     const data = await res.json().catch(() => ({}))
-    throw Object.assign(new Error(data.error || 'Unauthorized'), { status: 401 })
+    throw Object.assign(new Error(data.error || 'Unauthorized'), { ...data, status: 401, body: data })
   }
   const data = await res.json()
-  if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { status: res.status })
+  if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { ...data, status: res.status, body: data })
   return data
 }
 

@@ -25,6 +25,7 @@ import {
 } from '../validators/purchaseValidators.js'
 import {
   AccountingNotConfiguredError,
+  loadAccountingSettings,
   postBillAccrued,
   postBillPaid,
 } from './ledgerService.js'
@@ -55,6 +56,39 @@ function isValidIsoDate(value) {
   if (typeof value !== 'string') return false
   const ts = Date.parse(value)
   return !Number.isNaN(ts)
+}
+
+function buildApprovalLineValidationError(lines, { requireAccount = false } = {}) {
+  const fields = []
+  for (const [idx, line] of lines.entries()) {
+    if (!String(line.description || '').trim()) {
+      fields.push({ line: idx, field: 'description', message: 'Enter a description' })
+    }
+    if (requireAccount && !line.account_code) {
+      fields.push({ line: idx, field: 'account_code', message: 'Choose an expense account' })
+    }
+    if (Number(line.amount_incl_cents) <= 0) {
+      fields.push({ line: idx, field: 'amount_incl_cents', message: 'Enter an amount greater than zero' })
+    }
+  }
+  if (!fields.length) return null
+  return {
+    error: {
+      status: 400,
+      body: {
+        error: 'Complete the highlighted purchase line fields before approving.',
+        code: 'purchase_line_validation',
+        fields,
+      },
+    },
+  }
+}
+
+async function validateApprovalLines(executor, tenantId, lines) {
+  const settings = await loadAccountingSettings(executor, tenantId)
+  return buildApprovalLineValidationError(lines, {
+    requireAccount: !settings?.default_expense_account_code,
+  })
 }
 
 // ---------- create ----------
@@ -89,6 +123,11 @@ export async function createPurchase(pool, tenantId, body) {
   }
 
   const totals = computePurchaseTotals({ lines })
+
+  if (status === 'approved') {
+    const approvalErr = await validateApprovalLines(pool, tenantId, lines)
+    if (approvalErr) return approvalErr
+  }
 
   const client = await pool.connect()
   let purchaseId
@@ -196,6 +235,12 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
     if (accountErr) return accountErr
   }
 
+  if (body.status === 'approved' && existing.status !== 'approved') {
+    const approvalLines = 'lines' in body ? normalizeLines(body.lines) : await fetchPurchaseLines(pool, id, tenantId)
+    const approvalErr = await validateApprovalLines(pool, tenantId, approvalLines)
+    if (approvalErr) return approvalErr
+  }
+
   const contentChanged = Object.keys(body).some((k) => CONTENT_FIELDS_SET.has(k))
 
   const client = await pool.connect()
@@ -274,9 +319,8 @@ export async function registerPayment(pool, tenantId, id, body) {
   const paidOn = body.paid_on ?? new Date().toISOString().slice(0, 10)
   if (!isValidIsoDate(paidOn)) return { error: { status: 400, body: { error: 'Invalid paid_on' } } }
 
-  // Bank (default) or band-member reimbursement. The journal is identical for
-  // both (DR payable / CR checking); paid_by_band_member_id records who fronted
-  // it, even when that profile has no login account.
+  // Bank (default) or band-member payment. Member-paid purchases clear accounts
+  // payable into the configured reimbursement liability account.
   const method = body.method ?? 'bank'
   if (method !== 'bank' && method !== 'member') {
     return { error: { status: 400, body: { error: 'Invalid method', code: 'invalid_method' } } }
@@ -304,7 +348,12 @@ export async function registerPayment(pool, tenantId, id, body) {
         WHERE id = $4 AND tenant_id = $5`,
       [paidOn, method, paidByBandMemberId, id, tenantId],
     )
-    await postBillPaid(client, tenantId, { ...existing, paid_at: paidOn })
+    await postBillPaid(client, tenantId, {
+      ...existing,
+      paid_at: paidOn,
+      payment_method: method,
+      paid_by_band_member_id: paidByBandMemberId,
+    })
     await client.query('COMMIT')
     return {}
   } catch (err) {

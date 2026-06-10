@@ -16,7 +16,12 @@ vi.mock('../api/contacts.js', () => ({
 }))
 
 vi.mock('../api/accounts.js', () => ({
+  getAccountingSettings: vi.fn(async () => ({
+    default_expense_account_code: '62100',
+    primary_checking_account_code: '11000',
+  })),
   listAccounts: vi.fn(async () => [
+    { id: 0, code: '11000', name: 'Checking Account', type: 'asset', is_active: true },
     { id: 1, code: '62100', name: 'Instruments & Equipment', type: 'expense', is_active: true },
     { id: 2, code: '61100', name: 'Travel & Lodging', type: 'expense', is_active: true },
     { id: 3, code: '99000', name: 'Retired Account', type: 'expense', is_active: false },
@@ -33,6 +38,7 @@ vi.mock('../api/bandMembers.js', () => ({
 }))
 
 import * as purchasesApi from '../api/purchases.js'
+import * as accountsApi from '../api/accounts.js'
 import * as bandMembersApi from '../api/bandMembers.js'
 import PurchaseDetails from '../components/PurchaseDetails.jsx'
 import theme from '../theme.js'
@@ -171,13 +177,35 @@ describe('PurchaseDetails', () => {
     expect(screen.getByRole('button', { name: /register payment/i })).toBeDisabled()
   })
 
-  it('shows an already-paid purchase as payment registered and disabled', async () => {
-    purchasesApi.getPurchase.mockResolvedValue(purchase({ status: 'paid' }))
+  it('shows the checking account for an already-paid bank purchase', async () => {
+    purchasesApi.getPurchase.mockResolvedValue(purchase({
+      status: 'paid',
+      payment_method: 'bank',
+      paid_at: '2026-06-10',
+    }))
 
     wrap(<PurchaseDetails mode="edit" purchaseId={5} onClose={() => {}} embedded />)
 
     await screen.findByText('Purchase 5')
-    expect(screen.getByRole('button', { name: /payment registered/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /payment registered|register payment/i })).not.toBeInTheDocument()
+    expect(await screen.findByText(/paid from/i)).toBeInTheDocument()
+    expect(screen.getByText('11000 - Checking Account')).toBeInTheDocument()
+  })
+
+  it('shows the band member for an already-paid member purchase', async () => {
+    purchasesApi.getPurchase.mockResolvedValue(purchase({
+      status: 'paid',
+      payment_method: 'member',
+      paid_by_band_member_id: 3,
+      paid_at: '2026-06-10',
+    }))
+
+    wrap(<PurchaseDetails mode="edit" purchaseId={5} onClose={() => {}} embedded />)
+
+    await screen.findByText('Purchase 5')
+    expect(screen.queryByRole('button', { name: /payment registered|register payment/i })).not.toBeInTheDocument()
+    expect(await screen.findByText(/paid by/i)).toBeInTheDocument()
+    expect(screen.getByText('Bob')).toBeInTheDocument()
   })
 
   it('saves the selected expense account code and preserves VAT fields', async () => {
@@ -225,5 +253,48 @@ describe('PurchaseDetails', () => {
 
     expect(await screen.findByText(/replace the inactive expense account/i)).toBeInTheDocument()
     expect(purchasesApi.updatePurchase).not.toHaveBeenCalled()
+  })
+
+  it('marks empty line inputs before approving', async () => {
+    accountsApi.getAccountingSettings.mockResolvedValueOnce({ default_expense_account_code: null })
+    purchasesApi.getPurchase.mockResolvedValue(purchase({
+      status: 'draft',
+      finalized_at: null,
+      lines: [{ description: '', account_code: '', tax_rate: 21, amount_incl_cents: 0, position: 0 }],
+    }))
+    const user = userEvent.setup()
+
+    wrap(<PurchaseDetails mode="edit" purchaseId={5} onClose={() => {}} embedded />)
+
+    await screen.findByText('Purchase 5')
+    await waitFor(() => expect(accountsApi.getAccountingSettings).toHaveBeenCalled())
+    await user.click(screen.getByRole('button', { name: /^approve$/i }))
+
+    expect(await screen.findByText(/complete the highlighted purchase line fields/i)).toBeInTheDocument()
+    expect(screen.getByText(/enter a description/i)).toBeInTheDocument()
+    expect(screen.getByText(/choose an expense account/i)).toBeInTheDocument()
+    expect(screen.getByText(/enter an amount greater than zero/i)).toBeInTheDocument()
+    expect(purchasesApi.updatePurchase).not.toHaveBeenCalled()
+  })
+
+  it('maps a missing default expense account response to the account input', async () => {
+    purchasesApi.getPurchase.mockResolvedValue(purchase({
+      status: 'draft',
+      finalized_at: null,
+      lines: [{ description: 'Studio', account_code: '', tax_rate: 21, amount_incl_cents: 125000, position: 0 }],
+    }))
+    purchasesApi.updatePurchase.mockRejectedValueOnce(Object.assign(
+      new Error('Accounting setting not configured: default_expense_account_code'),
+      { code: 'accounting_not_configured', field: 'default_expense_account_code', status: 409 },
+    ))
+    const user = userEvent.setup()
+
+    wrap(<PurchaseDetails mode="edit" purchaseId={5} onClose={() => {}} embedded />)
+
+    await screen.findByText('Purchase 5')
+    await user.click(screen.getByRole('button', { name: /^approve$/i }))
+
+    expect(await screen.findByText(/configure a default expense account/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/choose an expense account/i).length).toBeGreaterThan(0)
   })
 })

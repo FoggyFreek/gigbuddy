@@ -25,10 +25,11 @@ const ACCOUNTS = [
   { id: 2,  code: '11200', name: 'Accounts Receivable',  type: 'asset',     is_active: true,  tenant_id: 1 },
   { id: 3,  code: '11500', name: 'Savings Account',      type: 'asset',     is_active: false, tenant_id: 1 },
   { id: 4,  code: '21100', name: 'Accounts Payable',     type: 'liability', is_active: true,  tenant_id: 1 },
-  { id: 5,  code: '41000', name: 'Performance Fees',     type: 'revenue',   is_active: true,  tenant_id: 1 },
-  { id: 6,  code: '61200', name: 'Equipment & Instr.',   type: 'expense',   is_active: true,  tenant_id: 1 },
-  { id: 7,  code: '24000', name: 'VAT Payable',          type: 'liability', is_active: true,  tenant_id: 1 },
-  { id: 8,  code: '15000', name: 'VAT Receivable',       type: 'asset',     is_active: true,  tenant_id: 1 },
+  { id: 5,  code: '22000', name: 'Due to Band Members',  type: 'liability', is_active: true,  tenant_id: 1 },
+  { id: 6,  code: '41000', name: 'Performance Fees',     type: 'revenue',   is_active: true,  tenant_id: 1 },
+  { id: 7,  code: '61200', name: 'Equipment & Instr.',   type: 'expense',   is_active: true,  tenant_id: 1 },
+  { id: 8,  code: '24000', name: 'VAT Payable',          type: 'liability', is_active: true,  tenant_id: 1 },
+  { id: 9,  code: '15000', name: 'VAT Receivable',       type: 'asset',     is_active: true,  tenant_id: 1 },
 ]
 
 const SETTINGS = {
@@ -37,6 +38,7 @@ const SETTINGS = {
   receivable_account_code: '11200',
   default_revenue_account_code: '41000',
   payable_account_code: '21100',
+  default_reimbursement_account_code: '22000',
   default_expense_account_code: '61200',
   primary_checking_account_code: '11000',
   output_vat_account_code: '24000',
@@ -81,6 +83,13 @@ describe('AccountingSettingsSection — rendering', () => {
       expect(screen.getByLabelText(/input vat/i)).toBeInTheDocument()
     })
   })
+
+  it('renders the default reimbursement account select', async () => {
+    wrap(<AccountingSettingsSection />)
+    await waitFor(() => {
+      expect(screen.getByLabelText(/default reimbursement account/i)).toBeInTheDocument()
+    })
+  })
 })
 
 describe('AccountingSettingsSection — VAT accounts', () => {
@@ -120,6 +129,24 @@ describe('AccountingSettingsSection — PATCH on change', () => {
     await waitFor(() => {
       expect(accountsApi.updateAccountingSettings).toHaveBeenCalledWith(
         expect.objectContaining({ currency: 'USD' }),
+      )
+    })
+  })
+
+  it('calls updateAccountingSettings when the default reimbursement account changes', async () => {
+    accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, default_reimbursement_account_code: '21100' })
+    const user = userEvent.setup()
+    wrap(<AccountingSettingsSection />)
+    await waitFor(() => screen.getByLabelText(/default reimbursement account/i))
+
+    const reimbursementSelect = screen.getByRole('combobox', { name: /default reimbursement account/i })
+    await user.click(reimbursementSelect)
+    await waitFor(() => screen.getByRole('option', { name: /21100/ }))
+    await user.click(screen.getByRole('option', { name: /21100/ }))
+
+    await waitFor(() => {
+      expect(accountsApi.updateAccountingSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ default_reimbursement_account_code: '21100' }),
       )
     })
   })

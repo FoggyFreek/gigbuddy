@@ -11,6 +11,7 @@ export const SETTINGS_TYPE_MAP = {
   primary_checking_account_code: 'asset',
   default_revenue_account_code: 'revenue',
   payable_account_code: 'liability',
+  default_reimbursement_account_code: 'liability',
   default_expense_account_code: 'expense',
   output_vat_account_code: 'liability',
   input_vat_account_code: 'asset',

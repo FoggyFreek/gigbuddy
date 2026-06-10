@@ -236,6 +236,7 @@ export const accountingSettingsShape = PropTypes.shape({
   receivable_account_code: PropTypes.string,
   default_revenue_account_code: PropTypes.string,
   payable_account_code: PropTypes.string,
+  default_reimbursement_account_code: PropTypes.string,
   default_expense_account_code: PropTypes.string,
   primary_checking_account_code: PropTypes.string,
   output_vat_account_code: PropTypes.string,

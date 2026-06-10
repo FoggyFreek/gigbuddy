@@ -33,6 +33,11 @@ import PurchaseLinesEditor from './purchases/PurchaseLinesEditor.jsx'
 import PurchaseTotalsPanel from './purchases/PurchaseTotalsPanel.jsx'
 import DateEntryField from './DateEntryField.jsx'
 
+function accountLabel(account) {
+  if (!account?.code) return 'Bank account'
+  return account.name ? `${account.code} - ${account.name}` : account.code
+}
+
 function PaymentRegistrationDialog({
   open,
   saving,
@@ -129,6 +134,57 @@ PaymentRegistrationDialog.propTypes = {
   onSubmit: PropTypes.func.isRequired,
 }
 
+function PaidPaymentSummary({ purchase, bandMembers, paymentAccount }) {
+  const isMemberPayment = purchase.payment_method === 'member'
+  const bandMember = isMemberPayment
+    ? bandMembers.find((m) => Number(m.id) === Number(purchase.paid_by_band_member_id))
+    : null
+  const payer = isMemberPayment
+    ? (bandMember?.name || (purchase.paid_by_band_member_id ? `Band member #${purchase.paid_by_band_member_id}` : 'Band member'))
+    : accountLabel(paymentAccount)
+  const label = isMemberPayment ? 'Paid by' : 'Paid from'
+
+  return (
+    <Box
+      sx={{
+        mt: 2,
+        p: 1.5,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.25,
+        bgcolor: 'action.hover',
+        borderRadius: 2,
+      }}
+    >
+      <VolunteerActivismOutlinedIcon color="success" fontSize="small" />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="caption" color="text.secondary">
+          {label}
+        </Typography>
+        <Typography variant="body2" fontWeight={600} noWrap title={payer}>
+          {payer}
+        </Typography>
+      </Box>
+    </Box>
+  )
+}
+
+PaidPaymentSummary.propTypes = {
+  purchase: PropTypes.shape({
+    payment_method: PropTypes.oneOf(['bank', 'member']),
+    paid_by_band_member_id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    paid_at: PropTypes.string,
+  }).isRequired,
+  bandMembers: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    name: PropTypes.string,
+  })).isRequired,
+  paymentAccount: PropTypes.shape({
+    code: PropTypes.string,
+    name: PropTypes.string,
+  }),
+}
+
 export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPurchaseUpdate, embedded = false }) {
   const s = usePurchaseFormState({ mode, draft, purchaseId, onClose, onPurchaseUpdate })
   const [editingNumber, setEditingNumber] = useState(false)
@@ -212,20 +268,29 @@ export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPu
           form={s.form}
           totals={s.totals}
           accounts={s.expenseAccounts}
+          lineErrors={s.lineErrors}
           readOnly={s.readOnly}
           patchLine={s.patchLine}
           addLine={s.addLine}
           removeLine={s.removeLine}
         />
-        <Button
-          fullWidth
-          startIcon={<VolunteerActivismOutlinedIcon />}
-          onClick={s.openPaymentDialog}
-          disabled={!canRegister || s.saving}
-          sx={{ mt: 2, py: 1.25, bgcolor: 'action.hover', borderRadius: 99, color: 'text.primary' }}
-        >
-          {s.isPaid ? 'Payment registered' : 'Register Payment'}
-        </Button>
+        {s.isPaid ? (
+          <PaidPaymentSummary
+            purchase={s.purchase}
+            bandMembers={s.bandMembers}
+            paymentAccount={s.paymentAccount}
+          />
+        ) : (
+          <Button
+            fullWidth
+            startIcon={<VolunteerActivismOutlinedIcon />}
+            onClick={s.openPaymentDialog}
+            disabled={!canRegister || s.saving}
+            sx={{ mt: 2, py: 1.25, bgcolor: 'action.hover', borderRadius: 99, color: 'text.primary' }}
+          >
+            Register Payment
+          </Button>
+        )}
       </Box>
 
       <Box>

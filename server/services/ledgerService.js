@@ -56,7 +56,6 @@ export async function postJournal(client, tenantId, {
   const normalized = (lines || [])
     .map((l) => ({
       account_code: l.account_code,
-      contact_id: l.contact_id ?? null,
       debit_cents: Math.round(l.debit_cents || 0),
       credit_cents: Math.round(l.credit_cents || 0),
       memo: l.memo ?? null,
@@ -87,9 +86,9 @@ export async function postJournal(client, tenantId, {
   for (const l of normalized) {
     await client.query(
       `INSERT INTO ledger_entries
-         (tenant_id, transaction_id, account_code, contact_id, debit_cents, credit_cents, memo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [tenantId, transactionId, l.account_code, l.contact_id, l.debit_cents, l.credit_cents, l.memo],
+         (tenant_id, transaction_id, account_code, debit_cents, credit_cents, memo)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [tenantId, transactionId, l.account_code, l.debit_cents, l.credit_cents, l.memo],
     )
   }
   return { posted: true, transactionId }
@@ -168,7 +167,6 @@ export async function postInvoiceVoid(client, tenantId, invoice) {
 export async function postBillAccrued(client, tenantId, purchase, purchaseLines) {
   const settings = await loadAccountingSettings(client, tenantId)
   const payable = requireCode(settings, 'payable_account_code')
-  const contactId = purchase.supplier_contact_id ?? null
   const memo = `Bill ${purchase.receipt_number} — ${purchase.supplier_name}`
 
   // Group net amounts by expense account; lines without a code fall back to the
@@ -182,12 +180,12 @@ export async function postBillAccrued(client, tenantId, purchase, purchaseLines)
 
   const lines = []
   for (const [code, net] of netByAccount) {
-    lines.push({ account_code: code, debit_cents: net, contact_id: contactId, memo })
+    lines.push({ account_code: code, debit_cents: net, memo })
   }
   if (purchase.tax_cents > 0) {
     lines.push({ account_code: requireCode(settings, 'input_vat_account_code'), debit_cents: purchase.tax_cents, memo })
   }
-  lines.push({ account_code: payable, credit_cents: purchase.total_cents, contact_id: contactId, memo })
+  lines.push({ account_code: payable, credit_cents: purchase.total_cents, memo })
 
   return postJournal(client, tenantId, {
     entryDate: toDateString(purchase.receipt_date),
@@ -196,13 +194,15 @@ export async function postBillAccrued(client, tenantId, purchase, purchaseLines)
   })
 }
 
-// Bill paid (bank or member reimbursement): DR payable (wipes liability),
-// CR checking (cash down). Identical journal for both methods.
+// Bill paid by bank: DR payable / CR checking. If a band member fronted the
+// cash, the band owes that member instead: DR payable / CR reimbursement
+// liability.
 export async function postBillPaid(client, tenantId, purchase) {
   const settings = await loadAccountingSettings(client, tenantId)
   const payable = requireCode(settings, 'payable_account_code')
-  const checking = requireCode(settings, 'primary_checking_account_code')
-  const contactId = purchase.supplier_contact_id ?? null
+  const creditAccount = purchase.payment_method === 'member'
+    ? requireCode(settings, 'default_reimbursement_account_code')
+    : requireCode(settings, 'primary_checking_account_code')
   const memo = `Bill ${purchase.receipt_number} — ${purchase.supplier_name}`
 
   return postJournal(client, tenantId, {
@@ -210,8 +210,8 @@ export async function postBillPaid(client, tenantId, purchase) {
     description: `Bill ${purchase.receipt_number} paid`,
     sourceType: 'purchase', sourceId: purchase.id, sourceEvent: 'paid',
     lines: [
-      { account_code: payable, debit_cents: purchase.total_cents, contact_id: contactId, memo },
-      { account_code: checking, credit_cents: purchase.total_cents, memo },
+      { account_code: payable, debit_cents: purchase.total_cents, memo },
+      { account_code: creditAccount, credit_cents: purchase.total_cents, memo },
     ],
   })
 }

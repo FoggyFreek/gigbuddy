@@ -17,6 +17,7 @@ export const DEFAULT_ACCOUNTS = [
   { code: '14000', name: 'Band Van or Vehicle',                           type: 'asset',              parent_code: '10000' },
   { code: '15000', name: 'Value Added Tax / VAT Receivable',              type: 'asset',              parent_code: '10000' },
   { code: '21000', name: 'Short-term Payables',                           type: 'liability',          parent_code: '20000' },
+  { code: '22000', name: 'Due to Band Members',                           type: 'liability',          parent_code: '20000' },
   { code: '24000', name: 'Sales Tax / VAT Payable',                       type: 'liability',          parent_code: '20000' },
   { code: '31000', name: 'Band Member Capital Contributions',             type: 'equity',             parent_code: '30000' },
   { code: '32000', name: 'Band Member Draws (Payouts)',                   type: 'equity',             parent_code: '30000' },
@@ -59,6 +60,7 @@ const DEFAULT_SETTINGS = {
   receivable_account_code: '11200',
   default_revenue_account_code: '41000',
   payable_account_code: '21100',
+  default_reimbursement_account_code: '22000',
   default_expense_account_code: '62100',
   primary_checking_account_code: '11000',
   output_vat_account_code: '24000',
@@ -81,10 +83,10 @@ export async function seedTenantAccounting(client, tenantId) {
     `INSERT INTO tenant_accounting_settings (
        tenant_id, currency,
        receivable_account_code, default_revenue_account_code,
-       payable_account_code, default_expense_account_code,
+       payable_account_code, default_reimbursement_account_code, default_expense_account_code,
        primary_checking_account_code,
        output_vat_account_code, input_vat_account_code
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      ON CONFLICT (tenant_id) DO NOTHING`,
     [
       tenantId,
@@ -92,6 +94,7 @@ export async function seedTenantAccounting(client, tenantId) {
       DEFAULT_SETTINGS.receivable_account_code,
       DEFAULT_SETTINGS.default_revenue_account_code,
       DEFAULT_SETTINGS.payable_account_code,
+      DEFAULT_SETTINGS.default_reimbursement_account_code,
       DEFAULT_SETTINGS.default_expense_account_code,
       DEFAULT_SETTINGS.primary_checking_account_code,
       DEFAULT_SETTINGS.output_vat_account_code,

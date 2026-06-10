@@ -24,6 +24,7 @@ vi.mock('../api/accounts.js', () => ({
     receivable_account_code: '11200',
     default_revenue_account_code: '41000',
     payable_account_code: '21100',
+    default_reimbursement_account_code: '22000',
     default_expense_account_code: '61200',
     primary_checking_account_code: '11000',
   }),

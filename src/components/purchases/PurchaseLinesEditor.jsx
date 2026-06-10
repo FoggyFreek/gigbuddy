@@ -24,7 +24,7 @@ const ACCOUNT_TYPE_LABELS = {
 // Group header shown above each block of options in the account combobox.
 const accountGroup = (account) => ACCOUNT_TYPE_LABELS[account.type] || 'Expenses'
 
-function PurchaseLineRow({ line, idx, accounts = [], vatCents, readOnly, canRemove, patchLine, removeLine }) {
+function PurchaseLineRow({ line, idx, accounts = [], vatCents, errors = {}, readOnly, canRemove, patchLine, removeLine }) {
   // A saved line can reference an account that is no longer active/expense-typed.
   // Surface it as a disabled option so the field doesn't silently drop it.
   const knownAccount = accounts.find((a) => a.code === line.account_code) || null
@@ -57,6 +57,8 @@ function PurchaseLineRow({ line, idx, accounts = [], vatCents, readOnly, canRemo
           value={line.description}
           onChange={(e) => patchLine(idx, { description: e.target.value })}
           disabled={readOnly}
+          error={Boolean(errors.description)}
+          helperText={errors.description}
         />
       </Box>
 
@@ -92,7 +94,13 @@ function PurchaseLineRow({ line, idx, accounts = [], vatCents, readOnly, canRemo
             </li>
           )}
           renderInput={(params) => (
-            <TextField {...params} label="Expense account" placeholder="Default expense account" />
+            <TextField
+              {...params}
+              label="Expense account"
+              placeholder="Default expense account"
+              error={Boolean(errors.account_code)}
+              helperText={errors.account_code}
+            />
           )}
         />
       </Box>
@@ -129,6 +137,8 @@ function PurchaseLineRow({ line, idx, accounts = [], vatCents, readOnly, canRemo
             cents={line.amount_incl_cents}
             onChange={(c) => patchLine(idx, { amount_incl_cents: c })}
             disabled={readOnly}
+            error={Boolean(errors.amount_incl_cents)}
+            helperText={errors.amount_incl_cents}
             sx={{ width: '100%' }}
           />
         </Box>
@@ -142,13 +152,14 @@ PurchaseLineRow.propTypes = {
   idx: PropTypes.number.isRequired,
   accounts: PropTypes.arrayOf(accountShape),
   vatCents: PropTypes.number,
+  errors: PropTypes.object,
   readOnly: PropTypes.bool,
   canRemove: PropTypes.bool,
   patchLine: PropTypes.func.isRequired,
   removeLine: PropTypes.func.isRequired,
 }
 
-export default function PurchaseLinesEditor({ form, totals, accounts = [], readOnly, patchLine, addLine, removeLine }) {
+export default function PurchaseLinesEditor({ form, totals, accounts = [], lineErrors = [], readOnly, patchLine, addLine, removeLine }) {
   return (
     <>
       {form.lines.map((line, idx) => (
@@ -158,6 +169,7 @@ export default function PurchaseLinesEditor({ form, totals, accounts = [], readO
           idx={idx}
           accounts={accounts}
           vatCents={totals.perLine[idx]?.vatCents || 0}
+          errors={lineErrors[idx] || {}}
           readOnly={readOnly}
           canRemove={form.lines.length > 1}
           patchLine={patchLine}
@@ -175,6 +187,7 @@ PurchaseLinesEditor.propTypes = {
   form: PropTypes.object.isRequired,
   totals: PropTypes.object.isRequired,
   accounts: PropTypes.arrayOf(accountShape),
+  lineErrors: PropTypes.arrayOf(PropTypes.object),
   readOnly: PropTypes.bool,
   patchLine: PropTypes.func.isRequired,
   addLine: PropTypes.func.isRequired,

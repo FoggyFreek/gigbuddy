@@ -20,6 +20,9 @@ vi.mock('../api/contacts.js', () => ({
 }))
 
 vi.mock('../api/accounts.js', () => ({
+  getAccountingSettings: vi.fn(async () => ({
+    default_expense_account_code: '62100',
+  })),
   listAccounts: vi.fn(async () => [
     { id: 1, code: '62100', name: 'Instruments & Equipment', type: 'expense', is_active: true },
   ]),

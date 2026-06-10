@@ -56,7 +56,7 @@ async function seedMemberUser() {
 }
 
 describe('accounts — seeding (JS path)', () => {
-  it('seeded tenants have all default accounts including 21100', async () => {
+  it('seeded tenants have all default accounts including reimbursement liability', async () => {
     const { rows } = await pool.query(
       'SELECT code FROM chart_of_accounts WHERE tenant_id = $1 ORDER BY code',
       [seed.tenantA.id],
@@ -66,6 +66,7 @@ describe('accounts — seeding (JS path)', () => {
       expect(codes).toContain(acc.code)
     }
     expect(codes).toContain('21100')
+    expect(codes).toContain('22000')
   })
 
   it('seeded tenants have the default settings row with expected defaults', async () => {
@@ -79,6 +80,7 @@ describe('accounts — seeding (JS path)', () => {
     expect(s.receivable_account_code).toBe('11200')
     expect(s.default_revenue_account_code).toBe('41000')
     expect(s.payable_account_code).toBe('21100')
+    expect(s.default_reimbursement_account_code).toBe('22000')
     expect(s.default_expense_account_code).toBe('62100')
     expect(s.primary_checking_account_code).toBe('11000')
     expect(s.output_vat_account_code).toBe('24000')
@@ -134,6 +136,7 @@ describe('accounts — migration backfill parity', () => {
     expect(s).toBeDefined()
     expect(s.currency).toBe('EUR')
     expect(s.primary_checking_account_code).toBe('11000')
+    expect(s.default_reimbursement_account_code).toBe('22000')
   })
 })
 
@@ -235,7 +238,7 @@ describe('accounts — CRUD', () => {
     const { rows: [acc] } = await pool.query(
       `SELECT id FROM chart_of_accounts
        WHERE tenant_id = $1
-         AND code NOT IN ('11000','11200','21100','41000','62100','24000','15000')
+         AND code NOT IN ('11000','11200','21100','22000','41000','62100','24000','15000')
          AND code NOT IN (
            SELECT code FROM chart_of_accounts c2
            WHERE c2.parent_code = chart_of_accounts.code AND c2.tenant_id = $1
@@ -415,6 +418,20 @@ describe('accounts/settings — CRUD', () => {
     expect(res.body.input_vat_account_code).toBe('15000')
   })
 
+  it('PATCH /api/accounts/settings updates the reimbursement account to a liability', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ default_reimbursement_account_code: '21100' })
+      .expect(200)
+    expect(res.body.default_reimbursement_account_code).toBe('21100')
+  })
+
+  it('PATCH /api/accounts/settings 400 when reimbursement account is not a liability', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ default_reimbursement_account_code: '11000' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/wrong_account_type/)
+  })
+
   it('PATCH /api/accounts/settings 400 when output VAT is not a liability', async () => {
     const res = await asUserA(request(app).patch('/api/accounts/settings'))
       .send({ output_vat_account_code: '15000' }) // 15000 is an asset
@@ -434,12 +451,23 @@ describe('accounts/settings — CRUD', () => {
     const res = await asUserA(request(app).get('/api/accounts/settings')).expect(200)
     expect(res.body.output_vat_account_code).toBe('24000')
     expect(res.body.input_vat_account_code).toBe('15000')
+    expect(res.body.default_reimbursement_account_code).toBe('22000')
   })
 
   it('PATCH deactivating a VAT-referenced account returns 409 account_in_use', async () => {
     // 24000 is the default output_vat_account_code
     const { rows: [acc] } = await pool.query(
       `SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '24000'`,
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(request(app).patch(`/api/accounts/${acc.id}`)).send({ is_active: false })
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatch(/account_in_use/)
+  })
+
+  it('PATCH deactivating the reimbursement-referenced account returns 409 account_in_use', async () => {
+    const { rows: [acc] } = await pool.query(
+      `SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '22000'`,
       [seed.tenantA.id],
     )
     const res = await asUserA(request(app).patch(`/api/accounts/${acc.id}`)).send({ is_active: false })
