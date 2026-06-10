@@ -240,6 +240,27 @@ export const accountingSettingsShape = PropTypes.shape({
   input_vat_account_code: PropTypes.string,
 })
 
+export const journalLineShape = PropTypes.shape({
+  id: idProp,
+  description: PropTypes.string,
+  account_code: PropTypes.string,
+  vat_rate: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  side: PropTypes.oneOf(['debit', 'credit', null]),
+  amount_cents: PropTypes.number,
+  balancing_account_code: PropTypes.string,
+  position: PropTypes.number,
+})
+
+export const journalShape = PropTypes.shape({
+  id: idProp,
+  entry_number: PropTypes.number,
+  entry_date: PropTypes.string,
+  description: PropTypes.string,
+  status: PropTypes.oneOf(['draft', 'approved']),
+  posted_transaction_id: idProp,
+  lines: PropTypes.arrayOf(journalLineShape),
+})
+
 export const periodShape = PropTypes.shape({
   mode: PropTypes.oneOf(['fiscal_year', 'month', 'quarter', 'all_time', 'custom']).isRequired,
   year: PropTypes.number,

@@ -33,6 +33,7 @@ import LocationOnOutlined from '@mui/icons-material/LocationOnOutlined'
 import ContactsOutlined from '@mui/icons-material/ContactsOutlined'
 import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined'
 import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined'
+import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined'
 import LibraryMusicOutlined from '@mui/icons-material/LibraryMusicOutlined'
 import QueueMusicOutlined from '@mui/icons-material/QueueMusicOutlined'
 import { useProfile } from '../contexts/profileContext.js'
@@ -91,6 +92,7 @@ const NAV_GROUPS = [
     children: [
       { to: '/invoices', label: 'Invoices', icon: ReceiptLongOutlined },
       { to: '/purchases', label: 'Purchases', icon: ShoppingCartOutlined },
+      { to: '/journal', label: 'Journal', icon: MenuBookOutlined },
     ],
   },
   {

@@ -215,3 +215,46 @@ export async function postBillPaid(client, tenantId, purchase) {
     ],
   })
 }
+
+// ---------- user journals (manual postings) ----------
+
+// Posts a balanced amount on `side` ('debit' | 'credit') to `accountCode`.
+function leg(accountCode, side, amountCents, memo) {
+  return side === 'debit'
+    ? { account_code: accountCode, debit_cents: amountCents, memo }
+    : { account_code: accountCode, credit_cents: amountCents, memo }
+}
+
+// Posts a user-entered journal to the ledger. Per line: the gross amount_cents is
+// split into net (→ account_code, on `side`) + VAT (→ input/output VAT account on
+// the same side); when a balancing account is set, the gross posts to it on the
+// opposite side, making a single row a complete balanced posting. Lines without a
+// balancing account rely on the user balancing across the whole journal, which
+// postJournal asserts. Callers must have validated postability first.
+export async function postUserJournal(client, tenantId, journal, journalLines) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const opposite = (side) => (side === 'debit' ? 'credit' : 'debit')
+  const lines = []
+
+  for (const jl of journalLines) {
+    const { netCents, vatCents } = computePurchaseLineTotals({
+      amount_incl_cents: jl.amount_cents, tax_rate: jl.vat_rate,
+    })
+    const memo = jl.description || journal.description || null
+
+    lines.push(leg(jl.account_code, jl.side, netCents, memo))
+    if (vatCents > 0) {
+      const vatField = jl.side === 'debit' ? 'input_vat_account_code' : 'output_vat_account_code'
+      lines.push(leg(requireCode(settings, vatField), jl.side, vatCents, memo))
+    }
+    if (jl.balancing_account_code) {
+      lines.push(leg(jl.balancing_account_code, opposite(jl.side), netCents + vatCents, memo))
+    }
+  }
+
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(journal.entry_date),
+    description: journal.description ?? null,
+    sourceType: 'journal', sourceId: journal.id, sourceEvent: 'posted', lines,
+  })
+}
