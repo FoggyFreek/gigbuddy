@@ -43,8 +43,9 @@ describe('GigsTable', () => {
     wrap(<GigsTable gigs={[]} onRowClick={() => {}} />)
     expect(screen.getByText('Date')).toBeInTheDocument()
     expect(screen.getByText('Event')).toBeInTheDocument()
-    expect(screen.getByText('Status')).toBeInTheDocument()
     expect(screen.getByText('Open tasks')).toBeInTheDocument()
+    // Status is shown as a header-less colour dot, not a labelled column.
+    expect(screen.queryByText('Status')).not.toBeInTheDocument()
   })
 
   it('shows empty state when no gigs', () => {
@@ -60,10 +61,10 @@ describe('GigsTable', () => {
     expect(screen.getByText('Amsterdam')).toBeInTheDocument()
   })
 
-  it('renders status chips', () => {
+  it('shows status as a colour dot without a text label on desktop rows', () => {
     wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
-    expect(screen.getByText('confirmed')).toBeInTheDocument()
-    expect(screen.getByText('option')).toBeInTheDocument()
+    expect(screen.queryByText('confirmed')).not.toBeInTheDocument()
+    expect(screen.queryByText('option')).not.toBeInTheDocument()
   })
 
   it('renders the open-task badge only when there are open tasks', () => {
@@ -85,11 +86,6 @@ describe('GigsTable', () => {
     wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
     // Summer Festival has no start/end time — time cell renders as "—–—"
     expect(screen.getByText('—–—')).toBeInTheDocument()
-  })
-
-  it('keeps a share button on each desktop row', () => {
-    wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
-    expect(screen.getAllByLabelText('share gig')).toHaveLength(GIGS.length)
   })
 
   it('renders the event banner thumbnail when banner_path is set', () => {
@@ -137,11 +133,6 @@ describe('GigsTable', () => {
     it('shows empty state when no gigs', () => {
       wrap(<GigsTable gigs={[]} onRowClick={() => {}} />)
       expect(screen.getByText(/No gigs yet/i)).toBeInTheDocument()
-    })
-
-    it('does not render a share button on compact cards', () => {
-      wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
-      expect(screen.queryByLabelText('share gig')).not.toBeInTheDocument()
     })
 
     it('does not render a banner background on compact cards when banner_path is set', () => {

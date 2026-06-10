@@ -28,6 +28,7 @@ import { formatShortDate } from '../utils/dateFormat.js'
 import { purchaseStatusColor } from '../utils/purchaseStatus.js'
 import { invoiceInPeriod } from '../utils/invoicePeriod.js'
 import { purchaseShape, idProp } from '../propTypes/shared.js'
+import StatusDot from '../components/StatusDot.jsx'
 
 const SUMMARY_CARDS = [
   { key: 'all', label: 'Purchases', chipColor: 'primary' },
@@ -252,23 +253,6 @@ export default function PurchasesPage() {
   )
 }
 
-function StatusDot({ status }) {
-  return (
-    <Box
-      component="span"
-      sx={{
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        bgcolor: `${purchaseStatusColor(status)}.main`,
-        display: 'inline-block',
-        flexShrink: 0,
-      }}
-    />
-  )
-}
-StatusDot.propTypes = { status: PropTypes.string }
-
 function PurchasesList({ purchases, selectedId, onRowClick }) {
   const isCompact = useCompactLayout()
 
@@ -295,7 +279,7 @@ function PurchasesList({ purchases, selectedId, onRowClick }) {
               boxShadow: p.id === selectedId ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
             }}
           >
-            <StatusDot status={p.status} />
+            <StatusDot color={purchaseStatusColor(p.status)} label={p.status} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5 }}>
                 <Typography variant="body2" fontWeight={600}>#{p.receipt_number}</Typography>
@@ -344,7 +328,7 @@ function PurchasesList({ purchases, selectedId, onRowClick }) {
                 sx={{ cursor: 'pointer' }}
                 onClick={() => onRowClick(p)}
               >
-                <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }}><StatusDot status={p.status} /></TableCell>
+                <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }}><StatusDot color={purchaseStatusColor(p.status)} label={p.status} /></TableCell>
                 <TableCell>{p.receipt_number}</TableCell>
                 <TableCell>{formatShortDate(p.receipt_date)}</TableCell>
                 <TableCell>{p.due_date ? formatShortDate(p.due_date) : ''}</TableCell>

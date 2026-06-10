@@ -26,7 +26,7 @@ import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.js'
 import MemberAvatarStack from './MemberAvatarStack.jsx'
-import GigShareMenu from './GigShareMenu.jsx'
+import StatusDot from './StatusDot.jsx'
 import PropTypes from 'prop-types'
 import { gigShape, idProp } from '../propTypes/shared.js'
 
@@ -39,7 +39,7 @@ const STATUS_COLORS = {
 const ALL_STATUSES = ['option', 'confirmed', 'announced']
 const STATUS_LABELS = { option: 'Option', confirmed: 'Confirmed', announced: 'Announced' }
 
-const COLUMN_COUNT = 8
+const COLUMN_COUNT = 7
 
 function formatDate(val) {
   if (!val) return '—'
@@ -101,15 +101,12 @@ function GigCard({ gig, active, onClick }) {
           <Typography variant="body2" color="text.secondary">
             ({formatTime(gig.start_time)} – {formatTime(gig.end_time)})
           </Typography>
-          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
-            {taskCount > 0 && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, color: 'text.secondary' }}>
-                <ChecklistIcon fontSize="small" />
-                <Typography variant="caption">{taskCount}</Typography>
-              </Box>
-            )}
-            
-          </Box>
+          {taskCount > 0 && (
+            <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.25, color: 'text.secondary' }}>
+              <ChecklistIcon fontSize="small" />
+              <Typography variant="caption">{taskCount}</Typography>
+            </Box>
+          )}
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
           {eventText.length ? eventText.join(' · ') : '—'}
@@ -138,6 +135,9 @@ function DesktopRow({ gig, active, onClick }) {
         boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
       }}
     >
+      <TableCell padding="none" align="center" sx={{ pl: 1, width: 24 }}>
+        <StatusDot color={STATUS_COLORS[gig.status] || 'default'} label={STATUS_LABELS[gig.status] || gig.status}/>
+      </TableCell>
       <TableCell>{formatDate(gig.event_date)}</TableCell>
       <TableCell>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -160,13 +160,6 @@ function DesktopRow({ gig, active, onClick }) {
       </TableCell>
       <TableCell>{formatTime(gig.start_time)}–{formatTime(gig.end_time)}</TableCell>
       <TableCell>
-        <Chip
-          label={gig.status}
-          color={STATUS_COLORS[gig.status] || 'default'}
-          size="small"
-        />
-      </TableCell>
-      <TableCell>
         <MemberAvatarStack members={gig.members_availability} />
       </TableCell>
       <TableCell align="center">
@@ -186,9 +179,6 @@ function DesktopRow({ gig, active, onClick }) {
           </Box>
         )}
       </TableCell>
-      <TableCell align="right" padding="none" sx={{ pr: 1 }}>
-        <GigShareMenu gig={gig} />
-      </TableCell>
     </TableRow>
   )
 }
@@ -197,14 +187,13 @@ function DesktopHead() {
   return (
     <TableHead>
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
+        <TableCell padding="none" sx={{ width: 24 }} />
         <TableCell>Date</TableCell>
         <TableCell>Event</TableCell>
         <TableCell>Venue / City</TableCell>
         <TableCell>Time</TableCell>
-        <TableCell>Status</TableCell>
         <TableCell>Band</TableCell>
         <TableCell align="center">Open tasks</TableCell>
-        <TableCell />
       </TableRow>
     </TableHead>
   )

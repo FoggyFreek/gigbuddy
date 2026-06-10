@@ -5,6 +5,7 @@ import {
   registerPurchasePayment,
   updatePurchase,
 } from '../../api/purchases.js'
+import { listAccounts } from '../../api/accounts.js'
 import { computePurchaseTotals } from '../../utils/purchaseTotals.js'
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.js'
 
@@ -19,6 +20,8 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [purchase, setPurchase] = useState(null)
+  const [expenseAccounts, setExpenseAccounts] = useState([])
+  const [accountsLoaded, setAccountsLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -33,6 +36,24 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [purchaseId])
+
+  // Expense accounts load independently so a slow/failed fetch never blocks the
+  // form (which is gated only on the purchase load above).
+  useEffect(() => {
+    let cancelled = false
+    listAccounts()
+      .then((accounts) => {
+        if (cancelled) return
+        setExpenseAccounts(
+          (accounts || []).filter(
+            (a) => a.is_active && (a.type === 'expense' || a.type === 'cost_of_goods_sold'),
+          ),
+        )
+      })
+      .catch(() => { /* best-effort; leave expenseAccounts empty */ })
+      .finally(() => { if (!cancelled) setAccountsLoaded(true) })
+    return () => { cancelled = true }
+  }, [])
 
   const finalized = Boolean(purchase?.finalized_at)
   const readOnly = finalized
@@ -67,6 +88,16 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     if (!form.supplier_name?.trim()) {
       setError('Supplier is required')
       return
+    }
+    // Once accounts are known, block a line that still references an account that
+    // is no longer an active expense account — the backend would reject it.
+    if (accountsLoaded) {
+      const validCodes = new Set(expenseAccounts.map((a) => a.code))
+      const badIdx = form.lines.findIndex((l) => l.account_code && !validCodes.has(l.account_code))
+      if (badIdx >= 0) {
+        setError(`Replace the inactive expense account on line ${badIdx + 1}`)
+        return
+      }
     }
     try {
       setSaving(true)
@@ -119,6 +150,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     readOnly,
     isPaid,
     totals,
+    expenseAccounts,
     deleteDialogOpen,
     setDeleteDialogOpen,
     patchForm,

@@ -10,12 +10,12 @@ export const DEFAULT_ACCOUNTS = [
   { code: '40000', name: 'Revenue',           type: 'revenue',            parent_code: null },
   { code: '50000', name: 'Cost of Goods Sold',type: 'cost_of_goods_sold', parent_code: null },                                                                                                                                               
   { code: '60000', name: 'Operating Expenses',type: 'expense',            parent_code: null },  
-  
   // ---- level 1 ----
   { code: '11000', name: 'Primary Bank Account',                          type: 'asset',              parent_code: '10000' },
   { code: '12000', name: 'Inventory',                                     type: 'asset',              parent_code: '10000' },
   { code: '13000', name: 'Owned Gear',                                    type: 'asset',              parent_code: '10000' },
   { code: '14000', name: 'Band Van or Vehicle',                           type: 'asset',              parent_code: '10000' },
+  { code: '15000', name: 'Value Added Tax / VAT Receivable',              type: 'asset',              parent_code: '10000' },
   { code: '21000', name: 'Short-term Payables',                           type: 'liability',          parent_code: '20000' },
   { code: '24000', name: 'Sales Tax / VAT Payable',                       type: 'liability',          parent_code: '20000' },
   { code: '31000', name: 'Band Member Capital Contributions',             type: 'equity',             parent_code: '30000' },
@@ -61,6 +61,8 @@ const DEFAULT_SETTINGS = {
   payable_account_code: '21100',
   default_expense_account_code: '62100',
   primary_checking_account_code: '11000',
+  output_vat_account_code: '24000',
+  input_vat_account_code: '15000',
 }
 
 // Seeds the chart of accounts + settings row for a single tenant.
@@ -80,8 +82,9 @@ export async function seedTenantAccounting(client, tenantId) {
        tenant_id, currency,
        receivable_account_code, default_revenue_account_code,
        payable_account_code, default_expense_account_code,
-       primary_checking_account_code
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+       primary_checking_account_code,
+       output_vat_account_code, input_vat_account_code
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (tenant_id) DO NOTHING`,
     [
       tenantId,
@@ -91,6 +94,8 @@ export async function seedTenantAccounting(client, tenantId) {
       DEFAULT_SETTINGS.payable_account_code,
       DEFAULT_SETTINGS.default_expense_account_code,
       DEFAULT_SETTINGS.primary_checking_account_code,
+      DEFAULT_SETTINGS.output_vat_account_code,
+      DEFAULT_SETTINGS.input_vat_account_code,
     ],
   )
 }

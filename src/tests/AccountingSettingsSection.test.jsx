@@ -27,6 +27,8 @@ const ACCOUNTS = [
   { id: 4,  code: '21100', name: 'Accounts Payable',     type: 'liability', is_active: true,  tenant_id: 1 },
   { id: 5,  code: '41000', name: 'Performance Fees',     type: 'revenue',   is_active: true,  tenant_id: 1 },
   { id: 6,  code: '61200', name: 'Equipment & Instr.',   type: 'expense',   is_active: true,  tenant_id: 1 },
+  { id: 7,  code: '24000', name: 'VAT Payable',          type: 'liability', is_active: true,  tenant_id: 1 },
+  { id: 8,  code: '15000', name: 'VAT Receivable',       type: 'asset',     is_active: true,  tenant_id: 1 },
 ]
 
 const SETTINGS = {
@@ -37,6 +39,8 @@ const SETTINGS = {
   payable_account_code: '21100',
   default_expense_account_code: '61200',
   primary_checking_account_code: '11000',
+  output_vat_account_code: '24000',
+  input_vat_account_code: '15000',
 }
 
 beforeEach(() => {
@@ -67,6 +71,35 @@ describe('AccountingSettingsSection — rendering', () => {
     await waitFor(() => {
       const eur = screen.getAllByText('EUR')
       expect(eur.length).toBeGreaterThan(0)
+    })
+  })
+
+  it('renders the output and input VAT account selects', async () => {
+    wrap(<AccountingSettingsSection />)
+    await waitFor(() => {
+      expect(screen.getByLabelText(/output vat/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/input vat/i)).toBeInTheDocument()
+    })
+  })
+})
+
+describe('AccountingSettingsSection — VAT accounts', () => {
+  it('calls updateAccountingSettings when the output VAT account changes', async () => {
+    accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, output_vat_account_code: '21100' })
+    const user = userEvent.setup()
+    wrap(<AccountingSettingsSection />)
+    await waitFor(() => screen.getByLabelText(/output vat/i))
+
+    const vatSelect = screen.getByRole('combobox', { name: /output vat/i })
+    await user.click(vatSelect)
+    // Output VAT filters to active liability accounts (21100, 24000)
+    await waitFor(() => screen.getByRole('option', { name: /21100/ }))
+    await user.click(screen.getByRole('option', { name: /21100/ }))
+
+    await waitFor(() => {
+      expect(accountsApi.updateAccountingSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ output_vat_account_code: '21100' }),
+      )
     })
   })
 })

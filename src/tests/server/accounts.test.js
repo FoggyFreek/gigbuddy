@@ -79,8 +79,10 @@ describe('accounts — seeding (JS path)', () => {
     expect(s.receivable_account_code).toBe('11200')
     expect(s.default_revenue_account_code).toBe('41000')
     expect(s.payable_account_code).toBe('21100')
-    expect(s.default_expense_account_code).toBe('61200')
+    expect(s.default_expense_account_code).toBe('62100')
     expect(s.primary_checking_account_code).toBe('11000')
+    expect(s.output_vat_account_code).toBe('24000')
+    expect(s.input_vat_account_code).toBe('15000')
   })
 
   it('each tenant has its own independent copy of default accounts', async () => {
@@ -233,7 +235,7 @@ describe('accounts — CRUD', () => {
     const { rows: [acc] } = await pool.query(
       `SELECT id FROM chart_of_accounts
        WHERE tenant_id = $1
-         AND code NOT IN ('11000','11200','21100','41000','61200')
+         AND code NOT IN ('11000','11200','21100','41000','62100','24000','15000')
          AND code NOT IN (
            SELECT code FROM chart_of_accounts c2
            WHERE c2.parent_code = chart_of_accounts.code AND c2.tenant_id = $1
@@ -250,7 +252,7 @@ describe('accounts — CRUD', () => {
   it('PATCH reactivates an account', async () => {
     const { rows: [acc] } = await pool.query(
       `SELECT id FROM chart_of_accounts
-       WHERE tenant_id = $1 AND code = '65000' LIMIT 1`,
+       WHERE tenant_id = $1 AND code = '64200' LIMIT 1`,
       [seed.tenantA.id],
     )
     await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
@@ -372,14 +374,15 @@ describe('accounts/settings — CRUD', () => {
   })
 
   it('PATCH /api/accounts/settings 400 on inactive code', async () => {
+    // 13000 (Owned Gear) is an asset leaf not referenced by settings.
     const { rows: [acc] } = await pool.query(
-      `SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '11500'`,
+      `SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '13000'`,
       [seed.tenantA.id],
     )
-    // deactivate 11500 first — it isn't referenced by settings
+    // deactivate it first, then it can't be used as the receivable account
     await asUserA(request(app).patch(`/api/accounts/${acc.id}`)).send({ is_active: false }).expect(200)
     const res = await asUserA(request(app).patch('/api/accounts/settings'))
-      .send({ receivable_account_code: '11500' })
+      .send({ receivable_account_code: '13000' })
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/unknown_account_code/)
   })
@@ -402,6 +405,46 @@ describe('accounts/settings — CRUD', () => {
       .send({ receivable_account_code: null })
       .expect(200)
     expect(res.body.receivable_account_code).toBeNull()
+  })
+
+  it('PATCH /api/accounts/settings updates VAT accounts to valid types', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ output_vat_account_code: '24000', input_vat_account_code: '15000' })
+      .expect(200)
+    expect(res.body.output_vat_account_code).toBe('24000')
+    expect(res.body.input_vat_account_code).toBe('15000')
+  })
+
+  it('PATCH /api/accounts/settings 400 when output VAT is not a liability', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ output_vat_account_code: '15000' }) // 15000 is an asset
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/wrong_account_type/)
+  })
+
+  it('PATCH /api/accounts/settings 400 when input VAT is not an asset', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ input_vat_account_code: '24000' }) // 24000 is a liability
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/wrong_account_type/)
+  })
+
+  it('GET /api/accounts/settings backstop includes VAT defaults when row is missing', async () => {
+    await pool.query('DELETE FROM tenant_accounting_settings WHERE tenant_id = $1', [seed.tenantA.id])
+    const res = await asUserA(request(app).get('/api/accounts/settings')).expect(200)
+    expect(res.body.output_vat_account_code).toBe('24000')
+    expect(res.body.input_vat_account_code).toBe('15000')
+  })
+
+  it('PATCH deactivating a VAT-referenced account returns 409 account_in_use', async () => {
+    // 24000 is the default output_vat_account_code
+    const { rows: [acc] } = await pool.query(
+      `SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '24000'`,
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(request(app).patch(`/api/accounts/${acc.id}`)).send({ is_active: false })
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatch(/account_in_use/)
   })
 
   it('PATCH /api/accounts/settings returns 403 for plain member', async () => {

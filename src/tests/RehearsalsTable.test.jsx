@@ -47,8 +47,9 @@ describe('RehearsalsTable', () => {
     wrap(<RehearsalsTable rehearsals={[]} onRowClick={() => {}} />)
     expect(screen.getByText('Date')).toBeInTheDocument()
     expect(screen.getByText('Location')).toBeInTheDocument()
-    expect(screen.getByText('Status')).toBeInTheDocument()
     expect(screen.getByText('Votes')).toBeInTheDocument()
+    // Status is shown as a header-less colour dot, not a labelled column.
+    expect(screen.queryByText('Status')).not.toBeInTheDocument()
   })
 
   it('shows empty state when no rehearsals', () => {
@@ -56,11 +57,11 @@ describe('RehearsalsTable', () => {
     expect(screen.getByText(/No rehearsals yet/i)).toBeInTheDocument()
   })
 
-  it('renders rehearsal rows with status chips', () => {
+  it('renders rehearsal rows and shows status as a colour dot without a text label', () => {
     wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={() => {}} />)
     expect(screen.getByText('Studio A')).toBeInTheDocument()
-    expect(screen.getByText('planned')).toBeInTheDocument()
-    expect(screen.getByText('option')).toBeInTheDocument()
+    expect(screen.queryByText('planned')).not.toBeInTheDocument()
+    expect(screen.queryByText('option')).not.toBeInTheDocument()
   })
 
   it('renders a visual progress bar for each rehearsal with participants', () => {

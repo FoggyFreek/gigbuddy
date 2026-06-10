@@ -18,6 +18,12 @@ vi.mock('../api/contacts.js', () => ({
   createContact: vi.fn(),
 }))
 
+vi.mock('../api/accounts.js', () => ({
+  listAccounts: vi.fn(async () => [
+    { id: 1, code: '62100', name: 'Instruments & Equipment', type: 'expense', is_active: true },
+  ]),
+}))
+
 import * as purchasesApi from '../api/purchases.js'
 import PurchaseDetailPage from '../pages/PurchaseDetailPage.jsx'
 import PurchasesPage from '../pages/PurchasesPage.jsx'

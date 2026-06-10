@@ -28,6 +28,7 @@ import { formatShortDate } from '../utils/dateFormat.js'
 import { invoiceStatusColor } from '../utils/invoiceStatus.js'
 import { invoiceInPeriod } from '../utils/invoicePeriod.js'
 import { invoiceShape, idProp } from '../propTypes/shared.js'
+import StatusDot from '../components/StatusDot.jsx'
 
 const SUMMARY_CARDS = [
   { key: 'all', label: 'All invoices', chipColor: 'primary' },
@@ -267,23 +268,6 @@ export default function InvoicesPage() {
   )
 }
 
-function StatusDot({ status }) {
-  return (
-    <Box
-      component="span"
-      sx={{
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        bgcolor: (t) => t.palette[invoiceStatusColor(status)]?.main ?? t.palette.action.disabled,
-        display: 'inline-block',
-        flexShrink: 0,
-      }}
-    />
-  )
-}
-StatusDot.propTypes = { status: PropTypes.string }
-
 function InvoicesList({ invoices, selectedId, onRowClick }) {
   const isCompact = useCompactLayout()
 
@@ -314,7 +298,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
                 : 'none',
             }}
           >
-            <StatusDot status={inv.status} />
+            <StatusDot color={invoiceStatusColor(inv.status)} label={inv.status} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5 }}>
                 <Typography variant="body2" fontWeight={600}>
@@ -369,7 +353,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
                 onClick={() => onRowClick(inv)}
               >
                 <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }}>
-                  <StatusDot status={inv.status} />
+                  <StatusDot color={invoiceStatusColor(inv.status)} label={inv.status} />
                 </TableCell>
                 <TableCell>#{inv.invoice_number}</TableCell>
                 <TableCell>{formatShortDate(inv.issue_date)}</TableCell>

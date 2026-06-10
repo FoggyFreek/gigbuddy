@@ -1,21 +1,31 @@
+import { useEffect } from 'react'
 import { Outlet, useNavigate, useOutlet } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
+import { useSetWideContent } from '../contexts/contentWidthContext.js'
 
 export default function SplitView({ basePath, children, outletContext }) {
   const theme = useTheme()
   const isDesktop = useMediaQuery(theme.breakpoints.up('sm'))
   const navigate = useNavigate()
   const hasDetail = useOutlet() != null
+  const setWideContent = useSetWideContent()
 
   const normalizedBase = basePath.replace(/\/$/, '')
   const handleClose = () => navigate(normalizedBase)
 
   const splitDesktop = hasDetail && isDesktop
   const hideList = hasDetail && !isDesktop
+
+  // While the master-detail layout is active, let the page use full width;
+  // restore the capped/centered default when it closes or this view unmounts.
+  useEffect(() => {
+    setWideContent(splitDesktop)
+    return () => setWideContent(false)
+  }, [splitDesktop, setWideContent])
 
   return (
     <Box

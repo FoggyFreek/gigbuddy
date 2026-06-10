@@ -120,6 +120,7 @@ export const invoiceShape = PropTypes.shape({
 export const purchaseLineShape = PropTypes.shape({
   id: idProp,
   description: PropTypes.string,
+  account_code: PropTypes.string,
   expense_category: PropTypes.string,
   tax_rate: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   amount_incl_cents: PropTypes.number,
@@ -235,6 +236,8 @@ export const accountingSettingsShape = PropTypes.shape({
   payable_account_code: PropTypes.string,
   default_expense_account_code: PropTypes.string,
   primary_checking_account_code: PropTypes.string,
+  output_vat_account_code: PropTypes.string,
+  input_vat_account_code: PropTypes.string,
 })
 
 export const periodShape = PropTypes.shape({

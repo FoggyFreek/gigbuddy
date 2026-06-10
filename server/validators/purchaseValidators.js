@@ -44,9 +44,11 @@ export function normalizeLines(lines) {
   if (!Array.isArray(lines)) return []
   return lines.map((raw, idx) => {
     const category = String(raw.expense_category ?? '').trim()
+    const code = raw.account_code != null ? String(raw.account_code).trim() : ''
     return {
       description: String(raw.description ?? '').trim(),
       expense_category: category || null,
+      account_code: code || null,
       tax_rate: snapTaxRate(raw.tax_rate),
       amount_incl_cents: Number.isInteger(Number(raw.amount_incl_cents)) ? Number(raw.amount_incl_cents) : 0,
       position: Number.isInteger(Number(raw.position)) ? Number(raw.position) : idx,

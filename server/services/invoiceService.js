@@ -27,6 +27,12 @@ import {
   STATUS_VALUES,
   normalizeLines,
 } from '../validators/invoiceValidators.js'
+import {
+  AccountingNotConfiguredError,
+  postInvoiceSent,
+  postInvoicePaid,
+  postInvoiceVoid,
+} from './ledgerService.js'
 
 // ---------- totals ----------
 
@@ -214,14 +220,27 @@ async function runPatchTransaction({ pool, tenantId, invoiceId, body, existing, 
 
     const { sql, values } = builder.build(invoiceId, tenantId)
     await client.query(sql, values)
+
+    if (body.status !== undefined) {
+      await postInvoiceTransition(client, tenantId, invoiceId, existing.status, body.status)
+    }
+
     await client.query('COMMIT')
     return { contentChanged }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
+    if (err instanceof AccountingNotConfiguredError) {
+      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
+    }
     throw err
   } finally {
     client.release()
   }
+}
+
+const CANNOT_VOID_PAID_ERROR = {
+  status: 409,
+  body: { error: 'Cannot void a paid invoice', code: 'cannot_void_paid_invoice' },
 }
 
 function validatePatchRequest(body, existing) {
@@ -232,7 +251,29 @@ function validatePatchRequest(body, existing) {
   if (body.status !== undefined && !STATUS_VALUES.has(body.status)) {
     return { error: { status: 400, body: { error: 'Invalid status' } } }
   }
+  // Void is allowed only from draft or sent. A paid invoice must be corrected via
+  // a credit note (out of scope), never voided — that would orphan the cash leg.
+  if (body.status === 'void' && existing.status === 'paid') {
+    return { error: CANNOT_VOID_PAID_ERROR }
+  }
   return { requestedContentFields }
+}
+
+// Posts the ledger journal for a status transition, inside the patch transaction.
+// Idempotent per (invoice, event), so re-running a transition is a no-op. A
+// direct draft->paid jump still records the revenue leg first (postInvoiceSent).
+async function postInvoiceTransition(client, tenantId, invoiceId, prevStatus, newStatus) {
+  if (!['sent', 'paid', 'void'].includes(newStatus) || newStatus === prevStatus) return
+  const fresh = await fetchInvoice(client, tenantId, invoiceId)
+  if (!fresh) return
+  if (newStatus === 'sent') {
+    await postInvoiceSent(client, tenantId, fresh)
+  } else if (newStatus === 'paid') {
+    await postInvoiceSent(client, tenantId, fresh)
+    await postInvoicePaid(client, tenantId, fresh)
+  } else if (newStatus === 'void' && prevStatus === 'sent') {
+    await postInvoiceVoid(client, tenantId, fresh)
+  }
 }
 
 // Validates and applies a PATCH. Returns { error } or { contentChanged }.
@@ -301,10 +342,16 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId) {
       RETURNING *`,
       [invoiceId, tenantId],
     )
+    // The invoice is now sent (revenue recognised). Idempotent if already posted
+    // by a prior PATCH-to-sent.
+    await postInvoiceSent(client, tenantId, finalized.rows[0])
     await client.query('COMMIT')
     return { invoice: finalized.rows[0] }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
+    if (err instanceof AccountingNotConfiguredError) {
+      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
+    }
     throw err
   } finally {
     client.release()
@@ -404,18 +451,36 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice) {
     }
   }
 
-  const { rows } = await db.query(
-    `UPDATE invoices
-        SET mollie_payment_status = $1,
-            mollie_payment_id     = $2,
-            mollie_paid_at        = $3,
-            status                = $4,
-            updated_at            = NOW()
-      WHERE id = $5 AND tenant_id = $6
-      RETURNING *`,
-    [mollieStatus, paymentId, paidAt, invoiceStatus, invoice.id, invoice.tenant_id],
-  )
-  return rows[0]
+  const becamePaid = invoiceStatus === 'paid' && invoice.status !== 'paid'
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows } = await client.query(
+      `UPDATE invoices
+          SET mollie_payment_status = $1,
+              mollie_payment_id     = $2,
+              mollie_paid_at        = $3,
+              status                = $4,
+              updated_at            = NOW()
+        WHERE id = $5 AND tenant_id = $6
+        RETURNING *`,
+      [mollieStatus, paymentId, paidAt, invoiceStatus, invoice.id, invoice.tenant_id],
+    )
+    const updated = rows[0]
+    if (becamePaid && updated) {
+      // Ensure the revenue leg exists, then record the cash receipt. Both are
+      // idempotent per (invoice, event).
+      await postInvoiceSent(client, invoice.tenant_id, updated)
+      await postInvoicePaid(client, invoice.tenant_id, updated)
+    }
+    await client.query('COMMIT')
+    return updated
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
 }
 
 // Fire-and-forget push to all approved members of the invoice's tenant that an

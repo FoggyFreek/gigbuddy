@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import AppBar from '@mui/material/AppBar'
 import Avatar from '@mui/material/Avatar'
@@ -40,6 +40,7 @@ import { useAuth } from '../contexts/authContext.js'
 import { usePushNotifications } from '../hooks/usePushNotifications.js'
 import { useTenantQuerySync } from '../hooks/useTenantQuerySync.js'
 import { useThemeMode } from '../contexts/themeModeContext.js'
+import { ContentWidthContext } from '../contexts/contentWidthContext.js'
 import NavGroup from './appShell/NavGroup.jsx'
 import { isItemSelected } from './appShell/navSelection.js'
 import NotificationToggle from './appShell/NotificationToggle.jsx'
@@ -48,6 +49,8 @@ import UserMenu from './appShell/UserMenu.jsx'
 
 const DRAWER_WIDTH = 220
 const COLLAPSED_DRAWER_WIDTH = 72
+// Caps page content width on large screens so it stays centered instead of stretching edge-to-edge.
+const CONTENT_MAX_WIDTH = 1400
 
 const NAV_GROUPS = [
   {
@@ -113,6 +116,10 @@ export default function AppShell() {
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState(null)
   const [settingsMenuAnchor, setSettingsMenuAnchor] = useState(null)
+  // When a SplitView opens its master-detail layout it asks for full width;
+  // otherwise content stays capped and centered (see CONTENT_MAX_WIDTH).
+  const [wideContent, setWideContent] = useState(false)
+  const requestWideContent = useCallback((wide) => setWideContent(wide), [])
 
   useTenantQuerySync()
 
@@ -332,7 +339,11 @@ export default function AppShell() {
         key={activeTenantId ?? 'no-tenant'}
       >
         <Toolbar />
-        <Outlet />
+        <Box sx={{ maxWidth: wideContent ? 'none' : CONTENT_MAX_WIDTH, mx: 'auto' }}>
+          <ContentWidthContext.Provider value={requestWideContent}>
+            <Outlet />
+          </ContentWidthContext.Provider>
+        </Box>
       </Box>
     </Box>
   )

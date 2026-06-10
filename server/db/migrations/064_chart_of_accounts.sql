@@ -57,6 +57,7 @@ CROSS JOIN (VALUES
   ('12000', 'Inventory',                            'asset',              '10000'),
   ('13000', 'Owned Gear',                           'asset',              '10000'),
   ('14000', 'Band Van or Vehicle',                  'asset',              '10000'),
+  ('15000', 'Value Added Tax / VAT Receivable',     'asset',              '10000'),
   ('21000', 'Short-term Payables',                  'liability',          '20000'),
   ('24000', 'Sales Tax / VAT Payable',              'liability',          '20000'),
   ('31000', 'Band Member Capital Contributions',    'equity',             '30000'),

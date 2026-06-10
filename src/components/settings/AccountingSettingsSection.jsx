@@ -21,6 +21,8 @@ const FIELD_TYPE = {
   default_revenue_account_code: 'revenue',
   payable_account_code: 'liability',
   default_expense_account_code: 'expense',
+  output_vat_account_code: 'liability',
+  input_vat_account_code: 'asset',
 }
 
 const FIELD_LABELS = {
@@ -29,6 +31,8 @@ const FIELD_LABELS = {
   default_revenue_account_code: 'Default revenue account',
   payable_account_code: 'Accounts payable',
   default_expense_account_code: 'Default expense account',
+  output_vat_account_code: 'Output VAT account (sales)',
+  input_vat_account_code: 'Input VAT account (purchases)',
 }
 
 function AccountSelect({ field, label, value, accounts, onChange, saving }) {

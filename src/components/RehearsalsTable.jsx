@@ -17,6 +17,7 @@ import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import VoteToggle from './VoteToggle.jsx'
+import StatusDot from './StatusDot.jsx'
 import PropTypes from 'prop-types'
 import { rehearsalShape, participantShape, idProp } from '../propTypes/shared.js'
 
@@ -24,6 +25,8 @@ const STATUS_COLORS = {
   option: 'default',
   planned: 'primary',
 }
+
+const STATUS_LABELS = { option: 'Option', planned: 'Planned' }
 
 const COLUMN_COUNT = 6
 
@@ -146,16 +149,12 @@ function DesktopRow({ rehearsal, active, onClick, onShare }) {
         boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
       }}
     >
+      <TableCell padding="none" align="center" sx={{ pl: 1, width: 24 }}>
+        <StatusDot color={STATUS_COLORS[rehearsal.status] || 'default'} label={STATUS_LABELS[rehearsal.status] || rehearsal.status}/>
+      </TableCell>
       <TableCell>{formatDate(rehearsal.proposed_date)}</TableCell>
       <TableCell>{formatTime(rehearsal.start_time)} – {formatTime(rehearsal.end_time)}</TableCell>
       <TableCell>{rehearsal.location || '—'}</TableCell>
-      <TableCell>
-        <Chip
-          label={rehearsal.status}
-          color={STATUS_COLORS[rehearsal.status] || 'default'}
-          size="small"
-        />
-      </TableCell>
       <TableCell sx={{ minWidth: 180 }}>
         <ParticipantProgress participants={rehearsal.participants} />
       </TableCell>
@@ -178,10 +177,10 @@ function DesktopHead() {
   return (
     <TableHead>
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
+        <TableCell padding="none" sx={{ width: 24 }} />
         <TableCell>Date</TableCell>
         <TableCell>Time</TableCell>
         <TableCell>Location</TableCell>
-        <TableCell>Status</TableCell>
         <TableCell>Votes</TableCell>
         <TableCell />
       </TableRow>

@@ -219,6 +219,33 @@ describe('purchases — totals', () => {
   })
 })
 
+describe('purchases — line account_code', () => {
+  it('round-trips a per-line account_code', async () => {
+    const created = await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ lines: [{ description: 'Gas', account_code: '61200', tax_rate: 21, amount_incl_cents: 12100 }] }))
+      .expect(201)
+    expect(created.body.lines[0].account_code).toBe('61200')
+    const got = await asUserA(request(app).get(`/api/purchases/${created.body.id}`)).expect(200)
+    expect(got.body.lines[0].account_code).toBe('61200')
+  })
+
+  it('rejects a non-expense account_code with 400', async () => {
+    const res = await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ lines: [{ description: 'x', account_code: '11000', tax_rate: 21, amount_incl_cents: 1000 }] }))
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('invalid_account_code')
+  })
+
+  it('records who fronted a member-paid bill', async () => {
+    const r = await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)
+    await approve(r.body.id, asUserA)
+    const res = await asUserA(request(app).post(`/api/purchases/${r.body.id}/payment`))
+      .send({ method: 'member', paid_by_user_id: seed.userA.id, paid_on: '2026-06-01' }).expect(200)
+    expect(res.body.payment_method).toBe('member')
+    expect(res.body.paid_by_user_id).toBe(seed.userA.id)
+  })
+})
+
 describe('contacts — duplicate', () => {
   it('returns 409 contact_exists on a duplicate name+category', async () => {
     await asUserA(request(app).post('/api/contacts')).send({ name: 'Studio X', category: 'supplier' }).expect(201)

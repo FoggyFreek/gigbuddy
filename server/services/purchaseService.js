@@ -12,6 +12,8 @@ import {
   insertPurchaseLines,
   replacePurchaseLines,
   validateContactIdForTenant,
+  fetchValidExpenseCodes,
+  validateApprovedMember,
 } from '../repositories/purchaseRepository.js'
 import {
   CONTENT_FIELDS_SET,
@@ -21,6 +23,25 @@ import {
   normalizeLines,
   parseReceiptNumber,
 } from '../validators/purchaseValidators.js'
+import {
+  AccountingNotConfiguredError,
+  postBillAccrued,
+  postBillPaid,
+} from './ledgerService.js'
+
+// Validates any explicit per-line account codes against the tenant chart: each
+// must exist, be active, and be an expense/COGS account. Lines without a code
+// fall back to the tenant default expense account at posting time.
+async function validateLineAccounts(executor, tenantId, lines) {
+  const codes = lines.map((l) => l.account_code).filter(Boolean)
+  if (!codes.length) return null
+  const valid = await fetchValidExpenseCodes(executor, tenantId, codes)
+  const invalid = codes.find((c) => !valid.has(c))
+  if (invalid) {
+    return { error: { status: 400, body: { error: 'Invalid account_code', code: 'invalid_account_code', account_code: invalid } } }
+  }
+  return null
+}
 
 const FINALIZED_ERROR = { status: 409, body: { error: 'Purchase is finalized', code: 'purchase_finalized' } }
 const RECEIPT_TAKEN_ERROR = { status: 409, body: { error: 'Receipt number already in use', code: 'receipt_number_taken' } }
@@ -50,6 +71,9 @@ export async function createPurchase(pool, tenantId, body) {
 
   const lines = normalizeLines(body.lines)
   if (!lines.length) return { error: { status: 400, body: { error: 'At least one line is required' } } }
+
+  const accountErr = await validateLineAccounts(pool, tenantId, lines)
+  if (accountErr) return accountErr
 
   const receiptDate = body.receipt_date || new Date().toISOString().slice(0, 10)
   const dueDate = body.due_date || null
@@ -92,9 +116,27 @@ export async function createPurchase(pool, tenantId, body) {
     )
     purchaseId = rows[0].id
     await insertPurchaseLines(client, purchaseId, tenantId, lines)
+
+    // Approving a bill accrues the expense + payable. Draft bills post nothing.
+    if (status === 'approved') {
+      const purchaseRow = {
+        id: purchaseId,
+        receipt_number: receiptNumber,
+        supplier_name: supplierName,
+        supplier_contact_id: supplierContactId,
+        receipt_date: receiptDate,
+        tax_cents: totals.taxCents,
+        total_cents: totals.totalCents,
+      }
+      await postBillAccrued(client, tenantId, purchaseRow, lines)
+    }
+
     await client.query('COMMIT')
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
+    if (err instanceof AccountingNotConfiguredError) {
+      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
+    }
     throw err
   } finally {
     client.release()
@@ -149,6 +191,11 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
     return { error: { status: 400, body: { error: 'Invalid receipt_number' } } }
   }
 
+  if ('lines' in body) {
+    const accountErr = await validateLineAccounts(pool, tenantId, normalizeLines(body.lines))
+    if (accountErr) return accountErr
+  }
+
   const contentChanged = Object.keys(body).some((k) => CONTENT_FIELDS_SET.has(k))
 
   const client = await pool.connect()
@@ -193,11 +240,22 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
     const sql = `UPDATE purchases SET ${setClauses.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`
     values.push(id, tenantId)
     await client.query(sql, values)
+
+    // Transitioning a draft to approved accrues the expense + payable.
+    if (body.status === 'approved' && existing.status !== 'approved') {
+      const purchaseRow = await fetchPurchase(client, tenantId, id)
+      const currentLines = await fetchPurchaseLines(client, id, tenantId)
+      await postBillAccrued(client, tenantId, purchaseRow, currentLines)
+    }
+
     await client.query('COMMIT')
     return {}
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     if (isUniqueViolation(err)) return { error: RECEIPT_TAKEN_ERROR }
+    if (err instanceof AccountingNotConfiguredError) {
+      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
+    }
     throw err
   } finally {
     client.release()
@@ -216,10 +274,39 @@ export async function registerPayment(pool, tenantId, id, body) {
   const paidOn = body.paid_on ?? new Date().toISOString().slice(0, 10)
   if (!isValidIsoDate(paidOn)) return { error: { status: 400, body: { error: 'Invalid paid_on' } } }
 
-  await pool.query(
-    `UPDATE purchases SET status = 'paid', paid_at = $1, updated_at = NOW()
-      WHERE id = $2 AND tenant_id = $3`,
-    [paidOn, id, tenantId],
-  )
-  return {}
+  // Bank (default) or band-member reimbursement. The journal is identical for
+  // both (DR payable / CR checking); paid_by_user_id just records who fronted it.
+  const method = body.method ?? 'bank'
+  if (method !== 'bank' && method !== 'member') {
+    return { error: { status: 400, body: { error: 'Invalid method', code: 'invalid_method' } } }
+  }
+  let paidByUserId = null
+  if (method === 'member') {
+    if (body.paid_by_user_id == null) {
+      return { error: { status: 400, body: { error: 'paid_by_user_id is required for member payments', code: 'paid_by_required' } } }
+    }
+    paidByUserId = await validateApprovedMember(pool, body.paid_by_user_id, tenantId)
+    if (paidByUserId === null) return { error: { status: 400, body: { error: 'Invalid paid_by_user_id' } } }
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query(
+      `UPDATE purchases SET status = 'paid', paid_at = $1, payment_method = $2, paid_by_user_id = $3, updated_at = NOW()
+        WHERE id = $4 AND tenant_id = $5`,
+      [paidOn, method, paidByUserId, id, tenantId],
+    )
+    await postBillPaid(client, tenantId, { ...existing, paid_at: paidOn })
+    await client.query('COMMIT')
+    return {}
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    if (err instanceof AccountingNotConfiguredError) {
+      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
+    }
+    throw err
+  } finally {
+    client.release()
+  }
 }

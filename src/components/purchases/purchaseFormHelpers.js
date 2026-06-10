@@ -1,7 +1,7 @@
 export const TAX_RATES = [21, 9, 0]
 
 export function emptyLine(position = 0) {
-  return { description: '', expense_category: '', tax_rate: 21, amount_incl_cents: 0, position }
+  return { description: '', account_code: '', tax_rate: 21, amount_incl_cents: 0, position }
 }
 
 export function emptyDraft() {
@@ -29,7 +29,7 @@ export function purchaseToForm(data) {
     memo: data.memo || null,
     lines: (data.lines || []).map((l, i) => ({
       description: l.description || '',
-      expense_category: l.expense_category || '',
+      account_code: l.account_code || '',
       tax_rate: Number(l.tax_rate) || 0,
       amount_incl_cents: Number(l.amount_incl_cents) || 0,
       position: l.position ?? i,
@@ -49,7 +49,7 @@ export function buildPurchasePayload(form, status) {
     memo: form.memo || null,
     lines: form.lines.map((l, i) => ({
       description: l.description || '',
-      expense_category: l.expense_category?.trim() || null,
+      account_code: l.account_code?.trim() || null,
       tax_rate: Number(l.tax_rate) || 0,
       amount_incl_cents: Math.round(Number(l.amount_incl_cents) || 0),
       position: i,

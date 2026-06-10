@@ -36,14 +36,17 @@ router.get('/settings', async (req, res, next) => {
       payable_account_code: existingCodes.has('21100') ? '21100' : null,
       default_expense_account_code: existingCodes.has('61200') ? '61200' : null,
       primary_checking_account_code: existingCodes.has('11000') ? '11000' : null,
+      output_vat_account_code: existingCodes.has('24000') ? '24000' : null,
+      input_vat_account_code: existingCodes.has('15000') ? '15000' : null,
     }
     const { rows: inserted } = await pool.query(
       `INSERT INTO tenant_accounting_settings (
          tenant_id, currency,
          receivable_account_code, default_revenue_account_code,
          payable_account_code, default_expense_account_code,
-         primary_checking_account_code
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+         primary_checking_account_code,
+         output_vat_account_code, input_vat_account_code
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (tenant_id) DO UPDATE SET updated_at = NOW()
        RETURNING *`,
       [
@@ -54,6 +57,8 @@ router.get('/settings', async (req, res, next) => {
         defaults.payable_account_code,
         defaults.default_expense_account_code,
         defaults.primary_checking_account_code,
+        defaults.output_vat_account_code,
+        defaults.input_vat_account_code,
       ],
     )
     res.json(inserted[0])
@@ -118,6 +123,8 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
         payable_account_code: null,
         default_expense_account_code: null,
         primary_checking_account_code: null,
+        output_vat_account_code: null,
+        input_vat_account_code: null,
         ...updates,
       }
       const { rows: ins } = await pool.query(
@@ -125,13 +132,15 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
            tenant_id, currency,
            receivable_account_code, default_revenue_account_code,
            payable_account_code, default_expense_account_code,
-           primary_checking_account_code
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+           primary_checking_account_code,
+           output_vat_account_code, input_vat_account_code
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
         [
           req.tenantId, full.currency,
           full.receivable_account_code, full.default_revenue_account_code,
           full.payable_account_code, full.default_expense_account_code,
           full.primary_checking_account_code,
+          full.output_vat_account_code, full.input_vat_account_code,
         ],
       )
       return res.json(ins[0])
@@ -218,7 +227,9 @@ router.patch('/:id', requireTenantAdmin, async (req, res, next) => {
            default_revenue_account_code = $2 OR
            payable_account_code = $2 OR
            default_expense_account_code = $2 OR
-           primary_checking_account_code = $2
+           primary_checking_account_code = $2 OR
+           output_vat_account_code = $2 OR
+           input_vat_account_code = $2
          )`,
         [req.tenantId, code],
       )
