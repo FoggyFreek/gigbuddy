@@ -315,6 +315,14 @@ export async function registerPayment(pool, tenantId, id, body) {
   if (existing.status === 'draft') {
     return { error: { status: 409, body: { error: 'Approve the purchase before registering payment', code: 'not_approved' } } }
   }
+  // Already paid: re-registering would change payment_method/payee while the
+  // original `paid` journal stays put (postJournal is idempotent on the source
+  // key), desyncing the ledger — e.g. flipping bank→member would fabricate member
+  // debt no liability journal ever created. A reimbursed purchase is doubly locked.
+  if (existing.status === 'paid') {
+    const code = existing.reimbursement_id != null ? 'purchase_reimbursed' : 'already_paid'
+    return { error: { status: 409, body: { error: 'Purchase is already paid', code } } }
+  }
 
   const paidOn = body.paid_on ?? new Date().toISOString().slice(0, 10)
   if (!isValidIsoDate(paidOn)) return { error: { status: 400, body: { error: 'Invalid paid_on' } } }

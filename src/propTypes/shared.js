@@ -148,6 +148,31 @@ export const purchaseShape = PropTypes.shape({
   lines: PropTypes.arrayOf(purchaseLineShape),
 })
 
+// One band member's outstanding reimbursement balance (from /reimbursements/outstanding).
+export const memberOutstandingShape = PropTypes.shape({
+  band_member_id: idProp,
+  band_member_name: PropTypes.string,
+  user_id: idProp,
+  outstanding_cents: PropTypes.number,
+  outstanding_count: PropTypes.number,
+})
+
+// A registered reimbursement and the purchases it settled (history view).
+export const reimbursementShape = PropTypes.shape({
+  id: idProp,
+  band_member_id: idProp,
+  band_member_name: PropTypes.string,
+  amount_cents: PropTypes.number,
+  paid_on: PropTypes.string,
+  memo: PropTypes.string,
+  purchases: PropTypes.arrayOf(PropTypes.shape({
+    id: idProp,
+    receipt_number: PropTypes.number,
+    supplier_name: PropTypes.string,
+    total_cents: PropTypes.number,
+  })),
+})
+
 export const songTagShape = PropTypes.shape({
   id: idProp,
   name: PropTypes.string,

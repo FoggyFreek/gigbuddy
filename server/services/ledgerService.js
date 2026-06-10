@@ -216,6 +216,28 @@ export async function postBillPaid(client, tenantId, purchase) {
   })
 }
 
+// ---------- reimbursement journals (settling member debt) ----------
+
+// Reimbursement paid: DR reimbursement liability (clears what the band owed the
+// member), CR checking (cash out). Settles one or more member-paid purchases whose
+// summed total is reimbursement.amount_cents.
+export async function postReimbursementPaid(client, tenantId, reimbursement) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const liability = requireCode(settings, 'default_reimbursement_account_code')
+  const checking = requireCode(settings, 'primary_checking_account_code')
+  const memo = reimbursement.memo || `Reimbursement to band member ${reimbursement.band_member_id}`
+
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(reimbursement.paid_on),
+    description: `Reimbursement #${reimbursement.id}`,
+    sourceType: 'reimbursement', sourceId: reimbursement.id, sourceEvent: 'paid',
+    lines: [
+      { account_code: liability, debit_cents: reimbursement.amount_cents, memo },
+      { account_code: checking, credit_cents: reimbursement.amount_cents, memo },
+    ],
+  })
+}
+
 // ---------- user journals (manual postings) ----------
 
 // Posts a balanced amount on `side` ('debit' | 'credit') to `accountCode`.

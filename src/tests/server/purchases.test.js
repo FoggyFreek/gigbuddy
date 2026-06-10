@@ -230,6 +230,23 @@ describe('purchases — payment', () => {
     expect(res.status).toBe(409)
     expect(res.body.code).toBe('use_payment_endpoint')
   })
+
+  it('rejects re-registering payment on an already-paid purchase, leaving it unchanged', async () => {
+    const r = await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)
+    await approve(r.body.id, asUserA)
+    await asUserA(request(app).post(`/api/purchases/${r.body.id}/payment`)).send({ paid_on: '2026-06-01' }).expect(200)
+
+    // Re-paying as a band member must not flip a bank-paid purchase (which would
+    // fabricate member debt no liability journal ever created).
+    const res = await asUserA(request(app).post(`/api/purchases/${r.body.id}/payment`))
+      .send({ method: 'member', paid_by_band_member_id: seed.memberA.id, paid_on: '2026-06-02' })
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('already_paid')
+
+    const after = await asUserA(request(app).get(`/api/purchases/${r.body.id}`)).expect(200)
+    expect(after.body.payment_method).toBe('bank')
+    expect(after.body.paid_by_band_member_id).toBeNull()
+  })
 })
 
 describe('purchases — totals', () => {
