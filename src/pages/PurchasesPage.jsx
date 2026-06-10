@@ -19,14 +19,14 @@ import SearchIcon from '@mui/icons-material/Search'
 import { alpha } from '@mui/material/styles'
 import PropTypes from 'prop-types'
 import NewPurchaseDialog from '../components/NewPurchaseDialog.jsx'
-import InvoicePeriodPicker from '../components/InvoicePeriodPicker.jsx'
+import PeriodPicker from '../components/shared/periodPicker.jsx'
 import SplitView from '../components/SplitView.jsx'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
-import { listPurchases } from '../api/purchases.js'
+import { listPurchasePeriods, listPurchases } from '../api/purchases.js'
 import { formatEur } from '../utils/purchaseTotals.js'
 import { formatShortDate } from '../utils/dateFormat.js'
 import { purchaseStatusColor } from '../utils/purchaseStatus.js'
-import { invoiceInPeriod } from '../utils/invoicePeriod.js'
+import { defaultPeriodForDates } from '../utils/invoicePeriod.js'
 import { purchaseShape, idProp } from '../propTypes/shared.js'
 import StatusDot from '../components/StatusDot.jsx'
 
@@ -37,10 +37,6 @@ const SUMMARY_CARDS = [
   { key: 'unpaid', label: 'Unpaid', chipColor: 'warning' },
   { key: 'paid', label: 'Paid', chipColor: 'success' },
 ]
-
-// The period helpers key off `issue_date`; purchases use `receipt_date`.
-const withIssueDate = (p) => ({ ...p, issue_date: p.receipt_date })
-const purchaseInPeriod = (p, period) => invoiceInPeriod(withIssueDate(p), period)
 
 function getPurchaseState(p) {
   if (p.status === 'paid') return 'paid'
@@ -63,19 +59,29 @@ export default function PurchasesPage() {
   const [summaryFilter, setSummaryFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [period, setPeriod] = useState(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [availableDates, setAvailableDates] = useState([])
+  const [periodsLoaded, setPeriodsLoaded] = useState(false)
+
+  const refreshPeriods = useCallback(async ({ signalLoaded = false } = {}) => {
+    try {
+      const dates = await listPurchasePeriods()
+      setAvailableDates(dates)
+      setPeriod((prev) => {
+        const fallback = defaultPeriodForDates(dates)
+        const currentYear = new Date().getFullYear()
+        if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
+        return fallback
+      })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      if (signalLoaded) setPeriodsLoaded(true)
+    }
+  }, [])
 
   useEffect(() => {
-    if (!purchases.length) return
-    const currentYear = new Date().getFullYear()
-    const years = purchases
-      .filter((p) => p.receipt_date)
-      .map((p) => new Date(p.receipt_date).getFullYear())
-    if (!years.length || years.includes(currentYear)) return
-    setPeriod((prev) => {
-      if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
-      return { mode: 'fiscal_year', year: Math.max(...years) }
-    })
-  }, [purchases])
+    refreshPeriods({ signalLoaded: true })
+  }, [refreshPeriods])
 
   const summaryStats = useMemo(() => {
     const stats = {
@@ -86,7 +92,6 @@ export default function PurchasesPage() {
       paid: { count: 0, total: 0 },
     }
     for (const p of purchases) {
-      if (!purchaseInPeriod(p, period)) continue
       const state = getPurchaseState(p)
       stats[state].count++
       stats[state].total += Number(p.total_cents) || 0
@@ -94,10 +99,10 @@ export default function PurchasesPage() {
       stats.all.total += Number(p.total_cents) || 0
     }
     return stats
-  }, [purchases, period])
+  }, [purchases])
 
   const visiblePurchases = useMemo(() => {
-    let list = purchases.filter((p) => purchaseInPeriod(p, period))
+    let list = purchases
     if (summaryFilter !== 'all') {
       list = list.filter((p) => getPurchaseState(p) === summaryFilter)
     }
@@ -111,29 +116,30 @@ export default function PurchasesPage() {
       )
     }
     return list
-  }, [purchases, period, summaryFilter, searchQuery])
-
-  const periodInvoices = useMemo(() => purchases.map(withIssueDate), [purchases])
+  }, [purchases, summaryFilter, searchQuery])
 
   const load = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const data = await listPurchases()
+      const data = await listPurchases(period)
       setPurchases(data)
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [period])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (periodsLoaded) load()
+  }, [load, periodsLoaded])
 
   // The dialog creates the draft on the server, then we open it in the split-view
   // detail editor and refresh the list so the new draft row appears.
   function handleCreated(id) {
     setNewDialog(false)
+    refreshPeriods()
     load()
     navigate(`/purchases/${id}`)
   }
@@ -235,7 +241,7 @@ export default function PurchasesPage() {
               }}
               sx={{ flex: '1 1 200px', minWidth: 160 }}
             />
-            <InvoicePeriodPicker invoices={periodInvoices} value={period} onChange={setPeriod} />
+            <PeriodPicker availableDates={availableDates} value={period} onChange={setPeriod} />
           </Box>
 
           <PurchasesList

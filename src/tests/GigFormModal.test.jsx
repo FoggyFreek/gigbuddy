@@ -78,6 +78,12 @@ describe('GigFormModal — create mode', () => {
     expect(screen.getByText('New gig')).toBeInTheDocument()
   })
 
+  it('uses the shared date entry field', () => {
+    wrap(<GigFormModal mode="create" onClose={() => {}} />)
+    expect(screen.getByLabelText(/^date$/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'open date picker' })).toBeInTheDocument()
+  })
+
   it('shows Cancel and Create buttons', () => {
     wrap(<GigFormModal mode="create" onClose={() => {}} />)
     expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()

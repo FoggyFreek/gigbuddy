@@ -1,8 +1,10 @@
 import { request, requestBlob, requestForm } from './_client.js'
+import { periodQueryString } from '../utils/invoicePeriod.js'
 
 const api = (path, options) => request(`/api/invoices${path}`, options)
 
-export const listInvoices   = ()         => api('/')
+export const listInvoices   = (period)   => api(`/${periodQueryString(period)}`)
+export const listInvoicePeriods = ()     => api('/periods')
 export const getInvoice     = (id)       => api(`/${id}`)
 export const draftFromGig   = (gigId)    => api(`/draft-from-gig/${gigId}`)
 export const createInvoice  = (body)     => api('/', { method: 'POST', body: JSON.stringify(body) })

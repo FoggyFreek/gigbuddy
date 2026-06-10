@@ -474,3 +474,42 @@ describe('invoices — render retry', () => {
     expect(r2[0].pdf_path).toMatch(/^tenants\//)
   })
 })
+
+describe('invoices period filtering', () => {
+  it('lists only invoices in the requested period', async () => {
+    await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      issue_date: '2026-03-15',
+      customer_name: 'March Client',
+    })).expect(201)
+    await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      issue_date: '2026-06-15',
+      customer_name: 'June Client',
+    })).expect(201)
+    await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      issue_date: '2025-09-15',
+      customer_name: 'Past Client',
+    })).expect(201)
+
+    const month = await asUserA(
+      request(app).get('/api/invoices?mode=month&year=2026&month=2')
+    ).expect(200)
+    expect(month.body.map((row) => row.customer_name)).toEqual(['March Client'])
+
+    const year = await asUserA(
+      request(app).get('/api/invoices?mode=fiscal_year&year=2026')
+    ).expect(200)
+    expect(year.body.map((row) => row.customer_name).sort()).toEqual(['June Client', 'March Client'])
+  })
+
+  it('returns tenant-scoped period availability dates', async () => {
+    await asUserA(request(app).post('/api/invoices')).send(basePayload({ issue_date: '2026-03-15' })).expect(201)
+    await asUserB(request(app).post('/api/invoices')).send(basePayload({
+      gig_id: seed.gigB.id,
+      customer_name: 'Beta Hall',
+      issue_date: '2026-04-15',
+    })).expect(201)
+
+    const res = await asUserA(request(app).get('/api/invoices/periods')).expect(200)
+    expect(res.body).toEqual(['2026-03-15'])
+  })
+})

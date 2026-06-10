@@ -240,9 +240,37 @@ describe('purchases — line account_code', () => {
     const r = await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)
     await approve(r.body.id, asUserA)
     const res = await asUserA(request(app).post(`/api/purchases/${r.body.id}/payment`))
-      .send({ method: 'member', paid_by_user_id: seed.userA.id, paid_on: '2026-06-01' }).expect(200)
+      .send({ method: 'member', paid_by_band_member_id: seed.memberA.id, paid_on: '2026-06-01' }).expect(200)
     expect(res.body.payment_method).toBe('member')
-    expect(res.body.paid_by_user_id).toBe(seed.userA.id)
+    expect(res.body.paid_by_band_member_id).toBe(seed.memberA.id)
+  })
+
+  it('records an unlinked band member as the reimbursement payee', async () => {
+    const { rows: [member] } = await pool.query(
+      `INSERT INTO band_members (tenant_id, name, position, sort_order, user_id)
+       VALUES ($1, 'Cash Fronted Friend', 'sub', 10, NULL)
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const r = await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)
+    await approve(r.body.id, asUserA)
+
+    const res = await asUserA(request(app).post(`/api/purchases/${r.body.id}/payment`))
+      .send({ method: 'member', paid_by_band_member_id: member.id, paid_on: '2026-06-01' }).expect(200)
+
+    expect(res.body.payment_method).toBe('member')
+    expect(res.body.paid_by_band_member_id).toBe(member.id)
+  })
+
+  it('rejects a cross-tenant band member as reimbursement payee', async () => {
+    const r = await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)
+    await approve(r.body.id, asUserA)
+
+    const res = await asUserA(request(app).post(`/api/purchases/${r.body.id}/payment`))
+      .send({ method: 'member', paid_by_band_member_id: seed.memberB.id, paid_on: '2026-06-01' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('Invalid paid_by_band_member_id')
   })
 })
 
@@ -252,5 +280,43 @@ describe('contacts — duplicate', () => {
     const res = await asUserA(request(app).post('/api/contacts')).send({ name: 'Studio X', category: 'supplier' })
     expect(res.status).toBe(409)
     expect(res.body.code).toBe('contact_exists')
+  })
+})
+
+describe('purchases period filtering', () => {
+  it('lists only purchases in the requested period', async () => {
+    await asUserA(request(app).post('/api/purchases')).send(basePayload({
+      receipt_date: '2026-03-15',
+      supplier_name: 'March Supplier',
+    })).expect(201)
+    await asUserA(request(app).post('/api/purchases')).send(basePayload({
+      receipt_date: '2026-06-15',
+      supplier_name: 'June Supplier',
+    })).expect(201)
+    await asUserA(request(app).post('/api/purchases')).send(basePayload({
+      receipt_date: '2025-09-15',
+      supplier_name: 'Past Supplier',
+    })).expect(201)
+
+    const month = await asUserA(
+      request(app).get('/api/purchases?mode=month&year=2026&month=2')
+    ).expect(200)
+    expect(month.body.map((row) => row.supplier_name)).toEqual(['March Supplier'])
+
+    const year = await asUserA(
+      request(app).get('/api/purchases?mode=fiscal_year&year=2026')
+    ).expect(200)
+    expect(year.body.map((row) => row.supplier_name).sort()).toEqual(['June Supplier', 'March Supplier'])
+  })
+
+  it('returns tenant-scoped period availability dates', async () => {
+    await asUserA(request(app).post('/api/purchases')).send(basePayload({ receipt_date: '2026-03-15' })).expect(201)
+    await asUserB(request(app).post('/api/purchases')).send(basePayload({
+      supplier_name: 'Beta Supplier',
+      receipt_date: '2026-04-15',
+    })).expect(201)
+
+    const res = await asUserA(request(app).get('/api/purchases/periods')).expect(200)
+    expect(res.body).toEqual(['2026-03-15'])
   })
 })

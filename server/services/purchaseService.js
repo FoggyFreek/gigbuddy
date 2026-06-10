@@ -13,7 +13,7 @@ import {
   replacePurchaseLines,
   validateContactIdForTenant,
   fetchValidExpenseCodes,
-  validateApprovedMember,
+  validateBandMemberForTenant,
 } from '../repositories/purchaseRepository.js'
 import {
   CONTENT_FIELDS_SET,
@@ -275,27 +275,34 @@ export async function registerPayment(pool, tenantId, id, body) {
   if (!isValidIsoDate(paidOn)) return { error: { status: 400, body: { error: 'Invalid paid_on' } } }
 
   // Bank (default) or band-member reimbursement. The journal is identical for
-  // both (DR payable / CR checking); paid_by_user_id just records who fronted it.
+  // both (DR payable / CR checking); paid_by_band_member_id records who fronted
+  // it, even when that profile has no login account.
   const method = body.method ?? 'bank'
   if (method !== 'bank' && method !== 'member') {
     return { error: { status: 400, body: { error: 'Invalid method', code: 'invalid_method' } } }
   }
-  let paidByUserId = null
+  let paidByBandMemberId = null
   if (method === 'member') {
-    if (body.paid_by_user_id == null) {
-      return { error: { status: 400, body: { error: 'paid_by_user_id is required for member payments', code: 'paid_by_required' } } }
+    if (body.paid_by_band_member_id == null) {
+      return { error: { status: 400, body: { error: 'paid_by_band_member_id is required for member payments', code: 'paid_by_required' } } }
     }
-    paidByUserId = await validateApprovedMember(pool, body.paid_by_user_id, tenantId)
-    if (paidByUserId === null) return { error: { status: 400, body: { error: 'Invalid paid_by_user_id' } } }
+    const member = await validateBandMemberForTenant(pool, body.paid_by_band_member_id, tenantId)
+    if (member === null) return { error: { status: 400, body: { error: 'Invalid paid_by_band_member_id' } } }
+    paidByBandMemberId = member.id
   }
 
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
     await client.query(
-      `UPDATE purchases SET status = 'paid', paid_at = $1, payment_method = $2, paid_by_user_id = $3, updated_at = NOW()
+      `UPDATE purchases
+          SET status = 'paid',
+              paid_at = $1,
+              payment_method = $2,
+              paid_by_band_member_id = $3,
+              updated_at = NOW()
         WHERE id = $4 AND tenant_id = $5`,
-      [paidOn, method, paidByUserId, id, tenantId],
+      [paidOn, method, paidByBandMemberId, id, tenantId],
     )
     await postBillPaid(client, tenantId, { ...existing, paid_at: paidOn })
     await client.query('COMMIT')

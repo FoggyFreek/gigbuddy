@@ -57,16 +57,16 @@ export async function fetchValidExpenseCodes(executor, tenantId, codes) {
   return new Set(rows.map((r) => r.code))
 }
 
-// Returns the user id only if it's an approved member of the tenant (the band
-// member who fronted cash for a member-paid bill).
-export async function validateApprovedMember(executor, rawUserId, tenantId) {
-  const n = Number(rawUserId)
+// Returns the band member row only if it belongs to the tenant. A member-paid
+// purchase may be fronted by a band member profile that has no login account.
+export async function validateBandMemberForTenant(executor, rawBandMemberId, tenantId) {
+  const n = Number(rawBandMemberId)
   if (!Number.isInteger(n) || n <= 0) return null
-  const { rowCount } = await executor.query(
-    `SELECT 1 FROM memberships WHERE user_id = $1 AND tenant_id = $2 AND status = 'approved'`,
+  const { rows } = await executor.query(
+    'SELECT id, user_id FROM band_members WHERE id = $1 AND tenant_id = $2',
     [n, tenantId],
   )
-  return rowCount ? n : null
+  return rows[0] || null
 }
 
 export async function replacePurchaseLines(executor, purchaseId, tenantId, lines) {

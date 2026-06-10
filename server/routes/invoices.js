@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import pool from '../db/index.js'
 import { uploadObject, removeObject, safeRemove, getObject, invoiceLogoKey } from '../services/storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
+import { buildPeriodWhere } from '../utils/periodQuery.js'
 import { assertMollieConfigured, createTenantMollieClient } from '../utils/mollieClient.js'
 import {
   parseId,
@@ -68,6 +69,9 @@ function requireId(req, res) {
 
 // ---------- list ----------
 router.get('/', async (req, res) => {
+  const period = buildPeriodWhere(req.query, 'issue_date')
+  if (period.error) return res.status(400).json({ error: period.error })
+
   const { rows } = await pool.query(
     `SELECT id, invoice_number, gig_id, issue_date, due_date,
             customer_name, total_cents, status, pdf_path, finalized_at,
@@ -76,10 +80,23 @@ router.get('/', async (req, res) => {
             created_at, updated_at
        FROM invoices
       WHERE tenant_id = $1
+        ${period.sql}
       ORDER BY issue_date DESC, id DESC`,
-    [req.tenantId],
+    [req.tenantId, ...period.values],
   )
   res.json(rows)
+})
+
+router.get('/periods', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT to_char(issue_date, 'YYYY-MM-DD') AS date
+       FROM invoices
+      WHERE tenant_id = $1
+        AND issue_date IS NOT NULL
+      ORDER BY date DESC`,
+    [req.tenantId],
+  )
+  res.json(rows.map((row) => row.date))
 })
 
 // ---------- draft (from gig) ----------

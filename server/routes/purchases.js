@@ -3,6 +3,7 @@ import pool from '../db/index.js'
 import { parseId } from '../validators/purchaseValidators.js'
 import { fetchPurchase, fetchPurchaseLines } from '../repositories/purchaseRepository.js'
 import { createPurchase, applyPurchasePatch, registerPayment } from '../services/purchaseService.js'
+import { buildPeriodWhere } from '../utils/periodQuery.js'
 
 const router = Router()
 
@@ -19,11 +20,15 @@ function requireId(req, res) {
 // Includes the first line's description so the table/search has something to show
 // (the per-line description lives in purchase_lines, not on the purchase row).
 router.get('/', async (req, res) => {
+  const period = buildPeriodWhere(req.query, 'p.receipt_date')
+  if (period.error) return res.status(400).json({ error: period.error })
+
   const { rows } = await pool.query(
     `SELECT p.id, p.receipt_number, p.supplier_name, p.supplier_contact_id,
             p.receipt_date, p.due_date, p.currency, p.status,
             p.subtotal_cents, p.tax_cents, p.total_cents,
             p.finalized_at, p.paid_at, p.created_at, p.updated_at,
+            p.payment_method, p.paid_by_band_member_id,
             fl.description
        FROM purchases p
        LEFT JOIN LATERAL (
@@ -33,10 +38,23 @@ router.get('/', async (req, res) => {
           LIMIT 1
        ) fl ON TRUE
       WHERE p.tenant_id = $1
+        ${period.sql}
       ORDER BY p.receipt_date DESC, p.id DESC`,
-    [req.tenantId],
+    [req.tenantId, ...period.values],
   )
   res.json(rows)
+})
+
+router.get('/periods', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT to_char(receipt_date, 'YYYY-MM-DD') AS date
+       FROM purchases
+      WHERE tenant_id = $1
+        AND receipt_date IS NOT NULL
+      ORDER BY date DESC`,
+    [req.tenantId],
+  )
+  res.json(rows.map((row) => row.date))
 })
 
 // ---------- single ----------

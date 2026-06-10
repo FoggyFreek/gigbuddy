@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import PropTypes from 'prop-types'
 import Alert from '@mui/material/Alert'
+import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -11,7 +12,12 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
+import FormControl from '@mui/material/FormControl'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import FormLabel from '@mui/material/FormLabel'
 import IconButton from '@mui/material/IconButton'
+import Radio from '@mui/material/Radio'
+import RadioGroup from '@mui/material/RadioGroup'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined'
@@ -25,6 +31,103 @@ import { usePurchaseFormState } from './purchases/usePurchaseFormState.js'
 import PurchaseSupplierFields from './purchases/PurchaseSupplierFields.jsx'
 import PurchaseLinesEditor from './purchases/PurchaseLinesEditor.jsx'
 import PurchaseTotalsPanel from './purchases/PurchaseTotalsPanel.jsx'
+import DateEntryField from './DateEntryField.jsx'
+
+function PaymentRegistrationDialog({
+  open,
+  saving,
+  error,
+  method,
+  paidOn,
+  paidByBandMemberId,
+  bandMembers,
+  onClose,
+  onMethodChange,
+  onPaidOnChange,
+  onPaidByBandMemberIdChange,
+  onSubmit,
+}) {
+  const hasBandMembers = bandMembers.length > 0
+  const selectedPayee = bandMembers.find((m) => Number(m.id) === Number(paidByBandMemberId)) || null
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>Register payment</DialogTitle>
+      <DialogContent dividers>
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        <Box sx={{ display: 'grid', gap: 2 }}>
+          <DateEntryField
+            label="Paid on"
+            size="small"
+            fullWidth
+            value={paidOn || ''}
+            onChange={(e) => onPaidOnChange(e.target.value)}
+            disabled={saving}
+          />
+          <FormControl>
+            <FormLabel>Payment method</FormLabel>
+            <RadioGroup
+              value={method}
+              onChange={(e) => onMethodChange(e.target.value)}
+            >
+              <FormControlLabel value="bank" control={<Radio />} label="Bank" disabled={saving} />
+              <FormControlLabel
+                value="member"
+                control={<Radio />}
+                label="Band member"
+                disabled={saving || !hasBandMembers}
+              />
+            </RadioGroup>
+          </FormControl>
+          {!hasBandMembers && (
+            <Alert severity="info">
+              Add a band member before registering a member-paid purchase.
+            </Alert>
+          )}
+          {method === 'member' && (
+            <Autocomplete
+              size="small"
+              fullWidth
+              options={bandMembers}
+              value={selectedPayee}
+              disabled={saving}
+              onChange={(_e, picked) => onPaidByBandMemberIdChange(picked?.id ?? null)}
+              getOptionLabel={(m) => (m ? `${m.name}${m.role ? ` (${m.role})` : ''}` : '')}
+              isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
+              renderInput={(params) => <TextField {...params} label="Paid by" />}
+            />
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button variant="contained" onClick={onSubmit} disabled={saving}>
+          Register
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+PaymentRegistrationDialog.propTypes = {
+  open: PropTypes.bool.isRequired,
+  saving: PropTypes.bool,
+  error: PropTypes.string,
+  method: PropTypes.oneOf(['bank', 'member']).isRequired,
+  paidOn: PropTypes.string,
+  paidByBandMemberId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  bandMembers: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    user_id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    name: PropTypes.string,
+    role: PropTypes.string,
+  })).isRequired,
+  onClose: PropTypes.func.isRequired,
+  onMethodChange: PropTypes.func.isRequired,
+  onPaidOnChange: PropTypes.func.isRequired,
+  onPaidByBandMemberIdChange: PropTypes.func.isRequired,
+  onSubmit: PropTypes.func.isRequired,
+}
 
 export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPurchaseUpdate, embedded = false }) {
   const s = usePurchaseFormState({ mode, draft, purchaseId, onClose, onPurchaseUpdate })
@@ -117,7 +220,7 @@ export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPu
         <Button
           fullWidth
           startIcon={<VolunteerActivismOutlinedIcon />}
-          onClick={s.handleRegisterPayment}
+          onClick={s.openPaymentDialog}
           disabled={!canRegister || s.saving}
           sx={{ mt: 2, py: 1.25, bgcolor: 'action.hover', borderRadius: 99, color: 'text.primary' }}
         >
@@ -143,6 +246,22 @@ export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPu
       </DialogActions>
     </Dialog>
   )
+  const paymentDialog = (
+    <PaymentRegistrationDialog
+      open={s.paymentDialogOpen}
+      saving={s.saving}
+      error={s.paymentError}
+      method={s.paymentMethod}
+      paidOn={s.paidOn}
+      paidByBandMemberId={s.paidByBandMemberId}
+      bandMembers={s.bandMembers}
+      onClose={s.closePaymentDialog}
+      onMethodChange={s.setPaymentMethod}
+      onPaidOnChange={s.setPaidOn}
+      onPaidByBandMemberIdChange={s.setPaidByBandMemberId}
+      onSubmit={s.handleRegisterPayment}
+    />
+  )
 
   if (embedded) {
     return (
@@ -159,6 +278,7 @@ export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPu
           {bodyCards}
         </Box>
         {deleteDialog}
+        {paymentDialog}
       </>
     )
   }
@@ -179,6 +299,7 @@ export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPu
         </DialogActions>
       </Dialog>
       {deleteDialog}
+      {paymentDialog}
     </>
   )
 }

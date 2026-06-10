@@ -63,14 +63,13 @@ export default function JournalEntryRow({
       sx={{
         display: 'flex',
         alignItems: 'flex-start',
-        gap: 1,
-        py: 1.5,
+        py: 0.5,
         bgcolor: selected ? 'action.selected' : 'transparent',
       }}
     >
       {/* left block: selection, J + number, date, status — centred on the same
           40px band as the first line row so all four read at one height */}
-      <Box sx={{ width: 260, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 40 }}>
+      <Box sx={{ width: 300, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 40 }}>
         <Checkbox
           size="small"
           checked={selected}
@@ -82,15 +81,16 @@ export default function JournalEntryRow({
           <Typography variant="body2" fontWeight={700} color="text.secondary">J</Typography>
           <Typography variant="body2" fontWeight={700} sx={{ minWidth: 20 }}>{form.entry_number}</Typography>
         </Box>
+        <StatusDot color={STATUS_COLOR[form.status] || 'default'} label={form.status} />
         <DateEntryField
           label="Date"
           value={form.entry_date}
           disabled={readOnly}
           onChange={(e) => patchForm({ entry_date: e.target.value })}
           size="small"
-          sx={{ width: 150 }}
+          sx={{ ml:1 }}
         />
-        <StatusDot color={STATUS_COLOR[form.status] || 'default'} label={form.status} />
+        
       </Box>
 
       {/* right block: the lines + per-entry actions */}

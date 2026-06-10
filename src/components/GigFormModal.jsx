@@ -16,6 +16,7 @@ import Typography from '@mui/material/Typography'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
+import DateEntryField from './DateEntryField.jsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.jsx'
 import GigDetailContent from './GigDetailContent.jsx'
 import SaveStatusLabel from './SaveStatusLabel.jsx'
@@ -51,7 +52,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
   const [selectedVenue, setSelectedVenue] = useState(null)
   const [selectedFestival, setSelectedFestival] = useState(null)
   const [errors, setErrors] = useState({})
-  const [focused, setFocused] = useState({ event_date: false })
   const [availabilityData, setAvailabilityData] = useState(null)
   const [confirmCreate, setConfirmCreate] = useState(false)
 
@@ -65,14 +65,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
     }, 100)
     return () => clearInterval(interval)
   }, [mode])
-
-  const onFocus = (field) => () => setFocused((p) => ({ ...p, [field]: true }))
-  const onBlur = (field) => () => setFocused((p) => ({ ...p, [field]: false }))
-  const maskSx = (field) => ({
-    '& input::-webkit-datetime-edit': {
-      opacity: focused[field] || form[field] ? 1 : 0,
-    },
-  })
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -127,18 +119,13 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }) {
         ) : (
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
+              <DateEntryField
                 label="Date"
-                type="date"
                 fullWidth
                 value={form.event_date}
                 onChange={(e) => handleChange('event_date', e.target.value)}
-                onFocus={onFocus('event_date')}
-                onBlur={onBlur('event_date')}
                 error={!!errors.event_date}
                 helperText={errors.event_date}
-                slotProps={{ inputLabel: { shrink: focused.event_date || !!form.event_date } }}
-                sx={maskSx('event_date')}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>

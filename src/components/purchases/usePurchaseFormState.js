@@ -6,8 +6,13 @@ import {
   updatePurchase,
 } from '../../api/purchases.js'
 import { listAccounts } from '../../api/accounts.js'
+import { listMembers } from '../../api/bandMembers.js'
 import { computePurchaseTotals } from '../../utils/purchaseTotals.js'
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.js'
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
+}
 
 // Owns the editable purchase form: loads the purchase, derives totals, mutates
 // lines/fields, and runs the save / approve / delete / register-payment
@@ -22,6 +27,12 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
   const [purchase, setPurchase] = useState(null)
   const [expenseAccounts, setExpenseAccounts] = useState([])
   const [accountsLoaded, setAccountsLoaded] = useState(false)
+  const [bandMembers, setBandMembers] = useState([])
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [paymentError, setPaymentError] = useState(null)
+  const [paymentMethod, setPaymentMethod] = useState('bank')
+  const [paidOn, setPaidOn] = useState(todayIso())
+  const [paidByBandMemberId, setPaidByBandMemberId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -52,6 +63,16 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
       })
       .catch(() => { /* best-effort; leave expenseAccounts empty */ })
       .finally(() => { if (!cancelled) setAccountsLoaded(true) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    listMembers()
+      .then((members) => {
+        if (!cancelled) setBandMembers(members || [])
+      })
+      .catch(() => { if (!cancelled) setBandMembers([]) })
     return () => { cancelled = true }
   }, [])
 
@@ -111,15 +132,43 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     }
   }
 
+  function openPaymentDialog() {
+    setPaymentError(null)
+    setPaymentMethod('bank')
+    setPaidOn(todayIso())
+    setPaidByBandMemberId(null)
+    setPaymentDialogOpen(true)
+  }
+
+  function closePaymentDialog() {
+    if (!saving) setPaymentDialogOpen(false)
+  }
+
   async function handleRegisterPayment() {
+    if (paymentMethod === 'member' && !paidByBandMemberId) {
+      setPaymentError('Choose the band member who paid for this purchase')
+      return
+    }
     try {
       setSaving(true)
       setError(null)
-      const updated = await registerPurchasePayment(purchaseId, {})
+      setPaymentError(null)
+      const payload = {
+        method: paymentMethod,
+        paid_on: paidOn || todayIso(),
+      }
+      if (paymentMethod === 'member') payload.paid_by_band_member_id = paidByBandMemberId
+      const updated = await registerPurchasePayment(purchaseId, payload)
       setPurchase(updated)
-      onPurchaseUpdate?.(purchaseId, { status: updated.status })
+      setPaymentDialogOpen(false)
+      onPurchaseUpdate?.(purchaseId, {
+        status: updated.status,
+        payment_method: updated.payment_method,
+        paid_by_band_member_id: updated.paid_by_band_member_id,
+        paid_at: updated.paid_at,
+      })
     } catch (e) {
-      setError(e.message)
+      setPaymentError(e.message)
     } finally {
       setSaving(false)
     }
@@ -151,6 +200,15 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     isPaid,
     totals,
     expenseAccounts,
+    bandMembers,
+    paymentDialogOpen,
+    paymentError,
+    paymentMethod,
+    setPaymentMethod,
+    paidOn,
+    setPaidOn,
+    paidByBandMemberId,
+    setPaidByBandMemberId,
     deleteDialogOpen,
     setDeleteDialogOpen,
     patchForm,
@@ -158,6 +216,8 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     addLine,
     removeLine,
     handleSave,
+    openPaymentDialog,
+    closePaymentDialog,
     handleRegisterPayment,
     handleDelete,
     confirmDelete,

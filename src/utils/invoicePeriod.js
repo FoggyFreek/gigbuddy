@@ -15,15 +15,32 @@ export function invoiceInPeriod(inv, period) {
     case 'all_time':
       return true
     case 'custom': {
-      // Parse dates at noon local to avoid UTC-midnight timezone edge cases.
-      const from = new Date(period.from + 'T00:00:00')
-      const to = new Date(period.to + 'T23:59:59')
-      const date = new Date(inv.issue_date + 'T12:00:00')
+      const from = new Date(`${period.from}T00:00:00`)
+      const to = new Date(`${period.to}T23:59:59`)
+      const date = new Date(`${inv.issue_date}T12:00:00`)
       return date >= from && date <= to
     }
     default:
       return false
   }
+}
+
+export function periodQueryString(period) {
+  if (!period?.mode) return ''
+
+  const params = new URLSearchParams({ mode: period.mode })
+  if (period.year !== undefined) params.set('year', String(period.year))
+  if (period.month !== undefined) params.set('month', String(period.month))
+  if (period.quarter !== undefined) params.set('quarter', String(period.quarter))
+  if (period.from) params.set('from', period.from)
+  if (period.to) params.set('to', period.to)
+
+  const query = params.toString()
+  return query ? `?${query}` : ''
+}
+
+export function periodDatesFromRecords(records, dateField = 'issue_date') {
+  return records.map((record) => record?.[dateField]).filter(Boolean)
 }
 
 // Returns the human-readable label shown on the picker trigger button.
@@ -41,28 +58,33 @@ export function periodLabel(period) {
       return 'All Time'
     case 'custom': {
       const fmt = (s) =>
-        new Date(s + 'T12:00:00').toLocaleDateString('nl-NL', {
+        new Date(`${s}T12:00:00`).toLocaleDateString('nl-NL', {
           day: 'numeric',
           month: 'short',
           year: 'numeric',
         })
-      return `${fmt(period.from)} – ${fmt(period.to)}`
+      return `${fmt(period.from)} - ${fmt(period.to)}`
     }
     default:
       return 'Period'
   }
 }
 
-// Returns the appropriate default period given a list of invoices:
-// defaults to the current fiscal year; if it has no invoices, falls back to
-// the most recent year that does.
-export function defaultPeriod(invoices) {
+export function defaultPeriodForDates(dates) {
   const currentYear = new Date().getFullYear()
-  const years = invoices
-    .filter((inv) => inv.issue_date)
-    .map((inv) => new Date(inv.issue_date).getFullYear())
+  const years = dates
+    .filter(Boolean)
+    .map((date) => new Date(`${String(date).slice(0, 10)}T12:00:00`).getFullYear())
+    .filter((year) => !Number.isNaN(year))
   if (!years.length || years.includes(currentYear)) {
     return { mode: 'fiscal_year', year: currentYear }
   }
   return { mode: 'fiscal_year', year: Math.max(...years) }
+}
+
+// Returns the appropriate default period given a list of invoices:
+// defaults to the current fiscal year; if it has no invoices, falls back to
+// the most recent year that does.
+export function defaultPeriod(invoices) {
+  return defaultPeriodForDates(periodDatesFromRecords(invoices))
 }

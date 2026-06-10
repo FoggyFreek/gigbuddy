@@ -143,6 +143,8 @@ export const purchaseShape = PropTypes.shape({
   tax_cents: PropTypes.number,
   total_cents: PropTypes.number,
   paid_at: PropTypes.string,
+  payment_method: PropTypes.string,
+  paid_by_band_member_id: idProp,
   lines: PropTypes.arrayOf(purchaseLineShape),
 })
 

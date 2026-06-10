@@ -249,9 +249,9 @@ describe('ledger — purchasing (expenses)', () => {
   it('bill paid by band member posts the same journal and records who fronted it', async () => {
     const bill = await createApprovedBill()
     const res = await asUserA(request(app).post(`/api/purchases/${bill.id}/payment`))
-      .send({ method: 'member', paid_by_user_id: seed.userA.id, paid_on: '2026-06-01' }).expect(200)
+      .send({ method: 'member', paid_by_band_member_id: seed.memberA.id, paid_on: '2026-06-01' }).expect(200)
     expect(res.body.payment_method).toBe('member')
-    expect(res.body.paid_by_user_id).toBe(seed.userA.id)
+    expect(res.body.paid_by_band_member_id).toBe(seed.memberA.id)
 
     const paid = byEvent(await journalsFor(seed.tenantA.id, 'purchase', bill.id), 'paid')
     expectBalanced(paid)
@@ -259,10 +259,10 @@ describe('ledger — purchasing (expenses)', () => {
     expect(line(paid, '11000').credit_cents).toBe(125000)
   })
 
-  it('member payment requires a valid approved member', async () => {
+  it('member payment requires a valid tenant band member', async () => {
     const bill = await createApprovedBill()
     const res = await asUserA(request(app).post(`/api/purchases/${bill.id}/payment`))
-      .send({ method: 'member', paid_by_user_id: seed.userB.id })
+      .send({ method: 'member', paid_by_band_member_id: seed.memberB.id })
     expect(res.status).toBe(400)
   })
 

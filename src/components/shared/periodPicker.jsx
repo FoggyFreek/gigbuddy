@@ -4,7 +4,6 @@ import Button from '@mui/material/Button'
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
 import Popover from '@mui/material/Popover'
-import TextField from '@mui/material/TextField'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
@@ -12,14 +11,13 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import PropTypes from 'prop-types'
-import { invoiceShape, periodShape } from '../propTypes/shared.js'
-import { periodLabel } from '../utils/invoicePeriod.js'
+import DateEntryField from '../DateEntryField.jsx'
+import { periodShape } from '../../propTypes/shared.js'
+import { periodLabel } from '../../utils/invoicePeriod.js'
 
 const MODES = ['month', 'quarter', 'fiscal_year', 'all_time']
 const MODE_LABELS = { month: 'Month', quarter: 'Quarter', fiscal_year: 'Fiscal Year', all_time: 'All Time' }
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-// ─── internal grid cell ────────────────────────────────────────────────────
 
 function GridCell({ label, hasData, isSelected, onClick }) {
   return (
@@ -56,9 +54,30 @@ GridCell.propTypes = {
   onClick: PropTypes.func.isRequired,
 }
 
-// ─── main component ────────────────────────────────────────────────────────
+function buildAvailability(availableDates) {
+  const yearsWithData = new Set()
+  const monthsByYear = new Map()
+  const quartersByYear = new Map()
 
-export default function InvoicePeriodPicker({ invoices, value, onChange }) {
+  for (const value of availableDates) {
+    if (!value) continue
+    const d = new Date(`${String(value).slice(0, 10)}T12:00:00`)
+    if (Number.isNaN(d.getTime())) continue
+
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    const q = Math.floor(m / 3) + 1
+    yearsWithData.add(y)
+    if (!monthsByYear.has(y)) monthsByYear.set(y, new Set())
+    monthsByYear.get(y).add(m)
+    if (!quartersByYear.has(y)) quartersByYear.set(y, new Set())
+    quartersByYear.get(y).add(q)
+  }
+
+  return { yearsWithData, monthsByYear, quartersByYear }
+}
+
+export default function PeriodPicker({ availableDates, value, onChange }) {
   const [anchor, setAnchor] = useState(null)
   const [pickerMode, setPickerMode] = useState(
     value.mode === 'custom' ? 'fiscal_year' : value.mode,
@@ -70,27 +89,10 @@ export default function InvoicePeriodPicker({ invoices, value, onChange }) {
   const [customFrom, setCustomFrom] = useState(value.mode === 'custom' ? value.from : '')
   const [customTo, setCustomTo] = useState(value.mode === 'custom' ? value.to : '')
 
-  // Pre-compute which years / months / quarters have invoice data.
-  const { yearsWithData, monthsByYear, quartersByYear } = useMemo(() => {
-    const years = new Set()
-    const monthMap = new Map()
-    const quarterMap = new Map()
-    for (const inv of invoices) {
-      if (!inv.issue_date) continue
-      const d = new Date(inv.issue_date)
-      const y = d.getFullYear()
-      const m = d.getMonth()
-      const q = Math.floor(m / 3) + 1
-      years.add(y)
-      if (!monthMap.has(y)) monthMap.set(y, new Set())
-      monthMap.get(y).add(m)
-      if (!quarterMap.has(y)) quarterMap.set(y, new Set())
-      quarterMap.get(y).add(q)
-    }
-    return { yearsWithData: years, monthsByYear: monthMap, quartersByYear: quarterMap }
-  }, [invoices])
-
-  // ── handlers ──────────────────────────────────────────────────────────────
+  const { yearsWithData, monthsByYear, quartersByYear } = useMemo(
+    () => buildAvailability(availableDates),
+    [availableDates],
+  )
 
   function handleOpen(e) {
     const year = value.year ?? new Date().getFullYear()
@@ -132,19 +134,13 @@ export default function InvoicePeriodPicker({ invoices, value, onChange }) {
     handleSelect({ mode: 'custom', from: customFrom, to: customTo })
   }
 
-  // ── derived display values ─────────────────────────────────────────────────
-
   const decadeYears = Array.from({ length: 10 }, (_, i) => viewDecade + i)
-
   const navigatorLabel =
     pickerMode === 'fiscal_year'
-      ? `${viewDecade} – ${viewDecade + 9}`
+      ? `${viewDecade} - ${viewDecade + 9}`
       : String(viewYear)
-
   const showGrid = pickerMode !== 'all_time'
   const open = Boolean(anchor)
-
-  // ── render ─────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -168,7 +164,6 @@ export default function InvoicePeriodPicker({ invoices, value, onChange }) {
         slotProps={{ paper: { sx: { width: 312 } } }}
       >
         <Box sx={{ p: 2 }}>
-          {/* Mode tabs */}
           <ToggleButtonGroup
             value={pickerMode}
             exclusive
@@ -177,18 +172,17 @@ export default function InvoicePeriodPicker({ invoices, value, onChange }) {
             fullWidth
             sx={{ mb: 2 }}
           >
-            {MODES.map((m) => (
+            {MODES.map((mode) => (
               <ToggleButton
-                key={m}
-                value={m}
+                key={mode}
+                value={mode}
                 sx={{ flex: 1, fontSize: '0.72rem', py: 0.5, px: 0.25, lineHeight: 1.4 }}
               >
-                {MODE_LABELS[m]}
+                {MODE_LABELS[mode]}
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
 
-          {/* Year / decade navigator + selection grid */}
           {showGrid && (
             <>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -265,31 +259,32 @@ export default function InvoicePeriodPicker({ invoices, value, onChange }) {
 
           <Divider sx={{ mb: 1.5 }} />
 
-          {/* Custom range */}
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
             Custom Range
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <TextField
+            <DateEntryField
               size="small"
               label="From"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
+              openPickerLabel="open from picker"
               sx={{ flex: 1 }}
               slotProps={{
-                htmlInput: { type: 'date', max: customTo || undefined },
+                htmlInput: { max: customTo || undefined },
                 inputLabel: { shrink: true },
               }}
             />
-            <Typography variant="body2" color="text.secondary">→</Typography>
-            <TextField
+            <Typography variant="body2" color="text.secondary">to</Typography>
+            <DateEntryField
               size="small"
               label="To"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
+              openPickerLabel="open to picker"
               sx={{ flex: 1 }}
               slotProps={{
-                htmlInput: { type: 'date', min: customFrom || undefined },
+                htmlInput: { min: customFrom || undefined },
                 inputLabel: { shrink: true },
               }}
             />
@@ -309,8 +304,8 @@ export default function InvoicePeriodPicker({ invoices, value, onChange }) {
   )
 }
 
-InvoicePeriodPicker.propTypes = {
-  invoices: PropTypes.arrayOf(invoiceShape).isRequired,
+PeriodPicker.propTypes = {
+  availableDates: PropTypes.arrayOf(PropTypes.string).isRequired,
   value: periodShape.isRequired,
   onChange: PropTypes.func.isRequired,
 }
