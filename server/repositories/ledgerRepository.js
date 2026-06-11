@@ -12,7 +12,10 @@ const SOURCE_JOIN_COLUMNS = `
        p.memo AS purchase_memo,
        j.entry_number AS journal_entry_number,
        j.description AS journal_description,
-       bm.name AS reimbursement_member_name`
+       bm.name AS reimbursement_member_name,
+       COALESCE(vr.year, vrr.year) AS vat_return_year,
+       COALESCE(vr.quarter, vrr.quarter) AS vat_return_quarter,
+       vrp.direction AS vat_payment_direction`
 
 const SOURCE_JOINS = `
   LEFT JOIN invoices i
@@ -24,7 +27,13 @@ const SOURCE_JOINS = `
   LEFT JOIN reimbursements r
     ON lt.source_type = 'reimbursement' AND r.id = lt.source_id AND r.tenant_id = lt.tenant_id
   LEFT JOIN band_members bm
-    ON bm.id = r.band_member_id AND bm.tenant_id = r.tenant_id`
+    ON bm.id = r.band_member_id AND bm.tenant_id = r.tenant_id
+  LEFT JOIN vat_returns vr
+    ON lt.source_type = 'vat_settlement' AND vr.id = lt.source_id AND vr.tenant_id = lt.tenant_id
+  LEFT JOIN vat_return_payments vrp
+    ON lt.source_type = 'vat_settlement_payment' AND vrp.id = lt.source_id AND vrp.tenant_id = lt.tenant_id
+  LEFT JOIN vat_returns vrr
+    ON vrr.id = vrp.vat_return_id AND vrr.tenant_id = vrp.tenant_id`
 
 // Transactions in the (optional) date range with their gross amount (sum of
 // the debit side, in cents) and the joined source-doc fields.
@@ -117,6 +126,33 @@ export async function checkingAccountBalance(executor, tenantId) {
     [tenantId],
   )
   return rows[0]?.balance_cents ?? 0
+}
+
+// Signed running balances of the configured input/output VAT accounts as of a
+// date (entry_date <= asOf). Because each VAT settlement posts reversals back
+// into these accounts, the running balance equals exactly the unsettled
+// accumulation. Output VAT (a liability) grows with credits, input VAT (an
+// asset) with debits; either can go negative in a credit-heavy period.
+export async function vatAccountBalances(executor, tenantId, { asOf }) {
+  const { rows } = await executor.query(
+    `SELECT COALESCE(SUM(e.credit_cents - e.debit_cents)
+              FILTER (WHERE e.account_code = tas.output_vat_account_code), 0)::int AS output_cents,
+            COALESCE(SUM(e.debit_cents - e.credit_cents)
+              FILTER (WHERE e.account_code = tas.input_vat_account_code), 0)::int AS input_cents
+       FROM tenant_accounting_settings tas
+       LEFT JOIN LATERAL (
+         SELECT le.account_code, le.debit_cents, le.credit_cents
+           FROM ledger_entries le
+           JOIN ledger_transactions lt
+             ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+          WHERE le.tenant_id = tas.tenant_id
+            AND lt.entry_date <= $2::date
+       ) e ON true
+      WHERE tas.tenant_id = $1
+      GROUP BY tas.tenant_id`,
+    [tenantId, asOf],
+  )
+  return rows[0] || { output_cents: 0, input_cents: 0 }
 }
 
 // Distinct entry dates for the PeriodPicker availability grid.

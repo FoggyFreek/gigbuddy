@@ -15,6 +15,8 @@ export const SETTINGS_TYPE_MAP = {
   default_expense_account_code: 'expense',
   output_vat_account_code: 'liability',
   input_vat_account_code: 'asset',
+  vat_receivable_settlement_account_code: 'asset',
+  vat_payable_settlement_account_code: 'liability',
 }
 
 export const SETTINGS_CODE_FIELDS = Object.keys(SETTINGS_TYPE_MAP)

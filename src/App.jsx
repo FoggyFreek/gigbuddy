@@ -38,6 +38,8 @@ const JournalPage = lazy(() => import('./pages/JournalPage.jsx'))
 const LedgerEntriesPage = lazy(() => import('./pages/LedgerEntriesPage.jsx'))
 const LedgerEntryDetailPage = lazy(() => import('./pages/LedgerEntryDetailPage.jsx'))
 const ReimbursementsPage = lazy(() => import('./pages/ReimbursementsPage.jsx'))
+const VatReturnsPage = lazy(() => import('./pages/VatReturnsPage.jsx'))
+const VatReturnDetailPage = lazy(() => import('./pages/VatReturnDetailPage.jsx'))
 const TenantSettingsPage = lazy(() => import('./pages/TenantSettingsPage.jsx'))
 const PaymentThanksPage = lazy(() => import('./pages/PaymentThanksPage.jsx'))
 const TenantsPage = lazy(() => import('./pages/admin/TenantsPage.jsx'))
@@ -97,6 +99,9 @@ export default function App() {
             <Route element={<RequireTenantAdmin />}>
               <Route path="/members" element={<MembersPage />} />
               <Route path="/settings" element={<TenantSettingsPage />} />
+              <Route path="/vat-returns" element={<VatReturnsPage />}>
+                <Route path=":id" element={<VatReturnDetailPage />} />
+              </Route>
             </Route>
             <Route element={<RequireSuperAdmin />}>
               <Route path="/admin/tenants" element={<TenantsPage />} />

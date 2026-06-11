@@ -37,6 +37,7 @@ import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined'
 import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined'
 import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
 import VolunteerActivismOutlined from '@mui/icons-material/VolunteerActivismOutlined'
+import AccountBalanceOutlined from '@mui/icons-material/AccountBalanceOutlined'
 import LibraryMusicOutlined from '@mui/icons-material/LibraryMusicOutlined'
 import QueueMusicOutlined from '@mui/icons-material/QueueMusicOutlined'
 import { useProfile } from '../contexts/profileContext.js'
@@ -99,6 +100,7 @@ const NAV_GROUPS = [
       { to: '/reimbursements', label: 'Reimbursements', icon: VolunteerActivismOutlined },
       { to: '/journal', label: 'Journal', icon: MenuBookOutlined },
       { to: '/ledger', label: 'Ledger entries', icon: ListAltOutlined },
+      { to: '/vat-returns', label: 'VAT declarations', icon: AccountBalanceOutlined, adminOnly: true },
     ],
   },
   {
@@ -135,14 +137,29 @@ export default function AppShell() {
     if (isMobile) setMobileOpen(false)
   }
 
+  const isSuperAdmin = !!user?.isSuperAdmin
+  const isTenantAdmin =
+    isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
+
+  // Admin-only nav items (adminOnly: true) are hidden from plain members; the
+  // matching routes sit behind RequireTenantAdmin and the API behind the
+  // tenantAdmin gate, so this is presentation, not the defense.
+  const visibleGroups = useMemo(
+    () =>
+      NAV_GROUPS
+        .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isTenantAdmin) }))
+        .filter((g) => g.children.length > 0),
+    [isTenantAdmin],
+  )
+
   // Single-open accordion: the group containing the active route auto-expands,
   // and clicking another header switches which one is open. We follow the route
   // by adjusting state during render (React's recommended pattern) rather than
   // an effect, so navigation re-opens the owning group while manual toggles in
   // between are still honoured.
   const activeGroupKey = useMemo(
-    () => NAV_GROUPS.find((g) => g.children.some((c) => isItemSelected(c.to, pathname)))?.key ?? null,
-    [pathname],
+    () => visibleGroups.find((g) => g.children.some((c) => isItemSelected(c.to, pathname)))?.key ?? null,
+    [visibleGroups, pathname],
   )
   const [expandedKey, setExpandedKey] = useState(activeGroupKey)
   const [prevActiveKey, setPrevActiveKey] = useState(activeGroupKey)
@@ -152,9 +169,6 @@ export default function AppShell() {
   }
   const handleToggleGroup = (key) => setExpandedKey((k) => (k === key ? null : key))
 
-  const isSuperAdmin = !!user?.isSuperAdmin
-  const isTenantAdmin =
-    isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
   const memberships = user?.memberships || []
   const approvedMemberships = memberships.filter((m) => m.status === 'approved')
   const activeTenantId = user?.activeTenantId ?? null
@@ -177,7 +191,7 @@ export default function AppShell() {
       <Toolbar />
       <Box sx={{ flex: 1, overflow: 'auto', pt: 1 }}>
         <List>
-          {NAV_GROUPS.map((group) => (
+          {visibleGroups.map((group) => (
             <NavGroup
               key={group.key}
               group={group}

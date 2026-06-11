@@ -18,6 +18,7 @@ import accountsRouter from './accounts.js'
 import journalRouter from './journal.js'
 import ledgerRouter from './ledger.js'
 import reimbursementsRouter from './reimbursements.js'
+import vatReturnsRouter from './vatReturns.js'
 import pushRouter from './push.js'
 import authRouter from './auth.js'
 import usersRouter from './users.js'
@@ -140,6 +141,7 @@ router.use('/accounts', tenantMember, accountsRouter)
 router.use('/journal', tenantMember, journalRouter)
 router.use('/ledger', tenantMember, ledgerRouter)
 router.use('/reimbursements', tenantMember, reimbursementsRouter)
+router.use('/vat-returns', tenantAdmin, vatReturnsRouter)
 router.use('/push', tenantMember, pushRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)
 router.use('/files', tenantMember, filesRouter)

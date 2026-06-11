@@ -112,6 +112,13 @@ describe('accounts — migration backfill parity', () => {
       'utf8',
     )
     await pool.query(migrationSql)
+    // 075 adds the VAT settlement accounts (15010/24010) for existing tenants;
+    // replay it too so the SQL-backfilled tenant matches the JS seed.
+    const vatMigrationSql = readFileSync(
+      join(__dirname, '../../../server/db/migrations/075_vat_returns.sql'),
+      'utf8',
+    )
+    await pool.query(vatMigrationSql)
 
     const { rows: accs } = await pool.query(
       'SELECT code, name, type, parent_code FROM chart_of_accounts WHERE tenant_id = $1 ORDER BY code',

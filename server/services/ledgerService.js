@@ -231,6 +231,8 @@ function originFor(row) {
     case 'purchase': return { label, path: `/purchases/${row.source_id}` }
     case 'journal': return { label, path: '/journal' }
     case 'reimbursement': return { label, path: '/reimbursements' }
+    case 'vat_settlement': return { label, path: '/vat-returns' }
+    case 'vat_settlement_payment': return { label, path: '/vat-returns' }
     default: return { label, path: null }
   }
 }

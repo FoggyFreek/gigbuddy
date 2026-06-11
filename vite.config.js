@@ -28,6 +28,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/tests/setup.js',
+    // Keep agent worktrees under .claude (full repo copies) out of test discovery.
+    exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'],
     // Frontend coverage. The server suite uses vitest.server.config.js so each
     // run emits its own lcov (coverage/frontend, coverage/server), merged by Sonar.
     coverage: {

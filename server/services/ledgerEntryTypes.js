@@ -12,6 +12,8 @@ const TYPE_MAP = {
   'purchase/paid':      { type: 'Outgoing payment', group: 'payments',  voided: false, sign: -1 },
   'reimbursement/paid': { type: 'Reimbursement',    group: 'payments',  voided: false, sign: -1 },
   'journal/posted':     { type: 'Journal',          group: 'journals',  voided: false, sign: null },
+  'vat_settlement/filed':        { type: 'VAT return',  group: 'journals', voided: false, sign: null },
+  'vat_settlement_payment/paid': { type: 'VAT payment', group: 'payments', voided: false, sign: null },
 }
 
 export function classify(sourceType, sourceEvent) {
@@ -52,6 +54,12 @@ export function describe(row) {
       return `Reimbursement to ${row.reimbursement_member_name}`
     case 'journal/posted':
       return row.journal_description ?? fallback
+    case 'vat_settlement/filed':
+      if (!row.vat_return_year) return fallback
+      return `VAT return ${row.vat_return_year} Q${row.vat_return_quarter}`
+    case 'vat_settlement_payment/paid':
+      if (!row.vat_return_year) return fallback
+      return `VAT ${row.vat_payment_direction === 'refund' ? 'refund' : 'payment'} for ${row.vat_return_year} Q${row.vat_return_quarter}`
     default:
       return fallback
   }

@@ -64,6 +64,8 @@ router.get('/settings', async (req, res, next) => {
       primary_checking_account_code: existingCodes.has('11000') ? '11000' : null,
       output_vat_account_code: existingCodes.has('24000') ? '24000' : null,
       input_vat_account_code: existingCodes.has('15000') ? '15000' : null,
+      vat_receivable_settlement_account_code: existingCodes.has('15010') ? '15010' : null,
+      vat_payable_settlement_account_code: existingCodes.has('24010') ? '24010' : null,
     }
     const { rows: inserted } = await pool.query(
       `INSERT INTO tenant_accounting_settings (
@@ -71,8 +73,9 @@ router.get('/settings', async (req, res, next) => {
          receivable_account_code, default_revenue_account_code,
          payable_account_code, default_reimbursement_account_code, default_expense_account_code,
          primary_checking_account_code,
-         output_vat_account_code, input_vat_account_code
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         output_vat_account_code, input_vat_account_code,
+         vat_receivable_settlement_account_code, vat_payable_settlement_account_code
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (tenant_id) DO UPDATE SET updated_at = NOW()
        RETURNING *`,
       [
@@ -86,6 +89,8 @@ router.get('/settings', async (req, res, next) => {
         defaults.primary_checking_account_code,
         defaults.output_vat_account_code,
         defaults.input_vat_account_code,
+        defaults.vat_receivable_settlement_account_code,
+        defaults.vat_payable_settlement_account_code,
       ],
     )
     res.json(inserted[0])
@@ -232,7 +237,9 @@ router.patch('/:id', requireTenantAdmin, async (req, res, next) => {
            default_expense_account_code = $2 OR
            primary_checking_account_code = $2 OR
            output_vat_account_code = $2 OR
-           input_vat_account_code = $2
+           input_vat_account_code = $2 OR
+           vat_receivable_settlement_account_code = $2 OR
+           vat_payable_settlement_account_code = $2
          )`,
         [req.tenantId, code],
       )
@@ -360,6 +367,8 @@ async function insertSettingsWithDefaults(client, tenantId, updates) {
     primary_checking_account_code: null,
     output_vat_account_code: null,
     input_vat_account_code: null,
+    vat_receivable_settlement_account_code: null,
+    vat_payable_settlement_account_code: null,
     books_closed_through: null,
     ...updates,
   }
@@ -370,14 +379,16 @@ async function insertSettingsWithDefaults(client, tenantId, updates) {
        payable_account_code, default_reimbursement_account_code, default_expense_account_code,
        primary_checking_account_code,
        output_vat_account_code, input_vat_account_code,
+       vat_receivable_settlement_account_code, vat_payable_settlement_account_code,
        books_closed_through
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
     [
       tenantId, full.currency,
       full.receivable_account_code, full.default_revenue_account_code,
       full.payable_account_code, full.default_reimbursement_account_code, full.default_expense_account_code,
       full.primary_checking_account_code,
       full.output_vat_account_code, full.input_vat_account_code,
+      full.vat_receivable_settlement_account_code, full.vat_payable_settlement_account_code,
       full.books_closed_through,
     ],
   )

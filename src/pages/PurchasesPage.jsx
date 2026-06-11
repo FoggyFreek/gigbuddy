@@ -170,7 +170,6 @@ export default function PurchasesPage() {
 
       {!loading && (
         <>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Summary</Typography>
           <Box sx={{ display: 'flex', gap: 1.5, mb: 3, flexWrap: 'wrap' }}>
             {SUMMARY_CARDS.map((card) => {
               const stats = summaryStats[card.key]

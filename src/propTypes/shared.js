@@ -322,3 +322,46 @@ export const calendarCellShape = PropTypes.shape({
   isWeekend: PropTypes.bool,
   bgcolor: PropTypes.string,
 })
+
+// One payment/refund against a filed VAT declaration.
+export const vatReturnPaymentShape = PropTypes.shape({
+  id: idProp,
+  amount_cents: PropTypes.number,
+  direction: PropTypes.oneOf(['payment', 'refund']),
+  bank_account_code: PropTypes.string,
+  paid_on: PropTypes.string,
+})
+
+// A filed VAT declaration (GET /api/vat-returns).
+export const vatReturnShape = PropTypes.shape({
+  id: idProp,
+  year: PropTypes.number,
+  quarter: PropTypes.number,
+  period_from: PropTypes.string,
+  period_to: PropTypes.string,
+  input_vat_cents: PropTypes.number,
+  output_vat_cents: PropTypes.number,
+  net_cents: PropTypes.number,
+  direction: PropTypes.oneOf(['payable', 'receivable', 'nil']),
+  settlement_account_code: PropTypes.string,
+  due_date: PropTypes.string,
+  notes: PropTypes.string,
+  status: PropTypes.string,
+  paid_cents: PropTypes.number,
+  payments: PropTypes.arrayOf(vatReturnPaymentShape),
+  ledger_transaction_id: idProp,
+})
+
+// The quarter preview returned by GET /api/vat-returns/preview.
+export const vatReturnPreviewShape = PropTypes.shape({
+  year: PropTypes.number,
+  quarter: PropTypes.number,
+  period_from: PropTypes.string,
+  period_to: PropTypes.string,
+  due_date: PropTypes.string,
+  input_vat_cents: PropTypes.number,
+  output_vat_cents: PropTypes.number,
+  net_cents: PropTypes.number,
+  direction: PropTypes.oneOf(['payable', 'receivable', 'nil']),
+  period_ended: PropTypes.bool,
+})
