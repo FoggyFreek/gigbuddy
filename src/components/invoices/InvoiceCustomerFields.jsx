@@ -52,8 +52,10 @@ export default function InvoiceCustomerFields({
           </Select>
         </FormControl>
         <FormControl size="small">
-          <InputLabel>Status</InputLabel>
+          <InputLabel id="invoice-status-label">Status</InputLabel>
           <Select
+            labelId="invoice-status-label"
+            id="invoice-status-select"
             label="Status"
             value={invoice?.status || 'draft'}
             onChange={(e) => onStatusChange(e.target.value)}

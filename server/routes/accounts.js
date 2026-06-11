@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { requireTenantAdmin } from '../middleware/tenant.js'
+import { acquireAccountingSettingsLock } from '../services/ledgerService.js'
 import {
   parseId,
   validateAccountCreate,
@@ -10,6 +11,31 @@ import {
 } from '../validators/accountValidators.js'
 
 const router = Router()
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+// Changing these account codes while a balance is still open on the current
+// account would orphan that balance: postings already made (payable accrual,
+// member-paid reimbursement liability, receivable on sent invoices) would sit
+// on the old account while the clearing legs land on the new one. The check
+// runs inside a transaction holding the per-tenant accounting settings advisory
+// lock, so it serializes against in-flight postings.
+const OPEN_BALANCE_GUARDS = {
+  payable_account_code: {
+    sql: `SELECT 1 FROM purchases WHERE tenant_id = $1 AND status = 'approved' LIMIT 1`,
+    reason: 'approved unpaid purchases exist',
+  },
+  default_reimbursement_account_code: {
+    sql: `SELECT 1 FROM purchases
+           WHERE tenant_id = $1 AND payment_method = 'member' AND status = 'paid'
+             AND reimbursement_id IS NULL LIMIT 1`,
+    reason: 'outstanding member-paid purchases exist',
+  },
+  receivable_account_code: {
+    sql: `SELECT 1 FROM invoices WHERE tenant_id = $1 AND status = 'sent' LIMIT 1`,
+    reason: 'sent unpaid invoices exist',
+  },
+}
 
 // ---------- GET /api/accounts/settings ----------
 // Must be declared before /:id so Express doesn't treat "settings" as an id.
@@ -103,6 +129,17 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
     updates[field] = code
   }
 
+  if ('books_closed_through' in body) {
+    const val = body.books_closed_through
+    if (val === null || val === undefined || val === '') {
+      updates.books_closed_through = null
+    } else if (typeof val === 'string' && ISO_DATE_RE.test(val) && !Number.isNaN(Date.parse(val))) {
+      updates.books_closed_through = val
+    } else {
+      return res.status(400).json({ error: 'invalid_books_closed_through' })
+    }
+  }
+
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'nothing_to_update' })
   }
@@ -111,8 +148,33 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
   sets.push('updated_at = NOW()')
   const values = [req.tenantId, ...Object.values(updates)]
 
+  const client = await pool.connect()
   try {
-    const { rows } = await pool.query(
+    await client.query('BEGIN')
+    // Serialize against ledger postings (which take the same lock via
+    // loadAccountingSettings), then refuse to move an account code that still
+    // carries an open balance.
+    await acquireAccountingSettingsLock(client, req.tenantId)
+    const { rows: currentRows } = await client.query(
+      'SELECT * FROM tenant_accounting_settings WHERE tenant_id = $1',
+      [req.tenantId],
+    )
+    const current = currentRows[0] || {}
+    for (const [field, guard] of Object.entries(OPEN_BALANCE_GUARDS)) {
+      if (!(field in updates)) continue
+      if (updates[field] === (current[field] ?? null)) continue
+      const { rows: open } = await client.query(guard.sql, [req.tenantId])
+      if (open.length) {
+        await client.query('ROLLBACK')
+        return res.status(409).json({
+          error: `Cannot change ${field}: ${guard.reason}. Settle them first.`,
+          code: 'account_has_open_balance',
+          field,
+        })
+      }
+    }
+
+    const { rows } = await client.query(
       `UPDATE tenant_accounting_settings SET ${sets.join(', ')} WHERE tenant_id = $1 RETURNING *`,
       values,
     )
@@ -128,29 +190,37 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
         primary_checking_account_code: null,
         output_vat_account_code: null,
         input_vat_account_code: null,
+        books_closed_through: null,
         ...updates,
       }
-      const { rows: ins } = await pool.query(
+      const { rows: ins } = await client.query(
         `INSERT INTO tenant_accounting_settings (
            tenant_id, currency,
            receivable_account_code, default_revenue_account_code,
            payable_account_code, default_reimbursement_account_code, default_expense_account_code,
            primary_checking_account_code,
-           output_vat_account_code, input_vat_account_code
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+           output_vat_account_code, input_vat_account_code,
+           books_closed_through
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
         [
           req.tenantId, full.currency,
           full.receivable_account_code, full.default_revenue_account_code,
           full.payable_account_code, full.default_reimbursement_account_code, full.default_expense_account_code,
           full.primary_checking_account_code,
           full.output_vat_account_code, full.input_vat_account_code,
+          full.books_closed_through,
         ],
       )
+      await client.query('COMMIT')
       return res.json(ins[0])
     }
+    await client.query('COMMIT')
     res.json(rows[0])
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
     next(err)
+  } finally {
+    client.release()
   }
 })
 

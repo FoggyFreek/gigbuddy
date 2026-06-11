@@ -32,13 +32,13 @@ router.get('/', async (req, res) => {
 // Declared before '/:id' so 'approve' isn't parsed as an id.
 router.post('/approve', async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
-  const result = await approveMany(pool, req.tenantId, ids)
+  const result = await approveMany(pool, req.tenantId, ids, req.user.id)
   res.json(result)
 })
 
 // ---------- create ----------
 router.post('/', async (req, res) => {
-  const result = await createJournal(pool, req.tenantId, req.body || {})
+  const result = await createJournal(pool, req.tenantId, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   const { journal } = await getJournal(pool, req.tenantId, result.journalId)
   res.status(201).json(journal)
@@ -72,7 +72,7 @@ router.delete('/:id', async (req, res) => {
 // ---------- approve single ----------
 router.post('/:id/approve', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const result = await approveJournal(pool, req.tenantId, id)
+  const result = await approveJournal(pool, req.tenantId, id, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   const { journal } = await getJournal(pool, req.tenantId, id)
   res.json(journal)

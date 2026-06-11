@@ -41,7 +41,7 @@ router.get('/members/:id/purchases', async (req, res) => {
 
 // ---------- register a reimbursement ----------
 router.post('/', async (req, res) => {
-  const result = await createReimbursement(pool, req.tenantId, req.body || {})
+  const result = await createReimbursement(pool, req.tenantId, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   res.status(201).json(result.reimbursement)
 })
@@ -49,7 +49,7 @@ router.post('/', async (req, res) => {
 // ---------- reimburse a member's full outstanding balance ----------
 router.post('/members/:id/full', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const result = await reimburseMemberFull(pool, req.tenantId, id, req.body || {})
+  const result = await reimburseMemberFull(pool, req.tenantId, id, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   res.status(201).json(result.reimbursement)
 })

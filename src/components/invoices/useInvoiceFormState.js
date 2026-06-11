@@ -20,6 +20,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }) {
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [form, setForm] = useState(() => emptyDraft())
   const [tenant, setTenant] = useState(null)
   const [invoice, setInvoice] = useState(null)
@@ -118,7 +119,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }) {
     }
   }
 
-  async function handleStatusChange(newStatus) {
+  async function applyStatusChange(newStatus) {
     try {
       setSaving(true)
       setError(null)
@@ -130,6 +131,21 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  // Voiding is irreversible and has side effects (ledger reversal, payment-link
+  // removal), so it goes through a confirmation dialog first.
+  function handleStatusChange(newStatus) {
+    if (newStatus === 'void' && invoice?.status !== 'void') {
+      setVoidDialogOpen(true)
+      return
+    }
+    return applyStatusChange(newStatus)
+  }
+
+  async function confirmVoid() {
+    setVoidDialogOpen(false)
+    await applyStatusChange('void')
   }
 
   function handleDelete() {
@@ -165,6 +181,9 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }) {
     setDiscountOpen,
     deleteDialogOpen,
     setDeleteDialogOpen,
+    voidDialogOpen,
+    setVoidDialogOpen,
+    confirmVoid,
     patchForm,
     patchLine,
     addLine,

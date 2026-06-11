@@ -13,7 +13,7 @@ import {
   settlePurchases,
 } from '../repositories/reimbursementRepository.js'
 import {
-  AccountingNotConfiguredError,
+  ledgerErrorResult,
   postReimbursementPaid,
 } from './ledgerService.js'
 
@@ -50,7 +50,7 @@ export async function listMemberOutstandingPurchases(pool, tenantId, bandMemberI
 // Registers a reimbursement that settles the selected member-paid purchases and
 // posts DR reimbursement liability / CR checking for their summed total. The
 // insert, settlement, and journal all happen in one transaction.
-export async function createReimbursement(pool, tenantId, body) {
+export async function createReimbursement(pool, tenantId, body, actorUserId = null) {
   const member = await validateBandMemberForTenant(pool, body.band_member_id, tenantId)
   if (member === null) {
     return { error: { status: 400, body: { error: 'Invalid band_member_id', code: 'invalid_band_member' } } }
@@ -85,6 +85,7 @@ export async function createReimbursement(pool, tenantId, body) {
       amount_cents: amountCents,
       paid_on: paidOn,
       memo: body.memo ?? null,
+      created_by_user_id: actorUserId,
     })
     const claimed = await settlePurchases(client, tenantId, reimbursement.id, uniqueIds)
     if (claimed !== uniqueIds.length) {
@@ -92,14 +93,13 @@ export async function createReimbursement(pool, tenantId, body) {
       conflict.code = RACE_CONFLICT
       throw conflict
     }
-    await postReimbursementPaid(client, tenantId, reimbursement)
+    await postReimbursementPaid(client, tenantId, reimbursement, { actorUserId })
     await client.query('COMMIT')
     return { reimbursement }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
-    if (err instanceof AccountingNotConfiguredError) {
-      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
-    }
+    const mapped = ledgerErrorResult(err)
+    if (mapped) return mapped
     if (err.code === RACE_CONFLICT) return notOutstanding()
     throw err
   } finally {
@@ -108,7 +108,7 @@ export async function createReimbursement(pool, tenantId, body) {
 }
 
 // Reimburses a member's entire outstanding balance in one go.
-export async function reimburseMemberFull(pool, tenantId, bandMemberId, body = {}) {
+export async function reimburseMemberFull(pool, tenantId, bandMemberId, body = {}, actorUserId = null) {
   const member = await validateBandMemberForTenant(pool, bandMemberId, tenantId)
   if (member === null) return { error: { status: 404, body: { error: 'Not found' } } }
 
@@ -122,5 +122,5 @@ export async function reimburseMemberFull(pool, tenantId, bandMemberId, body = {
     purchase_ids: outstanding.map((p) => p.id),
     paid_on: body.paid_on,
     memo: body.memo,
-  })
+  }, actorUserId)
 }

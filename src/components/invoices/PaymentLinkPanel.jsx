@@ -11,9 +11,10 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import LaunchIcon from '@mui/icons-material/Launch'
 import RefreshIcon from '@mui/icons-material/Refresh'
-import { createInvoicePaymentLink, syncInvoicePaymentLink } from '../../api/invoices.js'
+import { createInvoicePaymentLink, syncInvoicePaymentLink, deleteInvoicePaymentLink } from '../../api/invoices.js'
 import { invoiceShape } from '../../propTypes/shared.js'
 
 const MOLLIE_STATUS_COLOR = {
@@ -27,6 +28,11 @@ const CREATE_ERROR_MESSAGES = {
   mollie_key_missing: 'Mollie API key not configured. Go to Settings → Integrations.',
   zero_amount: 'Invoice total must be greater than zero.',
   void_invoice: 'Cannot create a payment link for a void invoice.',
+}
+
+const REMOVE_ERROR_MESSAGES = {
+  payment_link_paid: 'This payment link has already been paid — the invoice is now marked paid.',
+  mollie_error: 'Mollie could not remove the link. Try again later.',
 }
 
 export default function PaymentLinkPanel({ invoice, onUpdated }) {
@@ -66,6 +72,19 @@ export default function PaymentLinkPanel({ invoice, onUpdated }) {
       })
     } catch (err) {
       setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleRemove() {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await deleteInvoicePaymentLink(invoice.id)
+      onUpdated(result)
+    } catch (err) {
+      setError(REMOVE_ERROR_MESSAGES[err.code] ?? REMOVE_ERROR_MESSAGES[err.message] ?? err.message)
     } finally {
       setBusy(false)
     }
@@ -154,6 +173,14 @@ export default function PaymentLinkPanel({ invoice, onUpdated }) {
                 {busy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
               </IconButton>
             </Tooltip>
+
+            {paymentStatus !== 'paid' && (
+              <Tooltip title="Remove payment link">
+                <IconButton size="small" color="error" onClick={handleRemove} disabled={busy} aria-label="Remove payment link">
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
           </Stack>
         </Stack>
       )}

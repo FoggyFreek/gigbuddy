@@ -29,15 +29,11 @@ import {
   normalizeLines,
   findUnpostableLine,
 } from '../validators/journalValidators.js'
-import { AccountingNotConfiguredError, postUserJournal } from './ledgerService.js'
+import { ledgerErrorResult, postUserJournal } from './ledgerService.js'
 
 const NOT_FOUND = { status: 404, body: { error: 'Not found' } }
 const APPROVED_LOCKED = { status: 409, body: { error: 'Approved journals cannot be edited', code: 'journal_approved' } }
 const ALREADY_APPROVED = { status: 409, body: { error: 'Journal already approved', code: 'already_approved' } }
-
-function accountingError(err) {
-  return { status: err.status, body: { error: err.message, code: err.code, field: err.field } }
-}
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -72,7 +68,7 @@ export async function getJournal(pool, tenantId, id) {
 
 // ---------- create ----------
 
-export async function createJournal(pool, tenantId, body) {
+export async function createJournal(pool, tenantId, body, actorUserId = null) {
   const entryDate = body.entry_date || today()
   if (!isValidIsoDate(entryDate)) return { error: { status: 400, body: { error: 'Invalid entry_date' } } }
 
@@ -85,6 +81,7 @@ export async function createJournal(pool, tenantId, body) {
     await client.query('BEGIN')
     const id = await createJournalRepo(client, tenantId, {
       entryDate, description: body.description?.trim() || null,
+      createdByUserId: actorUserId,
     })
     if (lines.length) await replaceJournalLines(client, id, tenantId, lines)
     await client.query('COMMIT')
@@ -151,7 +148,7 @@ export async function deleteJournal(pool, tenantId, id) {
 // race-safe: the row is locked, the status flip is guarded by status='draft',
 // and a duplicate ledger post is recovered to its existing transaction id so the
 // header always ends up with a real posted_transaction_id.
-export async function approveJournal(pool, tenantId, id) {
+export async function approveJournal(pool, tenantId, id, actorUserId = null) {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -175,10 +172,11 @@ export async function approveJournal(pool, tenantId, id) {
 
     let result
     try {
-      result = await postUserJournal(client, tenantId, journal, lines)
+      result = await postUserJournal(client, tenantId, journal, lines, { actorUserId })
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {})
-      if (err instanceof AccountingNotConfiguredError) return { error: accountingError(err) }
+      const mapped = ledgerErrorResult(err)
+      if (mapped) return mapped
       if (err.message?.startsWith('ledger:')) {
         return { error: { status: 400, body: { error: err.message, code: 'unbalanced_journal' } } }
       }
@@ -202,7 +200,7 @@ export async function approveJournal(pool, tenantId, id) {
       return { error: { status: 500, body: { error: 'Failed to post journal' } } }
     }
 
-    const updated = await setApproved(client, tenantId, id, transactionId)
+    const updated = await setApproved(client, tenantId, id, transactionId, actorUserId)
     if (!updated) { await client.query('ROLLBACK'); return { error: ALREADY_APPROVED } }
 
     await client.query('COMMIT')
@@ -217,11 +215,11 @@ export async function approveJournal(pool, tenantId, id) {
 
 // Approves multiple drafts (powers "Approve all"). De-duplicates ids; each is its
 // own transaction so one bad entry doesn't sink the batch. Reports per-id results.
-export async function approveMany(pool, tenantId, ids) {
+export async function approveMany(pool, tenantId, ids, actorUserId = null) {
   const unique = [...new Set((ids || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))]
   const results = []
   for (const id of unique) {
-    const r = await approveJournal(pool, tenantId, id)
+    const r = await approveJournal(pool, tenantId, id, actorUserId)
     results.push(r.error ? { id, ok: false, ...r.error.body } : { id, ok: true })
   }
   return { results }

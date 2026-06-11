@@ -308,12 +308,17 @@ describe('ledger — invariants', () => {
   it('posting is idempotent per (entity, event)', async () => {
     const inv = await createInvoice()
     await setInvoiceStatus(inv.id, 'sent').expect(200)
-    // bounce back to draft and re-send: the sent journal must not be duplicated
-    await setInvoiceStatus(inv.id, 'draft').expect(200)
+    // Status regressions are blocked (forward-only), so re-drive the same
+    // transition instead: a same-status PATCH and a payment-link finalize both
+    // hit postInvoiceSent again — the sent journal must not be duplicated.
+    await setInvoiceStatus(inv.id, 'draft').expect(409)
     await setInvoiceStatus(inv.id, 'sent').expect(200)
+    await setInvoiceStatus(inv.id, 'paid').expect(200)
+    await setInvoiceStatus(inv.id, 'paid').expect(200)
 
     const journals = await journalsFor(seed.tenantA.id, 'invoice', inv.id)
     expect(journals.filter((j) => j.source_event === 'sent')).toHaveLength(1)
+    expect(journals.filter((j) => j.source_event === 'paid')).toHaveLength(1)
   })
 
   it('tenant isolation: tenant A journals never appear under tenant B', async () => {

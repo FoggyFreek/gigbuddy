@@ -23,6 +23,8 @@ vi.mock('../../../server/utils/imageProcess.js', () => ({
 // Mollie client mock — all test cases customise these fns.
 const mockPaymentLinksCreate = vi.fn()
 const mockPaymentLinksGet = vi.fn()
+const mockPaymentLinksDelete = vi.fn()
+const mockPaymentLinksUpdate = vi.fn()
 
 vi.mock('../../../server/utils/mollieClient.js', async (importOriginal) => {
   const actual = await importOriginal()
@@ -32,10 +34,17 @@ vi.mock('../../../server/utils/mollieClient.js', async (importOriginal) => {
       paymentLinks: {
         create: mockPaymentLinksCreate,
         get: mockPaymentLinksGet,
+        delete: mockPaymentLinksDelete,
+        update: mockPaymentLinksUpdate,
       },
     })),
   }
 })
+
+// Mollie's client throws ApiError objects carrying statusCode.
+function mollieApiError(statusCode, message = `mollie ${statusCode}`) {
+  return Object.assign(new Error(message), { statusCode })
+}
 
 // Stub the push fan-out so we can assert *which* tenant gets notified without
 // seeding subscriptions. Callers do `sendPushToTenant(...).catch(...)`, so the
@@ -90,6 +99,10 @@ beforeEach(async () => {
 
   // Default sync mock: open status, no payment yet.
   mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({ status: 'open' }))
+
+  // Default delete/update: link never opened, deletion succeeds.
+  mockPaymentLinksDelete.mockResolvedValue(true)
+  mockPaymentLinksUpdate.mockResolvedValue({ id: 'pl_test123', archived: true })
 
   // Keep push stubs returning a thenable after clearAllMocks.
   mockSendPushToTenant.mockResolvedValue(undefined)
@@ -1078,5 +1091,217 @@ describe('TOCTOU: concurrent PATCH during Mollie create is blocked', () => {
     expect(rows[0].total_cents).toBe(50000)
     expect(rows[0].status).toBe('sent')
     expect(rows[0].finalized_at).not.toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/invoices/:id/payment-link — payment-link removal
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('DELETE /api/invoices/:id/payment-link', () => {
+  async function linkedInvoiceA() {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    return inv
+  }
+
+  it('deletes the link at Mollie and clears the link columns', async () => {
+    const inv = await linkedInvoiceA()
+    const res = await asUserA(request(app).delete(`/api/invoices/${inv.id}/payment-link`))
+    expect(res.status).toBe(200)
+    expect(mockPaymentLinksDelete).toHaveBeenCalledWith('pl_test123')
+    expect(res.body.mollie_payment_link_id).toBeNull()
+    expect(res.body.mollie_payment_link_url).toBeNull()
+
+    const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].mollie_payment_link_id).toBeNull()
+    expect(rows[0].mollie_payment_link_url).toBeNull()
+    expect(rows[0].mollie_payment_status).toBeNull()
+  })
+
+  it('treats a Mollie 404 (link already gone) as success and clears columns', async () => {
+    const inv = await linkedInvoiceA()
+    mockPaymentLinksDelete.mockRejectedValue(mollieApiError(404))
+    const res = await asUserA(request(app).delete(`/api/invoices/${inv.id}/payment-link`))
+    expect(res.status).toBe(200)
+    const { rows } = await pool.query('SELECT mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].mollie_payment_link_id).toBeNull()
+  })
+
+  it('falls back to archiving when Mollie 422s and no payment is paid', async () => {
+    const inv = await linkedInvoiceA()
+    mockPaymentLinksDelete.mockRejectedValue(mollieApiError(422))
+    // Sync reports an opened link with a failed attempt — not paid.
+    mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
+      status: 'open',
+      payments: [{ id: 'tr_failed', status: 'failed' }],
+    }))
+
+    const res = await asUserA(request(app).delete(`/api/invoices/${inv.id}/payment-link`))
+    expect(res.status).toBe(200)
+    expect(mockPaymentLinksUpdate).toHaveBeenCalledWith('pl_test123', { archived: true })
+
+    const { rows } = await pool.query('SELECT mollie_payment_link_id, status FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].mollie_payment_link_id).toBeNull()
+    expect(rows[0].status).toBe('sent')
+  })
+
+  it('returns 409 payment_link_paid and marks the invoice paid when Mollie 422s with a paid payment', async () => {
+    const inv = await linkedInvoiceA()
+    mockPaymentLinksDelete.mockRejectedValue(mollieApiError(422))
+    mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
+      status: 'paid',
+      payments: [{ id: 'tr_paid', status: 'paid', paidAt: '2026-05-20T12:00:00+00:00' }],
+    }))
+
+    const res = await asUserA(request(app).delete(`/api/invoices/${inv.id}/payment-link`))
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('payment_link_paid')
+    expect(mockPaymentLinksUpdate).not.toHaveBeenCalled()
+
+    // The sync inside the helper booked the cash: invoice is paid, link kept.
+    const { rows } = await pool.query('SELECT status, mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('paid')
+    expect(rows[0].mollie_payment_link_id).toBe('pl_test123')
+  })
+
+  it('returns 502 mollie_error on an unexpected Mollie failure and keeps the link', async () => {
+    const inv = await linkedInvoiceA()
+    mockPaymentLinksDelete.mockRejectedValue(mollieApiError(500))
+    const res = await asUserA(request(app).delete(`/api/invoices/${inv.id}/payment-link`))
+    expect(res.status).toBe(502)
+    const { rows } = await pool.query('SELECT mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].mollie_payment_link_id).toBe('pl_test123')
+  })
+
+  it('returns 400 when the invoice has no payment link', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).delete(`/api/invoices/${inv.id}/payment-link`))
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('no_payment_link')
+  })
+
+  it('cross-tenant: tenant B cannot remove tenant A payment link', async () => {
+    const inv = await linkedInvoiceA()
+    const res = await asUserB(request(app).delete(`/api/invoices/${inv.id}/payment-link`))
+    expect(res.status).toBe(404)
+    expect(mockPaymentLinksDelete).not.toHaveBeenCalled()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Voiding an invoice always removes its payment link first
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('void removes the payment link', () => {
+  async function linkedInvoiceA() {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+    return inv
+  }
+
+  it('deletes the link at Mollie and voids the invoice', async () => {
+    const inv = await linkedInvoiceA()
+    const res = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'void' })
+    expect(res.status).toBe(200)
+    expect(mockPaymentLinksDelete).toHaveBeenCalledWith('pl_test123')
+
+    const { rows } = await pool.query('SELECT status, mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('void')
+    expect(rows[0].mollie_payment_link_id).toBeNull()
+  })
+
+  it('archives instead when the link was opened (422, not paid), then voids', async () => {
+    const inv = await linkedInvoiceA()
+    mockPaymentLinksDelete.mockRejectedValue(mollieApiError(422))
+    mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
+      status: 'open',
+      payments: [{ id: 'tr_open', status: 'open' }],
+    }))
+
+    const res = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'void' })
+    expect(res.status).toBe(200)
+    expect(mockPaymentLinksUpdate).toHaveBeenCalledWith('pl_test123', { archived: true })
+
+    const { rows } = await pool.query('SELECT status, mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('void')
+    expect(rows[0].mollie_payment_link_id).toBeNull()
+  })
+
+  it('refuses the void and marks the invoice paid when the link turns out paid', async () => {
+    const inv = await linkedInvoiceA()
+    mockPaymentLinksDelete.mockRejectedValue(mollieApiError(422))
+    mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
+      status: 'paid',
+      payments: [{ id: 'tr_paid', status: 'paid', paidAt: '2026-05-20T12:00:00+00:00' }],
+    }))
+
+    const res = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'void' })
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('payment_link_paid')
+
+    const { rows } = await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('paid')
+  })
+
+  it('aborts the void on an unexpected Mollie failure (link stays live, invoice stays sent)', async () => {
+    const inv = await linkedInvoiceA()
+    mockPaymentLinksDelete.mockRejectedValue(mollieApiError(503))
+    const res = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'void' })
+    expect(res.status).toBe(502)
+
+    const { rows } = await pool.query('SELECT status, mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('sent')
+    expect(rows[0].mollie_payment_link_id).toBe('pl_test123')
+  })
+
+  it('voiding an invoice without a link calls Mollie not at all', async () => {
+    const inv = await createInvoiceA()
+    const res = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'void' })
+    expect(res.status).toBe(200)
+    expect(mockPaymentLinksDelete).not.toHaveBeenCalled()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Period close: webhook cash receipts clamp to the first open day instead of
+// failing — Mollie holds the money either way.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('webhook posting clamps into the open period', () => {
+  it('marks the invoice paid and posts the journals dated after books_closed_through', async () => {
+    const inv = await createInvoiceA()
+    await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
+
+    // Close the books through the end of the payment month.
+    await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ books_closed_through: '2026-05-31' }).expect(200)
+
+    mockPaymentLinksGet.mockResolvedValue(mockPaymentLink({
+      status: 'paid',
+      payments: [{ id: 'tr_late', status: 'paid', paidAt: '2026-05-15T10:00:00+00:00' }],
+    }))
+
+    const res = await request(app)
+      .post(`/api/public/mollie/payment-links/webhook?invoice=${inv.id}`)
+      .send('id=tr_late')
+      .set('Content-Type', 'application/x-www-form-urlencoded')
+    expect(res.status).toBe(200)
+
+    const { rows } = await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('paid')
+
+    // The cash journal exists, is a system posting (no actor), and is dated in
+    // the open period (first day after the close).
+    const { rows: txns } = await pool.query(
+      `SELECT source_event, created_by_user_id, to_char(entry_date, 'YYYY-MM-DD') AS entry_date, description
+         FROM ledger_transactions
+        WHERE tenant_id = $1 AND source_type = 'invoice' AND source_id = $2 AND source_event = 'paid'`,
+      [seed.tenantA.id, inv.id],
+    )
+    expect(txns).toHaveLength(1)
+    expect(txns[0].created_by_user_id).toBeNull()
+    expect(txns[0].entry_date).toBe('2026-06-01')
+    expect(txns[0].description).toContain('posted in open period')
   })
 })

@@ -51,12 +51,12 @@ export async function fetchOutstandingPurchases(executor, tenantId, bandMemberId
   return rows
 }
 
-export async function insertReimbursement(client, tenantId, { band_member_id, amount_cents, paid_on, memo }) {
+export async function insertReimbursement(client, tenantId, { band_member_id, amount_cents, paid_on, memo, created_by_user_id = null }) {
   const { rows } = await client.query(
-    `INSERT INTO reimbursements (tenant_id, band_member_id, amount_cents, paid_on, memo)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO reimbursements (tenant_id, band_member_id, amount_cents, paid_on, memo, created_by_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [tenantId, band_member_id, amount_cents, paid_on, memo ?? null],
+    [tenantId, band_member_id, amount_cents, paid_on, memo ?? null, created_by_user_id],
   )
   return rows[0]
 }

@@ -26,6 +26,9 @@ export const createInvoicePaymentLink = (id, body = {}) =>
 export const syncInvoicePaymentLink = (id) =>
   api(`/${id}/payment-link/sync`, { method: 'POST' })
 
+export const deleteInvoicePaymentLink = (id) =>
+  api(`/${id}/payment-link`, { method: 'DELETE' })
+
 export const getInvoiceEmlDefaults = (id) => api(`/${id}/eml-defaults`)
 
 export const downloadInvoiceEml = (id, personalMessage) =>

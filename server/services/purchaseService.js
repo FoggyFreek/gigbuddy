@@ -24,7 +24,7 @@ import {
   parseReceiptNumber,
 } from '../validators/purchaseValidators.js'
 import {
-  AccountingNotConfiguredError,
+  ledgerErrorResult,
   loadAccountingSettings,
   postBillAccrued,
   postBillPaid,
@@ -93,7 +93,7 @@ async function validateApprovalLines(executor, tenantId, lines) {
 
 // ---------- create ----------
 
-export async function createPurchase(pool, tenantId, body) {
+export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   const supplierName = String(body.supplier_name ?? '').trim()
   if (!supplierName) return { error: { status: 400, body: { error: 'supplier_name is required' } } }
 
@@ -139,18 +139,20 @@ export async function createPurchase(pool, tenantId, body) {
          tenant_id, receipt_number, supplier_name, supplier_contact_id,
          receipt_date, due_date, currency, memo,
          subtotal_cents, tax_cents, total_cents,
-         status, finalized_at
+         status, finalized_at,
+         created_by_user_id, approved_by_user_id
        ) VALUES (
          $1, $2, $3, $4,
          $5, $6, $7, $8,
          $9, $10, $11,
-         $12, ${status === 'approved' ? 'NOW()' : 'NULL'}
+         $12, ${status === 'approved' ? 'NOW()' : 'NULL'},
+         $13, ${status === 'approved' ? '$13' : 'NULL'}
        ) RETURNING id`,
       [
         tenantId, receiptNumber, supplierName, supplierContactId,
         receiptDate, dueDate, currency, body.memo || null,
         totals.subtotalCents, totals.taxCents, totals.totalCents,
-        status,
+        status, actorUserId,
       ],
     )
     purchaseId = rows[0].id
@@ -167,15 +169,14 @@ export async function createPurchase(pool, tenantId, body) {
         tax_cents: totals.taxCents,
         total_cents: totals.totalCents,
       }
-      await postBillAccrued(client, tenantId, purchaseRow, lines)
+      await postBillAccrued(client, tenantId, purchaseRow, lines, { actorUserId })
     }
 
     await client.query('COMMIT')
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
-    if (err instanceof AccountingNotConfiguredError) {
-      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
-    }
+    const mapped = ledgerErrorResult(err)
+    if (mapped) return mapped
     throw err
   } finally {
     client.release()
@@ -202,13 +203,29 @@ function buildSimpleSet(body, supplierContactIdOverride) {
   return { assignments, nextIdx: idx }
 }
 
-export async function applyPurchasePatch(pool, tenantId, id, body) {
+export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId = null) {
   const existing = await fetchPurchase(pool, tenantId, id)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
 
   if (body.status !== undefined) {
     if (!STATUS_VALUES.has(body.status)) return { error: { status: 400, body: { error: 'Invalid status' } } }
     if (body.status === 'paid') return { error: USE_PAYMENT_ENDPOINT_ERROR }
+    // Forward-only: once approved the accrual journal is posted and may never be
+    // left dangling by a regression to draft; paid never changes via PATCH.
+    if (body.status !== existing.status
+        && !(existing.status === 'draft' && body.status === 'approved')) {
+      return {
+        error: {
+          status: 409,
+          body: {
+            error: `Cannot change purchase status from ${existing.status} to ${body.status}`,
+            code: 'invalid_status_transition',
+            from: existing.status,
+            to: body.status,
+          },
+        },
+      }
+    }
   }
 
   const requestedLockedFields = Object.keys(body).filter((k) => FINALIZED_LOCKED_FIELDS_SET.has(k))
@@ -274,6 +291,9 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
       if (body.status !== 'draft' && existing.finalized_at === null) {
         setClauses.push('finalized_at = NOW()')
       }
+      if (body.status === 'approved' && existing.status !== 'approved') {
+        setClauses.push(`approved_by_user_id = $${idx++}`); values.push(actorUserId)
+      }
     }
 
     if (!setClauses.length) {
@@ -290,7 +310,7 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
     if (body.status === 'approved' && existing.status !== 'approved') {
       const purchaseRow = await fetchPurchase(client, tenantId, id)
       const currentLines = await fetchPurchaseLines(client, id, tenantId)
-      await postBillAccrued(client, tenantId, purchaseRow, currentLines)
+      await postBillAccrued(client, tenantId, purchaseRow, currentLines, { actorUserId })
     }
 
     await client.query('COMMIT')
@@ -298,9 +318,8 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     if (isUniqueViolation(err)) return { error: RECEIPT_TAKEN_ERROR }
-    if (err instanceof AccountingNotConfiguredError) {
-      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
-    }
+    const mapped = ledgerErrorResult(err)
+    if (mapped) return mapped
     throw err
   } finally {
     client.release()
@@ -309,7 +328,7 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
 
 // ---------- register payment ----------
 
-export async function registerPayment(pool, tenantId, id, body) {
+export async function registerPayment(pool, tenantId, id, body, actorUserId = null) {
   const existing = await fetchPurchase(pool, tenantId, id)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
   if (existing.status === 'draft') {
@@ -352,23 +371,23 @@ export async function registerPayment(pool, tenantId, id, body) {
               paid_at = $1,
               payment_method = $2,
               paid_by_band_member_id = $3,
+              payment_registered_by_user_id = $4,
               updated_at = NOW()
-        WHERE id = $4 AND tenant_id = $5`,
-      [paidOn, method, paidByBandMemberId, id, tenantId],
+        WHERE id = $5 AND tenant_id = $6`,
+      [paidOn, method, paidByBandMemberId, actorUserId, id, tenantId],
     )
     await postBillPaid(client, tenantId, {
       ...existing,
       paid_at: paidOn,
       payment_method: method,
       paid_by_band_member_id: paidByBandMemberId,
-    })
+    }, { actorUserId })
     await client.query('COMMIT')
     return {}
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
-    if (err instanceof AccountingNotConfiguredError) {
-      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
-    }
+    const mapped = ledgerErrorResult(err)
+    if (mapped) return mapped
     throw err
   } finally {
     client.release()

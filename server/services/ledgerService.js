@@ -23,6 +23,45 @@ export class AccountingNotConfiguredError extends Error {
   }
 }
 
+// Thrown when a user-initiated posting is dated inside a closed period
+// (entry_date <= tenant_accounting_settings.books_closed_through). The HTTP
+// layer maps this to 409 period_closed and rolls back. System postings (Mollie
+// webhook cash receipts) clamp to the first open day instead — see postJournal.
+export class PeriodClosedError extends Error {
+  constructor(entryDate, closedThrough) {
+    super(`Books are closed through ${closedThrough}; cannot post on ${entryDate}`)
+    this.name = 'PeriodClosedError'
+    this.code = 'period_closed'
+    this.status = 409
+    this.entryDate = entryDate
+    this.closedThrough = closedThrough
+  }
+}
+
+// Maps the ledger guard errors to a discriminated { error } result for the HTTP
+// layer, or null when the error is not a ledger guard and should propagate.
+export function ledgerErrorResult(err) {
+  if (err instanceof AccountingNotConfiguredError) {
+    return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
+  }
+  if (err instanceof PeriodClosedError) {
+    return { error: { status: err.status, body: { error: err.message, code: err.code, closed_through: err.closedThrough } } }
+  }
+  return null
+}
+
+// Per-tenant advisory lock serializing ledger postings against accounting
+// settings changes. Posting transactions take it via loadAccountingSettings
+// (their first settings read); the settings PATCH takes it before its
+// open-balance checks, so a posting in flight to the old account codes commits
+// (and is seen by the balance check) before the codes can change, and vice
+// versa. Transaction-scoped: released automatically at COMMIT/ROLLBACK.
+export const ACCOUNTING_SETTINGS_LOCK_NAMESPACE = 53002
+
+export async function acquireAccountingSettingsLock(client, tenantId) {
+  await client.query('SELECT pg_advisory_xact_lock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -34,6 +73,10 @@ function toDateString(value) {
 }
 
 export async function loadAccountingSettings(client, tenantId) {
+  // Serialize against settings changes (see ACCOUNTING_SETTINGS_LOCK_NAMESPACE).
+  // Outside an explicit transaction the xact lock releases at statement end,
+  // which is harmless for read-only callers.
+  await acquireAccountingSettingsLock(client, tenantId)
   const { rows } = await client.query(
     'SELECT * FROM tenant_accounting_settings WHERE tenant_id = $1',
     [tenantId],
@@ -50,9 +93,34 @@ function requireCode(settings, field) {
 // Inserts one balanced journal. Drops zero lines, asserts ≥2 lines and balance,
 // then writes the transaction + entries. Idempotent on (source_type, source_id,
 // source_event): returns { posted: false } if that journal already exists.
+// Returns 'YYYY-MM-DD' of the day after the given ISO date string.
+function nextDay(isoDate) {
+  const d = new Date(`${isoDate}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
 export async function postJournal(client, tenantId, {
   entryDate, description, sourceType, sourceId, sourceEvent, lines,
+  actorUserId = null, clampToOpenPeriod = false,
 }) {
+  // Period close: user postings into a closed period are rejected; system
+  // postings (clampToOpenPeriod, e.g. webhook cash receipts) move to the first
+  // open day so external money is never silently dropped.
+  const { rows: settingsRows } = await client.query(
+    `SELECT to_char(books_closed_through, 'YYYY-MM-DD') AS closed_through
+       FROM tenant_accounting_settings WHERE tenant_id = $1`,
+    [tenantId],
+  )
+  const closedThrough = settingsRows[0]?.closed_through || null
+  let effectiveDate = entryDate
+  let effectiveDescription = description ?? null
+  if (closedThrough && entryDate <= closedThrough) {
+    if (!clampToOpenPeriod) throw new PeriodClosedError(entryDate, closedThrough)
+    effectiveDate = nextDay(closedThrough)
+    effectiveDescription = `${effectiveDescription || ''} (dated ${entryDate}, posted in open period)`.trim()
+  }
+
   const normalized = (lines || [])
     .map((l) => ({
       account_code: l.account_code,
@@ -74,11 +142,11 @@ export async function postJournal(client, tenantId, {
 
   const { rows } = await client.query(
     `INSERT INTO ledger_transactions
-       (tenant_id, entry_date, description, source_type, source_id, source_event)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (tenant_id, entry_date, description, source_type, source_id, source_event, created_by_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (tenant_id, source_type, source_id, source_event) DO NOTHING
      RETURNING id`,
-    [tenantId, entryDate, description ?? null, sourceType, sourceId, sourceEvent],
+    [tenantId, effectiveDate, effectiveDescription, sourceType, sourceId, sourceEvent, actorUserId],
   )
   if (!rows.length) return { posted: false }
   const transactionId = rows[0].id
@@ -97,7 +165,7 @@ export async function postJournal(client, tenantId, {
 // ---------- invoice journals (revenue) ----------
 
 // Invoice sent: DR receivable (asset up), CR revenue, CR output VAT (liability up).
-export async function postInvoiceSent(client, tenantId, invoice) {
+export async function postInvoiceSent(client, tenantId, invoice, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const receivable = requireCode(settings, 'receivable_account_code')
   const revenue = requireCode(settings, 'default_revenue_account_code')
@@ -115,12 +183,12 @@ export async function postInvoiceSent(client, tenantId, invoice) {
   return postJournal(client, tenantId, {
     entryDate: toDateString(invoice.issue_date),
     description: `Invoice ${invoice.invoice_number} sent`,
-    sourceType: 'invoice', sourceId: invoice.id, sourceEvent: 'sent', lines,
+    sourceType: 'invoice', sourceId: invoice.id, sourceEvent: 'sent', lines, ...opts,
   })
 }
 
 // Invoice paid: DR checking (cash up), CR receivable (clears the asset).
-export async function postInvoicePaid(client, tenantId, invoice) {
+export async function postInvoicePaid(client, tenantId, invoice, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const checking = requireCode(settings, 'primary_checking_account_code')
   const receivable = requireCode(settings, 'receivable_account_code')
@@ -134,11 +202,12 @@ export async function postInvoicePaid(client, tenantId, invoice) {
       { account_code: checking, debit_cents: invoice.total_cents, memo },
       { account_code: receivable, credit_cents: invoice.total_cents, memo },
     ],
+    ...opts,
   })
 }
 
 // Invoice voided: reverses the `sent` journal (CR receivable, DR revenue, DR VAT).
-export async function postInvoiceVoid(client, tenantId, invoice) {
+export async function postInvoiceVoid(client, tenantId, invoice, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const receivable = requireCode(settings, 'receivable_account_code')
   const revenue = requireCode(settings, 'default_revenue_account_code')
@@ -156,7 +225,7 @@ export async function postInvoiceVoid(client, tenantId, invoice) {
   return postJournal(client, tenantId, {
     entryDate: today(),
     description: `Invoice ${invoice.invoice_number} voided`,
-    sourceType: 'invoice', sourceId: invoice.id, sourceEvent: 'void', lines,
+    sourceType: 'invoice', sourceId: invoice.id, sourceEvent: 'void', lines, ...opts,
   })
 }
 
@@ -164,7 +233,7 @@ export async function postInvoiceVoid(client, tenantId, invoice) {
 
 // Bill accrued (on approve): DR expense account(s) per line (grouped on net),
 // DR input VAT (claimable asset), CR payable (liability up).
-export async function postBillAccrued(client, tenantId, purchase, purchaseLines) {
+export async function postBillAccrued(client, tenantId, purchase, purchaseLines, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const payable = requireCode(settings, 'payable_account_code')
   const memo = `Bill ${purchase.receipt_number} — ${purchase.supplier_name}`
@@ -190,14 +259,14 @@ export async function postBillAccrued(client, tenantId, purchase, purchaseLines)
   return postJournal(client, tenantId, {
     entryDate: toDateString(purchase.receipt_date),
     description: `Bill ${purchase.receipt_number} accrued`,
-    sourceType: 'purchase', sourceId: purchase.id, sourceEvent: 'accrued', lines,
+    sourceType: 'purchase', sourceId: purchase.id, sourceEvent: 'accrued', lines, ...opts,
   })
 }
 
 // Bill paid by bank: DR payable / CR checking. If a band member fronted the
 // cash, the band owes that member instead: DR payable / CR reimbursement
 // liability.
-export async function postBillPaid(client, tenantId, purchase) {
+export async function postBillPaid(client, tenantId, purchase, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const payable = requireCode(settings, 'payable_account_code')
   const creditAccount = purchase.payment_method === 'member'
@@ -213,6 +282,7 @@ export async function postBillPaid(client, tenantId, purchase) {
       { account_code: payable, debit_cents: purchase.total_cents, memo },
       { account_code: creditAccount, credit_cents: purchase.total_cents, memo },
     ],
+    ...opts,
   })
 }
 
@@ -221,7 +291,7 @@ export async function postBillPaid(client, tenantId, purchase) {
 // Reimbursement paid: DR reimbursement liability (clears what the band owed the
 // member), CR checking (cash out). Settles one or more member-paid purchases whose
 // summed total is reimbursement.amount_cents.
-export async function postReimbursementPaid(client, tenantId, reimbursement) {
+export async function postReimbursementPaid(client, tenantId, reimbursement, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const liability = requireCode(settings, 'default_reimbursement_account_code')
   const checking = requireCode(settings, 'primary_checking_account_code')
@@ -235,6 +305,7 @@ export async function postReimbursementPaid(client, tenantId, reimbursement) {
       { account_code: liability, debit_cents: reimbursement.amount_cents, memo },
       { account_code: checking, credit_cents: reimbursement.amount_cents, memo },
     ],
+    ...opts,
   })
 }
 
@@ -253,7 +324,7 @@ function leg(accountCode, side, amountCents, memo) {
 // opposite side, making a single row a complete balanced posting. Lines without a
 // balancing account rely on the user balancing across the whole journal, which
 // postJournal asserts. Callers must have validated postability first.
-export async function postUserJournal(client, tenantId, journal, journalLines) {
+export async function postUserJournal(client, tenantId, journal, journalLines, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const opposite = (side) => (side === 'debit' ? 'credit' : 'debit')
   const lines = []
@@ -277,6 +348,6 @@ export async function postUserJournal(client, tenantId, journal, journalLines) {
   return postJournal(client, tenantId, {
     entryDate: toDateString(journal.entry_date),
     description: journal.description ?? null,
-    sourceType: 'journal', sourceId: journal.id, sourceEvent: 'posted', lines,
+    sourceType: 'journal', sourceId: journal.id, sourceEvent: 'posted', lines, ...opts,
   })
 }

@@ -133,6 +133,37 @@ describe('AccountingSettingsSection — PATCH on change', () => {
     })
   })
 
+  it('renders the books-closed-through field and saves a chosen date', async () => {
+    accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, books_closed_through: '2026-05-31' })
+    wrap(<AccountingSettingsSection />)
+    const field = await screen.findByLabelText(/books closed through/i)
+
+    const { fireEvent } = await import('@testing-library/react')
+    fireEvent.change(field, { target: { value: '2026-05-31' } })
+
+    await waitFor(() => {
+      expect(accountsApi.updateAccountingSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ books_closed_through: '2026-05-31' }),
+      )
+    })
+  })
+
+  it('surfaces account_has_open_balance as a readable error', async () => {
+    accountsApi.updateAccountingSettings.mockRejectedValue(
+      Object.assign(new Error('Cannot change payable_account_code'), { code: 'account_has_open_balance' }),
+    )
+    const user = userEvent.setup()
+    wrap(<AccountingSettingsSection />)
+    await waitFor(() => screen.getByLabelText(/accounts payable/i))
+
+    const payableSelect = screen.getByRole('combobox', { name: /accounts payable/i })
+    await user.click(payableSelect)
+    await waitFor(() => screen.getByRole('option', { name: /22000/ }))
+    await user.click(screen.getByRole('option', { name: /22000/ }))
+
+    expect(await screen.findByText(/still carries an open balance/i)).toBeInTheDocument()
+  })
+
   it('calls updateAccountingSettings when the default reimbursement account changes', async () => {
     accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, default_reimbursement_account_code: '21100' })
     const user = userEvent.setup()

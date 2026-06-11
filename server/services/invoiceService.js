@@ -11,6 +11,7 @@ import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
 import {
   createTenantMollieClient,
   formatMollieAmountFromCents,
+  assertMollieConfigured,
 } from '../utils/mollieClient.js'
 import { sendPushToTenant } from '../utils/sendPush.js'
 import {
@@ -28,7 +29,7 @@ import {
   normalizeLines,
 } from '../validators/invoiceValidators.js'
 import {
-  AccountingNotConfiguredError,
+  ledgerErrorResult,
   postInvoiceSent,
   postInvoicePaid,
   postInvoiceVoid,
@@ -186,7 +187,7 @@ function clampNonNegative(value) {
   return Math.max(0, Number(value) || 0)
 }
 
-async function runPatchTransaction({ pool, tenantId, invoiceId, body, existing, tenant, requestedContentFields }) {
+async function runPatchTransaction({ pool, tenantId, invoiceId, body, existing, tenant, requestedContentFields, actorUserId }) {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -222,16 +223,15 @@ async function runPatchTransaction({ pool, tenantId, invoiceId, body, existing, 
     await client.query(sql, values)
 
     if (body.status !== undefined) {
-      await postInvoiceTransition(client, tenantId, invoiceId, existing.status, body.status)
+      await postInvoiceTransition(client, tenantId, invoiceId, existing.status, body.status, actorUserId)
     }
 
     await client.query('COMMIT')
     return { contentChanged }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
-    if (err instanceof AccountingNotConfiguredError) {
-      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
-    }
+    const mapped = ledgerErrorResult(err)
+    if (mapped) return mapped
     throw err
   } finally {
     client.release()
@@ -243,6 +243,17 @@ const CANNOT_VOID_PAID_ERROR = {
   body: { error: 'Cannot void a paid invoice', code: 'cannot_void_paid_invoice' },
 }
 
+// Forward-only status machine. A posted journal can never be left dangling by a
+// regression: once sent the revenue leg exists, once paid the cash leg exists,
+// and neither may be silently un-recorded. A paid invoice must be corrected via
+// a credit note (out of scope), never voided — that would orphan the cash leg.
+const ALLOWED_TRANSITIONS = {
+  draft: new Set(['sent', 'paid', 'void']),
+  sent: new Set(['paid', 'void']),
+  paid: new Set(),
+  void: new Set(),
+}
+
 function validatePatchRequest(body, existing) {
   const requestedContentFields = Object.keys(body).filter((k) => FINALIZED_LOCKED_FIELDS_SET.has(k))
   if (existing.finalized_at !== null && requestedContentFields.length > 0) {
@@ -251,10 +262,22 @@ function validatePatchRequest(body, existing) {
   if (body.status !== undefined && !STATUS_VALUES.has(body.status)) {
     return { error: { status: 400, body: { error: 'Invalid status' } } }
   }
-  // Void is allowed only from draft or sent. A paid invoice must be corrected via
-  // a credit note (out of scope), never voided — that would orphan the cash leg.
-  if (body.status === 'void' && existing.status === 'paid') {
-    return { error: CANNOT_VOID_PAID_ERROR }
+  if (body.status !== undefined && body.status !== existing.status
+      && !ALLOWED_TRANSITIONS[existing.status]?.has(body.status)) {
+    if (body.status === 'void' && existing.status === 'paid') {
+      return { error: CANNOT_VOID_PAID_ERROR }
+    }
+    return {
+      error: {
+        status: 409,
+        body: {
+          error: `Cannot change invoice status from ${existing.status} to ${body.status}`,
+          code: 'invalid_status_transition',
+          from: existing.status,
+          to: body.status,
+        },
+      },
+    }
   }
   return { requestedContentFields }
 }
@@ -262,22 +285,23 @@ function validatePatchRequest(body, existing) {
 // Posts the ledger journal for a status transition, inside the patch transaction.
 // Idempotent per (invoice, event), so re-running a transition is a no-op. A
 // direct draft->paid jump still records the revenue leg first (postInvoiceSent).
-async function postInvoiceTransition(client, tenantId, invoiceId, prevStatus, newStatus) {
+async function postInvoiceTransition(client, tenantId, invoiceId, prevStatus, newStatus, actorUserId) {
   if (!['sent', 'paid', 'void'].includes(newStatus) || newStatus === prevStatus) return
   const fresh = await fetchInvoice(client, tenantId, invoiceId)
   if (!fresh) return
+  const opts = { actorUserId }
   if (newStatus === 'sent') {
-    await postInvoiceSent(client, tenantId, fresh)
+    await postInvoiceSent(client, tenantId, fresh, opts)
   } else if (newStatus === 'paid') {
-    await postInvoiceSent(client, tenantId, fresh)
-    await postInvoicePaid(client, tenantId, fresh)
+    await postInvoiceSent(client, tenantId, fresh, opts)
+    await postInvoicePaid(client, tenantId, fresh, opts)
   } else if (newStatus === 'void' && prevStatus === 'sent') {
-    await postInvoiceVoid(client, tenantId, fresh)
+    await postInvoiceVoid(client, tenantId, fresh, opts)
   }
 }
 
-// Validates and applies a PATCH. Returns { error } or { contentChanged }.
-export async function applyInvoicePatch(pool, tenantId, invoiceId, body) {
+// Validates and applies a PATCH. Returns { error } or { contentChanged, linkRemoved }.
+export async function applyInvoicePatch(pool, tenantId, invoiceId, body, actorUserId = null) {
   const existing = await fetchInvoice(pool, tenantId, invoiceId)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
 
@@ -293,10 +317,82 @@ export async function applyInvoicePatch(pool, tenantId, invoiceId, body) {
   }
 
   const tenant = await fetchTenant(pool, tenantId)
-  return runPatchTransaction({
+
+  // Voiding always retracts any live Mollie payment link first, so a voided
+  // invoice can never receive money. If Mollie reports the link as already
+  // paid, removeMolliePaymentLink marks the invoice paid and errors — the void
+  // is then refused (paid invoices cannot be voided).
+  let linkRemoved = false
+  if (patch.status === 'void' && existing.status !== 'void' && existing.mollie_payment_link_id) {
+    const removal = await removeMolliePaymentLink({ pool, tenant, invoice: existing, tenantId, invoiceId })
+    if (removal.error) return removal
+    linkRemoved = true
+  }
+
+  const result = await runPatchTransaction({
     pool, tenantId, invoiceId, body: patch, existing, tenant,
     requestedContentFields: validation.requestedContentFields,
+    actorUserId,
   })
+  if (result.error) return result
+  return { ...result, linkRemoved }
+}
+
+// ---------- payment link removal ----------
+
+function mollieStatusCode(err) {
+  return err?.statusCode ?? err?.status ?? null
+}
+
+// Removes the Mollie payment link from an invoice: deletes it at Mollie when it
+// was never opened (DELETE /v2/payment-links/:id → 204; 404 = already gone), and
+// otherwise — Mollie 422s for any opened/attempted link — syncs authoritative
+// payment state and, when no payment turned out paid, archives the link
+// (PATCH { archived: true }) so it can no longer take payments. Either way the
+// invoice's link columns are cleared. Returns { error } | { invoice }.
+export async function removeMolliePaymentLink({ pool, tenant, invoice, tenantId, invoiceId }) {
+  try {
+    assertMollieConfigured(tenant)
+  } catch (err) {
+    return { error: { status: err.status || 400, body: { error: err.message, code: err.code } } }
+  }
+  const mollie = createTenantMollieClient(tenant.mollie_api_key)
+  const linkId = invoice.mollie_payment_link_id
+
+  try {
+    await mollie.paymentLinks.delete(linkId)
+  } catch (err) {
+    const status = mollieStatusCode(err)
+    if (status === 422) {
+      // Link was opened or has payment attempts. Pull authoritative state first.
+      const synced = await syncInvoicePaymentStatus(mollie, pool, invoice)
+      if (synced?.status === 'paid') {
+        return { error: { status: 409, body: { error: 'Payment link has a paid payment', code: 'payment_link_paid' } } }
+      }
+      try {
+        await mollie.paymentLinks.update(linkId, { archived: true })
+      } catch (archiveErr) {
+        console.error('[invoices] failed to archive payment link:', archiveErr)
+        return { error: { status: 502, body: { error: 'mollie_error', code: 'mollie_error' } } }
+      }
+    } else if (status !== 404) {
+      console.error('[invoices] failed to delete payment link:', err)
+      return { error: { status: 502, body: { error: 'mollie_error', code: 'mollie_error' } } }
+    }
+  }
+
+  await pool.query(
+    `UPDATE invoices
+        SET mollie_payment_link_id = NULL,
+            mollie_payment_link_url = NULL,
+            mollie_payment_link_created_at = NULL,
+            mollie_payment_link_expires_at = NULL,
+            mollie_payment_status = NULL,
+            updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2`,
+    [invoiceId, tenantId],
+  )
+  return { invoice: await fetchInvoice(pool, tenantId, invoiceId) }
 }
 
 // ---------- payment links ----------
@@ -308,7 +404,7 @@ export function isMollieWebhookDisabled() {
 // Locks the invoice, validates it can take a payment link, and finalizes it
 // (draft -> sent, sets finalized_at) BEFORE any external Mollie call. Returns
 // { error } | { alreadyLinked: invoice } | { invoice: finalizedInvoice }.
-export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId) {
+export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, actorUserId = null) {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -344,14 +440,13 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId) {
     )
     // The invoice is now sent (revenue recognised). Idempotent if already posted
     // by a prior PATCH-to-sent.
-    await postInvoiceSent(client, tenantId, finalized.rows[0])
+    await postInvoiceSent(client, tenantId, finalized.rows[0], { actorUserId })
     await client.query('COMMIT')
     return { invoice: finalized.rows[0] }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
-    if (err instanceof AccountingNotConfiguredError) {
-      return { error: { status: err.status, body: { error: err.message, code: err.code, field: err.field } } }
-    }
+    const mapped = ledgerErrorResult(err)
+    if (mapped) return mapped
     throw err
   } finally {
     client.release()
@@ -469,9 +564,12 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice) {
     const updated = rows[0]
     if (becamePaid && updated) {
       // Ensure the revenue leg exists, then record the cash receipt. Both are
-      // idempotent per (invoice, event).
-      await postInvoiceSent(client, invoice.tenant_id, updated)
-      await postInvoicePaid(client, invoice.tenant_id, updated)
+      // idempotent per (invoice, event). System posting: no actor, and a closed
+      // period clamps the entry date instead of rejecting — Mollie holds the
+      // cash either way, so the receipt must always be booked.
+      const opts = { actorUserId: null, clampToOpenPeriod: true }
+      await postInvoiceSent(client, invoice.tenant_id, updated, opts)
+      await postInvoicePaid(client, invoice.tenant_id, updated, opts)
     }
     await client.query('COMMIT')
     return updated

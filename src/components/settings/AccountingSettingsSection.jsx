@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import PropTypes from 'prop-types'
+import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
 import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
@@ -8,6 +9,7 @@ import Paper from '@mui/material/Paper'
 import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import DateEntryField from '../DateEntryField.jsx'
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet'
 import { listAccounts, getAccountingSettings, updateAccountingSettings } from '../../api/accounts.js'
 import { accountShape } from '../../propTypes/shared.js'
@@ -69,11 +71,19 @@ AccountSelect.propTypes = {
   saving: PropTypes.bool,
 }
 
+// Server error codes → user-facing explanations.
+const SAVE_ERROR_MESSAGES = {
+  account_has_open_balance:
+    'This account still carries an open balance (unpaid bills, unsettled member debt or unpaid invoices). Settle them before changing the account.',
+  invalid_books_closed_through: 'Enter a valid date (YYYY-MM-DD) or clear the field.',
+}
+
 export default function AccountingSettingsSection() {
   const [accounts, setAccounts] = useState([])
   const [settings, setSettings] = useState(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([listAccounts(), getAccountingSettings()])
@@ -85,11 +95,12 @@ export default function AccountingSettingsSection() {
   async function handleChange(field, value) {
     if (!settings) return
     setSaving(true)
+    setError(null)
     try {
       const updated = await updateAccountingSettings({ [field]: value })
       setSettings(updated)
-    } catch {
-      // best-effort; leave previous value
+    } catch (err) {
+      setError(SAVE_ERROR_MESSAGES[err.code] ?? SAVE_ERROR_MESSAGES[err.message] ?? err.message)
     } finally {
       setSaving(false)
     }
@@ -106,6 +117,10 @@ export default function AccountingSettingsSection() {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Default accounts used when creating invoices and purchases.
       </Typography>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>
+      )}
 
       {loading || !settings ? (
         <CircularProgress size={20} />
@@ -138,6 +153,17 @@ export default function AccountingSettingsSection() {
               saving={saving}
             />
           ))}
+
+          <DateEntryField
+            id="accounting-books-closed-through"
+            label="Books closed through"
+            size="small"
+            fullWidth
+            value={(settings.books_closed_through || '').slice(0, 10)}
+            onChange={(e) => handleChange('books_closed_through', e.target.value || null)}
+            disabled={saving}
+            helperText="Nothing can be posted on or before this date. Leave empty to keep the books open."
+          />
         </Stack>
       )}
     </Paper>

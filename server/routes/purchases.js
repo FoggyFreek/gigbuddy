@@ -68,7 +68,7 @@ router.get('/:id', async (req, res) => {
 
 // ---------- create ----------
 router.post('/', async (req, res) => {
-  const result = await createPurchase(pool, req.tenantId, req.body || {})
+  const result = await createPurchase(pool, req.tenantId, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   const created = await fetchPurchase(pool, req.tenantId, result.purchaseId)
   const lines = await fetchPurchaseLines(pool, result.purchaseId, req.tenantId)
@@ -78,7 +78,7 @@ router.post('/', async (req, res) => {
 // ---------- patch ----------
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const result = await applyPurchasePatch(pool, req.tenantId, id, req.body || {})
+  const result = await applyPurchasePatch(pool, req.tenantId, id, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   const updated = await fetchPurchase(pool, req.tenantId, id)
   const lines = await fetchPurchaseLines(pool, id, req.tenantId)
@@ -103,7 +103,7 @@ router.delete('/:id', async (req, res) => {
 // ---------- register payment ----------
 router.post('/:id/payment', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
-  const result = await registerPayment(pool, req.tenantId, id, req.body || {})
+  const result = await registerPayment(pool, req.tenantId, id, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   const updated = await fetchPurchase(pool, req.tenantId, id)
   const lines = await fetchPurchaseLines(pool, id, req.tenantId)

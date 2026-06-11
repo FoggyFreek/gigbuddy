@@ -86,13 +86,13 @@ export async function replaceJournalLines(executor, journalId, tenantId, lines) 
 
 // Inserts a draft journal header and returns its id. Assigns the next entry
 // number from the sequence table.
-export async function createJournal(executor, tenantId, { entryDate, description }) {
+export async function createJournal(executor, tenantId, { entryDate, description, createdByUserId = null }) {
   const entryNumber = await nextJournalNumber(executor, tenantId)
   const { rows } = await executor.query(
-    `INSERT INTO journals (tenant_id, entry_number, entry_date, description)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO journals (tenant_id, entry_number, entry_date, description, created_by_user_id)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [tenantId, entryNumber, entryDate, description ?? null],
+    [tenantId, entryNumber, entryDate, description ?? null, createdByUserId],
   )
   return rows[0].id
 }
@@ -118,13 +118,14 @@ export async function lockJournalForApprove(executor, tenantId, journalId) {
 // Flips a draft to approved only if it is still a draft (the WHERE guard plus the
 // row lock is the concurrency guard). Returns the updated row, or null if another
 // transaction already approved it.
-export async function setApproved(executor, tenantId, journalId, transactionId) {
+export async function setApproved(executor, tenantId, journalId, transactionId, approvedByUserId = null) {
   const { rows } = await executor.query(
     `UPDATE journals
-        SET status = 'approved', posted_transaction_id = $1, updated_at = NOW()
+        SET status = 'approved', posted_transaction_id = $1,
+            approved_by_user_id = $4, approved_at = NOW(), updated_at = NOW()
       WHERE id = $2 AND tenant_id = $3 AND status = 'draft'
       RETURNING *`,
-    [transactionId, journalId, tenantId],
+    [transactionId, journalId, tenantId, approvedByUserId],
   )
   return rows[0] || null
 }
