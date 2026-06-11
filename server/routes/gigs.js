@@ -173,36 +173,25 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 //   { error: '...' }      — row is invalid, the import should abort with 400
 //   { data: {...} }       — normalized, ready-to-insert column values
 function normalizeImportRow(item) {
-  if (item === null || typeof item !== 'object' || Array.isArray(item))
-    return { error: 'Each import row must be an object' }
+  const shapeResult = validateImportRowShape(item)
+  if (shapeResult) return shapeResult
 
   const {
     event_date, event_description, venue_id, festival_id,
     start_time, end_time, status, admission, event_link, ticket_link,
   } = item
 
-  if (!event_date || !event_description) return { skip: true }
+  const venueResult = parseImportRowId(venue_id, 'venue_id')
+  if (venueResult.error) return venueResult
+  const { id: venueId } = venueResult
 
-  if (!DATE_RE.test(event_date)) return { error: `Invalid event_date: ${event_date}` }
-  if (start_time && !TIME_RE.test(start_time)) return { error: `Invalid start_time: ${start_time}` }
-  if (end_time && !TIME_RE.test(end_time)) return { error: `Invalid end_time: ${end_time}` }
+  const festivalResult = parseImportRowId(festival_id, 'festival_id')
+  if (festivalResult.error) return festivalResult
+  const { id: festivalId } = festivalResult
 
-  let venueId = null
-  if (venue_id != null) {
-    venueId = parseId(venue_id)
-    if (venueId === null) return { error: 'Invalid venue_id' }
-  }
-  let festivalId = null
-  if (festival_id != null) {
-    festivalId = parseId(festival_id)
-    if (festivalId === null) return { error: 'Invalid festival_id' }
-  }
-
-  let finalStatus = 'confirmed'
-  if (status != null) {
-    if (!VALID_STATUSES.includes(status)) return { error: `Invalid status: ${status}` }
-    finalStatus = status
-  }
+  const statusResult = resolveImportRowStatus(status)
+  if (statusResult.error) return statusResult
+  const { status: finalStatus } = statusResult
 
   return {
     data: {
@@ -212,6 +201,30 @@ function normalizeImportRow(item) {
       event_link: event_link || null, ticket_link: ticket_link || null,
     },
   }
+}
+
+function validateImportRowShape(item) {
+  if (item === null || typeof item !== 'object' || Array.isArray(item))
+    return { error: 'Each import row must be an object' }
+  const { event_date, event_description, start_time, end_time } = item
+  if (!event_date || !event_description) return { skip: true }
+  if (!DATE_RE.test(event_date)) return { error: `Invalid event_date: ${event_date}` }
+  if (start_time && !TIME_RE.test(start_time)) return { error: `Invalid start_time: ${start_time}` }
+  if (end_time && !TIME_RE.test(end_time)) return { error: `Invalid end_time: ${end_time}` }
+  return null
+}
+
+function parseImportRowId(value, fieldName) {
+  if (value == null) return { id: null }
+  const id = parseId(value)
+  if (id === null) return { error: `Invalid ${fieldName}` }
+  return { id }
+}
+
+function resolveImportRowStatus(status) {
+  if (status == null) return { status: 'confirmed' }
+  if (!VALID_STATUSES.includes(status)) return { error: `Invalid status: ${status}` }
+  return { status }
 }
 
 // Bulk import gigs from Bandsintown CSV export
@@ -243,36 +256,13 @@ router.post('/import', async (req, res) => {
       if (parsed.skip) { skipped++; continue }
       const row = parsed.data
 
-      try {
-        await assertVenueInTenant(client, row.venueId, req.tenantId, 'venue')
-        await assertVenueInTenant(client, row.festivalId, req.tenantId, 'festival')
-      } catch (err) {
-        if (err.status === 400) {
-          await client.query('ROLLBACK')
-          return res.status(400).json({ error: err.message })
-        }
-        throw err
+      const venueErr = await assertImportRowVenues(client, row, req.tenantId)
+      if (venueErr) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: venueErr.error })
       }
 
-      const { rows: gigRows } = await client.query(
-        `INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id,
-           start_time, end_time, status, admission, event_link, ticket_link)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-        [
-          req.tenantId, row.event_date, row.event_description, row.venueId, row.festivalId,
-          row.start_time, row.end_time, row.status, row.admission,
-          row.event_link, row.ticket_link,
-        ],
-      )
-      const gigId = gigRows[0].id
-
-      for (const { id: memberId } of leadRows) {
-        await client.query(
-          `INSERT INTO gig_participants (tenant_id, gig_id, band_member_id, updated_by_user_id)
-           VALUES ($1,$2,$3,$4)`,
-          [req.tenantId, gigId, memberId, req.user.id],
-        )
-      }
+      await insertImportedGig(client, row, req.tenantId, req.user.id, leadRows)
       created++
     }
 
@@ -286,6 +276,39 @@ router.post('/import', async (req, res) => {
     client.release()
   }
 })
+
+async function assertImportRowVenues(client, row, tenantId) {
+  try {
+    await assertVenueInTenant(client, row.venueId, tenantId, 'venue')
+    await assertVenueInTenant(client, row.festivalId, tenantId, 'festival')
+    return null
+  } catch (err) {
+    if (err.status === 400) return { error: err.message }
+    throw err
+  }
+}
+
+async function insertImportedGig(client, row, tenantId, userId, leadRows) {
+  const { rows: gigRows } = await client.query(
+    `INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id,
+       start_time, end_time, status, admission, event_link, ticket_link)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+    [
+      tenantId, row.event_date, row.event_description, row.venueId, row.festivalId,
+      row.start_time, row.end_time, row.status, row.admission,
+      row.event_link, row.ticket_link,
+    ],
+  )
+  const gigId = gigRows[0].id
+  for (const { id: memberId } of leadRows) {
+    await client.query(
+      `INSERT INTO gig_participants (tenant_id, gig_id, band_member_id, updated_by_user_id)
+       VALUES ($1,$2,$3,$4)`,
+      [tenantId, gigId, memberId, userId],
+    )
+  }
+  return gigId
+}
 
 // Create gig
 router.post('/', async (req, res) => {

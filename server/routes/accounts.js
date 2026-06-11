@@ -97,47 +97,10 @@ router.get('/settings', async (req, res, next) => {
 // ---------- PATCH /api/accounts/settings ----------
 router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
   const body = req.body || {}
-  const updates = {}
 
-  if ('currency' in body) {
-    const c = validateCurrency(body.currency)
-    if (!c) return res.status(400).json({ error: 'invalid_currency' })
-    updates.currency = c
-  }
-
-  for (const field of SETTINGS_CODE_FIELDS) {
-    if (!(field in body)) continue
-    const val = body[field]
-    if (val === null || val === undefined) {
-      updates[field] = null
-      continue
-    }
-    const code = String(val).trim()
-    const { rows } = await pool.query(
-      `SELECT code, type, is_active FROM chart_of_accounts
-       WHERE tenant_id = $1 AND code = $2`,
-      [req.tenantId, code],
-    )
-    if (!rows[0] || !rows[0].is_active) {
-      return res.status(400).json({ error: 'unknown_account_code', field })
-    }
-    const expectedType = SETTINGS_TYPE_MAP[field]
-    if (rows[0].type !== expectedType) {
-      return res.status(400).json({ error: 'wrong_account_type', field, expected: expectedType, got: rows[0].type })
-    }
-    updates[field] = code
-  }
-
-  if ('books_closed_through' in body) {
-    const val = body.books_closed_through
-    if (val === null || val === undefined || val === '') {
-      updates.books_closed_through = null
-    } else if (isValidCalendarDate(val)) {
-      updates.books_closed_through = val
-    } else {
-      return res.status(400).json({ error: 'invalid_books_closed_through' })
-    }
-  }
+  const updatesResult = await buildSettingsUpdates(pool, req.tenantId, body)
+  if (updatesResult.error) return res.status(updatesResult.error.status).json(updatesResult.error.body)
+  const { updates } = updatesResult
 
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'nothing_to_update' })
@@ -159,18 +122,15 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
       [req.tenantId],
     )
     const current = currentRows[0] || {}
-    for (const [field, guard] of Object.entries(OPEN_BALANCE_GUARDS)) {
-      if (!(field in updates)) continue
-      if (updates[field] === (current[field] ?? null)) continue
-      const { rows: open } = await client.query(guard.sql, [req.tenantId])
-      if (open.length) {
-        await client.query('ROLLBACK')
-        return res.status(409).json({
-          error: `Cannot change ${field}: ${guard.reason}. Settle them first.`,
-          code: 'account_has_open_balance',
-          field,
-        })
-      }
+
+    const conflict = await findOpenBalanceConflict(client, req.tenantId, updates, current)
+    if (conflict) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({
+        error: `Cannot change ${conflict.field}: ${conflict.reason}. Settle them first.`,
+        code: 'account_has_open_balance',
+        field: conflict.field,
+      })
     }
 
     const { rows } = await client.query(
@@ -179,39 +139,9 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
     )
     if (!rows[0]) {
       // Row didn't exist — insert it with the updates applied as defaults
-      const full = {
-        currency: 'EUR',
-        receivable_account_code: null,
-        default_revenue_account_code: null,
-        payable_account_code: null,
-        default_reimbursement_account_code: null,
-        default_expense_account_code: null,
-        primary_checking_account_code: null,
-        output_vat_account_code: null,
-        input_vat_account_code: null,
-        books_closed_through: null,
-        ...updates,
-      }
-      const { rows: ins } = await client.query(
-        `INSERT INTO tenant_accounting_settings (
-           tenant_id, currency,
-           receivable_account_code, default_revenue_account_code,
-           payable_account_code, default_reimbursement_account_code, default_expense_account_code,
-           primary_checking_account_code,
-           output_vat_account_code, input_vat_account_code,
-           books_closed_through
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-        [
-          req.tenantId, full.currency,
-          full.receivable_account_code, full.default_revenue_account_code,
-          full.payable_account_code, full.default_reimbursement_account_code, full.default_expense_account_code,
-          full.primary_checking_account_code,
-          full.output_vat_account_code, full.input_vat_account_code,
-          full.books_closed_through,
-        ],
-      )
+      const ins = await insertSettingsWithDefaults(client, req.tenantId, updates)
       await client.query('COMMIT')
-      return res.json(ins[0])
+      return res.json(ins)
     }
     await client.query('COMMIT')
     res.json(rows[0])
@@ -362,5 +292,96 @@ router.delete('/:id', requireTenantAdmin, async (req, res, next) => {
     next(err)
   }
 })
+
+async function buildSettingsUpdates(pool, tenantId, body) {
+  const updates = {}
+
+  if ('currency' in body) {
+    const c = validateCurrency(body.currency)
+    if (!c) return { error: { status: 400, body: { error: 'invalid_currency' } } }
+    updates.currency = c
+  }
+
+  for (const field of SETTINGS_CODE_FIELDS) {
+    if (!(field in body)) continue
+    const val = body[field]
+    if (val === null || val === undefined) {
+      updates[field] = null
+      continue
+    }
+    const code = String(val).trim()
+    const { rows } = await pool.query(
+      `SELECT code, type, is_active FROM chart_of_accounts
+       WHERE tenant_id = $1 AND code = $2`,
+      [tenantId, code],
+    )
+    if (!rows[0] || !rows[0].is_active) {
+      return { error: { status: 400, body: { error: 'unknown_account_code', field } } }
+    }
+    const expectedType = SETTINGS_TYPE_MAP[field]
+    if (rows[0].type !== expectedType) {
+      return { error: { status: 400, body: { error: 'wrong_account_type', field, expected: expectedType, got: rows[0].type } } }
+    }
+    updates[field] = code
+  }
+
+  if ('books_closed_through' in body) {
+    const val = body.books_closed_through
+    if (val === null || val === undefined || val === '') {
+      updates.books_closed_through = null
+    } else if (isValidCalendarDate(val)) {
+      updates.books_closed_through = val
+    } else {
+      return { error: { status: 400, body: { error: 'invalid_books_closed_through' } } }
+    }
+  }
+
+  return { updates }
+}
+
+async function findOpenBalanceConflict(client, tenantId, updates, current) {
+  for (const [field, guard] of Object.entries(OPEN_BALANCE_GUARDS)) {
+    if (!(field in updates)) continue
+    if (updates[field] === (current[field] ?? null)) continue
+    const { rows: open } = await client.query(guard.sql, [tenantId])
+    if (open.length) return { field, reason: guard.reason }
+  }
+  return null
+}
+
+async function insertSettingsWithDefaults(client, tenantId, updates) {
+  const full = {
+    currency: 'EUR',
+    receivable_account_code: null,
+    default_revenue_account_code: null,
+    payable_account_code: null,
+    default_reimbursement_account_code: null,
+    default_expense_account_code: null,
+    primary_checking_account_code: null,
+    output_vat_account_code: null,
+    input_vat_account_code: null,
+    books_closed_through: null,
+    ...updates,
+  }
+  const { rows: ins } = await client.query(
+    `INSERT INTO tenant_accounting_settings (
+       tenant_id, currency,
+       receivable_account_code, default_revenue_account_code,
+       payable_account_code, default_reimbursement_account_code, default_expense_account_code,
+       primary_checking_account_code,
+       output_vat_account_code, input_vat_account_code,
+       books_closed_through
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+    [
+      tenantId, full.currency,
+      full.receivable_account_code, full.default_revenue_account_code,
+      full.payable_account_code, full.default_reimbursement_account_code, full.default_expense_account_code,
+      full.primary_checking_account_code,
+      full.output_vat_account_code, full.input_vat_account_code,
+      full.books_closed_through,
+    ],
+  )
+  return ins[0]
+}
 
 export default router

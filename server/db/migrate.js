@@ -17,7 +17,7 @@ async function migrate() {
 
   const files = (await readdir(migrationsDir))
     .filter((f) => f.endsWith('.sql'))
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
 
   for (const file of files) {
     const { rows } = await pool.query(

@@ -113,14 +113,9 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   const dueDate = body.due_date || null
   const currency = String(body.currency || 'EUR').trim() || 'EUR'
 
-  // Only draft/approved may be set on create; paying goes through the payment endpoint.
-  let status = 'draft'
-  if (body.status !== undefined) {
-    if (body.status !== 'draft' && body.status !== 'approved') {
-      return { error: { status: 400, body: { error: 'Invalid status' } } }
-    }
-    status = body.status
-  }
+  const statusResult = resolveCreateStatus(body)
+  if (statusResult.error) return statusResult
+  const { status } = statusResult
 
   const totals = computePurchaseTotals({ lines })
 
@@ -134,41 +129,20 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   try {
     await client.query('BEGIN')
     const receiptNumber = await nextPurchaseNumber(client, tenantId)
-    const { rows } = await client.query(
-      `INSERT INTO purchases (
-         tenant_id, receipt_number, supplier_name, supplier_contact_id,
-         receipt_date, due_date, currency, memo,
-         subtotal_cents, tax_cents, total_cents,
-         status, finalized_at,
-         created_by_user_id, approved_by_user_id
-       ) VALUES (
-         $1, $2, $3, $4,
-         $5, $6, $7, $8,
-         $9, $10, $11,
-         $12, ${status === 'approved' ? 'NOW()' : 'NULL'},
-         $13, ${status === 'approved' ? '$13' : 'NULL'}
-       ) RETURNING id`,
-      [
-        tenantId, receiptNumber, supplierName, supplierContactId,
-        receiptDate, dueDate, currency, body.memo || null,
-        totals.subtotalCents, totals.taxCents, totals.totalCents,
-        status, actorUserId,
-      ],
-    )
+    const { text, values } = buildCreatePurchaseInsert({
+      status, tenantId, receiptNumber, supplierName, supplierContactId,
+      receiptDate, dueDate, currency, memo: body.memo || null, totals, actorUserId,
+    })
+    const { rows } = await client.query(text, values)
     purchaseId = rows[0].id
     await insertPurchaseLines(client, purchaseId, tenantId, lines)
 
     // Approving a bill accrues the expense + payable. Draft bills post nothing.
     if (status === 'approved') {
-      const purchaseRow = {
-        id: purchaseId,
-        receipt_number: receiptNumber,
-        supplier_name: supplierName,
-        supplier_contact_id: supplierContactId,
-        receipt_date: receiptDate,
-        tax_cents: totals.taxCents,
-        total_cents: totals.totalCents,
-      }
+      const purchaseRow = buildAccruedPurchaseRow({
+        purchaseId, receiptNumber, supplierName, supplierContactId,
+        receiptDate, totals,
+      })
       await postBillAccrued(client, tenantId, purchaseRow, lines, { actorUserId })
     }
 
@@ -183,6 +157,56 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   }
 
   return { purchaseId }
+}
+
+function resolveCreateStatus(body) {
+  // Only draft/approved may be set on create; paying goes through the payment endpoint.
+  let status = 'draft'
+  if (body.status !== undefined) {
+    if (body.status !== 'draft' && body.status !== 'approved') {
+      return { error: { status: 400, body: { error: 'Invalid status' } } }
+    }
+    status = body.status
+  }
+  return { status }
+}
+
+function buildCreatePurchaseInsert({
+  status, tenantId, receiptNumber, supplierName, supplierContactId,
+  receiptDate, dueDate, currency, memo, totals, actorUserId,
+}) {
+  const text = `INSERT INTO purchases (
+       tenant_id, receipt_number, supplier_name, supplier_contact_id,
+       receipt_date, due_date, currency, memo,
+       subtotal_cents, tax_cents, total_cents,
+       status, finalized_at,
+       created_by_user_id, approved_by_user_id
+     ) VALUES (
+       $1, $2, $3, $4,
+       $5, $6, $7, $8,
+       $9, $10, $11,
+       $12, ${status === 'approved' ? 'NOW()' : 'NULL'},
+       $13, ${status === 'approved' ? '$13' : 'NULL'}
+     ) RETURNING id`
+  const values = [
+    tenantId, receiptNumber, supplierName, supplierContactId,
+    receiptDate, dueDate, currency, memo,
+    totals.subtotalCents, totals.taxCents, totals.totalCents,
+    status, actorUserId,
+  ]
+  return { text, values }
+}
+
+function buildAccruedPurchaseRow({ purchaseId, receiptNumber, supplierName, supplierContactId, receiptDate, totals }) {
+  return {
+    id: purchaseId,
+    receipt_number: receiptNumber,
+    supplier_name: supplierName,
+    supplier_contact_id: supplierContactId,
+    receipt_date: receiptDate,
+    tax_cents: totals.taxCents,
+    total_cents: totals.totalCents,
+  }
 }
 
 // ---------- patch ----------
@@ -207,56 +231,12 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
   const existing = await fetchPurchase(pool, tenantId, id)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
 
-  if (body.status !== undefined) {
-    if (!STATUS_VALUES.has(body.status)) return { error: { status: 400, body: { error: 'Invalid status' } } }
-    if (body.status === 'paid') return { error: USE_PAYMENT_ENDPOINT_ERROR }
-    // Forward-only: once approved the accrual journal is posted and may never be
-    // left dangling by a regression to draft; paid never changes via PATCH.
-    if (body.status !== existing.status
-        && !(existing.status === 'draft' && body.status === 'approved')) {
-      return {
-        error: {
-          status: 409,
-          body: {
-            error: `Cannot change purchase status from ${existing.status} to ${body.status}`,
-            code: 'invalid_status_transition',
-            from: existing.status,
-            to: body.status,
-          },
-        },
-      }
-    }
-  }
+  const preflightErr = await runPatchPreflightValidations(pool, tenantId, id, existing, body)
+  if (preflightErr) return preflightErr
 
-  const requestedLockedFields = Object.keys(body).filter((k) => FINALIZED_LOCKED_FIELDS_SET.has(k))
-  if (existing.finalized_at !== null && requestedLockedFields.length > 0) {
-    return { error: FINALIZED_ERROR }
-  }
-
-  let supplierContactId
-  if ('supplier_contact_id' in body) {
-    if (body.supplier_contact_id == null) {
-      supplierContactId = null
-    } else {
-      supplierContactId = await validateContactIdForTenant(pool, body.supplier_contact_id, tenantId)
-      if (supplierContactId === null) return { error: { status: 400, body: { error: 'Invalid supplier_contact_id' } } }
-    }
-  }
-
-  if ('receipt_number' in body && parseReceiptNumber(body.receipt_number) === null) {
-    return { error: { status: 400, body: { error: 'Invalid receipt_number' } } }
-  }
-
-  if ('lines' in body) {
-    const accountErr = await validateLineAccounts(pool, tenantId, normalizeLines(body.lines))
-    if (accountErr) return accountErr
-  }
-
-  if (body.status === 'approved' && existing.status !== 'approved') {
-    const approvalLines = 'lines' in body ? normalizeLines(body.lines) : await fetchPurchaseLines(pool, id, tenantId)
-    const approvalErr = await validateApprovalLines(pool, tenantId, approvalLines)
-    if (approvalErr) return approvalErr
-  }
+  const supplierResult = await resolvePatchSupplierContactId(pool, tenantId, body)
+  if (supplierResult.error) return supplierResult
+  const { supplierContactId } = supplierResult
 
   const contentChanged = Object.keys(body).some((k) => CONTENT_FIELDS_SET.has(k))
 
@@ -279,21 +259,11 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
     let idx = nextIdx
 
     if (contentChanged) {
-      const currentLines = await fetchPurchaseLines(client, id, tenantId)
-      const totals = computePurchaseTotals({ lines: currentLines })
-      setClauses.push(`subtotal_cents = $${idx++}`); values.push(totals.subtotalCents)
-      setClauses.push(`tax_cents = $${idx++}`); values.push(totals.taxCents)
-      setClauses.push(`total_cents = $${idx++}`); values.push(totals.totalCents)
+      idx = await appendTotalsSetClauses(client, id, tenantId, { setClauses, values, idx })
     }
 
     if (body.status !== undefined) {
-      setClauses.push(`status = $${idx++}`); values.push(body.status)
-      if (body.status !== 'draft' && existing.finalized_at === null) {
-        setClauses.push('finalized_at = NOW()')
-      }
-      if (body.status === 'approved' && existing.status !== 'approved') {
-        setClauses.push(`approved_by_user_id = $${idx++}`); values.push(actorUserId)
-      }
+      idx = appendStatusSetClauses({ setClauses, values, idx }, existing, body, actorUserId)
     }
 
     if (!setClauses.length) {
@@ -317,13 +287,99 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
     return {}
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
-    if (isUniqueViolation(err)) return { error: RECEIPT_TAKEN_ERROR }
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    throw err
+    return mapPatchError(err)
   } finally {
     client.release()
   }
+}
+
+function validateStatusTransition(existing, body) {
+  if (body.status === undefined) return null
+  if (!STATUS_VALUES.has(body.status)) return { error: { status: 400, body: { error: 'Invalid status' } } }
+  if (body.status === 'paid') return { error: USE_PAYMENT_ENDPOINT_ERROR }
+  // Forward-only: once approved the accrual journal is posted and may never be
+  // left dangling by a regression to draft; paid never changes via PATCH.
+  if (body.status !== existing.status
+      && !(existing.status === 'draft' && body.status === 'approved')) {
+    return {
+      error: {
+        status: 409,
+        body: {
+          error: `Cannot change purchase status from ${existing.status} to ${body.status}`,
+          code: 'invalid_status_transition',
+          from: existing.status,
+          to: body.status,
+        },
+      },
+    }
+  }
+  return null
+}
+
+async function resolvePatchSupplierContactId(pool, tenantId, body) {
+  if (!('supplier_contact_id' in body)) return { supplierContactId: undefined }
+  if (body.supplier_contact_id == null) return { supplierContactId: null }
+  const supplierContactId = await validateContactIdForTenant(pool, body.supplier_contact_id, tenantId)
+  if (supplierContactId === null) return { error: { status: 400, body: { error: 'Invalid supplier_contact_id' } } }
+  return { supplierContactId }
+}
+
+async function runPatchPreflightValidations(pool, tenantId, id, existing, body) {
+  const statusErr = validateStatusTransition(existing, body)
+  if (statusErr) return statusErr
+
+  const requestedLockedFields = Object.keys(body).filter((k) => FINALIZED_LOCKED_FIELDS_SET.has(k))
+  if (existing.finalized_at !== null && requestedLockedFields.length > 0) {
+    return { error: FINALIZED_ERROR }
+  }
+
+  if ('receipt_number' in body && parseReceiptNumber(body.receipt_number) === null) {
+    return { error: { status: 400, body: { error: 'Invalid receipt_number' } } }
+  }
+
+  if ('lines' in body) {
+    const accountErr = await validateLineAccounts(pool, tenantId, normalizeLines(body.lines))
+    if (accountErr) return accountErr
+  }
+
+  if (body.status === 'approved' && existing.status !== 'approved') {
+    const approvalLines = 'lines' in body ? normalizeLines(body.lines) : await fetchPurchaseLines(pool, id, tenantId)
+    const approvalErr = await validateApprovalLines(pool, tenantId, approvalLines)
+    if (approvalErr) return approvalErr
+  }
+
+  return null
+}
+
+function appendStatusSetClauses(state, existing, body, actorUserId) {
+  const { setClauses, values } = state
+  let { idx } = state
+  setClauses.push(`status = $${idx++}`); values.push(body.status)
+  if (body.status !== 'draft' && existing.finalized_at === null) {
+    setClauses.push('finalized_at = NOW()')
+  }
+  if (body.status === 'approved' && existing.status !== 'approved') {
+    setClauses.push(`approved_by_user_id = $${idx++}`); values.push(actorUserId)
+  }
+  return idx
+}
+
+async function appendTotalsSetClauses(client, id, tenantId, state) {
+  const { setClauses, values } = state
+  let { idx } = state
+  const currentLines = await fetchPurchaseLines(client, id, tenantId)
+  const totals = computePurchaseTotals({ lines: currentLines })
+  setClauses.push(`subtotal_cents = $${idx++}`); values.push(totals.subtotalCents)
+  setClauses.push(`tax_cents = $${idx++}`); values.push(totals.taxCents)
+  setClauses.push(`total_cents = $${idx++}`); values.push(totals.totalCents)
+  return idx
+}
+
+function mapPatchError(err) {
+  if (isUniqueViolation(err)) return { error: RECEIPT_TAKEN_ERROR }
+  const mapped = ledgerErrorResult(err)
+  if (mapped) return mapped
+  throw err
 }
 
 // ---------- register payment ----------
@@ -331,36 +387,16 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
 export async function registerPayment(pool, tenantId, id, body, actorUserId = null) {
   const existing = await fetchPurchase(pool, tenantId, id)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
-  if (existing.status === 'draft') {
-    return { error: { status: 409, body: { error: 'Approve the purchase before registering payment', code: 'not_approved' } } }
-  }
-  // Already paid: re-registering would change payment_method/payee while the
-  // original `paid` journal stays put (postJournal is idempotent on the source
-  // key), desyncing the ledger — e.g. flipping bank→member would fabricate member
-  // debt no liability journal ever created. A reimbursed purchase is doubly locked.
-  if (existing.status === 'paid') {
-    const code = existing.reimbursement_id != null ? 'purchase_reimbursed' : 'already_paid'
-    return { error: { status: 409, body: { error: 'Purchase is already paid', code } } }
-  }
+
+  const preconditionErr = validatePaymentPreconditions(existing)
+  if (preconditionErr) return preconditionErr
 
   const paidOn = body.paid_on ?? new Date().toISOString().slice(0, 10)
   if (!isValidIsoDate(paidOn)) return { error: { status: 400, body: { error: 'Invalid paid_on' } } }
 
-  // Bank (default) or band-member payment. Member-paid purchases clear accounts
-  // payable into the configured reimbursement liability account.
-  const method = body.method ?? 'bank'
-  if (method !== 'bank' && method !== 'member') {
-    return { error: { status: 400, body: { error: 'Invalid method', code: 'invalid_method' } } }
-  }
-  let paidByBandMemberId = null
-  if (method === 'member') {
-    if (body.paid_by_band_member_id == null) {
-      return { error: { status: 400, body: { error: 'paid_by_band_member_id is required for member payments', code: 'paid_by_required' } } }
-    }
-    const member = await validateBandMemberForTenant(pool, body.paid_by_band_member_id, tenantId)
-    if (member === null) return { error: { status: 400, body: { error: 'Invalid paid_by_band_member_id' } } }
-    paidByBandMemberId = member.id
-  }
+  const methodResult = await resolvePaymentMethod(pool, tenantId, body)
+  if (methodResult.error) return methodResult
+  const { method, paidByBandMemberId } = methodResult
 
   const client = await pool.connect()
   try {
@@ -392,4 +428,38 @@ export async function registerPayment(pool, tenantId, id, body, actorUserId = nu
   } finally {
     client.release()
   }
+}
+
+function validatePaymentPreconditions(existing) {
+  if (existing.status === 'draft') {
+    return { error: { status: 409, body: { error: 'Approve the purchase before registering payment', code: 'not_approved' } } }
+  }
+  // Already paid: re-registering would change payment_method/payee while the
+  // original `paid` journal stays put (postJournal is idempotent on the source
+  // key), desyncing the ledger — e.g. flipping bank→member would fabricate member
+  // debt no liability journal ever created. A reimbursed purchase is doubly locked.
+  if (existing.status === 'paid') {
+    const code = existing.reimbursement_id != null ? 'purchase_reimbursed' : 'already_paid'
+    return { error: { status: 409, body: { error: 'Purchase is already paid', code } } }
+  }
+  return null
+}
+
+async function resolvePaymentMethod(pool, tenantId, body) {
+  // Bank (default) or band-member payment. Member-paid purchases clear accounts
+  // payable into the configured reimbursement liability account.
+  const method = body.method ?? 'bank'
+  if (method !== 'bank' && method !== 'member') {
+    return { error: { status: 400, body: { error: 'Invalid method', code: 'invalid_method' } } }
+  }
+  let paidByBandMemberId = null
+  if (method === 'member') {
+    if (body.paid_by_band_member_id == null) {
+      return { error: { status: 400, body: { error: 'paid_by_band_member_id is required for member payments', code: 'paid_by_required' } } }
+    }
+    const member = await validateBandMemberForTenant(pool, body.paid_by_band_member_id, tenantId)
+    if (member === null) return { error: { status: 400, body: { error: 'Invalid paid_by_band_member_id' } } }
+    paidByBandMemberId = member.id
+  }
+  return { method, paidByBandMemberId }
 }
