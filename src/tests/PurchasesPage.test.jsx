@@ -4,6 +4,13 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// pdf.js can't run in jsdom (no DOMMatrix/worker); stub the react-pdf surface.
+vi.mock('react-pdf', () => ({
+  Document: () => null,
+  Page: () => null,
+  pdfjs: { GlobalWorkerOptions: {} },
+}))
+
 vi.mock('../api/purchases.js', () => ({
   listPurchases: vi.fn(),
   listPurchasePeriods: vi.fn(),

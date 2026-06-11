@@ -161,6 +161,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
           gap: 2,
           p: 4,
           minHeight: 280,
+          height: '100%',
           borderStyle: 'dashed',
           borderColor: dragOver ? 'primary.main' : 'divider',
           bgcolor: dragOver ? 'action.hover' : 'transparent',

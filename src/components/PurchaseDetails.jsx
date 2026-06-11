@@ -345,7 +345,7 @@ export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPu
   if (embedded) {
     return (
       <>
-        <Box sx={{ display: 'flex', flexDirection: isCompact ? 'column' : 'row', gap: 3, alignItems: 'flex-start' }}>
+        <Box sx={{ display: 'flex', flexDirection: isCompact ? 'column' : 'row', gap: 3, alignItems: isCompact ? 'flex-start' : 'stretch' }}>
           <Box sx={{ flex: isCompact ? '0 0 auto' : '1 1 45%', minWidth: 0, width: isCompact ? '100%' : 'auto' }}>
             {attachmentsPanel}
           </Box>

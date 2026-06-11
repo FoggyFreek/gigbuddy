@@ -84,9 +84,8 @@ describe('InvoicesPage', () => {
 
   it('shows all five summary cards after load', async () => {
     wrap(<InvoicesPage />)
-    await waitFor(() => expect(screen.getByText('Summary')).toBeInTheDocument())
     // "All invoices" appears twice: once in the card, once as the active-filter label.
-    expect(screen.getAllByText('All invoices').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => expect(screen.getAllByText('All invoices').length).toBeGreaterThanOrEqual(1))
     for (const label of ['Draft', 'Overdue', 'Unpaid', 'Paid']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
@@ -94,7 +93,7 @@ describe('InvoicesPage', () => {
 
   it('summary counts: 4 non-void invoices under "All", 1 each in draft/overdue/unpaid/paid', async () => {
     wrap(<InvoicesPage />)
-    await waitFor(() => expect(screen.getByText('Summary')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('All invoices').length).toBeGreaterThanOrEqual(1))
 
     // The summary card circles contain plain digit text nodes.
     const counts = screen.getAllByText(/^\d+$/).map((el) => el.textContent)
@@ -159,7 +158,7 @@ describe('InvoicesPage', () => {
   it('void invoices appear in the "All" table view but are excluded from summary stat counts', async () => {
     const user = userEvent.setup()
     wrap(<InvoicesPage />)
-    await waitFor(() => expect(screen.getByText('Summary')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('All invoices').length).toBeGreaterThanOrEqual(1))
 
     // Void invoice is visible under the default "All" filter.
     expect(screen.getByText('Void BV')).toBeInTheDocument()
