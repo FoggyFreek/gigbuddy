@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/purchases.js', () => ({
   listPurchases: vi.fn(),
+  listPurchasePeriods: vi.fn(),
   getPurchase: vi.fn(),
   createPurchase: vi.fn(),
   updatePurchase: vi.fn(),
@@ -16,6 +17,15 @@ vi.mock('../api/purchases.js', () => ({
 vi.mock('../api/contacts.js', () => ({
   searchContacts: vi.fn(async () => []),
   createContact: vi.fn(),
+}))
+
+vi.mock('../api/accounts.js', () => ({
+  getAccountingSettings: vi.fn(async () => ({
+    default_expense_account_code: '62100',
+  })),
+  listAccounts: vi.fn(async () => [
+    { id: 1, code: '62100', name: 'Instruments & Equipment', type: 'expense', is_active: true },
+  ]),
 }))
 
 import * as purchasesApi from '../api/purchases.js'
@@ -93,6 +103,7 @@ const CREATED_PURCHASE = {
 beforeEach(() => {
   vi.clearAllMocks()
   purchasesApi.listPurchases.mockResolvedValue(PURCHASES)
+  purchasesApi.listPurchasePeriods.mockResolvedValue(PURCHASES.map((p) => p.receipt_date))
   purchasesApi.createPurchase.mockResolvedValue(CREATED_PURCHASE)
   purchasesApi.getPurchase.mockResolvedValue(CREATED_PURCHASE)
 })
@@ -104,6 +115,7 @@ describe('PurchasesPage', () => {
     expect(screen.getByText('Studio recording day')).toBeInTheDocument()
     // Summary "Purchases" card label is present.
     expect(screen.getByRole('heading', { name: 'Purchases', level: 5 })).toBeInTheDocument()
+    expect(purchasesApi.listPurchases).toHaveBeenCalledWith(expect.objectContaining({ mode: 'fiscal_year' }))
   })
 
   it('opens the create dialog', async () => {

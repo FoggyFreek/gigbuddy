@@ -7,6 +7,7 @@ import RequireSuperAdmin from './components/RequireSuperAdmin.jsx'
 
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage.jsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'))
+const FinancialDashboardPage = lazy(() => import('./pages/FinancialDashboardPage.jsx'))
 const BandEventDetailPage = lazy(() => import('./pages/BandEventDetailPage.jsx'))
 const BandEventsPage = lazy(() => import('./pages/BandEventsPage.jsx'))
 const ContactDetailPage = lazy(() => import('./pages/ContactDetailPage.jsx'))
@@ -33,6 +34,10 @@ const InvoicesPage = lazy(() => import('./pages/InvoicesPage.jsx'))
 const InvoiceDetailPage = lazy(() => import('./pages/InvoiceDetailPage.jsx'))
 const PurchasesPage = lazy(() => import('./pages/PurchasesPage.jsx'))
 const PurchaseDetailPage = lazy(() => import('./pages/PurchaseDetailPage.jsx'))
+const JournalPage = lazy(() => import('./pages/JournalPage.jsx'))
+const LedgerEntriesPage = lazy(() => import('./pages/LedgerEntriesPage.jsx'))
+const LedgerEntryDetailPage = lazy(() => import('./pages/LedgerEntryDetailPage.jsx'))
+const ReimbursementsPage = lazy(() => import('./pages/ReimbursementsPage.jsx'))
 const TenantSettingsPage = lazy(() => import('./pages/TenantSettingsPage.jsx'))
 const PaymentThanksPage = lazy(() => import('./pages/PaymentThanksPage.jsx'))
 const TenantsPage = lazy(() => import('./pages/admin/TenantsPage.jsx'))
@@ -49,6 +54,7 @@ export default function App() {
           <Route path="/redeem-invite" element={<RedeemInvitePage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/financial" element={<FinancialDashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/gigs" element={<GigsPage />}>
               <Route path=":id" element={<GigDetailPage />} />
@@ -78,6 +84,10 @@ export default function App() {
             <Route path="/purchases" element={<PurchasesPage />}>
               <Route path=":id" element={<PurchaseDetailPage />} />
             </Route>
+            <Route path="/journal" element={<JournalPage />} />
+            <Route path="/ledger" element={<LedgerEntriesPage />} />
+            <Route path="/ledger/:id" element={<LedgerEntryDetailPage />} />
+            <Route path="/reimbursements" element={<ReimbursementsPage />} />
             <Route path="/availability" element={<AvailabilityPage />}>
               <Route path="gigs/:id" element={<GigDetailPage />} />
               <Route path="rehearsals/:id" element={<RehearsalDetailPage />} />

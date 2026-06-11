@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
@@ -191,6 +191,58 @@ describe('AvailabilityCalendar', () => {
       const cell = container.querySelector('[data-date="2026-04-10"]')
       await user.click(cell)
       expect(onDayClick).toHaveBeenCalledWith('2026-04-10', false, expect.any(HTMLElement))
+    })
+    function swipe(grid, fromX, toX, fromY = 100, toY = 100) {
+      fireEvent.touchStart(grid, { touches: [{ clientX: fromX, clientY: fromY }] })
+      fireEvent.touchEnd(grid, { changedTouches: [{ clientX: toX, clientY: toY }] })
+    }
+
+    function getSwipeArea(container) {
+      return container.querySelector('[data-swipe-area="calendar"]')
+    }
+
+    it('swiping left goes to the next month', () => {
+      const onNext = vi.fn()
+      const onPrev = vi.fn()
+      const { container } = wrap(
+        <AvailabilityCalendar {...makeProps({ mobile: true, onNext, onPrev })} />
+      )
+      swipe(getSwipeArea(container), 250, 100)
+      expect(onNext).toHaveBeenCalledTimes(1)
+      expect(onPrev).not.toHaveBeenCalled()
+    })
+
+    it('swiping right goes to the previous month', () => {
+      const onNext = vi.fn()
+      const onPrev = vi.fn()
+      const { container } = wrap(
+        <AvailabilityCalendar {...makeProps({ mobile: true, onNext, onPrev })} />
+      )
+      swipe(getSwipeArea(container), 100, 250)
+      expect(onPrev).toHaveBeenCalledTimes(1)
+      expect(onNext).not.toHaveBeenCalled()
+    })
+
+    it('a short horizontal movement does not change the month', () => {
+      const onNext = vi.fn()
+      const onPrev = vi.fn()
+      const { container } = wrap(
+        <AvailabilityCalendar {...makeProps({ mobile: true, onNext, onPrev })} />
+      )
+      swipe(getSwipeArea(container), 120, 100)
+      expect(onNext).not.toHaveBeenCalled()
+      expect(onPrev).not.toHaveBeenCalled()
+    })
+
+    it('a mostly vertical movement (scrolling) does not change the month', () => {
+      const onNext = vi.fn()
+      const onPrev = vi.fn()
+      const { container } = wrap(
+        <AvailabilityCalendar {...makeProps({ mobile: true, onNext, onPrev })} />
+      )
+      swipe(getSwipeArea(container), 250, 100, 100, 350)
+      expect(onNext).not.toHaveBeenCalled()
+      expect(onPrev).not.toHaveBeenCalled()
     })
   })
 

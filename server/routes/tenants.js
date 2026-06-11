@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
 
 const router = Router()
 
@@ -79,6 +80,8 @@ router.post('/', async (req, res, next) => {
       `INSERT INTO tenant_statistics (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING`,
       [tenant.id],
     )
+
+    await seedTenantAccounting(client, tenant.id)
 
     if (adminUserId) {
       await client.query(

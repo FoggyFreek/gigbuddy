@@ -22,6 +22,8 @@ import { useProfile } from '../contexts/profileContext.js'
 import { clearMollieKey, getMollieKey, setMollieKey, updateProfile } from '../api/profile.js'
 import { getMyStorageStats, refreshMyStorageStats } from '../api/statistics.js'
 import { formatBytes } from '../utils/formatBytes.js'
+import ChartOfAccountsSection from '../components/settings/ChartOfAccountsSection.jsx'
+import AccountingSettingsSection from '../components/settings/AccountingSettingsSection.jsx'
 
 const PRESET_COLORS = [
   { hex: '#6750A4', label: 'Purple (default)' },
@@ -160,6 +162,8 @@ export default function TenantSettingsPage() {
 
       {isAdmin && <StorageUsageSection />}
       {isAdmin && <MollieKeySection />}
+      {isAdmin && <ChartOfAccountsSection />}
+      {isAdmin && <AccountingSettingsSection />}
     </Box>
   )
 }

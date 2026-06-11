@@ -66,6 +66,24 @@ export async function validateGigIdForTenant(executor, rawGigId, tenantId) {
   return rowCount ? n : null
 }
 
+// Count + gross total of open invoices per dashboard bucket: overdue (sent,
+// past due), unpaid (sent, not yet due or no due date), draft. Paid and void
+// invoices fall outside every bucket.
+export async function openInvoiceBuckets(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*) FILTER (WHERE status = 'sent' AND due_date < CURRENT_DATE)::int AS overdue_count,
+            COALESCE(SUM(total_cents) FILTER (WHERE status = 'sent' AND due_date < CURRENT_DATE), 0)::int AS overdue_total_cents,
+            COUNT(*) FILTER (WHERE status = 'sent' AND (due_date IS NULL OR due_date >= CURRENT_DATE))::int AS unpaid_count,
+            COALESCE(SUM(total_cents) FILTER (WHERE status = 'sent' AND (due_date IS NULL OR due_date >= CURRENT_DATE)), 0)::int AS unpaid_total_cents,
+            COUNT(*) FILTER (WHERE status = 'draft')::int AS draft_count,
+            COALESCE(SUM(total_cents) FILTER (WHERE status = 'draft'), 0)::int AS draft_total_cents
+       FROM invoices
+      WHERE tenant_id = $1`,
+    [tenantId],
+  )
+  return rows[0]
+}
+
 // Drops the secret Mollie API key before a tenant row is returned to a client.
 export function stripMollieKey(tenant) {
   if (!tenant) return tenant

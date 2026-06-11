@@ -6,8 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/gigs.js', () => ({ listGigs: vi.fn() }))
 vi.mock('../api/rehearsals.js', () => ({ listRehearsals: vi.fn() }))
-vi.mock('../api/invoices.js', () => ({ listInvoices: vi.fn() }))
-vi.mock('../api/purchases.js', () => ({ listPurchases: vi.fn() }))
 vi.mock('../api/tasks.js', () => ({ listAllTasks: vi.fn() }))
 vi.mock('../contexts/authContext.js', () => ({ useAuth: vi.fn() }))
 // The world-map tile loads its own data (and Leaflet); stub it so these tests stay
@@ -20,8 +18,6 @@ vi.mock('../api/profile.js', () => ({ getProfile: vi.fn() }))
 import DashboardPage from '../pages/DashboardPage.jsx'
 import { listGigs } from '../api/gigs.js'
 import { listRehearsals } from '../api/rehearsals.js'
-import { listInvoices } from '../api/invoices.js'
-import { listPurchases } from '../api/purchases.js'
 import { listAllTasks } from '../api/tasks.js'
 import { getProfile } from '../api/profile.js'
 import { useAuth } from '../contexts/authContext.js'
@@ -57,17 +53,6 @@ const REHEARSALS = [
   { id: 20, proposed_date: '2026-06-01', location: 'Studio A', status: 'planned' },
   { id: 21, proposed_date: '2026-02-01', location: 'Old Studio', status: 'planned' },
 ]
-const INVOICES = [
-  { id: 40, invoice_number: '2026-001', customer_name: 'Acme', total_cents: 50000, status: 'sent', due_date: '2026-06-10' },
-  { id: 41, invoice_number: '2026-002', customer_name: 'Beta', total_cents: 20000, status: 'draft', due_date: null },
-  { id: 42, invoice_number: '2026-003', customer_name: 'Gamma', total_cents: 10000, status: 'paid', due_date: '2026-05-01' },
-  { id: 43, invoice_number: '2026-004', customer_name: 'Delta', total_cents: 30000, status: 'void', due_date: null },
-]
-const PURCHASES = [
-  { id: 44, receipt_number: 1, supplier_name: 'Studio Hire', total_cents: 30000, status: 'approved', due_date: '2026-06-05' },
-  { id: 45, receipt_number: 2, supplier_name: 'Guitar Shop', total_cents: 12000, status: 'draft', due_date: null },
-  { id: 46, receipt_number: 3, supplier_name: 'Paid Supplier', total_cents: 9000, status: 'paid', due_date: '2026-06-01' },
-]
 const TASKS = [
   { id: 50, gig_id: 3, title: 'Send invoice', done: false, due_date: null, assigned_to: 7, event_description: 'Tour Stop' },
   { id: 51, gig_id: 2, title: 'Confirm rider', done: false, due_date: '2026-06-01', assigned_to: 9, event_description: 'Jazz Night' },
@@ -76,8 +61,6 @@ const TASKS = [
 function resolveAll() {
   listGigs.mockResolvedValue(GIGS)
   listRehearsals.mockResolvedValue(REHEARSALS)
-  listInvoices.mockResolvedValue(INVOICES)
-  listPurchases.mockResolvedValue(PURCHASES)
   listAllTasks.mockResolvedValue(TASKS)
   getProfile.mockResolvedValue({ logo_path: null })
 }
@@ -128,20 +111,11 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Old Studio')).not.toBeInTheDocument()
   })
 
-  it('shows only open invoices, excluding paid and void', async () => {
+  it('does not render invoice or purchase cards (moved to the financial dashboard)', async () => {
     wrap(<DashboardPage />)
-    await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
-    expect(screen.getByText('Beta')).toBeInTheDocument()
-    expect(screen.queryByText('Gamma')).not.toBeInTheDocument()
-    expect(screen.queryByText('Delta')).not.toBeInTheDocument()
-  })
-
-  it('shows only open purchases, excluding paid purchases', async () => {
-    wrap(<DashboardPage />)
-    await waitFor(() => expect(screen.getByText('Studio Hire')).toBeInTheDocument())
-    expect(screen.getByText('Guitar Shop')).toBeInTheDocument()
-    expect(screen.queryByText('Paid Supplier')).not.toBeInTheDocument()
-    expect(screen.getByText('unpaid')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+    expect(screen.queryByText('Open invoices')).not.toBeInTheDocument()
+    expect(screen.queryByText('Open purchases')).not.toBeInTheDocument()
   })
 
   it('shows only open tasks assigned to the current member', async () => {
@@ -162,54 +136,34 @@ describe('DashboardPage', () => {
   it('renders empty states when sources return nothing', async () => {
     listGigs.mockResolvedValue([])
     listRehearsals.mockResolvedValue([])
-    listInvoices.mockResolvedValue([])
-    listPurchases.mockResolvedValue([])
     listAllTasks.mockResolvedValue([])
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText(/no upcoming shows/i)).toBeInTheDocument())
-    expect(screen.getByText(/no open invoices/i)).toBeInTheDocument()
-    expect(screen.getByText(/no open purchases/i)).toBeInTheDocument()
     expect(screen.getByText(/no open tasks/i)).toBeInTheDocument()
   })
 
   it('shows a count badge reflecting the full total, not the capped 5 rows', async () => {
-    // 7 open invoices: only 5 rows render, but the badge must read 7.
-    const manyInvoices = Array.from({ length: 7 }, (_, i) => ({
+    // 7 open tasks for member 7: only 5 rows render, but the badge must read 7.
+    const manyTasks = Array.from({ length: 7 }, (_, i) => ({
       id: 100 + i,
-      invoice_number: `2026-1${i}`,
-      customer_name: `Customer ${i}`,
-      total_cents: 1000,
-      status: 'sent',
+      gig_id: 3,
+      title: `Task ${i}`,
+      done: false,
       due_date: '2026-06-10',
+      assigned_to: 7,
+      event_description: 'Tour Stop',
     }))
-    listInvoices.mockResolvedValue(manyInvoices)
+    listAllTasks.mockResolvedValue(manyTasks)
     wrap(<DashboardPage />)
-    await waitFor(() => expect(screen.getByText('Open invoices')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('My tasks')).toBeInTheDocument())
     expect(screen.getByText('7')).toBeInTheDocument()
     // Capped at 5 rendered rows.
-    expect(screen.getByText('Customer 0')).toBeInTheDocument()
-    expect(screen.queryByText('Customer 5')).not.toBeInTheDocument()
-  })
-
-  it('caps open purchases at 5 rows while showing the full count', async () => {
-    const manyPurchases = Array.from({ length: 7 }, (_, i) => ({
-      id: 200 + i,
-      receipt_number: i + 1,
-      supplier_name: `Supplier ${i}`,
-      total_cents: 1000,
-      status: 'approved',
-      due_date: '2026-06-10',
-    }))
-    listPurchases.mockResolvedValue(manyPurchases)
-    wrap(<DashboardPage />)
-    await waitFor(() => expect(screen.getByText('Open purchases')).toBeInTheDocument())
-    expect(screen.getByText('7')).toBeInTheDocument()
-    expect(screen.getByText('Supplier 0')).toBeInTheDocument()
-    expect(screen.queryByText('Supplier 5')).not.toBeInTheDocument()
+    expect(screen.getByText('Task 0')).toBeInTheDocument()
+    expect(screen.queryByText('Task 5')).not.toBeInTheDocument()
   })
 
   it('shows a per-card error when one source fails, while the others still render', async () => {
-    listInvoices.mockRejectedValue(new Error('boom'))
+    listRehearsals.mockRejectedValue(new Error('boom'))
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument()

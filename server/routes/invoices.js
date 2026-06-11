@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import pool from '../db/index.js'
 import { uploadObject, removeObject, safeRemove, getObject, invoiceLogoKey } from '../services/storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
+import { buildPeriodWhere } from '../utils/periodQuery.js'
 import { assertMollieConfigured, createTenantMollieClient } from '../utils/mollieClient.js'
 import {
   parseId,
@@ -28,6 +29,7 @@ import {
   applyInvoicePatch,
   finalizeInvoiceForPaymentLink,
   createMolliePaymentLink,
+  removeMolliePaymentLink,
   syncInvoicePaymentStatus,
 } from '../services/invoiceService.js'
 
@@ -68,6 +70,9 @@ function requireId(req, res) {
 
 // ---------- list ----------
 router.get('/', async (req, res) => {
+  const period = buildPeriodWhere(req.query, 'issue_date')
+  if (period.error) return res.status(400).json({ error: period.error })
+
   const { rows } = await pool.query(
     `SELECT id, invoice_number, gig_id, issue_date, due_date,
             customer_name, total_cents, status, pdf_path, finalized_at,
@@ -76,10 +81,23 @@ router.get('/', async (req, res) => {
             created_at, updated_at
        FROM invoices
       WHERE tenant_id = $1
+        ${period.sql}
       ORDER BY issue_date DESC, id DESC`,
-    [req.tenantId],
+    [req.tenantId, ...period.values],
   )
   res.json(rows)
+})
+
+router.get('/periods', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT to_char(issue_date, 'YYYY-MM-DD') AS date
+       FROM invoices
+      WHERE tenant_id = $1
+        AND issue_date IS NOT NULL
+      ORDER BY date DESC`,
+    [req.tenantId],
+  )
+  res.json(rows.map((row) => row.date))
 })
 
 // ---------- draft (from gig) ----------
@@ -260,7 +278,8 @@ router.post('/', async (req, res) => {
         customer_kvk, customer_tax_id, memo, tax_inclusive,
         discount_type, discount_pct, discount_cents,
         invert_logo,
-        subtotal_cents, tax_cents, total_cents
+        subtotal_cents, tax_cents, total_cents,
+        created_by_user_id
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
@@ -269,7 +288,8 @@ router.post('/', async (req, res) => {
         $16, $17, $18, $19,
         $20, $21, $22,
         $23,
-        $24, $25, $26
+        $24, $25, $26,
+        $27
       ) RETURNING id`
     const { rows } = await client.query(insertSql, [
       req.tenantId, gigId, invoiceNumber, issueDate, dueDate, paymentTermDays,
@@ -280,6 +300,7 @@ router.post('/', async (req, res) => {
       discountType, discountPct, totals.discountCents,
       Boolean(body.invert_logo),
       totals.subtotalCents, totals.taxCents, totals.totalCents,
+      req.user.id,
     ])
     invoiceId = rows[0].id
 
@@ -308,10 +329,12 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
 
-  const result = await applyInvoicePatch(pool, req.tenantId, id, req.body || {})
+  const result = await applyInvoicePatch(pool, req.tenantId, id, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
 
-  if (result.contentChanged) {
+  // linkRemoved: voiding retracted the Mollie payment link, so the stored PDF
+  // (which embeds the payment QR/URL) must be refreshed too.
+  if (result.contentChanged || result.linkRemoved) {
     try {
       await renderAndStorePdf(pool, id, req.tenantId)
     } catch (err) {
@@ -412,7 +435,7 @@ router.post('/:id/payment-link', async (req, res) => {
   return withPaymentLinkCreationLock(pool, id, async () => {
     // Finalize the invoice before calling Mollie, so a concurrent PATCH sees
     // finalized_at. The advisory lock also makes the Mollie create single-flight.
-    const finalize = await finalizeInvoiceForPaymentLink(pool, req.tenantId, id)
+    const finalize = await finalizeInvoiceForPaymentLink(pool, req.tenantId, id, req.user.id)
     if (finalize.error) return res.status(finalize.error.status).json(finalize.error.body)
 
     const tenant = await fetchTenant(pool, req.tenantId)
@@ -443,6 +466,39 @@ router.post('/:id/payment-link', async (req, res) => {
     const lines = await fetchLines(pool, id, req.tenantId)
     return res.status(201).json({ ...finalInvoice, lines, tenant: stripMollieKey(tenant) })
   })
+})
+
+// ---------- payment link removal ----------
+// Deletes the Mollie payment link (or archives it when Mollie refuses deletion
+// for an opened/attempted link) and clears the link columns. 409 when the link
+// turns out to be paid — the invoice is then marked paid instead.
+router.delete('/:id/payment-link', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+
+  const invoice = await fetchInvoice(pool, req.tenantId, id)
+  if (!invoice) return res.status(404).json({ error: 'Not found' })
+  if (!invoice.mollie_payment_link_id) {
+    return res.status(400).json({ error: 'no_payment_link' })
+  }
+
+  const tenant = await fetchTenant(pool, req.tenantId)
+  const result = await removeMolliePaymentLink({
+    pool, tenant, invoice, tenantId: req.tenantId, invoiceId: id,
+  })
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+
+  // The stored PDF embeds the payment QR/URL — refresh it now the link is gone.
+  let finalInvoice = result.invoice
+  try {
+    await renderAndStorePdf(pool, id, req.tenantId)
+    const refreshed = await fetchInvoice(pool, req.tenantId, id)
+    if (refreshed) finalInvoice = refreshed
+  } catch (err) {
+    console.error('[invoices] PDF re-render after payment-link removal failed:', err)
+  }
+
+  const lines = await fetchLines(pool, id, req.tenantId)
+  res.json({ ...finalInvoice, lines, tenant: stripMollieKey(tenant) })
 })
 
 // ---------- payment link sync ----------

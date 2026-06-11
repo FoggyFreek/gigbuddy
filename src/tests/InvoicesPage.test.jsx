@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/invoices.js', () => ({
   listInvoices: vi.fn(),
+  listInvoicePeriods: vi.fn(),
 }))
 // Avoid rendering the full split-view router shell; InvoicesPage still needs
 // useNavigate / useParams so we keep MemoryRouter.
@@ -15,15 +16,15 @@ vi.mock('../components/SplitView.jsx', () => ({
 vi.mock('../components/NewInvoiceDialog.jsx', () => ({
   default: ({ onClose }) => <button onClick={onClose}>close-new-dialog</button>,
 }))
-vi.mock('../components/InvoicePeriodPicker.jsx', () => ({
+vi.mock('../components/shared/periodPicker.jsx', () => ({
   default: ({ value, onChange }) => (
-    <button onClick={() => onChange(value)}>
+    <button onClick={() => onChange({ mode: 'month', year: 2026, month: 2 })}>
       {`FY ${value.year ?? ''}`}
     </button>
   ),
 }))
 
-import { listInvoices } from '../api/invoices.js'
+import { listInvoicePeriods, listInvoices } from '../api/invoices.js'
 import InvoicesPage from '../pages/InvoicesPage.jsx'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
 import theme from '../theme.js'
@@ -64,6 +65,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(FIXED_NOW)
   listInvoices.mockResolvedValue(INVOICES)
+  listInvoicePeriods.mockResolvedValue(INVOICES.map((inv) => inv.issue_date))
 })
 
 afterEach(() => {
@@ -77,6 +79,7 @@ describe('InvoicesPage', () => {
     expect(screen.getByRole('heading', { name: /^invoices$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^create invoice$/i })).toBeInTheDocument()
     await waitFor(() => expect(listInvoices).toHaveBeenCalledTimes(1))
+    expect(listInvoices).toHaveBeenCalledWith({ mode: 'fiscal_year', year: 2026 })
   })
 
   it('shows all five summary cards after load', async () => {
@@ -194,7 +197,18 @@ describe('InvoicesPage', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /FY 2026/ })).toBeInTheDocument())
   })
 
+  it('loads invoices again when the period changes', async () => {
+    const user = userEvent.setup()
+    wrap(<InvoicesPage />)
+    await waitFor(() => expect(listInvoices).toHaveBeenCalledWith({ mode: 'fiscal_year', year: 2026 }))
+
+    await user.click(screen.getByRole('button', { name: /FY 2026/ }))
+
+    await waitFor(() => expect(listInvoices).toHaveBeenCalledWith({ mode: 'month', year: 2026, month: 2 }))
+  })
+
   it('fiscal year auto-switches to the most recent past year when no invoices exist for the current year', async () => {
+    listInvoicePeriods.mockResolvedValue(['2025-06-01'])
     listInvoices.mockResolvedValue([
       { id: 10, invoice_number: '2025-0001', status: 'paid', issue_date: '2025-06-01', payment_term_days: 14, customer_name: 'Old Client', total_cents: 50000 },
     ])

@@ -12,6 +12,8 @@ import {
   insertPurchaseLines,
   replacePurchaseLines,
   validateContactIdForTenant,
+  fetchValidExpenseCodes,
+  validateBandMemberForTenant,
 } from '../repositories/purchaseRepository.js'
 import {
   CONTENT_FIELDS_SET,
@@ -21,6 +23,26 @@ import {
   normalizeLines,
   parseReceiptNumber,
 } from '../validators/purchaseValidators.js'
+import {
+  ledgerErrorResult,
+  loadAccountingSettings,
+  postBillAccrued,
+  postBillPaid,
+} from './ledgerService.js'
+
+// Validates any explicit per-line account codes against the tenant chart: each
+// must exist, be active, and be an expense/COGS account. Lines without a code
+// fall back to the tenant default expense account at posting time.
+async function validateLineAccounts(executor, tenantId, lines) {
+  const codes = lines.map((l) => l.account_code).filter(Boolean)
+  if (!codes.length) return null
+  const valid = await fetchValidExpenseCodes(executor, tenantId, codes)
+  const invalid = codes.find((c) => !valid.has(c))
+  if (invalid) {
+    return { error: { status: 400, body: { error: 'Invalid account_code', code: 'invalid_account_code', account_code: invalid } } }
+  }
+  return null
+}
 
 const FINALIZED_ERROR = { status: 409, body: { error: 'Purchase is finalized', code: 'purchase_finalized' } }
 const RECEIPT_TAKEN_ERROR = { status: 409, body: { error: 'Receipt number already in use', code: 'receipt_number_taken' } }
@@ -36,9 +58,42 @@ function isValidIsoDate(value) {
   return !Number.isNaN(ts)
 }
 
+function buildApprovalLineValidationError(lines, { requireAccount = false } = {}) {
+  const fields = []
+  for (const [idx, line] of lines.entries()) {
+    if (!String(line.description || '').trim()) {
+      fields.push({ line: idx, field: 'description', message: 'Enter a description' })
+    }
+    if (requireAccount && !line.account_code) {
+      fields.push({ line: idx, field: 'account_code', message: 'Choose an expense account' })
+    }
+    if (Number(line.amount_incl_cents) <= 0) {
+      fields.push({ line: idx, field: 'amount_incl_cents', message: 'Enter an amount greater than zero' })
+    }
+  }
+  if (!fields.length) return null
+  return {
+    error: {
+      status: 400,
+      body: {
+        error: 'Complete the highlighted purchase line fields before approving.',
+        code: 'purchase_line_validation',
+        fields,
+      },
+    },
+  }
+}
+
+async function validateApprovalLines(executor, tenantId, lines) {
+  const settings = await loadAccountingSettings(executor, tenantId)
+  return buildApprovalLineValidationError(lines, {
+    requireAccount: !settings?.default_expense_account_code,
+  })
+}
+
 // ---------- create ----------
 
-export async function createPurchase(pool, tenantId, body) {
+export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   const supplierName = String(body.supplier_name ?? '').trim()
   if (!supplierName) return { error: { status: 400, body: { error: 'supplier_name is required' } } }
 
@@ -50,6 +105,9 @@ export async function createPurchase(pool, tenantId, body) {
 
   const lines = normalizeLines(body.lines)
   if (!lines.length) return { error: { status: 400, body: { error: 'At least one line is required' } } }
+
+  const accountErr = await validateLineAccounts(pool, tenantId, lines)
+  if (accountErr) return accountErr
 
   const receiptDate = body.receipt_date || new Date().toISOString().slice(0, 10)
   const dueDate = body.due_date || null
@@ -66,6 +124,11 @@ export async function createPurchase(pool, tenantId, body) {
 
   const totals = computePurchaseTotals({ lines })
 
+  if (status === 'approved') {
+    const approvalErr = await validateApprovalLines(pool, tenantId, lines)
+    if (approvalErr) return approvalErr
+  }
+
   const client = await pool.connect()
   let purchaseId
   try {
@@ -76,25 +139,44 @@ export async function createPurchase(pool, tenantId, body) {
          tenant_id, receipt_number, supplier_name, supplier_contact_id,
          receipt_date, due_date, currency, memo,
          subtotal_cents, tax_cents, total_cents,
-         status, finalized_at
+         status, finalized_at,
+         created_by_user_id, approved_by_user_id
        ) VALUES (
          $1, $2, $3, $4,
          $5, $6, $7, $8,
          $9, $10, $11,
-         $12, ${status === 'approved' ? 'NOW()' : 'NULL'}
+         $12, ${status === 'approved' ? 'NOW()' : 'NULL'},
+         $13, ${status === 'approved' ? '$13' : 'NULL'}
        ) RETURNING id`,
       [
         tenantId, receiptNumber, supplierName, supplierContactId,
         receiptDate, dueDate, currency, body.memo || null,
         totals.subtotalCents, totals.taxCents, totals.totalCents,
-        status,
+        status, actorUserId,
       ],
     )
     purchaseId = rows[0].id
     await insertPurchaseLines(client, purchaseId, tenantId, lines)
+
+    // Approving a bill accrues the expense + payable. Draft bills post nothing.
+    if (status === 'approved') {
+      const purchaseRow = {
+        id: purchaseId,
+        receipt_number: receiptNumber,
+        supplier_name: supplierName,
+        supplier_contact_id: supplierContactId,
+        receipt_date: receiptDate,
+        tax_cents: totals.taxCents,
+        total_cents: totals.totalCents,
+      }
+      await postBillAccrued(client, tenantId, purchaseRow, lines, { actorUserId })
+    }
+
     await client.query('COMMIT')
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
+    const mapped = ledgerErrorResult(err)
+    if (mapped) return mapped
     throw err
   } finally {
     client.release()
@@ -121,13 +203,29 @@ function buildSimpleSet(body, supplierContactIdOverride) {
   return { assignments, nextIdx: idx }
 }
 
-export async function applyPurchasePatch(pool, tenantId, id, body) {
+export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId = null) {
   const existing = await fetchPurchase(pool, tenantId, id)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
 
   if (body.status !== undefined) {
     if (!STATUS_VALUES.has(body.status)) return { error: { status: 400, body: { error: 'Invalid status' } } }
     if (body.status === 'paid') return { error: USE_PAYMENT_ENDPOINT_ERROR }
+    // Forward-only: once approved the accrual journal is posted and may never be
+    // left dangling by a regression to draft; paid never changes via PATCH.
+    if (body.status !== existing.status
+        && !(existing.status === 'draft' && body.status === 'approved')) {
+      return {
+        error: {
+          status: 409,
+          body: {
+            error: `Cannot change purchase status from ${existing.status} to ${body.status}`,
+            code: 'invalid_status_transition',
+            from: existing.status,
+            to: body.status,
+          },
+        },
+      }
+    }
   }
 
   const requestedLockedFields = Object.keys(body).filter((k) => FINALIZED_LOCKED_FIELDS_SET.has(k))
@@ -147,6 +245,17 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
 
   if ('receipt_number' in body && parseReceiptNumber(body.receipt_number) === null) {
     return { error: { status: 400, body: { error: 'Invalid receipt_number' } } }
+  }
+
+  if ('lines' in body) {
+    const accountErr = await validateLineAccounts(pool, tenantId, normalizeLines(body.lines))
+    if (accountErr) return accountErr
+  }
+
+  if (body.status === 'approved' && existing.status !== 'approved') {
+    const approvalLines = 'lines' in body ? normalizeLines(body.lines) : await fetchPurchaseLines(pool, id, tenantId)
+    const approvalErr = await validateApprovalLines(pool, tenantId, approvalLines)
+    if (approvalErr) return approvalErr
   }
 
   const contentChanged = Object.keys(body).some((k) => CONTENT_FIELDS_SET.has(k))
@@ -182,6 +291,9 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
       if (body.status !== 'draft' && existing.finalized_at === null) {
         setClauses.push('finalized_at = NOW()')
       }
+      if (body.status === 'approved' && existing.status !== 'approved') {
+        setClauses.push(`approved_by_user_id = $${idx++}`); values.push(actorUserId)
+      }
     }
 
     if (!setClauses.length) {
@@ -193,11 +305,21 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
     const sql = `UPDATE purchases SET ${setClauses.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`
     values.push(id, tenantId)
     await client.query(sql, values)
+
+    // Transitioning a draft to approved accrues the expense + payable.
+    if (body.status === 'approved' && existing.status !== 'approved') {
+      const purchaseRow = await fetchPurchase(client, tenantId, id)
+      const currentLines = await fetchPurchaseLines(client, id, tenantId)
+      await postBillAccrued(client, tenantId, purchaseRow, currentLines, { actorUserId })
+    }
+
     await client.query('COMMIT')
     return {}
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     if (isUniqueViolation(err)) return { error: RECEIPT_TAKEN_ERROR }
+    const mapped = ledgerErrorResult(err)
+    if (mapped) return mapped
     throw err
   } finally {
     client.release()
@@ -206,20 +328,68 @@ export async function applyPurchasePatch(pool, tenantId, id, body) {
 
 // ---------- register payment ----------
 
-export async function registerPayment(pool, tenantId, id, body) {
+export async function registerPayment(pool, tenantId, id, body, actorUserId = null) {
   const existing = await fetchPurchase(pool, tenantId, id)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
   if (existing.status === 'draft') {
     return { error: { status: 409, body: { error: 'Approve the purchase before registering payment', code: 'not_approved' } } }
   }
+  // Already paid: re-registering would change payment_method/payee while the
+  // original `paid` journal stays put (postJournal is idempotent on the source
+  // key), desyncing the ledger — e.g. flipping bank→member would fabricate member
+  // debt no liability journal ever created. A reimbursed purchase is doubly locked.
+  if (existing.status === 'paid') {
+    const code = existing.reimbursement_id != null ? 'purchase_reimbursed' : 'already_paid'
+    return { error: { status: 409, body: { error: 'Purchase is already paid', code } } }
+  }
 
   const paidOn = body.paid_on ?? new Date().toISOString().slice(0, 10)
   if (!isValidIsoDate(paidOn)) return { error: { status: 400, body: { error: 'Invalid paid_on' } } }
 
-  await pool.query(
-    `UPDATE purchases SET status = 'paid', paid_at = $1, updated_at = NOW()
-      WHERE id = $2 AND tenant_id = $3`,
-    [paidOn, id, tenantId],
-  )
-  return {}
+  // Bank (default) or band-member payment. Member-paid purchases clear accounts
+  // payable into the configured reimbursement liability account.
+  const method = body.method ?? 'bank'
+  if (method !== 'bank' && method !== 'member') {
+    return { error: { status: 400, body: { error: 'Invalid method', code: 'invalid_method' } } }
+  }
+  let paidByBandMemberId = null
+  if (method === 'member') {
+    if (body.paid_by_band_member_id == null) {
+      return { error: { status: 400, body: { error: 'paid_by_band_member_id is required for member payments', code: 'paid_by_required' } } }
+    }
+    const member = await validateBandMemberForTenant(pool, body.paid_by_band_member_id, tenantId)
+    if (member === null) return { error: { status: 400, body: { error: 'Invalid paid_by_band_member_id' } } }
+    paidByBandMemberId = member.id
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query(
+      `UPDATE purchases
+          SET status = 'paid',
+              paid_at = $1,
+              payment_method = $2,
+              paid_by_band_member_id = $3,
+              payment_registered_by_user_id = $4,
+              updated_at = NOW()
+        WHERE id = $5 AND tenant_id = $6`,
+      [paidOn, method, paidByBandMemberId, actorUserId, id, tenantId],
+    )
+    await postBillPaid(client, tenantId, {
+      ...existing,
+      paid_at: paidOn,
+      payment_method: method,
+      paid_by_band_member_id: paidByBandMemberId,
+    }, { actorUserId })
+    await client.query('COMMIT')
+    return {}
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    const mapped = ledgerErrorResult(err)
+    if (mapped) return mapped
+    throw err
+  } finally {
+    client.release()
+  }
 }

@@ -1,8 +1,10 @@
 import { request } from './_client.js'
+import { periodQueryString } from '../utils/invoicePeriod.js'
 
 const api = (path, options) => request(`/api/purchases${path}`, options)
 
-export const listPurchases  = ()         => api('/')
+export const listPurchases  = (period)   => api(`/${periodQueryString(period)}`)
+export const listPurchasePeriods = ()    => api('/periods')
 export const getPurchase    = (id)       => api(`/${id}`)
 export const createPurchase = (body)     => api('/', { method: 'POST', body: JSON.stringify(body) })
 export const updatePurchase = (id, body) => api(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })

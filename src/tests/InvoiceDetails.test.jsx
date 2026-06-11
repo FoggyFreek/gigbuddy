@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/invoices.js', () => ({
   createInvoicePaymentLink: vi.fn(),
+  deleteInvoicePaymentLink: vi.fn(),
   deleteInvoice: vi.fn(async () => {}),
   downloadInvoiceEml: vi.fn(),
   getInvoice: vi.fn(),
@@ -163,6 +164,71 @@ describe('InvoiceDetails', () => {
 
     expect(await screen.findByText('upload boom')).toBeInTheDocument()
     expect(invoicesApi.uploadInvoiceLogo).toHaveBeenCalledWith(7, file)
+  })
+
+  it('removes the payment link via the remove button', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
+    invoicesApi.deleteInvoicePaymentLink.mockResolvedValueOnce({
+      ...LINKED_INVOICE,
+      mollie_payment_link_id: null,
+      mollie_payment_link_url: null,
+      mollie_payment_status: null,
+    })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove payment link' }))
+    await waitFor(() => expect(invoicesApi.deleteInvoicePaymentLink).toHaveBeenCalledWith(7))
+    // Back to the create state once the link columns are cleared.
+    expect(await screen.findByRole('button', { name: /Create payment link/ })).toBeInTheDocument()
+  })
+
+  it('shows a friendly message when the link turns out to be paid', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
+    invoicesApi.deleteInvoicePaymentLink.mockRejectedValueOnce(
+      Object.assign(new Error('Payment link has a paid payment'), { code: 'payment_link_paid' }),
+    )
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove payment link' }))
+    expect(await screen.findByText(/already been paid/)).toBeInTheDocument()
+  })
+
+  it('does not offer the remove button for a paid link', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce({ ...LINKED_INVOICE, mollie_payment_status: 'paid' })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Remove payment link' })).toBeNull()
+  })
+
+  it('asks for confirmation before voiding and only PATCHes after confirm', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(FINALIZED_INVOICE)
+    invoicesApi.updateInvoice.mockResolvedValueOnce({ ...FINALIZED_INVOICE, status: 'void' })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+
+    // Pick "Void" in the status select → dialog appears, nothing PATCHed yet.
+    await userEvent.click(screen.getByRole('combobox', { name: 'Status' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Void' }))
+    expect(await screen.findByText(/Void invoice 2026-0007\?/)).toBeInTheDocument()
+    expect(screen.getByText(/voiding is permanent/i)).toBeInTheDocument()
+    expect(screen.getByText(/reversing entry is posted/i)).toBeInTheDocument()
+    expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Void invoice' }))
+    await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(7, { status: 'void' }))
+  })
+
+  it('cancelling the void dialog leaves the invoice untouched', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(FINALIZED_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Status' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Void' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
   })
 
   it('loads the default personal message into the EML dialog', async () => {

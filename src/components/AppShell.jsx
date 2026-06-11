@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import AppBar from '@mui/material/AppBar'
 import Avatar from '@mui/material/Avatar'
@@ -23,6 +23,7 @@ import PaymentsTwoTone from '@mui/icons-material/PaymentsTwoTone'
 import LibraryMusicTwoTone from '@mui/icons-material/LibraryMusicTwoTone'
 import DashboardOutlined from '@mui/icons-material/DashboardOutlined'
 import PersonOutlined from '@mui/icons-material/PersonOutlined'
+import QueryStatsOutlined from '@mui/icons-material/QueryStatsOutlined'
 import EventOutlined from '@mui/icons-material/EventOutlined'
 import CalendarMonthOutlined from '@mui/icons-material/CalendarMonthOutlined'
 import MusicNoteOutlined from '@mui/icons-material/MusicNoteOutlined'
@@ -33,6 +34,9 @@ import LocationOnOutlined from '@mui/icons-material/LocationOnOutlined'
 import ContactsOutlined from '@mui/icons-material/ContactsOutlined'
 import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined'
 import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined'
+import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined'
+import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
+import VolunteerActivismOutlined from '@mui/icons-material/VolunteerActivismOutlined'
 import LibraryMusicOutlined from '@mui/icons-material/LibraryMusicOutlined'
 import QueueMusicOutlined from '@mui/icons-material/QueueMusicOutlined'
 import { useProfile } from '../contexts/profileContext.js'
@@ -40,6 +44,7 @@ import { useAuth } from '../contexts/authContext.js'
 import { usePushNotifications } from '../hooks/usePushNotifications.js'
 import { useTenantQuerySync } from '../hooks/useTenantQuerySync.js'
 import { useThemeMode } from '../contexts/themeModeContext.js'
+import { ContentWidthContext } from '../contexts/contentWidthContext.js'
 import NavGroup from './appShell/NavGroup.jsx'
 import { isItemSelected } from './appShell/navSelection.js'
 import NotificationToggle from './appShell/NotificationToggle.jsx'
@@ -48,6 +53,8 @@ import UserMenu from './appShell/UserMenu.jsx'
 
 const DRAWER_WIDTH = 220
 const COLLAPSED_DRAWER_WIDTH = 72
+// Caps page content width on large screens so it stays centered instead of stretching edge-to-edge.
+const CONTENT_MAX_WIDTH = 1400
 
 const NAV_GROUPS = [
   {
@@ -56,6 +63,7 @@ const NAV_GROUPS = [
     icon: SpaceDashboardTwoTone,
     children: [
       { to: '/', label: 'Dashboard', icon: DashboardOutlined },
+      { to: '/financial', label: 'Financial', icon: QueryStatsOutlined },
       { to: '/profile', label: 'Profile', icon: PersonOutlined },
     ],
   },
@@ -88,6 +96,9 @@ const NAV_GROUPS = [
     children: [
       { to: '/invoices', label: 'Invoices', icon: ReceiptLongOutlined },
       { to: '/purchases', label: 'Purchases', icon: ShoppingCartOutlined },
+      { to: '/reimbursements', label: 'Reimbursements', icon: VolunteerActivismOutlined },
+      { to: '/journal', label: 'Journal', icon: MenuBookOutlined },
+      { to: '/ledger', label: 'Ledger entries', icon: ListAltOutlined },
     ],
   },
   {
@@ -113,6 +124,10 @@ export default function AppShell() {
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState(null)
   const [settingsMenuAnchor, setSettingsMenuAnchor] = useState(null)
+  // When a SplitView opens its master-detail layout it asks for full width;
+  // otherwise content stays capped and centered (see CONTENT_MAX_WIDTH).
+  const [wideContent, setWideContent] = useState(false)
+  const requestWideContent = useCallback((wide) => setWideContent(wide), [])
 
   useTenantQuerySync()
 
@@ -332,7 +347,11 @@ export default function AppShell() {
         key={activeTenantId ?? 'no-tenant'}
       >
         <Toolbar />
-        <Outlet />
+        <Box sx={{ maxWidth: wideContent ? 'none' : CONTENT_MAX_WIDTH, mx: 'auto' }}>
+          <ContentWidthContext.Provider value={requestWideContent}>
+            <Outlet />
+          </ContentWidthContext.Provider>
+        </Box>
       </Box>
     </Box>
   )

@@ -19,15 +19,16 @@ import SearchIcon from '@mui/icons-material/Search'
 import { alpha } from '@mui/material/styles'
 import PropTypes from 'prop-types'
 import NewInvoiceDialog from '../components/NewInvoiceDialog.jsx'
-import InvoicePeriodPicker from '../components/InvoicePeriodPicker.jsx'
+import PeriodPicker from '../components/shared/periodPicker.jsx'
 import SplitView from '../components/SplitView.jsx'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
-import { listInvoices } from '../api/invoices.js'
+import { listInvoicePeriods, listInvoices } from '../api/invoices.js'
 import { formatEur } from '../utils/invoiceTotals.js'
 import { formatShortDate } from '../utils/dateFormat.js'
 import { invoiceStatusColor } from '../utils/invoiceStatus.js'
-import { invoiceInPeriod } from '../utils/invoicePeriod.js'
+import { defaultPeriodForDates } from '../utils/invoicePeriod.js'
 import { invoiceShape, idProp } from '../propTypes/shared.js'
+import StatusDot from '../components/StatusDot.jsx'
 
 const SUMMARY_CARDS = [
   { key: 'all', label: 'All invoices', chipColor: 'primary' },
@@ -60,21 +61,29 @@ export default function InvoicesPage() {
   const [summaryFilter, setSummaryFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [period, setPeriod] = useState(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [availableDates, setAvailableDates] = useState([])
+  const [periodsLoaded, setPeriodsLoaded] = useState(false)
 
-  // After load: if the current period is the default current-year FY and no
-  // invoices exist for that year, switch to the most recent year with invoices.
+  const refreshPeriods = useCallback(async ({ signalLoaded = false } = {}) => {
+    try {
+      const dates = await listInvoicePeriods()
+      setAvailableDates(dates)
+      setPeriod((prev) => {
+        const fallback = defaultPeriodForDates(dates)
+        const currentYear = new Date().getFullYear()
+        if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
+        return fallback
+      })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      if (signalLoaded) setPeriodsLoaded(true)
+    }
+  }, [])
+
   useEffect(() => {
-    if (!invoices.length) return
-    const currentYear = new Date().getFullYear()
-    const years = invoices
-      .filter((inv) => inv.issue_date)
-      .map((inv) => new Date(inv.issue_date).getFullYear())
-    if (!years.length || years.includes(currentYear)) return
-    setPeriod((prev) => {
-      if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
-      return { mode: 'fiscal_year', year: Math.max(...years) }
-    })
-  }, [invoices])
+    refreshPeriods({ signalLoaded: true })
+  }, [refreshPeriods])
 
   const summaryStats = useMemo(() => {
     const stats = {
@@ -85,7 +94,6 @@ export default function InvoicesPage() {
       paid: { count: 0, total: 0 },
     }
     for (const inv of invoices) {
-      if (!invoiceInPeriod(inv, period)) continue
       const state = getInvoiceState(inv)
       if (state === 'void') continue
       stats[state].count++
@@ -94,10 +102,10 @@ export default function InvoicesPage() {
       stats.all.total += Number(inv.total_cents) || 0
     }
     return stats
-  }, [invoices, period])
+  }, [invoices])
 
   const visibleInvoices = useMemo(() => {
-    let list = invoices.filter((inv) => invoiceInPeriod(inv, period))
+    let list = invoices
     if (summaryFilter !== 'all') {
       list = list.filter((inv) => getInvoiceState(inv) === summaryFilter)
     }
@@ -110,25 +118,28 @@ export default function InvoicesPage() {
       )
     }
     return list
-  }, [invoices, period, summaryFilter, searchQuery])
+  }, [invoices, summaryFilter, searchQuery])
 
   const load = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const data = await listInvoices()
+      const data = await listInvoices(period)
       setInvoices(data)
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [period])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (periodsLoaded) load()
+  }, [load, periodsLoaded])
 
   function handleCreated(id) {
     setNewDialog(false)
+    refreshPeriods()
     load()
     navigate(`/invoices/${id}`)
   }
@@ -242,8 +253,8 @@ export default function InvoicesPage() {
               }}
               sx={{ flex: '1 1 200px', minWidth: 160 }}
             />
-            <InvoicePeriodPicker
-              invoices={invoices}
+            <PeriodPicker
+              availableDates={availableDates}
               value={period}
               onChange={setPeriod}
             />
@@ -266,23 +277,6 @@ export default function InvoicesPage() {
     </SplitView>
   )
 }
-
-function StatusDot({ status }) {
-  return (
-    <Box
-      component="span"
-      sx={{
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        bgcolor: (t) => t.palette[invoiceStatusColor(status)]?.main ?? t.palette.action.disabled,
-        display: 'inline-block',
-        flexShrink: 0,
-      }}
-    />
-  )
-}
-StatusDot.propTypes = { status: PropTypes.string }
 
 function InvoicesList({ invoices, selectedId, onRowClick }) {
   const isCompact = useCompactLayout()
@@ -314,7 +308,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
                 : 'none',
             }}
           >
-            <StatusDot status={inv.status} />
+            <StatusDot color={invoiceStatusColor(inv.status)} label={inv.status} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5 }}>
                 <Typography variant="body2" fontWeight={600}>
@@ -369,7 +363,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
                 onClick={() => onRowClick(inv)}
               >
                 <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }}>
-                  <StatusDot status={inv.status} />
+                  <StatusDot color={invoiceStatusColor(inv.status)} label={inv.status} />
                 </TableCell>
                 <TableCell>#{inv.invoice_number}</TableCell>
                 <TableCell>{formatShortDate(inv.issue_date)}</TableCell>

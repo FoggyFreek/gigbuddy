@@ -16,6 +16,7 @@ import InvoiceCustomerFields from './invoices/InvoiceCustomerFields.jsx'
 import InvoiceLinesEditor from './invoices/InvoiceLinesEditor.jsx'
 import InvoiceTotalsPanel from './invoices/InvoiceTotalsPanel.jsx'
 import InvoiceDeleteDialog from './invoices/InvoiceDeleteDialog.jsx'
+import InvoiceVoidDialog from './invoices/InvoiceVoidDialog.jsx'
 import InvoiceEmlDialog from './invoices/InvoiceEmlDialog.jsx'
 import PaymentLinkPanel from './invoices/PaymentLinkPanel.jsx'
 
@@ -40,6 +41,14 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }) 
         invoiceNumber={s.invoice?.invoice_number}
         onCancel={() => s.setDeleteDialogOpen(false)}
         onConfirm={s.confirmDelete}
+      />
+      <InvoiceVoidDialog
+        open={s.voidDialogOpen}
+        invoiceNumber={s.invoice?.invoice_number}
+        hasPaymentLink={Boolean(s.invoice?.mollie_payment_link_id)}
+        wasSent={s.invoice?.status === 'sent'}
+        onCancel={() => s.setVoidDialogOpen(false)}
+        onConfirm={s.confirmVoid}
       />
       <InvoiceEmlDialog
         open={s.emlDialogOpen}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import PropTypes from 'prop-types'
 import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
@@ -48,6 +48,26 @@ export default function AvailabilityCalendar({
   onMonthJump,
   onExport,
 }) {
+  const touchStartRef = useRef(null)
+
+  const handleTouchStart = (e) => {
+    const t = e.touches[0]
+    touchStartRef.current = { x: t.clientX, y: t.clientY }
+  }
+
+  const handleTouchEnd = (e) => {
+    const start = touchStartRef.current
+    touchStartRef.current = null
+    if (!start) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    // Require a clearly horizontal gesture so vertical scrolling never flips months.
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+    if (dx < 0) onNext()
+    else onPrev()
+  }
+
   const today = toIsoDate(new Date())
   const cells = useMemo(() => buildCalendarCells(year, month), [year, month])
 
@@ -101,7 +121,12 @@ export default function AvailabilityCalendar({
       </Stack>
 
       {mobile ? (
-        <Box sx={{ display: 'grid', gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}>
+        <Box
+          data-swipe-area="calendar"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          sx={{ display: 'grid', gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}
+        >
           <Typography variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
             Wk
           </Typography>

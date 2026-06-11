@@ -371,7 +371,7 @@ export default function SetlistEditorPage() {
   const total = computeTotal(sets)
 
   return (
-    <Box sx={{ width: { xs: '100%', md: '75%' }, maxWidth: 900, mx: 'auto' }}>
+    <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <IconButton onClick={handleBack} aria-label="back">
           <ArrowBackIcon />
