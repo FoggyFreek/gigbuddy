@@ -127,6 +127,15 @@ export const purchaseLineShape = PropTypes.shape({
   position: PropTypes.number,
 })
 
+export const purchaseAttachmentShape = PropTypes.shape({
+  id: idProp,
+  object_key: PropTypes.string,
+  original_filename: PropTypes.string,
+  content_type: PropTypes.string,
+  file_size: PropTypes.number,
+  uploaded_at: PropTypes.string,
+})
+
 export const purchaseShape = PropTypes.shape({
   id: idProp,
   receipt_number: PropTypes.number,
@@ -146,6 +155,7 @@ export const purchaseShape = PropTypes.shape({
   payment_method: PropTypes.string,
   paid_by_band_member_id: idProp,
   lines: PropTypes.arrayOf(purchaseLineShape),
+  attachments: PropTypes.arrayOf(purchaseAttachmentShape),
 })
 
 // One band member's outstanding reimbursement balance (from /reimbursements/outstanding).

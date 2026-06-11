@@ -20,7 +20,7 @@ export default function PurchaseDetailPage() {
   }
 
   return (
-    <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
+    <Box sx={{ maxWidth: insideSplitView ? '100%' : 1200, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
           <IconButton onClick={() => closeView(false)} aria-label="back">

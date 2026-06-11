@@ -1,11 +1,30 @@
 import { Router } from 'express'
+import multer from 'multer'
 import pool from '../db/index.js'
 import { parseId } from '../validators/purchaseValidators.js'
 import { fetchPurchase, fetchPurchaseLines } from '../repositories/purchaseRepository.js'
-import { createPurchase, applyPurchasePatch, registerPayment } from '../services/purchaseService.js'
+import { createPurchase, applyPurchasePatch, registerPayment, createPurchaseAttachment } from '../services/purchaseService.js'
+import { safeRemove } from '../services/storageService.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 
 const router = Router()
+
+const ATTACHMENT_ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png'])
+const attachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+})
+
+async function fetchAttachments(purchaseId, tenantId) {
+  const { rows } = await pool.query(
+    `SELECT id, object_key, original_filename, content_type, file_size, uploaded_at
+       FROM purchase_attachments
+      WHERE purchase_id = $1 AND tenant_id = $2
+      ORDER BY uploaded_at ASC, id ASC`,
+    [purchaseId, tenantId],
+  )
+  return rows
+}
 
 function requireId(req, res) {
   const id = parseId(req.params.id)
@@ -63,7 +82,36 @@ router.get('/:id', async (req, res) => {
   const purchase = await fetchPurchase(pool, req.tenantId, id)
   if (!purchase) return res.status(404).json({ error: 'Not found' })
   const lines = await fetchPurchaseLines(pool, id, req.tenantId)
-  res.json({ ...purchase, lines })
+  const attachments = await fetchAttachments(id, req.tenantId)
+  res.json({ ...purchase, lines, attachments })
+})
+
+// ---------- attachments ----------
+router.post('/:id/attachments', attachmentUpload.single('file'), async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (!ATTACHMENT_ALLOWED_TYPES.has(req.file.mimetype))
+    return res.status(400).json({ error: 'File type not allowed' })
+
+  const result = await createPurchaseAttachment({ db: pool, tenantId: req.tenantId, purchaseId: id, file: req.file })
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.status(201).json(result.attachment)
+})
+
+router.delete('/:id/attachments/:attachmentId', async (req, res) => {
+  const id = requireId(req, res); if (id === null) return
+  const attachmentId = parseId(req.params.attachmentId)
+  if (attachmentId === null) return res.status(400).json({ error: 'Invalid attachmentId' })
+
+  const { rows } = await pool.query(
+    'DELETE FROM purchase_attachments WHERE id = $1 AND purchase_id = $2 AND tenant_id = $3 RETURNING object_key',
+    [attachmentId, id, req.tenantId],
+  )
+  if (!rows.length) return res.status(404).json({ error: 'Not found' })
+
+  safeRemove(rows[0].object_key, 'Failed to delete purchase attachment object:')
+
+  res.status(204).end()
 })
 
 // ---------- create ----------

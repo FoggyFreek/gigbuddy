@@ -313,6 +313,114 @@ describe('purchases — line account_code', () => {
   })
 })
 
+describe('purchases — attachments', () => {
+  const pdfBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<< >>\nendobj\ntrailer\n<< >>\n%%EOF\n')
+  let pngBuffer
+
+  beforeAll(async () => {
+    const sharp = (await import('sharp')).default
+    pngBuffer = await sharp({
+      create: { width: 4, height: 4, channels: 3, background: { r: 200, g: 30, b: 30 } },
+    }).png().toBuffer()
+  })
+
+  async function createPurchaseA() {
+    const r = await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)
+    return r.body
+  }
+
+  function uploadA(id, buffer, filename, contentType) {
+    return asUserA(request(app).post(`/api/purchases/${id}/attachments`))
+      .attach('file', buffer, { filename, contentType })
+  }
+
+  it('uploads a PDF receipt and lists it on the purchase', async () => {
+    const p = await createPurchaseA()
+    const res = await uploadA(p.id, pdfBuffer, 'receipt.pdf', 'application/pdf').expect(201)
+    expect(res.body.original_filename).toBe('receipt.pdf')
+    expect(res.body.content_type).toBe('application/pdf')
+    expect(res.body.object_key).toMatch(new RegExp(`^tenants/${seed.tenantA.id}/purchase_attachments/`))
+
+    const detail = await asUserA(request(app).get(`/api/purchases/${p.id}`)).expect(200)
+    expect(detail.body.attachments).toHaveLength(1)
+    expect(detail.body.attachments[0].id).toBe(res.body.id)
+  })
+
+  it('uploads a PNG receipt (re-encoded image path)', async () => {
+    const p = await createPurchaseA()
+    const res = await uploadA(p.id, pngBuffer, 'receipt.png', 'image/png').expect(201)
+    expect(res.body.content_type).toBe('image/png')
+    expect(res.body.object_key).toMatch(/\.png$/)
+  })
+
+  it('rejects content that does not match the declared image type', async () => {
+    const p = await createPurchaseA()
+    const res = await uploadA(p.id, pdfBuffer, 'receipt.png', 'image/png')
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects content that does not match the declared pdf type', async () => {
+    const p = await createPurchaseA()
+    const res = await uploadA(p.id, pngBuffer, 'receipt.pdf', 'application/pdf')
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects a disallowed file type', async () => {
+    const p = await createPurchaseA()
+    const res = await uploadA(p.id, Buffer.from('hello'), 'notes.txt', 'text/plain')
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/not allowed/i)
+  })
+
+  it('allows uploads on approved and paid purchases', async () => {
+    const p = await createPurchaseA()
+    await approve(p.id, asUserA)
+    await uploadA(p.id, pdfBuffer, 'approved.pdf', 'application/pdf').expect(201)
+    await asUserA(request(app).post(`/api/purchases/${p.id}/payment`))
+      .send({ method: 'bank', paid_on: '2026-06-01' }).expect(200)
+    await uploadA(p.id, pdfBuffer, 'paid.pdf', 'application/pdf').expect(201)
+  })
+
+  it("cross-tenant upload to another tenant's purchase returns 404", async () => {
+    const p = await createPurchaseA()
+    const res = await asUserB(request(app).post(`/api/purchases/${p.id}/attachments`))
+      .attach('file', pdfBuffer, { filename: 'receipt.pdf', contentType: 'application/pdf' })
+    expect(res.status).toBe(404)
+  })
+
+  it('owner can stream the attachment via /api/files, cross-tenant gets 404', async () => {
+    const p = await createPurchaseA()
+    const up = await uploadA(p.id, pdfBuffer, 'receipt.pdf', 'application/pdf').expect(201)
+    const ok = await asUserA(request(app).get(`/api/files/${up.body.object_key}`)).expect(200)
+    expect(ok.headers['content-type']).toContain('application/pdf')
+    await asUserB(request(app).get(`/api/files/${up.body.object_key}`)).expect(404)
+  })
+
+  it('inline preview relaxes framing to same-origin; plain download stays locked down', async () => {
+    const p = await createPurchaseA()
+    const up = await uploadA(p.id, pdfBuffer, 'receipt.pdf', 'application/pdf').expect(201)
+
+    const inline = await asUserA(request(app).get(`/api/files/${up.body.object_key}?inline=1`)).expect(200)
+    expect(inline.headers['content-disposition']).toMatch(/^inline/)
+    expect(inline.headers['x-frame-options']).toBe('SAMEORIGIN')
+    expect(inline.headers['content-security-policy']).toContain("frame-ancestors 'self'")
+
+    const download = await asUserA(request(app).get(`/api/files/${up.body.object_key}`)).expect(200)
+    expect(download.headers['content-disposition']).toMatch(/^attachment/)
+  })
+
+  it('delete removes the attachment, cross-tenant delete returns 404', async () => {
+    const p = await createPurchaseA()
+    const up = await uploadA(p.id, pdfBuffer, 'receipt.pdf', 'application/pdf').expect(201)
+
+    await asUserB(request(app).delete(`/api/purchases/${p.id}/attachments/${up.body.id}`)).expect(404)
+    await asUserA(request(app).delete(`/api/purchases/${p.id}/attachments/${up.body.id}`)).expect(204)
+
+    const detail = await asUserA(request(app).get(`/api/purchases/${p.id}`)).expect(200)
+    expect(detail.body.attachments).toHaveLength(0)
+  })
+})
+
 describe('contacts — duplicate', () => {
   it('returns 409 contact_exists on a duplicate name+category', async () => {
     await asUserA(request(app).post('/api/contacts')).send({ name: 'Studio X', category: 'supplier' }).expect(201)

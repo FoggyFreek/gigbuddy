@@ -27,7 +27,9 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import DeleteIcon from '@mui/icons-material/Delete'
 import CloseIcon from '@mui/icons-material/Close'
 import { purchaseStatusColor } from '../utils/purchaseStatus.js'
+import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import { usePurchaseFormState } from './purchases/usePurchaseFormState.js'
+import PurchaseAttachmentsViewer from './purchases/PurchaseAttachmentsViewer.jsx'
 import PurchaseSupplierFields from './purchases/PurchaseSupplierFields.jsx'
 import PurchaseLinesEditor from './purchases/PurchaseLinesEditor.jsx'
 import PurchaseTotalsPanel from './purchases/PurchaseTotalsPanel.jsx'
@@ -188,6 +190,7 @@ PaidPaymentSummary.propTypes = {
 export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPurchaseUpdate, embedded = false }) {
   const s = usePurchaseFormState({ mode, draft, purchaseId, onClose, onPurchaseUpdate })
   const [editingNumber, setEditingNumber] = useState(false)
+  const isCompact = useCompactLayout()
 
   if (s.loading) {
     const spinner = (
@@ -328,19 +331,35 @@ export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPu
     />
   )
 
+  // Receipt preview: left of the form on desktop, on top in compact layout.
+  const attachmentsPanel = mode === 'edit' && (
+    <PurchaseAttachmentsViewer
+      attachments={s.attachments}
+      busy={s.attachmentsBusy}
+      error={s.attachmentError}
+      onUpload={s.handleUploadAttachments}
+      onDelete={s.handleDeleteAttachment}
+    />
+  )
+
   if (embedded) {
     return (
       <>
-        <Box>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, mb: 2 }}>
-            {!s.readOnly && (
-              <Button color="error" startIcon={<DeleteIcon />} onClick={s.handleDelete} sx={{ mr: 'auto' }}>
-                Delete
-              </Button>
-            )}
-            {saveActions}
+        <Box sx={{ display: 'flex', flexDirection: isCompact ? 'column' : 'row', gap: 3, alignItems: 'flex-start' }}>
+          <Box sx={{ flex: isCompact ? '0 0 auto' : '1 1 45%', minWidth: 0, width: isCompact ? '100%' : 'auto' }}>
+            {attachmentsPanel}
           </Box>
-          {bodyCards}
+          <Box sx={{ flex: isCompact ? '0 0 auto' : '1 1 55%', minWidth: 0, width: isCompact ? '100%' : 'auto' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, mb: 2 }}>
+              {!s.readOnly && (
+                <Button color="error" startIcon={<DeleteIcon />} onClick={s.handleDelete} sx={{ mr: 'auto' }}>
+                  Delete
+                </Button>
+              )}
+              {saveActions}
+            </Box>
+            {bodyCards}
+          </Box>
         </Box>
         {deleteDialog}
         {paymentDialog}

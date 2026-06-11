@@ -3,6 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// pdf.js can't run in jsdom (no DOMMatrix/worker); stub the react-pdf surface.
+vi.mock('react-pdf', () => ({
+  Document: () => null,
+  Page: () => null,
+  pdfjs: { GlobalWorkerOptions: {} },
+}))
+
 vi.mock('../api/purchases.js', () => ({
   updatePurchase: vi.fn(async () => ({})),
   getPurchase: vi.fn(),

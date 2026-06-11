@@ -29,6 +29,60 @@ import {
   postBillAccrued,
   postBillPaid,
 } from './ledgerService.js'
+import { randomUUID } from 'node:crypto'
+import { purchaseAttachmentKey, uploadObject, removeObject } from './storageService.js'
+import { verifyDocumentContent } from '../utils/verifyFileContent.js'
+import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
+
+const ATTACHMENT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
+
+// Receipt/attachment upload. Allowed at any purchase status. Images take the
+// share-photo security path (magic bytes + sharp re-encode, which strips
+// EXIF/metadata); PDFs are magic-byte verified and stored as-is.
+export async function createPurchaseAttachment({ db, tenantId, purchaseId, file }) {
+  const { rows } = await db.query(
+    'SELECT id FROM purchases WHERE id = $1 AND tenant_id = $2',
+    [purchaseId, tenantId],
+  )
+  if (!rows.length) return { error: { status: 404, body: { error: 'Not found' } } }
+
+  let buffer = file.buffer
+  let size = file.size
+  let ext
+  if (ATTACHMENT_IMAGE_TYPES.has(file.mimetype)) {
+    let image
+    try {
+      image = await validateAndReencodeImage(file.buffer, file.mimetype)
+    } catch (err) {
+      if (err.status === 400) return { error: { status: 400, body: { error: err.message } } }
+      throw err
+    }
+    buffer = image.buffer
+    size = image.size
+    ext = extensionForImageMime(image.mimetype)
+  } else {
+    if (!verifyDocumentContent(file.buffer, file.mimetype)) {
+      return { error: { status: 400, body: { error: 'File content does not match declared type' } } }
+    }
+    ext = '.pdf'
+  }
+
+  const objectKey = purchaseAttachmentKey(tenantId, randomUUID(), ext)
+  await uploadObject(objectKey, buffer, size, file.mimetype)
+
+  try {
+    const { rows: inserted } = await db.query(
+      `INSERT INTO purchase_attachments (purchase_id, tenant_id, object_key, original_filename, content_type, file_size)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at`,
+      [purchaseId, tenantId, objectKey, file.originalname, file.mimetype, size],
+    )
+    return { attachment: inserted[0] }
+  } catch (err) {
+    removeObject(objectKey).catch(() => {})
+    throw err
+  }
+}
 
 // Validates any explicit per-line account codes against the tenant chart: each
 // must exist, be active, and be an expense/COGS account. Lines without a code

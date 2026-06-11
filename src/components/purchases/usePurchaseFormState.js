@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   deletePurchase,
+  deletePurchaseAttachment,
   getPurchase,
   registerPurchasePayment,
   updatePurchase,
+  uploadPurchaseAttachment,
 } from '../../api/purchases.js'
 import { getAccountingSettings, listAccounts } from '../../api/accounts.js'
 import { listMembers } from '../../api/bandMembers.js'
@@ -37,6 +39,9 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
   const [paymentMethod, setPaymentMethod] = useState('bank')
   const [paidOn, setPaidOn] = useState(todayIso())
   const [paidByBandMemberId, setPaidByBandMemberId] = useState(null)
+  const [attachments, setAttachments] = useState([])
+  const [attachmentsBusy, setAttachmentsBusy] = useState(false)
+  const [attachmentError, setAttachmentError] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -46,6 +51,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
         if (cancelled) return
         setPurchase(data)
         setForm(purchaseToForm(data))
+        setAttachments(data.attachments || [])
       })
       .catch((e) => { if (!cancelled) setError(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -257,6 +263,34 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     }
   }
 
+  async function handleUploadAttachments(files) {
+    setAttachmentError(null)
+    setAttachmentsBusy(true)
+    try {
+      for (const file of files) {
+        const created = await uploadPurchaseAttachment(purchaseId, file)
+        setAttachments((prev) => [...prev, created])
+      }
+    } catch (e) {
+      setAttachmentError(e.message)
+    } finally {
+      setAttachmentsBusy(false)
+    }
+  }
+
+  async function handleDeleteAttachment(attachmentId) {
+    setAttachmentError(null)
+    setAttachmentsBusy(true)
+    try {
+      await deletePurchaseAttachment(purchaseId, attachmentId)
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId))
+    } catch (e) {
+      setAttachmentError(e.message)
+    } finally {
+      setAttachmentsBusy(false)
+    }
+  }
+
   function handleDelete() {
     setDeleteDialogOpen(true)
   }
@@ -306,5 +340,10 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     handleRegisterPayment,
     handleDelete,
     confirmDelete,
+    attachments,
+    attachmentsBusy,
+    attachmentError,
+    handleUploadAttachments,
+    handleDeleteAttachment,
   }
 }

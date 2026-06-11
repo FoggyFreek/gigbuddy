@@ -21,6 +21,9 @@ export const invoicePdfKey = (tenantId, uuid) =>
 export const invoiceLogoKey = (tenantId, uuid, ext) =>
   `tenants/${tenantId}/invoices/logo-${uuid}${ext}`
 
+export const purchaseAttachmentKey = (tenantId, uuid, ext) =>
+  `tenants/${tenantId}/purchase_attachments/${uuid}${ext}`
+
 export const songDocumentKey = (tenantId, uuid, ext) =>
   `tenants/${tenantId}/song_documents/${uuid}${ext}`
 
