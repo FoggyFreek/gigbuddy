@@ -41,6 +41,15 @@ export function validateAccountCreate(body) {
   }
 }
 
+// Strict YYYY-MM-DD calendar validation: the parsed UTC date must round-trip to
+// the original string, so impossible dates like 2026-02-31 are rejected (Date
+// would silently roll them over to March).
+export function isValidCalendarDate(val) {
+  if (typeof val !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(val)) return false
+  const parsed = new Date(`${val}T00:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === val
+}
+
 export function validateCurrency(val) {
   const c = String(val ?? '').trim().toUpperCase()
   return CURRENCY_RE.test(c) ? c : null

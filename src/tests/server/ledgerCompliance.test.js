@@ -232,6 +232,33 @@ describe('actor audit trail', () => {
 })
 
 // ============================================================
+describe('audit FKs do not block user deletion', () => {
+  it('deleting a user referenced by financial records succeeds and nulls the audit columns', async () => {
+    const p = await createPurchase()
+    await setPurchaseStatus(p.id, 'approved').expect(200)
+
+    await request(app)
+      .delete(`/api/admin/users/${seed.userA.id}`)
+      .set('x-test-user-id', String(seed.superUser.id))
+      .set('x-test-tenant-id', String(seed.tenantA.id))
+      .expect(204)
+
+    const { rows } = await pool.query(
+      'SELECT created_by_user_id, approved_by_user_id FROM purchases WHERE id = $1', [p.id])
+    expect(rows[0].created_by_user_id).toBeNull()
+    expect(rows[0].approved_by_user_id).toBeNull()
+
+    const { rows: txns } = await pool.query(
+      `SELECT created_by_user_id FROM ledger_transactions
+        WHERE tenant_id = $1 AND source_type = 'purchase' AND source_id = $2`,
+      [seed.tenantA.id, p.id],
+    )
+    expect(txns.length).toBe(1)
+    expect(txns[0].created_by_user_id).toBeNull()
+  })
+})
+
+// ============================================================
 describe('settings guard — account codes with open balances', () => {
   it('refuses changing payable_account_code while approved unpaid purchases exist', async () => {
     const p = await createPurchase()
@@ -321,6 +348,26 @@ describe('period close — books_closed_through', () => {
       .send({ books_closed_through: 'not-a-date' })
     expect(res.status).toBe(400)
     expect(res.body.error).toBe('invalid_books_closed_through')
+  })
+
+  it('rejects an impossible calendar date like 2026-02-31 with 400, not 500', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ books_closed_through: '2026-02-31' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invalid_books_closed_through')
+  })
+
+  it('refuses voiding a sent invoice when the void reversal would land in a closed period', async () => {
+    const inv = await createInvoice({ issue_date: '2026-05-01' })
+    await setInvoiceStatus(inv.id, 'sent').expect(200)
+    // Close the books through the far future: today's reversal date is closed.
+    await closeBooksThrough('2099-12-31')
+
+    const res = await setInvoiceStatus(inv.id, 'void')
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('period_closed')
+    const { rows } = await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('sent')
   })
 
   it('rejects approving a journal dated inside the closed period with 409 period_closed', async () => {

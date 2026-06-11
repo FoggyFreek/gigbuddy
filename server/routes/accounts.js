@@ -6,13 +6,12 @@ import {
   parseId,
   validateAccountCreate,
   validateCurrency,
+  isValidCalendarDate,
   SETTINGS_TYPE_MAP,
   SETTINGS_CODE_FIELDS,
 } from '../validators/accountValidators.js'
 
 const router = Router()
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 // Changing these account codes while a balance is still open on the current
 // account would orphan that balance: postings already made (payable accrual,
@@ -133,7 +132,7 @@ router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
     const val = body.books_closed_through
     if (val === null || val === undefined || val === '') {
       updates.books_closed_through = null
-    } else if (typeof val === 'string' && ISO_DATE_RE.test(val) && !Number.isNaN(Date.parse(val))) {
+    } else if (isValidCalendarDate(val)) {
       updates.books_closed_through = val
     } else {
       return res.status(400).json({ error: 'invalid_books_closed_through' })

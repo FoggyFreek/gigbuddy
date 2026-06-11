@@ -1255,6 +1255,60 @@ describe('void removes the payment link', () => {
     expect(rows[0].mollie_payment_link_id).toBe('pl_test123')
   })
 
+  it('a concurrent settings change waits for an in-flight void (no preflight race)', async () => {
+    const inv = await linkedInvoiceA()
+
+    let releaseDelete, deleteStarted
+    const deleteStartedPromise = new Promise((resolve) => { deleteStarted = resolve })
+    const releaseDeletePromise = new Promise((resolve) => { releaseDelete = resolve })
+    mockPaymentLinksDelete.mockImplementationOnce(async () => {
+      deleteStarted()
+      await releaseDeletePromise
+      return true
+    })
+
+    // Void starts: preflight passed, now stalled inside the Mollie call while
+    // holding the per-tenant settings session lock.
+    const voidRequest = asUserA(request(app).patch(`/api/invoices/${inv.id}`))
+      .send({ status: 'void' }).then((r) => r)
+    await deleteStartedPromise
+
+    // A settings change that would invalidate the preflight must block until
+    // the void completes.
+    let settingsDone = false
+    const settingsRequest = asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ books_closed_through: '2099-12-31' })
+      .then((r) => { settingsDone = true; return r })
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(settingsDone).toBe(false)
+
+    releaseDelete()
+    const [voidRes, settingsRes] = await Promise.all([voidRequest, settingsRequest])
+    // The void completes under the rules its preflight validated...
+    expect(voidRes.status).toBe(200)
+    // ...and the settings change lands afterwards.
+    expect(settingsRes.status).toBe(200)
+
+    const { rows } = await pool.query('SELECT status, mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('void')
+    expect(rows[0].mollie_payment_link_id).toBeNull()
+  })
+
+  it('does not touch Mollie when the void reversal cannot post (closed period): link survives', async () => {
+    const inv = await linkedInvoiceA()
+    await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ books_closed_through: '2099-12-31' }).expect(200)
+
+    const res = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'void' })
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('period_closed')
+    expect(mockPaymentLinksDelete).not.toHaveBeenCalled()
+
+    const { rows } = await pool.query('SELECT status, mollie_payment_link_id FROM invoices WHERE id = $1', [inv.id])
+    expect(rows[0].status).toBe('sent')
+    expect(rows[0].mollie_payment_link_id).toBe('pl_test123')
+  })
+
   it('voiding an invoice without a link calls Mollie not at all', async () => {
     const inv = await createInvoiceA()
     const res = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'void' })

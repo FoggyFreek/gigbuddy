@@ -30,10 +30,36 @@ import {
 } from '../validators/invoiceValidators.js'
 import {
   ledgerErrorResult,
+  assertInvoiceVoidPostable,
   postInvoiceSent,
   postInvoicePaid,
   postInvoiceVoid,
+  ACCOUNTING_SETTINGS_LOCK_NAMESPACE,
 } from './ledgerService.js'
+
+// Holds a session-level per-tenant accounting-settings advisory lock for the
+// duration of `fn`, which receives the lock-holding client. Session and
+// transaction advisory locks share a lock space, so the settings PATCH (which
+// takes pg_advisory_xact_lock on the same key) blocks until fn completes.
+// IMPORTANT: any work inside fn that itself takes the xact lock (e.g. anything
+// calling loadAccountingSettings) must run on the provided client — advisory
+// locks are re-entrant within a session but deadlock across connections.
+async function withAccountingSettingsSessionLock(pool, tenantId, fn) {
+  const client = await pool.connect()
+  let releaseError = null
+  try {
+    await client.query('SELECT pg_advisory_lock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
+    return await fn(client)
+  } finally {
+    try {
+      await client.query('SELECT pg_advisory_unlock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
+    } catch (err) {
+      releaseError = err
+      console.error('[invoices] failed to release accounting-settings advisory lock:', err)
+    }
+    client.release(releaseError)
+  }
+}
 
 // ---------- totals ----------
 
@@ -187,8 +213,10 @@ function clampNonNegative(value) {
   return Math.max(0, Number(value) || 0)
 }
 
-async function runPatchTransaction({ pool, tenantId, invoiceId, body, existing, tenant, requestedContentFields, actorUserId }) {
-  const client = await pool.connect()
+// `client` is optional: when provided (the void flow's lock-holding session),
+// the transaction runs on it and the caller keeps ownership of the connection.
+async function runPatchTransaction({ pool, client: providedClient, tenantId, invoiceId, body, existing, tenant, requestedContentFields, actorUserId }) {
+  const client = providedClient ?? await pool.connect()
   try {
     await client.query('BEGIN')
     const builder = createUpdateBuilder()
@@ -234,7 +262,7 @@ async function runPatchTransaction({ pool, tenantId, invoiceId, body, existing, 
     if (mapped) return mapped
     throw err
   } finally {
-    client.release()
+    if (!providedClient) client.release()
   }
 }
 
@@ -319,14 +347,39 @@ export async function applyInvoicePatch(pool, tenantId, invoiceId, body, actorUs
   const tenant = await fetchTenant(pool, tenantId)
 
   // Voiding always retracts any live Mollie payment link first, so a voided
-  // invoice can never receive money. If Mollie reports the link as already
-  // paid, removeMolliePaymentLink marks the invoice paid and errors — the void
-  // is then refused (paid invoices cannot be voided).
-  let linkRemoved = false
+  // invoice can never receive money. Before touching Mollie, verify the void's
+  // reversal journal can actually post (accounts configured, period open) —
+  // otherwise a doomed void would delete the link and then fail, leaving a
+  // sent invoice with no way to be paid. The whole flow (preflight → Mollie
+  // removal → posting) runs under the per-tenant session-level settings lock so
+  // a concurrent settings change (closing the books, clearing an account code)
+  // cannot invalidate the preflight mid-flight. If Mollie reports the link as
+  // already paid, removeMolliePaymentLink marks the invoice paid and errors —
+  // the void is then refused (paid invoices cannot be voided).
   if (patch.status === 'void' && existing.status !== 'void' && existing.mollie_payment_link_id) {
-    const removal = await removeMolliePaymentLink({ pool, tenant, invoice: existing, tenantId, invoiceId })
-    if (removal.error) return removal
-    linkRemoved = true
+    return withAccountingSettingsSessionLock(pool, tenantId, async (lockClient) => {
+      if (existing.status === 'sent') {
+        try {
+          await assertInvoiceVoidPostable(lockClient, tenantId, existing)
+        } catch (err) {
+          const mapped = ledgerErrorResult(err)
+          if (mapped) return mapped
+          throw err
+        }
+      }
+      const removal = await removeMolliePaymentLink({
+        pool, tenant, invoice: existing, tenantId, invoiceId, client: lockClient,
+      })
+      if (removal.error) return removal
+
+      const result = await runPatchTransaction({
+        pool, client: lockClient, tenantId, invoiceId, body: patch, existing, tenant,
+        requestedContentFields: validation.requestedContentFields,
+        actorUserId,
+      })
+      if (result.error) return result
+      return { ...result, linkRemoved: true }
+    })
   }
 
   const result = await runPatchTransaction({
@@ -335,7 +388,7 @@ export async function applyInvoicePatch(pool, tenantId, invoiceId, body, actorUs
     actorUserId,
   })
   if (result.error) return result
-  return { ...result, linkRemoved }
+  return { ...result, linkRemoved: false }
 }
 
 // ---------- payment link removal ----------
@@ -350,7 +403,12 @@ function mollieStatusCode(err) {
 // payment state and, when no payment turned out paid, archives the link
 // (PATCH { archived: true }) so it can no longer take payments. Either way the
 // invoice's link columns are cleared. Returns { error } | { invoice }.
-export async function removeMolliePaymentLink({ pool, tenant, invoice, tenantId, invoiceId }) {
+// `client` is optional: the void flow passes its lock-holding session so the
+// 422→sync posting path and the column updates run on that connection (see
+// withAccountingSettingsSessionLock — a fresh pooled connection would deadlock
+// on the settings advisory lock the caller already holds).
+export async function removeMolliePaymentLink({ pool, tenant, invoice, tenantId, invoiceId, client = null }) {
+  const executor = client ?? pool
   try {
     assertMollieConfigured(tenant)
   } catch (err) {
@@ -365,7 +423,7 @@ export async function removeMolliePaymentLink({ pool, tenant, invoice, tenantId,
     const status = mollieStatusCode(err)
     if (status === 422) {
       // Link was opened or has payment attempts. Pull authoritative state first.
-      const synced = await syncInvoicePaymentStatus(mollie, pool, invoice)
+      const synced = await syncInvoicePaymentStatus(mollie, pool, invoice, { client })
       if (synced?.status === 'paid') {
         return { error: { status: 409, body: { error: 'Payment link has a paid payment', code: 'payment_link_paid' } } }
       }
@@ -381,7 +439,7 @@ export async function removeMolliePaymentLink({ pool, tenant, invoice, tenantId,
     }
   }
 
-  await pool.query(
+  await executor.query(
     `UPDATE invoices
         SET mollie_payment_link_id = NULL,
             mollie_payment_link_url = NULL,
@@ -392,7 +450,7 @@ export async function removeMolliePaymentLink({ pool, tenant, invoice, tenantId,
       WHERE id = $1 AND tenant_id = $2`,
     [invoiceId, tenantId],
   )
-  return { invoice: await fetchInvoice(pool, tenantId, invoiceId) }
+  return { invoice: await fetchInvoice(executor, tenantId, invoiceId) }
 }
 
 // ---------- payment links ----------
@@ -528,7 +586,10 @@ async function getLatestPayment(paymentLink) {
 // (An earlier review-#4 guard matched the posted id against the link's single
 // latest payment; that wrongly blocked legitimate webhooks whenever a link had
 // more than one payment attempt, so it was removed.)
-export async function syncInvoicePaymentStatus(mollie, db, invoice) {
+// `opts.client` lets the void flow run the update + posting on its
+// lock-holding session (see withAccountingSettingsSessionLock); the caller
+// keeps ownership of a provided client.
+export async function syncInvoicePaymentStatus(mollie, db, invoice, { client: providedClient = null } = {}) {
   const paymentLink = await mollie.paymentLinks.get(invoice.mollie_payment_link_id)
   const latestPayment = await getLatestPayment(paymentLink)
 
@@ -547,7 +608,7 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice) {
   }
 
   const becamePaid = invoiceStatus === 'paid' && invoice.status !== 'paid'
-  const client = await db.connect()
+  const client = providedClient ?? await db.connect()
   try {
     await client.query('BEGIN')
     const { rows } = await client.query(
@@ -577,7 +638,7 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice) {
     await client.query('ROLLBACK').catch(() => {})
     throw err
   } finally {
-    client.release()
+    if (!providedClient) client.release()
   }
 }
 

@@ -100,6 +100,35 @@ function nextDay(isoDate) {
   return d.toISOString().slice(0, 10)
 }
 
+async function fetchBooksClosedThrough(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT to_char(books_closed_through, 'YYYY-MM-DD') AS closed_through
+       FROM tenant_accounting_settings WHERE tenant_id = $1`,
+    [tenantId],
+  )
+  return rows[0]?.closed_through || null
+}
+
+// Throws PeriodClosedError when entryDate falls in the closed period.
+export async function assertPeriodOpen(executor, tenantId, entryDate) {
+  const closedThrough = await fetchBooksClosedThrough(executor, tenantId)
+  if (closedThrough && entryDate <= closedThrough) {
+    throw new PeriodClosedError(entryDate, closedThrough)
+  }
+}
+
+// Pre-flight for voiding a sent invoice: verifies the reversal journal *can*
+// post (accounts configured, period open for today's reversal date) without
+// writing anything. Callers run this BEFORE external side effects like Mollie
+// payment-link removal, so a doomed void never half-executes.
+export async function assertInvoiceVoidPostable(executor, tenantId, invoice) {
+  const settings = await loadAccountingSettings(executor, tenantId)
+  requireCode(settings, 'receivable_account_code')
+  requireCode(settings, 'default_revenue_account_code')
+  if (invoice.tax_cents > 0) requireCode(settings, 'output_vat_account_code')
+  await assertPeriodOpen(executor, tenantId, today())
+}
+
 export async function postJournal(client, tenantId, {
   entryDate, description, sourceType, sourceId, sourceEvent, lines,
   actorUserId = null, clampToOpenPeriod = false,
@@ -107,12 +136,7 @@ export async function postJournal(client, tenantId, {
   // Period close: user postings into a closed period are rejected; system
   // postings (clampToOpenPeriod, e.g. webhook cash receipts) move to the first
   // open day so external money is never silently dropped.
-  const { rows: settingsRows } = await client.query(
-    `SELECT to_char(books_closed_through, 'YYYY-MM-DD') AS closed_through
-       FROM tenant_accounting_settings WHERE tenant_id = $1`,
-    [tenantId],
-  )
-  const closedThrough = settingsRows[0]?.closed_through || null
+  const closedThrough = await fetchBooksClosedThrough(client, tenantId)
   let effectiveDate = entryDate
   let effectiveDescription = description ?? null
   if (closedThrough && entryDate <= closedThrough) {
