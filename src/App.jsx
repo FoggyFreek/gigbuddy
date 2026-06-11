@@ -7,6 +7,7 @@ import RequireSuperAdmin from './components/RequireSuperAdmin.jsx'
 
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage.jsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'))
+const FinancialDashboardPage = lazy(() => import('./pages/FinancialDashboardPage.jsx'))
 const BandEventDetailPage = lazy(() => import('./pages/BandEventDetailPage.jsx'))
 const BandEventsPage = lazy(() => import('./pages/BandEventsPage.jsx'))
 const ContactDetailPage = lazy(() => import('./pages/ContactDetailPage.jsx'))
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/redeem-invite" element={<RedeemInvitePage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/financial" element={<FinancialDashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/gigs" element={<GigsPage />}>
               <Route path=":id" element={<GigDetailPage />} />

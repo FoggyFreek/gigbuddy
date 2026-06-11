@@ -51,6 +51,74 @@ export async function listTransactions(executor, tenantId, period = { sql: '', v
   return rows
 }
 
+// Revenue/expense totals per calendar month inside [from, toExclusive),
+// classified by the chart-of-accounts type of each entry's account. Revenue
+// increases with credits; expenses (incl. cost of goods sold) with debits.
+// Months without activity are absent — the service fills them with zeros.
+export async function monthlyResultTotals(executor, tenantId, { from, toExclusive }) {
+  const { rows } = await executor.query(
+    `SELECT to_char(date_trunc('month', lt.entry_date), 'YYYY-MM') AS month_key,
+            COALESCE(SUM(le.credit_cents - le.debit_cents)
+              FILTER (WHERE coa.type = 'revenue'), 0)::int AS revenue_cents,
+            COALESCE(SUM(le.debit_cents - le.credit_cents)
+              FILTER (WHERE coa.type IN ('expense', 'cost_of_goods_sold')), 0)::int AS expense_cents
+       FROM ledger_entries le
+       JOIN ledger_transactions lt
+         ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+       JOIN chart_of_accounts coa
+         ON coa.tenant_id = le.tenant_id AND coa.code = le.account_code
+      WHERE le.tenant_id = $1
+        AND lt.entry_date >= $2::date
+        AND lt.entry_date < $3::date
+      GROUP BY 1`,
+    [tenantId, from, toExclusive],
+  )
+  return rows
+}
+
+// Output/input VAT movement inside [from, toExclusive), on the tenant's
+// configured VAT accounts. Output VAT (a liability) grows with credits, input
+// VAT (an asset) with debits. Returns null when accounting settings are missing.
+export async function vatTotals(executor, tenantId, { from, toExclusive }) {
+  const { rows } = await executor.query(
+    `SELECT COALESCE(SUM(e.credit_cents - e.debit_cents)
+              FILTER (WHERE e.account_code = tas.output_vat_account_code), 0)::int AS output_cents,
+            COALESCE(SUM(e.debit_cents - e.credit_cents)
+              FILTER (WHERE e.account_code = tas.input_vat_account_code), 0)::int AS input_cents
+       FROM tenant_accounting_settings tas
+       LEFT JOIN LATERAL (
+         SELECT le.account_code, le.debit_cents, le.credit_cents
+           FROM ledger_entries le
+           JOIN ledger_transactions lt
+             ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+          WHERE le.tenant_id = tas.tenant_id
+            AND lt.entry_date >= $2::date
+            AND lt.entry_date < $3::date
+       ) e ON true
+      WHERE tas.tenant_id = $1
+      GROUP BY tas.tenant_id`,
+    [tenantId, from, toExclusive],
+  )
+  return rows[0] || null
+}
+
+// Point-in-time balance of the tenant's primary checking account (an asset:
+// debits increase it). Spans all postings regardless of period — a bank
+// balance is a running total, not a period movement. 0 when accounting
+// settings or the checking account code are missing.
+export async function checkingAccountBalance(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT COALESCE(SUM(le.debit_cents - le.credit_cents), 0)::int AS balance_cents
+       FROM tenant_accounting_settings tas
+       LEFT JOIN ledger_entries le
+         ON le.tenant_id = tas.tenant_id
+        AND le.account_code = tas.primary_checking_account_code
+      WHERE tas.tenant_id = $1`,
+    [tenantId],
+  )
+  return rows[0]?.balance_cents ?? 0
+}
+
 // Distinct entry dates for the PeriodPicker availability grid.
 export async function listEntryDates(executor, tenantId) {
   const { rows } = await executor.query(

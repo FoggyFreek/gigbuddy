@@ -85,6 +85,12 @@ function nextDay(isoDate) {
   return date.toISOString().slice(0, 10)
 }
 
+// Resolves the period query params to a concrete { from, toExclusive } date
+// range: { range } (null range = all time) or { error }.
+export function resolvePeriodRange(query) {
+  return rangeForQuery(query)
+}
+
 export function buildPeriodWhere(query, columnSql, startIndex = 2) {
   const result = rangeForQuery(query)
   if (result.error) return { error: result.error }

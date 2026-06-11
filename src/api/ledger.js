@@ -5,4 +5,5 @@ const api = (path, options) => request(`/api/ledger${path}`, options)
 
 export const listLedger        = (period) => api(`/${periodQueryString(period)}`)
 export const listLedgerPeriods = ()       => api('/periods')
+export const getLedgerOverview = (period) => api(`/overview${periodQueryString(period)}`)
 export const getLedgerEntry    = (id)     => api(`/${id}`)

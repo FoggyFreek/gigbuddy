@@ -14,7 +14,12 @@ import {
   listTransactions,
   getTransaction,
   listLines,
+  listEntryDates,
+  monthlyResultTotals,
+  vatTotals,
+  checkingAccountBalance,
 } from '../repositories/ledgerRepository.js'
+import { openInvoiceBuckets } from '../repositories/invoiceRepository.js'
 
 // Thrown when a journal needs a tenant default account that isn't configured.
 // The HTTP layer maps this to 409 accounting_not_configured and rolls back, so
@@ -250,6 +255,113 @@ export async function getLedgerEntryDetail(executor, tenantId, transactionId) {
     created_by_name: row.created_by_name,
     origin: originFor(row),
     lines,
+  }
+}
+
+// 'YYYY-MM-01' of the month `count` months after the given year/month (1-based).
+function monthStart(year, month, count = 0) {
+  const d = new Date(Date.UTC(year, month - 1 + count, 1))
+  return d.toISOString().slice(0, 10)
+}
+
+// First days of every calendar month covering [from, toExclusive).
+function enumerateMonths(from, toExclusive) {
+  const months = []
+  let year = Number(from.slice(0, 4))
+  let month = Number(from.slice(5, 7))
+  while (monthStart(year, month) < toExclusive) {
+    months.push({ year, month })
+    month += 1
+    if (month > 12) { month = 1; year += 1 }
+  }
+  return months
+}
+
+// The quarter containing `now`, plus its filing due date — the last day of the
+// month after the quarter ends (NL VAT convention).
+function currentVatQuarter(now = new Date()) {
+  const year = now.getFullYear()
+  const quarter = Math.floor(now.getMonth() / 3) + 1
+  const startMonth = (quarter - 1) * 3 + 1
+  const toExclusive = monthStart(year, startMonth, 3)
+  const dueExclusive = new Date(`${monthStart(year, startMonth, 4)}T00:00:00Z`)
+  dueExclusive.setUTCDate(dueExclusive.getUTCDate() - 1)
+  return {
+    year,
+    quarter,
+    range: { from: monthStart(year, startMonth), toExclusive },
+    dueDate: dueExclusive.toISOString().slice(0, 10),
+  }
+}
+
+// Aggregates the financial dashboard: revenue/expense/result per month over
+// the requested period (null range = all time, spanning the booked entries),
+// the VAT position of the *current* quarter, and the open invoice buckets
+// (which reflect current status, not the period).
+export async function getFinancialOverview(executor, tenantId, range) {
+  let effectiveRange = range
+  if (!effectiveRange) {
+    const dates = await listEntryDates(executor, tenantId) // DESC
+    if (dates.length) {
+      const min = dates[dates.length - 1]
+      const max = dates[0]
+      effectiveRange = {
+        from: `${min.slice(0, 7)}-01`,
+        toExclusive: monthStart(Number(max.slice(0, 4)), Number(max.slice(5, 7)), 1),
+      }
+    } else {
+      const year = new Date().getFullYear()
+      effectiveRange = { from: `${year}-01-01`, toExclusive: `${year + 1}-01-01` }
+    }
+  }
+
+  const vatQuarter = currentVatQuarter()
+  const [monthRows, vat, buckets, settings, bankBalanceCents] = await Promise.all([
+    monthlyResultTotals(executor, tenantId, effectiveRange),
+    vatTotals(executor, tenantId, vatQuarter.range),
+    openInvoiceBuckets(executor, tenantId),
+    loadAccountingSettings(executor, tenantId),
+    checkingAccountBalance(executor, tenantId),
+  ])
+
+  const byKey = new Map(monthRows.map((r) => [r.month_key, r]))
+  const months = enumerateMonths(effectiveRange.from, effectiveRange.toExclusive).map(({ year, month }) => {
+    const key = `${year}-${String(month).padStart(2, '0')}`
+    const row = byKey.get(key)
+    const revenue = row?.revenue_cents || 0
+    const expense = row?.expense_cents || 0
+    return { key, year, month, revenue_cents: revenue, expense_cents: expense, result_cents: revenue - expense }
+  })
+  const totals = months.reduce(
+    (acc, m) => ({
+      revenue_cents: acc.revenue_cents + m.revenue_cents,
+      expense_cents: acc.expense_cents + m.expense_cents,
+      result_cents: acc.result_cents + m.result_cents,
+    }),
+    { revenue_cents: 0, expense_cents: 0, result_cents: 0 },
+  )
+
+  const outputCents = vat?.output_cents || 0
+  const inputCents = vat?.input_cents || 0
+
+  return {
+    currency: settings?.currency || 'EUR',
+    months,
+    totals,
+    bank: { balance_cents: bankBalanceCents },
+    vat: {
+      year: vatQuarter.year,
+      quarter: vatQuarter.quarter,
+      due_date: vatQuarter.dueDate,
+      output_cents: outputCents,
+      input_cents: inputCents,
+      net_cents: outputCents - inputCents,
+    },
+    invoices: {
+      overdue: { count: buckets.overdue_count, total_cents: buckets.overdue_total_cents },
+      unpaid: { count: buckets.unpaid_count, total_cents: buckets.unpaid_total_cents },
+      draft: { count: buckets.draft_count, total_cents: buckets.draft_total_cents },
+    },
   }
 }
 

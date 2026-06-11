@@ -23,6 +23,7 @@ import PaymentsTwoTone from '@mui/icons-material/PaymentsTwoTone'
 import LibraryMusicTwoTone from '@mui/icons-material/LibraryMusicTwoTone'
 import DashboardOutlined from '@mui/icons-material/DashboardOutlined'
 import PersonOutlined from '@mui/icons-material/PersonOutlined'
+import QueryStatsOutlined from '@mui/icons-material/QueryStatsOutlined'
 import EventOutlined from '@mui/icons-material/EventOutlined'
 import CalendarMonthOutlined from '@mui/icons-material/CalendarMonthOutlined'
 import MusicNoteOutlined from '@mui/icons-material/MusicNoteOutlined'
@@ -62,6 +63,7 @@ const NAV_GROUPS = [
     icon: SpaceDashboardTwoTone,
     children: [
       { to: '/', label: 'Dashboard', icon: DashboardOutlined },
+      { to: '/financial', label: 'Financial', icon: QueryStatsOutlined },
       { to: '/profile', label: 'Profile', icon: PersonOutlined },
     ],
   },

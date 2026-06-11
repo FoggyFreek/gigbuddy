@@ -1,5 +1,6 @@
 import './_envSetup.js'
 // @vitest-environment node
+import { readFile } from 'node:fs/promises'
 import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
 import request from 'supertest'
 
@@ -107,6 +108,14 @@ function setInvoiceStatus(id, status) {
   return asUserA(request(app).patch(`/api/invoices/${id}`)).send({ status })
 }
 
+async function runInvoiceLedgerBackfill() {
+  const sql = await readFile(
+    new URL('../../../server/db/migrations/074_backfill_invoice_ledger.sql', import.meta.url),
+    'utf8',
+  )
+  await pool.query(sql)
+}
+
 // ============================================================
 describe('ledger — invoicing (revenue)', () => {
   it('invoice sent posts DR receivable / CR revenue / CR output VAT', async () => {
@@ -182,6 +191,133 @@ describe('ledger — invoicing (revenue)', () => {
     expect(sent.entries).toHaveLength(2)
     expect(line(sent, '11200').debit_cents).toBe(100000)
     expect(line(sent, '41000').credit_cents).toBe(100000)
+  })
+
+  it('backfill migration posts legacy sent and paid invoices idempotently', async () => {
+    const { rows: [sentInv] } = await pool.query(
+      `INSERT INTO invoices (
+         tenant_id, invoice_number, issue_date, customer_name,
+         subtotal_cents, tax_cents, total_cents, status, finalized_at, updated_at
+       )
+       VALUES ($1, 'LEGACY-SENT', '2026-04-01', 'Legacy Customer',
+         100000, 21000, 121000, 'sent', '2026-04-01T10:00:00Z', '2026-04-01T10:00:00Z')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const { rows: [paidInv] } = await pool.query(
+      `INSERT INTO invoices (
+         tenant_id, invoice_number, issue_date, customer_name,
+         subtotal_cents, tax_cents, total_cents, status,
+         finalized_at, updated_at, mollie_paid_at
+       )
+       VALUES ($1, 'LEGACY-PAID', '2026-05-01', 'Legacy Customer',
+         200000, 42000, 242000, 'paid',
+         '2026-05-01T10:00:00Z', '2026-05-15T10:00:00Z', '2026-05-20T10:00:00Z')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const { rows: [manualPaidInv] } = await pool.query(
+      `INSERT INTO invoices (
+         tenant_id, invoice_number, issue_date, customer_name,
+         subtotal_cents, tax_cents, total_cents, status, finalized_at, updated_at
+       )
+       VALUES ($1, 'LEGACY-MANUAL-PAID', '2026-05-01', 'Legacy Customer',
+         200000, 42000, 242000, 'paid',
+         '2026-05-01T10:00:00Z', '2026-05-15T10:00:00Z')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const { rows: [draftInv] } = await pool.query(
+      `INSERT INTO invoices (
+         tenant_id, invoice_number, issue_date, customer_name,
+         subtotal_cents, tax_cents, total_cents, status
+       )
+       VALUES ($1, 'LEGACY-DRAFT', '2026-06-01', 'Legacy Customer',
+         100000, 21000, 121000, 'draft')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const { rows: [voidInv] } = await pool.query(
+      `INSERT INTO invoices (
+         tenant_id, invoice_number, issue_date, customer_name,
+         subtotal_cents, tax_cents, total_cents, status, finalized_at
+       )
+       VALUES ($1, 'LEGACY-VOID', '2026-07-01', 'Legacy Customer',
+         100000, 21000, 121000, 'void', '2026-07-01T10:00:00Z')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+
+    await runInvoiceLedgerBackfill()
+    await runInvoiceLedgerBackfill()
+
+    const sentJournals = await journalsFor(seed.tenantA.id, 'invoice', sentInv.id)
+    expect(sentJournals.map((j) => j.source_event)).toEqual(['sent'])
+    const sent = byEvent(sentJournals, 'sent')
+    expectBalanced(sent)
+    expect(line(sent, '11200').debit_cents).toBe(121000)
+    expect(line(sent, '41000').credit_cents).toBe(100000)
+    expect(line(sent, '24000').credit_cents).toBe(21000)
+
+    const paidJournals = await journalsFor(seed.tenantA.id, 'invoice', paidInv.id)
+    expect(paidJournals.map((j) => j.source_event).sort()).toEqual(['paid', 'sent'])
+    expect(byEvent(paidJournals, 'sent').entry_date).toBe('2026-05-01')
+    expect(byEvent(paidJournals, 'paid').entry_date).toBe('2026-05-20')
+    expect(line(byEvent(paidJournals, 'paid'), '11000').debit_cents).toBe(242000)
+    expect(line(byEvent(paidJournals, 'paid'), '11200').credit_cents).toBe(242000)
+
+    const manualPaidJournals = await journalsFor(seed.tenantA.id, 'invoice', manualPaidInv.id)
+    expect(byEvent(manualPaidJournals, 'paid').entry_date).toBe('2026-05-15')
+
+    expect(await journalsFor(seed.tenantA.id, 'invoice', draftInv.id)).toHaveLength(0)
+    expect(await journalsFor(seed.tenantA.id, 'invoice', voidInv.id)).toHaveLength(0)
+  })
+
+  it('backfill migration aborts and rolls back on inconsistent invoice amounts', async () => {
+    // total <> subtotal - discount + tax: no balanced journal can be built from
+    // these numbers, so the migration must refuse rather than post garbage.
+    const { rows: [goodInv] } = await pool.query(
+      `INSERT INTO invoices (
+         tenant_id, invoice_number, issue_date, customer_name,
+         subtotal_cents, tax_cents, total_cents, status, finalized_at
+       )
+       VALUES ($1, 'LEGACY-GOOD', '2026-04-01', 'Legacy Customer',
+         100000, 21000, 121000, 'sent', '2026-04-01T10:00:00Z')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO invoices (
+         tenant_id, invoice_number, issue_date, customer_name,
+         subtotal_cents, tax_cents, total_cents, status, finalized_at
+       )
+       VALUES ($1, 'LEGACY-BROKEN', '2026-04-02', 'Legacy Customer',
+         1000, 21000, 1500, 'sent', '2026-04-02T10:00:00Z')`,
+      [seed.tenantA.id],
+    )
+
+    await expect(runInvoiceLedgerBackfill()).rejects.toThrow(/backfill/i)
+    // The file runs as one implicit transaction: nothing was committed,
+    // including the journal for the well-formed invoice.
+    expect(await journalsFor(seed.tenantA.id, 'invoice', goodInv.id)).toHaveLength(0)
+  })
+
+  it('backfill migration aborts when a required account code is not configured', async () => {
+    await pool.query(
+      `UPDATE tenant_accounting_settings SET receivable_account_code = NULL WHERE tenant_id = $1`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO invoices (
+         tenant_id, invoice_number, issue_date, customer_name,
+         subtotal_cents, tax_cents, total_cents, status, finalized_at
+       )
+       VALUES ($1, 'LEGACY-NO-AR', '2026-04-01', 'Legacy Customer',
+         100000, 21000, 121000, 'sent', '2026-04-01T10:00:00Z')`,
+      [seed.tenantA.id],
+    )
+
+    await expect(runInvoiceLedgerBackfill()).rejects.toThrow(/backfill/i)
   })
 })
 

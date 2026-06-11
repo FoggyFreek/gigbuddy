@@ -15,30 +15,21 @@ import Typography from '@mui/material/Typography'
 import EventIcon from '@mui/icons-material/Event'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
 import DashboardCard from '../components/dashboard/DashboardCard.jsx'
 import GigMapTile from '../components/dashboard/GigMapTile.jsx'
 import { SOCIALS } from '../components/profile/profileForm.js'
 import { useAuth } from '../contexts/authContext.js'
 import { listGigs } from '../api/gigs.js'
 import { listRehearsals } from '../api/rehearsals.js'
-import { listInvoices } from '../api/invoices.js'
-import { listPurchases } from '../api/purchases.js'
 import { listAllTasks } from '../api/tasks.js'
 import { getProfile } from '../api/profile.js'
 import { formatShortDate } from '../utils/dateFormat.js'
-import { formatEur } from '../utils/invoiceTotals.js'
-import { invoiceStatusColor } from '../utils/invoiceStatus.js'
-import { purchaseStatusColor } from '../utils/purchaseStatus.js'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.js'
 
 function logoSrc(logoPath) {
   return logoPath ? `/api/files/${logoPath}` : '/share/logo.png'
 }
 
-const OPEN_INVOICE_STATUSES = new Set(['draft', 'sent'])
-const OPEN_PURCHASE_STATUSES = new Set(['draft', 'approved'])
 const GIG_STATUS_COLOR = { confirmed: 'success', announced: 'info', option: 'default' }
 const MAX_ROWS = 5
 
@@ -65,10 +56,6 @@ function byDateAscNullsLast(field) {
   }
 }
 
-function purchaseStatusLabel(status) {
-  return status === 'approved' ? 'unpaid' : status
-}
-
 const settle = (r) =>
   r.status === 'fulfilled'
     ? { status: 'ok', data: r.value || [] }
@@ -76,7 +63,7 @@ const settle = (r) =>
 
 // Build the whole view-model in the effect (not in render) so render stays pure.
 function buildSections(results) {
-  const [gigsR, rehR, invR, purchaseR, taskR, bandMemberId] = results
+  const [gigsR, rehR, taskR, bandMemberId] = results
   const today = todayStr()
 
   const gigsSettled = settle(gigsR)
@@ -85,8 +72,6 @@ function buildSections(results) {
     .sort(byDateAscNullsLast('event_date'))
 
   const rehSettled = settle(rehR)
-  const invSettled = settle(invR)
-  const purchaseSettled = settle(purchaseR)
   const taskSettled = settle(taskR)
 
   // Featured "next gig" is dropped from the shows list, so total excludes it too.
@@ -94,12 +79,6 @@ function buildSections(results) {
   const upcomingRehearsals = rehSettled.data
     .filter((r) => dateKey(r.proposed_date) >= today)
     .sort(byDateAscNullsLast('proposed_date'))
-  const openInvoices = invSettled.data
-    .filter((i) => OPEN_INVOICE_STATUSES.has(i.status))
-    .sort(byDateAscNullsLast('due_date'))
-  const openPurchases = purchaseSettled.data
-    .filter((p) => OPEN_PURCHASE_STATUSES.has(p.status))
-    .sort(byDateAscNullsLast('due_date'))
   const myTasks = taskSettled.data
     .filter((t) => !t.done && bandMemberId != null && t.assigned_to === bandMemberId)
     .sort(byDateAscNullsLast('due_date'))
@@ -111,16 +90,6 @@ function buildSections(results) {
       status: rehSettled.status,
       total: upcomingRehearsals.length,
       data: upcomingRehearsals.slice(0, MAX_ROWS),
-    },
-    invoices: {
-      status: invSettled.status,
-      total: openInvoices.length,
-      data: openInvoices.slice(0, MAX_ROWS),
-    },
-    purchases: {
-      status: purchaseSettled.status,
-      total: openPurchases.length,
-      data: openPurchases.slice(0, MAX_ROWS),
     },
     tasks: {
       status: taskSettled.status,
@@ -176,8 +145,6 @@ export default function DashboardPage() {
       const results = await Promise.allSettled([
         listGigs(),
         listRehearsals(),
-        listInvoices(),
-        listPurchases(),
         listAllTasks(),
       ])
       setSections(buildSections([...results, bandMemberId]))
@@ -196,7 +163,7 @@ export default function DashboardPage() {
     )
   }
 
-  const { nextGig, shows, rehearsals, invoices, purchases, tasks } = sections
+  const { nextGig, shows, rehearsals, tasks } = sections
   const activeSocials = SOCIALS.filter(({ field, prefix }) => prefix && profile?.[field])
 
   return (
@@ -378,67 +345,6 @@ export default function DashboardPage() {
             </List>
           </DashboardCard>
         </Grid>
-
- {/* Open invoices */}
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-          <DashboardCard
-            title="Open invoices"
-            icon={ReceiptLongIcon}
-            count={invoices.total}
-            viewAllTo="/invoices"
-            status={invoices.status}
-            isEmpty={invoices.data.length === 0}
-            emptyText="No open invoices"
-          >
-            <List dense disablePadding>
-              {invoices.data.map((inv) => (
-                <Row
-                  key={inv.id}
-                  primary={inv.customer_name}
-                  secondary={`${inv.invoice_number} · ${formatEur(inv.total_cents)}`}
-                  chip={
-                    <Chip size="small" label={inv.status} color={invoiceStatusColor(inv.status)} />
-                  }
-                  onClick={() => navigate(`/invoices/${inv.id}`)}
-                />
-              ))}
-            </List>
-          </DashboardCard>
-        </Grid>
-
-        {/* Open purchases */}
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-          <DashboardCard
-            title="Open purchases"
-            icon={ShoppingCartIcon}
-            count={purchases.total}
-            viewAllTo="/purchases"
-            status={purchases.status}
-            isEmpty={purchases.data.length === 0}
-            emptyText="No open purchases"
-          >
-            <List dense disablePadding>
-              {purchases.data.map((purchase) => (
-                <Row
-                  key={purchase.id}
-                  primary={purchase.supplier_name}
-                  secondary={`#${purchase.receipt_number} · ${formatEur(purchase.total_cents)}`}
-                  chip={
-                    <Chip
-                      size="small"
-                      label={purchaseStatusLabel(purchase.status)}
-                      color={purchaseStatusColor(purchase.status)}
-                    />
-                  }
-                  onClick={() => navigate(`/purchases/${purchase.id}`)}
-                />
-              ))}
-            </List>
-          </DashboardCard>
-        </Grid>
-
-
-
 
       </Grid>
     </Box>
