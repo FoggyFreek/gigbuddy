@@ -9,6 +9,12 @@
 // Core invariant: Assets & Expenses increase with Debits; Liabilities, Equity &
 // Revenue increase with Credits. Every journal balances (Σ debits == Σ credits).
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
+import { classify, describe, receiptFor } from './ledgerEntryTypes.js'
+import {
+  listTransactions,
+  getTransaction,
+  listLines,
+} from '../repositories/ledgerRepository.js'
 
 // Thrown when a journal needs a tenant default account that isn't configured.
 // The HTTP layer maps this to 409 accounting_not_configured and rolls back, so
@@ -184,6 +190,67 @@ export async function postJournal(client, tenantId, {
     )
   }
   return { posted: true, transactionId }
+}
+
+// ---------- read helpers (ledger browser) ----------
+
+// One ledger-browser list row. Amount is the gross debit total signed by the
+// entry type (purchases/outgoing money negative); journals show no amount.
+function toListRow(row) {
+  const { type, group, voided, sign } = classify(row.source_type, row.source_event)
+  return {
+    id: row.id,
+    entry_date: row.entry_date,
+    type,
+    group,
+    voided,
+    receipt: receiptFor(row),
+    description: describe(row),
+    amount_cents: sign === null ? null : sign * row.total_debit_cents,
+    source_type: row.source_type,
+    source_id: row.source_id,
+    source_event: row.source_event,
+  }
+}
+
+// `period` is the { sql, values } result of buildPeriodWhere(query, 'lt.entry_date').
+export async function getLedgerList(executor, tenantId, period) {
+  const rows = await listTransactions(executor, tenantId, period)
+  return rows.map(toListRow)
+}
+
+function originFor(row) {
+  const label = describe(row)
+  switch (row.source_type) {
+    case 'invoice': return { label, path: `/invoices/${row.source_id}` }
+    case 'purchase': return { label, path: `/purchases/${row.source_id}` }
+    case 'journal': return { label, path: '/journal' }
+    case 'reimbursement': return { label, path: '/reimbursements' }
+    default: return { label, path: null }
+  }
+}
+
+// Detail for one transaction, or null (route 404s — no cross-tenant leak).
+export async function getLedgerEntryDetail(executor, tenantId, transactionId) {
+  const row = await getTransaction(executor, tenantId, transactionId)
+  if (!row) return null
+  const lines = await listLines(executor, tenantId, transactionId)
+  const { type, group, voided } = classify(row.source_type, row.source_event)
+  return {
+    id: row.id,
+    entry_date: row.entry_date,
+    type,
+    group,
+    voided,
+    receipt: receiptFor(row),
+    description: describe(row),
+    source_type: row.source_type,
+    source_id: row.source_id,
+    created_at: row.created_at,
+    created_by_name: row.created_by_name,
+    origin: originFor(row),
+    lines,
+  }
 }
 
 // ---------- invoice journals (revenue) ----------

@@ -7,8 +7,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../api/reimbursements.js', () => ({
   listOutstanding: vi.fn(),
   listMemberPurchases: vi.fn(),
-  listReimbursements: vi.fn(),
-  listReimbursementPeriods: vi.fn(),
   createReimbursement: vi.fn(),
   reimburseMemberFull: vi.fn(),
 }))
@@ -42,8 +40,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.listOutstanding.mockResolvedValue([...OUTSTANDING])
   api.listMemberPurchases.mockResolvedValue([...ALICE_PURCHASES])
-  api.listReimbursements.mockResolvedValue([])
-  api.listReimbursementPeriods.mockResolvedValue([])
   api.reimburseMemberFull.mockResolvedValue({ id: 99 })
   api.createReimbursement.mockResolvedValue({ id: 99 })
 })
@@ -87,13 +83,9 @@ describe('ReimbursementsPage — outstanding', () => {
     await waitFor(() => expect(api.reimburseMemberFull).toHaveBeenCalledWith(1, {}))
   })
 
-  it('loads history when switching tabs', async () => {
-    const user = userEvent.setup()
+  it('does not render tabs — history lives in the ledger', async () => {
     wrap(<ReimbursementsPage />)
     await screen.findByText('Alice')
-    await user.click(screen.getByRole('tab', { name: /history/i }))
-
-    await waitFor(() => expect(api.listReimbursementPeriods).toHaveBeenCalled())
-    await waitFor(() => expect(api.listReimbursements).toHaveBeenCalled())
+    expect(screen.queryByRole('tab')).toBeNull()
   })
 })

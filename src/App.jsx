@@ -34,6 +34,8 @@ const InvoiceDetailPage = lazy(() => import('./pages/InvoiceDetailPage.jsx'))
 const PurchasesPage = lazy(() => import('./pages/PurchasesPage.jsx'))
 const PurchaseDetailPage = lazy(() => import('./pages/PurchaseDetailPage.jsx'))
 const JournalPage = lazy(() => import('./pages/JournalPage.jsx'))
+const LedgerEntriesPage = lazy(() => import('./pages/LedgerEntriesPage.jsx'))
+const LedgerEntryDetailPage = lazy(() => import('./pages/LedgerEntryDetailPage.jsx'))
 const ReimbursementsPage = lazy(() => import('./pages/ReimbursementsPage.jsx'))
 const TenantSettingsPage = lazy(() => import('./pages/TenantSettingsPage.jsx'))
 const PaymentThanksPage = lazy(() => import('./pages/PaymentThanksPage.jsx'))
@@ -81,6 +83,8 @@ export default function App() {
               <Route path=":id" element={<PurchaseDetailPage />} />
             </Route>
             <Route path="/journal" element={<JournalPage />} />
+            <Route path="/ledger" element={<LedgerEntriesPage />} />
+            <Route path="/ledger/:id" element={<LedgerEntryDetailPage />} />
             <Route path="/reimbursements" element={<ReimbursementsPage />} />
             <Route path="/availability" element={<AvailabilityPage />}>
               <Route path="gigs/:id" element={<GigDetailPage />} />

@@ -34,6 +34,7 @@ import ContactsOutlined from '@mui/icons-material/ContactsOutlined'
 import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined'
 import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined'
 import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined'
+import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
 import VolunteerActivismOutlined from '@mui/icons-material/VolunteerActivismOutlined'
 import LibraryMusicOutlined from '@mui/icons-material/LibraryMusicOutlined'
 import QueueMusicOutlined from '@mui/icons-material/QueueMusicOutlined'
@@ -95,6 +96,7 @@ const NAV_GROUPS = [
       { to: '/purchases', label: 'Purchases', icon: ShoppingCartOutlined },
       { to: '/reimbursements', label: 'Reimbursements', icon: VolunteerActivismOutlined },
       { to: '/journal', label: 'Journal', icon: MenuBookOutlined },
+      { to: '/ledger', label: 'Ledger entries', icon: ListAltOutlined },
     ],
   },
   {

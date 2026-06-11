@@ -157,22 +157,6 @@ export const memberOutstandingShape = PropTypes.shape({
   outstanding_count: PropTypes.number,
 })
 
-// A registered reimbursement and the purchases it settled (history view).
-export const reimbursementShape = PropTypes.shape({
-  id: idProp,
-  band_member_id: idProp,
-  band_member_name: PropTypes.string,
-  amount_cents: PropTypes.number,
-  paid_on: PropTypes.string,
-  memo: PropTypes.string,
-  purchases: PropTypes.arrayOf(PropTypes.shape({
-    id: idProp,
-    receipt_number: PropTypes.number,
-    supplier_name: PropTypes.string,
-    total_cents: PropTypes.number,
-  })),
-})
-
 export const songTagShape = PropTypes.shape({
   id: idProp,
   name: PropTypes.string,
@@ -287,6 +271,30 @@ export const journalShape = PropTypes.shape({
   status: PropTypes.oneOf(['draft', 'approved']),
   posted_transaction_id: idProp,
   lines: PropTypes.arrayOf(journalLineShape),
+})
+
+// One row of the read-only ledger browser list (GET /api/ledger).
+export const ledgerEntryRowShape = PropTypes.shape({
+  id: idProp,
+  entry_date: PropTypes.string,
+  type: PropTypes.string,
+  group: PropTypes.string,
+  voided: PropTypes.bool,
+  receipt: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  description: PropTypes.string,
+  amount_cents: PropTypes.number,
+  source_type: PropTypes.string,
+  source_id: idProp,
+})
+
+// One journal line in the ledger entry detail (GET /api/ledger/:id).
+export const ledgerLineShape = PropTypes.shape({
+  id: idProp,
+  account_code: PropTypes.string,
+  account_name: PropTypes.string,
+  memo: PropTypes.string,
+  debit_cents: PropTypes.number,
+  credit_cents: PropTypes.number,
 })
 
 export const periodShape = PropTypes.shape({
