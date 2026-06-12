@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
+import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
 import Link from '@mui/material/Link'
 import Paper from '@mui/material/Paper'
@@ -14,7 +21,8 @@ import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import PropTypes from 'prop-types'
-import { getLedgerEntry } from '../api/ledger.js'
+import { getLedgerEntry, voidLedgerEntry } from '../api/ledger.js'
+import { createJournal } from '../api/journal.js'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import { formatEur } from '../utils/invoiceTotals.js'
 import { formatShortDate } from '../utils/dateFormat.js'
@@ -32,14 +40,58 @@ export default function LedgerEntryDetailPage() {
   const { id } = useParams()
   const [entry, setEntry] = useState(null)
   const [error, setError] = useState(null)
+  const [voidOpen, setVoidOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState(null)
 
   useEffect(() => {
     let cancelled = false
+    setEntry(null)
+    setActionError(null)
     getLedgerEntry(Number(id))
       .then((data) => { if (!cancelled) setEntry(data) })
       .catch((e) => { if (!cancelled) setError(e.message) })
     return () => { cancelled = true }
   }, [id])
+
+  async function confirmVoid() {
+    setBusy(true)
+    setActionError(null)
+    try {
+      const { id: voidId } = await voidLedgerEntry(entry.id)
+      setVoidOpen(false)
+      navigate(`/ledger/${voidId}`)
+    } catch (e) {
+      setVoidOpen(false)
+      setActionError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Copies the entry's raw lines into a draft journal (gross amounts, no VAT
+  // split — the lines already are the final ledger legs).
+  async function copyToJournal() {
+    setBusy(true)
+    setActionError(null)
+    try {
+      await createJournal({
+        description: entry.description || null,
+        lines: entry.lines.map((l) => ({
+          description: l.memo,
+          account_code: l.account_code,
+          vat_rate: 0,
+          side: l.debit_cents > 0 ? 'debit' : 'credit',
+          amount_cents: l.debit_cents > 0 ? l.debit_cents : l.credit_cents,
+        })),
+      })
+      navigate('/journal')
+    } catch (e) {
+      setActionError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   if (error) {
     return <Typography color="error" sx={{ p: 2 }}>{error}</Typography>
@@ -58,10 +110,34 @@ export default function LedgerEntryDetailPage() {
         <IconButton aria-label="back" onClick={() => navigate('/ledger')}>
           <ArrowBackIcon />
         </IconButton>
-        <Typography variant="h5" fontWeight={600}>
+        <Typography variant="h5" fontWeight={600} sx={{ flex: 1, minWidth: 0 }}>
           Ledger entry: {entry.description || `#${entry.id}`}
         </Typography>
+        <Button variant="outlined" onClick={copyToJournal} disabled={busy}>
+          Copy
+        </Button>
+        <Button variant="contained" color="error" onClick={() => setVoidOpen(true)} disabled={busy || entry.voided}>
+          Void
+        </Button>
       </Box>
+
+      {actionError && <Alert severity="error" sx={{ mb: 2 }}>{actionError}</Alert>}
+
+      <Dialog open={voidOpen} onClose={() => setVoidOpen(false)}>
+        <DialogTitle>Void ledger entry?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Do you want to void this ledger entry? Doing so will create a new ledger entry that
+            cancels out this one.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVoidOpen(false)} disabled={busy}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={confirmVoid} disabled={busy}>
+            Void entry
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <LedgerLinesTable lines={entry.lines} />

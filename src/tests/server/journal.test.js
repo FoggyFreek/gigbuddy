@@ -304,6 +304,17 @@ describe('approved journals are locked and idempotent', () => {
     return draft
   }
 
+  it('drops out of the journal list once approved (drafts only)', async () => {
+    const approved = await approvedDraft()
+    const stillDraft = await createDraft({
+      lines: [{ account_code: '62100', vat_rate: 0, side: 'debit', amount_cents: 500, balancing_account_code: '11000', position: 0 }],
+    })
+
+    const list = await asUserA(request(app).get('/api/journal')).expect(200)
+    expect(list.body.map((j) => j.id)).toEqual([stillDraft.id])
+    expect(list.body.map((j) => j.id)).not.toContain(approved.id)
+  })
+
   it('rejects edit and delete of an approved journal with 409', async () => {
     const draft = await approvedDraft()
     await asUserA(request(app).patch(`/api/journal/${draft.id}`)).send({ description: 'x' }).expect(409)

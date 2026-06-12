@@ -23,12 +23,14 @@ export async function fetchJournalLines(executor, journalId, tenantId) {
 }
 
 // Lists journal headers with their lines for the tenant, newest entry first.
+// Drafts only: once approved, a journal lives on as its posted ledger
+// transaction and no longer belongs in the journal editor.
 export async function listJournals(executor, tenantId) {
   const { rows: journals } = await executor.query(
     `SELECT id, entry_number, entry_date, description, status,
             posted_transaction_id, created_at, updated_at
        FROM journals
-      WHERE tenant_id = $1
+      WHERE tenant_id = $1 AND status = 'draft'
       ORDER BY entry_date DESC, entry_number DESC, id DESC`,
     [tenantId],
   )

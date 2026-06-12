@@ -236,6 +236,8 @@ function originFor(row) {
     case 'merch_sale': return { label, path: '/merch' }
     case 'vat_settlement': return { label, path: '/vat-returns' }
     case 'vat_settlement_payment': return { label, path: '/vat-returns' }
+    // A manual void's source is the ledger entry it reverses.
+    case 'ledger_transaction': return { label, path: `/ledger/${row.source_id}` }
     default: return { label, path: null }
   }
 }
@@ -260,6 +262,60 @@ export async function getLedgerEntryDetail(executor, tenantId, transactionId) {
     created_by_name: row.created_by_name,
     origin: originFor(row),
     lines,
+  }
+}
+
+// Voids one ledger transaction corrections-forward: posts a new transaction
+// dated today with every line's debit/credit swapped. Idempotent on
+// (ledger_transaction, id, void) — a second void 409s. Void entries themselves
+// cannot be voided (un-voiding is re-entering the original, not a void chain).
+export async function voidLedgerTransaction(pool, tenantId, transactionId, actorUserId = null) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const row = await getTransaction(client, tenantId, transactionId)
+    if (!row) {
+      await client.query('ROLLBACK')
+      return { error: { status: 404, body: { error: 'Not found' } } }
+    }
+    if (classify(row.source_type, row.source_event).voided) {
+      await client.query('ROLLBACK')
+      return { error: { status: 409, body: { error: 'A void entry cannot be voided', code: 'void_of_void' } } }
+    }
+
+    const lines = (await listLines(client, tenantId, transactionId)).map((l) => ({
+      account_code: l.account_code,
+      debit_cents: l.credit_cents,
+      credit_cents: l.debit_cents,
+      memo: l.memo,
+    }))
+
+    let result
+    try {
+      result = await postJournal(client, tenantId, {
+        entryDate: today(),
+        description: `Void of ledger entry #${transactionId}`,
+        sourceType: 'ledger_transaction', sourceId: transactionId, sourceEvent: 'void',
+        lines, actorUserId,
+      })
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      const mapped = ledgerErrorResult(err)
+      if (mapped) return mapped
+      throw err
+    }
+    if (!result.posted) {
+      await client.query('ROLLBACK')
+      return { error: { status: 409, body: { error: 'Entry already voided', code: 'already_voided' } } }
+    }
+
+    await client.query('COMMIT')
+    return { transactionId: result.transactionId }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
   }
 }
 
@@ -639,7 +695,9 @@ export async function postUserJournal(client, tenantId, journal, journalLines, o
 
   return postJournal(client, tenantId, {
     entryDate: toDateString(journal.entry_date),
-    description: journal.description ?? null,
+    // No header description → fall back to the first line's, so the ledger
+    // browser doesn't show a blank row.
+    description: journal.description ?? journalLines[0]?.description ?? null,
     sourceType: 'journal', sourceId: journal.id, sourceEvent: 'posted', lines, ...opts,
   })
 }

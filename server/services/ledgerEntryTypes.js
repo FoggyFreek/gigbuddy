@@ -14,6 +14,7 @@ const TYPE_MAP = {
   'merch_sale/recorded': { type: 'Merch sale',        group: 'invoices',  voided: false, sign: 1 },
   'merch_sale/voided':   { type: 'Merch sale (void)', group: 'invoices',  voided: true,  sign: -1 },
   'journal/posted':     { type: 'Journal',          group: 'journals',  voided: false, sign: null },
+  'ledger_transaction/void': { type: 'Void',        group: 'journals',  voided: true,  sign: null },
   'vat_settlement/filed':        { type: 'VAT return',  group: 'journals', voided: false, sign: null },
   'vat_settlement_payment/paid': { type: 'VAT payment', group: 'payments', voided: false, sign: null },
 }

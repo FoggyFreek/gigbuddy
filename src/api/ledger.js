@@ -8,6 +8,7 @@ export const listLedgerPeriods  = ()       => api('/periods')
 export const getLedgerOverview  = (period) => api(`/overview${periodQueryString(period)}`)
 export const getLedgerEntry     = (id)     => api(`/${id}`)
 export const getFinancialReport = (period) => api(`/report${periodQueryString(period)}`)
+export const voidLedgerEntry    = (id)     => api(`/${id}/void`, { method: 'POST' })
 
 // format: 'xlsx' | 'pdf'
 export const exportFinancialReport = (period, format) => {

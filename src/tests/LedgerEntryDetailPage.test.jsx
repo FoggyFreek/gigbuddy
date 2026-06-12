@@ -5,9 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/ledger.js', () => ({
   getLedgerEntry: vi.fn(),
+  voidLedgerEntry: vi.fn(),
+}))
+vi.mock('../api/journal.js', () => ({
+  createJournal: vi.fn(),
 }))
 
-import { getLedgerEntry } from '../api/ledger.js'
+import { getLedgerEntry, voidLedgerEntry } from '../api/ledger.js'
+import { createJournal } from '../api/journal.js'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
 import LedgerEntryDetailPage from '../pages/LedgerEntryDetailPage.jsx'
 import theme from '../theme.js'
@@ -40,6 +45,7 @@ function wrap({ compact = false } = {}) {
           <Routes>
             <Route path="/ledger" element={<div>list-route</div>} />
             <Route path="/ledger/:id" element={<LedgerEntryDetailPage />} />
+            <Route path="/journal" element={<div>journal-route</div>} />
           </Routes>
         </CompactLayoutContext.Provider>
       </ThemeProvider>
@@ -114,6 +120,56 @@ describe('LedgerEntryDetailPage', () => {
     // Metadata still present.
     expect(screen.getByText(/ledger entry number/i)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /bill from mi5 studios: test/i })).toBeInTheDocument()
+  })
+
+  it('void action confirms, posts the void, and navigates to the reversing entry', async () => {
+    voidLedgerEntry.mockResolvedValue({ id: 77 })
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /void/i })).toBeInTheDocument())
+
+    screen.getByRole('button', { name: /^void$/i }).click()
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+    expect(screen.getByText(/do you want to void this ledger entry/i)).toBeInTheDocument()
+    expect(screen.getByText(/creates? a new ledger entry that cancels out this one/i)).toBeInTheDocument()
+
+    screen.getByRole('button', { name: /void entry/i }).click()
+    await waitFor(() => expect(voidLedgerEntry).toHaveBeenCalledWith(5))
+    // Navigates to the new reversing entry's detail page.
+    await waitFor(() => expect(getLedgerEntry).toHaveBeenCalledWith(77))
+  })
+
+  it('void confirmation can be cancelled without calling the API', async () => {
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /^void$/i })).toBeInTheDocument())
+    screen.getByRole('button', { name: /^void$/i }).click()
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+    screen.getByRole('button', { name: /cancel/i }).click()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(voidLedgerEntry).not.toHaveBeenCalled()
+  })
+
+  it('void button is disabled for an entry that is itself a void', async () => {
+    getLedgerEntry.mockResolvedValue({ ...DETAIL, voided: true })
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /^void$/i })).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /^void$/i })).toBeDisabled()
+  })
+
+  it('copy action creates a draft journal from the lines and navigates to the journal page', async () => {
+    createJournal.mockResolvedValue({ id: 12 })
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /copy/i })).toBeInTheDocument())
+
+    screen.getByRole('button', { name: /copy/i }).click()
+    await waitFor(() => expect(createJournal).toHaveBeenCalledTimes(1))
+    const body = createJournal.mock.calls[0][0]
+    expect(body.description).toBe(DETAIL.description)
+    expect(body.lines).toEqual([
+      { description: 'TEST', account_code: '421', vat_rate: 0, side: 'debit', amount_cents: 2066 },
+      { description: 'TEST', account_code: '120501009', vat_rate: 0, side: 'debit', amount_cents: 434 },
+      { description: null, account_code: '120301', vat_rate: 0, side: 'credit', amount_cents: 2500 },
+    ])
+    await waitFor(() => expect(screen.getByText('journal-route')).toBeInTheDocument())
   })
 
   it('back button navigates to the ledger list', async () => {

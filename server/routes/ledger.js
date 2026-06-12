@@ -1,11 +1,12 @@
-// Read-only ledger browser endpoints. Posting stays in ledgerService.js,
-// driven by the invoice/purchase/journal/reimbursement state machines.
+// Ledger browser endpoints: reads plus the manual void action. All posting
+// stays in ledgerService.js, driven by the invoice/purchase/journal/
+// reimbursement state machines (and voidLedgerTransaction here).
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { buildPeriodWhere, resolvePeriodRange } from '../utils/periodQuery.js'
 import { parseId } from '../validators/journalValidators.js'
 import { listEntryDates } from '../repositories/ledgerRepository.js'
-import { getLedgerList, getLedgerEntryDetail, getFinancialOverview } from '../services/ledgerService.js'
+import { getLedgerList, getLedgerEntryDetail, getFinancialOverview, voidLedgerTransaction } from '../services/ledgerService.js'
 import { getFinancialReport, getReportEntryLines } from '../services/financialReportService.js'
 import { renderFinancialReportXlsx } from '../utils/renderFinancialReportXlsx.js'
 import { renderFinancialReportPdf } from '../utils/renderFinancialReportPdf.js'
@@ -95,6 +96,15 @@ router.get('/:id', async (req, res) => {
   const detail = await getLedgerEntryDetail(pool, req.tenantId, id)
   if (!detail) return res.status(404).json({ error: 'Not found' })
   res.json(detail)
+})
+
+// ---------- void (posts a reversing transaction) ----------
+router.post('/:id/void', async (req, res) => {
+  const id = parseId(req.params.id)
+  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const result = await voidLedgerTransaction(pool, req.tenantId, id, req.user.id)
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.json({ id: result.transactionId })
 })
 
 export default router

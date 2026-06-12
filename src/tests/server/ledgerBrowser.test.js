@@ -137,6 +137,21 @@ describe('ledger browser — list', () => {
     expect(posted.amount_cents).toBeNull()
   })
 
+  it('falls back to the first line\'s description for a journal without one', async () => {
+    const r = await asUserA(request(app).post('/api/journal')).send({
+      entry_date: '2026-06-10',
+      lines: [
+        { description: 'First line memo', account_code: '62100', vat_rate: 0, side: 'debit', amount_cents: 1000 },
+        { description: 'Second line memo', account_code: '11000', vat_rate: 0, side: 'credit', amount_cents: 1000 },
+      ],
+    }).expect(201)
+    await asUserA(request(app).post(`/api/journal/${r.body.id}/approve`)).expect(200)
+
+    const res = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const posted = res.body.find((row) => row.source_type === 'journal')
+    expect(posted.description).toBe('First line memo')
+  })
+
   it('marks invoice void rows as voided', async () => {
     const inv = await createSentInvoice()
     await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'void' }).expect(200)
@@ -222,5 +237,65 @@ describe('ledger browser — detail', () => {
   it('404s on a missing id and 400s on a non-numeric id', async () => {
     await asUserA(request(app).get('/api/ledger/999999')).expect(404)
     await asUserA(request(app).get('/api/ledger/abc')).expect(400)
+  })
+})
+
+describe('ledger browser — void', () => {
+  async function purchaseLedgerRow() {
+    await createAccruedPurchase()
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    return list.body.find((r) => r.source_type === 'purchase')
+  }
+
+  it('posts a reversing entry dated today with swapped debits/credits', async () => {
+    const row = await purchaseLedgerRow()
+    const original = await asUserA(request(app).get(`/api/ledger/${row.id}`)).expect(200)
+
+    const res = await asUserA(request(app).post(`/api/ledger/${row.id}/void`)).expect(200)
+    expect(res.body.id).toBeGreaterThan(0)
+    expect(res.body.id).not.toBe(row.id)
+
+    const voidEntry = await asUserA(request(app).get(`/api/ledger/${res.body.id}`)).expect(200)
+    expect(voidEntry.body.source_type).toBe('ledger_transaction')
+    expect(voidEntry.body.voided).toBe(true)
+    expect(voidEntry.body.type).toBe('Void')
+    expect(voidEntry.body.entry_date).toBe(new Date().toISOString().slice(0, 10))
+    expect(voidEntry.body.origin).toEqual({
+      label: `Void of ledger entry #${row.id}`,
+      path: `/ledger/${row.id}`,
+    })
+
+    // Each original line is mirrored: debit↔credit per account.
+    const mirror = new Map(voidEntry.body.lines.map((l) => [l.account_code, l]))
+    for (const line of original.body.lines) {
+      const m = mirror.get(line.account_code)
+      expect(m.debit_cents).toBe(line.credit_cents)
+      expect(m.credit_cents).toBe(line.debit_cents)
+    }
+  })
+
+  it('voiding twice 409s (idempotent posting key)', async () => {
+    const row = await purchaseLedgerRow()
+    await asUserA(request(app).post(`/api/ledger/${row.id}/void`)).expect(200)
+    const res = await asUserA(request(app).post(`/api/ledger/${row.id}/void`)).expect(409)
+    expect(res.body.code).toBe('already_voided')
+  })
+
+  it('refuses to void a void entry', async () => {
+    const row = await purchaseLedgerRow()
+    const voided = await asUserA(request(app).post(`/api/ledger/${row.id}/void`)).expect(200)
+    const res = await asUserA(request(app).post(`/api/ledger/${voided.body.id}/void`)).expect(409)
+    expect(res.body.code).toBe('void_of_void')
+  })
+
+  it('cross-tenant void 404s and writes nothing', async () => {
+    const row = await purchaseLedgerRow()
+    await asUserB(request(app).post(`/api/ledger/${row.id}/void`)).expect(404)
+    const listA = await asUserA(request(app).get('/api/ledger')).expect(200)
+    expect(listA.body).toHaveLength(1)
+  })
+
+  it('400s on a non-numeric id', async () => {
+    await asUserA(request(app).post('/api/ledger/abc/void')).expect(400)
   })
 })
