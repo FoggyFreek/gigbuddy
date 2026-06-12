@@ -41,6 +41,7 @@ import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined'
 import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
 import VolunteerActivismOutlined from '@mui/icons-material/VolunteerActivismOutlined'
 import AccountBalanceOutlined from '@mui/icons-material/AccountBalanceOutlined'
+import AssessmentOutlined from '@mui/icons-material/AssessmentOutlined'
 import LibraryMusicOutlined from '@mui/icons-material/LibraryMusicOutlined'
 import QueueMusicOutlined from '@mui/icons-material/QueueMusicOutlined'
 import { useProfile } from '../contexts/profileContext.js'
@@ -122,6 +123,7 @@ const NAV_GROUPS = [
       { to: '/journal', label: 'Journal', icon: MenuBookOutlined },
       { to: '/ledger', label: 'Ledger entries', icon: ListAltOutlined },
       { to: '/vat-returns', label: 'VAT declarations', icon: AccountBalanceOutlined, adminOnly: true },
+      { to: '/reports', label: 'Reports', icon: AssessmentOutlined },
     ],
   },
  

@@ -39,6 +39,7 @@ const MerchPage = lazy(() => import('./pages/MerchPage.jsx'))
 const JournalPage = lazy(() => import('./pages/JournalPage.jsx'))
 const LedgerEntriesPage = lazy(() => import('./pages/LedgerEntriesPage.jsx'))
 const LedgerEntryDetailPage = lazy(() => import('./pages/LedgerEntryDetailPage.jsx'))
+const ReportsPage = lazy(() => import('./pages/ReportsPage.jsx'))
 const ReimbursementsPage = lazy(() => import('./pages/ReimbursementsPage.jsx'))
 const VatReturnsPage = lazy(() => import('./pages/VatReturnsPage.jsx'))
 const VatReturnDetailPage = lazy(() => import('./pages/VatReturnDetailPage.jsx'))
@@ -95,6 +96,7 @@ export default function App() {
             <Route path="/journal" element={<JournalPage />} />
             <Route path="/ledger" element={<LedgerEntriesPage />} />
             <Route path="/ledger/:id" element={<LedgerEntryDetailPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
             <Route path="/reimbursements" element={<ReimbursementsPage />} />
             <Route path="/availability" element={<AvailabilityPage />}>
               <Route path="gigs/:id" element={<GigDetailPage />} />

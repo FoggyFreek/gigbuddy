@@ -202,6 +202,71 @@ export async function vatAccountBalances(executor, tenantId, { asOf }) {
   return rows[0] || { output_cents: 0, input_cents: 0 }
 }
 
+// Per-account debit/credit totals of entries inside [from, toExclusive),
+// joined to the chart of accounts. Accounts without activity are absent.
+export async function accountActivity(executor, tenantId, { from, toExclusive }) {
+  const { rows } = await executor.query(
+    `SELECT coa.code, coa.name, coa.type,
+            COALESCE(SUM(le.debit_cents), 0)::int AS debit_cents,
+            COALESCE(SUM(le.credit_cents), 0)::int AS credit_cents
+       FROM ledger_entries le
+       JOIN ledger_transactions lt
+         ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+       JOIN chart_of_accounts coa
+         ON coa.tenant_id = le.tenant_id AND coa.code = le.account_code
+      WHERE le.tenant_id = $1
+        AND lt.entry_date >= $2::date
+        AND lt.entry_date < $3::date
+      GROUP BY coa.code, coa.name, coa.type
+      ORDER BY coa.code`,
+    [tenantId, from, toExclusive],
+  )
+  return rows
+}
+
+// Per-account running balances (debit - credit, in cents) of all entries
+// before toExclusive — the closing balances backing the balance sheet.
+export async function accountBalancesBefore(executor, tenantId, toExclusive) {
+  const { rows } = await executor.query(
+    `SELECT coa.code, coa.name, coa.type,
+            COALESCE(SUM(le.debit_cents - le.credit_cents), 0)::int AS balance_cents
+       FROM ledger_entries le
+       JOIN ledger_transactions lt
+         ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+       JOIN chart_of_accounts coa
+         ON coa.tenant_id = le.tenant_id AND coa.code = le.account_code
+      WHERE le.tenant_id = $1
+        AND lt.entry_date < $2::date
+      GROUP BY coa.code, coa.name, coa.type
+      ORDER BY coa.code`,
+    [tenantId, toExclusive],
+  )
+  return rows
+}
+
+// Every journal line inside [from, toExclusive), flattened for the report
+// exports (the line-level backing detail a tax filing wants attached).
+export async function reportEntryLines(executor, tenantId, { from, toExclusive }) {
+  const { rows } = await executor.query(
+    `SELECT to_char(lt.entry_date, 'YYYY-MM-DD') AS entry_date,
+            lt.id AS transaction_id, lt.description,
+            lt.source_type, lt.source_event,
+            le.account_code, coa.name AS account_name,
+            le.debit_cents, le.credit_cents, le.memo
+       FROM ledger_entries le
+       JOIN ledger_transactions lt
+         ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+       LEFT JOIN chart_of_accounts coa
+         ON coa.tenant_id = le.tenant_id AND coa.code = le.account_code
+      WHERE le.tenant_id = $1
+        AND lt.entry_date >= $2::date
+        AND lt.entry_date < $3::date
+      ORDER BY lt.entry_date ASC, lt.id ASC, le.id ASC`,
+    [tenantId, from, toExclusive],
+  )
+  return rows
+}
+
 // Distinct entry dates for the PeriodPicker availability grid.
 export async function listEntryDates(executor, tenantId) {
   const { rows } = await executor.query(

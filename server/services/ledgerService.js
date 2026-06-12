@@ -299,26 +299,29 @@ function currentVatQuarter(now = new Date()) {
   }
 }
 
+// A null range means "all time": span whole months from the first to the last
+// booked entry (falling back to the current calendar year when empty).
+export async function resolveEffectiveRange(executor, tenantId, range) {
+  if (range) return range
+  const dates = await listEntryDates(executor, tenantId) // DESC
+  if (dates.length) {
+    const min = dates[dates.length - 1]
+    const max = dates[0]
+    return {
+      from: `${min.slice(0, 7)}-01`,
+      toExclusive: monthStart(Number(max.slice(0, 4)), Number(max.slice(5, 7)), 1),
+    }
+  }
+  const year = new Date().getFullYear()
+  return { from: `${year}-01-01`, toExclusive: `${year + 1}-01-01` }
+}
+
 // Aggregates the financial dashboard: revenue/expense/result per month over
 // the requested period (null range = all time, spanning the booked entries),
 // the VAT position of the *current* quarter, and the open invoice buckets
 // (which reflect current status, not the period).
 export async function getFinancialOverview(executor, tenantId, range) {
-  let effectiveRange = range
-  if (!effectiveRange) {
-    const dates = await listEntryDates(executor, tenantId) // DESC
-    if (dates.length) {
-      const min = dates[dates.length - 1]
-      const max = dates[0]
-      effectiveRange = {
-        from: `${min.slice(0, 7)}-01`,
-        toExclusive: monthStart(Number(max.slice(0, 4)), Number(max.slice(5, 7)), 1),
-      }
-    } else {
-      const year = new Date().getFullYear()
-      effectiveRange = { from: `${year}-01-01`, toExclusive: `${year + 1}-01-01` }
-    }
-  }
+  const effectiveRange = await resolveEffectiveRange(executor, tenantId, range)
 
   const vatQuarter = currentVatQuarter()
   const [monthRows, vat, buckets, settings, bankBalanceCents, merch, merchInventoryCents] = await Promise.all([

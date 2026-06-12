@@ -6,8 +6,31 @@ import { buildPeriodWhere, resolvePeriodRange } from '../utils/periodQuery.js'
 import { parseId } from '../validators/journalValidators.js'
 import { listEntryDates } from '../repositories/ledgerRepository.js'
 import { getLedgerList, getLedgerEntryDetail, getFinancialOverview } from '../services/ledgerService.js'
+import { getFinancialReport, getReportEntryLines } from '../services/financialReportService.js'
+import { renderFinancialReportXlsx } from '../utils/renderFinancialReportXlsx.js'
+import { renderFinancialReportPdf } from '../utils/renderFinancialReportPdf.js'
 
 const router = Router()
+
+// Human label for the requested period, used in export headers/filenames.
+function periodLabelFor(query) {
+  const { mode, year, month, quarter, from, to } = query
+  switch (mode) {
+    case 'fiscal_year': return `FY ${year}`
+    case 'month': return `${year}-${String(Number(month) + 1).padStart(2, '0')}`
+    case 'quarter': return `Q${quarter} ${year}`
+    case 'custom': return `${from} - ${to}`
+    default: return 'All time'
+  }
+}
+
+async function tenantName(tenantId) {
+  const { rows } = await pool.query(
+    'SELECT COALESCE(formal_name, band_name) AS name FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  return rows[0]?.name || ''
+}
 
 // ---------- list ----------
 router.get('/', async (req, res) => {
@@ -26,6 +49,43 @@ router.get('/overview', async (req, res) => {
   const period = resolvePeriodRange(req.query)
   if (period.error) return res.status(400).json({ error: period.error })
   res.json(await getFinancialOverview(pool, req.tenantId, period.range))
+})
+
+// ---------- financial report (must precede /:id) ----------
+router.get('/report', async (req, res) => {
+  const period = resolvePeriodRange(req.query)
+  if (period.error) return res.status(400).json({ error: period.error })
+  res.json(await getFinancialReport(pool, req.tenantId, period.range))
+})
+
+router.get('/report/export', async (req, res) => {
+  const period = resolvePeriodRange(req.query)
+  if (period.error) return res.status(400).json({ error: period.error })
+  const format = req.query.format
+  if (format !== 'xlsx' && format !== 'pdf') {
+    return res.status(400).json({ error: 'Invalid format' })
+  }
+
+  const [report, name] = await Promise.all([
+    getFinancialReport(pool, req.tenantId, period.range),
+    tenantName(req.tenantId),
+  ])
+  const label = periodLabelFor(req.query)
+  const safeLabel = label.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '-')
+  const filename = `financial-report-${safeLabel || 'all-time'}.${format}`
+
+  if (format === 'xlsx') {
+    const lines = await getReportEntryLines(pool, req.tenantId, period.range)
+    const buffer = await renderFinancialReportXlsx({ report, lines, tenantName: name, periodLabel: label })
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    return res.send(Buffer.from(buffer))
+  }
+
+  const buffer = await renderFinancialReportPdf({ report, tenantName: name, periodLabel: label })
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  res.send(buffer)
 })
 
 // ---------- detail ----------
