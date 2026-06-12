@@ -153,7 +153,7 @@ describe('createGigAttachment rollback', () => {
 
     const mockDb = {
       query: vi.fn()
-        .mockResolvedValueOnce({ rows: [{ id: 1 }] })   // SELECT gig exists
+        .mockResolvedValueOnce({ rowCount: 1 })          // SELECT gig exists
         .mockRejectedValueOnce(new Error('db error')),   // INSERT fails
     }
 
@@ -165,7 +165,7 @@ describe('createGigAttachment rollback', () => {
     }
 
     await expect(
-      createGigAttachment({ db: mockDb, tenantId: 1, gigId: 1, file }),
+      createGigAttachment(mockDb, 1, 1, file),
     ).rejects.toThrow('db error')
 
     // The key passed to putObject must be the same one removeObject received
