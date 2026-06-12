@@ -47,12 +47,20 @@ export const participantShape = PropTypes.shape({
   vote: PropTypes.string,
 })
 
+// A song linked to a rehearsal (rehearsal.songs entries).
+export const rehearsalSongShape = PropTypes.shape({
+  song_id: idProp,
+  title: PropTypes.string,
+  artist: PropTypes.string,
+})
+
 export const rehearsalShape = PropTypes.shape({
   id: idProp,
   proposed_date: PropTypes.string,
   status: PropTypes.string,
   location: PropTypes.string,
   participants: PropTypes.arrayOf(participantShape),
+  songs: PropTypes.arrayOf(rehearsalSongShape),
 })
 
 export const bandEventShape = PropTypes.shape({

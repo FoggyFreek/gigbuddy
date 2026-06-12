@@ -80,6 +80,27 @@ export function computeDueDate(issueDate, paymentTermDays) {
   return d.toISOString().slice(0, 10)
 }
 
+// Parses and normalizes a POST /invoices body. Pure — gig ownership is checked
+// against the DB by the service. Returns { error } | normalized fields.
+export function parseCreateInvoiceBody(body) {
+  const customerName = String(body.customer_name ?? '').trim()
+  if (!customerName) return { error: 'customer_name is required' }
+
+  const paymentTermDays = PAYMENT_TERM_DAYS.has(Number(body.payment_term_days))
+    ? Number(body.payment_term_days)
+    : 14
+  const issueDate = body.issue_date || new Date().toISOString().slice(0, 10)
+  const dueDate = body.due_date || computeDueDate(issueDate, paymentTermDays)
+  const taxInclusive = Boolean(body.tax_inclusive)
+  const discountType = body.discount_type === 'pct' ? 'pct' : 'eur'
+  const discountPct = Math.max(0, Number(body.discount_pct) || 0)
+  const discountCents = Math.max(0, Number.isInteger(Number(body.discount_cents)) ? Number(body.discount_cents) : 0)
+  const lines = normalizeLines(body.lines)
+  if (!lines.length) return { error: 'At least one line is required' }
+
+  return { customerName, paymentTermDays, issueDate, dueDate, taxInclusive, discountType, discountPct, discountCents, lines }
+}
+
 function validateExpiresAt(value) {
   if (value === undefined || value === null) return { ok: true }
   if (typeof value !== 'string') return { error: 'invalid_expires_at' }

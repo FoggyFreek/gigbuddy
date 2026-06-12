@@ -9,6 +9,8 @@ export const updateSong  = (id, body) => api(`/${id}`, { method: 'PATCH', body: 
 export const deleteSong  = (id)       => api(`/${id}`, { method: 'DELETE' })
 export const importSongs = (rows)     => api('/import', { method: 'POST', body: JSON.stringify(rows) })
 
+export const searchSongs = (q) => api(`/search?${new URLSearchParams({ q: q ?? '' })}`)
+
 export const searchSongTags = (q) => api(`/tags?${new URLSearchParams({ q: q ?? '' })}`)
 export const setSongTags    = (id, tags) =>
   api(`/${id}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) })

@@ -11,6 +11,7 @@ import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
+import TablePagination from '@mui/material/TablePagination'
 import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -275,8 +276,30 @@ export default function InvoicesPage() {
   )
 }
 
+const PAGE_SIZE = 25
+
 function InvoicesList({ invoices, selectedId, onRowClick }) {
   const isCompact = useCompactLayout()
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)
+
+  // Filtering happens in the parent; clamp so a shrinking list can't strand
+  // the user on an empty page.
+  const pageCount = Math.max(0, Math.ceil(invoices.length / rowsPerPage) - 1)
+  const safePage = Math.min(page, pageCount)
+  const paged = invoices.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)
+
+  const pagination = invoices.length > rowsPerPage && (
+    <TablePagination
+      component="div"
+      count={invoices.length}
+      page={safePage}
+      rowsPerPage={rowsPerPage}
+      rowsPerPageOptions={[25, 50, 100]}
+      onPageChange={(_, p) => setPage(p)}
+      onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0) }}
+    />
+  )
 
   if (isCompact) {
     return (
@@ -286,7 +309,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
             No invoices found
           </Typography>
         )}
-        {invoices.map((inv) => (
+        {paged.map((inv) => (
           <Box
             key={inv.id}
             onClick={() => onRowClick(inv)}
@@ -324,6 +347,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
             </Typography>
           </Box>
         ))}
+        {pagination}
       </Paper>
     )
   }
@@ -351,7 +375,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
                 </TableCell>
               </TableRow>
             )}
-            {invoices.map((inv) => (
+            {paged.map((inv) => (
               <TableRow
                 key={inv.id}
                 hover
@@ -371,6 +395,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
           </TableBody>
         </Table>
       </TableContainer>
+      {pagination}
     </Paper>
   )
 }

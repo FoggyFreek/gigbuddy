@@ -224,6 +224,61 @@ describe('InvoicesPage', () => {
     await waitFor(() => expect(screen.getByText('No invoices found')).toBeInTheDocument())
   })
 
+  it('paginates the table at 25 rows per page', async () => {
+    const user = userEvent.setup()
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      id: 100 + i,
+      invoice_number: `2026-${String(100 + i)}`,
+      status: 'paid',
+      issue_date: '2026-03-01',
+      payment_term_days: 14,
+      customer_name: `Client ${100 + i}`,
+      total_cents: 1000,
+    }))
+    listInvoices.mockResolvedValue(many)
+    wrap(<InvoicesPage />)
+    await waitFor(() => expect(screen.getByText('#2026-100')).toBeInTheDocument())
+
+    // First page: rows 0–24 visible, row 25 not.
+    expect(screen.getByText('#2026-124')).toBeInTheDocument()
+    expect(screen.queryByText('#2026-125')).not.toBeInTheDocument()
+    expect(screen.getByText('1–25 of 30')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /next page/i }))
+
+    expect(screen.getByText('#2026-125')).toBeInTheDocument()
+    expect(screen.queryByText('#2026-100')).not.toBeInTheDocument()
+  })
+
+  it('hides pagination controls when invoices fit on one page', async () => {
+    wrap(<InvoicesPage />)
+    await waitFor(() => expect(screen.getByText('#2026-0001')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /next page/i })).not.toBeInTheDocument()
+  })
+
+  it('resets to a valid page when a filter shrinks the list', async () => {
+    const user = userEvent.setup()
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      id: 100 + i,
+      invoice_number: `2026-${String(100 + i)}`,
+      status: i === 0 ? 'draft' : 'paid',
+      issue_date: '2026-03-01',
+      payment_term_days: 14,
+      customer_name: `Client ${100 + i}`,
+      total_cents: 1000,
+    }))
+    listInvoices.mockResolvedValue(many)
+    wrap(<InvoicesPage />)
+    await waitFor(() => expect(screen.getByText('#2026-100')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /next page/i }))
+    expect(screen.getByText('#2026-125')).toBeInTheDocument()
+
+    // Only one draft invoice → the previous page index is out of range.
+    await user.click(screen.getByText('Draft'))
+    expect(screen.getByText('#2026-100')).toBeInTheDocument()
+  })
+
   it('shows "No invoices found" when the active summary filter matches nothing', async () => {
     const user = userEvent.setup()
     // Only paid invoices; clicking "Draft" yields an empty list.

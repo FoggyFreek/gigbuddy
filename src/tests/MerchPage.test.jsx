@@ -152,6 +152,35 @@ describe('MerchPage — sales', () => {
   })
 })
 
+describe('MerchPage — sales pagination', () => {
+  it('paginates sales at 25 rows per page', async () => {
+    const user = userEvent.setup()
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      id: 100 + i, product_id: 1, product_name: `Sale Item ${100 + i}`, gig_id: null,
+      sale_date: '2026-06-01', quantity: 1, unit_price_incl_cents: 1000,
+      vat_rate: '21.00', unit_cost_cents: 500, status: 'recorded', voided_at: null,
+    }))
+    api.listMerchSales.mockResolvedValue(many)
+    wrap(<MerchPage />)
+    await screen.findByText('Sale Item 100')
+
+    expect(screen.getByText('Sale Item 124')).toBeInTheDocument()
+    expect(screen.queryByText('Sale Item 125')).not.toBeInTheDocument()
+    expect(screen.getByText('1–25 of 30')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /next page/i }))
+
+    expect(screen.getByText('Sale Item 125')).toBeInTheDocument()
+    expect(screen.queryByText('Sale Item 100')).not.toBeInTheDocument()
+  })
+
+  it('hides pagination controls when sales fit on one page', async () => {
+    wrap(<MerchPage />)
+    await screen.findAllByText('Band T-Shirt')
+    expect(screen.queryByRole('button', { name: /next page/i })).not.toBeInTheDocument()
+  })
+})
+
 describe('MerchPage — compact layout', () => {
   it('renders products and sales as cards instead of tables', async () => {
     wrap(<MerchPage />, { compact: true })

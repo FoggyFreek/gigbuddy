@@ -23,3 +23,11 @@ export const setVote = (id, bandMemberId, vote) =>
     method: 'PATCH',
     body: JSON.stringify({ vote }),
   })
+
+export const addSong = (id, songId) =>
+  api(`/${id}/songs`, {
+    method: 'POST',
+    body: JSON.stringify({ song_id: songId }),
+  })
+export const removeSong = (id, songId) =>
+  api(`/${id}/songs/${songId}`, { method: 'DELETE' })

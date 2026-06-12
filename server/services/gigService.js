@@ -3,6 +3,7 @@
 // success returns a domain payload (see each function).
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
+import pool from '../db/index.js'
 import { uploadObject, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
@@ -11,16 +12,52 @@ import {
   parseId,
   toDateStr,
   venueDisplay,
+  VALID_STATUSES,
+  VALID_VOTES,
   normalizeGigVenueRefs,
+  normalizeImportRow,
   buildGigUpdateFields,
   buildGigTaskUpdateFields,
 } from '../validators/gigValidators.js'
 import {
   assertVenueInTenant,
   memberExistsInTenant,
+  gigExistsInTenant,
+  fetchGigWithRelations,
+  loadParticipants,
+  listGigsWithTaskCounts,
+  listBandMembers,
+  listAvailabilitySlotsOverlapping,
+  listGigTasks,
+  listGigAttachments,
+  getLeadMemberIds,
+  getGigDescription,
+  insertGigForImport,
+  insertGigWithRelations,
+  insertGigParticipant,
+  deleteGigParticipant,
+  updateParticipantVote,
+  touchGig,
+  deleteGig as deleteGigRow,
+  getGigBannerRow,
+  setGigBannerPath,
+  clearGigBannerPath,
+  insertGigTask,
+  deleteGigTask as deleteGigTaskRow,
+  insertGigAttachment,
+  deleteGigAttachment as deleteGigAttachmentRow,
+  getContactInTenant,
+  listGigContacts as listGigContactRows,
+  insertGigContact,
+  lockGigContacts,
+  clearPrimaryGigContact,
+  setGigContactPrimary as setGigContactPrimaryRow,
+  deleteGigContact,
   updateGigFields,
   updateGigTaskFields,
 } from '../repositories/gigRepository.js'
+
+const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
 
 // ---------- notifications ----------
 
@@ -56,11 +93,8 @@ export function notifyGigsImported(tenantId, count) {
 }
 
 async function notifyTaskAssignment(db, tenantId, gigId, task) {
-  const { rows: gigs } = await db.query(
-    'SELECT event_description FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [gigId, tenantId],
-  )
-  const suffix = gigs[0]?.event_description ? ` (${gigs[0].event_description})` : ''
+  const description = await getGigDescription(db, gigId, tenantId)
+  const suffix = description ? ` (${description})` : ''
   sendPushToMember(task.assigned_to, tenantId, {
     title: 'Task assigned to you',
     body: `${task.title}${suffix}`,
@@ -68,11 +102,11 @@ async function notifyTaskAssignment(db, tenantId, gigId, task) {
   }).catch((err) => console.error('[push] task assignment notify failed', err))
 }
 
-// ---------- venue/festival validation ----------
+// ---------- internals ----------
 
 // Validates venue_id/festival_id (when present in body) belong to the tenant and
 // match the expected category. Returns { error, status } or {}.
-export async function validateVenueAndFestivalForTenant(db, body, tenantId) {
+async function validateVenueAndFestivalForTenant(db, body, tenantId) {
   try {
     if ('venue_id' in body) await assertVenueInTenant(db, body.venue_id, tenantId, 'venue')
     if ('festival_id' in body) await assertVenueInTenant(db, body.festival_id, tenantId, 'festival')
@@ -83,10 +117,173 @@ export async function validateVenueAndFestivalForTenant(db, body, tenantId) {
   }
 }
 
-// ---------- gig patch ----------
+// Composes the single-gig response shape shared by participant mutations.
+async function withTasksAndParticipants(db, tenantId, gigId, gig) {
+  const tasks = await listGigTasks(db, gigId, tenantId)
+  const byGig = await loadParticipants(db, [gigId], tenantId)
+  return { ...gig, tasks, participants: byGig.get(gigId) || [] }
+}
 
-// Validates and applies a gig PATCH. Returns { error } or { gig }. The caller is
-// responsible for firing the confirmed-status notification.
+// ---------- reads ----------
+
+// Lists all gigs with open task counts and per-member availability derived from
+// availability_slots (a band-wide slot wins over a member-specific one).
+export async function listGigs(db, tenantId) {
+  const gigs = await listGigsWithTaskCounts(db, tenantId)
+  if (!gigs.length) return []
+
+  const members = await listBandMembers(db, tenantId)
+
+  const dates = gigs.map((g) => toDateStr(g.event_date)).filter(Boolean)
+  const minDate = dates.reduce((a, b) => (a < b ? a : b))
+  const maxDate = dates.reduce((a, b) => (a > b ? a : b))
+
+  const slots = await listAvailabilitySlotsOverlapping(db, tenantId, minDate, maxDate)
+
+  return gigs.map((gig) => {
+    const dateStr = toDateStr(gig.event_date)
+    if (!dateStr) return { ...gig, members_availability: [] }
+
+    const gigSlots = slots.filter(
+      (s) => toDateStr(s.start_date) <= dateStr && toDateStr(s.end_date) >= dateStr,
+    )
+    const bandWide = gigSlots.findLast((s) => s.band_member_id === null) ?? null
+
+    const membersAvail = members.map((m) => {
+      const memberSlot = gigSlots.findLast((s) => s.band_member_id === m.id)
+      const winner = bandWide ?? memberSlot
+      return {
+        member_id: m.id,
+        name: m.name,
+        color: m.color,
+        position: m.position,
+        status: winner ? winner.status : 'default',
+        reason: winner?.reason ?? null,
+      }
+    })
+
+    return { ...gig, members_availability: membersAvail }
+  })
+}
+
+export async function getGig(db, tenantId, gigId) {
+  const gig = await fetchGigWithRelations(db, gigId, tenantId)
+  if (!gig) return NOT_FOUND
+
+  const tasks = await listGigTasks(db, gigId, tenantId)
+  const attachments = await listGigAttachments(db, gigId, tenantId)
+  const byGig = await loadParticipants(db, [gigId], tenantId)
+  return { gig: { ...gig, tasks, participants: byGig.get(gigId) || [], attachments } }
+}
+
+// ---------- writes ----------
+
+// Bulk import of normalized Bandsintown rows in one transaction; lead members
+// are added as participants of every created gig. The caller fires the
+// imported notification. Returns { error } | { created, skipped }.
+export async function importGigs(tenantId, userId, body) {
+  if (!Array.isArray(body) || body.length === 0) {
+    return { error: { status: 400, body: { error: 'Expected non-empty array' } } }
+  }
+  if (body.length > 200) {
+    return { error: { status: 400, body: { error: 'Maximum 200 gigs per import' } } }
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const leadIds = await getLeadMemberIds(client, tenantId)
+
+    let created = 0
+    let skipped = 0
+
+    for (const item of body) {
+      const parsed = normalizeImportRow(item)
+      if (parsed.error) {
+        await client.query('ROLLBACK')
+        return { error: { status: 400, body: { error: parsed.error } } }
+      }
+      if (parsed.skip) { skipped++; continue }
+      const row = parsed.data
+
+      const venueCheck = await validateVenueAndFestivalForTenant(
+        client, { venue_id: row.venueId, festival_id: row.festivalId }, tenantId,
+      )
+      if (venueCheck.error) {
+        await client.query('ROLLBACK')
+        return { error: { status: 400, body: { error: venueCheck.error } } }
+      }
+
+      const gigId = await insertGigForImport(client, tenantId, row)
+      for (const memberId of leadIds) {
+        await insertGigParticipant(client, tenantId, gigId, memberId, userId)
+      }
+      created++
+    }
+
+    await client.query('COMMIT')
+    return { created, skipped }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+// Creates a gig plus its initial lead-member participants in one transaction.
+// The caller fires the created notification. Returns { error } | { gig }.
+export async function createGig(tenantId, userId, body) {
+  const {
+    event_date, event_description, start_time, end_time, status,
+    has_pa_system, has_drumkit, has_stage_lights,
+  } = body
+  if (!event_date || !event_description) {
+    return { error: { status: 400, body: { error: 'event_date and event_description are required' } } }
+  }
+  const refs = normalizeGigVenueRefs(body)
+  if (refs.error) return { error: { status: 400, body: { error: refs.error } } }
+  const venueId = refs.body.venue_id ?? null
+  const festivalId = refs.body.festival_id ?? null
+  const finalStatus = VALID_STATUSES.includes(status) ? status : 'option'
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const venueCheck = await validateVenueAndFestivalForTenant(
+      client, { venue_id: venueId, festival_id: festivalId }, tenantId,
+    )
+    if (venueCheck.error) {
+      await client.query('ROLLBACK')
+      return { error: { status: 400, body: { error: venueCheck.error } } }
+    }
+
+    const gig = await insertGigWithRelations(client, tenantId, {
+      event_date, event_description, venueId, festivalId,
+      start_time: start_time || null, end_time: end_time || null, status: finalStatus,
+      has_pa_system: !!has_pa_system, has_drumkit: !!has_drumkit, has_stage_lights: !!has_stage_lights,
+    })
+
+    const leadIds = await getLeadMemberIds(client, tenantId)
+    for (const memberId of leadIds) {
+      await insertGigParticipant(client, tenantId, gig.id, memberId, userId)
+    }
+
+    await client.query('COMMIT')
+    return { gig }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+// Validates and applies a gig PATCH. Returns { error } or { gig, confirmed } —
+// `confirmed` is true when this PATCH set the status to confirmed; the caller
+// fires the confirmed notification.
 export async function patchGig(db, tenantId, gigId, body) {
   const refs = normalizeGigVenueRefs(body)
   if (refs.error) return { error: { status: 400, body: { error: refs.error } } }
@@ -100,11 +297,32 @@ export async function patchGig(db, tenantId, gigId, body) {
   if (!built.fields.length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
 
   const gig = await updateGigFields(db, tenantId, gigId, built.fields, built.values)
-  if (!gig) return { error: { status: 404, body: { error: 'Not found' } } }
-  return { gig }
+  if (!gig) return NOT_FOUND
+  return { gig, confirmed: body.status === 'confirmed' }
 }
 
-// ---------- task patch ----------
+// Deletes the gig and removes its banner object from storage.
+export async function deleteGig(db, tenantId, gigId) {
+  const row = await getGigBannerRow(db, gigId, tenantId)
+  if (!row) return NOT_FOUND
+
+  const deleted = await deleteGigRow(db, gigId, tenantId)
+  if (!deleted) return NOT_FOUND
+
+  safeRemove(row.banner_path, 'Failed to delete gig banner object:')
+  return {}
+}
+
+// ---------- tasks ----------
+
+export async function addGigTask(db, tenantId, gigId, body) {
+  const { title, due_date } = body
+  if (!title) return { error: { status: 400, body: { error: 'title is required' } } }
+  if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
+
+  const task = await insertGigTask(db, tenantId, gigId, title, due_date || null)
+  return { task }
+}
 
 // Validates assigned_to (when present) and returns a normalized copy of body
 // with it parsed to an integer, leaving the input untouched. A null/absent
@@ -131,7 +349,7 @@ export async function patchGigTask(db, tenantId, gigId, taskId, body) {
   if (!built.fields.length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
 
   const task = await updateGigTaskFields(db, tenantId, gigId, taskId, built.fields, built.values)
-  if (!task) return { error: { status: 404, body: { error: 'Not found' } } }
+  if (!task) return NOT_FOUND
 
   if (normalizedBody.assigned_to) {
     await notifyTaskAssignment(db, tenantId, gigId, task)
@@ -139,19 +357,65 @@ export async function patchGigTask(db, tenantId, gigId, taskId, body) {
   return { task }
 }
 
+export async function deleteGigTask(db, tenantId, gigId, taskId) {
+  const deleted = await deleteGigTaskRow(db, taskId, gigId, tenantId)
+  return deleted ? {} : NOT_FOUND
+}
+
+// ---------- participants ----------
+
+export async function addParticipant(db, tenantId, userId, gigId, memberId) {
+  if (!(await memberExistsInTenant(db, memberId, tenantId))) {
+    return { error: { status: 404, body: { error: 'band_member not found' } } }
+  }
+  if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
+
+  try {
+    await insertGigParticipant(db, tenantId, gigId, memberId, userId)
+  } catch (err) {
+    if (err.code === '23505') {
+      return { error: { status: 409, body: { error: 'Already a participant' } } }
+    }
+    throw err
+  }
+
+  await touchGig(db, gigId, tenantId)
+  const gig = await fetchGigWithRelations(db, gigId, tenantId)
+  return { gig: await withTasksAndParticipants(db, tenantId, gigId, gig) }
+}
+
+export async function removeParticipant(db, tenantId, gigId, memberId) {
+  const removed = await deleteGigParticipant(db, gigId, memberId, tenantId)
+  if (!removed) return NOT_FOUND
+  await touchGig(db, gigId, tenantId)
+  return {}
+}
+
+export async function setParticipantVote(db, tenantId, userId, gigId, memberId, body) {
+  if (!('vote' in body)) return { error: { status: 400, body: { error: 'vote is required' } } }
+  const vote = body.vote
+  if (vote !== null && !VALID_VOTES.includes(vote)) {
+    return { error: { status: 400, body: { error: 'Invalid vote value' } } }
+  }
+
+  const participant = await updateParticipantVote(db, tenantId, gigId, memberId, vote, userId)
+  if (!participant) return NOT_FOUND
+
+  await touchGig(db, gigId, tenantId)
+  const gig = await fetchGigWithRelations(db, gigId, tenantId)
+  return { gig: await withTasksAndParticipants(db, tenantId, gigId, gig) }
+}
+
 // ---------- banner ----------
 
 // Replaces a gig banner: stores the new object, points the row at it, and
 // removes the old object on success (or the new object on DB failure).
-export async function replaceGigBanner({ db, tenantId, gigId, file }) {
+export async function replaceGigBanner(db, tenantId, gigId, file) {
   const image = await validateAndReencodeImage(file.buffer, file.mimetype)
 
-  const { rows: before } = await db.query(
-    'SELECT banner_path FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [gigId, tenantId],
-  )
-  if (!before.length) return { error: { status: 404, body: { error: 'Not found' } } }
-  const oldKey = before[0].banner_path
+  const before = await getGigBannerRow(db, gigId, tenantId)
+  if (!before) return NOT_FOUND
+  const oldKey = before.banner_path
 
   const ext = extensionForImageMime(image.mimetype)
   const objectKey = gigBannerKey(tenantId, randomUUID(), ext)
@@ -160,12 +424,7 @@ export async function replaceGigBanner({ db, tenantId, gigId, file }) {
 
   let updatedKey
   try {
-    const { rows } = await db.query(
-      `UPDATE gigs SET banner_path = $1, updated_at = NOW()
-       WHERE id = $2 AND tenant_id = $3 RETURNING banner_path`,
-      [objectKey, gigId, tenantId],
-    )
-    updatedKey = rows[0].banner_path
+    updatedKey = await setGigBannerPath(db, gigId, tenantId, objectKey)
   } catch (err) {
     removeObject(objectKey).catch(() => {})
     throw err
@@ -176,20 +435,13 @@ export async function replaceGigBanner({ db, tenantId, gigId, file }) {
   return { bannerPath: updatedKey }
 }
 
-export async function deleteGigBanner({ db, tenantId, gigId }) {
-  const { rows } = await db.query(
-    'SELECT banner_path FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [gigId, tenantId],
-  )
-  if (!rows.length) return { error: { status: 404, body: { error: 'Not found' } } }
+export async function deleteGigBanner(db, tenantId, gigId) {
+  const row = await getGigBannerRow(db, gigId, tenantId)
+  if (!row) return NOT_FOUND
 
-  const key = rows[0].banner_path
-  await db.query(
-    'UPDATE gigs SET banner_path = NULL, updated_at = NOW() WHERE id = $1 AND tenant_id = $2',
-    [gigId, tenantId],
-  )
+  await clearGigBannerPath(db, gigId, tenantId)
 
-  safeRemove(key, 'Failed to delete gig banner object:')
+  safeRemove(row.banner_path, 'Failed to delete gig banner object:')
   return {}
 }
 
@@ -197,12 +449,8 @@ export async function deleteGigBanner({ db, tenantId, gigId }) {
 
 // Verifies file content matches its declared MIME type (OWASP A06), stores the
 // object, and records it. Removes the object if the DB insert fails.
-export async function createGigAttachment({ db, tenantId, gigId, file }) {
-  const { rows } = await db.query(
-    'SELECT id FROM gigs WHERE id = $1 AND tenant_id = $2',
-    [gigId, tenantId],
-  )
-  if (!rows.length) return { error: { status: 404, body: { error: 'Not found' } } }
+export async function createGigAttachment(db, tenantId, gigId, file) {
+  if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
 
   if (!verifyDocumentContent(file.buffer, file.mimetype)) {
     return { error: { status: 400, body: { error: 'File content does not match declared type' } } }
@@ -214,15 +462,77 @@ export async function createGigAttachment({ db, tenantId, gigId, file }) {
   await uploadObject(objectKey, file.buffer, file.size, file.mimetype)
 
   try {
-    const { rows: inserted } = await db.query(
-      `INSERT INTO gig_attachments (gig_id, tenant_id, object_key, original_filename, content_type, file_size)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at`,
-      [gigId, tenantId, objectKey, file.originalname, file.mimetype, file.size],
-    )
-    return { attachment: inserted[0] }
+    const attachment = await insertGigAttachment(db, tenantId, gigId, file, objectKey)
+    return { attachment }
   } catch (err) {
     removeObject(objectKey).catch(() => {})
     throw err
   }
+}
+
+export async function deleteGigAttachment(db, tenantId, gigId, attachmentId) {
+  const objectKey = await deleteGigAttachmentRow(db, attachmentId, gigId, tenantId)
+  if (objectKey === null) return NOT_FOUND
+
+  safeRemove(objectKey, 'Failed to delete gig attachment object:')
+  return {}
+}
+
+// ---------- gig contacts (mirrors venue_contacts; links are informational) ----------
+
+export async function listGigContacts(db, tenantId, gigId) {
+  if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
+  return { contacts: await listGigContactRows(db, gigId, tenantId) }
+}
+
+export async function addGigContact(db, tenantId, gigId, contactId) {
+  if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
+  const contact = await getContactInTenant(db, contactId, tenantId)
+  if (!contact) return NOT_FOUND
+
+  try {
+    await insertGigContact(db, gigId, contactId, tenantId)
+  } catch (err) {
+    if (err.code === '23505') {
+      return { error: { status: 409, body: { error: 'Contact is already linked to this gig' } } }
+    }
+    throw err
+  }
+  return { contact: { ...contact, is_primary: false } }
+}
+
+// Toggles a contact's primary flag inside a transaction; at most one contact
+// per gig can be primary, so making one primary first clears the others.
+export async function setGigContactPrimary(tenantId, gigId, contactId, makePrimary) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const linkedIds = await lockGigContacts(client, gigId, tenantId)
+    if (!linkedIds.includes(contactId)) {
+      await client.query('ROLLBACK')
+      return NOT_FOUND
+    }
+
+    if (makePrimary) {
+      await clearPrimaryGigContact(client, gigId, tenantId)
+    }
+
+    const link = await setGigContactPrimaryRow(client, gigId, contactId, makePrimary, tenantId)
+    await client.query('COMMIT')
+    return { link }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    if (err.code === '23505') {
+      return { error: { status: 409, body: { error: 'Another contact is already primary' } } }
+    }
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+export async function removeGigContact(db, tenantId, gigId, contactId) {
+  const removed = await deleteGigContact(db, gigId, contactId, tenantId)
+  return removed ? {} : NOT_FOUND
 }

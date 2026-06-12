@@ -5,14 +5,17 @@
 //   { error: { status, body } }   — caller should respond with that status/body
 //   anything else                 — success payload (see each function)
 import { randomUUID } from 'node:crypto'
-import { getObject, uploadObject, removeObject, safeRemove, invoicePdfKey } from './storageService.js'
+import { getObject, uploadObject, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from './storageService.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
+import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
+import { buildPeriodWhere } from '../utils/periodQuery.js'
+import { createTenantMollieClient, assertMollieConfigured } from '../utils/mollieClient.js'
 import {
-  createTenantMollieClient,
-  formatMollieAmountFromCents,
-  assertMollieConfigured,
-} from '../utils/mollieClient.js'
+  createMolliePaymentLink,
+  removeMolliePaymentLink,
+  syncInvoicePaymentStatus,
+} from './molliePaymentLinkService.js'
 import { sendPushToTenant } from '../utils/sendPush.js'
 import {
   fetchTenant,
@@ -20,6 +23,16 @@ import {
   fetchLines,
   replaceInvoiceLines,
   validateGigIdForTenant,
+  listInvoices as listInvoiceRows,
+  listInvoicePeriodDates,
+  fetchGig,
+  fetchVenue,
+  insertInvoice,
+  insertInvoiceLines,
+  nextInvoiceNumber,
+  deleteInvoiceRow,
+  setCustomLogoPath,
+  stripMollieKey,
 } from '../repositories/invoiceRepository.js'
 import {
   SIMPLE_PATCH_FIELDS,
@@ -27,6 +40,9 @@ import {
   FINALIZED_LOCKED_FIELDS_SET,
   STATUS_VALUES,
   normalizeLines,
+  parseCreateInvoiceBody,
+  computeDueDate,
+  validatePaymentLinkOptions,
 } from '../validators/invoiceValidators.js'
 import {
   ledgerErrorResult,
@@ -391,73 +407,7 @@ export async function applyInvoicePatch(pool, tenantId, invoiceId, body, actorUs
   return { ...result, linkRemoved: false }
 }
 
-// ---------- payment link removal ----------
-
-function mollieStatusCode(err) {
-  return err?.statusCode ?? err?.status ?? null
-}
-
-// Removes the Mollie payment link from an invoice: deletes it at Mollie when it
-// was never opened (DELETE /v2/payment-links/:id → 204; 404 = already gone), and
-// otherwise — Mollie 422s for any opened/attempted link — syncs authoritative
-// payment state and, when no payment turned out paid, archives the link
-// (PATCH { archived: true }) so it can no longer take payments. Either way the
-// invoice's link columns are cleared. Returns { error } | { invoice }.
-// `client` is optional: the void flow passes its lock-holding session so the
-// 422→sync posting path and the column updates run on that connection (see
-// withAccountingSettingsSessionLock — a fresh pooled connection would deadlock
-// on the settings advisory lock the caller already holds).
-export async function removeMolliePaymentLink({ pool, tenant, invoice, tenantId, invoiceId, client = null }) {
-  const executor = client ?? pool
-  try {
-    assertMollieConfigured(tenant)
-  } catch (err) {
-    return { error: { status: err.status || 400, body: { error: err.message, code: err.code } } }
-  }
-  const mollie = createTenantMollieClient(tenant.mollie_api_key)
-  const linkId = invoice.mollie_payment_link_id
-
-  try {
-    await mollie.paymentLinks.delete(linkId)
-  } catch (err) {
-    const status = mollieStatusCode(err)
-    if (status === 422) {
-      // Link was opened or has payment attempts. Pull authoritative state first.
-      const synced = await syncInvoicePaymentStatus(mollie, pool, invoice, { client })
-      if (synced?.status === 'paid') {
-        return { error: { status: 409, body: { error: 'Payment link has a paid payment', code: 'payment_link_paid' } } }
-      }
-      try {
-        await mollie.paymentLinks.update(linkId, { archived: true })
-      } catch (archiveErr) {
-        console.error('[invoices] failed to archive payment link:', archiveErr)
-        return { error: { status: 502, body: { error: 'mollie_error', code: 'mollie_error' } } }
-      }
-    } else if (status !== 404) {
-      console.error('[invoices] failed to delete payment link:', err)
-      return { error: { status: 502, body: { error: 'mollie_error', code: 'mollie_error' } } }
-    }
-  }
-
-  await executor.query(
-    `UPDATE invoices
-        SET mollie_payment_link_id = NULL,
-            mollie_payment_link_url = NULL,
-            mollie_payment_link_created_at = NULL,
-            mollie_payment_link_expires_at = NULL,
-            mollie_payment_status = NULL,
-            updated_at = NOW()
-      WHERE id = $1 AND tenant_id = $2`,
-    [invoiceId, tenantId],
-  )
-  return { invoice: await fetchInvoice(executor, tenantId, invoiceId) }
-}
-
 // ---------- payment links ----------
-
-export function isMollieWebhookDisabled() {
-  return process.env.MOLLIE_DISABLE_WEBHOOK === 'true'
-}
 
 // Locks the invoice, validates it can take a payment link, and finalizes it
 // (draft -> sent, sets finalized_at) BEFORE any external Mollie call. Returns
@@ -511,134 +461,416 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
   }
 }
 
-function buildPaymentLinkPayload({ tenant, invoice, invoiceId, opts }) {
-  const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
-  const webhookBase = (process.env.MOLLIE_WEBHOOK_BASE_URL || appUrl).replace(/\/$/, '')
-  const tenantLabel = (tenant.band_name || tenant.formal_name || '').trim()
-  const description = tenantLabel
-    ? `Invoice ${invoice.invoice_number} - ${tenantLabel}`
-    : `Invoice ${invoice.invoice_number}`
+// ---------- route-facing operations ----------
 
-  const redirectQuery = new URLSearchParams({ invoice: String(invoiceId) })
-  if (tenantLabel) redirectQuery.set('band', tenantLabel)
+const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
 
-  const payload = {
-    amount: { currency: 'EUR', value: formatMollieAmountFromCents(invoice.total_cents) },
-    description,
-    redirectUrl: `${appUrl}/payment/thanks?${redirectQuery.toString()}`,
-    reusable: false,
-    ...(opts.expiresAt ? { expiresAt: opts.expiresAt } : {}),
-    ...(opts.allowedMethods ? { allowedMethods: opts.allowedMethods } : {}),
-  }
-  if (!isMollieWebhookDisabled()) {
-    payload.webhookUrl = `${webhookBase}/api/public/mollie/payment-links/webhook?invoice=${invoiceId}`
-  }
-  return payload
+export async function listInvoices(pool, tenantId, query) {
+  const period = buildPeriodWhere(query, 'issue_date')
+  if (period.error) return { error: { status: 400, body: { error: period.error } } }
+  return { invoices: await listInvoiceRows(pool, tenantId, period) }
 }
 
-// Creates the Mollie payment link and stores it on the invoice with an atomic
-// guard against concurrent creation. Returns { error } | { invoice }.
-export async function createMolliePaymentLink({ pool, tenant, invoice, tenantId, invoiceId, opts }) {
-  const mollie = createTenantMollieClient(tenant.mollie_api_key)
-  const payload = buildPaymentLinkPayload({ tenant, invoice, invoiceId, opts })
-  const paymentLink = await mollie.paymentLinks.create(payload)
+export async function listInvoicePeriods(pool, tenantId) {
+  return listInvoicePeriodDates(pool, tenantId)
+}
 
-  const checkoutUrl = paymentLink._links?.paymentLink?.href
-  if (!checkoutUrl) return { error: { status: 502, body: { error: 'mollie_payment_link_url_missing' } } }
+function buildBillingTarget(type, row) {
+  return {
+    type,
+    id: row.id,
+    name: row.organization_name || row.name,
+    contact_title: row.title || null,
+    contact_given_name: row.given_name || null,
+    contact_family_name: row.family_name || null,
+    address_street: row.street_and_number || null,
+    address_postal_code: row.postal_code || null,
+    address_city: row.city || null,
+    address_country: row.country || null,
+    email: row.email || null,
+  }
+}
 
-  // Atomic update guard: only write if no other concurrent request beat us to
-  // it. A link orphaned by losing this race carries no charge until used.
-  const updateResult = await pool.query(
-    `UPDATE invoices
-        SET mollie_payment_link_id = $1,
-            mollie_payment_link_url = $2,
-            mollie_payment_link_created_at = NOW(),
-            mollie_payment_link_expires_at = $3,
-            mollie_payment_status = 'open',
-            updated_at = NOW()
-      WHERE id = $4 AND tenant_id = $5
-        AND mollie_payment_link_id IS NULL
-    RETURNING *`,
-    [paymentLink.id, checkoutUrl, opts.expiresAt ?? null, invoiceId, tenantId],
+// Pre-fills an invoice draft from a gig. Returns { error } | { draft payload }.
+export async function buildDraftFromGig(pool, tenantId, gigId) {
+  const gig = await fetchGig(pool, tenantId, gigId)
+  if (!gig) return { error: { status: 404, body: { error: 'Gig not found' } } }
+
+  const venue = gig.venue_id ? await fetchVenue(pool, tenantId, gig.venue_id) : null
+  const festival = gig.festival_id ? await fetchVenue(pool, tenantId, gig.festival_id) : null
+
+  const tenant = await fetchTenant(pool, tenantId)
+  if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
+
+  const issueDate = new Date().toISOString().slice(0, 10)
+  const paymentTermDays = 14
+  const taxPercentage = tenant.applies_kor ? 0 : Number(tenant.tax_percentage ?? 9)
+
+  const eventDateStr = gig.event_date
+    ? new Date(gig.event_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
+    : ''
+  const description = `${tenant.band_name || ''} optreden tijdens ${gig.event_description || ''} op ${eventDateStr}`.trim()
+
+  // Default billing target: festival when present, otherwise venue
+  const defaultTarget = festival ?? venue
+
+  // Build billing_targets list when both are present (enables choice in UI)
+  const billingTargets = []
+  if (festival) billingTargets.push(buildBillingTarget('festival', festival))
+  if (venue) billingTargets.push(buildBillingTarget('venue', venue))
+
+  return {
+    draftResponse: {
+      gig: {
+        id: gig.id,
+        event_date: gig.event_date,
+        event_description: gig.event_description,
+        booking_fee_cents: gig.booking_fee_cents,
+      },
+      tenant: {
+        id: tenant.id,
+        band_name: tenant.band_name,
+        formal_name: tenant.formal_name,
+        address_street: tenant.address_street,
+        address_postal_code: tenant.address_postal_code,
+        address_city: tenant.address_city,
+        address_country: tenant.address_country,
+        email: null,
+        phone: null,
+        website: null,
+        kvk_number: tenant.kvk_number,
+        iban: tenant.iban,
+        tax_id: tenant.tax_id,
+        tax_percentage: tenant.tax_percentage,
+        applies_kor: tenant.applies_kor,
+        logo_path: tenant.logo_path,
+      },
+      billing_targets: billingTargets.length > 1 ? billingTargets : [],
+      draft: {
+        gig_id: gig.id,
+        issue_date: issueDate,
+        payment_term_days: paymentTermDays,
+        due_date: computeDueDate(issueDate, paymentTermDays),
+        customer_name: defaultTarget?.organization_name || defaultTarget?.name || '',
+        customer_contact_title: defaultTarget?.title || null,
+        customer_contact_given_name: defaultTarget?.given_name || null,
+        customer_contact_family_name: defaultTarget?.family_name || null,
+        customer_address_street: defaultTarget?.street_and_number || null,
+        customer_address_postal_code: defaultTarget?.postal_code || null,
+        customer_address_city: defaultTarget?.city || null,
+        customer_address_country: defaultTarget?.country || 'NL',
+        customer_email: defaultTarget?.email || null,
+        customer_kvk: null,
+        customer_tax_id: null,
+        memo: null,
+        tax_inclusive: false,
+        discount_cents: 0,
+        lines: [
+          {
+            description,
+            quantity: 1,
+            unit_price_cents: gig.booking_fee_cents ?? 0,
+            tax_percentage: taxPercentage,
+            position: 0,
+          },
+        ],
+      },
+    },
+  }
+}
+
+export async function getInvoice(pool, tenantId, invoiceId) {
+  const invoice = await fetchInvoice(pool, tenantId, invoiceId)
+  if (!invoice) return NOT_FOUND
+  const lines = await fetchLines(pool, invoiceId, tenantId)
+  const tenant = await fetchTenant(pool, tenantId)
+  return { invoice: { ...invoice, lines, tenant: stripMollieKey(tenant) } }
+}
+
+// Creates an invoice with its lines, then renders the PDF (best-effort — the
+// row persists and rendering can be retried via POST /:id/render).
+export async function createInvoice(pool, tenantId, userId, body) {
+  const parsed = parseCreateInvoiceBody(body)
+  if (parsed.error) return { error: { status: 400, body: { error: parsed.error } } }
+
+  const tenant = await fetchTenant(pool, tenantId)
+  if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
+
+  const totals = computeAndApply(
+    { tax_inclusive: parsed.taxInclusive, discount_type: parsed.discountType, discount_pct: parsed.discountPct, discount_cents: parsed.discountCents },
+    parsed.lines,
+    tenant,
   )
+  const year = new Date(parsed.issueDate).getUTCFullYear() || new Date().getUTCFullYear()
 
-  if (updateResult.rowCount === 0) {
-    return { invoice: await fetchInvoice(pool, tenantId, invoiceId) }
-  }
-  return { invoice: updateResult.rows[0] }
-}
-
-// In @mollie/api-client v4.3+ payments-under-a-link is a helper iterator on the
-// PaymentLink object, not a method on the paymentLinks binder. The API returns
-// newest-first, so the first item is the latest payment.
-async function getLatestPayment(paymentLink) {
-  const iterator = paymentLink.getPayments().take(1)[Symbol.asyncIterator]()
-  const { value, done } = await iterator.next()
-  return done ? null : value
-}
-
-// Shared payment-status update logic used by both the sync endpoint and the
-// webhook. Authoritative payment state always comes from re-fetching the
-// payment link from Mollie with the tenant's secret key — never from the
-// caller. The webhook body's payment id is only a "go check now" hint and is
-// intentionally NOT used as a gate: a caller who guesses an invoice id cannot
-// forge a paid status, because paid/open is read from Mollie, not the request.
-// (An earlier review-#4 guard matched the posted id against the link's single
-// latest payment; that wrongly blocked legitimate webhooks whenever a link had
-// more than one payment attempt, so it was removed.)
-// `opts.client` lets the void flow run the update + posting on its
-// lock-holding session (see withAccountingSettingsSessionLock); the caller
-// keeps ownership of a provided client.
-export async function syncInvoicePaymentStatus(mollie, db, invoice, { client: providedClient = null } = {}) {
-  const paymentLink = await mollie.paymentLinks.get(invoice.mollie_payment_link_id)
-  const latestPayment = await getLatestPayment(paymentLink)
-
-  let mollieStatus = paymentLink.status ?? 'open'
-  let paymentId = invoice.mollie_payment_id
-  let paidAt = invoice.mollie_paid_at
-  let invoiceStatus = invoice.status
-
-  if (latestPayment) {
-    mollieStatus = latestPayment.status
-    paymentId = latestPayment.id
-    if (latestPayment.status === 'paid') {
-      paidAt = latestPayment.paidAt ? new Date(latestPayment.paidAt) : new Date()
-      if (invoice.status !== 'void') invoiceStatus = 'paid'
-    }
+  let gigId = null
+  if (body.gig_id != null) {
+    gigId = await validateGigIdForTenant(pool, body.gig_id, tenantId)
+    if (gigId === null) return { error: { status: 400, body: { error: 'Invalid gig_id' } } }
   }
 
-  const becamePaid = invoiceStatus === 'paid' && invoice.status !== 'paid'
-  const client = providedClient ?? await db.connect()
+  const client = await pool.connect()
+  let invoiceId
   try {
     await client.query('BEGIN')
-    const { rows } = await client.query(
-      `UPDATE invoices
-          SET mollie_payment_status = $1,
-              mollie_payment_id     = $2,
-              mollie_paid_at        = $3,
-              status                = $4,
-              updated_at            = NOW()
-        WHERE id = $5 AND tenant_id = $6
-        RETURNING *`,
-      [mollieStatus, paymentId, paidAt, invoiceStatus, invoice.id, invoice.tenant_id],
-    )
-    const updated = rows[0]
-    if (becamePaid && updated) {
-      // Ensure the revenue leg exists, then record the cash receipt. Both are
-      // idempotent per (invoice, event). System posting: no actor, and a closed
-      // period clamps the entry date instead of rejecting — Mollie holds the
-      // cash either way, so the receipt must always be booked.
-      const opts = { actorUserId: null, clampToOpenPeriod: true }
-      await postInvoiceSent(client, invoice.tenant_id, updated, opts)
-      await postInvoicePaid(client, invoice.tenant_id, updated, opts)
-    }
+    const invoiceNumber = await nextInvoiceNumber(client, tenantId, year)
+    invoiceId = await insertInvoice(client, {
+      tenant_id: tenantId,
+      gig_id: gigId,
+      invoice_number: invoiceNumber,
+      issue_date: parsed.issueDate,
+      due_date: parsed.dueDate,
+      payment_term_days: parsed.paymentTermDays,
+      customer_name: parsed.customerName,
+      customer_contact_title: body.customer_contact_title || null,
+      customer_contact_given_name: body.customer_contact_given_name || null,
+      customer_contact_family_name: body.customer_contact_family_name || null,
+      customer_address_street: body.customer_address_street || null,
+      customer_address_postal_code: body.customer_address_postal_code || null,
+      customer_address_city: body.customer_address_city || null,
+      customer_address_country: body.customer_address_country || null,
+      customer_email: body.customer_email || null,
+      customer_kvk: body.customer_kvk || null,
+      customer_tax_id: body.customer_tax_id || null,
+      memo: body.memo || null,
+      tax_inclusive: parsed.taxInclusive,
+      discount_type: parsed.discountType,
+      discount_pct: parsed.discountPct,
+      discount_cents: totals.discountCents,
+      invert_logo: Boolean(body.invert_logo),
+      subtotal_cents: totals.subtotalCents,
+      tax_cents: totals.taxCents,
+      total_cents: totals.totalCents,
+      created_by_user_id: userId,
+    })
+    await insertInvoiceLines(client, invoiceId, tenantId, parsed.lines)
     await client.query('COMMIT')
-    return updated
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     throw err
   } finally {
-    if (!providedClient) client.release()
+    client.release()
+  }
+
+  try {
+    await renderAndStorePdf(pool, invoiceId, tenantId)
+  } catch (err) {
+    console.error('[invoices] PDF render failed (row persisted, retry via POST /:id/render):', err)
+  }
+
+  const created = await fetchInvoice(pool, tenantId, invoiceId)
+  const createdLines = await fetchLines(pool, invoiceId, tenantId)
+  return { invoice: { ...created, lines: createdLines } }
+}
+
+// Applies a PATCH, re-renders the PDF when needed, and returns the fresh
+// invoice with lines. Returns { error } | { invoice }.
+export async function patchInvoice(pool, tenantId, invoiceId, body, actorUserId = null) {
+  const result = await applyInvoicePatch(pool, tenantId, invoiceId, body, actorUserId)
+  if (result.error) return result
+
+  // linkRemoved: voiding retracted the Mollie payment link, so the stored PDF
+  // (which embeds the payment QR/URL) must be refreshed too.
+  if (result.contentChanged || result.linkRemoved) {
+    try {
+      await renderAndStorePdf(pool, invoiceId, tenantId)
+    } catch (err) {
+      console.error('[invoices] PDF re-render failed:', err)
+    }
+  }
+
+  const updated = await fetchInvoice(pool, tenantId, invoiceId)
+  const lines = await fetchLines(pool, invoiceId, tenantId)
+  return { invoice: { ...updated, lines } }
+}
+
+export async function deleteInvoice(pool, tenantId, invoiceId) {
+  const existing = await fetchInvoice(pool, tenantId, invoiceId)
+  if (!existing) return NOT_FOUND
+  if (existing.status !== 'draft') {
+    return { error: { status: 409, body: { error: 'Only draft invoices can be deleted', code: 'invoice_finalized' } } }
+  }
+  await deleteInvoiceRow(pool, tenantId, invoiceId)
+  safeRemove(existing.pdf_path, '[invoices] failed to delete pdf on invoice delete:')
+  safeRemove(existing.custom_logo_path, '[invoices] failed to delete custom logo on invoice delete:')
+  return {}
+}
+
+export async function retryRenderPdf(pool, tenantId, invoiceId) {
+  const existing = await fetchInvoice(pool, tenantId, invoiceId)
+  if (!existing) return NOT_FOUND
+  const pdfPath = await renderAndStorePdf(pool, invoiceId, tenantId)
+  return { pdf_path: pdfPath }
+}
+
+// ---------- custom logo ----------
+
+export async function uploadInvoiceLogo(pool, tenantId, invoiceId, file) {
+  const existing = await fetchInvoice(pool, tenantId, invoiceId)
+  if (!existing) return NOT_FOUND
+  if (existing.finalized_at !== null) {
+    return { error: { status: 409, body: { error: 'Invoice is finalized', code: 'invoice_finalized' } } }
+  }
+  const oldKey = existing.custom_logo_path || null
+
+  const image = await validateAndReencodeImage(file.buffer, file.mimetype)
+  const ext = extensionForImageMime(image.mimetype)
+  const objectKey = invoiceLogoKey(tenantId, randomUUID(), ext)
+
+  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
+
+  try {
+    await setCustomLogoPath(pool, tenantId, invoiceId, objectKey)
+  } catch (err) {
+    removeObject(objectKey).catch(() => {})
+    throw err
+  }
+
+  safeRemove(oldKey, '[invoices] failed to delete old custom logo:')
+
+  try {
+    await renderAndStorePdf(pool, invoiceId, tenantId)
+  } catch (err) {
+    console.error('[invoices] PDF re-render after logo upload failed:', err)
+  }
+
+  return { custom_logo_path: objectKey }
+}
+
+export async function removeInvoiceLogo(pool, tenantId, invoiceId) {
+  const existing = await fetchInvoice(pool, tenantId, invoiceId)
+  if (!existing) return NOT_FOUND
+  if (existing.finalized_at !== null) {
+    return { error: { status: 409, body: { error: 'Invoice is finalized', code: 'invoice_finalized' } } }
+  }
+  const oldKey = existing.custom_logo_path
+  await setCustomLogoPath(pool, tenantId, invoiceId, null)
+  safeRemove(oldKey, '[invoices] failed to delete custom logo on remove:')
+  try {
+    await renderAndStorePdf(pool, invoiceId, tenantId)
+  } catch (err) {
+    console.error('[invoices] PDF re-render after logo remove failed:', err)
+  }
+  return {}
+}
+
+// ---------- payment-link route operations ----------
+
+const PAYMENT_LINK_LOCK_NAMESPACE = 53001
+
+async function withPaymentLinkCreationLock(db, invoiceId, fn) {
+  const client = await db.connect()
+  let releaseError = null
+  try {
+    await client.query('SELECT pg_advisory_lock($1, $2)', [PAYMENT_LINK_LOCK_NAMESPACE, invoiceId])
+    return await fn()
+  } finally {
+    try {
+      await client.query('SELECT pg_advisory_unlock($1, $2)', [PAYMENT_LINK_LOCK_NAMESPACE, invoiceId])
+    } catch (err) {
+      releaseError = err
+      console.error('[invoices] failed to release payment-link advisory lock:', err)
+    }
+    client.release(releaseError)
+  }
+}
+
+// Finalizes the invoice and creates a Mollie payment link under a per-invoice
+// advisory lock. Returns { error } | { invoice, created } where created is
+// false when an existing link was returned instead of a new one.
+export async function createInvoicePaymentLink(pool, tenantId, invoiceId, actorUserId, rawOptions) {
+  const opts = validatePaymentLinkOptions(rawOptions || {})
+  if (opts.error) return { error: { status: 400, body: { error: opts.error } } }
+
+  return withPaymentLinkCreationLock(pool, invoiceId, async () => {
+    // Finalize the invoice before calling Mollie, so a concurrent PATCH sees
+    // finalized_at. The advisory lock also makes the Mollie create single-flight.
+    const finalize = await finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, actorUserId)
+    if (finalize.error) return finalize
+
+    const tenant = await fetchTenant(pool, tenantId)
+
+    if (finalize.alreadyLinked) {
+      const lines = await fetchLines(pool, invoiceId, tenantId)
+      return { invoice: { ...finalize.alreadyLinked, lines, tenant: stripMollieKey(tenant) }, created: false }
+    }
+
+    assertMollieConfigured(tenant)
+    const created = await createMolliePaymentLink({
+      pool, tenant, invoice: finalize.invoice, tenantId, invoiceId, opts,
+    })
+    if (created.error) return created
+
+    // Re-render the PDF so it includes the QR code. Await so the response carries
+    // the freshly-rendered pdf_path; renderAndStorePdf deletes the previous PDF,
+    // so returning the stale key would 404 on download.
+    let finalInvoice = created.invoice
+    try {
+      await renderAndStorePdf(pool, invoiceId, tenantId)
+      const refreshed = await fetchInvoice(pool, tenantId, invoiceId)
+      if (refreshed) finalInvoice = refreshed
+    } catch (err) {
+      console.error('[invoices] PDF re-render after payment-link creation failed:', err)
+    }
+
+    const lines = await fetchLines(pool, invoiceId, tenantId)
+    return { invoice: { ...finalInvoice, lines, tenant: stripMollieKey(tenant) }, created: true }
+  })
+}
+
+// Deletes the Mollie payment link (or archives it when Mollie refuses deletion
+// for an opened/attempted link) and clears the link columns. 409 when the link
+// turns out to be paid — the invoice is then marked paid instead.
+export async function removeInvoicePaymentLink(pool, tenantId, invoiceId) {
+  const invoice = await fetchInvoice(pool, tenantId, invoiceId)
+  if (!invoice) return NOT_FOUND
+  if (!invoice.mollie_payment_link_id) {
+    return { error: { status: 400, body: { error: 'no_payment_link' } } }
+  }
+
+  const tenant = await fetchTenant(pool, tenantId)
+  const result = await removeMolliePaymentLink({
+    pool, tenant, invoice, tenantId, invoiceId,
+  })
+  if (result.error) return result
+
+  // The stored PDF embeds the payment QR/URL — refresh it now the link is gone.
+  let finalInvoice = result.invoice
+  try {
+    await renderAndStorePdf(pool, invoiceId, tenantId)
+    const refreshed = await fetchInvoice(pool, tenantId, invoiceId)
+    if (refreshed) finalInvoice = refreshed
+  } catch (err) {
+    console.error('[invoices] PDF re-render after payment-link removal failed:', err)
+  }
+
+  const lines = await fetchLines(pool, invoiceId, tenantId)
+  return { invoice: { ...finalInvoice, lines, tenant: stripMollieKey(tenant) } }
+}
+
+// Pulls authoritative payment state from Mollie. Returns { error } | { sync }.
+export async function syncInvoicePaymentLink(pool, tenantId, invoiceId) {
+  const invoice = await fetchInvoice(pool, tenantId, invoiceId)
+  if (!invoice) return NOT_FOUND
+  if (!invoice.mollie_payment_link_id) {
+    return { error: { status: 400, body: { error: 'no_payment_link' } } }
+  }
+
+  const tenant = await fetchTenant(pool, tenantId)
+  assertMollieConfigured(tenant)
+
+  const mollie = createTenantMollieClient(tenant.mollie_api_key)
+  const updated = await syncInvoicePaymentStatus(mollie, pool, invoice)
+
+  return {
+    sync: {
+      paymentLinkId: updated.mollie_payment_link_id,
+      paymentLinkUrl: updated.mollie_payment_link_url,
+      paymentId: updated.mollie_payment_id,
+      status: updated.mollie_payment_status,
+      paidAt: updated.mollie_paid_at,
+      invoiceStatus: updated.status,
+    },
   }
 }
 

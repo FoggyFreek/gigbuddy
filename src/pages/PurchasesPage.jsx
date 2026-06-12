@@ -11,6 +11,7 @@ import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
+import TablePagination from '@mui/material/TablePagination'
 import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -258,8 +259,30 @@ export default function PurchasesPage() {
   )
 }
 
+const PAGE_SIZE = 25
+
 function PurchasesList({ purchases, selectedId, onRowClick }) {
   const isCompact = useCompactLayout()
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)
+
+  // Filtering happens in the parent; clamp so a shrinking list can't strand
+  // the user on an empty page.
+  const pageCount = Math.max(0, Math.ceil(purchases.length / rowsPerPage) - 1)
+  const safePage = Math.min(page, pageCount)
+  const paged = purchases.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)
+
+  const pagination = purchases.length > rowsPerPage && (
+    <TablePagination
+      component="div"
+      count={purchases.length}
+      page={safePage}
+      rowsPerPage={rowsPerPage}
+      rowsPerPageOptions={[25, 50, 100]}
+      onPageChange={(_, p) => setPage(p)}
+      onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0) }}
+    />
+  )
 
   if (isCompact) {
     return (
@@ -267,7 +290,7 @@ function PurchasesList({ purchases, selectedId, onRowClick }) {
         {!purchases.length && (
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>No purchases found</Typography>
         )}
-        {purchases.map((p) => (
+        {paged.map((p) => (
           <Box
             key={p.id}
             onClick={() => onRowClick(p)}
@@ -297,6 +320,7 @@ function PurchasesList({ purchases, selectedId, onRowClick }) {
             <Typography variant="body1" fontWeight={500} sx={{ flexShrink: 0 }}>{formatEur(p.total_cents)}</Typography>
           </Box>
         ))}
+        {pagination}
       </Paper>
     )
   }
@@ -325,7 +349,7 @@ function PurchasesList({ purchases, selectedId, onRowClick }) {
                 </TableCell>
               </TableRow>
             )}
-            {purchases.map((p) => (
+            {paged.map((p) => (
               <TableRow
                 key={p.id}
                 hover
@@ -346,6 +370,7 @@ function PurchasesList({ purchases, selectedId, onRowClick }) {
           </TableBody>
         </Table>
       </TableContainer>
+      {pagination}
     </Paper>
   )
 }

@@ -15,6 +15,9 @@ coverage/
 .env
 .infisical.json 
 
+# Local-only scripts (demo seeds etc.)
+scripts/local/
+
 # Database dumps
 *.dump
 *.sql.gz

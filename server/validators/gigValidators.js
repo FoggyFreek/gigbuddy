@@ -44,6 +44,68 @@ export function normalizeGigVenueRefs(body) {
   return { body: normalized }
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+function validateImportRowShape(item) {
+  if (item === null || typeof item !== 'object' || Array.isArray(item))
+    return { error: 'Each import row must be an object' }
+  const { event_date, event_description, start_time, end_time } = item
+  if (!event_date || !event_description) return { skip: true }
+  if (!DATE_RE.test(event_date)) return { error: `Invalid event_date: ${event_date}` }
+  if (start_time && !TIME_RE.test(start_time)) return { error: `Invalid start_time: ${start_time}` }
+  if (end_time && !TIME_RE.test(end_time)) return { error: `Invalid end_time: ${end_time}` }
+  return null
+}
+
+function parseImportRowId(value, fieldName) {
+  if (value == null) return { id: null }
+  const id = parseId(value)
+  if (id === null) return { error: `Invalid ${fieldName}` }
+  return { id }
+}
+
+function resolveImportRowStatus(status) {
+  if (status == null) return { status: 'confirmed' }
+  if (!VALID_STATUSES.includes(status)) return { error: `Invalid status: ${status}` }
+  return { status }
+}
+
+// Validate and normalize a single import row. Returns one of:
+//   { skip: true }        — row is missing required fields, count as skipped
+//   { error: '...' }      — row is invalid, the import should abort with 400
+//   { data: {...} }       — normalized, ready-to-insert column values
+export function normalizeImportRow(item) {
+  const shapeResult = validateImportRowShape(item)
+  if (shapeResult) return shapeResult
+
+  const {
+    event_date, event_description, venue_id, festival_id,
+    start_time, end_time, status, admission, event_link, ticket_link,
+  } = item
+
+  const venueResult = parseImportRowId(venue_id, 'venue_id')
+  if (venueResult.error) return venueResult
+  const { id: venueId } = venueResult
+
+  const festivalResult = parseImportRowId(festival_id, 'festival_id')
+  if (festivalResult.error) return festivalResult
+  const { id: festivalId } = festivalResult
+
+  const statusResult = resolveImportRowStatus(status)
+  if (statusResult.error) return statusResult
+  const { status: finalStatus } = statusResult
+
+  return {
+    data: {
+      event_date, event_description, venueId, festivalId,
+      start_time: start_time || null, end_time: end_time || null,
+      status: finalStatus, admission: admission === 'paid' ? 'paid' : 'free',
+      event_link: event_link || null, ticket_link: ticket_link || null,
+    },
+  }
+}
+
 // Builds the dynamic SET fragments/values for a gig UPDATE. Returns
 // { error } for an invalid status, otherwise { fields, values }.
 export function buildGigUpdateFields(body) {

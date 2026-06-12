@@ -125,6 +125,40 @@ describe('PurchasesPage', () => {
     expect(purchasesApi.listPurchases).toHaveBeenCalledWith(expect.objectContaining({ mode: 'fiscal_year' }))
   })
 
+  it('paginates the table at 25 rows per page', async () => {
+    const user = userEvent.setup()
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      id: 100 + i,
+      receipt_number: 100 + i,
+      supplier_name: `Supplier ${100 + i}`,
+      receipt_date: '2026-06-03',
+      due_date: null,
+      status: 'paid',
+      subtotal_cents: 1000,
+      tax_cents: 210,
+      total_cents: 1210,
+      description: '',
+    }))
+    purchasesApi.listPurchases.mockResolvedValue(many)
+    wrap(<PurchasesPage />)
+    await screen.findByText('Supplier 100')
+
+    expect(screen.getByText('Supplier 124')).toBeInTheDocument()
+    expect(screen.queryByText('Supplier 125')).not.toBeInTheDocument()
+    expect(screen.getByText('1–25 of 30')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /next page/i }))
+
+    expect(screen.getByText('Supplier 125')).toBeInTheDocument()
+    expect(screen.queryByText('Supplier 100')).not.toBeInTheDocument()
+  })
+
+  it('hides pagination controls when purchases fit on one page', async () => {
+    wrap(<PurchasesPage />)
+    await screen.findByText('mi5 Studios')
+    expect(screen.queryByRole('button', { name: /next page/i })).not.toBeInTheDocument()
+  })
+
   it('opens the create dialog', async () => {
     const user = userEvent.setup()
     wrap(<PurchasesPage />)

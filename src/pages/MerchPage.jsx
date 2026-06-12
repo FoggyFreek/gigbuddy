@@ -10,6 +10,7 @@ import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
+import TablePagination from '@mui/material/TablePagination'
 import TableRow from '@mui/material/TableRow'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
@@ -274,13 +275,34 @@ VoidSaleButton.propTypes = {
   onVoid: PropTypes.func.isRequired,
 }
 
+const SALES_PAGE_SIZE = 25
+
 function SalesList({ sales, onVoid }) {
   const isCompact = useCompactLayout()
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(SALES_PAGE_SIZE)
+
+  // Clamp so a shrinking list can't strand the user on an empty page.
+  const pageCount = Math.max(0, Math.ceil(sales.length / rowsPerPage) - 1)
+  const safePage = Math.min(page, pageCount)
+  const paged = sales.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)
+
+  const pagination = sales.length > rowsPerPage && (
+    <TablePagination
+      component="div"
+      count={sales.length}
+      page={safePage}
+      rowsPerPage={rowsPerPage}
+      rowsPerPageOptions={[25, 50, 100]}
+      onPageChange={(_, p) => setPage(p)}
+      onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0) }}
+    />
+  )
 
   if (isCompact) {
     return (
       <Paper variant="outlined">
-        {sales.map((s) => (
+        {paged.map((s) => (
           <Box key={s.id} sx={{ ...cardSx, opacity: s.status === 'voided' ? 0.5 : 1 }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -297,6 +319,7 @@ function SalesList({ sales, onVoid }) {
             <VoidSaleButton sale={s} onVoid={onVoid} />
           </Box>
         ))}
+        {pagination}
       </Paper>
     )
   }
@@ -316,7 +339,7 @@ function SalesList({ sales, onVoid }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {sales.map((s) => (
+            {paged.map((s) => (
               <TableRow key={s.id} sx={s.status === 'voided' ? { opacity: 0.5 } : undefined}>
                 <TableCell>{s.sale_date}</TableCell>
                 <TableCell>
@@ -334,6 +357,7 @@ function SalesList({ sales, onVoid }) {
           </TableBody>
         </Table>
       </TableContainer>
+      {pagination}
     </Paper>
   )
 }

@@ -10,7 +10,6 @@ import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
-import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
 import VoteToggle from './VoteToggle.jsx'
@@ -22,8 +21,6 @@ export default function RehearsalParticipantsSection({
   members,
   addMemberId,
   onAddMemberIdChange,
-  notes,
-  onNotesChange,
   onVote,
   onRemoveParticipant,
   onAddParticipant,
@@ -38,6 +35,7 @@ export default function RehearsalParticipantsSection({
   const allYes =
     rehearsal.participants?.length > 0 &&
     rehearsal.participants.every((p) => p.vote === 'yes')
+  const isPlanned = rehearsal.status === 'planned'
 
   return (
     <>
@@ -47,7 +45,7 @@ export default function RehearsalParticipantsSection({
           <Typography variant="subtitle2" fontWeight={600}>Status</Typography>
           <Chip
             label={rehearsal.status}
-            color={rehearsal.status === 'planned' ? 'primary' : 'default'}
+            color={isPlanned ? 'primary' : 'default'}
             size="small"
           />
           <Box sx={{ flexGrow: 1 }} />
@@ -66,6 +64,16 @@ export default function RehearsalParticipantsSection({
         )}
       </Grid>
 
+      {isPlanned ? (
+        <Grid size={12}>
+          <Divider sx={{ my: 1 }} />
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+            {rehearsal.participants.map((p) => (
+              <Chip key={p.band_member_id} size="small" label={p.name} />
+            ))}
+          </Stack>
+        </Grid>
+      ) : (
       <Grid size={12}>
         <Divider sx={{ my: 1 }} />
         <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
@@ -103,12 +111,10 @@ export default function RehearsalParticipantsSection({
               </Typography>
               <Chip size="small" label={p.position} variant="outlined" />
               <Box sx={{ flexGrow: 1 }} />
-              {rehearsal.status !== 'planned' && (
-                <VoteToggle
-                  vote={p.vote}
-                  onChange={(v) => onVote(p.band_member_id, v)}
-                />
-              )}
+              <VoteToggle
+                vote={p.vote}
+                onChange={(v) => onVote(p.band_member_id, v)}
+              />
               <IconButton
                 size="small"
                 aria-label={`remove ${p.name}`}
@@ -143,18 +149,7 @@ export default function RehearsalParticipantsSection({
           </Box>
         )}
       </Grid>
-
-      <Grid size={12}>
-        <Divider sx={{ my: 1 }} />
-        <TextField
-          label="Notes"
-          fullWidth
-          multiline
-          minRows={3}
-          value={notes}
-          onChange={(e) => onNotesChange(e.target.value)}
-        />
-      </Grid>
+      )}
     </>
   )
 }
@@ -164,8 +159,6 @@ RehearsalParticipantsSection.propTypes = {
   members: PropTypes.arrayOf(memberShape),
   addMemberId: idProp,
   onAddMemberIdChange: PropTypes.func,
-  notes: PropTypes.string,
-  onNotesChange: PropTypes.func,
   onVote: PropTypes.func,
   onRemoveParticipant: PropTypes.func,
   onAddParticipant: PropTypes.func,

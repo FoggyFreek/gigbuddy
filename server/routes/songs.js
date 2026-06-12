@@ -81,6 +81,24 @@ router.get('/tags', async (req, res) => {
   res.json(rows)
 })
 
+// Must also be registered before GET /:id.
+router.get('/search', async (req, res) => {
+  const q = String(req.query.q ?? '').trim()
+  if (q.length < 3) return res.json([])
+  const like = `%${q}%`
+  const { rows } = await pool.query(
+    `SELECT id, title, artist
+       FROM songs
+      WHERE tenant_id = $1 AND (title ILIKE $2 OR artist ILIKE $2)
+      ORDER BY
+        CASE WHEN title ILIKE $2 THEN 0 ELSE 1 END,
+        title ASC
+      LIMIT 10`,
+    [req.tenantId, like],
+  )
+  res.json(rows)
+})
+
 router.get('/:id', async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   // Separate queries per child collection — a single multi-LEFT-JOIN would

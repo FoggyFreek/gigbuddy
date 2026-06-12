@@ -2,7 +2,7 @@ import { Router, urlencoded } from 'express'
 import pool from '../db/index.js'
 import { createTenantMollieClient } from '../utils/mollieClient.js'
 import { notifyInvoicePaid } from '../services/invoiceService.js'
-import { syncInvoicePaymentStatus } from './invoices.js'
+import { syncInvoicePaymentStatus } from '../services/molliePaymentLinkService.js'
 
 const router = Router()
 

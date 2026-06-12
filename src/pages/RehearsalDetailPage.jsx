@@ -8,18 +8,21 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
-import { addParticipant, deleteRehearsal, getRehearsal, removeParticipant, setVote, updateRehearsal } from '../api/rehearsals.js'
+import { addParticipant, addSong, deleteRehearsal, getRehearsal, removeParticipant, removeSong, setVote, updateRehearsal } from '../api/rehearsals.js'
 import { listMembers } from '../api/bandMembers.js'
 import RehearsalFields from '../components/RehearsalFields.jsx'
 import RehearsalParticipantsSection from '../components/RehearsalParticipantsSection.jsx'
+import RehearsalSongsSection from '../components/RehearsalSongsSection.jsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 
 const REQUIRED_FIELDS = ['proposed_date']
@@ -102,6 +105,19 @@ export default function RehearsalDetailPage() {
     await refresh()
   }
 
+  async function handleAddSong(song) {
+    const updated = await addSong(rehearsalId, song.id)
+    setRehearsal((prev) => ({ ...prev, songs: updated.songs }))
+  }
+
+  async function handleRemoveSong(songId) {
+    await removeSong(rehearsalId, songId)
+    setRehearsal((prev) => ({
+      ...prev,
+      songs: (prev.songs ?? []).filter((s) => s.song_id !== songId),
+    }))
+  }
+
   async function handlePromote() {
     await flush()
     await updateRehearsal(rehearsalId, { status: 'planned' })
@@ -152,19 +168,35 @@ export default function RehearsalDetailPage() {
             errors={getRequiredErrors(form, REQUIRED_FIELDS)}
           />
           {rehearsal && (
-            <RehearsalParticipantsSection
-              rehearsal={rehearsal}
-              members={members}
-              addMemberId={addMemberId}
-              onAddMemberIdChange={setAddMemberId}
-              notes={form.notes}
-              onNotesChange={(v) => handleChange('notes', v)}
-              onVote={handleVote}
-              onRemoveParticipant={handleRemoveParticipant}
-              onAddParticipant={handleAddParticipant}
-              onPromote={handlePromote}
-              onDemote={handleDemote}
-            />
+            <>
+              <RehearsalParticipantsSection
+                rehearsal={rehearsal}
+                members={members}
+                addMemberId={addMemberId}
+                onAddMemberIdChange={setAddMemberId}
+                onVote={handleVote}
+                onRemoveParticipant={handleRemoveParticipant}
+                onAddParticipant={handleAddParticipant}
+                onPromote={handlePromote}
+                onDemote={handleDemote}
+              />
+              <RehearsalSongsSection
+                songs={rehearsal.songs ?? []}
+                onAddSong={handleAddSong}
+                onRemoveSong={handleRemoveSong}
+              />
+              <Grid size={12}>
+                <Divider sx={{ my: 1 }} />
+                <TextField
+                  label="Notes"
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  value={form.notes}
+                  onChange={(e) => handleChange('notes', e.target.value)}
+                />
+              </Grid>
+            </>
           )}
         </Grid>
       )}

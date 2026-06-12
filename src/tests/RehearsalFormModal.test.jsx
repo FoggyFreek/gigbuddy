@@ -186,6 +186,33 @@ describe('RehearsalFormModal — edit mode', () => {
     )
   })
 
+  it('shows planned rehearsal participants as name chips without required participant controls', async () => {
+    getRehearsal.mockResolvedValueOnce({
+      id: 1,
+      proposed_date: '2099-05-10',
+      start_time: null,
+      end_time: null,
+      location: 'Studio A',
+      notes: '',
+      status: 'planned',
+      participants: [
+        { band_member_id: 10, name: 'Alice', color: '#e53935', position: 'lead', vote: 'yes' },
+        { band_member_id: 11, name: 'Bob', color: '#1e88e5', position: 'lead', vote: 'yes' },
+      ],
+    })
+    wrap(<RehearsalFormModal mode="edit" rehearsalId={1} onClose={() => {}} />)
+
+    await waitFor(() => screen.getByDisplayValue('Studio A'))
+
+    expect(screen.queryByText('Required participants')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/add participant/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /remove alice/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^yes$/i })).not.toBeInTheDocument()
+    expect(screen.getByText('Alice').closest('.MuiChip-root')).toBeTruthy()
+    expect(screen.getByText('Bob').closest('.MuiChip-root')).toBeTruthy()
+    expect(document.body.querySelectorAll('.MuiChip-root')).toHaveLength(3)
+  })
+
   it('adds a participant via the add-participant select + button', async () => {
     const user = userEvent.setup()
     wrap(<RehearsalFormModal mode="edit" rehearsalId={1} onClose={() => {}} />)

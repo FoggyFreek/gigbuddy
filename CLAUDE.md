@@ -42,8 +42,11 @@ Write or adjust the test first, watch it fail, then implement until it passes. T
 infisical run -- npm test                                   # frontend (vitest watch), excludes server tests
 infisical run -- npm test -- --run                          # frontend, single run
 infisical run -- npm test -- --run src/tests/Foo.test.jsx   # one file
-infisical run -- npm run test:server                        # backend isolation tests, sequential, against a real PG
+infisical run -- npm run test:server                        # FULL backend suite (~10 min!) — only when explicitly asked
+infisical run -- npx vitest run --no-file-parallelism src/tests/server/<file>.test.js   # targeted backend test — default
 ```
+
+**Backend tests are slow** (sequential, real Postgres). Run only the affected file(s) via `npx vitest` as shown. Note `npm run test:server -- <file>` does NOT narrow the run — the npm script already passes `src/tests/server` as a path, so appended file args are ignored and the full suite runs anyway.
 
 - **Frontend** tests (`src/tests/`, jsdom): all `src/api/*.js` modules are mocked with `vi.mock`. Components are wrapped in MUI `ThemeProvider` (+ `LocalizationProvider`/`MemoryRouter` as needed) via a local `wrap()` helper. Debounced-save tests use `vi.useFakeTimers()` + `vi.runAllTimersAsync()`. 
  
@@ -90,6 +93,15 @@ Finance is built on an **immutable double-entry ledger** (`ledger_transactions` 
 - External payments (Mollie webhooks) use `clampToOpenPeriod` so cash receipts still book when the original date falls in a closed period.
 - Display classification of `(source_type, source_event)` lives in `server/services/ledgerEntryTypes.js` with a frontend mirror in `src/utils/ledgerEntryType.js` — **keep both in sync** when adding events.
 - Best reference tests: `src/tests/server/ledger.test.js` (posting invariants), `ledgerCompliance.test.js` (period close, audit, settings guard), `ledgerBrowser.test.js` (read side).
+
+## Backend layering: route → service → repository
+
+Backend resources follow a three-layer split. **The rehearsals stack is the canonical example** — `server/routes/rehearsals.js`, `server/services/rehearsalService.js`, `server/repositories/rehearsalRepository.js`, `server/validators/rehearsalValidators.js`. New routes and refactors must follow it; the backend-layering skill has the full rules.
+
+- **Route** (`server/routes/`): HTTP only — parse/validate params, call one service function, translate `{ error: { status, body } }` to a response. No SQL, no business rules.
+- **Service** (`server/services/`): domain logic, transactions, push notifications, mapping DB errors (e.g. `23505` → 409). Returns `{ error: { status, body } }` on expected failures, a domain payload on success. Throws only on unexpected errors.
+- **Repository** (`server/repositories/`): SQL only. Every function takes an `executor` (pool or transaction client) as its first argument so callers control transactions. Every query is tenant-scoped.
+- **Validators** (`server/validators/`): pure input parsing/normalization and SET-fragment builders, no DB access.
 
 ## Migrations
 
