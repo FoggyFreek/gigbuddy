@@ -11,6 +11,8 @@ const TYPE_MAP = {
   'purchase/accrued':   { type: 'Purchase',         group: 'purchases', voided: false, sign: -1 },
   'purchase/paid':      { type: 'Outgoing payment', group: 'payments',  voided: false, sign: -1 },
   'reimbursement/paid': { type: 'Reimbursement',    group: 'payments',  voided: false, sign: -1 },
+  'merch_sale/recorded': { type: 'Merch sale',        group: 'invoices',  voided: false, sign: 1 },
+  'merch_sale/voided':   { type: 'Merch sale (void)', group: 'invoices',  voided: true,  sign: -1 },
   'journal/posted':     { type: 'Journal',          group: 'journals',  voided: false, sign: null },
   'vat_settlement/filed':        { type: 'VAT return',  group: 'journals', voided: false, sign: null },
   'vat_settlement_payment/paid': { type: 'VAT payment', group: 'payments', voided: false, sign: null },
@@ -52,6 +54,12 @@ export function describe(row) {
     case 'reimbursement/paid':
       if (!row.reimbursement_member_name) return fallback
       return `Reimbursement to ${row.reimbursement_member_name}`
+    case 'merch_sale/recorded':
+      if (!row.merch_sale_product_name) return fallback
+      return `Merch sale: ${row.merch_sale_quantity} × ${row.merch_sale_product_name}`
+    case 'merch_sale/voided':
+      if (!row.merch_sale_product_name) return fallback
+      return `Merch sale voided: ${row.merch_sale_quantity} × ${row.merch_sale_product_name}`
     case 'journal/posted':
       return row.journal_description ?? fallback
     case 'vat_settlement/filed':

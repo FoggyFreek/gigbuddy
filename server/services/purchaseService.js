@@ -4,7 +4,7 @@
 // to status codes without knowing the rules:
 //   { error: { status, body } }   — caller should respond with that status/body
 //   anything else                 — success payload (see each function)
-import { computePurchaseTotals } from '../../shared/purchaseTotals.js'
+import { computePurchaseTotals, computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import {
   fetchPurchase,
   fetchPurchaseLines,
@@ -13,6 +13,7 @@ import {
   replacePurchaseLines,
   validateContactIdForTenant,
   fetchValidExpenseCodes,
+  fetchValidProductIds,
   validateBandMemberForTenant,
 } from '../repositories/purchaseRepository.js'
 import {
@@ -98,7 +99,52 @@ async function validateLineAccounts(executor, tenantId, lines) {
   return null
 }
 
-const FINALIZED_ERROR = { status: 409, body: { error: 'Purchase is finalized', code: 'purchase_finalized' } }
+// Validates per-line product references: each must be an existing, non-archived
+// product of the tenant, and carry a positive quantity (normalizeLines already
+// nulls quantity when product_id is absent).
+async function validateLineProducts(executor, tenantId, lines) {
+  const productLines = lines.filter((l) => l.product_id)
+  if (!productLines.length) return null
+  const missingQty = productLines.find((l) => !l.quantity)
+  if (missingQty) {
+    return { error: { status: 400, body: { error: 'quantity is required on product lines', code: 'product_quantity_required' } } }
+  }
+  const valid = await fetchValidProductIds(executor, tenantId, productLines.map((l) => l.product_id))
+  const invalid = productLines.find((l) => !valid.has(l.product_id))
+  if (invalid) {
+    return { error: { status: 400, body: { error: 'Invalid product_id', code: 'invalid_product_id', product_id: invalid.product_id } } }
+  }
+  return null
+}
+
+// Adds each product line's quantity to stock and re-averages the product's
+// unit cost (moving average: existing stock value + this purchase's net,
+// divided by the new quantity). Runs in the same transaction as the accrual
+// journal so stock, cost and ledger can never diverge; the row lock serializes
+// against concurrent sales of the same product.
+async function applyPurchaseStockIn(client, tenantId, lines) {
+  for (const line of lines) {
+    if (!line.product_id) continue
+    const { netCents } = computePurchaseLineTotals(line)
+    const { rows } = await client.query(
+      'SELECT quantity_on_hand, unit_cost_cents FROM products WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+      [line.product_id, tenantId],
+    )
+    const product = rows[0]
+    if (!product) continue // validated up front; the composite FK is the backstop
+    const newQty = product.quantity_on_hand + line.quantity
+    const newCost = Math.round(
+      (product.quantity_on_hand * product.unit_cost_cents + netCents) / newQty,
+    )
+    await client.query(
+      `UPDATE products SET quantity_on_hand = $1, unit_cost_cents = $2, updated_at = NOW()
+        WHERE id = $3 AND tenant_id = $4`,
+      [newQty, newCost, line.product_id, tenantId],
+    )
+  }
+}
+
+const FINALIZED_ERROR ={ status: 409, body: { error: 'Purchase is finalized', code: 'purchase_finalized' } }
 const RECEIPT_TAKEN_ERROR = { status: 409, body: { error: 'Receipt number already in use', code: 'receipt_number_taken' } }
 const USE_PAYMENT_ENDPOINT_ERROR = { status: 409, body: { error: 'Use the payment endpoint to mark a purchase paid', code: 'use_payment_endpoint' } }
 
@@ -163,7 +209,10 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   const accountErr = await validateLineAccounts(pool, tenantId, lines)
   if (accountErr) return accountErr
 
-  const receiptDate = body.receipt_date || new Date().toISOString().slice(0, 10)
+  const productErr = await validateLineProducts(pool, tenantId, lines)
+  if (productErr) return productErr
+
+  const receiptDate =body.receipt_date || new Date().toISOString().slice(0, 10)
   const dueDate = body.due_date || null
   const currency = String(body.currency || 'EUR').trim() || 'EUR'
 
@@ -198,6 +247,7 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null) {
         receiptDate, totals,
       })
       await postBillAccrued(client, tenantId, purchaseRow, lines, { actorUserId })
+      await applyPurchaseStockIn(client, tenantId, lines)
     }
 
     await client.query('COMMIT')
@@ -335,6 +385,7 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
       const purchaseRow = await fetchPurchase(client, tenantId, id)
       const currentLines = await fetchPurchaseLines(client, id, tenantId)
       await postBillAccrued(client, tenantId, purchaseRow, currentLines, { actorUserId })
+      await applyPurchaseStockIn(client, tenantId, currentLines)
     }
 
     await client.query('COMMIT')
@@ -392,8 +443,11 @@ async function runPatchPreflightValidations(pool, tenantId, id, existing, body) 
   }
 
   if ('lines' in body) {
-    const accountErr = await validateLineAccounts(pool, tenantId, normalizeLines(body.lines))
+    const normalized = normalizeLines(body.lines)
+    const accountErr = await validateLineAccounts(pool, tenantId, normalized)
     if (accountErr) return accountErr
+    const productErr = await validateLineProducts(pool, tenantId, normalized)
+    if (productErr) return productErr
   }
 
   if (body.status === 'approved' && existing.status !== 'approved') {

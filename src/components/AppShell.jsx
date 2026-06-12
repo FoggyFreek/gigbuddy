@@ -21,6 +21,7 @@ import EventNoteTwoTone from '@mui/icons-material/EventNoteTwoTone'
 import HubTwoTone from '@mui/icons-material/HubTwoTone'
 import PaymentsTwoTone from '@mui/icons-material/PaymentsTwoTone'
 import LibraryMusicTwoTone from '@mui/icons-material/LibraryMusicTwoTone'
+import AccountBalanceTwoTone from '@mui/icons-material/AccountBalanceTwoTone'
 import DashboardOutlined from '@mui/icons-material/DashboardOutlined'
 import PersonOutlined from '@mui/icons-material/PersonOutlined'
 import QueryStatsOutlined from '@mui/icons-material/QueryStatsOutlined'
@@ -32,8 +33,10 @@ import EventNoteOutlined from '@mui/icons-material/EventNoteOutlined'
 import EmailOutlined from '@mui/icons-material/EmailOutlined'
 import LocationOnOutlined from '@mui/icons-material/LocationOnOutlined'
 import ContactsOutlined from '@mui/icons-material/ContactsOutlined'
+import StorefrontOutlined from '@mui/icons-material/StorefrontOutlined'
 import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined'
 import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined'
+import SellOutlined from '@mui/icons-material/SellOutlined'
 import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined'
 import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
 import VolunteerActivismOutlined from '@mui/icons-material/VolunteerActivismOutlined'
@@ -81,11 +84,21 @@ const NAV_GROUPS = [
     ],
   },
   {
+    key: 'repertoire',
+    label: 'Repertoire',
+    icon: LibraryMusicTwoTone,
+    children: [
+      { to: '/songs', label: 'Songs', icon: LibraryMusicOutlined },
+      { to: '/setlists', label: 'Setlists', icon: QueueMusicOutlined },
+    ],
+  },
+  {
     key: 'network',
     label: 'Network',
     icon: HubTwoTone,
     children: [
       { to: '/contacts', label: 'Contacts', icon: ContactsOutlined },
+      { to: '/suppliers', label: 'Suppliers', icon: StorefrontOutlined },
       { to: '/venues', label: 'Venues', icon: LocationOnOutlined },
       { to: '/email-templates', label: 'Email Templates', icon: EmailOutlined },
     ],
@@ -97,21 +110,21 @@ const NAV_GROUPS = [
     children: [
       { to: '/invoices', label: 'Invoices', icon: ReceiptLongOutlined },
       { to: '/purchases', label: 'Purchases', icon: ShoppingCartOutlined },
+      { to: '/merch', label: 'Merchandise', icon: SellOutlined },
       { to: '/reimbursements', label: 'Reimbursements', icon: VolunteerActivismOutlined },
+    ],
+  },
+  {
+    key: 'accounting',
+    label: 'Accounting',
+    icon: AccountBalanceTwoTone,
+    children: [
       { to: '/journal', label: 'Journal', icon: MenuBookOutlined },
       { to: '/ledger', label: 'Ledger entries', icon: ListAltOutlined },
       { to: '/vat-returns', label: 'VAT declarations', icon: AccountBalanceOutlined, adminOnly: true },
     ],
   },
-  {
-    key: 'repertoire',
-    label: 'Repertoire',
-    icon: LibraryMusicTwoTone,
-    children: [
-      { to: '/songs', label: 'Songs', icon: LibraryMusicOutlined },
-      { to: '/setlists', label: 'Setlists', icon: QueueMusicOutlined },
-    ],
-  },
+ 
 ]
 
 export default function AppShell() {

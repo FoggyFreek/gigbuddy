@@ -11,7 +11,7 @@ export async function fetchPurchase(executor, tenantId, purchaseId) {
 
 export async function fetchPurchaseLines(executor, purchaseId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id, description, expense_category, account_code, tax_rate, amount_incl_cents, position
+    `SELECT id, description, expense_category, account_code, tax_rate, amount_incl_cents, position, product_id, quantity
        FROM purchase_lines
       WHERE purchase_id = $1 AND tenant_id = $2
       ORDER BY position ASC, id ASC`,
@@ -35,9 +35,9 @@ export async function nextPurchaseNumber(executor, tenantId) {
 export async function insertPurchaseLines(executor, purchaseId, tenantId, lines) {
   for (const line of lines) {
     await executor.query(
-      `INSERT INTO purchase_lines (purchase_id, tenant_id, position, description, expense_category, account_code, tax_rate, amount_incl_cents)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [purchaseId, tenantId, line.position, line.description, line.expense_category, line.account_code ?? null, line.tax_rate, line.amount_incl_cents],
+      `INSERT INTO purchase_lines (purchase_id, tenant_id, position, description, expense_category, account_code, tax_rate, amount_incl_cents, product_id, quantity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [purchaseId, tenantId, line.position, line.description, line.expense_category, line.account_code ?? null, line.tax_rate, line.amount_incl_cents, line.product_id ?? null, line.quantity ?? null],
     )
   }
 }
@@ -75,6 +75,20 @@ export async function replacePurchaseLines(executor, purchaseId, tenantId, lines
     [purchaseId, tenantId],
   )
   await insertPurchaseLines(executor, purchaseId, tenantId, lines)
+}
+
+// Returns the subset of `ids` that exist as non-archived products of the
+// tenant. The line's composite FK is the backstop; this gives a clean 400 for
+// cross-tenant or archived products before any insert is attempted.
+export async function fetchValidProductIds(executor, tenantId, ids) {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (!unique.length) return new Set()
+  const { rows } = await executor.query(
+    `SELECT id FROM products
+      WHERE tenant_id = $1 AND id = ANY($2) AND archived_at IS NULL`,
+    [tenantId, unique],
+  )
+  return new Set(rows.map((r) => r.id))
 }
 
 // Returns the int id only if a contact with that (id, tenant_id) exists.

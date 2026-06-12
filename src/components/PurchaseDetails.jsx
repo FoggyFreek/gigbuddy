@@ -271,6 +271,7 @@ export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPu
           form={s.form}
           totals={s.totals}
           accounts={s.expenseAccounts}
+          products={s.products}
           lineErrors={s.lineErrors}
           readOnly={s.readOnly}
           patchLine={s.patchLine}

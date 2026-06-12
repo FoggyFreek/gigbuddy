@@ -69,6 +69,9 @@ const DEFAULT_SETTINGS = {
   input_vat_account_code: '15000',
   vat_receivable_settlement_account_code: '15010',
   vat_payable_settlement_account_code: '24010',
+  merch_inventory_account_code: '12200',
+  merch_revenue_account_code: '42000',
+  merch_cogs_account_code: '51000',
 }
 
 // Seeds the chart of accounts + settings row for a single tenant.
@@ -90,8 +93,9 @@ export async function seedTenantAccounting(client, tenantId) {
        payable_account_code, default_reimbursement_account_code, default_expense_account_code,
        primary_checking_account_code,
        output_vat_account_code, input_vat_account_code,
-       vat_receivable_settlement_account_code, vat_payable_settlement_account_code
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       vat_receivable_settlement_account_code, vat_payable_settlement_account_code,
+       merch_inventory_account_code, merch_revenue_account_code, merch_cogs_account_code
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      ON CONFLICT (tenant_id) DO NOTHING`,
     [
       tenantId,
@@ -106,6 +110,9 @@ export async function seedTenantAccounting(client, tenantId) {
       DEFAULT_SETTINGS.input_vat_account_code,
       DEFAULT_SETTINGS.vat_receivable_settlement_account_code,
       DEFAULT_SETTINGS.vat_payable_settlement_account_code,
+      DEFAULT_SETTINGS.merch_inventory_account_code,
+      DEFAULT_SETTINGS.merch_revenue_account_code,
+      DEFAULT_SETTINGS.merch_cogs_account_code,
     ],
   )
 }

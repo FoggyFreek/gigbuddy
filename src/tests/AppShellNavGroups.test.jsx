@@ -67,9 +67,9 @@ describe('AppShell nav groups', () => {
     useAuth.mockReturnValue({ user: USER, logout: vi.fn(), switchTenant: vi.fn() })
   })
 
-  it('renders all five group headers', () => {
+  it('renders all six group headers', () => {
     renderShell('/')
-    for (const label of ['Overview', 'Planning', 'Network', 'Financial', 'Repertoire']) {
+    for (const label of ['Overview', 'Planning', 'Network', 'Financial', 'Accounting', 'Repertoire']) {
       expect(screen.getByRole('button', { name: `${label} group` })).toBeInTheDocument()
     }
   })

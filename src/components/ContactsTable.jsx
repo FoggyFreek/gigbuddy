@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import PropTypes from 'prop-types'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -26,6 +27,8 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
+import { CONTACT_CATEGORIES, CONTACT_CATEGORY_COLORS, CONTACT_CATEGORY_LABELS } from '../utils/contactCategories.js'
+import { contactShape } from '../propTypes/shared.js'
 
 const PAGE_SIZE = 25
 const COLUMN_COUNT = 5
@@ -37,30 +40,12 @@ const COLUMNS = [
   { id: 'phone',    label: 'Phone' },
 ]
 
-const CATEGORY_LABELS = {
-  'press':      'Press',
-  'radio & tv': 'Radio & TV',
-  'booker':     'Booker',
-  'promotion':  'Promotion',
-  'network':    'Network',
-}
-
-const CATEGORY_COLORS = {
-  'press':      'default',
-  'radio & tv': 'primary',
-  'booker':     'secondary',
-  'promotion':  'warning',
-  'network':    'success',
-}
-
-const ALL_CATEGORIES = ['press', 'radio & tv', 'booker', 'promotion', 'network']
-
 function CategoryChip({ category }) {
   return (
     <Chip
-      label={CATEGORY_LABELS[category] ?? category}
+      label={CONTACT_CATEGORY_LABELS[category] ?? category}
       size="small"
-      color={CATEGORY_COLORS[category] ?? 'default'}
+      color={CONTACT_CATEGORY_COLORS[category] ?? 'default'}
     />
   )
 }
@@ -144,8 +129,16 @@ function ContactCard({ contact, selected, active, onToggle, onClick }) {
   )
 }
 
-export default function ContactsTable({ contacts, onRowClick, selectedId = null }) {
-  const [selectedCategories, setSelectedCategories] = useState(new Set(ALL_CATEGORIES))
+export default function ContactsTable({
+  contacts,
+  onRowClick,
+  selectedId = null,
+  categories = CONTACT_CATEGORIES,
+  emptyMessage = 'No contacts yet - add one or import from CSV.',
+}) {
+  const categoryKey = categories.join('|')
+  const selectableCategories = useMemo(() => categoryKey.split('|').filter(Boolean), [categoryKey])
+  const [selectedCategories, setSelectedCategories] = useState(() => new Set(selectableCategories))
   const [filterAnchor, setFilterAnchor] = useState(null)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('name')
@@ -184,7 +177,7 @@ export default function ContactsTable({ contacts, onRowClick, selectedId = null 
 
   function toggleAllCategories() {
     setSelectedCategories(
-      selectedCategories.size === ALL_CATEGORIES.length ? new Set() : new Set(ALL_CATEGORIES)
+      selectedCategories.size === selectableCategories.length ? new Set() : new Set(selectableCategories)
     )
     setPage(0)
     setSelected(new Set())
@@ -207,7 +200,7 @@ export default function ContactsTable({ contacts, onRowClick, selectedId = null 
   }
 
   const filtered = applySearch(
-    selectedCategories.size === ALL_CATEGORIES.length
+    selectedCategories.size === selectableCategories.length
       ? contacts
       : contacts.filter((c) => selectedCategories.has(c.category)),
     search
@@ -243,7 +236,8 @@ export default function ContactsTable({ contacts, onRowClick, selectedId = null 
     </Box>
   )
 
-  const allCatsSelected = selectedCategories.size === ALL_CATEGORIES.length
+  const showCategoryFilter = selectableCategories.length > 1
+  const allCatsSelected = selectedCategories.size === selectableCategories.length
   const someCatsSelected = selectedCategories.size > 0 && !allCatsSelected
 
   const controls = (
@@ -264,35 +258,39 @@ export default function ContactsTable({ contacts, onRowClick, selectedId = null 
           },
         }}
       />
-      <Button
-        size="small"
-        variant={someCatsSelected ? 'contained' : 'outlined'}
-        startIcon={<FilterListIcon />}
-        onClick={(e) => setFilterAnchor(e.currentTarget)}
-      >
-        {someCatsSelected ? `Filter (${selectedCategories.size})` : 'Filter'}
-      </Button>
-      <Menu
-        anchorEl={filterAnchor}
-        open={Boolean(filterAnchor)}
-        onClose={() => setFilterAnchor(null)}
-      >
-        <MenuItem dense onClick={toggleAllCategories}>
-          <Checkbox
+      {showCategoryFilter && (
+        <>
+          <Button
             size="small"
-            checked={allCatsSelected}
-            indeterminate={someCatsSelected}
-          />
-          <ListItemText primary="All categories" />
-        </MenuItem>
-        <Divider />
-        {ALL_CATEGORIES.map((cat) => (
-          <MenuItem key={cat} dense onClick={() => toggleCategory(cat)}>
-            <Checkbox size="small" checked={selectedCategories.has(cat)} />
-            <ListItemText primary={CATEGORY_LABELS[cat]} />
-          </MenuItem>
-        ))}
-      </Menu>
+            variant={someCatsSelected ? 'contained' : 'outlined'}
+            startIcon={<FilterListIcon />}
+            onClick={(e) => setFilterAnchor(e.currentTarget)}
+          >
+            {someCatsSelected ? `Filter (${selectedCategories.size})` : 'Filter'}
+          </Button>
+          <Menu
+            anchorEl={filterAnchor}
+            open={Boolean(filterAnchor)}
+            onClose={() => setFilterAnchor(null)}
+          >
+            <MenuItem dense onClick={toggleAllCategories}>
+              <Checkbox
+                size="small"
+                checked={allCatsSelected}
+                indeterminate={someCatsSelected}
+              />
+              <ListItemText primary="All categories" />
+            </MenuItem>
+            <Divider />
+            {selectableCategories.map((cat) => (
+              <MenuItem key={cat} dense onClick={() => toggleCategory(cat)}>
+                <Checkbox size="small" checked={selectedCategories.has(cat)} />
+                <ListItemText primary={CONTACT_CATEGORY_LABELS[cat]} />
+              </MenuItem>
+            ))}
+          </Menu>
+        </>
+      )}
     </Box>
   )
 
@@ -304,7 +302,7 @@ export default function ContactsTable({ contacts, onRowClick, selectedId = null 
         <Paper variant="outlined">
           {isEmpty ? (
             <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No contacts yet — add one or import from CSV.
+              {emptyMessage}
             </Box>
           ) : sorted.length === 0 ? (
             <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
@@ -372,7 +370,7 @@ export default function ContactsTable({ contacts, onRowClick, selectedId = null 
               {isEmpty && (
                 <TableRow>
                   <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                    No contacts yet — add one or import from CSV.
+                    {emptyMessage}
                   </TableCell>
                 </TableRow>
               )}
@@ -423,4 +421,24 @@ export default function ContactsTable({ contacts, onRowClick, selectedId = null 
       </Paper>
     </Stack>
   )
+}
+
+CategoryChip.propTypes = {
+  category: PropTypes.string,
+}
+
+ContactCard.propTypes = {
+  contact: contactShape.isRequired,
+  selected: PropTypes.bool.isRequired,
+  active: PropTypes.bool.isRequired,
+  onToggle: PropTypes.func.isRequired,
+  onClick: PropTypes.func.isRequired,
+}
+
+ContactsTable.propTypes = {
+  contacts: PropTypes.arrayOf(contactShape).isRequired,
+  onRowClick: PropTypes.func.isRequired,
+  selectedId: PropTypes.number,
+  categories: PropTypes.arrayOf(PropTypes.string),
+  emptyMessage: PropTypes.string,
 }

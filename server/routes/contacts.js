@@ -5,6 +5,12 @@ const router = Router()
 
 const VALID_CATEGORIES = new Set(['press', 'radio & tv', 'booker', 'promotion', 'network', 'supplier'])
 
+function parseCategoryFilter(value) {
+  if (value == null || value === '') return null
+  const category = String(value).trim()
+  return VALID_CATEGORIES.has(category) ? category : false
+}
+
 function parseId(val) {
   const n = Number(val)
   return Number.isInteger(n) && n > 0 ? n : null
@@ -20,9 +26,27 @@ function requireId(req, res) {
 }
 
 router.get('/', async (req, res) => {
+  const category = parseCategoryFilter(req.query.category)
+  const excludeCategory = parseCategoryFilter(req.query.excludeCategory)
+  if (category === false || excludeCategory === false) {
+    return res.status(400).json({ error: 'Invalid category value' })
+  }
+  if (category && excludeCategory) {
+    return res.status(400).json({ error: 'Use category or excludeCategory, not both' })
+  }
+  const filters = ['tenant_id = $1']
+  const values = [req.tenantId]
+  if (category) {
+    values.push(category)
+    filters.push(`category = $${values.length}`)
+  }
+  if (excludeCategory) {
+    values.push(excludeCategory)
+    filters.push(`category <> $${values.length}`)
+  }
   const { rows } = await pool.query(
-    'SELECT * FROM contacts WHERE tenant_id = $1 ORDER BY category ASC, name ASC',
-    [req.tenantId],
+    `SELECT * FROM contacts WHERE ${filters.join(' AND ')} ORDER BY category ASC, name ASC`,
+    values,
   )
   res.json(rows)
 })

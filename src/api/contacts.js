@@ -2,7 +2,13 @@ import { request } from './_client.js'
 
 const api = (path, options) => request(`/api/contacts${path}`, options)
 
-export const listContacts   = ()         => api('/')
+export const listContacts   = (filters = {}) => {
+  const params = new URLSearchParams()
+  if (filters.category) params.set('category', filters.category)
+  if (filters.excludeCategory) params.set('excludeCategory', filters.excludeCategory)
+  const query = params.toString()
+  return api(query ? `/?${query}` : '/')
+}
 export const searchContacts = (q)        => api(`/search?${new URLSearchParams({ q })}`)
 export const getContact     = (id)       => api(`/${id}`)
 export const createContact  = (body)     => api('/', { method: 'POST', body: JSON.stringify(body) })

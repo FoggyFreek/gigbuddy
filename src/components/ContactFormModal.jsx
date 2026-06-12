@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import PropTypes from 'prop-types'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -11,6 +12,8 @@ import Typography from '@mui/material/Typography'
 import { createContact, getContact, updateContact } from '../api/contacts.js'
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
+import { ALL_CONTACT_CATEGORIES } from '../utils/contactCategories.js'
+import { idProp } from '../propTypes/shared.js'
 import ContactFields from './ContactFields.jsx'
 import SaveStatusLabel from './SaveStatusLabel.jsx'
 
@@ -23,7 +26,17 @@ const EMPTY_FORM = {
   category: 'press',
 }
 
-export default function ContactFormModal({ mode, contactId, onClose, onDelete, initial, onCreated }) {
+export default function ContactFormModal({
+  mode,
+  contactId,
+  onClose,
+  onDelete,
+  initial,
+  onCreated,
+  categories = ALL_CONTACT_CATEGORIES,
+  title,
+  submitLabel,
+}) {
   const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...initial }))
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(mode === 'edit')
@@ -79,7 +92,7 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete, i
 
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={mode === 'edit' ? handleClose : undefined}>
-      <DialogTitle>{mode === 'create' ? 'Add contact' : 'Contact'}</DialogTitle>
+      <DialogTitle>{title ?? (mode === 'create' ? 'Add contact' : 'Contact')}</DialogTitle>
 
       {loading ? (
         <DialogContent sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -92,6 +105,7 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete, i
               form={form}
               onChange={handleChange}
               errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
+              categories={categories}
             />
           </Grid>
         </DialogContent>
@@ -105,7 +119,7 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete, i
         {mode === 'create' ? (
           <>
             <Button onClick={onClose}>Cancel</Button>
-            <Button variant="contained" onClick={handleCreate}>Add contact</Button>
+            <Button variant="contained" onClick={handleCreate}>{submitLabel ?? 'Add contact'}</Button>
           </>
         ) : confirmingDelete ? (
           <>
@@ -125,4 +139,21 @@ export default function ContactFormModal({ mode, contactId, onClose, onDelete, i
       </DialogActions>
     </Dialog>
   )
+}
+
+ContactFormModal.propTypes = {
+  mode: PropTypes.oneOf(['create', 'edit']).isRequired,
+  contactId: idProp,
+  onClose: PropTypes.func.isRequired,
+  onDelete: PropTypes.func,
+  initial: PropTypes.shape({
+    name: PropTypes.string,
+    email: PropTypes.string,
+    phone: PropTypes.string,
+    category: PropTypes.string,
+  }),
+  onCreated: PropTypes.func,
+  categories: PropTypes.arrayOf(PropTypes.string),
+  title: PropTypes.string,
+  submitLabel: PropTypes.string,
 }

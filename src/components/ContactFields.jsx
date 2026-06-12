@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types'
 import FormControl from '@mui/material/FormControl'
 import Grid from '@mui/material/Grid'
 import InputLabel from '@mui/material/InputLabel'
@@ -5,19 +6,9 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import CopyAdornment from './CopyAdornment.jsx'
+import { ALL_CONTACT_CATEGORIES, CONTACT_CATEGORY_LABELS } from '../utils/contactCategories.js'
 
-const VALID_CATEGORIES = ['press', 'radio & tv', 'booker', 'promotion', 'network', 'supplier']
-
-const CATEGORY_LABELS = {
-  'press':      'Press',
-  'radio & tv': 'Radio & TV',
-  'booker':     'Booker',
-  'promotion':  'Promotion',
-  'network':    'Network',
-  'supplier':   'Supplier',
-}
-
-export default function ContactFields({ form, onChange, errors = {} }) {
+export default function ContactFields({ form, onChange, errors = {}, categories = ALL_CONTACT_CATEGORIES }) {
   return (
     <>
       <Grid size={4}>
@@ -28,8 +19,8 @@ export default function ContactFields({ form, onChange, errors = {} }) {
             value={form.category}
             onChange={(e) => onChange('category', e.target.value)}
           >
-            {VALID_CATEGORIES.map((cat) => (
-              <MenuItem key={cat} value={cat}>{CATEGORY_LABELS[cat]}</MenuItem>
+            {categories.map((cat) => (
+              <MenuItem key={cat} value={cat}>{CONTACT_CATEGORY_LABELS[cat]}</MenuItem>
             ))}
           </Select>
         </FormControl>
@@ -66,4 +57,16 @@ export default function ContactFields({ form, onChange, errors = {} }) {
       </Grid>
     </>
   )
+}
+
+ContactFields.propTypes = {
+  form: PropTypes.shape({
+    name: PropTypes.string,
+    email: PropTypes.string,
+    phone: PropTypes.string,
+    category: PropTypes.string,
+  }).isRequired,
+  onChange: PropTypes.func.isRequired,
+  errors: PropTypes.object,
+  categories: PropTypes.arrayOf(PropTypes.string),
 }

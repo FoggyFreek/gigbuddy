@@ -28,7 +28,7 @@ export default function JournalPage() {
     journals, accounts, loading, error,
     approvalErrors, clearApprovalErrors,
     selected, draftIds,
-    registerFlush,
+    registerFlush, reportSaveStatus, saveStatus,
     toggleSelect, selectAll,
     addEntry, approveAll, approveSelected, deleteSelected,
   } = useJournalListState()
@@ -75,7 +75,7 @@ export default function JournalPage() {
         <Typography variant="h4" fontWeight={700} sx={{ flexGrow: 1 }}>Journal</Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+      <Box data-testid="journal-toolbar" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
         <Checkbox
           size="small"
           checked={allSelected}
@@ -118,6 +118,8 @@ export default function JournalPage() {
         )}
 
         <Box sx={{ flexGrow: 1 }} />
+        {saveStatus === 'saving' && <Typography variant="caption" color="text.secondary">Saving…</Typography>}
+        {saveStatus === 'error' && <Typography variant="caption" color="error">Save failed</Typography>}
         <Button startIcon={<AddIcon />} onClick={addEntry}>Add journal entry</Button>
       </Box>
 
@@ -143,6 +145,7 @@ export default function JournalPage() {
           selected={selected.has(journal.id)}
           onToggleSelect={toggleSelect}
           registerFlush={registerFlush}
+          onSaveStatus={reportSaveStatus}
         />
       ))}
 

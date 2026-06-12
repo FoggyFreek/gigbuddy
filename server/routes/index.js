@@ -14,6 +14,7 @@ import songsRouter from './songs.js'
 import setlistsRouter from './setlists.js'
 import invoicesRouter from './invoices.js'
 import purchasesRouter from './purchases.js'
+import merchRouter from './merch.js'
 import accountsRouter from './accounts.js'
 import journalRouter from './journal.js'
 import ledgerRouter from './ledger.js'
@@ -137,6 +138,7 @@ router.use('/songs', tenantMember, songsRouter)
 router.use('/setlists', tenantMember, setlistsRouter)
 router.use('/invoices', tenantMember, invoicesRouter)
 router.use('/purchases', tenantMember, purchasesRouter)
+router.use('/merch', tenantMember, merchRouter)
 router.use('/accounts', tenantMember, accountsRouter)
 router.use('/journal', tenantMember, journalRouter)
 router.use('/ledger', tenantMember, ledgerRouter)

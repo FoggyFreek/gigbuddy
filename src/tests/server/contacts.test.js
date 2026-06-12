@@ -32,6 +32,38 @@ function asUserA(req) {
     .set('x-test-tenant-id', String(seed.tenantA.id))
 }
 
+describe('GET /api/contacts - category filters', () => {
+  it('returns only supplier contacts when category=supplier', async () => {
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category) VALUES
+       ($1, 'Alpha Supplier', 'supplier'),
+       ($2, 'Beta Supplier', 'supplier')`,
+      [seed.tenantA.id, seed.tenantB.id],
+    )
+
+    const res = await asUserA(request(app).get('/api/contacts?category=supplier')).expect(200)
+    expect(res.body.map((c) => c.name)).toEqual(['Alpha Supplier'])
+    expect(res.body.every((c) => c.category === 'supplier')).toBe(true)
+  })
+
+  it('excludes supplier contacts when excludeCategory=supplier', async () => {
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category)
+       VALUES ($1, 'Alpha Supplier', 'supplier')`,
+      [seed.tenantA.id],
+    )
+
+    const res = await asUserA(request(app).get('/api/contacts?excludeCategory=supplier')).expect(200)
+    expect(res.body.map((c) => c.name)).toEqual(['Alpha Contact'])
+    expect(res.body.every((c) => c.category !== 'supplier')).toBe(true)
+  })
+
+  it('returns 400 for invalid category filters', async () => {
+    await asUserA(request(app).get('/api/contacts?category=invalid')).expect(400)
+    await asUserA(request(app).get('/api/contacts?excludeCategory=invalid')).expect(400)
+  })
+})
+
 describe('GET /api/contacts/:id — includes notes array', () => {
   it('returns empty notes array when contact has no notes', async () => {
     const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id

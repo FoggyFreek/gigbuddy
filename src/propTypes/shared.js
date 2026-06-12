@@ -88,6 +88,14 @@ export const tenantShape = PropTypes.shape({
   tax_id: PropTypes.string,
 })
 
+export const contactShape = PropTypes.shape({
+  id: idProp,
+  name: PropTypes.string,
+  email: PropTypes.string,
+  phone: PropTypes.string,
+  category: PropTypes.string,
+})
+
 export const invoiceLineShape = PropTypes.shape({
   id: idProp,
   description: PropTypes.string,
@@ -374,4 +382,30 @@ export const vatReturnPreviewShape = PropTypes.shape({
   net_cents: PropTypes.number,
   direction: PropTypes.oneOf(['payable', 'receivable', 'nil']),
   period_ended: PropTypes.bool,
+})
+
+// A merch product (GET /api/merch/products).
+export const productShape = PropTypes.shape({
+  id: idProp,
+  name: PropTypes.string,
+  unit_cost_cents: PropTypes.number,
+  default_price_incl_cents: PropTypes.number,
+  vat_rate: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  quantity_on_hand: PropTypes.number,
+  archived_at: PropTypes.string,
+})
+
+// A merch sale row (GET /api/merch/sales).
+export const merchSaleShape = PropTypes.shape({
+  id: idProp,
+  product_id: idProp,
+  product_name: PropTypes.string,
+  gig_id: idProp,
+  sale_date: PropTypes.string,
+  quantity: PropTypes.number,
+  unit_price_incl_cents: PropTypes.number,
+  vat_rate: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  unit_cost_cents: PropTypes.number,
+  status: PropTypes.oneOf(['recorded', 'voided']),
+  voided_at: PropTypes.string,
 })

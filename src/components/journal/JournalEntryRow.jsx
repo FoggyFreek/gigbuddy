@@ -14,7 +14,7 @@ import { accountShape, journalShape } from '../../propTypes/shared.js'
 const STATUS_COLOR = { draft: 'secondary', approved: 'success' }
 
 export default function JournalEntryRow({
-  journal, accounts, selected, onToggleSelect, registerFlush,
+  journal, accounts, selected, onToggleSelect, registerFlush, onSaveStatus,
 }) {
   const [form, setForm] = useState(() => journalToForm(journal))
   const readOnly = form.status === 'approved'
@@ -38,6 +38,13 @@ export default function JournalEntryRow({
     registerFlush(journal.id, flush)
     return () => registerFlush(journal.id, null)
   }, [journal.id, flush, registerFlush])
+
+  // Report the save status upward; the page shows it in the toolbar so the
+  // indicator never adds/removes height inside the entry list (no jitter).
+  useEffect(() => {
+    onSaveStatus(journal.id, saveStatus)
+    return () => onSaveStatus(journal.id, null)
+  }, [journal.id, saveStatus, onSaveStatus])
 
   const update = useCallback((next) => {
     setForm(next)
@@ -109,12 +116,6 @@ export default function JournalEntryRow({
             duplicateLine={duplicateLine}
           />
         ))}
-        {!readOnly && (saveStatus === 'saving' || saveStatus === 'error') && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
-            {saveStatus === 'saving' && <Typography variant="caption" color="text.secondary">Saving…</Typography>}
-            {saveStatus === 'error' && <Typography variant="caption" color="error">Save failed</Typography>}
-          </Box>
-        )}
       </Box>
     </Box>
   )
@@ -126,4 +127,5 @@ JournalEntryRow.propTypes = {
   selected: PropTypes.bool,
   onToggleSelect: PropTypes.func.isRequired,
   registerFlush: PropTypes.func.isRequired,
+  onSaveStatus: PropTypes.func.isRequired,
 }

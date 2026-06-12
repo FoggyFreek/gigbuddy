@@ -112,6 +112,7 @@ export default function FinancialDashboardPage() {
           <OverviewCard totals={data.totals} bank={data.bank} />
           <InvoicesCard invoices={data.invoices} />
           <VatCard vat={data.vat} />
+          {data.merch && <MerchCard merch={data.merch} totals={data.totals} />}
         </Box>
       )}
     </Box>
@@ -391,6 +392,62 @@ InvoicesCard.propTypes = {
     unpaid: bucketShape.isRequired,
     draft: bucketShape.isRequired,
   }).isRequired,
+}
+
+// Merch gross-margin panel: revenue/COGS within the selected period, the
+// resulting margin, merch's share of total revenue, and the current stock
+// value (a point-in-time asset balance, independent of the period).
+function MerchCard({ merch, totals }) {
+  const marginPct = merch.revenue_cents > 0
+    ? Math.round((merch.gross_profit_cents / merch.revenue_cents) * 100)
+    : null
+  const sharePct = totals.revenue_cents > 0
+    ? Math.round((merch.revenue_cents / totals.revenue_cents) * 100)
+    : null
+
+  return (
+    <DashboardCard
+      title="Merchandise"
+      action={(
+        <Button component={RouterLink} to="/merch" size="small" variant="outlined">
+          Manage merch
+        </Button>
+      )}
+    >
+      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: 1, minWidth: 140 }}>
+          <Typography variant="caption" color="text.secondary">Gross profit</Typography>
+          <Typography variant="h4" fontWeight={600} sx={{ my: 0.5, color: 'success.main' }}>
+            {formatEur(merch.gross_profit_cents)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {marginPct === null ? 'No merch sales in this period' : `${marginPct}% margin on sales`}
+          </Typography>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 140 }}>
+          <Typography variant="caption" color="text.secondary">Inventory value</Typography>
+          <Typography variant="h4" fontWeight={600} sx={{ my: 0.5 }}>
+            {formatEur(merch.inventory_value_cents)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">Stock on hand, at cost</Typography>
+        </Box>
+      </Box>
+      <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
+        Sales {formatEur(merch.revenue_cents)} − cost of goods {formatEur(merch.cogs_cents)}
+        {sharePct !== null && ` — ${sharePct}% of total revenue`}
+      </Typography>
+    </DashboardCard>
+  )
+}
+
+MerchCard.propTypes = {
+  merch: PropTypes.shape({
+    revenue_cents: PropTypes.number.isRequired,
+    cogs_cents: PropTypes.number.isRequired,
+    gross_profit_cents: PropTypes.number.isRequired,
+    inventory_value_cents: PropTypes.number.isRequired,
+  }).isRequired,
+  totals: totalsShape.isRequired,
 }
 
 function VatCard({ vat }) {

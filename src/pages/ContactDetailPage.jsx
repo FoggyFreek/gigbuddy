@@ -33,6 +33,7 @@ import {
 import useDebouncedSave from '../hooks/useDebouncedSave.js'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.js'
 import { venueHeadline } from '../utils/venueDisplay.js'
+import { contactMatchesCategoryFilter } from '../utils/contactCategories.js'
 import ContactFields from '../components/ContactFields.jsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.jsx'
 import VenuePicker from '../components/VenuePicker.jsx'
@@ -45,11 +46,15 @@ export default function ContactDetailPage() {
   const navigate = useNavigate()
   const outletCtx = useOutletContext() || {}
   const insideSplitView = !!outletCtx.insideSplitView
+  const contactFilter = outletCtx.contactFilter
+  const onClose = outletCtx.onClose
+  const onContactUpdate = outletCtx.onContactUpdate
+  const onContactDelete = outletCtx.onContactDelete
 
-  function closeView() {
-    if (outletCtx.onClose) outletCtx.onClose()
+  const closeView = useCallback(() => {
+    if (onClose) onClose()
     else navigate(-1)
-  }
+  }, [navigate, onClose])
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', category: 'press' })
   const [notes, setNotes] = useState([])
@@ -62,15 +67,33 @@ export default function ContactDetailPage() {
     async (patch) => { await updateContact(contactId, patch) },
     [contactId]
   )
+  const handleSaved = useCallback((patch) => {
+    onContactUpdate?.(contactId, patch)
+    const nextContact = { ...form, ...patch }
+    if (
+      'category' in patch &&
+      contactFilter &&
+      !contactMatchesCategoryFilter(nextContact, contactFilter)
+    ) {
+      closeView()
+    }
+  }, [closeView, contactFilter, contactId, form, onContactUpdate])
   const { schedule, flush, status: saveStatus } = useDebouncedSave(
     saveFn,
     600,
-    (patch) => outletCtx.onContactUpdate?.(contactId, patch)
+    handleSaved
   )
 
   useEffect(() => {
     getContact(contactId)
       .then((c) => {
+        if (
+          contactFilter &&
+          !contactMatchesCategoryFilter(c, contactFilter)
+        ) {
+          closeView()
+          return
+        }
         setForm({
           name:     c.name || '',
           email:    c.email || '',
@@ -81,7 +104,7 @@ export default function ContactDetailPage() {
       })
       .finally(() => setLoading(false))
     listContactVenues(contactId).then(setVenues).catch(() => setVenues([]))
-  }, [contactId])
+  }, [closeView, contactFilter, contactId])
 
   async function handleAddVenue(venue) {
     if (venues.some((v) => v.id === venue.id)) return
@@ -115,7 +138,7 @@ export default function ContactDetailPage() {
 
   async function handleDelete() {
     await deleteContact(contactId)
-    outletCtx.onContactDelete?.(contactId)
+    onContactDelete?.(contactId)
     closeView()
   }
 

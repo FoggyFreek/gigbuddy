@@ -18,6 +18,8 @@ import {
   monthlyResultTotals,
   vatTotals,
   checkingAccountBalance,
+  merchTotals,
+  merchInventoryValue,
 } from '../repositories/ledgerRepository.js'
 import { openInvoiceBuckets } from '../repositories/invoiceRepository.js'
 
@@ -231,6 +233,7 @@ function originFor(row) {
     case 'purchase': return { label, path: `/purchases/${row.source_id}` }
     case 'journal': return { label, path: '/journal' }
     case 'reimbursement': return { label, path: '/reimbursements' }
+    case 'merch_sale': return { label, path: '/merch' }
     case 'vat_settlement': return { label, path: '/vat-returns' }
     case 'vat_settlement_payment': return { label, path: '/vat-returns' }
     default: return { label, path: null }
@@ -318,12 +321,14 @@ export async function getFinancialOverview(executor, tenantId, range) {
   }
 
   const vatQuarter = currentVatQuarter()
-  const [monthRows, vat, buckets, settings, bankBalanceCents] = await Promise.all([
+  const [monthRows, vat, buckets, settings, bankBalanceCents, merch, merchInventoryCents] = await Promise.all([
     monthlyResultTotals(executor, tenantId, effectiveRange),
     vatTotals(executor, tenantId, vatQuarter.range),
     openInvoiceBuckets(executor, tenantId),
     loadAccountingSettings(executor, tenantId),
     checkingAccountBalance(executor, tenantId),
+    merchTotals(executor, tenantId, effectiveRange),
+    merchInventoryValue(executor, tenantId),
   ])
 
   const byKey = new Map(monthRows.map((r) => [r.month_key, r]))
@@ -363,6 +368,14 @@ export async function getFinancialOverview(executor, tenantId, range) {
       overdue: { count: buckets.overdue_count, total_cents: buckets.overdue_total_cents },
       unpaid: { count: buckets.unpaid_count, total_cents: buckets.unpaid_total_cents },
       draft: { count: buckets.draft_count, total_cents: buckets.draft_total_cents },
+    },
+    // Merch contribution within the same period as `months`/`totals`; inventory
+    // value is a point-in-time asset balance regardless of the period.
+    merch: {
+      revenue_cents: merch.revenue_cents,
+      cogs_cents: merch.cogs_cents,
+      gross_profit_cents: merch.revenue_cents - merch.cogs_cents,
+      inventory_value_cents: merchInventoryCents,
     },
   }
 }
@@ -443,12 +456,15 @@ export async function postBillAccrued(client, tenantId, purchase, purchaseLines,
   const payable = requireCode(settings, 'payable_account_code')
   const memo = `Bill ${purchase.receipt_number} — ${purchase.supplier_name}`
 
-  // Group net amounts by expense account; lines without a code fall back to the
-  // tenant default expense account.
+  // Group net amounts by account. Lines that stock a product book to the merch
+  // inventory asset (the goods aren't an expense until sold); other lines use
+  // their explicit code or fall back to the tenant default expense account.
   const netByAccount = new Map()
   for (const line of purchaseLines) {
     const { netCents } = computePurchaseLineTotals(line)
-    const code = line.account_code || requireCode(settings, 'default_expense_account_code')
+    const code = line.product_id
+      ? requireCode(settings, 'merch_inventory_account_code')
+      : (line.account_code || requireCode(settings, 'default_expense_account_code'))
     netByAccount.set(code, (netByAccount.get(code) || 0) + netCents)
   }
 
@@ -488,6 +504,74 @@ export async function postBillPaid(client, tenantId, purchase, opts = {}) {
       { account_code: creditAccount, credit_cents: purchase.total_cents, memo },
     ],
     ...opts,
+  })
+}
+
+// ---------- merch sale journals (revenue + COGS) ----------
+
+// Merch sale recorded, one balanced journal combining the sale and cost legs:
+// DR checking gross (cash up), CR merch revenue net, CR output VAT;
+// DR COGS / CR inventory at quantity × the sale's snapshotted unit cost.
+// COGS uses the sale's snapshot of the product's moving-average cost, the same
+// basis at which purchases booked the goods into inventory.
+export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const checking = requireCode(settings, 'primary_checking_account_code')
+  const revenue = requireCode(settings, 'merch_revenue_account_code')
+  const grossCents = sale.quantity * sale.unit_price_incl_cents
+  const { netCents, vatCents } = computePurchaseLineTotals({
+    amount_incl_cents: grossCents, tax_rate: sale.vat_rate,
+  })
+  const cogsCents = sale.quantity * sale.unit_cost_cents
+  const memo = `Merch sale: ${sale.quantity} × ${sale.product_name}`
+
+  const lines = [
+    { account_code: checking, debit_cents: grossCents, memo },
+    { account_code: revenue, credit_cents: netCents, memo },
+  ]
+  if (vatCents > 0) {
+    lines.push({ account_code: requireCode(settings, 'output_vat_account_code'), credit_cents: vatCents, memo })
+  }
+  if (cogsCents > 0) {
+    lines.push({ account_code: requireCode(settings, 'merch_cogs_account_code'), debit_cents: cogsCents, memo })
+    lines.push({ account_code: requireCode(settings, 'merch_inventory_account_code'), credit_cents: cogsCents, memo })
+  }
+
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(sale.sale_date),
+    description: memo,
+    sourceType: 'merch_sale', sourceId: sale.id, sourceEvent: 'recorded', lines, ...opts,
+  })
+}
+
+// Merch sale voided: exact mirror of `recorded`, dated today (corrections-forward).
+export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const checking = requireCode(settings, 'primary_checking_account_code')
+  const revenue = requireCode(settings, 'merch_revenue_account_code')
+  const grossCents = sale.quantity * sale.unit_price_incl_cents
+  const { netCents, vatCents } = computePurchaseLineTotals({
+    amount_incl_cents: grossCents, tax_rate: sale.vat_rate,
+  })
+  const cogsCents = sale.quantity * sale.unit_cost_cents
+  const memo = `Merch sale voided: ${sale.quantity} × ${sale.product_name}`
+
+  const lines = [
+    { account_code: checking, credit_cents: grossCents, memo },
+    { account_code: revenue, debit_cents: netCents, memo },
+  ]
+  if (vatCents > 0) {
+    lines.push({ account_code: requireCode(settings, 'output_vat_account_code'), debit_cents: vatCents, memo })
+  }
+  if (cogsCents > 0) {
+    lines.push({ account_code: requireCode(settings, 'merch_cogs_account_code'), credit_cents: cogsCents, memo })
+    lines.push({ account_code: requireCode(settings, 'merch_inventory_account_code'), debit_cents: cogsCents, memo })
+  }
+
+  return postJournal(client, tenantId, {
+    entryDate: today(),
+    description: memo,
+    sourceType: 'merch_sale', sourceId: sale.id, sourceEvent: 'voided', lines, ...opts,
   })
 }
 

@@ -8,6 +8,7 @@ import {
   uploadPurchaseAttachment,
 } from '../../api/purchases.js'
 import { getAccountingSettings, listAccounts } from '../../api/accounts.js'
+import { listProducts } from '../../api/merch.js'
 import { listMembers } from '../../api/bandMembers.js'
 import { computePurchaseTotals } from '../../utils/purchaseTotals.js'
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.js'
@@ -34,6 +35,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
   const [settingsLoaded, setSettingsLoaded] = useState(false)
   const [lineErrors, setLineErrors] = useState([])
   const [bandMembers, setBandMembers] = useState([])
+  const [products, setProducts] = useState([])
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [paymentError, setPaymentError] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('bank')
@@ -85,6 +87,15 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
       })
       .catch(() => { if (!cancelled) setAccountingSettings(null) })
       .finally(() => { if (!cancelled) setSettingsLoaded(true) })
+    return () => { cancelled = true }
+  }, [])
+
+  // Products power the optional "stock a product" link per line; best-effort.
+  useEffect(() => {
+    let cancelled = false
+    listProducts()
+      .then((rows) => { if (!cancelled) setProducts(rows || []) })
+      .catch(() => { if (!cancelled) setProducts([]) })
     return () => { cancelled = true }
   }, [])
 
@@ -317,6 +328,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     isPaid,
     totals,
     expenseAccounts,
+    products,
     paymentAccount,
     lineErrors,
     bandMembers,

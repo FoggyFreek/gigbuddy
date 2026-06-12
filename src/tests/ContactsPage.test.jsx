@@ -25,12 +25,14 @@ vi.mock('../api/venues.js', () => ({
 }))
 
 import ContactsPage from '../pages/ContactsPage.jsx'
+import SuppliersPage from '../pages/SuppliersPage.jsx'
 import ContactDetailPage from '../pages/ContactDetailPage.jsx'
-import { addContactNote, deleteContactNote, deleteContact, listContacts, getContact, updateContact } from '../api/contacts.js'
+import { addContactNote, createContact, deleteContactNote, deleteContact, listContacts, getContact, updateContact } from '../api/contacts.js'
 import theme from '../theme.js'
 
 const NOTE = { id: 10, contact_id: 1, tenant_id: 1, note: 'Test note', created_at: '2026-01-01T12:00:00Z' }
 const CONTACT = { id: 1, name: 'Alice', email: '', phone: '', category: 'press', notes: [] }
+const SUPPLIER = { id: 2, name: 'Studio X', email: '', phone: '', category: 'supplier', notes: [] }
 
 function wrapWithRoutes({ initialEntries }) {
   return render(
@@ -38,6 +40,9 @@ function wrapWithRoutes({ initialEntries }) {
       <ThemeProvider theme={theme}>
         <Routes>
           <Route path="/contacts" element={<ContactsPage />}>
+            <Route path=":id" element={<ContactDetailPage />} />
+          </Route>
+          <Route path="/suppliers" element={<SuppliersPage />}>
             <Route path=":id" element={<ContactDetailPage />} />
           </Route>
         </Routes>
@@ -53,9 +58,52 @@ describe('ContactsPage — split-view list refresh', () => {
     getContact.mockReset()
     getContact.mockResolvedValue(CONTACT)
     updateContact.mockClear()
+    createContact.mockReset()
     deleteContact.mockClear()
     addContactNote.mockClear()
     deleteContactNote.mockClear()
+  })
+
+  it('loads the contacts page with suppliers excluded', async () => {
+    wrapWithRoutes({ initialEntries: ['/contacts'] })
+
+    await waitFor(() => expect(listContacts).toHaveBeenCalledWith({ excludeCategory: 'supplier' }))
+    expect(await screen.findByText('Alice')).toBeInTheDocument()
+  })
+
+  it('loads suppliers through their own route and navigates inside /suppliers', async () => {
+    listContacts.mockResolvedValue([SUPPLIER])
+    getContact.mockResolvedValue(SUPPLIER)
+    const user = userEvent.setup()
+    wrapWithRoutes({ initialEntries: ['/suppliers'] })
+
+    await waitFor(() => expect(listContacts).toHaveBeenCalledWith({ category: 'supplier' }))
+    await user.click(await screen.findByText('Studio X'))
+
+    await waitFor(() => expect(screen.getByDisplayValue('Studio X')).toBeInTheDocument())
+    expect(getContact).toHaveBeenCalledWith(2)
+  })
+
+  it('creates suppliers with the supplier category by default', async () => {
+    listContacts.mockResolvedValue([])
+    createContact.mockResolvedValue(SUPPLIER)
+    const user = userEvent.setup()
+    wrapWithRoutes({ initialEntries: ['/suppliers'] })
+
+    await screen.findByText(/no suppliers yet/i)
+    await user.click(screen.getByRole('button', { name: /^add$/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/name/i), 'Studio X')
+    await user.click(within(dialog).getByRole('button', { name: /^add supplier$/i }))
+
+    await waitFor(() => {
+      expect(createContact).toHaveBeenCalledWith({
+        name: 'Studio X',
+        email: null,
+        phone: null,
+        category: 'supplier',
+      })
+    })
   })
 
   it('updates the list row immediately after the detail email field is saved', async () => {

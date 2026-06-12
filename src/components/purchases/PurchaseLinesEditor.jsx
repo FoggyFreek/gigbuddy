@@ -14,7 +14,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import MoneyInput from '../invoices/MoneyInput.jsx'
 import { centsToEditableEuro } from '../invoices/invoiceFormHelpers.js'
 import { TAX_RATES } from './purchaseFormHelpers.js'
-import { accountShape } from '../../propTypes/shared.js'
+import { accountShape, productShape } from '../../propTypes/shared.js'
 
 const ACCOUNT_TYPE_LABELS = {
   cost_of_goods_sold: 'Cost of Goods Sold',
@@ -24,7 +24,7 @@ const ACCOUNT_TYPE_LABELS = {
 // Group header shown above each block of options in the account combobox.
 const accountGroup = (account) => ACCOUNT_TYPE_LABELS[account.type] || 'Expenses'
 
-function PurchaseLineRow({ line, idx, accounts = [], vatCents, errors = {}, readOnly, canRemove, patchLine, removeLine }) {
+function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, errors = {}, readOnly, canRemove, patchLine, removeLine }) {
   // A saved line can reference an account that is no longer active/expense-typed.
   // Surface it as a disabled option so the field doesn't silently drop it.
   const knownAccount = accounts.find((a) => a.code === line.account_code) || null
@@ -35,6 +35,10 @@ function PurchaseLineRow({ line, idx, accounts = [], vatCents, errors = {}, read
   const accountOptions = (selectedAccount?.__stale ? [selectedAccount, ...accounts] : accounts)
     .slice()
     .sort((a, b) => accountGroup(a).localeCompare(accountGroup(b)) || a.code.localeCompare(b.code))
+  // A saved line can reference a product that has since been archived.
+  const lineProduct = products.find((p) => p.id === line.product_id) || null
+  const productOptions = products.filter((p) => !p.archived_at || p.id === line.product_id)
+  const stocksProduct = Boolean(line.product_id)
   return (
     <Box sx={{ mb: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -62,11 +66,44 @@ function PurchaseLineRow({ line, idx, accounts = [], vatCents, errors = {}, read
         />
       </Box>
 
+      {(productOptions.length > 0 || stocksProduct) && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 2, mb: 2 }}>
+          <Autocomplete
+            size="small"
+            disabled={readOnly}
+            options={productOptions}
+            value={lineProduct}
+            onChange={(_e, picked) => patchLine(idx, {
+              product_id: picked?.id || null,
+              quantity: picked ? (line.quantity || 1) : null,
+            })}
+            getOptionLabel={(o) => (o ? o.name : '')}
+            isOptionEqualToValue={(o, v) => o.id === v.id}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Stock product (optional)"
+                placeholder="No product — regular expense"
+              />
+            )}
+          />
+          <TextField
+            label="Quantity"
+            size="small"
+            type="number"
+            disabled={readOnly || !stocksProduct}
+            value={stocksProduct ? (line.quantity ?? '') : ''}
+            onChange={(e) => patchLine(idx, { quantity: Number(e.target.value) || null })}
+            slotProps={{ htmlInput: { min: 1, step: 1 } }}
+          />
+        </Box>
+      )}
+
       <Box sx={{ mb: 2 }}>
         <Autocomplete
           size="small"
           fullWidth
-          disabled={readOnly}
+          disabled={readOnly || stocksProduct}
           options={accountOptions}
           value={selectedAccount}
           onChange={(_e, picked) => patchLine(idx, { account_code: picked?.code || null })}
@@ -97,7 +134,7 @@ function PurchaseLineRow({ line, idx, accounts = [], vatCents, errors = {}, read
             <TextField
               {...params}
               label="Expense account"
-              placeholder="Default expense account"
+              placeholder={stocksProduct ? 'Books to inventory' : 'Default expense account'}
               error={Boolean(errors.account_code)}
               helperText={errors.account_code}
             />
@@ -151,6 +188,7 @@ PurchaseLineRow.propTypes = {
   line: PropTypes.object.isRequired,
   idx: PropTypes.number.isRequired,
   accounts: PropTypes.arrayOf(accountShape),
+  products: PropTypes.arrayOf(productShape),
   vatCents: PropTypes.number,
   errors: PropTypes.object,
   readOnly: PropTypes.bool,
@@ -159,7 +197,7 @@ PurchaseLineRow.propTypes = {
   removeLine: PropTypes.func.isRequired,
 }
 
-export default function PurchaseLinesEditor({ form, totals, accounts = [], lineErrors = [], readOnly, patchLine, addLine, removeLine }) {
+export default function PurchaseLinesEditor({ form, totals, accounts = [], products = [], lineErrors = [], readOnly, patchLine, addLine, removeLine }) {
   return (
     <>
       {form.lines.map((line, idx) => (
@@ -168,6 +206,7 @@ export default function PurchaseLinesEditor({ form, totals, accounts = [], lineE
           line={line}
           idx={idx}
           accounts={accounts}
+          products={products}
           vatCents={totals.perLine[idx]?.vatCents || 0}
           errors={lineErrors[idx] || {}}
           readOnly={readOnly}
@@ -187,6 +226,7 @@ PurchaseLinesEditor.propTypes = {
   form: PropTypes.object.isRequired,
   totals: PropTypes.object.isRequired,
   accounts: PropTypes.arrayOf(accountShape),
+  products: PropTypes.arrayOf(productShape),
   lineErrors: PropTypes.arrayOf(PropTypes.object),
   readOnly: PropTypes.bool,
   patchLine: PropTypes.func.isRequired,

@@ -45,6 +45,8 @@ export function normalizeLines(lines) {
   return lines.map((raw, idx) => {
     const category = String(raw.expense_category ?? '').trim()
     const code = raw.account_code != null ? String(raw.account_code).trim() : ''
+    const productId = parseId(raw.product_id)
+    const quantity = parseId(raw.quantity)
     return {
       description: String(raw.description ?? '').trim(),
       expense_category: category || null,
@@ -52,6 +54,9 @@ export function normalizeLines(lines) {
       tax_rate: snapTaxRate(raw.tax_rate),
       amount_incl_cents: Number.isInteger(Number(raw.amount_incl_cents)) ? Number(raw.amount_incl_cents) : 0,
       position: Number.isInteger(Number(raw.position)) ? Number(raw.position) : idx,
+      // A line that stocks a product carries which product and how many units.
+      product_id: productId,
+      quantity: productId ? quantity : null,
     }
   })
 }

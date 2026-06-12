@@ -19,6 +19,7 @@ export function useJournalListState() {
   const [error, setError] = useState(null)
   const [approvalErrors, setApprovalErrors] = useState([])
   const [selected, setSelected] = useState(() => new Set())
+  const [saveStatuses, setSaveStatuses] = useState(() => new Map())
   const flushers = useRef(new Map())
 
   const clearApprovalErrors = useCallback(() => setApprovalErrors([]), [])
@@ -27,6 +28,23 @@ export function useJournalListState() {
     if (fn) flushers.current.set(id, fn)
     else flushers.current.delete(id)
   }, [])
+
+  // Rows report their useDebouncedSave status here so the page can show one
+  // save indicator in the toolbar instead of per-row text that shifts layout.
+  const reportSaveStatus = useCallback((id, status) => {
+    setSaveStatuses((prev) => {
+      if ((prev.get(id) ?? null) === status) return prev
+      const next = new Map(prev)
+      if (status === null) next.delete(id)
+      else next.set(id, status)
+      return next
+    })
+  }, [])
+
+  const statuses = [...saveStatuses.values()]
+  const saveStatus = statuses.includes('saving') ? 'saving'
+    : statuses.includes('error') ? 'error'
+      : 'idle'
 
   const flushIds = useCallback(async (ids) => {
     await Promise.all(ids.map((id) => flushers.current.get(id)?.()).filter(Boolean))
@@ -117,7 +135,7 @@ export function useJournalListState() {
     journals, accounts, loading, error,
     approvalErrors, clearApprovalErrors,
     selected, draftIds,
-    registerFlush,
+    registerFlush, reportSaveStatus, saveStatus,
     toggleSelect, selectAll,
     addEntry, approveAll, approveSelected, deleteSelected,
   }

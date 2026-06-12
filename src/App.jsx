@@ -12,6 +12,7 @@ const BandEventDetailPage = lazy(() => import('./pages/BandEventDetailPage.jsx')
 const BandEventsPage = lazy(() => import('./pages/BandEventsPage.jsx'))
 const ContactDetailPage = lazy(() => import('./pages/ContactDetailPage.jsx'))
 const ContactsPage = lazy(() => import('./pages/ContactsPage.jsx'))
+const SuppliersPage = lazy(() => import('./pages/SuppliersPage.jsx'))
 const SongsPage = lazy(() => import('./pages/SongsPage.jsx'))
 const SongDetailPage = lazy(() => import('./pages/SongDetailPage.jsx'))
 const SetlistsPage = lazy(() => import('./pages/SetlistsPage.jsx'))
@@ -34,6 +35,7 @@ const InvoicesPage = lazy(() => import('./pages/InvoicesPage.jsx'))
 const InvoiceDetailPage = lazy(() => import('./pages/InvoiceDetailPage.jsx'))
 const PurchasesPage = lazy(() => import('./pages/PurchasesPage.jsx'))
 const PurchaseDetailPage = lazy(() => import('./pages/PurchaseDetailPage.jsx'))
+const MerchPage = lazy(() => import('./pages/MerchPage.jsx'))
 const JournalPage = lazy(() => import('./pages/JournalPage.jsx'))
 const LedgerEntriesPage = lazy(() => import('./pages/LedgerEntriesPage.jsx'))
 const LedgerEntryDetailPage = lazy(() => import('./pages/LedgerEntryDetailPage.jsx'))
@@ -75,6 +77,9 @@ export default function App() {
             <Route path="/contacts" element={<ContactsPage />}>
               <Route path=":id" element={<ContactDetailPage />} />
             </Route>
+            <Route path="/suppliers" element={<SuppliersPage />}>
+              <Route path=":id" element={<ContactDetailPage />} />
+            </Route>
             <Route path="/songs" element={<SongsPage />}>
               <Route path=":id" element={<SongDetailPage />} />
             </Route>
@@ -86,6 +91,7 @@ export default function App() {
             <Route path="/purchases" element={<PurchasesPage />}>
               <Route path=":id" element={<PurchaseDetailPage />} />
             </Route>
+            <Route path="/merch" element={<MerchPage />} />
             <Route path="/journal" element={<JournalPage />} />
             <Route path="/ledger" element={<LedgerEntriesPage />} />
             <Route path="/ledger/:id" element={<LedgerEntryDetailPage />} />

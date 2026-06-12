@@ -173,6 +173,35 @@ describe('JournalPage', () => {
     await waitFor(() => expect(journalApi.deleteJournal).toHaveBeenCalledWith(1))
   })
 
+  it('shows the save status in the toolbar instead of inside the entry row', async () => {
+    let resolveSave
+    journalApi.updateJournal.mockImplementation(() => new Promise((res) => { resolveSave = res }))
+    const user = userEvent.setup()
+    wrap(<JournalPage />)
+    expect(await screen.findByText('1 ledger entry')).toBeInTheDocument()
+
+    await user.type(screen.getByPlaceholderText('Description'), 'x')
+
+    const saving = await screen.findByText('Saving…')
+    // rendered in the toolbar (next to the Add button), not inside the entry list
+    expect(saving.closest('[data-testid="journal-toolbar"]')).not.toBeNull()
+
+    resolveSave(draft())
+    await waitFor(() => expect(screen.queryByText('Saving…')).not.toBeInTheDocument())
+  })
+
+  it('shows "Save failed" in the toolbar when a debounced save errors', async () => {
+    journalApi.updateJournal.mockRejectedValue(new Error('boom'))
+    const user = userEvent.setup()
+    wrap(<JournalPage />)
+    expect(await screen.findByText('1 ledger entry')).toBeInTheDocument()
+
+    await user.type(screen.getByPlaceholderText('Description'), 'x')
+
+    const failed = await screen.findByText('Save failed')
+    expect(failed.closest('[data-testid="journal-toolbar"]')).not.toBeNull()
+  })
+
   it('select-all selects every draft entry', async () => {
     const user = userEvent.setup()
     journalApi.listJournals.mockResolvedValue([

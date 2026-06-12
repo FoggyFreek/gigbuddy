@@ -78,6 +78,19 @@ Gates: `requireApproved` 403s non-approved users; `resolveTenantId` 403s a non-a
 - OIDC redirect GETs (`/auth/login`, `/auth/callback`) bypass CSRF. **`/push/resubscribe` is explicitly CSRF-exempt** — the service worker can't read the in-memory token; `sameSite:lax` cookies + the `(oldEndpoint, user_id)` match are the integrity gate there.
 - Cold sign-in is **invite-only**: a new Google sign-in creates an approved `users` row with zero memberships → `/redeem-invite`. Access comes from invite redemption + tenant-admin approval. `ADMIN_EMAIL` is bootstrapped as super admin + seed-tenant admin on first login.
 
+## Double-entry ledger
+
+Finance is built on an **immutable double-entry ledger** (`ledger_transactions` + `ledger_entries`, migration `065`). Rules that aren't obvious from any single file:
+
+- **`postJournal()` in `server/services/ledgerService.js` is the only insert path.** Never write ledger rows directly. It validates balance (debits = credits), drops zero lines, requires ≥2 non-zero lines, and enforces period close (`books_closed_through`).
+- **Idempotency by `UNIQUE (tenant_id, source_type, source_id, source_event)`** — re-posting the same event returns `{ posted: false }` instead of duplicating. New posted events follow the `source_type/source_event` pattern (e.g. `invoice/sent`, `purchase/payment`, `vat_settlement/filed`).
+- **Postings are corrections-forward, never edits**: voiding posts a reversing transaction; rows are never updated or deleted.
+- Business services (invoice, purchase, reimbursement, journal, VAT return) post **inside the same DB transaction** as the state change — keep it that way for new events.
+- Tenant accounting settings (receivable/payable/revenue/VAT/reimbursement account codes, seeded from `server/db/defaultChartOfAccounts.js`) are guarded by a **per-tenant Postgres advisory lock** (`ledgerService.js`, shared with `server/routes/accounts.js`) so settings can't change while a posting races.
+- External payments (Mollie webhooks) use `clampToOpenPeriod` so cash receipts still book when the original date falls in a closed period.
+- Display classification of `(source_type, source_event)` lives in `server/services/ledgerEntryTypes.js` with a frontend mirror in `src/utils/ledgerEntryType.js` — **keep both in sync** when adding events.
+- Best reference tests: `src/tests/server/ledger.test.js` (posting invariants), `ledgerCompliance.test.js` (period close, audit, settings guard), `ledgerBrowser.test.js` (read side).
+
 ## Migrations
 
 New migrations go in `server/db/migrations/` as `NNN_name.sql` and run on the next `migrate`. The runner sorts alphabetically, so **numeric prefixes must stay monotonic** and zero-padded. They run automatically; don't hand-apply SQL.

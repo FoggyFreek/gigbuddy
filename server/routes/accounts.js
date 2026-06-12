@@ -66,6 +66,9 @@ router.get('/settings', async (req, res, next) => {
       input_vat_account_code: existingCodes.has('15000') ? '15000' : null,
       vat_receivable_settlement_account_code: existingCodes.has('15010') ? '15010' : null,
       vat_payable_settlement_account_code: existingCodes.has('24010') ? '24010' : null,
+      merch_inventory_account_code: existingCodes.has('12200') ? '12200' : null,
+      merch_revenue_account_code: existingCodes.has('42000') ? '42000' : null,
+      merch_cogs_account_code: existingCodes.has('51000') ? '51000' : null,
     }
     const { rows: inserted } = await pool.query(
       `INSERT INTO tenant_accounting_settings (
@@ -74,8 +77,9 @@ router.get('/settings', async (req, res, next) => {
          payable_account_code, default_reimbursement_account_code, default_expense_account_code,
          primary_checking_account_code,
          output_vat_account_code, input_vat_account_code,
-         vat_receivable_settlement_account_code, vat_payable_settlement_account_code
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         vat_receivable_settlement_account_code, vat_payable_settlement_account_code,
+         merch_inventory_account_code, merch_revenue_account_code, merch_cogs_account_code
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (tenant_id) DO UPDATE SET updated_at = NOW()
        RETURNING *`,
       [
@@ -91,6 +95,9 @@ router.get('/settings', async (req, res, next) => {
         defaults.input_vat_account_code,
         defaults.vat_receivable_settlement_account_code,
         defaults.vat_payable_settlement_account_code,
+        defaults.merch_inventory_account_code,
+        defaults.merch_revenue_account_code,
+        defaults.merch_cogs_account_code,
       ],
     )
     res.json(inserted[0])
@@ -239,7 +246,10 @@ router.patch('/:id', requireTenantAdmin, async (req, res, next) => {
            output_vat_account_code = $2 OR
            input_vat_account_code = $2 OR
            vat_receivable_settlement_account_code = $2 OR
-           vat_payable_settlement_account_code = $2
+           vat_payable_settlement_account_code = $2 OR
+           merch_inventory_account_code = $2 OR
+           merch_revenue_account_code = $2 OR
+           merch_cogs_account_code = $2
          )`,
         [req.tenantId, code],
       )
@@ -369,6 +379,9 @@ async function insertSettingsWithDefaults(client, tenantId, updates) {
     input_vat_account_code: null,
     vat_receivable_settlement_account_code: null,
     vat_payable_settlement_account_code: null,
+    merch_inventory_account_code: null,
+    merch_revenue_account_code: null,
+    merch_cogs_account_code: null,
     books_closed_through: null,
     ...updates,
   }
@@ -380,8 +393,9 @@ async function insertSettingsWithDefaults(client, tenantId, updates) {
        primary_checking_account_code,
        output_vat_account_code, input_vat_account_code,
        vat_receivable_settlement_account_code, vat_payable_settlement_account_code,
+       merch_inventory_account_code, merch_revenue_account_code, merch_cogs_account_code,
        books_closed_through
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
     [
       tenantId, full.currency,
       full.receivable_account_code, full.default_revenue_account_code,
@@ -389,6 +403,7 @@ async function insertSettingsWithDefaults(client, tenantId, updates) {
       full.primary_checking_account_code,
       full.output_vat_account_code, full.input_vat_account_code,
       full.vat_receivable_settlement_account_code, full.vat_payable_settlement_account_code,
+      full.merch_inventory_account_code, full.merch_revenue_account_code, full.merch_cogs_account_code,
       full.books_closed_through,
     ],
   )

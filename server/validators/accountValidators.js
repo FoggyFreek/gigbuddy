@@ -17,6 +17,9 @@ export const SETTINGS_TYPE_MAP = {
   input_vat_account_code: 'asset',
   vat_receivable_settlement_account_code: 'asset',
   vat_payable_settlement_account_code: 'liability',
+  merch_inventory_account_code: 'asset',
+  merch_revenue_account_code: 'revenue',
+  merch_cogs_account_code: 'cost_of_goods_sold',
 }
 
 export const SETTINGS_CODE_FIELDS = Object.keys(SETTINGS_TYPE_MAP)

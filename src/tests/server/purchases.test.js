@@ -1,7 +1,36 @@
 import './_envSetup.js'
 // @vitest-environment node
-import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
+import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
 import request from 'supertest'
+import { Readable } from 'node:stream'
+
+// In-memory stand-in for the MinIO/RustFS client: CI has no object storage,
+// and the attachment tests stream back what they upload, so the mock must
+// retain the bytes and content type per key (unlike the throw-away stub in
+// invoices.test.js).
+const objectStore = new Map()
+vi.mock('../../../server/utils/storage.js', () => ({
+  BUCKET: 'test-bucket',
+  storageClient: {
+    putObject: vi.fn(async (bucket, key, buffer, size, meta) => {
+      objectStore.set(key, { buffer, contentType: meta?.['Content-Type'] })
+      return { etag: 'test' }
+    }),
+    statObject: vi.fn(async (bucket, key) => {
+      const obj = objectStore.get(key)
+      if (!obj) throw Object.assign(new Error('Not Found'), { code: 'NoSuchKey' })
+      return { size: obj.buffer.length, metaData: { 'content-type': obj.contentType } }
+    }),
+    getObject: vi.fn(async (bucket, key) => {
+      const obj = objectStore.get(key)
+      if (!obj) throw Object.assign(new Error('Not Found'), { code: 'NoSuchKey' })
+      return Readable.from(obj.buffer)
+    }),
+    removeObject: vi.fn(async (bucket, key) => {
+      objectStore.delete(key)
+    }),
+  },
+}))
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let seed
