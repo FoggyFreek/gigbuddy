@@ -337,3 +337,12 @@ export async function listLines(executor, tenantId, transactionId) {
   )
   return rows
 }
+
+// Display name for report export headers/filenames (formal name, else band name).
+export async function getTenantDisplayName(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT COALESCE(formal_name, band_name) AS name FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  return rows[0]?.name || ''
+}

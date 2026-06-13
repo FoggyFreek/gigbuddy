@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { statObject, getObject } from '../services/storageService.js'
+import { getPublicInvoiceLogoPath } from '../services/invoiceService.js'
 
 const router = Router()
 
@@ -12,14 +13,7 @@ router.get('/:id/logo', async (req, res) => {
   const id = Number(req.params.id)
   if (!Number.isInteger(id) || id <= 0) return res.status(404).end()
 
-  const { rows } = await pool.query(
-    `SELECT t.logo_path
-       FROM invoices i
-       JOIN tenants t ON t.id = i.tenant_id
-      WHERE i.id = $1 AND i.mollie_payment_link_id IS NOT NULL`,
-    [id],
-  )
-  const logoPath = rows[0]?.logo_path
+  const logoPath = await getPublicInvoiceLogoPath(pool, id)
   if (!logoPath) return res.status(404).end()
 
   try {

@@ -1,146 +1,56 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { parseId } from '../validators/availabilityValidators.js'
+import {
+  listRange,
+  listOnDate,
+  createSlot,
+  patchSlot,
+  deleteSlot,
+} from '../services/availabilityService.js'
 
 const router = Router()
 
-const SLOT_FIELDS = ['band_member_id', 'start_date', 'end_date', 'status', 'reason']
-const VALID_STATUSES = new Set(['available', 'unavailable'])
-
-function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
+function requireId(req, res) {
+  const id = parseId(req.params.id)
+  if (id === null) {
+    res.status(400).json({ error: 'Invalid id' })
+    return null
+  }
+  return id
 }
 
-function validateSlot({ start_date, end_date, status }) {
-  if (status !== undefined && !VALID_STATUSES.has(status)) {
-    return 'status must be available or unavailable'
-  }
-  if (start_date && end_date && end_date < start_date) {
-    return 'end_date must be >= start_date'
-  }
-  return null
+function sendError(res, error) {
+  res.status(error.status).json(error.body)
 }
 
 router.get('/', async (req, res) => {
-  const { from, to } = req.query
-  if (!from || !to) return res.status(400).json({ error: 'from and to are required' })
-
-  const { rows } = await pool.query(
-    `SELECT * FROM availability_slots
-     WHERE tenant_id = $1 AND start_date <= $2 AND end_date >= $3
-     ORDER BY created_at ASC`,
-    [req.tenantId, to, from],
-  )
-  res.json(rows)
+  const result = await listRange(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.slots)
 })
 
 router.get('/on/:date', async (req, res) => {
-  const { date } = req.params
-
-  const { rows: members } = await pool.query(
-    'SELECT * FROM band_members WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
-    [req.tenantId],
-  )
-  const { rows: slots } = await pool.query(
-    `SELECT * FROM availability_slots
-     WHERE tenant_id = $1 AND start_date <= $2 AND end_date >= $2
-     ORDER BY created_at ASC`,
-    [req.tenantId, date],
-  )
-
-  const bandWide = slots.findLast((s) => s.band_member_id === null) ?? null
-
-  const result = members.map((m) => {
-    const memberSlot = slots.findLast((s) => s.band_member_id === m.id)
-    const winner = bandWide ?? memberSlot
-    return {
-      member_id: m.id,
-      name: m.name,
-      color: m.color,
-      role: m.role,
-      position: m.position,
-      status: winner ? winner.status : 'default',
-      reason: winner?.reason ?? null,
-      source: bandWide ? 'band' : memberSlot ? 'member' : 'default',
-    }
-  })
-
-  res.json({ members: result, bandWide })
+  res.json(await listOnDate(pool, req.tenantId, req.params.date))
 })
 
 router.post('/', async (req, res) => {
-  const { band_member_id, start_date, end_date, status, reason } = req.body
-  if (!start_date || !end_date || !status) {
-    return res.status(400).json({ error: 'start_date, end_date and status are required' })
-  }
-
-  const err = validateSlot({ start_date, end_date, status })
-  if (err) return res.status(400).json({ error: err })
-
-  if (band_member_id != null) {
-    const { rows } = await pool.query(
-      'SELECT id FROM band_members WHERE id = $1 AND tenant_id = $2',
-      [band_member_id, req.tenantId],
-    )
-    if (!rows.length) return res.status(400).json({ error: 'band_member_id not found' })
-  }
-
-  const { rows } = await pool.query(
-    `INSERT INTO availability_slots (tenant_id, band_member_id, start_date, end_date, status, reason)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [req.tenantId, band_member_id ?? null, start_date, end_date, status, reason ?? null],
-  )
-  res.status(201).json(rows[0])
+  const result = await createSlot(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.slot)
 })
 
 router.patch('/:id', async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
-
-  const err = validateSlot(req.body)
-  if (err) return res.status(400).json({ error: err })
-
-  if (req.body.band_member_id != null) {
-    const { rows } = await pool.query(
-      'SELECT id FROM band_members WHERE id = $1 AND tenant_id = $2',
-      [req.body.band_member_id, req.tenantId],
-    )
-    if (!rows.length) return res.status(400).json({ error: 'band_member_id not found' })
-  }
-
-  const fields = []
-  const values = []
-  let idx = 1
-
-  for (const key of SLOT_FIELDS) {
-    if (key in req.body) {
-      fields.push(`${key} = $${idx++}`)
-      values.push(req.body[key])
-    }
-  }
-
-  if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
-
-  fields.push(`updated_at = NOW()`)
-  values.push(id, req.tenantId)
-  const { rows } = await pool.query(
-    `UPDATE availability_slots SET ${fields.join(', ')}
-     WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
-    values,
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  res.json(rows[0])
+  const id = requireId(req, res); if (id === null) return
+  const result = await patchSlot(pool, req.tenantId, id, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.slot)
 })
 
 router.delete('/:id', async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
-
-  const { rowCount } = await pool.query(
-    'DELETE FROM availability_slots WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rowCount) return res.status(404).json({ error: 'Not found' })
+  const id = requireId(req, res); if (id === null) return
+  const result = await deleteSlot(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })
 

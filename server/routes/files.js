@@ -1,34 +1,10 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { statObject, getObject } from '../services/storageService.js'
+import { resolveFileAccess } from '../services/fileService.js'
 import { sanitizeFilename } from '../utils/sanitizeFilename.js'
 
 const router = Router()
-
-async function objectKeyBelongsToTenant(objectKey, tenantId) {
-  const { rows } = await pool.query(
-    `SELECT 1 FROM tenants WHERE id = $1 AND logo_path = $2
-     UNION ALL
-     SELECT 1 FROM gigs WHERE tenant_id = $1 AND banner_path = $2
-     UNION ALL
-     SELECT 1 FROM share_photos WHERE tenant_id = $1 AND object_key = $2
-     UNION ALL
-     SELECT 1 FROM gig_attachments WHERE tenant_id = $1 AND object_key = $2
-     UNION ALL
-     SELECT 1 FROM invoices WHERE tenant_id = $1 AND pdf_path = $2
-     UNION ALL
-     SELECT 1 FROM invoices WHERE tenant_id = $1 AND custom_logo_path = $2
-     UNION ALL
-     SELECT 1 FROM song_documents WHERE tenant_id = $1 AND object_key = $2
-     UNION ALL
-     SELECT 1 FROM song_recordings WHERE tenant_id = $1 AND object_key = $2
-     UNION ALL
-     SELECT 1 FROM purchase_attachments WHERE tenant_id = $1 AND object_key = $2
-     LIMIT 1`,
-    [tenantId, objectKey],
-  )
-  return rows.length > 0
-}
 
 router.get('/*objectKey', async (req, res) => {
   const segments = req.params.objectKey
@@ -36,28 +12,16 @@ router.get('/*objectKey', async (req, res) => {
 
   if (!objectKey) return res.status(400).json({ error: 'Missing object key' })
 
-  const allowed = await objectKeyBelongsToTenant(objectKey, req.tenantId)
+  const { allowed, originalFilename } = await resolveFileAccess(pool, req.tenantId, objectKey)
   if (!allowed) return res.status(404).json({ error: 'Not found' })
-
-  const { rows: meta } = await pool.query(
-    `SELECT original_filename FROM gig_attachments WHERE object_key = $1 AND tenant_id = $2
-     UNION ALL
-     SELECT original_filename FROM song_documents WHERE object_key = $1 AND tenant_id = $2
-     UNION ALL
-     SELECT original_filename FROM song_recordings WHERE object_key = $1 AND tenant_id = $2
-     UNION ALL
-     SELECT original_filename FROM purchase_attachments WHERE object_key = $1 AND tenant_id = $2
-     LIMIT 1`,
-    [objectKey, req.tenantId],
-  )
 
   try {
     const stat = await statObject(objectKey)
     res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream')
     res.setHeader('Content-Length', stat.size)
-    if (meta.length) {
+    if (originalFilename) {
       // Sanitize before embedding in header to prevent response splitting (OWASP A05).
-      const safeName = sanitizeFilename(meta[0].original_filename)
+      const safeName = sanitizeFilename(originalFilename)
       // ?inline=1 lets the SPA preview the file (e.g. a PDF in an <iframe>)
       // instead of forcing a download; the filename still applies on save.
       const inline = req.query.inline === '1'

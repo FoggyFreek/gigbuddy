@@ -1,9 +1,9 @@
 import { Router } from 'express'
-import pool from '../db/index.js'
 import {
   getTenantStatistics,
   getAllTenantStatistics,
   refreshTenantStorage,
+  refreshAllTenantStorage,
 } from '../services/statisticsService.js'
 
 // Tenant-admin view: usage for the active tenant only.
@@ -45,10 +45,7 @@ adminRouter.get('/storage', async (_req, res, next) => {
 
 adminRouter.post('/storage/refresh', async (_req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT id FROM tenants ORDER BY id')
-    for (const { id } of rows) {
-      await refreshTenantStorage(id)
-    }
+    await refreshAllTenantStorage()
     res.json(await getAllTenantStatistics())
   } catch (err) {
     next(err)

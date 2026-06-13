@@ -131,12 +131,6 @@ export default function JournalPage() {
         </Box>
       )}
 
-      {!loading && !journals.length && (
-        <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-          No journal entries yet. Add one to get started.
-        </Typography>
-      )}
-
       {!loading && journals.map((journal) => (
         <JournalEntryRow
           key={journal.id}

@@ -284,6 +284,71 @@ describe('PurchaseDetails', () => {
     expect(purchasesApi.updatePurchase).not.toHaveBeenCalled()
   })
 
+  it('stays in the detail after approving so payment can be registered directly', async () => {
+    purchasesApi.getPurchase.mockResolvedValue(purchase({
+      status: 'draft',
+      finalized_at: null,
+      lines: [{ description: 'Studio', account_code: '62100', tax_rate: 21, amount_incl_cents: 125000, position: 0 }],
+    }))
+    purchasesApi.updatePurchase.mockResolvedValueOnce(purchase({ status: 'approved' }))
+    const onClose = vi.fn()
+    const onPurchaseUpdate = vi.fn()
+    const user = userEvent.setup()
+
+    wrap(
+      <PurchaseDetails
+        mode="edit"
+        purchaseId={5}
+        onClose={onClose}
+        onPurchaseUpdate={onPurchaseUpdate}
+        embedded
+      />,
+    )
+
+    await screen.findByText('Purchase 5')
+    expect(screen.getByRole('button', { name: /register payment/i })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: /^approve$/i }))
+
+    // Register Payment becomes enabled in place; the view does not close.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /register payment/i })).toBeEnabled(),
+    )
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onPurchaseUpdate).toHaveBeenCalledWith(5, expect.objectContaining({ status: 'approved' }))
+  })
+
+  it('stays in the detail after saving as draft instead of closing', async () => {
+    purchasesApi.getPurchase.mockResolvedValue(purchase({
+      status: 'draft',
+      finalized_at: null,
+      lines: [{ description: 'Studio', account_code: '62100', tax_rate: 21, amount_incl_cents: 125000, position: 0 }],
+    }))
+    purchasesApi.updatePurchase.mockResolvedValueOnce(purchase({ status: 'draft', finalized_at: null }))
+    const onClose = vi.fn()
+    const onPurchaseUpdate = vi.fn()
+    const user = userEvent.setup()
+
+    wrap(
+      <PurchaseDetails
+        mode="edit"
+        purchaseId={5}
+        onClose={onClose}
+        onPurchaseUpdate={onPurchaseUpdate}
+        embedded
+      />,
+    )
+
+    await screen.findByText('Purchase 5')
+    await user.click(screen.getByRole('button', { name: /save as draft/i }))
+
+    await waitFor(() => expect(purchasesApi.updatePurchase).toHaveBeenCalled())
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onPurchaseUpdate).toHaveBeenCalledWith(5, expect.objectContaining({ status: 'draft' }))
+    // The editor is still mounted.
+    expect(screen.getByRole('button', { name: /save as draft/i })).toBeInTheDocument()
+  })
+
   it('maps a missing default expense account response to the account input', async () => {
     purchasesApi.getPurchase.mockResolvedValue(purchase({
       status: 'draft',

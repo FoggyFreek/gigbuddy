@@ -27,6 +27,7 @@ import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import { formatEur } from '../utils/invoiceTotals.js'
 import { formatShortDate } from '../utils/dateFormat.js'
 import { ledgerLineShape } from '../propTypes/shared.js'
+import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.jsx'
 
 const decimalEur = new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -252,6 +253,24 @@ MetaField.propTypes = {
   value: PropTypes.string.isRequired,
 }
 
+// A ledger line uses only one side, so the unused side is blank. Render two
+// empty cells (matching MoneyCells' two-column shape) rather than "€ 0,00".
+function MoneyOrBlankCells({ cents }) {
+  if (!cents) {
+    return (
+      <>
+        <TableCell padding="none" />
+        <TableCell />
+      </>
+    )
+  }
+  return <MoneyCells cents={cents} />
+}
+
+MoneyOrBlankCells.propTypes = {
+  cents: PropTypes.number.isRequired,
+}
+
 function LedgerLinesTable({ lines }) {
   const isCompact = useCompactLayout()
   const totalDebit = lines.reduce((s, l) => s + l.debit_cents, 0)
@@ -322,8 +341,8 @@ function LedgerLinesTable({ lines }) {
               <TableCell>Name</TableCell>
               <TableCell>Description</TableCell>
               <TableCell align="right">In EUR</TableCell>
-              <TableCell align="right">Debit</TableCell>
-              <TableCell align="right">Credit</TableCell>
+              <MoneyHeaderCells label="Debit" />
+              <MoneyHeaderCells label="Credit" />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -333,8 +352,8 @@ function LedgerLinesTable({ lines }) {
                 <TableCell>{line.account_name || '-'}</TableCell>
                 <TableCell>{line.memo || ''}</TableCell>
                 <TableCell align="right">{formatSigned(line)}</TableCell>
-                <TableCell align="right">{line.debit_cents > 0 ? formatEur(line.debit_cents) : ''}</TableCell>
-                <TableCell align="right">{line.credit_cents > 0 ? formatEur(line.credit_cents) : ''}</TableCell>
+                <MoneyOrBlankCells cents={line.debit_cents} />
+                <MoneyOrBlankCells cents={line.credit_cents} />
               </TableRow>
             ))}
             <TableRow>
@@ -342,12 +361,8 @@ function LedgerLinesTable({ lines }) {
               <TableCell align="right">
                 <Typography variant="body2" fontWeight={600}>Total EUR:</Typography>
               </TableCell>
-              <TableCell align="right">
-                <Typography variant="body2" fontWeight={600}>{formatEur(totalDebit)}</Typography>
-              </TableCell>
-              <TableCell align="right">
-                <Typography variant="body2" fontWeight={600}>{formatEur(totalCredit)}</Typography>
-              </TableCell>
+              <MoneyCells cents={totalDebit} bold />
+              <MoneyCells cents={totalCredit} bold />
             </TableRow>
           </TableBody>
         </Table>

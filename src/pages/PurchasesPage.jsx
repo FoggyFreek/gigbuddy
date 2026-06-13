@@ -30,6 +30,7 @@ import { purchaseStatusColor } from '../utils/purchaseStatus.js'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.js'
 import { purchaseShape, idProp } from '../propTypes/shared.js'
 import StatusDot from '../components/StatusDot.jsx'
+import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.jsx'
 
 const SUMMARY_CARDS = [
   { key: 'all', label: 'Purchases', chipColor: 'primary' },
@@ -337,14 +338,14 @@ function PurchasesList({ purchases, selectedId, onRowClick }) {
               <TableCell>Due date</TableCell>
               <TableCell>Description</TableCell>
               <TableCell>Supplier</TableCell>
-              <TableCell align="right">Excl. VAT</TableCell>
-              <TableCell align="right">Incl. VAT</TableCell>
+              <MoneyHeaderCells label="Excl. VAT" />
+              <MoneyHeaderCells label="Incl. VAT" />
             </TableRow>
           </TableHead>
           <TableBody>
             {!purchases.length && (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={10}>
                   <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>No purchases found</Typography>
                 </TableCell>
               </TableRow>
@@ -363,8 +364,8 @@ function PurchasesList({ purchases, selectedId, onRowClick }) {
                 <TableCell>{p.due_date ? formatShortDate(p.due_date) : ''}</TableCell>
                 <TableCell>{p.description || ''}</TableCell>
                 <TableCell>{p.supplier_name}</TableCell>
-                <TableCell align="right">{formatEur(p.subtotal_cents)}</TableCell>
-                <TableCell align="right">{formatEur(p.total_cents)}</TableCell>
+                <MoneyCells cents={p.subtotal_cents} />
+                <MoneyCells cents={p.total_cents} />
               </TableRow>
             ))}
           </TableBody>

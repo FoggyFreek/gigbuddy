@@ -50,18 +50,32 @@ export function useJournalListState() {
     await Promise.all(ids.map((id) => flushers.current.get(id)?.()).filter(Boolean))
   }, [])
 
+  // The journal must never be empty: there should always be at least one draft
+  // ready to edit. Creates a fresh blank draft (one empty line) for the tenant.
+  const createBlankDraft = useCallback(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    return createJournal({ entry_date: today, description: null, lines: [emptyLine(0)] })
+  }, [])
+
+  // Loads the drafts and, if none exist (first visit, or after approving/deleting
+  // them all), seeds one blank draft and re-fetches once so the editor always has
+  // a row. The single guarded `if` (no loop) keeps a still-empty re-fetch safe.
   const load = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const data = await listJournals()
+      let data = await listJournals()
+      if (!data.length) {
+        await createBlankDraft()
+        data = await listJournals()
+      }
       setJournals(data)
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [createBlankDraft])
 
   useEffect(() => { load() }, [load])
 
@@ -89,13 +103,12 @@ export function useJournalListState() {
 
   const addEntry = useCallback(async () => {
     try {
-      const today = new Date().toISOString().slice(0, 10)
-      await createJournal({ entry_date: today, description: null, lines: [emptyLine(0)] })
+      await createBlankDraft()
       await load()
     } catch (e) {
       setError(e.message)
     }
-  }, [load])
+  }, [createBlankDraft, load])
 
   // Flushes pending edits for the given drafts, posts them in one batch, then
   // reloads. Per-entry approval failures (invalid/unbalanced lines, missing

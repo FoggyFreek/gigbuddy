@@ -31,6 +31,7 @@ import {
 } from '../api/merch.js'
 import { formatEur } from '../utils/purchaseTotals.js'
 import { productShape, merchSaleShape } from '../propTypes/shared.js'
+import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.jsx'
 
 export default function MerchPage() {
   const { products, sales, error, setError, reload } = useMerchState()
@@ -223,8 +224,8 @@ function ProductsList({ products, onEdit, onArchive }) {
           <TableHead>
             <TableRow>
               <TableCell>Name</TableCell>
-              <TableCell align="right">Unit cost</TableCell>
-              <TableCell align="right">Price (incl. VAT)</TableCell>
+              <MoneyHeaderCells label="Unit cost" />
+              <MoneyHeaderCells label="Price (incl. VAT)" />
               <TableCell align="right">VAT</TableCell>
               <TableCell align="right">On hand</TableCell>
               <TableCell align="right">Actions</TableCell>
@@ -237,8 +238,8 @@ function ProductsList({ products, onEdit, onArchive }) {
                   {p.name}
                   {p.archived_at && <Chip label="Archived" size="small" sx={{ ml: 1 }} />}
                 </TableCell>
-                <TableCell align="right">{formatEur(p.unit_cost_cents)}</TableCell>
-                <TableCell align="right">{formatEur(p.default_price_incl_cents)}</TableCell>
+                <MoneyCells cents={p.unit_cost_cents} />
+                <MoneyCells cents={p.default_price_incl_cents} />
                 <TableCell align="right">{Number(p.vat_rate)}%</TableCell>
                 <TableCell align="right">{p.quantity_on_hand}</TableCell>
                 <TableCell align="right">
@@ -333,8 +334,8 @@ function SalesList({ sales, onVoid }) {
               <TableCell>Date</TableCell>
               <TableCell>Product</TableCell>
               <TableCell align="right">Qty</TableCell>
-              <TableCell align="right">Unit price</TableCell>
-              <TableCell align="right">Total</TableCell>
+              <MoneyHeaderCells label="Unit price" />
+              <MoneyHeaderCells label="Total" />
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -347,8 +348,8 @@ function SalesList({ sales, onVoid }) {
                   {s.status === 'voided' && <Chip label="Voided" size="small" sx={{ ml: 1 }} />}
                 </TableCell>
                 <TableCell align="right">{s.quantity}</TableCell>
-                <TableCell align="right">{formatEur(s.unit_price_incl_cents)}</TableCell>
-                <TableCell align="right">{formatEur(s.quantity * s.unit_price_incl_cents)}</TableCell>
+                <MoneyCells cents={s.unit_price_incl_cents} />
+                <MoneyCells cents={s.quantity * s.unit_price_incl_cents} />
                 <TableCell align="right">
                   <VoidSaleButton sale={s} onVoid={onVoid} />
                 </TableCell>

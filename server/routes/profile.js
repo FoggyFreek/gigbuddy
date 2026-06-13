@@ -1,22 +1,19 @@
-import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
 import { requireTenantAdmin } from '../middleware/tenant.js'
-import { uploadObject, removeObject, safeRemove, bandLogoKey } from '../services/storageService.js'
-import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
-import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
-
-// Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
-const MOLLIE_KEY_RE = /^(live|test)_[A-Za-z0-9]{25,}$/
-
-function maskMollieKey(key) {
-  if (!key) return null
-  const prefix = key.slice(0, 5)
-  const last4 = key.slice(-4)
-  const dots = '•'.repeat(Math.max(0, key.length - 9))
-  return `${prefix}${dots}${last4}`
-}
+import { parseId } from '../validators/profileValidators.js'
+import {
+  getProfile,
+  patchProfile,
+  createLink,
+  patchLink,
+  deleteLink,
+  getMollieKeyStatus,
+  setMollieKeyValue,
+  clearMollieKeyValue,
+  uploadLogo,
+} from '../services/profileService.js'
 
 const router = Router()
 
@@ -27,62 +24,6 @@ const logoUpload = multer({
   limits: { fileSize: 2 * 1024 * 1024 },
 })
 
-const PROFILE_FIELDS = [
-  'band_name',
-  'bio',
-  'instagram_handle',
-  'facebook_handle',
-  'tiktok_handle',
-  'youtube_handle',
-  'spotify_handle',
-  'bandsintown_artist_name',
-  'accent_color',
-]
-
-const FINANCIAL_FIELDS = [
-  'formal_name',
-  'address_street',
-  'address_postal_code',
-  'address_city',
-  'address_country',
-  'kvk_number',
-  'iban',
-  'tax_id',
-  'tax_percentage',
-  'applies_kor',
-]
-
-const FINANCIAL_FIELDS_SET = new Set(FINANCIAL_FIELDS)
-
-const TEXT_MAX_LENGTHS = {
-  formal_name: 200,
-  address_street: 200,
-  address_postal_code: 10,
-  address_city: 200,
-  address_country: 200,
-}
-
-const KVK_RE = /^[0-9]{8}$/
-const IBAN_RE = /^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/
-const TAX_ID_RE = /^NL[0-9]{9}B[0-9]{2}$/
-
-const LINK_FIELDS = ['label', 'url', 'sort_order']
-
-function normalizeRequiredProfileUrl(value) {
-  const url = normalizeOptionalUrl(value, { allowedProtocols: PROFILE_LINK_PROTOCOLS })
-  if (!url) {
-    const err = new Error('Invalid URL')
-    err.status = 400
-    throw err
-  }
-  return url
-}
-
-function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
-
 function requireLinkId(req, res) {
   const linkId = parseId(req.params.linkId)
   if (linkId === null) {
@@ -92,211 +33,63 @@ function requireLinkId(req, res) {
   return linkId
 }
 
+function sendError(res, error) {
+  res.status(error.status).json(error.body)
+}
+
 // Get tenant profile with its links.
-// mollie_api_key is intentionally excluded — use GET /profile/mollie-key for masked status.
 router.get('/', async (req, res) => {
-  const { rows: profiles } = await pool.query(
-    'SELECT * FROM tenants WHERE id = $1',
-    [req.tenantId],
-  )
-  if (!profiles.length) return res.status(404).json({ error: 'Profile not found' })
-
-  const { rows: links } = await pool.query(
-    'SELECT * FROM profile_links WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
-    [req.tenantId],
-  )
-  const profile = { ...profiles[0] }
-  delete profile.mollie_api_key
-  res.json({ ...profile, links })
+  const result = await getProfile(pool, req.tenantId)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.profile)
 })
-
-function validateAppliesKor(raw) {
-  if (raw === null || raw === undefined) return { skip: true }
-  if (typeof raw !== 'boolean') return { error: 'invalid_applies_kor' }
-  return { value: raw }
-}
-
-function validateTaxPercentage(raw) {
-  if (raw === null || raw === undefined) return { value: null }
-  if (raw === '') return { skip: true }
-  const n = Number(raw)
-  if (!Number.isFinite(n) || n < 0 || n > 100) return { error: 'invalid_tax_percentage' }
-  return { value: n }
-}
-
-// Builds a validator for whitespace-stripped, regex-checked fields (kvk/iban/tax_id).
-function makeStrippedValidator(key, re, upper) {
-  return (raw) => {
-    if (raw === null || raw === undefined) return { value: null }
-    if (typeof raw !== 'string') return { error: `invalid_${key}` }
-    let stripped = raw.replace(/\s+/g, '')
-    if (upper) stripped = stripped.toUpperCase()
-    if (stripped === '') return { value: '' }
-    if (!re.test(stripped)) return { error: `invalid_${key}` }
-    return { value: stripped }
-  }
-}
-
-function validateBoundedText(key, raw) {
-  if (raw === null || raw === undefined) return { value: null }
-  if (typeof raw !== 'string') return { error: `invalid_${key}` }
-  const max = TEXT_MAX_LENGTHS[key]
-  if (max != null && raw.length > max) return { error: `invalid_${key}` }
-  return { value: raw }
-}
-
-const FINANCIAL_VALIDATORS = {
-  applies_kor: validateAppliesKor,
-  tax_percentage: validateTaxPercentage,
-  kvk_number: makeStrippedValidator('kvk_number', KVK_RE, false),
-  iban: makeStrippedValidator('iban', IBAN_RE, true),
-  tax_id: makeStrippedValidator('tax_id', TAX_ID_RE, true),
-}
-
-function normalizeFinancialValue(key, raw) {
-  const validator = FINANCIAL_VALIDATORS[key]
-  return validator ? validator(raw) : validateBoundedText(key, raw)
-}
 
 // Update tenant profile (partial)
 router.patch('/', async (req, res) => {
-  const bodyKeys = Object.keys(req.body || {})
-  const touchesFinancial = bodyKeys.some((k) => FINANCIAL_FIELDS_SET.has(k))
-  if (touchesFinancial) {
-    const isAdmin = req.membership?.role === 'tenant_admin' || req.user?.is_super_admin
-    if (!isAdmin) return res.status(403).json({ error: 'tenant_admin_required' })
-  }
-
-  const fields = []
-  const values = []
-  let idx = 1
-
-  for (const key of PROFILE_FIELDS) {
-    if (key in req.body) {
-      fields.push(`${key} = $${idx++}`)
-      values.push(req.body[key])
-    }
-  }
-
-  for (const key of FINANCIAL_FIELDS) {
-    if (!(key in req.body)) continue
-    const result = normalizeFinancialValue(key, req.body[key])
-    if (result.error) return res.status(400).json({ error: result.error })
-    if (result.skip) continue
-    fields.push(`${key} = $${idx++}`)
-    values.push(result.value)
-  }
-
-  if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
-
-  fields.push(`updated_at = NOW()`)
-  values.push(req.tenantId)
-
-  const { rows } = await pool.query(
-    `UPDATE tenants SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
-    values,
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Profile not found' })
-  const updated = { ...rows[0] }
-  delete updated.mollie_api_key
-  res.json(updated)
+  const isAdmin = req.membership?.role === 'tenant_admin' || req.user?.is_super_admin
+  const result = await patchProfile(pool, req.tenantId, req.body, isAdmin)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.profile)
 })
 
 // Create link
 router.post('/links', async (req, res) => {
-  const { label, url } = req.body
-  if (!label || !url) {
-    return res.status(400).json({ error: 'label and url are required' })
-  }
-  const normalizedUrl = normalizeRequiredProfileUrl(url)
-
-  const { rows: maxRows } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM profile_links WHERE tenant_id = $1',
-    [req.tenantId],
-  )
-  const nextOrder = maxRows[0].next
-
-  const { rows } = await pool.query(
-    `INSERT INTO profile_links (tenant_id, label, url, sort_order)
-     VALUES ($1, $2, $3, $4) RETURNING *`,
-    [req.tenantId, label, normalizedUrl, nextOrder],
-  )
-  res.status(201).json(rows[0])
+  const result = await createLink(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.link)
 })
 
 // Update link (partial)
 router.patch('/links/:linkId', async (req, res) => {
   const linkId = requireLinkId(req, res); if (linkId === null) return
-
-  const fields = []
-  const values = []
-  let idx = 1
-
-  for (const key of LINK_FIELDS) {
-    if (key in req.body) {
-      fields.push(`${key} = $${idx++}`)
-      values.push(
-        key === 'url'
-          ? normalizeRequiredProfileUrl(req.body[key])
-          : req.body[key],
-      )
-    }
-  }
-
-  if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
-
-  values.push(linkId, req.tenantId)
-  const { rows } = await pool.query(
-    `UPDATE profile_links SET ${fields.join(', ')}
-     WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
-    values,
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  res.json(rows[0])
+  const result = await patchLink(pool, req.tenantId, linkId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.link)
 })
 
 // Delete link
 router.delete('/links/:linkId', async (req, res) => {
   const linkId = requireLinkId(req, res); if (linkId === null) return
-  const { rowCount } = await pool.query(
-    'DELETE FROM profile_links WHERE id = $1 AND tenant_id = $2',
-    [linkId, req.tenantId],
-  )
-  if (!rowCount) return res.status(404).json({ error: 'Not found' })
+  const result = await deleteLink(pool, req.tenantId, linkId)
+  if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })
 
 // Get Mollie API key status (returns masked preview, never the raw key)
 router.get('/mollie-key', async (req, res) => {
-  const { rows } = await pool.query(
-    'SELECT mollie_api_key FROM tenants WHERE id = $1',
-    [req.tenantId],
-  )
-  const key = rows[0]?.mollie_api_key || null
-  res.json({ isSet: !!key, preview: maskMollieKey(key) })
+  res.json(await getMollieKeyStatus(pool, req.tenantId))
 })
 
 // Set or replace Mollie API key (tenant admin only)
 router.put('/mollie-key', requireTenantAdmin, async (req, res) => {
-  const { key } = req.body || {}
-  if (typeof key !== 'string' || !MOLLIE_KEY_RE.test(key)) {
-    return res.status(400).json({ error: 'invalid_mollie_key' })
-  }
-  const { rows } = await pool.query(
-    'UPDATE tenants SET mollie_api_key = $1, updated_at = NOW() WHERE id = $2 RETURNING mollie_api_key',
-    [key, req.tenantId],
-  )
-  const stored = rows[0]?.mollie_api_key
-  res.json({ isSet: !!stored, preview: maskMollieKey(stored) })
+  const result = await setMollieKeyValue(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.status)
 })
 
 // Clear Mollie API key (tenant admin only)
 router.delete('/mollie-key', requireTenantAdmin, async (req, res) => {
-  await pool.query(
-    'UPDATE tenants SET mollie_api_key = NULL, updated_at = NOW() WHERE id = $1',
-    [req.tenantId],
-  )
-  res.json({ isSet: false, preview: null })
+  res.json(await clearMollieKeyValue(pool, req.tenantId))
 })
 
 // Upload / replace band logo (tenant admin only)
@@ -305,35 +98,7 @@ router.post('/logo', requireTenantAdmin, logoUpload.single('logo'), async (req, 
   if (!LOGO_ALLOWED_TYPES.has(req.file.mimetype)) {
     return res.status(400).json({ error: 'File type not allowed' })
   }
-
-  const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
-
-  const ext = extensionForImageMime(image.mimetype)
-  const objectKey = bandLogoKey(req.tenantId, randomUUID(), ext)
-
-  const { rows: before } = await pool.query(
-    'SELECT logo_path FROM tenants WHERE id = $1',
-    [req.tenantId],
-  )
-  const oldKey = before[0]?.logo_path || null
-
-  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
-
-  let updatedKey
-  try {
-    const { rows } = await pool.query(
-      'UPDATE tenants SET logo_path = $1, updated_at = NOW() WHERE id = $2 RETURNING logo_path',
-      [objectKey, req.tenantId],
-    )
-    updatedKey = rows[0].logo_path
-  } catch (err) {
-    removeObject(objectKey).catch(() => {})
-    throw err
-  }
-
-  safeRemove(oldKey, 'Failed to delete old logo object:')
-
-  res.json({ logo_path: updatedKey })
+  res.json(await uploadLogo(pool, req.tenantId, req.file))
 })
 
 export default router

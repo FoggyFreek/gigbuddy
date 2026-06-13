@@ -27,22 +27,33 @@ import { formatEur } from '../utils/invoiceTotals.js'
 import { formatShortDate } from '../utils/dateFormat.js'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.js'
 import { ALL_LEDGER_GROUPS } from '../utils/ledgerEntryType.js'
+import { loadLedgerFilters, saveLedgerFilters } from '../utils/ledgerFilterStorage.js'
 import { ledgerEntryRowShape } from '../propTypes/shared.js'
+import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.jsx'
 
 export default function LedgerEntriesPage() {
   const navigate = useNavigate()
+  // Restore the previous session's filters so navigating into an entry detail
+  // and back keeps the user's view.
+  const saved = loadLedgerFilters()
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showVoided, setShowVoided] = useState(false)
-  const [activeGroups, setActiveGroups] = useState(() => new Set(ALL_LEDGER_GROUPS))
-  const [sortDesc, setSortDesc] = useState(true)
-  const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(50)
-  const [period, setPeriod] = useState(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [searchQuery, setSearchQuery] = useState(saved?.searchQuery ?? '')
+  const [showVoided, setShowVoided] = useState(saved?.showVoided ?? false)
+  const [activeGroups, setActiveGroups] = useState(() => new Set(saved?.activeGroups ?? ALL_LEDGER_GROUPS))
+  const [sortBy, setSortBy] = useState(saved?.sortBy ?? 'id')
+  const [sortDesc, setSortDesc] = useState(saved?.sortDesc ?? true)
+  const [page, setPage] = useState(saved?.page ?? 0)
+  const [rowsPerPage, setRowsPerPage] = useState(saved?.rowsPerPage ?? 50)
+  const [period, setPeriod] = useState(() => saved?.period ?? { mode: 'fiscal_year', year: new Date().getFullYear() })
   const [availableDates, setAvailableDates] = useState([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
+
+  // Persist filters whenever they change (best-effort, session-scoped).
+  useEffect(() => {
+    saveLedgerFilters({ searchQuery, showVoided, activeGroups: [...activeGroups], sortBy, sortDesc, page, rowsPerPage, period })
+  }, [searchQuery, showVoided, activeGroups, sortBy, sortDesc, page, rowsPerPage, period])
 
   useEffect(() => {
     let cancelled = false
@@ -90,8 +101,17 @@ export default function LedgerEntriesPage() {
           String(row.id).includes(q),
       )
     }
-    return [...list].sort((a, b) => (sortDesc ? b.id - a.id : a.id - b.id))
-  }, [entries, activeGroups, showVoided, searchQuery, sortDesc])
+    return [...list].sort((a, b) => {
+      // Date sort falls back to id for stable ordering within the same day.
+      let cmp = 0
+      if (sortBy === 'entry_date') {
+        if (a.entry_date < b.entry_date) cmp = -1
+        else if (a.entry_date > b.entry_date) cmp = 1
+      }
+      if (cmp === 0) cmp = a.id - b.id
+      return sortDesc ? -cmp : cmp
+    })
+  }, [entries, activeGroups, showVoided, searchQuery, sortBy, sortDesc])
 
   // Clamp the page when filters shrink the list below the current page start.
   const pageCount = Math.max(0, Math.ceil(visibleEntries.length / rowsPerPage) - 1)
@@ -102,6 +122,16 @@ export default function LedgerEntriesPage() {
     return (value) => {
       setter(value)
       setPage(0)
+    }
+  }
+
+  // Clicking the active column flips direction; a new column starts descending.
+  function handleSort(field) {
+    if (field === sortBy) {
+      setSortDesc((d) => !d)
+    } else {
+      setSortBy(field)
+      setSortDesc(true)
     }
   }
 
@@ -159,8 +189,9 @@ export default function LedgerEntriesPage() {
         <>
           <LedgerEntriesList
             entries={pagedEntries}
+            sortBy={sortBy}
             sortDesc={sortDesc}
-            onToggleSort={() => setSortDesc((d) => !d)}
+            onSort={handleSort}
             onRowClick={(row) => navigate(`/ledger/${row.id}`)}
           />
           <TablePagination
@@ -182,7 +213,7 @@ export default function LedgerEntriesPage() {
   )
 }
 
-function LedgerEntriesList({ entries, sortDesc, onToggleSort, onRowClick }) {
+function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }) {
   const isCompact = useCompactLayout()
 
   if (isCompact) {
@@ -242,27 +273,35 @@ function LedgerEntriesList({ entries, sortDesc, onToggleSort, onRowClick }) {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell sortDirection={sortDesc ? 'desc' : 'asc'}>
+              <TableCell sortDirection={sortBy === 'id' ? (sortDesc ? 'desc' : 'asc') : false}>
                 <TableSortLabel
-                  active
-                  direction={sortDesc ? 'desc' : 'asc'}
-                  onClick={onToggleSort}
+                  active={sortBy === 'id'}
+                  direction={sortBy === 'id' && sortDesc ? 'desc' : 'asc'}
+                  onClick={() => onSort('id')}
                 >
                   #
                 </TableSortLabel>
               </TableCell>
               <TableCell>File</TableCell>
               <TableCell>Receipt</TableCell>
-              <TableCell>Date</TableCell>
+              <TableCell sortDirection={sortBy === 'entry_date' ? (sortDesc ? 'desc' : 'asc') : false}>
+                <TableSortLabel
+                  active={sortBy === 'entry_date'}
+                  direction={sortBy === 'entry_date' && sortDesc ? 'desc' : 'asc'}
+                  onClick={() => onSort('entry_date')}
+                >
+                  Date
+                </TableSortLabel>
+              </TableCell>
               <TableCell>Type</TableCell>
               <TableCell>Description</TableCell>
-              <TableCell align="right">Amount</TableCell>
+              <MoneyHeaderCells label="Amount" />
             </TableRow>
           </TableHead>
           <TableBody>
             {!entries.length && (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
                     No ledger entries found
                   </Typography>
@@ -282,9 +321,14 @@ function LedgerEntriesList({ entries, sortDesc, onToggleSort, onRowClick }) {
                 <TableCell>{formatShortDate(row.entry_date)}</TableCell>
                 <TableCell>{row.type}</TableCell>
                 <TableCell>{row.description || '-'}</TableCell>
-                <TableCell align="right">
-                  {row.amount_cents !== null ? formatEur(row.amount_cents) : ''}
-                </TableCell>
+                {row.amount_cents !== null
+                  ? <MoneyCells cents={row.amount_cents} />
+                  : (
+                    <>
+                      <TableCell padding="none" />
+                      <TableCell />
+                    </>
+                  )}
               </TableRow>
             ))}
           </TableBody>
@@ -296,7 +340,8 @@ function LedgerEntriesList({ entries, sortDesc, onToggleSort, onRowClick }) {
 
 LedgerEntriesList.propTypes = {
   entries: PropTypes.arrayOf(ledgerEntryRowShape).isRequired,
+  sortBy: PropTypes.oneOf(['id', 'entry_date']).isRequired,
   sortDesc: PropTypes.bool.isRequired,
-  onToggleSort: PropTypes.func.isRequired,
+  onSort: PropTypes.func.isRequired,
   onRowClick: PropTypes.func.isRequired,
 }

@@ -12,6 +12,7 @@ import {
 } from '../utils/mollieClient.js'
 import {
   fetchInvoice,
+  fetchInvoiceWithMollieKey,
   setInvoicePaymentLink,
   clearInvoicePaymentLink,
   updateInvoicePaymentState,
@@ -184,4 +185,28 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice, { client: pr
   } finally {
     if (!providedClient) client.release()
   }
+}
+
+// Processes a Mollie payment-link webhook for one invoice. The posted payment id
+// is only a "go check now" hint — authoritative status is re-fetched from Mollie
+// using the tenant's secret key, so the posted id is never trusted. Returns
+// { notify: { tenantId, invoice } } only on the transition to paid (so the route
+// pings the band once), otherwise {}.
+export async function handlePaymentWebhook(db, invoiceId) {
+  const invoice = await fetchInvoiceWithMollieKey(db, invoiceId)
+  if (!invoice?.mollie_api_key) return {}
+
+  const mollie = createTenantMollieClient(invoice.mollie_api_key)
+  const updated = await syncInvoicePaymentStatus(mollie, db, invoice)
+
+  // Gate on the app invoice status (not mollie_payment_status) so void invoices
+  // stay silent, and compare the pre-read row against the update to suppress
+  // Mollie's sequential retries — once status is 'paid', later reads skip.
+  const becamePaid =
+    updated &&
+    invoice.status !== 'paid' &&
+    updated.status === 'paid' &&
+    updated.mollie_payment_status === 'paid'
+
+  return becamePaid ? { notify: { tenantId: invoice.tenant_id, invoice: updated } } : {}
 }

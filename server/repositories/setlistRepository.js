@@ -1,38 +1,15 @@
-// SQL for setlists: list aggregates, the nested setlist→sets→items tree, and the
-// transactional item reorder. Kept here so the route file stays thin.
+// Data-access helpers for setlists, their sets, items, and per-member notes.
+// Each query takes an `executor` (a pool or transaction client) so callers
+// control transactions. Every query is scoped by tenant_id.
 
-// Map each item to the id of the item that immediately follows it in its set,
-// from the current DB rows (id, set_id, sort_order). Items with no follower are
-// absent from the map (treated as null follower by callers).
-function buildOldFollowerMap(rows) {
-  const bySet = new Map()
-  for (const r of rows) {
-    if (!bySet.has(r.set_id)) bySet.set(r.set_id, [])
-    bySet.get(r.set_id).push(r)
-  }
-  const follower = new Map()
-  for (const items of bySet.values()) {
-    items.sort((a, b) => a.sort_order - b.sort_order)
-    for (let i = 0; i < items.length - 1; i++) follower.set(items[i].id, items[i + 1].id)
-  }
-  return follower
-}
-
-// Same, but from the requested new order: [{ setId, itemIds: [...] }].
-function buildNewFollowerMap(payloadSets) {
-  const follower = new Map()
-  for (const { itemIds } of payloadSets) {
-    for (let i = 0; i < itemIds.length - 1; i++) follower.set(itemIds[i], itemIds[i + 1])
-  }
-  return follower
-}
+// ---------- setlists ----------
 
 // List all setlists for a tenant with computed totals. The per-set
 // include_in_total flag governs whether that set's time counts; song durations
 // come from the songs table, pause/break durations from the item row. COALESCE
 // guards against NULL totals for empty setlists.
-export async function listSetlistsWithAggregates(db, tenantId) {
-  const { rows } = await db.query(
+export async function listSetlistsWithAggregates(executor, tenantId) {
+  const { rows } = await executor.query(
     `SELECT
        sl.id,
        sl.name,
@@ -61,14 +38,14 @@ export async function listSetlistsWithAggregates(db, tenantId) {
 // Fetch one setlist as a nested tree, or null if it doesn't belong to the tenant.
 // Song items are enriched with title/artist/key/tempo/duration and their first tag,
 // plus `my_note`: the requesting user's personal note on that song-in-set (or null).
-export async function fetchSetlistTree(db, tenantId, setlistId, userId) {
-  const { rows: head } = await db.query(
+export async function fetchSetlistTree(executor, tenantId, setlistId, userId) {
+  const { rows: head } = await executor.query(
     'SELECT id, name, created_at, updated_at FROM setlists WHERE id = $1 AND tenant_id = $2',
     [setlistId, tenantId],
   )
   if (!head.length) return null
 
-  const { rows: sets } = await db.query(
+  const { rows: sets } = await executor.query(
     `SELECT id, name, include_in_total, sort_order
        FROM setlist_sets
       WHERE setlist_id = $1 AND tenant_id = $2
@@ -76,7 +53,7 @@ export async function fetchSetlistTree(db, tenantId, setlistId, userId) {
     [setlistId, tenantId],
   )
 
-  const { rows: items } = await db.query(
+  const { rows: items } = await executor.query(
     `SELECT
        i.id, i.set_id, i.item_type, i.song_id, i.label, i.sort_order,
        i.linked_to_next, i.transition_note,
@@ -114,81 +91,261 @@ export async function fetchSetlistTree(db, tenantId, setlistId, userId) {
   }
 }
 
-// Reorder (and move across sets) items in one transaction. `payloadSets` is
-// [{ setId, itemIds: [...] }]. Validates that every set belongs to the setlist+
-// tenant, that there are no duplicate item ids, and that the submitted ids are
-// exactly the items currently in the affected sets — then rewrites set_id and
-// sort_order. Returns { error } on validation failure.
-export async function reorderItems(db, tenantId, setlistId, payloadSets) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+export async function insertSetlist(executor, tenantId, name) {
+  const { rows } = await executor.query(
+    'INSERT INTO setlists (tenant_id, name) VALUES ($1, $2) RETURNING *',
+    [tenantId, name],
+  )
+  return rows[0]
+}
 
-    const setIds = payloadSets.map((s) => s.setId)
-    // Every target set must belong to this setlist + tenant.
-    const { rows: validSets } = await client.query(
-      `SELECT id FROM setlist_sets
-        WHERE setlist_id = $1 AND tenant_id = $2 AND id = ANY($3)`,
-      [setlistId, tenantId, setIds],
-    )
-    if (validSets.length !== new Set(setIds).size) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'Not found' } } }
-    }
+export async function updateSetlistName(executor, tenantId, setlistId, name) {
+  const { rows } = await executor.query(
+    'UPDATE setlists SET name = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3 RETURNING *',
+    [name, setlistId, tenantId],
+  )
+  return rows[0] || null
+}
 
-    const submittedIds = payloadSets.flatMap((s) => s.itemIds)
-    if (new Set(submittedIds).size !== submittedIds.length) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'Duplicate item ids' } } }
-    }
+export async function deleteSetlist(executor, setlistId, tenantId) {
+  const { rowCount } = await executor.query(
+    'DELETE FROM setlists WHERE id = $1 AND tenant_id = $2',
+    [setlistId, tenantId],
+  )
+  return rowCount > 0
+}
 
-    // The submitted items must be exactly the items currently in those sets —
-    // no item dropped, none injected from another set/setlist.
-    const { rows: currentItems } = await client.query(
-      `SELECT id, set_id, sort_order, item_type, linked_to_next
-         FROM setlist_items WHERE tenant_id = $1 AND set_id = ANY($2)`,
-      [tenantId, setIds],
-    )
-    const currentSet = new Set(currentItems.map((r) => r.id))
-    if (currentSet.size !== submittedIds.length || submittedIds.some((id) => !currentSet.has(id))) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'Item set does not match current state' } } }
-    }
+// ---------- sets ----------
 
-    // Auto-clear broken segue links: a linked item whose immediate follower
-    // changes identity (moved, replaced, or now last) loses its link + note.
-    const oldFollower = buildOldFollowerMap(currentItems)
-    const newFollower = buildNewFollowerMap(payloadSets)
-    const clearedIds = currentItems
-      .filter((it) => it.linked_to_next && (newFollower.get(it.id) ?? null) !== (oldFollower.get(it.id) ?? null))
-      .map((it) => it.id)
-    const cleared = new Set(clearedIds)
+export async function insertSet(executor, setlistId, tenantId, name, sortOrder) {
+  await executor.query(
+    'INSERT INTO setlist_sets (setlist_id, tenant_id, name, sort_order) VALUES ($1, $2, $3, $4)',
+    [setlistId, tenantId, name, sortOrder],
+  )
+}
 
-    for (const { setId, itemIds } of payloadSets) {
-      for (let idx = 0; idx < itemIds.length; idx++) {
-        const id = itemIds[idx]
-        if (cleared.has(id)) {
-          await client.query(
-            `UPDATE setlist_items
-                SET set_id = $1, sort_order = $2, linked_to_next = false, transition_note = NULL
-              WHERE id = $3 AND tenant_id = $4`,
-            [setId, idx, id, tenantId],
-          )
-        } else {
-          await client.query(
-            'UPDATE setlist_items SET set_id = $1, sort_order = $2 WHERE id = $3 AND tenant_id = $4',
-            [setId, idx, id, tenantId],
-          )
-        }
-      }
-    }
+export async function listSetIds(executor, setlistId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT id FROM setlist_sets WHERE setlist_id = $1 AND tenant_id = $2',
+    [setlistId, tenantId],
+  )
+  return rows.map((r) => r.id)
+}
 
-    await client.query('COMMIT')
-    return { ok: true, clearedIds }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+export async function updateSetSortOrder(executor, setId, sortOrder, tenantId) {
+  await executor.query(
+    'UPDATE setlist_sets SET sort_order = $1 WHERE id = $2 AND tenant_id = $3',
+    [sortOrder, setId, tenantId],
+  )
+}
+
+// Next sort_order and current set count for a setlist, used to position and name
+// a freshly added set.
+export async function setSortAggregate(executor, setlistId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next, COUNT(*)::int AS count
+       FROM setlist_sets WHERE setlist_id = $1 AND tenant_id = $2`,
+    [setlistId, tenantId],
+  )
+  return rows[0]
+}
+
+// Inserts a set only when the parent setlist belongs to the tenant (SELECT
+// guard). Returns the new set row, or null when the setlist doesn't exist.
+export async function insertSetGuarded(executor, setlistId, tenantId, name, sortOrder) {
+  const { rows } = await executor.query(
+    `INSERT INTO setlist_sets (setlist_id, tenant_id, name, sort_order)
+     SELECT sl.id, sl.tenant_id, $3, $4
+     FROM setlists sl WHERE sl.id = $1 AND sl.tenant_id = $2
+     RETURNING id, name, include_in_total, sort_order`,
+    [setlistId, tenantId, name, sortOrder],
+  )
+  return rows[0] || null
+}
+
+// Applies prebuilt SET fragments to a set scoped to its setlist + tenant.
+// Returns the updated row or null.
+export async function updateSetFields(executor, tenantId, setlistId, setId, fields, values) {
+  const whereIdx = values.length + 1
+  const { rows } = await executor.query(
+    `UPDATE setlist_sets SET ${fields.join(', ')}
+       WHERE id = $${whereIdx} AND setlist_id = $${whereIdx + 1} AND tenant_id = $${whereIdx + 2}
+       RETURNING id, name, include_in_total, sort_order`,
+    [...values, setId, setlistId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function deleteSet(executor, setId, setlistId, tenantId) {
+  const { rowCount } = await executor.query(
+    'DELETE FROM setlist_sets WHERE id = $1 AND setlist_id = $2 AND tenant_id = $3',
+    [setId, setlistId, tenantId],
+  )
+  return rowCount > 0
+}
+
+// ---------- items ----------
+
+export async function songExistsInTenant(executor, songId, tenantId) {
+  const { rowCount } = await executor.query(
+    'SELECT 1 FROM songs WHERE id = $1 AND tenant_id = $2',
+    [songId, tenantId],
+  )
+  return rowCount > 0
+}
+
+export async function itemSortNext(executor, setId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next
+       FROM setlist_items WHERE set_id = $1 AND tenant_id = $2`,
+    [setId, tenantId],
+  )
+  return rows[0].next
+}
+
+// Inserts an item only when its set belongs to this setlist + tenant (SELECT
+// guard), so a cross-tenant or wrong-setlist setId yields no row → null.
+export async function insertSetlistItem(executor, params) {
+  const { setId, setlistId, tenantId, itemType, songId, durationSeconds, label, sortOrder } = params
+  const { rows } = await executor.query(
+    `INSERT INTO setlist_items (set_id, tenant_id, item_type, song_id, duration_seconds, label, sort_order)
+     SELECT st.id, st.tenant_id, $4, $5, $6, $7, $8
+     FROM setlist_sets st
+     WHERE st.id = $1 AND st.setlist_id = $2 AND st.tenant_id = $3
+     RETURNING id, set_id, item_type, song_id, duration_seconds, label, sort_order,
+               linked_to_next, transition_note`,
+    [setId, setlistId, tenantId, itemType, songId, durationSeconds, label, sortOrder],
+  )
+  return rows[0] || null
+}
+
+// Title/artist/key/tempo/duration + first tag for a song, used to enrich a song
+// item response so the client can render the card without a refetch. Returns
+// null when the song no longer belongs to the tenant.
+export async function loadSongEnrichment(executor, songId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT sg.title, sg.artist, sg.song_key, sg.tempo, sg.duration_seconds,
+       (SELECT t.name FROM song_tag_links l
+          JOIN song_tags t ON t.id = l.tag_id AND t.tenant_id = l.tenant_id
+         WHERE l.song_id = sg.id AND l.tenant_id = sg.tenant_id
+         ORDER BY t.name ASC LIMIT 1) AS tag
+     FROM songs sg WHERE sg.id = $1 AND sg.tenant_id = $2`,
+    [songId, tenantId],
+  )
+  return rows[0] || null
+}
+
+// Loads an item's id + type, scoped to a set within this setlist + tenant.
+export async function fetchItemInSetlist(executor, itemId, tenantId, setlistId) {
+  const { rows } = await executor.query(
+    `SELECT i.id, i.item_type FROM setlist_items i
+       JOIN setlist_sets st ON st.id = i.set_id AND st.tenant_id = i.tenant_id
+      WHERE i.id = $1 AND i.tenant_id = $2 AND st.setlist_id = $3`,
+    [itemId, tenantId, setlistId],
+  )
+  return rows[0] || null
+}
+
+// Applies prebuilt assignments (parameterized $1..$N plus literal rawSet
+// fragments) to an item, appending the id + tenant WHERE bindings. The caller
+// has already verified the item exists in this setlist + tenant.
+export async function updateSetlistItem(executor, tenantId, itemId, assignments, values) {
+  const whereIdx = values.length + 1
+  const { rows } = await executor.query(
+    `UPDATE setlist_items SET ${assignments.join(', ')}
+       WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1}
+       RETURNING id, set_id, item_type, song_id, duration_seconds, label, sort_order,
+                 linked_to_next, transition_note`,
+    [...values, itemId, tenantId],
+  )
+  return rows[0]
+}
+
+// Locates an item (scoped to this setlist + tenant) for deletion, returning its
+// set_id + sort_order so the caller can find the predecessor whose link breaks.
+export async function fetchItemForDelete(executor, itemId, tenantId, setlistId) {
+  const { rows } = await executor.query(
+    `SELECT i.set_id, i.sort_order FROM setlist_items i
+       JOIN setlist_sets st ON st.id = i.set_id AND st.tenant_id = i.tenant_id
+      WHERE i.id = $1 AND i.tenant_id = $2 AND st.setlist_id = $3`,
+    [itemId, tenantId, setlistId],
+  )
+  return rows[0] || null
+}
+
+// Clears the link (and note) on the immediate predecessor of a removed item, if
+// that predecessor was linked. Returns the ids actually cleared.
+export async function clearBrokenPredecessorLink(executor, tenantId, setId, sortOrder) {
+  const { rows } = await executor.query(
+    `UPDATE setlist_items SET linked_to_next = false, transition_note = NULL
+      WHERE tenant_id = $1 AND linked_to_next = true AND id = (
+        SELECT id FROM setlist_items
+         WHERE set_id = $2 AND tenant_id = $1 AND sort_order < $3
+         ORDER BY sort_order DESC LIMIT 1)
+      RETURNING id`,
+    [tenantId, setId, sortOrder],
+  )
+  return rows.map((r) => r.id)
+}
+
+export async function deleteSetlistItem(executor, itemId, tenantId) {
+  await executor.query(
+    'DELETE FROM setlist_items WHERE id = $1 AND tenant_id = $2',
+    [itemId, tenantId],
+  )
+}
+
+// ---------- item reorder (granular helpers; the service owns the transaction) ----------
+
+export async function listValidSetIds(executor, setlistId, tenantId, setIds) {
+  const { rows } = await executor.query(
+    `SELECT id FROM setlist_sets
+      WHERE setlist_id = $1 AND tenant_id = $2 AND id = ANY($3)`,
+    [setlistId, tenantId, setIds],
+  )
+  return rows.map((r) => r.id)
+}
+
+export async function listItemsInSets(executor, tenantId, setIds) {
+  const { rows } = await executor.query(
+    `SELECT id, set_id, sort_order, item_type, linked_to_next
+       FROM setlist_items WHERE tenant_id = $1 AND set_id = ANY($2)`,
+    [tenantId, setIds],
+  )
+  return rows
+}
+
+export async function moveItem(executor, setId, sortOrder, itemId, tenantId) {
+  await executor.query(
+    'UPDATE setlist_items SET set_id = $1, sort_order = $2 WHERE id = $3 AND tenant_id = $4',
+    [setId, sortOrder, itemId, tenantId],
+  )
+}
+
+export async function moveItemClearingLink(executor, setId, sortOrder, itemId, tenantId) {
+  await executor.query(
+    `UPDATE setlist_items
+        SET set_id = $1, sort_order = $2, linked_to_next = false, transition_note = NULL
+      WHERE id = $3 AND tenant_id = $4`,
+    [setId, sortOrder, itemId, tenantId],
+  )
+}
+
+// ---------- per-member notes ----------
+
+export async function upsertItemNote(executor, itemId, tenantId, userId, note) {
+  await executor.query(
+    `INSERT INTO setlist_item_notes (setlist_item_id, tenant_id, user_id, note)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (setlist_item_id, user_id)
+     DO UPDATE SET note = EXCLUDED.note, updated_at = NOW()`,
+    [itemId, tenantId, userId, note],
+  )
+}
+
+export async function deleteItemNote(executor, itemId, userId, tenantId) {
+  await executor.query(
+    'DELETE FROM setlist_item_notes WHERE setlist_item_id = $1 AND user_id = $2 AND tenant_id = $3',
+    [itemId, userId, tenantId],
+  )
 }

@@ -102,3 +102,72 @@ export async function validateContactIdForTenant(executor, rawId, tenantId) {
   )
   return rowCount ? n : null
 }
+
+// List rows for the table/search. Includes the first line's description (the
+// per-line description lives in purchase_lines, not on the purchase row).
+// `periodSql`/`periodValues` come from buildPeriodWhere (placeholders $2+).
+export async function listPurchases(executor, tenantId, periodSql, periodValues) {
+  const { rows } = await executor.query(
+    `SELECT p.id, p.receipt_number, p.supplier_name, p.supplier_contact_id,
+            p.receipt_date, p.due_date, p.currency, p.status,
+            p.subtotal_cents, p.tax_cents, p.total_cents,
+            p.finalized_at, p.paid_at, p.created_at, p.updated_at,
+            p.payment_method, p.paid_by_band_member_id,
+            fl.description
+       FROM purchases p
+       LEFT JOIN LATERAL (
+         SELECT description FROM purchase_lines pl
+          WHERE pl.purchase_id = p.id AND pl.tenant_id = p.tenant_id
+          ORDER BY position ASC, id ASC
+          LIMIT 1
+       ) fl ON TRUE
+      WHERE p.tenant_id = $1
+        ${periodSql}
+      ORDER BY p.receipt_date DESC, p.id DESC`,
+    [tenantId, ...periodValues],
+  )
+  return rows
+}
+
+export async function listPurchasePeriods(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT DISTINCT to_char(receipt_date, 'YYYY-MM-DD') AS date
+       FROM purchases
+      WHERE tenant_id = $1
+        AND receipt_date IS NOT NULL
+      ORDER BY date DESC`,
+    [tenantId],
+  )
+  return rows.map((row) => row.date)
+}
+
+export async function fetchPurchaseAttachments(executor, purchaseId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id, object_key, original_filename, content_type, file_size, uploaded_at
+       FROM purchase_attachments
+      WHERE purchase_id = $1 AND tenant_id = $2
+      ORDER BY uploaded_at ASC, id ASC`,
+    [purchaseId, tenantId],
+  )
+  return rows
+}
+
+export async function getPurchaseStatus(executor, purchaseId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT status FROM purchases WHERE id = $1 AND tenant_id = $2',
+    [purchaseId, tenantId],
+  )
+  return rows[0]?.status ?? null
+}
+
+export async function deletePurchase(executor, purchaseId, tenantId) {
+  await executor.query('DELETE FROM purchases WHERE id = $1 AND tenant_id = $2', [purchaseId, tenantId])
+}
+
+export async function deleteAttachmentReturningKey(executor, attachmentId, purchaseId, tenantId) {
+  const { rows } = await executor.query(
+    'DELETE FROM purchase_attachments WHERE id = $1 AND purchase_id = $2 AND tenant_id = $3 RETURNING object_key',
+    [attachmentId, purchaseId, tenantId],
+  )
+  return rows[0]?.object_key ?? null
+}

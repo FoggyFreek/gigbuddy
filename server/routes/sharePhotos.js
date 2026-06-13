@@ -1,11 +1,9 @@
-import { randomUUID } from 'node:crypto'
-import path from 'node:path'
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
 import { requireTenantAdmin } from '../middleware/tenant.js'
-import { uploadObject, removeObject, safeRemove, sharePhotoKey } from '../services/storageService.js'
-import { validateAndReencodeImage } from '../utils/imageProcess.js'
+import { parseId } from '../validators/sharePhotoValidators.js'
+import { listPhotos, createPhoto, deletePhoto } from '../services/sharePhotoService.js'
 
 const router = Router()
 
@@ -16,14 +14,12 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 })
 
+function sendError(res, error) {
+  res.status(error.status).json(error.body)
+}
+
 router.get('/', async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT id, object_key, content_type, label, sort_order
-     FROM share_photos WHERE tenant_id = $1
-     ORDER BY sort_order, id`,
-    [req.tenantId],
-  )
-  res.json(rows)
+  res.json(await listPhotos(pool, req.tenantId))
 })
 
 router.post('/', requireTenantAdmin, upload.single('photo'), async (req, res) => {
@@ -31,57 +27,16 @@ router.post('/', requireTenantAdmin, upload.single('photo'), async (req, res) =>
   if (!ALLOWED_TYPES.has(req.file.mimetype)) {
     return res.status(400).json({ error: 'File type not allowed' })
   }
-
-  const image = await validateAndReencodeImage(req.file.buffer, req.file.mimetype)
-
-  const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
-  const objectKey = sharePhotoKey(req.tenantId, randomUUID(), ext)
-  const label = path.basename(req.file.originalname, ext) || 'Photo'
-
-  const { rows: maxRows } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM share_photos WHERE tenant_id = $1',
-    [req.tenantId],
-  )
-  const sortOrder = maxRows[0].next
-
-  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
-
-  let row
-  try {
-    const { rows } = await pool.query(
-      `INSERT INTO share_photos (tenant_id, object_key, content_type, label, sort_order)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [req.tenantId, objectKey, image.mimetype, label, sortOrder],
-    )
-    row = rows[0]
-  } catch (err) {
-    removeObject(objectKey).catch(() => {})
-    throw err
-  }
-
-  res.status(201).json(row)
+  const result = await createPhoto(pool, req.tenantId, req.file)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.photo)
 })
 
 router.delete('/:id', requireTenantAdmin, async (req, res) => {
-  const id = Number(req.params.id)
-  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid id' })
-
-  const { rows } = await pool.query(
-    'SELECT object_key FROM share_photos WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-
-  const { object_key } = rows[0]
-
-  const { rowCount } = await pool.query(
-    'DELETE FROM share_photos WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rowCount) return res.status(404).json({ error: 'Not found' })
-
-  safeRemove(object_key, 'Failed to delete share photo object:')
-
+  const id = parseId(req.params.id)
+  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const result = await deletePhoto(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })
 

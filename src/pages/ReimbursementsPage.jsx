@@ -15,6 +15,7 @@ import MemberReimbursementCard from '../components/reimbursements/MemberReimburs
 import RegisterReimbursementDialog from '../components/reimbursements/RegisterReimbursementDialog.jsx'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import { formatEur } from '../utils/purchaseTotals.js'
+import { MoneyHeaderCells } from '../components/shared/MoneyCells.jsx'
 
 export default function ReimbursementsPage() {
   const isCompact = useCompactLayout()
@@ -87,7 +88,7 @@ export default function ReimbursementsPage() {
                       <TableCell sx={{ width: '1%' }} />
                       <TableCell>Member</TableCell>
                       <TableCell align="center">Purchases</TableCell>
-                      <TableCell align="right">Outstanding</TableCell>
+                      <MoneyHeaderCells label="Outstanding" />
                       <TableCell align="right">Actions</TableCell>
                     </TableRow>
                   </TableHead>

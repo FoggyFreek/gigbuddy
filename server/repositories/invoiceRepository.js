@@ -60,6 +60,32 @@ export async function fetchInvoice(executor, tenantId, invoiceId) {
   return rows[0] || null
 }
 
+// Public (unauthenticated) lookups — gated on mollie_payment_link_id so only
+// invoices shared for payment are reachable without a session, and not scoped to
+// a tenant because the caller has no active tenant.
+
+export async function fetchPublicInvoiceLogoPath(executor, invoiceId) {
+  const { rows } = await executor.query(
+    `SELECT t.logo_path
+       FROM invoices i
+       JOIN tenants t ON t.id = i.tenant_id
+      WHERE i.id = $1 AND i.mollie_payment_link_id IS NOT NULL`,
+    [invoiceId],
+  )
+  return rows[0]?.logo_path ?? null
+}
+
+export async function fetchInvoiceWithMollieKey(executor, invoiceId) {
+  const { rows } = await executor.query(
+    `SELECT i.*, t.mollie_api_key
+       FROM invoices i
+       JOIN tenants t ON t.id = i.tenant_id
+      WHERE i.id = $1 AND i.mollie_payment_link_id IS NOT NULL`,
+    [invoiceId],
+  )
+  return rows[0] || null
+}
+
 export async function fetchLines(executor, invoiceId, tenantId) {
   const { rows } = await executor.query(
     `SELECT id, description, quantity, unit_price_cents, tax_percentage, position

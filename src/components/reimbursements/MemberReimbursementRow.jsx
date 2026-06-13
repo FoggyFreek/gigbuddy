@@ -10,9 +10,10 @@ import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
-import { formatEur } from '../../utils/purchaseTotals.js'
+import { formatEurParts } from '../../utils/invoiceTotals.js'
 import { formatShortDate } from '../../utils/dateFormat.js'
 import { memberOutstandingShape } from '../../propTypes/shared.js'
+import MoneyCells from '../shared/MoneyCells.jsx'
 
 // One band member's outstanding row, expandable to a display-only list of the
 // member-paid purchases that make up the balance.
@@ -27,16 +28,14 @@ export default function MemberReimbursementRow({ member, expanded, purchases, on
         </TableCell>
         <TableCell>{member.band_member_name}</TableCell>
         <TableCell align="center"><Chip size="small" label={member.outstanding_count} /></TableCell>
-        <TableCell align="right">
-          <Typography fontWeight={700}>{formatEur(member.outstanding_cents)}</Typography>
-        </TableCell>
+        <MoneyCells cents={member.outstanding_cents} bold />
         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
           <Button size="small" onClick={onRegister} sx={{ mr: 1 }}>Register</Button>
           <Button size="small" variant="contained" onClick={onMarkReimbursed}>Mark reimbursed</Button>
         </TableCell>
       </TableRow>
       <TableRow>
-        <TableCell colSpan={5} sx={{ py: 0, border: expanded ? undefined : 'none' }}>
+        <TableCell colSpan={6} sx={{ py: 0, border: expanded ? undefined : 'none' }}>
           <Collapse in={expanded} unmountOnExit>
             <Box sx={{ py: 1.5, pl: 4 }}>
               {purchases === undefined && (
@@ -45,16 +44,35 @@ export default function MemberReimbursementRow({ member, expanded, purchases, on
               {purchases && purchases.length === 0 && (
                 <Typography variant="body2" color="text.secondary">No outstanding purchases</Typography>
               )}
-              {purchases && purchases.map((p) => (
-                <Box key={p.id} sx={{ display: 'flex', gap: 1.5, alignItems: 'baseline', py: 0.25 }}>
-                  <Typography variant="body2" fontWeight={600}>#{p.receipt_number}</Typography>
-                  <Typography variant="caption" color="text.secondary">{formatShortDate(p.receipt_date)}</Typography>
-                  <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
-                    {p.supplier_name}{p.description ? ` · ${p.description}` : ''}
-                  </Typography>
-                  <Typography variant="body2">{formatEur(p.total_cents)}</Typography>
+              {purchases && purchases.length > 0 && (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    // Receipt · date · supplier (flexes) · € symbol · digits. The
+                    // symbol gets its own column so it lines up vertically across
+                    // rows while the digits stay right-aligned.
+                    gridTemplateColumns: 'auto auto minmax(0, 1fr) auto auto',
+                    columnGap: 1.5,
+                    rowGap: 0.25,
+                    alignItems: 'baseline',
+                  }}
+                >
+                  {purchases.map((p) => {
+                    const { symbol, value } = formatEurParts(p.total_cents)
+                    return (
+                      <Fragment key={p.id}>
+                        <Typography variant="body2" fontWeight={600}>#{p.receipt_number}</Typography>
+                        <Typography variant="caption" color="text.secondary">{formatShortDate(p.receipt_date)}</Typography>
+                        <Typography variant="body2" noWrap>
+                          {p.supplier_name}{p.description ? ` · ${p.description}` : ''}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>{symbol}</Typography>
+                        <Typography variant="body2" sx={{ textAlign: 'right' }}>{value}</Typography>
+                      </Fragment>
+                    )
+                  })}
                 </Box>
-              ))}
+              )}
             </Box>
           </Collapse>
         </TableCell>

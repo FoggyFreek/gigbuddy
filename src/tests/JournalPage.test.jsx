@@ -202,6 +202,51 @@ describe('JournalPage', () => {
     expect(failed.closest('[data-testid="journal-toolbar"]')).not.toBeNull()
   })
 
+  it('seeds a blank draft when the list loads empty', async () => {
+    journalApi.listJournals.mockReset()
+    journalApi.listJournals
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([draft({ id: 2, entry_number: 6, lines: [] })])
+    wrap(<JournalPage />)
+    expect(await screen.findByText('1 ledger entry')).toBeInTheDocument()
+    await waitFor(() => expect(journalApi.createJournal).toHaveBeenCalledTimes(1))
+  })
+
+  it('re-seeds a blank draft after deleting the last draft', async () => {
+    const user = userEvent.setup()
+    journalApi.listJournals.mockReset()
+    journalApi.listJournals
+      .mockResolvedValueOnce([draft({ id: 1, entry_number: 5 })])
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([draft({ id: 2, entry_number: 6, lines: [] })])
+    wrap(<JournalPage />)
+    await screen.findByText('1 ledger entry')
+
+    await user.click(screen.getByRole('checkbox', { name: /select journal 5/i }))
+    await user.click(screen.getByRole('button', { name: /delete selected/i }))
+    await screen.findByText(/delete selected entries\?/i)
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
+
+    await waitFor(() => expect(journalApi.deleteJournal).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(journalApi.createJournal).toHaveBeenCalledTimes(1))
+  })
+
+  it('re-seeds a blank draft after approving all drafts', async () => {
+    const user = userEvent.setup()
+    journalApi.listJournals.mockReset()
+    journalApi.listJournals
+      .mockResolvedValueOnce([draft({ id: 1, entry_number: 5 })])
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([draft({ id: 2, entry_number: 6, lines: [] })])
+    wrap(<JournalPage />)
+    await screen.findByText('1 ledger entry')
+
+    await user.click(screen.getByRole('button', { name: /approve all/i }))
+
+    await waitFor(() => expect(journalApi.approveJournals).toHaveBeenCalledWith([1]))
+    await waitFor(() => expect(journalApi.createJournal).toHaveBeenCalledTimes(1))
+  })
+
   it('select-all selects every draft entry', async () => {
     const user = userEvent.setup()
     journalApi.listJournals.mockResolvedValue([

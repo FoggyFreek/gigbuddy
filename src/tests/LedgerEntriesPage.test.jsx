@@ -45,6 +45,7 @@ function wrap(ui, { compact = false } = {}) {
 }
 
 beforeEach(() => {
+  sessionStorage.clear()
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-06-11T12:00:00.000Z'))
   listLedger.mockResolvedValue(ROWS)
@@ -128,8 +129,10 @@ describe('LedgerEntriesPage', () => {
     wrap(<LedgerEntriesPage />)
     await waitFor(() => expect(screen.getByText('Bill from mi5 Studios: TEST')).toBeInTheDocument())
 
+    // The symbol and digits render in separate cells so the € lines up vertically.
     const purchaseRow = screen.getByText('Bill from mi5 Studios: TEST').closest('tr')
-    expect(within(purchaseRow).getByText(/-\s?€\s?25,00|€\s?-25,00/)).toBeInTheDocument()
+    expect(within(purchaseRow).getByText('€')).toBeInTheDocument()
+    expect(within(purchaseRow).getByText('-25,00')).toBeInTheDocument()
 
     const journalRow = screen.getByText('T').closest('tr')
     expect(within(journalRow).queryByText(/€/)).not.toBeInTheDocument()
@@ -145,9 +148,57 @@ describe('LedgerEntriesPage', () => {
     await waitFor(() => expect(listLedger).toHaveBeenCalledWith({ mode: 'month', year: 2026, month: 2 }))
   })
 
+  it('sorts by the Date column when its header is clicked', async () => {
+    const user = userEvent.setup()
+    // Dates and ids run in opposite order so date-sorting is distinguishable.
+    listLedger.mockResolvedValue([
+      { id: 1, entry_date: '2026-06-20', type: 'Invoice', group: 'invoices', voided: false, receipt: null, description: 'Later date lower id', amount_cents: 1000, source_type: 'invoice', source_id: 1 },
+      { id: 2, entry_date: '2026-06-01', type: 'Invoice', group: 'invoices', voided: false, receipt: null, description: 'Earlier date higher id', amount_cents: 2000, source_type: 'invoice', source_id: 2 },
+    ])
+    wrap(<LedgerEntriesPage />)
+    await waitFor(() => expect(screen.getByText('Later date lower id')).toBeInTheDocument())
+
+    // Default sort is by # descending → highest id (id 2) first.
+    let rows = screen.getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('Earlier date higher id')).toBeInTheDocument()
+
+    // Sorting by Date descending puts the newest date (id 1) first.
+    await user.click(screen.getByRole('button', { name: /^date$/i }))
+    rows = screen.getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('Later date lower id')).toBeInTheDocument()
+
+    // Clicking Date again flips to ascending → oldest date (id 2) first.
+    await user.click(screen.getByRole('button', { name: /^date$/i }))
+    rows = screen.getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('Earlier date higher id')).toBeInTheDocument()
+  })
+
   it('shows an empty state when there are no entries', async () => {
     listLedger.mockResolvedValue([])
     wrap(<LedgerEntriesPage />)
     await waitFor(() => expect(screen.getByText(/no ledger entries/i)).toBeInTheDocument())
+  })
+
+  it('remembers filters across remount via sessionStorage', async () => {
+    const user = userEvent.setup()
+    const first = wrap(<LedgerEntriesPage />)
+    await waitFor(() => expect(screen.getByText('Bill from mi5 Studios: TEST')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('checkbox', { name: /show voided/i }))
+    expect(screen.getByText('Invoice 2 voided')).toBeInTheDocument()
+
+    first.unmount()
+
+    wrap(<LedgerEntriesPage />)
+    await waitFor(() => expect(screen.getByText('Bill from mi5 Studios: TEST')).toBeInTheDocument())
+    // The "Show voided" filter is restored, so the voided row is visible again.
+    expect(screen.getByText('Invoice 2 voided')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /show voided/i })).toBeChecked()
+  })
+
+  it('starts with defaults when nothing is persisted', async () => {
+    wrap(<LedgerEntriesPage />)
+    await waitFor(() => expect(screen.getByText('Bill from mi5 Studios: TEST')).toBeInTheDocument())
+    expect(screen.queryByText('Invoice 2 voided')).not.toBeInTheDocument()
   })
 })

@@ -5,7 +5,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { buildPeriodWhere, resolvePeriodRange } from '../utils/periodQuery.js'
 import { parseId } from '../validators/journalValidators.js'
-import { listEntryDates } from '../repositories/ledgerRepository.js'
+import { listEntryDates, getTenantDisplayName } from '../repositories/ledgerRepository.js'
 import { getLedgerList, getLedgerEntryDetail, getFinancialOverview, voidLedgerTransaction, reverseLedgerTransaction } from '../services/ledgerService.js'
 import { getFinancialReport, getReportEntryLines } from '../services/financialReportService.js'
 import { renderFinancialReportXlsx } from '../utils/renderFinancialReportXlsx.js'
@@ -23,14 +23,6 @@ function periodLabelFor(query) {
     case 'custom': return `${from} - ${to}`
     default: return 'All time'
   }
-}
-
-async function tenantName(tenantId) {
-  const { rows } = await pool.query(
-    'SELECT COALESCE(formal_name, band_name) AS name FROM tenants WHERE id = $1',
-    [tenantId],
-  )
-  return rows[0]?.name || ''
 }
 
 // ---------- list ----------
@@ -69,7 +61,7 @@ router.get('/report/export', async (req, res) => {
 
   const [report, name] = await Promise.all([
     getFinancialReport(pool, req.tenantId, period.range),
-    tenantName(req.tenantId),
+    getTenantDisplayName(pool, req.tenantId),
   ])
   const label = periodLabelFor(req.query)
   const safeLabel = label.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '-')

@@ -15,7 +15,14 @@ import {
   fetchValidExpenseCodes,
   fetchValidProductIds,
   validateBandMemberForTenant,
+  listPurchases as listPurchaseRows,
+  listPurchasePeriods,
+  fetchPurchaseAttachments,
+  getPurchaseStatus,
+  deletePurchase as deletePurchaseRow,
+  deleteAttachmentReturningKey,
 } from '../repositories/purchaseRepository.js'
+import { buildPeriodWhere } from '../utils/periodQuery.js'
 import {
   CONTENT_FIELDS_SET,
   FINALIZED_LOCKED_FIELDS_SET,
@@ -31,7 +38,7 @@ import {
   postBillPaid,
 } from './ledgerService.js'
 import { randomUUID } from 'node:crypto'
-import { purchaseAttachmentKey, uploadObject, removeObject } from './storageService.js'
+import { purchaseAttachmentKey, uploadObject, removeObject, safeRemove } from './storageService.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 
@@ -551,6 +558,48 @@ function validatePaymentPreconditions(existing) {
     return { error: { status: 409, body: { error: 'Purchase is already paid', code } } }
   }
   return null
+}
+
+// ---------- reads / composition ----------
+
+export async function listPurchases(db, tenantId, query) {
+  const period = buildPeriodWhere(query, 'p.receipt_date')
+  if (period.error) return { error: { status: 400, body: { error: period.error } } }
+  return { purchases: await listPurchaseRows(db, tenantId, period.sql, period.values) }
+}
+
+export async function listPeriods(db, tenantId) {
+  return listPurchasePeriods(db, tenantId)
+}
+
+// Composes a purchase with its lines (and optionally attachments). Used both for
+// GET /:id and to shape the response after create/patch/payment.
+export async function getPurchaseDetail(db, tenantId, id, { withAttachments = false } = {}) {
+  const purchase = await fetchPurchase(db, tenantId, id)
+  if (!purchase) return { error: { status: 404, body: { error: 'Not found' } } }
+  const lines = await fetchPurchaseLines(db, id, tenantId)
+  if (!withAttachments) return { purchase: { ...purchase, lines } }
+  const attachments = await fetchPurchaseAttachments(db, id, tenantId)
+  return { purchase: { ...purchase, lines, attachments } }
+}
+
+// ---------- delete ----------
+
+export async function deletePurchase(db, tenantId, id) {
+  const status = await getPurchaseStatus(db, id, tenantId)
+  if (status === null) return { error: { status: 404, body: { error: 'Not found' } } }
+  if (status !== 'draft') {
+    return { error: { status: 409, body: { error: 'Only draft purchases can be deleted', code: 'purchase_finalized' } } }
+  }
+  await deletePurchaseRow(db, id, tenantId)
+  return {}
+}
+
+export async function deletePurchaseAttachment(db, tenantId, purchaseId, attachmentId) {
+  const objectKey = await deleteAttachmentReturningKey(db, attachmentId, purchaseId, tenantId)
+  if (!objectKey) return { error: { status: 404, body: { error: 'Not found' } } }
+  safeRemove(objectKey, 'Failed to delete purchase attachment object:')
+  return {}
 }
 
 async function resolvePaymentMethod(pool, tenantId, body) {

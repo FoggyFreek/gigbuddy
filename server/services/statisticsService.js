@@ -97,3 +97,12 @@ export async function getAllTenantStatistics() {
   )
   return rows
 }
+
+// Recompute usage for every tenant (super-admin backfill for tenants whose
+// files predate this feature).
+export async function refreshAllTenantStorage() {
+  const { rows } = await pool.query('SELECT id FROM tenants ORDER BY id')
+  for (const { id } of rows) {
+    await refreshTenantStorage(id)
+  }
+}

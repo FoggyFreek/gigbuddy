@@ -223,8 +223,21 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     try {
       setSaving(true)
       setError(null)
-      await updatePurchase(purchaseId, buildPurchasePayload(form, status))
-      onClose(true)
+      const updated = await updatePurchase(purchaseId, buildPurchasePayload(form, status))
+      // Stay in the detail after saving (draft or approve) so the user can keep
+      // working — e.g. register payment right after approving — without
+      // re-finding the purchase; refresh the list row in place instead of
+      // closing.
+      setPurchase(updated)
+      setForm(purchaseToForm(updated))
+      onPurchaseUpdate?.(purchaseId, {
+        status: updated.status,
+        due_date: updated.due_date,
+        receipt_number: updated.receipt_number,
+        supplier_name: updated.supplier_name,
+        subtotal_cents: updated.subtotal_cents,
+        total_cents: updated.total_cents,
+      })
     } catch (e) {
       applySaveError(e)
     } finally {

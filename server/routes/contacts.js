@@ -1,328 +1,123 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { parseId } from '../validators/contactValidators.js'
+import {
+  listContacts,
+  searchContacts,
+  getContact,
+  createContact,
+  patchContact,
+  deleteContact,
+  createNote,
+  deleteNote,
+  listVenues,
+  linkVenue,
+  unlinkVenue,
+  importContacts,
+} from '../services/contactService.js'
 
 const router = Router()
 
-const VALID_CATEGORIES = new Set(['press', 'radio & tv', 'booker', 'promotion', 'network', 'supplier'])
-
-function parseCategoryFilter(value) {
-  if (value == null || value === '') return null
-  const category = String(value).trim()
-  return VALID_CATEGORIES.has(category) ? category : false
-}
-
-function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
-
-function requireId(req, res) {
-  const id = parseId(req.params.id)
+function requireParam(req, res, name, label = name) {
+  const id = parseId(req.params[name])
   if (id === null) {
-    res.status(400).json({ error: 'Invalid id' })
+    res.status(400).json({ error: `Invalid ${label}` })
     return null
   }
   return id
 }
 
+function sendError(res, error) {
+  res.status(error.status).json(error.body)
+}
+
 router.get('/', async (req, res) => {
-  const category = parseCategoryFilter(req.query.category)
-  const excludeCategory = parseCategoryFilter(req.query.excludeCategory)
-  if (category === false || excludeCategory === false) {
-    return res.status(400).json({ error: 'Invalid category value' })
-  }
-  if (category && excludeCategory) {
-    return res.status(400).json({ error: 'Use category or excludeCategory, not both' })
-  }
-  const filters = ['tenant_id = $1']
-  const values = [req.tenantId]
-  if (category) {
-    values.push(category)
-    filters.push(`category = $${values.length}`)
-  }
-  if (excludeCategory) {
-    values.push(excludeCategory)
-    filters.push(`category <> $${values.length}`)
-  }
-  const { rows } = await pool.query(
-    `SELECT * FROM contacts WHERE ${filters.join(' AND ')} ORDER BY category ASC, name ASC`,
-    values,
-  )
-  res.json(rows)
+  const result = await listContacts(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.contacts)
 })
 
 router.get('/search', async (req, res) => {
-  const q = String(req.query.q ?? '').trim()
-  if (q.length < 3) return res.json([])
-  const parsedLimit = parseInt(req.query.limit, 10)
-  const limit = Math.max(
-    1,
-    Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),
-  )
-  const like = `%${q}%`
-  const prefix = `${q}%`
-  const { rows } = await pool.query(
-    `SELECT id, name, category, email, phone
-       FROM contacts
-      WHERE tenant_id = $1
-        AND (name ILIKE $2 OR email ILIKE $2)
-      ORDER BY
-        CASE WHEN name ILIKE $3 THEN 0 ELSE 1 END,
-        name ASC
-      LIMIT $4`,
-    [req.tenantId, like, prefix, limit],
-  )
-  res.json(rows)
+  res.json(await searchContacts(pool, req.tenantId, req.query))
 })
 
 router.get('/:id', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
-  const { rows } = await pool.query(
-    `SELECT c.*,
-       COALESCE(
-         json_agg(n ORDER BY n.created_at DESC) FILTER (WHERE n.id IS NOT NULL),
-         '[]'
-       ) AS notes
-     FROM contacts c
-     LEFT JOIN contact_notes n ON n.contact_id = c.id AND n.tenant_id = c.tenant_id
-     WHERE c.id = $1 AND c.tenant_id = $2
-     GROUP BY c.id`,
-    [id, req.tenantId],
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  res.json(rows[0])
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await getContact(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.contact)
 })
 
 router.post('/', async (req, res) => {
-  const { name, email, phone, category } = req.body
-  if (!name || !String(name).trim()) {
-    return res.status(400).json({ error: 'name is required' })
-  }
-  const finalCategory = VALID_CATEGORIES.has(category) ? category : 'press'
-  try {
-    const { rows } = await pool.query(
-      `INSERT INTO contacts (tenant_id, name, email, phone, category)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [req.tenantId, String(name).trim(), email || null, phone || null, finalCategory],
-    )
-    res.status(201).json(rows[0])
-  } catch (err) {
-    // UNIQUE(lower(name), lower(category)) collision — surface a 409 with a
-    // stable code so callers (e.g. the supplier autocomplete) can recover.
-    if (err.code === '23505') {
-      return res.status(409).json({ error: 'A contact with that name already exists', code: 'contact_exists' })
-    }
-    throw err
-  }
+  const result = await createContact(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.contact)
 })
 
 router.patch('/:id', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
-  const allowed = ['name', 'email', 'phone', 'category']
-  const fields = []
-  const values = []
-  let idx = 1
-  for (const key of allowed) {
-    if (key in req.body) {
-      if (key === 'category' && !VALID_CATEGORIES.has(req.body[key])) {
-        return res.status(400).json({ error: 'Invalid category value' })
-      }
-      fields.push(`${key} = $${idx++}`)
-      values.push(req.body[key] || null)
-    }
-  }
-  if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
-  fields.push(`updated_at = NOW()`)
-  values.push(id, req.tenantId)
-  const { rows } = await pool.query(
-    `UPDATE contacts SET ${fields.join(', ')}
-     WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
-    values,
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  res.json(rows[0])
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await patchContact(pool, req.tenantId, id, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.contact)
 })
 
 router.delete('/:id', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
-  const { rowCount } = await pool.query(
-    'DELETE FROM contacts WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rowCount) return res.status(404).json({ error: 'Not found' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await deleteContact(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })
 
-function requireNoteId(req, res) {
-  const n = Number(req.params.noteId)
-  if (!Number.isInteger(n) || n <= 0) {
-    res.status(400).json({ error: 'Invalid noteId' })
-    return null
-  }
-  return n
-}
+// ---------- notes ----------
 
 router.post('/:id/notes', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
-  const note = req.body?.note
-  if (!note || !String(note).trim()) {
-    return res.status(400).json({ error: 'note is required' })
-  }
-  const { rows } = await pool.query(
-    `INSERT INTO contact_notes (contact_id, tenant_id, note)
-     SELECT c.id, c.tenant_id, $3
-     FROM contacts c
-     WHERE c.id = $1 AND c.tenant_id = $2
-     RETURNING *`,
-    [id, req.tenantId, String(note).trim()],
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  res.status(201).json(rows[0])
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await createNote(pool, req.tenantId, id, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.note)
 })
 
 router.delete('/:id/notes/:noteId', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
-  const noteId = requireNoteId(req, res); if (noteId === null) return
-  const { rowCount } = await pool.query(
-    'DELETE FROM contact_notes WHERE id = $1 AND contact_id = $2 AND tenant_id = $3',
-    [noteId, id, req.tenantId],
-  )
-  if (!rowCount) return res.status(404).json({ error: 'Not found' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const noteId = requireParam(req, res, 'noteId'); if (noteId === null) return
+  const result = await deleteNote(pool, req.tenantId, id, noteId)
+  if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })
 
+// ---------- venue links ----------
 // Reverse side of the venue_contacts link: manage a contact's venues/festivals
 // from the contact. The link row is shared with the venue side (venues.js); both
 // festivals (category='festival') and venues live in the same venues table.
-async function requireContactInTenant(tenantId, contactId) {
-  const { rows } = await pool.query(
-    'SELECT 1 FROM contacts WHERE id = $1 AND tenant_id = $2',
-    [contactId, tenantId],
-  )
-  return rows.length > 0
-}
 
 router.get('/:id/venues', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
-  if (!(await requireContactInTenant(req.tenantId, id))) {
-    return res.status(404).json({ error: 'Not found' })
-  }
-  const { rows } = await pool.query(
-    `SELECT v.id, v.name, v.category, v.organization_name, v.city, v.region, v.country, vc.is_primary
-       FROM venue_contacts vc
-       JOIN venues v ON v.id = vc.venue_id AND v.tenant_id = vc.tenant_id
-      WHERE vc.contact_id = $1 AND vc.tenant_id = $2
-      ORDER BY v.category ASC, v.name ASC`,
-    [id, req.tenantId],
-  )
-  res.json(rows)
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await listVenues(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.venues)
 })
 
 router.post('/:id/venues', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
-  const venueId = parseId(req.body.venue_id)
-  if (venueId === null) return res.status(400).json({ error: 'venue_id is required' })
-
-  if (!(await requireContactInTenant(req.tenantId, id))) {
-    return res.status(404).json({ error: 'Not found' })
-  }
-  const { rows: venueRows } = await pool.query(
-    `SELECT id, name, category, organization_name, city, region, country
-       FROM venues WHERE id = $1 AND tenant_id = $2`,
-    [venueId, req.tenantId],
-  )
-  if (!venueRows.length) return res.status(404).json({ error: 'Not found' })
-
-  try {
-    await pool.query(
-      'INSERT INTO venue_contacts (venue_id, contact_id, tenant_id) VALUES ($1, $2, $3)',
-      [venueId, id, req.tenantId],
-    )
-    return res.status(201).json({ ...venueRows[0], is_primary: false })
-  } catch (err) {
-    if (err.code === '23505') {
-      return res.status(409).json({ error: 'Venue is already linked to this contact' })
-    }
-    throw err
-  }
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await linkVenue(pool, req.tenantId, id, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.venue)
 })
 
 router.delete('/:id/venues/:venueId', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
-  const venueId = parseId(req.params.venueId)
-  if (venueId === null) return res.status(400).json({ error: 'Invalid venueId' })
-
-  const { rowCount } = await pool.query(
-    'DELETE FROM venue_contacts WHERE contact_id = $1 AND venue_id = $2 AND tenant_id = $3',
-    [id, venueId, req.tenantId],
-  )
-  if (!rowCount) return res.status(404).json({ error: 'Not found' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const venueId = requireParam(req, res, 'venueId'); if (venueId === null) return
+  const result = await unlinkVenue(pool, req.tenantId, id, venueId)
+  if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })
 
-async function fetchExistingImportKeys(client, tenantId, names) {
-  if (!names.length) return new Set()
-  const { rows } = await client.query(
-    `SELECT lower(name) AS name, lower(category) AS category
-     FROM contacts WHERE tenant_id = $1 AND lower(name) = ANY($2)`,
-    [tenantId, names],
-  )
-  const keys = new Set()
-  for (const r of rows) keys.add(`${r.name} ${r.category}`)
-  return keys
-}
-
-function normalizeImportRow(row) {
-  return {
-    name: String(row.name ?? '').trim(),
-    email: String(row.email ?? '').trim(),
-    phone: String(row.phone ?? '').trim(),
-    category: VALID_CATEGORIES.has(row.category) ? row.category : 'press',
-  }
-}
+// ---------- import ----------
 
 router.post('/import', async (req, res) => {
-  if (!Array.isArray(req.body) || req.body.length === 0) {
-    return res.status(400).json({ error: 'Expected non-empty array' })
-  }
-  if (req.body.length > 1000) {
-    return res.status(400).json({ error: 'Maximum 1000 rows per import' })
-  }
-
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
-    const incomingNames = [...new Set(req.body.map(r => String(r.name ?? '').trim().toLowerCase()).filter(Boolean))]
-    const existingKeys = await fetchExistingImportKeys(client, req.tenantId, incomingNames)
-
-    let imported = 0
-    let skipped = 0
-    const seenKeys = new Set()
-
-    for (const row of req.body) {
-      const { name, email, phone, category } = normalizeImportRow(row)
-      if (!name) { skipped++; continue }
-
-      const key = `${name.toLowerCase()} ${category.toLowerCase()}`
-      if (existingKeys.has(key) || seenKeys.has(key)) { skipped++; continue }
-
-      await client.query(
-        `INSERT INTO contacts (tenant_id, name, email, phone, category) VALUES ($1, $2, $3, $4, $5)`,
-        [req.tenantId, name, email || null, phone || null, category],
-      )
-      imported++
-      seenKeys.add(key)
-    }
-    await client.query('COMMIT')
-    res.json({ imported, skipped })
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  const result = await importContacts(req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.summary)
 })
 
 export default router

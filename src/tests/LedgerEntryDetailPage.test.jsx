@@ -83,13 +83,16 @@ describe('LedgerEntryDetailPage', () => {
     expect(screen.getByText('5b. Input tax')).toBeInTheDocument()
     expect(screen.getByText('Trade creditors, nominal')).toBeInTheDocument()
 
-    // Signed "In EUR": debit positive, credit negative.
-    expect(screen.getByText('20,66')).toBeInTheDocument()
+    // Signed "In EUR": debit positive, credit negative. "20,66" also appears in
+    // the (symbol-split) Debit column, so allow more than one match; the signed
+    // "-25,00" is unique to the In EUR column.
+    expect(screen.getAllByText('20,66').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('-25,00')).toBeInTheDocument()
 
-    // Totals row: debits and credits both €25,00.
+    // Totals row: debits and credits both €25,00. The symbol and digits render
+    // in separate aligned cells, so assert on the digit part.
     expect(screen.getByText(/total eur/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/€\s?25,00/).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getAllByText('25,00').length).toBeGreaterThanOrEqual(2)
   })
 
   it('renders the metadata card with origin link', async () => {

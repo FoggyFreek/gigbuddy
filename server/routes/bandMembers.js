@@ -1,81 +1,49 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { parseId } from '../validators/bandMemberValidators.js'
+import {
+  listMembers,
+  createMember,
+  patchMember,
+  deleteMember,
+} from '../services/bandMemberService.js'
 
 const router = Router()
 
-const MEMBER_FIELDS = ['name', 'role', 'color', 'sort_order', 'position']
+function requireId(req, res) {
+  const id = parseId(req.params.id)
+  if (id === null) {
+    res.status(400).json({ error: 'Invalid id' })
+    return null
+  }
+  return id
+}
 
-function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
+function sendError(res, error) {
+  res.status(error.status).json(error.body)
 }
 
 router.get('/', async (req, res) => {
-  const { rows } = await pool.query(
-    'SELECT * FROM band_members WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
-    [req.tenantId],
-  )
-  res.json(rows)
+  res.json(await listMembers(pool, req.tenantId))
 })
 
 router.post('/', async (req, res) => {
-  const { name, role, color, position } = req.body
-  if (!name) return res.status(400).json({ error: 'name is required' })
-  const pos = position ?? 'lead'
-  if (!['lead', 'optional', 'sub'].includes(pos)) {
-    return res.status(400).json({ error: 'position must be lead, optional, or sub' })
-  }
-
-  const { rows: maxRows } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM band_members WHERE tenant_id = $1',
-    [req.tenantId],
-  )
-  const nextOrder = maxRows[0].next
-
-  const { rows } = await pool.query(
-    `INSERT INTO band_members (tenant_id, name, role, color, sort_order, position)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [req.tenantId, name, role ?? null, color ?? null, nextOrder, pos],
-  )
-  res.status(201).json(rows[0])
+  const result = await createMember(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.member)
 })
 
 router.patch('/:id', async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
-
-  const fields = []
-  const values = []
-  let idx = 1
-
-  for (const key of MEMBER_FIELDS) {
-    if (key in req.body) {
-      fields.push(`${key} = $${idx++}`)
-      values.push(req.body[key])
-    }
-  }
-
-  if (!fields.length) return res.status(400).json({ error: 'No valid fields to update' })
-
-  values.push(id, req.tenantId)
-  const { rows } = await pool.query(
-    `UPDATE band_members SET ${fields.join(', ')}
-     WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
-    values,
-  )
-  if (!rows.length) return res.status(404).json({ error: 'Not found' })
-  res.json(rows[0])
+  const id = requireId(req, res); if (id === null) return
+  const result = await patchMember(pool, req.tenantId, id, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.member)
 })
 
 router.delete('/:id', async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
-
-  const { rowCount } = await pool.query(
-    'DELETE FROM band_members WHERE id = $1 AND tenant_id = $2',
-    [id, req.tenantId],
-  )
-  if (!rowCount) return res.status(404).json({ error: 'Not found' })
+  const id = requireId(req, res); if (id === null) return
+  const result = await deleteMember(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })
 

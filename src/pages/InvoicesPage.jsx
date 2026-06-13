@@ -30,6 +30,7 @@ import { invoiceStatusColor } from '../utils/invoiceStatus.js'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.js'
 import { invoiceShape, idProp } from '../propTypes/shared.js'
 import StatusDot from '../components/StatusDot.jsx'
+import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.jsx'
 
 const SUMMARY_CARDS = [
   { key: 'all', label: 'All invoices', chipColor: 'primary' },
@@ -362,13 +363,13 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
               <TableCell>Invoice #</TableCell>
               <TableCell>Date</TableCell>
               <TableCell>Customer</TableCell>
-              <TableCell align="right">Total</TableCell>
+              <MoneyHeaderCells label="Total" />
             </TableRow>
           </TableHead>
           <TableBody>
             {!invoices.length && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
                     No invoices found
                   </Typography>
@@ -389,7 +390,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }) {
                 <TableCell>#{inv.invoice_number}</TableCell>
                 <TableCell>{formatShortDate(inv.issue_date)}</TableCell>
                 <TableCell>{inv.customer_name}</TableCell>
-                <TableCell align="right">{formatEur(inv.total_cents)}</TableCell>
+                <MoneyCells cents={inv.total_cents} />
               </TableRow>
             ))}
           </TableBody>

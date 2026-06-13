@@ -33,6 +33,7 @@ import {
   deleteInvoiceRow,
   setCustomLogoPath,
   stripMollieKey,
+  fetchPublicInvoiceLogoPath,
 } from '../repositories/invoiceRepository.js'
 import {
   SIMPLE_PATCH_FIELDS,
@@ -886,4 +887,10 @@ export function notifyInvoicePaid(tenantId, invoice) {
     tag: 'invoice-paid',
     url: `/invoices/${invoice.id}`,
   }).catch((err) => console.error('[push] invoice paid notify failed', err))
+}
+
+// Public (unauthenticated) tenant logo for an invoice shared via a Mollie
+// payment link. Returns the object key, or null when not shareable/none set.
+export async function getPublicInvoiceLogoPath(db, invoiceId) {
+  return fetchPublicInvoiceLogoPath(db, invoiceId)
 }
