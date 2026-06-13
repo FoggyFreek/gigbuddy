@@ -210,7 +210,9 @@ function toListRow(row) {
     entry_date: row.entry_date,
     type,
     group,
-    voided,
+    // A manually voided original carries no void source_event, so fold in its
+    // voided_at marker: both halves of a void hide from the default list.
+    voided: voided || row.voided_at != null,
     receipt: receiptFor(row),
     description: describe(row),
     amount_cents: sign === null ? null : sign * row.total_debit_cents,
@@ -243,17 +245,27 @@ function originFor(row) {
 }
 
 // Detail for one transaction, or null (route 404s — no cross-tenant leak).
+// Carries the correction state that drives the front-end banner/button choice:
+// whether this entry was voided/reversed, whether it is itself a correction,
+// and whether its booking period is still open (→ Void) or closed (→ Reversal).
 export async function getLedgerEntryDetail(executor, tenantId, transactionId) {
   const row = await getTransaction(executor, tenantId, transactionId)
   if (!row) return null
   const lines = await listLines(executor, tenantId, transactionId)
   const { type, group, voided } = classify(row.source_type, row.source_event)
+  const isCorrection = row.source_type === 'ledger_transaction'
+    && (row.source_event === 'void' || row.source_event === 'reversal')
+  const closedThrough = await fetchBooksClosedThrough(executor, tenantId)
   return {
     id: row.id,
     entry_date: row.entry_date,
     type,
     group,
-    voided,
+    voided: voided || row.voided_at != null,
+    voided_by_transaction_id: row.voided_by_transaction_id ?? null,
+    reversed_by_transaction_id: row.reversed_by_transaction_id ?? null,
+    corrects_transaction_id: isCorrection ? row.source_id : null,
+    period_open: !closedThrough || row.entry_date > closedThrough,
     receipt: receiptFor(row),
     description: describe(row),
     source_type: row.source_type,
@@ -265,11 +277,37 @@ export async function getLedgerEntryDetail(executor, tenantId, transactionId) {
   }
 }
 
-// Voids one ledger transaction corrections-forward: posts a new transaction
-// dated today with every line's debit/credit swapped. Idempotent on
-// (ledger_transaction, id, void) — a second void 409s. Void entries themselves
-// cannot be voided (un-voiding is re-entering the original, not a void chain).
-export async function voidLedgerTransaction(pool, tenantId, transactionId, actorUserId = null) {
+// Posts a correcting transaction: a new journal dated today with every line of
+// `original` debit/credit-swapped. `mode` is 'void' or 'reversal'; the
+// source_event records which.
+async function postReversingJournal(client, tenantId, original, mode, actorUserId) {
+  const verb = mode === 'void' ? 'Void' : 'Reversal'
+  const lines = (await listLines(client, tenantId, original.id)).map((l) => ({
+    account_code: l.account_code,
+    debit_cents: l.credit_cents,
+    credit_cents: l.debit_cents,
+    memo: l.memo,
+  }))
+  return postJournal(client, tenantId, {
+    entryDate: today(),
+    description: `${verb} of ledger entry #${original.id}`,
+    sourceType: 'ledger_transaction', sourceId: original.id, sourceEvent: mode,
+    lines, actorUserId,
+  })
+}
+
+// Corrects one ledger transaction by posting a reversing journal dated today
+// (debit/credit swapped). Two modes, gated on the original's booking period:
+//   'void'     — open period only. Marks the original voided_at; both halves
+//                then hide from the ledger and drop out of every financial
+//                report (corrections-as-exclusion).
+//   'reversal' — closed period only. A *visible* correction: marks the original
+//                reversed_by_transaction_id, but both halves stay in the ledger
+//                and in reports, netting the mistake out forward without
+//                touching the closed period.
+// A correction entry can't itself be voided/reversed, nor can an already
+// corrected original. Idempotent on (ledger_transaction, id, mode).
+async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode) {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -278,26 +316,33 @@ export async function voidLedgerTransaction(pool, tenantId, transactionId, actor
       await client.query('ROLLBACK')
       return { error: { status: 404, body: { error: 'Not found' } } }
     }
-    if (classify(row.source_type, row.source_event).voided) {
+    if (classify(row.source_type, row.source_event).voided || row.source_event === 'reversal') {
       await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'A void entry cannot be voided', code: 'void_of_void' } } }
+      return { error: { status: 409, body: { error: 'A correction entry cannot be voided or reversed', code: 'void_of_void' } } }
+    }
+    if (row.voided_at) {
+      await client.query('ROLLBACK')
+      return { error: { status: 409, body: { error: 'This ledger entry has already been voided', code: 'already_voided' } } }
+    }
+    if (row.reversed_by_transaction_id) {
+      await client.query('ROLLBACK')
+      return { error: { status: 409, body: { error: 'This ledger entry has already been reversed', code: 'already_reversed' } } }
     }
 
-    const lines = (await listLines(client, tenantId, transactionId)).map((l) => ({
-      account_code: l.account_code,
-      debit_cents: l.credit_cents,
-      credit_cents: l.debit_cents,
-      memo: l.memo,
-    }))
+    const closedThrough = await fetchBooksClosedThrough(client, tenantId)
+    const isClosed = Boolean(closedThrough && row.entry_date <= closedThrough)
+    if (mode === 'void' && isClosed) {
+      await client.query('ROLLBACK')
+      return { error: { status: 409, body: { error: `This ledger entry is in a closed period (closed through ${closedThrough}); reverse it instead`, code: 'use_reversal', closed_through: closedThrough } } }
+    }
+    if (mode === 'reversal' && !isClosed) {
+      await client.query('ROLLBACK')
+      return { error: { status: 409, body: { error: 'This ledger entry is in an open period; void it instead', code: 'use_void' } } }
+    }
 
     let result
     try {
-      result = await postJournal(client, tenantId, {
-        entryDate: today(),
-        description: `Void of ledger entry #${transactionId}`,
-        sourceType: 'ledger_transaction', sourceId: transactionId, sourceEvent: 'void',
-        lines, actorUserId,
-      })
+      result = await postReversingJournal(client, tenantId, row, mode, actorUserId)
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {})
       const mapped = ledgerErrorResult(err)
@@ -306,8 +351,18 @@ export async function voidLedgerTransaction(pool, tenantId, transactionId, actor
     }
     if (!result.posted) {
       await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'Entry already voided', code: 'already_voided' } } }
+      const code = mode === 'void' ? 'already_voided' : 'already_reversed'
+      return { error: { status: 409, body: { error: 'Entry already corrected', code } } }
     }
+
+    // Mark the original. Column names are internal constants (not user input).
+    const markerColumn = mode === 'void' ? 'voided_by_transaction_id' : 'reversed_by_transaction_id'
+    const setVoidedAt = mode === 'void' ? ', voided_at = NOW()' : ''
+    await client.query(
+      `UPDATE ledger_transactions SET ${markerColumn} = $1${setVoidedAt}
+        WHERE id = $2 AND tenant_id = $3`,
+      [result.transactionId, transactionId, tenantId],
+    )
 
     await client.query('COMMIT')
     return { transactionId: result.transactionId }
@@ -317,6 +372,18 @@ export async function voidLedgerTransaction(pool, tenantId, transactionId, actor
   } finally {
     client.release()
   }
+}
+
+// Void an open-period entry (hidden + excluded from reports). 409s a
+// closed-period entry with code use_reversal.
+export async function voidLedgerTransaction(pool, tenantId, transactionId, actorUserId = null) {
+  return applyCorrection(pool, tenantId, transactionId, actorUserId, 'void')
+}
+
+// Reverse a closed-period entry with a visible correction. 409s an open-period
+// entry with code use_void.
+export async function reverseLedgerTransaction(pool, tenantId, transactionId, actorUserId = null) {
+  return applyCorrection(pool, tenantId, transactionId, actorUserId, 'reversal')
 }
 
 // 'YYYY-MM-01' of the month `count` months after the given year/month (1-based).

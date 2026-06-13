@@ -41,6 +41,23 @@ const SOURCE_JOINS = `
   LEFT JOIN products mp
     ON mp.id = ms.product_id AND mp.tenant_id = ms.tenant_id`
 
+// Open-period voids (the voided original and its ledger_transaction/void
+// reverser) are excluded from every financial aggregation; they stay visible
+// in the browser via "Show voided". Reversals (closed-period corrections) are
+// NOT excluded — they net the mistake out forward and must show in reports.
+// Used in queries that already join ledger_transactions AS lt.
+const EXCLUDE_VOIDED_SQL =
+  "AND lt.voided_at IS NULL AND NOT (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')"
+
+// Same exclusion as a correlated NOT EXISTS, for the running-balance queries
+// that LEFT JOIN ledger_entries directly (no lt) and must preserve their
+// zero-row when accounting settings exist but the account has no entries.
+const NOT_VOIDED_EXISTS_SQL = `AND NOT EXISTS (
+           SELECT 1 FROM ledger_transactions lt
+            WHERE lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+              AND (lt.voided_at IS NOT NULL
+                   OR (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')))`
+
 // Transactions in the (optional) date range with their gross amount (sum of
 // the debit side, in cents) and the joined source-doc fields.
 // `period` is the { sql, values } pair from buildPeriodWhere(query, 'lt.entry_date').
@@ -48,7 +65,7 @@ export async function listTransactions(executor, tenantId, period = { sql: '', v
   const { rows } = await executor.query(
     `SELECT lt.id, to_char(lt.entry_date, 'YYYY-MM-DD') AS entry_date,
             lt.description, lt.source_type, lt.source_id, lt.source_event,
-            lt.created_at,
+            lt.created_at, lt.voided_at,
             e.total_debit_cents,
             ${SOURCE_JOIN_COLUMNS}
        FROM ledger_transactions lt
@@ -85,6 +102,7 @@ export async function monthlyResultTotals(executor, tenantId, { from, toExclusiv
       WHERE le.tenant_id = $1
         AND lt.entry_date >= $2::date
         AND lt.entry_date < $3::date
+        ${EXCLUDE_VOIDED_SQL}
       GROUP BY 1`,
     [tenantId, from, toExclusive],
   )
@@ -109,6 +127,7 @@ export async function vatTotals(executor, tenantId, { from, toExclusive }) {
           WHERE le.tenant_id = tas.tenant_id
             AND lt.entry_date >= $2::date
             AND lt.entry_date < $3::date
+            ${EXCLUDE_VOIDED_SQL}
        ) e ON true
       WHERE tas.tenant_id = $1
       GROUP BY tas.tenant_id`,
@@ -128,6 +147,7 @@ export async function checkingAccountBalance(executor, tenantId) {
        LEFT JOIN ledger_entries le
          ON le.tenant_id = tas.tenant_id
         AND le.account_code = tas.primary_checking_account_code
+        ${NOT_VOIDED_EXISTS_SQL}
       WHERE tas.tenant_id = $1`,
     [tenantId],
   )
@@ -152,6 +172,7 @@ export async function merchTotals(executor, tenantId, { from, toExclusive }) {
           WHERE le.tenant_id = tas.tenant_id
             AND lt.entry_date >= $2::date
             AND lt.entry_date < $3::date
+            ${EXCLUDE_VOIDED_SQL}
        ) e ON true
       WHERE tas.tenant_id = $1
       GROUP BY tas.tenant_id`,
@@ -169,6 +190,7 @@ export async function merchInventoryValue(executor, tenantId) {
        LEFT JOIN ledger_entries le
          ON le.tenant_id = tas.tenant_id
         AND le.account_code = tas.merch_inventory_account_code
+        ${NOT_VOIDED_EXISTS_SQL}
       WHERE tas.tenant_id = $1`,
     [tenantId],
   )
@@ -194,6 +216,7 @@ export async function vatAccountBalances(executor, tenantId, { asOf }) {
              ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
           WHERE le.tenant_id = tas.tenant_id
             AND lt.entry_date <= $2::date
+            ${EXCLUDE_VOIDED_SQL}
        ) e ON true
       WHERE tas.tenant_id = $1
       GROUP BY tas.tenant_id`,
@@ -217,6 +240,7 @@ export async function accountActivity(executor, tenantId, { from, toExclusive })
       WHERE le.tenant_id = $1
         AND lt.entry_date >= $2::date
         AND lt.entry_date < $3::date
+        ${EXCLUDE_VOIDED_SQL}
       GROUP BY coa.code, coa.name, coa.type
       ORDER BY coa.code`,
     [tenantId, from, toExclusive],
@@ -237,6 +261,7 @@ export async function accountBalancesBefore(executor, tenantId, toExclusive) {
          ON coa.tenant_id = le.tenant_id AND coa.code = le.account_code
       WHERE le.tenant_id = $1
         AND lt.entry_date < $2::date
+        ${EXCLUDE_VOIDED_SQL}
       GROUP BY coa.code, coa.name, coa.type
       ORDER BY coa.code`,
     [tenantId, toExclusive],
@@ -261,6 +286,7 @@ export async function reportEntryLines(executor, tenantId, { from, toExclusive }
       WHERE le.tenant_id = $1
         AND lt.entry_date >= $2::date
         AND lt.entry_date < $3::date
+        ${EXCLUDE_VOIDED_SQL}
       ORDER BY lt.entry_date ASC, lt.id ASC, le.id ASC`,
     [tenantId, from, toExclusive],
   )
@@ -285,6 +311,7 @@ export async function getTransaction(executor, tenantId, transactionId) {
     `SELECT lt.id, to_char(lt.entry_date, 'YYYY-MM-DD') AS entry_date,
             lt.description, lt.source_type, lt.source_id, lt.source_event,
             lt.created_at, lt.created_by_user_id,
+            lt.voided_at, lt.voided_by_transaction_id, lt.reversed_by_transaction_id,
             u.name AS created_by_name,
             ${SOURCE_JOIN_COLUMNS}
        FROM ledger_transactions lt

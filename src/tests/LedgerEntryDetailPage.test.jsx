@@ -6,12 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../api/ledger.js', () => ({
   getLedgerEntry: vi.fn(),
   voidLedgerEntry: vi.fn(),
+  reverseLedgerEntry: vi.fn(),
 }))
 vi.mock('../api/journal.js', () => ({
   createJournal: vi.fn(),
 }))
 
-import { getLedgerEntry, voidLedgerEntry } from '../api/ledger.js'
+import { getLedgerEntry, voidLedgerEntry, reverseLedgerEntry } from '../api/ledger.js'
 import { createJournal } from '../api/journal.js'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
 import LedgerEntryDetailPage from '../pages/LedgerEntryDetailPage.jsx'
@@ -23,6 +24,10 @@ const DETAIL = {
   type: 'Purchase',
   group: 'purchases',
   voided: false,
+  voided_by_transaction_id: null,
+  reversed_by_transaction_id: null,
+  corrects_transaction_id: null,
+  period_open: true,
   receipt: 9,
   description: 'Bill from mi5 Studios: TEST',
   source_type: 'purchase',
@@ -148,11 +153,37 @@ describe('LedgerEntryDetailPage', () => {
     expect(voidLedgerEntry).not.toHaveBeenCalled()
   })
 
-  it('void button is disabled for an entry that is itself a void', async () => {
-    getLedgerEntry.mockResolvedValue({ ...DETAIL, voided: true })
+  it('hides the void button and shows a banner for an entry that has been voided', async () => {
+    getLedgerEntry.mockResolvedValue({ ...DETAIL, voided: true, voided_by_transaction_id: 6 })
     wrap()
-    await waitFor(() => expect(screen.getByRole('button', { name: /^void$/i })).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /^void$/i })).toBeDisabled()
+    await waitFor(() => expect(screen.getByText(/has been voided by another ledger entry/i)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^void$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^reverse$/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /view entry #6/i })).toHaveAttribute('href', '/ledger/6')
+  })
+
+  it('shows a reversed banner and no action button for an entry that has been reversed', async () => {
+    getLedgerEntry.mockResolvedValue({ ...DETAIL, period_open: false, reversed_by_transaction_id: 8 })
+    wrap()
+    await waitFor(() => expect(screen.getByText(/has been reversed by another ledger entry/i)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^void$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^reverse$/i })).not.toBeInTheDocument()
+  })
+
+  it('offers Reverse (not Void) for an entry in a closed period and posts the reversal', async () => {
+    reverseLedgerEntry.mockResolvedValue({ id: 90 })
+    getLedgerEntry.mockResolvedValue({ ...DETAIL, period_open: false })
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /^reverse$/i })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^void$/i })).not.toBeInTheDocument()
+
+    screen.getByRole('button', { name: /^reverse$/i }).click()
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+    expect(screen.getByText(/closed booking period/i)).toBeInTheDocument()
+
+    screen.getByRole('button', { name: /reverse entry/i }).click()
+    await waitFor(() => expect(reverseLedgerEntry).toHaveBeenCalledWith(5))
+    await waitFor(() => expect(getLedgerEntry).toHaveBeenCalledWith(90))
   })
 
   it('copy action creates a draft journal from the lines and navigates to the journal page', async () => {

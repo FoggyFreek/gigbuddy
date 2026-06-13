@@ -6,7 +6,7 @@ import pool from '../db/index.js'
 import { buildPeriodWhere, resolvePeriodRange } from '../utils/periodQuery.js'
 import { parseId } from '../validators/journalValidators.js'
 import { listEntryDates } from '../repositories/ledgerRepository.js'
-import { getLedgerList, getLedgerEntryDetail, getFinancialOverview, voidLedgerTransaction } from '../services/ledgerService.js'
+import { getLedgerList, getLedgerEntryDetail, getFinancialOverview, voidLedgerTransaction, reverseLedgerTransaction } from '../services/ledgerService.js'
 import { getFinancialReport, getReportEntryLines } from '../services/financialReportService.js'
 import { renderFinancialReportXlsx } from '../utils/renderFinancialReportXlsx.js'
 import { renderFinancialReportPdf } from '../utils/renderFinancialReportPdf.js'
@@ -98,11 +98,20 @@ router.get('/:id', async (req, res) => {
   res.json(detail)
 })
 
-// ---------- void (posts a reversing transaction) ----------
+// ---------- void (open period: hidden + excluded from reports) ----------
 router.post('/:id/void', async (req, res) => {
   const id = parseId(req.params.id)
   if (id === null) return res.status(400).json({ error: 'Invalid id' })
   const result = await voidLedgerTransaction(pool, req.tenantId, id, req.user.id)
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.json({ id: result.transactionId })
+})
+
+// ---------- reverse (closed period: visible corrections-forward entry) ----------
+router.post('/:id/reverse', async (req, res) => {
+  const id = parseId(req.params.id)
+  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const result = await reverseLedgerTransaction(pool, req.tenantId, id, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   res.json({ id: result.transactionId })
 })

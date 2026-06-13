@@ -194,3 +194,55 @@ describe('financial report', () => {
     expect(res.body.trial_balance.rows).toEqual([])
   })
 })
+
+describe('financial report — voids excluded, reversals included', () => {
+  async function purchaseLedgerId() {
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    return list.body.find((r) => r.source_type === 'purchase').id
+  }
+  async function closeBooksThrough(date) {
+    await asUserA(request(app).patch('/api/accounts/settings')).send({ books_closed_through: date }).expect(200)
+  }
+
+  it('drops a voided open-period entry from the P&L, balance sheet and VAT', async () => {
+    await createAccruedPurchase() // expense 2066 on 62100, input VAT 434, payable 2500, dated 2026-02-15
+
+    const before = await asUserA(
+      request(app).get('/api/ledger/report').query({ mode: 'fiscal_year', year: YEAR }),
+    ).expect(200)
+    expect(before.body.profit_loss.totals.expense_cents).toBe(2066)
+
+    const id = await purchaseLedgerId()
+    await asUserA(request(app).post(`/api/ledger/${id}/void`)).expect(200)
+
+    const after = await asUserA(
+      request(app).get('/api/ledger/report').query({ mode: 'fiscal_year', year: YEAR }),
+    ).expect(200)
+    expect(after.body.profit_loss.totals.expense_cents).toBe(0)
+    expect(after.body.profit_loss.expenses.find((r) => r.code === '62100')).toBeUndefined()
+    // The voided pair drops out of the balance sheet and VAT too.
+    expect(after.body.balance_sheet.totals.assets_cents).toBe(0)
+    expect(after.body.balance_sheet.totals.liabilities_cents).toBe(0)
+    expect(after.body.vat).toEqual({ output_cents: 0, input_cents: 0, net_cents: 0 })
+  })
+
+  it('keeps a reversed closed-period entry in its own period but nets it out across the year', async () => {
+    await createAccruedPurchase() // dated 2026-02-15
+    await closeBooksThrough(`${YEAR}-05-31`)
+
+    const id = await purchaseLedgerId()
+    await asUserA(request(app).post(`/api/ledger/${id}/reverse`)).expect(200)
+
+    // The original closed-period expense is still reported in February…
+    const feb = await asUserA(
+      request(app).get('/api/ledger/report').query({ mode: 'month', year: YEAR, month: 1 }),
+    ).expect(200)
+    expect(feb.body.profit_loss.expenses.find((r) => r.code === '62100')).toMatchObject({ amount_cents: 2066 })
+
+    // …but the reversal (dated today) nets it out over the whole year.
+    const year = await asUserA(
+      request(app).get('/api/ledger/report').query({ mode: 'fiscal_year', year: YEAR }),
+    ).expect(200)
+    expect(year.body.profit_loss.totals.expense_cents).toBe(0)
+  })
+})

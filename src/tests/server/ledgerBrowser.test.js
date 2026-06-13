@@ -299,3 +299,100 @@ describe('ledger browser — void', () => {
     await asUserA(request(app).post('/api/ledger/abc/void')).expect(400)
   })
 })
+
+describe('ledger browser — void/reversal state', () => {
+  async function approvedPurchaseRow(receipt_date = '2026-06-12') {
+    await asUserA(request(app).post('/api/purchases'))
+      .send(purchasePayload({ status: 'approved', receipt_date })).expect(201)
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    return list.body.find((r) => r.source_type === 'purchase')
+  }
+  async function closeBooksThrough(date) {
+    await asUserA(request(app).patch('/api/accounts/settings')).send({ books_closed_through: date }).expect(200)
+  }
+
+  it('voiding an open-period entry marks the original voided and flags both halves', async () => {
+    const row = await approvedPurchaseRow()
+    const { body } = await asUserA(request(app).post(`/api/ledger/${row.id}/void`)).expect(200)
+    const voidId = body.id
+
+    const original = await asUserA(request(app).get(`/api/ledger/${row.id}`)).expect(200)
+    expect(original.body.voided).toBe(true)
+    expect(original.body.voided_by_transaction_id).toBe(voidId)
+    expect(original.body.reversed_by_transaction_id).toBeNull()
+    expect(original.body.period_open).toBe(true)
+
+    const voidEntry = await asUserA(request(app).get(`/api/ledger/${voidId}`)).expect(200)
+    expect(voidEntry.body.voided).toBe(true)
+    expect(voidEntry.body.type).toBe('Void')
+    expect(voidEntry.body.corrects_transaction_id).toBe(row.id)
+
+    // Both halves carry voided:true so the front-end hides them unless "Show voided".
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const byId = Object.fromEntries(list.body.map((r) => [r.id, r]))
+    expect(byId[row.id].voided).toBe(true)
+    expect(byId[voidId].voided).toBe(true)
+  })
+
+  it('refuses to void a closed-period entry and points to reversal', async () => {
+    const row = await approvedPurchaseRow()
+    await closeBooksThrough('2099-12-31')
+    const res = await asUserA(request(app).post(`/api/ledger/${row.id}/void`)).expect(409)
+    expect(res.body.code).toBe('use_reversal')
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    expect(list.body).toHaveLength(1) // nothing posted
+  })
+
+  it('reverses a closed-period entry with a visible Reversal; both halves stay visible', async () => {
+    const row = await approvedPurchaseRow('2026-02-15')
+    await closeBooksThrough('2026-05-31')
+    const { body } = await asUserA(request(app).post(`/api/ledger/${row.id}/reverse`)).expect(200)
+    const reverseId = body.id
+
+    const reverseEntry = await asUserA(request(app).get(`/api/ledger/${reverseId}`)).expect(200)
+    expect(reverseEntry.body.type).toBe('Reversal')
+    expect(reverseEntry.body.voided).toBe(false)
+    expect(reverseEntry.body.corrects_transaction_id).toBe(row.id)
+    expect(reverseEntry.body.entry_date).toBe(new Date().toISOString().slice(0, 10))
+
+    const original = await asUserA(request(app).get(`/api/ledger/${row.id}`)).expect(200)
+    expect(original.body.reversed_by_transaction_id).toBe(reverseId)
+    expect(original.body.voided).toBe(false)
+    expect(original.body.period_open).toBe(false)
+
+    // Reversals are visible corrections — neither half hides.
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const byId = Object.fromEntries(list.body.map((r) => [r.id, r]))
+    expect(byId[row.id].voided).toBe(false)
+    expect(byId[reverseId].voided).toBe(false)
+  })
+
+  it('refuses to reverse an open-period entry and points to void', async () => {
+    const row = await approvedPurchaseRow()
+    const res = await asUserA(request(app).post(`/api/ledger/${row.id}/reverse`)).expect(409)
+    expect(res.body.code).toBe('use_void')
+  })
+
+  it('reversing twice 409s already_reversed', async () => {
+    const row = await approvedPurchaseRow('2026-02-15')
+    await closeBooksThrough('2026-05-31')
+    await asUserA(request(app).post(`/api/ledger/${row.id}/reverse`)).expect(200)
+    const res = await asUserA(request(app).post(`/api/ledger/${row.id}/reverse`)).expect(409)
+    expect(res.body.code).toBe('already_reversed')
+  })
+
+  it('refuses to reverse a correction (void) entry', async () => {
+    const row = await approvedPurchaseRow()
+    const { body } = await asUserA(request(app).post(`/api/ledger/${row.id}/void`)).expect(200)
+    const res = await asUserA(request(app).post(`/api/ledger/${body.id}/reverse`)).expect(409)
+    expect(res.body.code).toBe('void_of_void')
+  })
+
+  it('cross-tenant reverse 404s and writes nothing', async () => {
+    const row = await approvedPurchaseRow('2026-02-15')
+    await closeBooksThrough('2026-05-31')
+    await asUserB(request(app).post(`/api/ledger/${row.id}/reverse`)).expect(404)
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    expect(list.body).toHaveLength(1)
+  })
+})

@@ -15,6 +15,9 @@ const TYPE_MAP = {
   'merch_sale/voided':   { type: 'Merch sale (void)', group: 'invoices',  voided: true,  sign: -1 },
   'journal/posted':     { type: 'Journal',          group: 'journals',  voided: false, sign: null },
   'ledger_transaction/void': { type: 'Void',        group: 'journals',  voided: true,  sign: null },
+  // A reversal is a *visible* correction of a closed-period entry: unlike a
+  // void it stays in the ledger and in financial reports.
+  'ledger_transaction/reversal': { type: 'Reversal', group: 'journals',  voided: false, sign: null },
   'vat_settlement/filed':        { type: 'VAT return',  group: 'journals', voided: false, sign: null },
   'vat_settlement_payment/paid': { type: 'VAT payment', group: 'payments', voided: false, sign: null },
 }

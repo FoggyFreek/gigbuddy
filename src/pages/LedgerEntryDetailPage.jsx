@@ -21,7 +21,7 @@ import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import PropTypes from 'prop-types'
-import { getLedgerEntry, voidLedgerEntry } from '../api/ledger.js'
+import { getLedgerEntry, voidLedgerEntry, reverseLedgerEntry } from '../api/ledger.js'
 import { createJournal } from '../api/journal.js'
 import { useCompactLayout } from '../hooks/useCompactLayout.js'
 import { formatEur } from '../utils/invoiceTotals.js'
@@ -41,6 +41,7 @@ export default function LedgerEntryDetailPage() {
   const [entry, setEntry] = useState(null)
   const [error, setError] = useState(null)
   const [voidOpen, setVoidOpen] = useState(false)
+  const [reverseOpen, setReverseOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState(null)
 
@@ -63,6 +64,21 @@ export default function LedgerEntryDetailPage() {
       navigate(`/ledger/${voidId}`)
     } catch (e) {
       setVoidOpen(false)
+      setActionError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmReverse() {
+    setBusy(true)
+    setActionError(null)
+    try {
+      const { id: reverseId } = await reverseLedgerEntry(entry.id)
+      setReverseOpen(false)
+      navigate(`/ledger/${reverseId}`)
+    } catch (e) {
+      setReverseOpen(false)
       setActionError(e.message)
     } finally {
       setBusy(false)
@@ -104,6 +120,23 @@ export default function LedgerEntryDetailPage() {
     )
   }
 
+  // An entry that has been corrected (voided/reversed) or is itself a
+  // correction offers no action — just an explanatory banner. Otherwise the
+  // booking period decides: open → Void (hide + exclude), closed → Reverse
+  // (visible corrections-forward entry).
+  const isVoidedOriginal = entry.voided_by_transaction_id != null
+  const isReversedOriginal = entry.reversed_by_transaction_id != null
+  const isCorrection = entry.corrects_transaction_id != null
+  const actionable = !isVoidedOriginal && !isReversedOriginal && !isCorrection
+  let correctionNotice = null
+  if (isVoidedOriginal) {
+    correctionNotice = { text: 'This ledger entry has been voided by another ledger entry.', linkId: entry.voided_by_transaction_id }
+  } else if (isReversedOriginal) {
+    correctionNotice = { text: 'This ledger entry has been reversed by another ledger entry.', linkId: entry.reversed_by_transaction_id }
+  } else if (isCorrection) {
+    correctionNotice = { text: `This ledger entry was created to ${entry.voided ? 'void' : 'reverse'} another ledger entry.`, linkId: entry.corrects_transaction_id }
+  }
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -116,12 +149,33 @@ export default function LedgerEntryDetailPage() {
         <Button variant="outlined" onClick={copyToJournal} disabled={busy}>
           Copy
         </Button>
-        <Button variant="contained" color="error" onClick={() => setVoidOpen(true)} disabled={busy || entry.voided}>
-          Void
-        </Button>
+        {actionable && entry.period_open && (
+          <Button variant="contained" color="error" onClick={() => setVoidOpen(true)} disabled={busy}>
+            Void
+          </Button>
+        )}
+        {actionable && !entry.period_open && (
+          <Button variant="contained" color="warning" onClick={() => setReverseOpen(true)} disabled={busy}>
+            Reverse
+          </Button>
+        )}
       </Box>
 
       {actionError && <Alert severity="error" sx={{ mb: 2 }}>{actionError}</Alert>}
+
+      {correctionNotice && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {correctionNotice.text}
+          {correctionNotice.linkId != null && (
+            <>
+              {' '}
+              <Link component={RouterLink} to={`/ledger/${correctionNotice.linkId}`}>
+                View entry #{correctionNotice.linkId}
+              </Link>
+            </>
+          )}
+        </Alert>
+      )}
 
       <Dialog open={voidOpen} onClose={() => setVoidOpen(false)}>
         <DialogTitle>Void ledger entry?</DialogTitle>
@@ -135,6 +189,22 @@ export default function LedgerEntryDetailPage() {
           <Button onClick={() => setVoidOpen(false)} disabled={busy}>Cancel</Button>
           <Button variant="contained" color="error" onClick={confirmVoid} disabled={busy}>
             Void entry
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={reverseOpen} onClose={() => setReverseOpen(false)}>
+        <DialogTitle>Reverse ledger entry?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This entry falls in a closed booking period. Reversing posts a new, visible ledger entry
+            in the current open period that cancels it out; the original entry is kept unchanged.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReverseOpen(false)} disabled={busy}>Cancel</Button>
+          <Button variant="contained" color="warning" onClick={confirmReverse} disabled={busy}>
+            Reverse entry
           </Button>
         </DialogActions>
       </Dialog>
