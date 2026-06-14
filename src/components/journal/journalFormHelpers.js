@@ -1,8 +1,17 @@
 // VAT rates a journal line may carry — same domain constants as purchases.
 export const VAT_RATES = [21, 9, 0]
 
+// Stable per-line React key, independent of array position (which shifts on
+// add/remove/duplicate). Whitelisted out of the API payload by buildJournalPayload.
+let lineKeySeq = 0
+export function nextLineKey() {
+  lineKeySeq += 1
+  return `jl${lineKeySeq}`
+}
+
 export function emptyLine(position = 0) {
   return {
+    _key: nextLineKey(),
     description: '',
     account_code: '',
     vat_rate: 0,
@@ -23,6 +32,7 @@ export function journalToForm(journal) {
     status: journal.status,
     posted_transaction_id: journal.posted_transaction_id ?? null,
     lines: (journal.lines || []).map((l, i) => ({
+      _key: nextLineKey(),
       description: l.description || '',
       account_code: l.account_code || '',
       vat_rate: Number(l.vat_rate) || 0,

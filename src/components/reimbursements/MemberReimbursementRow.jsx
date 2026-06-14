@@ -41,7 +41,7 @@ export default function MemberReimbursementRow({ member, expanded, purchases, on
               {purchases === undefined && (
                 <Typography variant="body2" color="text.secondary">Loading…</Typography>
               )}
-              {purchases && purchases.length === 0 && (
+              {purchases?.length === 0 && (
                 <Typography variant="body2" color="text.secondary">No outstanding purchases</Typography>
               )}
               {purchases && purchases.length > 0 && (

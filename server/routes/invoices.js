@@ -17,7 +17,6 @@ import {
   removeInvoicePaymentLink,
   syncInvoicePaymentLink,
 } from '../services/invoiceService.js'
-import { syncInvoicePaymentStatus } from '../services/molliePaymentLinkService.js'
 import { getEmlDefaults, buildInvoiceEml } from '../services/invoiceEmailService.js'
 
 const router = Router()
@@ -163,5 +162,5 @@ router.post('/:id/eml', async (req, res) => {
   res.send(result.content)
 })
 
-export { syncInvoicePaymentStatus }
+export { syncInvoicePaymentStatus } from '../services/molliePaymentLinkService.js'
 export default router

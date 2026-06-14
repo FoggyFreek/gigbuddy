@@ -222,7 +222,7 @@ export default function SetlistPreviewModal({ open, onClose, setlistName = '', s
             <Button
               variant="contained"
               startIcon={<PrintIcon />}
-              onClick={() => window.print()}
+              onClick={() => globalThis.print()}
               sx={{ flexGrow: { xs: 1, sm: 0 } }}
             >
               Print

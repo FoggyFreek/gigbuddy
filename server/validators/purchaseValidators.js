@@ -44,7 +44,7 @@ export function normalizeLines(lines) {
   if (!Array.isArray(lines)) return []
   return lines.map((raw, idx) => {
     const category = String(raw.expense_category ?? '').trim()
-    const code = raw.account_code != null ? String(raw.account_code).trim() : ''
+    const code = String(raw.account_code ?? '').trim()
     const productId = parseId(raw.product_id)
     const quantity = parseId(raw.quantity)
     return {
@@ -63,7 +63,7 @@ export function normalizeLines(lines) {
 
 export function computeDueDate(receiptDate, days) {
   if (!receiptDate || !days) return null
-  const d = receiptDate instanceof Date ? new Date(receiptDate.getTime()) : new Date(receiptDate)
+  const d = new Date(receiptDate)
   if (Number.isNaN(d.getTime())) return null
   d.setDate(d.getDate() + days)
   return d.toISOString().slice(0, 10)

@@ -64,6 +64,22 @@ export async function getSettings(db, tenantId) {
   return { settings: await insertSettingsDefaults(db, tenantId, defaults) }
 }
 
+// Validates a single settings account-code field, returning { error } on a bad
+// reference/type or { value } (the trimmed code, or null to clear).
+async function resolveSettingsCode(db, tenantId, field, val) {
+  if (val === null || val === undefined) return { value: null }
+  const code = String(val).trim()
+  const account = await findAccountByCode(db, tenantId, code)
+  if (!account?.is_active) {
+    return { error: { status: 400, body: { error: 'unknown_account_code', field } } }
+  }
+  const expectedType = SETTINGS_TYPE_MAP[field]
+  if (account.type !== expectedType) {
+    return { error: { status: 400, body: { error: 'wrong_account_type', field, expected: expectedType, got: account.type } } }
+  }
+  return { value: code }
+}
+
 async function buildSettingsUpdates(db, tenantId, body) {
   const updates = {}
 
@@ -75,21 +91,9 @@ async function buildSettingsUpdates(db, tenantId, body) {
 
   for (const field of SETTINGS_CODE_FIELDS) {
     if (!(field in body)) continue
-    const val = body[field]
-    if (val === null || val === undefined) {
-      updates[field] = null
-      continue
-    }
-    const code = String(val).trim()
-    const account = await findAccountByCode(db, tenantId, code)
-    if (!account || !account.is_active) {
-      return { error: { status: 400, body: { error: 'unknown_account_code', field } } }
-    }
-    const expectedType = SETTINGS_TYPE_MAP[field]
-    if (account.type !== expectedType) {
-      return { error: { status: 400, body: { error: 'wrong_account_type', field, expected: expectedType, got: account.type } } }
-    }
-    updates[field] = code
+    const resolved = await resolveSettingsCode(db, tenantId, field, body[field])
+    if (resolved.error) return resolved
+    updates[field] = resolved.value
   }
 
   if ('books_closed_through' in body) {
@@ -214,6 +218,19 @@ export async function createAccount(db, tenantId, body = {}) {
   }
 }
 
+// Resolves an is_active change, guarding against deactivating an account still
+// referenced by settings. Returns { error } or { value }.
+async function resolveActiveUpdate(db, tenantId, existing, rawIsActive) {
+  const isActive = Boolean(rawIsActive)
+  if (!isActive) {
+    const referenced = await isCodeReferencedInSettings(db, tenantId, existing.code)
+    if (referenced) {
+      return { error: { status: 409, body: { error: 'account_in_use' } } }
+    }
+  }
+  return { value: isActive }
+}
+
 export async function patchAccount(db, tenantId, id, body = {}) {
   const existing = await getAccountById(db, tenantId, id)
   if (!existing) return NOT_FOUND
@@ -221,21 +238,15 @@ export async function patchAccount(db, tenantId, id, body = {}) {
   const updates = {}
 
   if ('name' in body) {
-    const name = String(body.name ?? '').trim()
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
     if (!name) return { error: { status: 400, body: { error: 'name_required' } } }
     updates.name = name
   }
 
   if ('is_active' in body) {
-    const isActive = Boolean(body.is_active)
-    if (!isActive) {
-      // Guard: cannot deactivate an account referenced by settings
-      const referenced = await isCodeReferencedInSettings(db, tenantId, existing.code)
-      if (referenced) {
-        return { error: { status: 409, body: { error: 'account_in_use' } } }
-      }
-    }
-    updates.is_active = isActive
+    const activeResult = await resolveActiveUpdate(db, tenantId, existing, body.is_active)
+    if (activeResult.error) return activeResult
+    updates.is_active = activeResult.value
   }
 
   if ('is_capitalizable' in body) {

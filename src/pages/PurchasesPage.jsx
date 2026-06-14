@@ -113,8 +113,8 @@ export default function PurchasesPage() {
       list = list.filter(
         (p) =>
           String(p.receipt_number).includes(q) ||
-          (p.supplier_name && p.supplier_name.toLowerCase().includes(q)) ||
-          (p.description && p.description.toLowerCase().includes(q)),
+          p.supplier_name?.toLowerCase().includes(q) ||
+          p.description?.toLowerCase().includes(q),
       )
     }
     return list

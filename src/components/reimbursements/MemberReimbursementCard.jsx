@@ -33,10 +33,10 @@ export default function MemberReimbursementCard({ member, expanded, purchases, o
           {purchases === undefined && (
             <Typography variant="body2" color="text.secondary">Loading…</Typography>
           )}
-          {purchases && purchases.length === 0 && (
+          {purchases?.length === 0 && (
             <Typography variant="body2" color="text.secondary">No outstanding purchases</Typography>
           )}
-          {purchases && purchases.map((p) => (
+          {purchases?.map((p) => (
             <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', py: 0.25 }}>
               <Typography variant="body2" fontWeight={600}>#{p.receipt_number}</Typography>
               <Typography variant="caption" color="text.secondary">{formatShortDate(p.receipt_date)}</Typography>

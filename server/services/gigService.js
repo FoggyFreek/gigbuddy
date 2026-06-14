@@ -85,7 +85,7 @@ export function notifyGigConfirmed(tenantId, gig) {
 
 export function notifyGigsImported(tenantId, count) {
   sendPushToTenant(tenantId, {
-    title: `${count} gig${count !== 1 ? 's' : ''} imported`,
+    title: `${count} gig${count === 1 ? '' : 's'} imported`,
     body: 'Your Bandsintown import is complete.',
     tag: 'gig-import',
     url: '/gigs',

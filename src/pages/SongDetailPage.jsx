@@ -93,7 +93,7 @@ export default function SongDetailPage() {
           title: s.title || '',
           artist: s.artist || '',
           song_key: s.song_key || '',
-          tempo: s.tempo != null ? String(s.tempo) : '',
+          tempo: String(s.tempo ?? ''),
           duration: formatDuration(s.duration_seconds),
           notes: s.notes || '',
         })
@@ -178,7 +178,7 @@ export default function SongDetailPage() {
                 value={form.title}
                 onChange={(e) => handleField('title', e.target.value)}
                 error={!form.title.trim()}
-                helperText={!form.title.trim() ? 'Required' : ''}
+                helperText={form.title.trim() ? '' : 'Required'}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>

@@ -1,7 +1,15 @@
 export const TAX_RATES = [21, 9, 0]
 
+// Stable per-line React key, independent of array position (which shifts on
+// add/remove). Whitelisted out of the API payload by buildPurchasePayload.
+let lineKeySeq = 0
+export function nextLineKey() {
+  lineKeySeq += 1
+  return `pl${lineKeySeq}`
+}
+
 export function emptyLine(position = 0) {
-  return { description: '', account_code: '', tax_rate: 21, amount_incl_cents: 0, position, product_id: null, quantity: null }
+  return { _key: nextLineKey(), description: '', account_code: '', tax_rate: 21, amount_incl_cents: 0, position, product_id: null, quantity: null }
 }
 
 export function emptyDraft() {
@@ -28,6 +36,7 @@ export function purchaseToForm(data) {
     currency: data.currency || 'EUR',
     memo: data.memo || null,
     lines: (data.lines || []).map((l, i) => ({
+      _key: nextLineKey(),
       description: l.description || '',
       account_code: l.account_code || '',
       tax_rate: Number(l.tax_rate) || 0,

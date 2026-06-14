@@ -46,6 +46,25 @@ const pdfLoadingSpinner = (
   </Box>
 )
 
+// Step back through the flattened page sequence: previous page, else the last
+// page of the previous attachment. queueMicrotask defers the page jump past the
+// on-switch reset that returns page to 1.
+function stepBack({ page, safeIndex, attachments, pagesOf, setPage, setIndex }) {
+  if (page > 1) {
+    setPage(page - 1)
+  } else if (safeIndex > 0) {
+    const prev = attachments[safeIndex - 1]
+    setIndex(safeIndex - 1)
+    queueMicrotask(() => setPage(pagesOf(prev)))
+  }
+}
+
+// Step forward: next page, else the first page of the next attachment.
+function stepForward({ page, currentPages, safeIndex, attachments, setPage, setIndex }) {
+  if (page < currentPages) setPage(page + 1)
+  else if (safeIndex < attachments.length - 1) setIndex(safeIndex + 1)
+}
+
 // Receipt viewer. One prev/next control paginates through every page of every
 // attachment in sequence (PDF pages expand in place once their document loads).
 // Zoom/rotate re-render PDF pages via pdf.js; images use CSS transforms.
@@ -95,19 +114,11 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
   const currentStep = attachments.slice(0, safeIndex).reduce((sum, a) => sum + pagesOf(a), 0) + page
 
   function goPrev() {
-    if (page > 1) {
-      setPage(page - 1)
-    } else if (safeIndex > 0) {
-      const prev = attachments[safeIndex - 1]
-      setIndex(safeIndex - 1)
-      // setViewedId reset puts page at 1; jump to the last known page instead.
-      queueMicrotask(() => setPage(pagesOf(prev)))
-    }
+    stepBack({ page, safeIndex, attachments, pagesOf, setPage, setIndex })
   }
 
   function goNext() {
-    if (page < currentPages) setPage(page + 1)
-    else if (safeIndex < attachments.length - 1) setIndex(safeIndex + 1)
+    stepForward({ page, currentPages, safeIndex, attachments, setPage, setIndex })
   }
 
   function handleFilesPicked(e) {

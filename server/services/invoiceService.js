@@ -130,7 +130,7 @@ export async function renderAndStorePdf(pool, invoiceId, tenantId) {
     throw err
   }
 
-  safeRemove(previousKey !== newKey ? previousKey : null, '[invoices] failed to remove previous pdf:')
+  safeRemove(previousKey === newKey ? null : previousKey, '[invoices] failed to remove previous pdf:')
 
   return newKey
 }

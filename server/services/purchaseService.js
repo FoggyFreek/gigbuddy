@@ -157,7 +157,7 @@ const RECEIPT_TAKEN_ERROR = { status: 409, body: { error: 'Receipt number alread
 const USE_PAYMENT_ENDPOINT_ERROR = { status: 409, body: { error: 'Use the payment endpoint to mark a purchase paid', code: 'use_payment_endpoint' } }
 
 function isUniqueViolation(err) {
-  return err && err.code === '23505'
+  return err?.code === '23505'
 }
 
 function isValidIsoDate(value) {
@@ -437,6 +437,16 @@ async function resolvePatchSupplierContactId(pool, tenantId, body) {
   return { supplierContactId }
 }
 
+// Validates the line accounts and products when `lines` is being patched.
+// Returns an error result or null.
+async function validatePatchedLines(pool, tenantId, body) {
+  if (!('lines' in body)) return null
+  const normalized = normalizeLines(body.lines)
+  const accountErr = await validateLineAccounts(pool, tenantId, normalized)
+  if (accountErr) return accountErr
+  return validateLineProducts(pool, tenantId, normalized)
+}
+
 async function runPatchPreflightValidations(pool, tenantId, id, existing, body) {
   const statusErr = validateStatusTransition(existing, body)
   if (statusErr) return statusErr
@@ -450,13 +460,8 @@ async function runPatchPreflightValidations(pool, tenantId, id, existing, body) 
     return { error: { status: 400, body: { error: 'Invalid receipt_number' } } }
   }
 
-  if ('lines' in body) {
-    const normalized = normalizeLines(body.lines)
-    const accountErr = await validateLineAccounts(pool, tenantId, normalized)
-    if (accountErr) return accountErr
-    const productErr = await validateLineProducts(pool, tenantId, normalized)
-    if (productErr) return productErr
-  }
+  const lineErr = await validatePatchedLines(pool, tenantId, body)
+  if (lineErr) return lineErr
 
   if (body.status === 'approved' && existing.status !== 'approved') {
     const approvalLines = 'lines' in body ? normalizeLines(body.lines) : await fetchPurchaseLines(pool, id, tenantId)
@@ -555,7 +560,7 @@ function validatePaymentPreconditions(existing) {
   // key), desyncing the ledger — e.g. flipping bank→member would fabricate member
   // debt no liability journal ever created. A reimbursed purchase is doubly locked.
   if (existing.status === 'paid') {
-    const code = existing.reimbursement_id != null ? 'purchase_reimbursed' : 'already_paid'
+    const code = existing.reimbursement_id == null ? 'already_paid' : 'purchase_reimbursed'
     return { error: { status: 409, body: { error: 'Purchase is already paid', code } } }
   }
   return null

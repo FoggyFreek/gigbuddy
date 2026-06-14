@@ -127,26 +127,22 @@ export default function BandsintownImportDialog({ onClose }) {
     })
   }
 
-  function handleFile(e) {
+  async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    const reader = new FileReader()
-    reader.onload = (evt) => {
-      const text = evt.target.result
-      const { rows: parsed, parseError: err } = parseBandsintownCsv(text)
-      if (err) {
-        setParseError(err)
-        return
-      }
-      setParseError(null)
-      const initialStates = buildInitialRowStates(parsed, existingGigs)
-      setRows(parsed)
-      setRowStates(initialStates)
-      setStep('review')
-      preFillVenueMatches(parsed, setRowStates)
+    const text = await file.text()
+    const { rows: parsed, parseError: err } = parseBandsintownCsv(text)
+    if (err) {
+      setParseError(err)
+      return
     }
-    reader.readAsText(file)
+    setParseError(null)
+    const initialStates = buildInitialRowStates(parsed, existingGigs)
+    setRows(parsed)
+    setRowStates(initialStates)
+    setStep('review')
+    preFillVenueMatches(parsed, setRowStates)
   }
 
   async function handleImport() {
@@ -218,7 +214,7 @@ export default function BandsintownImportDialog({ onClose }) {
               </Alert>
             )}
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {rows.length} event{rows.length !== 1 ? 's' : ''} found.
+              {rows.length} event{rows.length === 1 ? '' : 's'} found.
               Uncheck any you don&apos;t want to import. Select or create a venue/festival for each row.
             </Typography>
             <Box sx={{ overflowX: 'auto' }}>
@@ -319,7 +315,7 @@ export default function BandsintownImportDialog({ onClose }) {
           <Box sx={{ py: 4 }}>
             <LinearProgress sx={{ mb: 2 }} />
             <Typography variant="body2" color="text.secondary" align="center">
-              Importing {selectedCount} gig{selectedCount !== 1 ? 's' : ''}…
+              Importing {selectedCount} gig{selectedCount === 1 ? '' : 's'}…
             </Typography>
           </Box>
         )}
@@ -327,7 +323,7 @@ export default function BandsintownImportDialog({ onClose }) {
         {step === 'done' && result && (
           <Box sx={{ py: 2 }}>
             <Alert severity="success">
-              {result.created} gig{result.created !== 1 ? 's' : ''} imported
+              {result.created} gig{result.created === 1 ? '' : 's'} imported
               {result.skipped > 0 ? `, ${result.skipped} skipped` : ''}.
             </Alert>
           </Box>
@@ -344,7 +340,7 @@ export default function BandsintownImportDialog({ onClose }) {
             disabled={selectedCount === 0}
             onClick={handleImport}
           >
-            Import {selectedCount} gig{selectedCount !== 1 ? 's' : ''}
+            Import {selectedCount} gig{selectedCount === 1 ? '' : 's'}
           </Button>
         )}
         {step === 'done' && (

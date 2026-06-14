@@ -26,6 +26,14 @@ export default function SongPicker({ onSelect, excludeIds = [], label = 'Add son
   const trimmed = query.trim()
   const tooShort = trimmed.length < MIN_CHARS
 
+  // Applies fetched rows iff this is still the latest request (guards against a
+  // slow earlier search overwriting a newer one). Kept at component scope so the
+  // effect's promise chain stays shallow (avoids deeply nested callbacks).
+  function applyResults(rows, myReqId, excluded) {
+    if (reqIdRef.current !== myReqId) return
+    setOptions(rows.filter((r) => !excluded.has(r.id)))
+  }
+
   useEffect(() => {
     const myReqId = ++reqIdRef.current
     const excluded = new Set(excludeIds)
@@ -43,10 +51,7 @@ export default function SongPicker({ onSelect, excludeIds = [], label = 'Add son
     }, 0)
     const handle = setTimeout(() => {
       searchSongs(trimmed)
-        .then((rows) => {
-          if (reqIdRef.current !== myReqId) return
-          setOptions(rows.filter((r) => !excluded.has(r.id)))
-        })
+        .then((rows) => applyResults(rows, myReqId, excluded))
         .catch(() => {
           if (reqIdRef.current !== myReqId) return
           setOptions([])
@@ -71,6 +76,10 @@ export default function SongPicker({ onSelect, excludeIds = [], label = 'Add son
     setOptions([])
   }
 
+  let noOptionsText = 'No matches'
+  if (tooShort) noOptionsText = `Type at least ${MIN_CHARS} characters…`
+  else if (loading) noOptionsText = 'Searching…'
+
   return (
     <Autocomplete
       value={null}
@@ -86,13 +95,7 @@ export default function SongPicker({ onSelect, excludeIds = [], label = 'Add son
       loading={loading}
       getOptionLabel={(o) => o?.title ?? ''}
       isOptionEqualToValue={(a, b) => a?.id != null && a.id === b?.id}
-      noOptionsText={
-        tooShort
-          ? `Type at least ${MIN_CHARS} characters…`
-          : loading
-            ? 'Searching…'
-            : 'No matches'
-      }
+      noOptionsText={noOptionsText}
       renderOption={(props, option) => (
         <li {...props} key={option.id}>
           <Box sx={{ display: 'flex', flexDirection: 'column' }}>

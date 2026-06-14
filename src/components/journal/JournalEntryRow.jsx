@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography'
 import DateEntryField from '../DateEntryField.jsx'
 import StatusDot from '../StatusDot.jsx'
 import JournalLineRow from './JournalLineRow.jsx'
-import { buildJournalPayload, emptyLine, journalToForm } from './journalFormHelpers.js'
+import { buildJournalPayload, emptyLine, journalToForm, nextLineKey } from './journalFormHelpers.js'
 import useDebouncedSave from '../../hooks/useDebouncedSave.js'
 import { updateJournal } from '../../api/journal.js'
 import { accountShape, journalShape } from '../../propTypes/shared.js'
@@ -59,7 +59,7 @@ export default function JournalEntryRow({
   const removeLine = (i) => update({ ...form, lines: form.lines.filter((_, j) => j !== i) })
   const duplicateLine = (i) => {
     const lines = [...form.lines]
-    lines.splice(i + 1, 0, { ...form.lines[i] })
+    lines.splice(i + 1, 0, { ...form.lines[i], _key: nextLineKey() })
     update({ ...form, lines })
   }
 
@@ -104,7 +104,7 @@ export default function JournalEntryRow({
       <Box sx={{ flex: 1, minWidth: 0 }}>
         {lines.map((line, idx) => (
           <JournalLineRow
-            key={idx}
+            key={line._key}
             line={line}
             idx={idx}
             accounts={accounts}

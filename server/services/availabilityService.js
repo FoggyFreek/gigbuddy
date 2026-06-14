@@ -37,6 +37,9 @@ export async function listOnDate(db, tenantId, date) {
   const result = members.map((m) => {
     const memberSlot = slots.findLast((s) => s.band_member_id === m.id)
     const winner = bandWide ?? memberSlot
+    let source = 'default'
+    if (bandWide) source = 'band'
+    else if (memberSlot) source = 'member'
     return {
       member_id: m.id,
       name: m.name,
@@ -45,7 +48,7 @@ export async function listOnDate(db, tenantId, date) {
       position: m.position,
       status: winner ? winner.status : 'default',
       reason: winner?.reason ?? null,
-      source: bandWide ? 'band' : memberSlot ? 'member' : 'default',
+      source,
     }
   })
 

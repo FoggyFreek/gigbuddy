@@ -241,7 +241,7 @@ export default function ChartOfAccountsSection() {
   const groupedTrees = TYPE_ORDER.map((type) => {
     const typeAccounts = accounts.filter((a) => a.type === type)
     if (!typeAccounts.length) return null
-    const trees = buildTree(typeAccounts).filter((n) => !n.parent_code || !accounts.find((a) => a.code === n.parent_code && a.type === type))
+    const trees = buildTree(typeAccounts).filter((n) => !n.parent_code || !accounts.some((a) => a.code === n.parent_code && a.type === type))
     return { type, trees }
   }).filter(Boolean)
 

@@ -109,7 +109,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   useEffect(() => {
     if (!basePath) return
     const escaped = basePath.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')
-    const match = pathname.match(new RegExp(`^${escaped}/(gigs|rehearsals|events)/(\\d+)`))
+    const match = new RegExp(`^${escaped}/(gigs|rehearsals|events)/(\\d+)`).exec(pathname)
     if (!match) return
     const [, type, idStr] = match
     const id = Number(idStr)

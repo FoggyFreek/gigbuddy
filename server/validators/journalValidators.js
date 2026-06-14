@@ -25,9 +25,9 @@ function snapVatRate(raw) {
 export function normalizeLines(lines) {
   if (!Array.isArray(lines)) return []
   return lines.map((raw, idx) => {
-    const code = raw.account_code != null ? String(raw.account_code).trim() : ''
-    const balCode = raw.balancing_account_code != null ? String(raw.balancing_account_code).trim() : ''
-    const side = raw.side != null ? String(raw.side).trim() : ''
+    const code = String(raw.account_code ?? '').trim()
+    const balCode = String(raw.balancing_account_code ?? '').trim()
+    const side = String(raw.side ?? '').trim()
     return {
       description: String(raw.description ?? '').trim() || null,
       account_code: code || null,
@@ -53,7 +53,7 @@ export function findUnpostableLine(lines, activeCodes) {
     if (!SIDES.has(l.side)) {
       return { index: i + 1, reason: 'side', code: 'missing_side' }
     }
-    if (!(l.amount_cents > 0)) {
+    if (l.amount_cents <= 0) {
       return { index: i + 1, reason: 'amount', code: 'invalid_amount' }
     }
     if (l.balancing_account_code && !activeCodes.has(l.balancing_account_code)) {

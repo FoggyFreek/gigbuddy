@@ -146,14 +146,45 @@ mcp__sonarqube__search_my_sonarqube_projects
 | MEDIUM/MAJOR | Style: prefer `.dataset`, duplicate literals in SQL | Fix when touching the file |
 | LOW/INFO | Minor style | Accept or ignore |
 
-Known open BLOCKER patterns (as of 2026-05-28):
-- `src/tests/server/contacts.test.js` lines 67, 74, 80, 105, 112 — test cases with no assertions
-- `src/tests/server/venueContacts.test.js` lines 66, 75, 81, 102, 136, 151 — same pattern
+## Rule disposition guide (this project)
 
-Known open CRITICAL patterns:
-- `server/routes/venues.js:170` — cognitive complexity 51 (way over limit)
-- `server/routes/contacts.js:162` — cognitive complexity 19
-- `server/routes/rehearsals.js:202` — cognitive complexity 16
-- `src/components/ContactPicker.jsx:46` — functions nested > 4 levels
-- `src/components/RehearsalFormModal.jsx:189` — functions nested > 4 levels
-- `src/pages/ProfilePage.jsx:49` — functions nested > 4 levels
+Defaults learned from triaging the backlog. These are starting points, not blanket
+rules — still read the actual code.
+
+**Reliably false-positive here → mark `falsepositive`:**
+- "add at least one assertion": our backend tests assert via supertest
+  `.expect(<status>)` and frontend tests via testing-library `waitFor(() => getByText())`.
+  Sonar recognizes neither. Effectively always FP in `src/tests/**`.
+- "=== always false": fires on legit type-union comparisons (e.g. a MUI
+  Select value that is genuinely `'' | number`, or a state union guarded one line up).
+  Confirm the union really includes the compared value, then dismiss.
+
+**Intentional here → mark `accept`:**
+- "propTypes is deprecated": CLAUDE.md *mandates* propTypes on every
+  component. Removing them violates project convention.
+
+**Verify before auto-applying — the suggested fix can be a bug:**
+- "use Math.min": only valid for numbers. Our date helpers compare
+  `'YYYY-MM-DD'` *strings* with `<`/`>`; `Math.min` would coerce them to `NaN`. FP.
+- optional-chaining & similar: confirm the `a && a.b` guard and the
+  rewritten `a?.b` have identical truthiness in the surrounding `||`/ternary before
+  swapping.
+- "use String.raw": can't represent a lone trailing backslash (it escapes
+  the closing backtick). Not applicable to single-`\` replacement targets → accept.
+
+**Don't churn readable code just to satisfy it:**
+- cognitive complexity, often only 1–2 over: extracting *backend* validation
+  helpers is usually a clean win. But a **flat, readable `switch`** (e.g.
+  `ledgerEntryTypes.describe`) is preferred as-is over a lookup-map rewrite — that
+  conversion was reverted. For large, well-tested UI components, prefer a small safe
+  extraction or `accept` over a risky restructure.
+
+**Process notes:**
+- Sonar issue **line numbers drift** as you edit a file. After your first edit in a
+  file, locate later issues by *content* (Grep), not the stored line number.
+- `search_sonar_issues_in_projects` output can exceed the token cap; it's written to a
+  file. Parse with `node -e` (no `jq` on this box) rather than reading raw chunks.
+- For array-index keys on add/remove/duplicate line editors: the rows carry
+  no stable id and hold local state, so add a synthetic `_key` at construction
+  (`emptyLine`/`*ToForm`, new key on duplicate) and confirm the payload builder
+  whitelists fields so `_key` never reaches the API.

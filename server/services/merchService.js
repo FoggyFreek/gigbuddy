@@ -47,26 +47,32 @@ export async function listProducts(executor, tenantId) {
   return { products: rows }
 }
 
+// For a full create every field is set; for a partial (PATCH) only fields
+// present in the body are.
+function shouldSet(partial, body, field) {
+  return !partial || field in body
+}
+
 function validateProductBody(body, { partial = false } = {}) {
   const errors = []
   const out = {}
 
-  if (!partial || 'name' in body) {
+  if (shouldSet(partial, body, 'name')) {
     const name = String(body.name ?? '').trim()
-    if (!name) errors.push({ field: 'name', message: 'Enter a name' })
-    else out.name = name
+    if (name) out.name = name
+    else errors.push({ field: 'name', message: 'Enter a name' })
   }
   for (const field of ['unit_cost_cents', 'default_price_incl_cents']) {
-    if (!partial || field in body) {
+    if (shouldSet(partial, body, field)) {
       const cents = parseCents(body[field] ?? 0)
       if (cents === null) errors.push({ field, message: 'Enter a non-negative amount' })
       else out[field] = cents
     }
   }
-  if (!partial || 'vat_rate' in body) {
+  if (shouldSet(partial, body, 'vat_rate')) {
     const rate = Number(body.vat_rate ?? 21)
-    if (!ALLOWED_TAX_RATES_SET.has(rate)) errors.push({ field: 'vat_rate', message: 'Invalid VAT rate' })
-    else out.vat_rate = rate
+    if (ALLOWED_TAX_RATES_SET.has(rate)) out.vat_rate = rate
+    else errors.push({ field: 'vat_rate', message: 'Invalid VAT rate' })
   }
 
   if (errors.length) {

@@ -7,7 +7,7 @@ export function parseId(val) {
 
 export function trimOrNull(val) {
   const s = String(val ?? '').trim()
-  return s ? s : null
+  return s || null
 }
 
 export function toNonNegInt(val) {

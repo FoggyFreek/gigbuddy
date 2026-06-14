@@ -57,9 +57,9 @@ export default function NewVatReturnDialog({ onFiled, onClose }) {
   }, [year, quarter])
 
   const preview =
-    lastPreview && lastPreview.year === year && lastPreview.quarter === quarter ? lastPreview : null
+    lastPreview?.year === year && lastPreview?.quarter === quarter ? lastPreview : null
 
-  const nothingToSettle = preview && preview.output_vat_cents === 0 && preview.input_vat_cents === 0
+  const nothingToSettle = preview?.output_vat_cents === 0 && preview?.input_vat_cents === 0
   const canFile = Boolean(preview) && preview.period_ended && !nothingToSettle && !busy
 
   async function handleFile() {

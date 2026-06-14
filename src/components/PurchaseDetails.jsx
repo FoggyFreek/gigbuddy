@@ -99,7 +99,11 @@ function PaymentRegistrationDialog({
               value={selectedPayee}
               disabled={saving}
               onChange={(_e, picked) => onPaidByBandMemberIdChange(picked?.id ?? null)}
-              getOptionLabel={(m) => (m ? `${m.name}${m.role ? ` (${m.role})` : ''}` : '')}
+              getOptionLabel={(m) => {
+                if (!m) return ''
+                const role = m.role ? ` (${m.role})` : ''
+                return `${m.name}${role}`
+              }}
               isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
               renderInput={(params) => <TextField {...params} label="Paid by" />}
             />
@@ -141,9 +145,11 @@ function PaidPaymentSummary({ purchase, bandMembers, paymentAccount }) {
   const bandMember = isMemberPayment
     ? bandMembers.find((m) => Number(m.id) === Number(purchase.paid_by_band_member_id))
     : null
-  const payer = isMemberPayment
-    ? (bandMember?.name || (purchase.paid_by_band_member_id ? `Band member #${purchase.paid_by_band_member_id}` : 'Band member'))
-    : accountLabel(paymentAccount)
+  let payer
+  if (!isMemberPayment) payer = accountLabel(paymentAccount)
+  else if (bandMember?.name) payer = bandMember.name
+  else if (purchase.paid_by_band_member_id) payer = `Band member #${purchase.paid_by_band_member_id}`
+  else payer = 'Band member'
   const label = isMemberPayment ? 'Paid by' : 'Paid from'
 
   return (
@@ -187,24 +193,31 @@ PaidPaymentSummary.propTypes = {
   }),
 }
 
+function PurchaseDetailsLoading({ embedded, onClose }) {
+  const spinner = (
+    <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+      <CircularProgress />
+    </Box>
+  )
+  if (embedded) return spinner
+  return (
+    <Dialog open fullWidth maxWidth="sm" onClose={() => onClose(false)}>
+      <DialogContent>{spinner}</DialogContent>
+    </Dialog>
+  )
+}
+
+PurchaseDetailsLoading.propTypes = {
+  embedded: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+}
+
 export default function PurchaseDetails({ mode, draft, purchaseId, onClose, onPurchaseUpdate, embedded = false }) {
   const s = usePurchaseFormState({ mode, draft, purchaseId, onClose, onPurchaseUpdate })
   const [editingNumber, setEditingNumber] = useState(false)
   const isCompact = useCompactLayout()
 
-  if (s.loading) {
-    const spinner = (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-        <CircularProgress />
-      </Box>
-    )
-    if (embedded) return spinner
-    return (
-      <Dialog open fullWidth maxWidth="sm" onClose={() => onClose(false)}>
-        <DialogContent>{spinner}</DialogContent>
-      </Dialog>
-    )
-  }
+  if (s.loading) return <PurchaseDetailsLoading embedded={embedded} onClose={onClose} />
 
   const canRegister = s.purchase?.status === 'approved'
   const canEditNumber = !s.readOnly

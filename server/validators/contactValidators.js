@@ -18,7 +18,7 @@ export function parseCategoryFilter(value) {
 }
 
 export function parseSearchLimit(value) {
-  const parsedLimit = parseInt(value, 10)
+  const parsedLimit = Number.parseInt(value, 10)
   return Math.max(
     1,
     Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),

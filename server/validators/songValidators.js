@@ -14,7 +14,7 @@ export function toIntOrNull(val) {
 
 export function trimOrNull(val) {
   const s = String(val ?? '').trim()
-  return s ? s : null
+  return s || null
 }
 
 const TEXT_FIELDS = ['artist', 'song_key', 'lyrics_html', 'notes']

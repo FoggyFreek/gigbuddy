@@ -351,6 +351,32 @@ async function postReversingJournal(client, tenantId, original, mode, actorUserI
 //                touching the closed period.
 // A correction entry can't itself be voided/reversed, nor can an already
 // corrected original. Idempotent on (ledger_transaction, id, mode).
+// Row-state guards shared by void and reverse: a correction can't itself be
+// corrected, nor a row already voided/reversed. Returns an error body or null.
+function correctionRowConflict(row) {
+  if (classify(row.source_type, row.source_event).voided || row.source_event === 'reversal') {
+    return { status: 409, body: { error: 'A correction entry cannot be voided or reversed', code: 'void_of_void' } }
+  }
+  if (row.voided_at) {
+    return { status: 409, body: { error: 'This ledger entry has already been voided', code: 'already_voided' } }
+  }
+  if (row.reversed_by_transaction_id) {
+    return { status: 409, body: { error: 'This ledger entry has already been reversed', code: 'already_reversed' } }
+  }
+  return null
+}
+
+// Open periods must be voided, closed periods reversed. Returns an error body or null.
+function correctionPeriodConflict(mode, isClosed, closedThrough) {
+  if (mode === 'void' && isClosed) {
+    return { status: 409, body: { error: `This ledger entry is in a closed period (closed through ${closedThrough}); reverse it instead`, code: 'use_reversal', closed_through: closedThrough } }
+  }
+  if (mode === 'reversal' && !isClosed) {
+    return { status: 409, body: { error: 'This ledger entry is in an open period; void it instead', code: 'use_void' } }
+  }
+  return null
+}
+
 async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode) {
   const client = await pool.connect()
   try {
@@ -360,28 +386,18 @@ async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode)
       await client.query('ROLLBACK')
       return { error: { status: 404, body: { error: 'Not found' } } }
     }
-    if (classify(row.source_type, row.source_event).voided || row.source_event === 'reversal') {
+    const rowConflict = correctionRowConflict(row)
+    if (rowConflict) {
       await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'A correction entry cannot be voided or reversed', code: 'void_of_void' } } }
-    }
-    if (row.voided_at) {
-      await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'This ledger entry has already been voided', code: 'already_voided' } } }
-    }
-    if (row.reversed_by_transaction_id) {
-      await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'This ledger entry has already been reversed', code: 'already_reversed' } } }
+      return { error: rowConflict }
     }
 
     const closedThrough = await fetchBooksClosedThrough(client, tenantId)
     const isClosed = Boolean(closedThrough && row.entry_date <= closedThrough)
-    if (mode === 'void' && isClosed) {
+    const periodConflict = correctionPeriodConflict(mode, isClosed, closedThrough)
+    if (periodConflict) {
       await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: `This ledger entry is in a closed period (closed through ${closedThrough}); reverse it instead`, code: 'use_reversal', closed_through: closedThrough } } }
-    }
-    if (mode === 'reversal' && !isClosed) {
-      await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'This ledger entry is in an open period; void it instead', code: 'use_void' } } }
+      return { error: periodConflict }
     }
 
     let result
@@ -706,8 +722,10 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
     lines.push({ account_code: requireCode(settings, 'output_vat_account_code'), credit_cents: vatCents, memo })
   }
   if (cogsCents > 0) {
-    lines.push({ account_code: requireCode(settings, 'merch_cogs_account_code'), debit_cents: cogsCents, memo })
-    lines.push({ account_code: requireCode(settings, 'merch_inventory_account_code'), credit_cents: cogsCents, memo })
+    lines.push(
+      { account_code: requireCode(settings, 'merch_cogs_account_code'), debit_cents: cogsCents, memo },
+      { account_code: requireCode(settings, 'merch_inventory_account_code'), credit_cents: cogsCents, memo },
+    )
   }
 
   return postJournal(client, tenantId, {
@@ -753,8 +771,10 @@ export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
     lines.push({ account_code: requireCode(settings, 'output_vat_account_code'), debit_cents: vatCents, memo })
   }
   if (cogsCents > 0) {
-    lines.push({ account_code: requireCode(settings, 'merch_cogs_account_code'), credit_cents: cogsCents, memo })
-    lines.push({ account_code: requireCode(settings, 'merch_inventory_account_code'), debit_cents: cogsCents, memo })
+    lines.push(
+      { account_code: requireCode(settings, 'merch_cogs_account_code'), credit_cents: cogsCents, memo },
+      { account_code: requireCode(settings, 'merch_inventory_account_code'), debit_cents: cogsCents, memo },
+    )
   }
 
   const result = await postJournal(client, tenantId, {

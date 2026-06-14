@@ -58,7 +58,7 @@ export async function createReimbursement(pool, tenantId, body, actorUserId = nu
 
   const rawIds = Array.isArray(body.purchase_ids) ? body.purchase_ids : []
   const ids = rawIds.map(parseId)
-  if (!ids.length || ids.some((id) => id === null)) {
+  if (!ids.length || ids.includes(null)) {
     return { error: { status: 400, body: { error: 'Select at least one purchase', code: 'no_purchases_selected' } } }
   }
   const uniqueIds = [...new Set(ids)]

@@ -58,7 +58,7 @@ export default function VatReturnsPage() {
   const [returns, setReturns] = useState(null)
   const [error, setError] = useState(null)
   const [creating, setCreating] = useState(false)
-  const [menu, setMenu] = useState(null) // { anchorEl, ret }
+  const [menu, setMenu] = useState(null) // row menu state: anchorEl plus ret, or null when closed
   const [summaryFilter, setSummaryFilter] = useState('all')
 
   const summaryStats = useMemo(() => {

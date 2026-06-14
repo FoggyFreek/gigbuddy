@@ -95,7 +95,7 @@ function SongCard({ song, active, onClick }) {
       }}
     >
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-        <Stack direction="column" spacing={0.0}>
+        <Stack direction="column" spacing={0}>
           <Typography sx={{ variant: "body2", fontWeight: 'medium' }} noWrap>
             {song.title}
           </Typography>

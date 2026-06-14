@@ -5,6 +5,8 @@
 // entries carry no band_member_id): a purchase is outstanding while it is
 // member-paid, paid, and not yet claimed by a reimbursement.
 
+const EMPTY_PERIOD = Object.freeze({ sql: '', values: [] })
+
 // Outstanding total per band member: unsettled member-paid purchases, grouped.
 // Only members who are actually owed something appear. SUM/COUNT come back as
 // int8, so cast to int for clean JSON numbers.
@@ -78,7 +80,7 @@ export async function settlePurchases(client, tenantId, reimbursementId, purchas
 // History: past reimbursements with the member name and the purchases each one
 // settled. `period` is a { sql, values } fragment from buildPeriodWhere on
 // r.paid_on (values follow tenantId as $2, $3...).
-export async function listReimbursements(executor, tenantId, period = { sql: '', values: [] }) {
+export async function listReimbursements(executor, tenantId, period = EMPTY_PERIOD) {
   const { rows } = await executor.query(
     `SELECT r.id, r.band_member_id, bm.name AS band_member_name,
             r.amount_cents, to_char(r.paid_on, 'YYYY-MM-DD') AS paid_on,

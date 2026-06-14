@@ -95,8 +95,8 @@ export default function LedgerEntriesPage() {
       const q = searchQuery.toLowerCase()
       list = list.filter(
         (row) =>
-          (row.description && row.description.toLowerCase().includes(q)) ||
-          (row.type && row.type.toLowerCase().includes(q)) ||
+          row.description?.toLowerCase().includes(q) ||
+          row.type?.toLowerCase().includes(q) ||
           (row.receipt != null && String(row.receipt).includes(q)) ||
           String(row.id).includes(q),
       )
@@ -267,13 +267,18 @@ function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }) {
     )
   }
 
+  const sortDirectionFor = (col) => {
+    if (sortBy !== col) return false
+    return sortDesc ? 'desc' : 'asc'
+  }
+
   return (
     <Paper variant="outlined">
       <TableContainer>
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell sortDirection={sortBy === 'id' ? (sortDesc ? 'desc' : 'asc') : false}>
+              <TableCell sortDirection={sortDirectionFor('id')}>
                 <TableSortLabel
                   active={sortBy === 'id'}
                   direction={sortBy === 'id' && sortDesc ? 'desc' : 'asc'}
@@ -284,7 +289,7 @@ function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }) {
               </TableCell>
               <TableCell>File</TableCell>
               <TableCell>Receipt</TableCell>
-              <TableCell sortDirection={sortBy === 'entry_date' ? (sortDesc ? 'desc' : 'asc') : false}>
+              <TableCell sortDirection={sortDirectionFor('entry_date')}>
                 <TableSortLabel
                   active={sortBy === 'entry_date'}
                   direction={sortBy === 'entry_date' && sortDesc ? 'desc' : 'asc'}
@@ -321,14 +326,14 @@ function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }) {
                 <TableCell>{formatShortDate(row.entry_date)}</TableCell>
                 <TableCell>{row.type}</TableCell>
                 <TableCell>{row.description || '-'}</TableCell>
-                {row.amount_cents !== null
-                  ? <MoneyCells cents={row.amount_cents} />
-                  : (
+                {row.amount_cents === null
+                  ? (
                     <>
                       <TableCell padding="none" />
                       <TableCell />
                     </>
-                  )}
+                  )
+                  : <MoneyCells cents={row.amount_cents} />}
               </TableRow>
             ))}
           </TableBody>

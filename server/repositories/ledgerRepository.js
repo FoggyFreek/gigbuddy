@@ -59,10 +59,12 @@ const NOT_VOIDED_EXISTS_SQL = `AND NOT EXISTS (
               AND (lt.voided_at IS NOT NULL
                    OR (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')))`
 
+const EMPTY_PERIOD = Object.freeze({ sql: '', values: [] })
+
 // Transactions in the (optional) date range with their gross amount (sum of
 // the debit side, in cents) and the joined source-doc fields.
 // `period` is the { sql, values } pair from buildPeriodWhere(query, 'lt.entry_date').
-export async function listTransactions(executor, tenantId, period = { sql: '', values: [] }) {
+export async function listTransactions(executor, tenantId, period = EMPTY_PERIOD) {
   const { rows } = await executor.query(
     `SELECT lt.id, to_char(lt.entry_date, 'YYYY-MM-DD') AS entry_date,
             lt.description, lt.source_type, lt.source_id, lt.source_event,

@@ -68,6 +68,9 @@ export default function VatReturnDetailPage() {
 
   const outstanding = ret ? outstandingCents(ret) : 0
   const isRefund = ret?.direction === 'receivable'
+  let dueLabel = 'Nothing due'
+  if (isRefund) dueLabel = 'To receive'
+  else if (ret?.direction === 'payable') dueLabel = 'To pay'
 
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 600, mx: insideSplitView ? 0 : 'auto' }}>
@@ -113,7 +116,7 @@ export default function VatReturnDetailPage() {
           <Divider sx={{ my: 1 }} />
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
             <Typography variant="subtitle2">
-              {isRefund ? 'To receive' : ret.direction === 'payable' ? 'To pay' : 'Nothing due'}
+              {dueLabel}
             </Typography>
             <Typography variant="h6" fontWeight={700}>{formatEur(Math.abs(ret.net_cents))}</Typography>
           </Box>

@@ -115,8 +115,8 @@ export default function InvoicesPage() {
       const q = searchQuery.toLowerCase()
       list = list.filter(
         (inv) =>
-          (inv.invoice_number && inv.invoice_number.toLowerCase().includes(q)) ||
-          (inv.customer_name && inv.customer_name.toLowerCase().includes(q)),
+          inv.invoice_number?.toLowerCase().includes(q) ||
+          inv.customer_name?.toLowerCase().includes(q),
       )
     }
     return list

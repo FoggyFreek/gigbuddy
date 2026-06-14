@@ -45,9 +45,9 @@ const TEXT_MAX_LENGTHS = {
   address_country: 200,
 }
 
-const KVK_RE = /^[0-9]{8}$/
-const IBAN_RE = /^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/
-const TAX_ID_RE = /^NL[0-9]{9}B[0-9]{2}$/
+const KVK_RE = /^\d{8}$/
+const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/
+const TAX_ID_RE = /^NL\d{9}B\d{2}$/
 
 export function parseId(val) {
   const n = Number(val)

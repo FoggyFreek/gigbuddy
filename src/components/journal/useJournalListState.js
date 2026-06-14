@@ -41,10 +41,10 @@ export function useJournalListState() {
     })
   }, [])
 
-  const statuses = [...saveStatuses.values()]
-  const saveStatus = statuses.includes('saving') ? 'saving'
-    : statuses.includes('error') ? 'error'
-      : 'idle'
+  const statuses = new Set(saveStatuses.values())
+  let saveStatus = 'idle'
+  if (statuses.has('saving')) saveStatus = 'saving'
+  else if (statuses.has('error')) saveStatus = 'error'
 
   const flushIds = useCallback(async (ids) => {
     await Promise.all(ids.map((id) => flushers.current.get(id)?.()).filter(Boolean))

@@ -77,7 +77,8 @@ function statusFor(direction, netCents, paidCents) {
 function clearingLine(accountCode, balanceCents, clearSide) {
   if (balanceCents === 0) return null
   const amount = Math.abs(balanceCents)
-  const side = balanceCents > 0 ? clearSide : (clearSide === 'debit' ? 'credit' : 'debit')
+  const opposite = clearSide === 'debit' ? 'credit' : 'debit'
+  const side = balanceCents > 0 ? clearSide : opposite
   return {
     account_code: accountCode,
     debit_cents: side === 'debit' ? amount : 0,
@@ -96,9 +97,8 @@ const RETURN_COLUMNS = `
 
 function withStatus(row) {
   const paidCents = Number(row.paid_cents ?? 0)
-  const { paid_cents: _ignored, ...rest } = row
   return {
-    ...rest,
+    ...row,
     paid_cents: paidCents,
     status: statusFor(row.direction, row.net_cents, paidCents),
   }
@@ -258,7 +258,9 @@ export async function recordVatPayment(pool, tenantId, vatReturnId, payment, act
       return { error: { status: 404, body: { error: 'Not found' } } }
     }
 
-    const required = ret.direction === 'payable' ? 'payment' : ret.direction === 'receivable' ? 'refund' : null
+    let required = null
+    if (ret.direction === 'payable') required = 'payment'
+    else if (ret.direction === 'receivable') required = 'refund'
     if (payment.direction !== required) {
       await client.query('ROLLBACK')
       return {

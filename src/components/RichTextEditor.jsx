@@ -41,7 +41,7 @@ function EditorToolbar({ editor }) {
 
   function handleLink() {
     const prev = editor.getAttributes('link').href || ''
-    const url = window.prompt('URL', prev)
+    const url = globalThis.prompt('URL', prev)
     if (url === null) return
     if (url === '') editor.chain().focus().unsetLink().run()
     else editor.chain().focus().setLink({ href: url }).run()

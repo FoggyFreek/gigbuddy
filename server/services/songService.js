@@ -281,7 +281,7 @@ export async function importSongs(tenantId, body) {
       if (existingKeys.has(key) || seenKeys.has(key)) { skipped++; continue }
 
       const songId = await insertImportSong(client, tenantId, row)
-      for (const name of [...new Set(row.tags)]) {
+      for (const name of new Set(row.tags)) {
         const tagId = await upsertTag(client, tenantId, name)
         await insertSongTagLinkIgnore(client, songId, tagId, tenantId)
       }

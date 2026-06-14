@@ -10,9 +10,9 @@ export default function AmountCell({ cents, active, placeholder, disabled, onCom
   const [raw, setRaw] = useState('')
   const [focused, setFocused] = useState(false)
 
-  const display = focused
-    ? raw
-    : (active && cents > 0 ? centsToEditableEuro(cents) : '')
+  let display = ''
+  if (focused) display = raw
+  else if (active && cents > 0) display = centsToEditableEuro(cents)
 
   return (
     <TextField

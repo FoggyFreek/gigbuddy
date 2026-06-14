@@ -27,11 +27,11 @@ export function ToastProvider({ children }) {
       showToast(message)
     }
 
-    window.addEventListener('error', handleError)
-    window.addEventListener('unhandledrejection', handleRejection)
+    globalThis.addEventListener('error', handleError)
+    globalThis.addEventListener('unhandledrejection', handleRejection)
     return () => {
-      window.removeEventListener('error', handleError)
-      window.removeEventListener('unhandledrejection', handleRejection)
+      globalThis.removeEventListener('error', handleError)
+      globalThis.removeEventListener('unhandledrejection', handleRejection)
     }
   }, [showToast])
 

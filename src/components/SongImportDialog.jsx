@@ -174,7 +174,7 @@ export default function SongImportDialog({ onClose }) {
           <Box sx={{ py: 1 }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
               Showing first {Math.min(5, csvRows.length)} of {csvRows.length} rows.
-              {' '}{importableCount} row{importableCount !== 1 ? 's' : ''} will be imported.
+              {' '}{importableCount} row{importableCount === 1 ? '' : 's'} will be imported.
             </Typography>
             {importError && <Alert severity="error" sx={{ mb: 2 }}>{importError}</Alert>}
             <Table size="small">
@@ -210,7 +210,7 @@ export default function SongImportDialog({ onClose }) {
 
         {result && (
           <Alert severity="success" sx={{ mt: 2 }}>
-            Imported {result.imported} song{result.imported !== 1 ? 's' : ''}
+            Imported {result.imported} song{result.imported === 1 ? '' : 's'}
             {result.skipped > 0 ? ` (${result.skipped} skipped as duplicates)` : ''}.
           </Alert>
         )}
@@ -221,7 +221,7 @@ export default function SongImportDialog({ onClose }) {
         {step === 'map' && <Button variant="outlined" onClick={handlePreview}>Preview</Button>}
         {step === 'preview' && !result && (
           <Button variant="contained" onClick={handleImport} disabled={importableCount === 0}>
-            Import {importableCount} row{importableCount !== 1 ? 's' : ''}
+            Import {importableCount} row{importableCount === 1 ? '' : 's'}
           </Button>
         )}
       </DialogActions>

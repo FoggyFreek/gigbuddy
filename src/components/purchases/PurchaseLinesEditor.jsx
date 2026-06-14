@@ -203,7 +203,7 @@ export default function PurchaseLinesEditor({ form, totals, accounts = [], produ
     <>
       {form.lines.map((line, idx) => (
         <PurchaseLineRow
-          key={idx}
+          key={line._key}
           line={line}
           idx={idx}
           accounts={accounts}

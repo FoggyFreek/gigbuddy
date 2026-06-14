@@ -20,6 +20,9 @@ const MODE_LABELS = { month: 'Month', quarter: 'Quarter', fiscal_year: 'Fiscal Y
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function GridCell({ label, hasData, isSelected, onClick }) {
+  let color = 'text.disabled'
+  if (isSelected) color = 'primary.contrastText'
+  else if (hasData) color = 'text.primary'
   return (
     <Box
       role="option"
@@ -32,7 +35,7 @@ function GridCell({ label, hasData, isSelected, onClick }) {
         textAlign: 'center',
         cursor: hasData ? 'pointer' : 'default',
         bgcolor: isSelected ? 'primary.main' : 'transparent',
-        color: isSelected ? 'primary.contrastText' : hasData ? 'text.primary' : 'text.disabled',
+        color,
         fontWeight: hasData ? 600 : 400,
         fontSize: '0.875rem',
         userSelect: 'none',

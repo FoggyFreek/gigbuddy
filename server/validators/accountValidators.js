@@ -1,4 +1,4 @@
-const CODE_RE = /^[0-9]{4,6}$/
+const CODE_RE = /^\d{4,6}$/
 const CURRENCY_RE = /^[A-Z]{3}$/
 
 export const ACCOUNT_TYPES = new Set([
@@ -47,7 +47,7 @@ export function validateAccountCreate(body) {
     code,
     name,
     type,
-    parent_code: body.parent_code != null ? String(body.parent_code).trim() || null : null,
+    parent_code: String(body.parent_code ?? '').trim() || null,
     is_capitalizable: isCapitalizable,
   }
 }
