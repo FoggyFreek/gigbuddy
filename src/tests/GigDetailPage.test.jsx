@@ -5,10 +5,10 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import GigDetailPage from '../pages/GigDetailPage.jsx'
-import theme from '../theme.js'
+import GigDetailPage from '../pages/GigDetailPage.tsx'
+import theme from '../theme.ts'
 
-vi.mock('../api/availability.js', () => ({
+vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock('../api/availability.js', () => ({
   deleteSlot: vi.fn(),
 }))
 
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
 }))
 
@@ -43,7 +43,7 @@ function gigFixture(id) {
   }
 }
 
-vi.mock('../api/gigs.js', () => ({
+vi.mock('../api/gigs.ts', () => ({
   getGig: vi.fn(),
   updateGig: vi.fn().mockResolvedValue({}),
   deleteGig: vi.fn().mockResolvedValue({}),
@@ -58,12 +58,12 @@ vi.mock('../api/gigs.js', () => ({
   removeGigContact: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('../api/venues.js', async (importOriginal) => ({
+vi.mock('../api/venues.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 
-import { getGig } from '../api/gigs.js'
+import { getGig } from '../api/gigs.ts'
 
 // Navigates within the same router so GigDetailPage stays mounted across the id change —
 // the split-view scenario the stale-gig guard protects against.

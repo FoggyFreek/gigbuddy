@@ -1,0 +1,46 @@
+{
+  // Frontend type-check config. Vite/esbuild does the actual transpile; this config
+  // is for `tsc --noEmit` only (see `npm run type-check`). The JS→TS migration is
+  // complete and strict mode is on — keep type-check at 0 errors.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "useDefineForClassFields": true,
+
+    // Tests are still .jsx/.js — allow them alongside .ts/.tsx but don't type-check
+    // the JS (checkJs:false); only app .ts/.tsx is enforced.
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+
+    // House style is explicit import extensions (./foo.js, ./Foo.jsx). Converted
+    // modules are imported with explicit ./foo.ts / ./Foo.tsx specifiers; this flag
+    // permits that under bundler resolution (legal because noEmit:true).
+    "allowImportingTsExtensions": true,
+
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Strict type-checking (incl. strictNullChecks). noUnused* stay off for now —
+    // eslint's no-unused-vars covers that, and tsc's variant is noisier on PascalCase
+    // type imports. Flipping them on is a possible future tightening.
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    // import.meta.env (vite/client) + describe/it/expect globals (vitest config has
+    // globals:true) so converted test files type-check without per-file imports.
+    "types": ["vite/client", "vitest/globals"]
+  },
+  // Type-check the app only. Server (server/**) is a separate, later migration and
+  // runs under Node, not Vite — keep it out of this config.
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "coverage", ".claude"]
+}

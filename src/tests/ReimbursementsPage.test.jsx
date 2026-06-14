@@ -4,17 +4,17 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/reimbursements.js', () => ({
+vi.mock('../api/reimbursements.ts', () => ({
   listOutstanding: vi.fn(),
   listMemberPurchases: vi.fn(),
   createReimbursement: vi.fn(),
   reimburseMemberFull: vi.fn(),
 }))
 
-import * as api from '../api/reimbursements.js'
-import ReimbursementsPage from '../pages/ReimbursementsPage.jsx'
-import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
-import theme from '../theme.js'
+import * as api from '../api/reimbursements.ts'
+import ReimbursementsPage from '../pages/ReimbursementsPage.tsx'
+import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
+import theme from '../theme.ts'
 
 function wrap(ui, { compact = false } = {}) {
   return render(

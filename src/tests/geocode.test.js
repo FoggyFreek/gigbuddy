@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
-vi.mock('../api/geocode.js', () => ({ lookupGeocode: vi.fn() }))
+vi.mock('../api/geocode.ts', () => ({ lookupGeocode: vi.fn() }))
 
-import { lookupGeocode } from '../api/geocode.js'
-import { geocodePlace } from '../utils/geocode.js'
+import { lookupGeocode } from '../api/geocode.ts'
+import { geocodePlace } from '../utils/geocode.ts'
 
 const hit = (lat, lon) => ({ status: 'hit', coords: { lat, lon } })
 const empty = () => ({ status: 'empty' })

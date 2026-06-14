@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { tooltipLeft, TOOLTIP_MARGIN_PX } from '../utils/chartTooltipPosition.js'
+import { tooltipLeft, TOOLTIP_MARGIN_PX } from '../utils/chartTooltipPosition.ts'
 
 describe('tooltipLeft', () => {
   it('anchors the card 2px right of the line when it fits', () => {

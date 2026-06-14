@@ -4,23 +4,23 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/tasks.js', () => ({
+vi.mock('../api/tasks.ts', () => ({
   listAllTasks: vi.fn(),
 }))
-vi.mock('../api/gigs.js', () => ({
+vi.mock('../api/gigs.ts', () => ({
   updateTask: vi.fn(),
 }))
-vi.mock('../contexts/authContext.js', () => ({
+vi.mock('../contexts/authContext.ts', () => ({
   useAuth: vi.fn(),
 }))
-vi.mock('../components/GigFormModal.jsx', () => ({
+vi.mock('../components/GigFormModal.tsx', () => ({
   default: () => null,
 }))
 
-import TasksPage from '../pages/TasksPage.jsx'
-import { listAllTasks } from '../api/tasks.js'
-import { useAuth } from '../contexts/authContext.js'
-import theme from '../theme.js'
+import TasksPage from '../pages/TasksPage.tsx'
+import { listAllTasks } from '../api/tasks.ts'
+import { useAuth } from '../contexts/authContext.ts'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(

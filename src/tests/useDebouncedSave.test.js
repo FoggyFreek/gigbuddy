@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import useDebouncedSave from '../hooks/useDebouncedSave.js'
+import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 
 describe('useDebouncedSave', () => {
   beforeEach(() => {

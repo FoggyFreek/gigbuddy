@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computePurchaseLineTotals, computePurchaseTotals } from '../utils/purchaseTotals.js'
+import { computePurchaseLineTotals, computePurchaseTotals } from '../utils/purchaseTotals.ts'
 
 describe('computePurchaseLineTotals', () => {
   it('derives net and VAT from an inclusive amount at 21%', () => {

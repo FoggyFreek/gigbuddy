@@ -5,7 +5,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/bandEvents.js', () => ({
+vi.mock('../api/bandEvents.ts', () => ({
   createBandEvent: vi.fn().mockResolvedValue({ id: 99 }),
   getBandEvent: vi.fn().mockResolvedValue({
     id: 1,
@@ -20,9 +20,9 @@ vi.mock('../api/bandEvents.js', () => ({
   updateBandEvent: vi.fn().mockResolvedValue({}),
 }))
 
-import BandEventFormModal from '../components/BandEventFormModal.jsx'
-import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.js'
-import theme from '../theme.js'
+import BandEventFormModal from '../components/BandEventFormModal.tsx'
+import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(

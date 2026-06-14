@@ -2,10 +2,10 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import BandMembersSection from '../components/BandMembersSection.jsx'
-import theme from '../theme.js'
+import BandMembersSection from '../components/BandMembersSection.tsx'
+import theme from '../theme.ts'
 
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([
     { id: 1, name: 'Alice', role: 'Guitar', color: '#e53935', sort_order: 0, position: 'lead' },
   ]),
@@ -14,7 +14,7 @@ vi.mock('../api/bandMembers.js', () => ({
   deleteMember: vi.fn().mockResolvedValue(null),
 }))
 
-import { createMember, deleteMember, listMembers, updateMember } from '../api/bandMembers.js'
+import { createMember, deleteMember, listMembers, updateMember } from '../api/bandMembers.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

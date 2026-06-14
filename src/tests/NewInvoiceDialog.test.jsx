@@ -3,12 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/invoices.js', () => ({
+vi.mock('../api/invoices.ts', () => ({
   createInvoice: vi.fn(),
   draftFromGig: vi.fn(),
 }))
 
-vi.mock('../components/GigPicker.jsx', () => ({
+vi.mock('../components/GigPicker.tsx', () => ({
   default: ({ onChange }) => (
     <button type="button" onClick={() => onChange({ id: 42 })}>
       Pick gig
@@ -16,9 +16,9 @@ vi.mock('../components/GigPicker.jsx', () => ({
   ),
 }))
 
-import { createInvoice, draftFromGig } from '../api/invoices.js'
-import NewInvoiceDialog from '../components/NewInvoiceDialog.jsx'
-import theme from '../theme.js'
+import { createInvoice, draftFromGig } from '../api/invoices.ts'
+import NewInvoiceDialog from '../components/NewInvoiceDialog.tsx'
+import theme from '../theme.ts'
 
 const DRAFT_PAYLOAD = {
   tenant: { id: 1, band_name: 'The Band', applies_kor: false, tax_percentage: 9 },

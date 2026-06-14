@@ -2,18 +2,18 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AuthContext } from '../contexts/authContext.js'
-import ProfilePage from '../pages/ProfilePage.jsx'
-import theme from '../theme.js'
+import { AuthContext } from '../contexts/authContext.ts'
+import ProfilePage from '../pages/ProfilePage.tsx'
+import theme from '../theme.ts'
 
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
   createMember: vi.fn(),
   updateMember: vi.fn(),
   deleteMember: vi.fn(),
 }))
 
-vi.mock('../api/availability.js', () => ({
+vi.mock('../api/availability.ts', () => ({
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock('../api/availability.js', () => ({
   getAvailabilityOn: vi.fn(),
 }))
 
-vi.mock('../api/profile.js', () => ({
+vi.mock('../api/profile.ts', () => ({
   getProfile: vi.fn().mockResolvedValue({
     id: 1,
     band_name: 'The Testers',
@@ -53,15 +53,15 @@ vi.mock('../api/profile.js', () => ({
   deleteLink: vi.fn().mockResolvedValue(null),
 }))
 
-vi.mock('../utils/compressImage.js', () => ({
+vi.mock('../utils/compressImage.ts', () => ({
   compressLogo: vi.fn().mockImplementation((file) => {
     if (file.type === 'image/gif') throw new Error('File type not allowed')
     return Promise.resolve(file)
   }),
 }))
 
-import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '../api/profile.js'
-import { compressLogo } from '../utils/compressImage.js'
+import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '../api/profile.ts'
+import { compressLogo } from '../utils/compressImage.ts'
 
 function wrap(ui, { user } = {}) {
   return render(

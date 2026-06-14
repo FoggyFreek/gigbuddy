@@ -3,20 +3,20 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/ledger.js', () => ({
+vi.mock('../api/ledger.ts', () => ({
   getLedgerEntry: vi.fn(),
   voidLedgerEntry: vi.fn(),
   reverseLedgerEntry: vi.fn(),
 }))
-vi.mock('../api/journal.js', () => ({
+vi.mock('../api/journal.ts', () => ({
   createJournal: vi.fn(),
 }))
 
-import { getLedgerEntry, voidLedgerEntry, reverseLedgerEntry } from '../api/ledger.js'
-import { createJournal } from '../api/journal.js'
-import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
-import LedgerEntryDetailPage from '../pages/LedgerEntryDetailPage.jsx'
-import theme from '../theme.js'
+import { getLedgerEntry, voidLedgerEntry, reverseLedgerEntry } from '../api/ledger.ts'
+import { createJournal } from '../api/journal.ts'
+import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
+import LedgerEntryDetailPage from '../pages/LedgerEntryDetailPage.tsx'
+import theme from '../theme.ts'
 
 const DETAIL = {
   id: 5,

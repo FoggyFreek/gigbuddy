@@ -6,7 +6,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/bandEvents.js', () => ({
+vi.mock('../api/bandEvents.ts', () => ({
   listBandEvents: vi.fn(),
   getBandEvent: vi.fn().mockResolvedValue({
     id: 1,
@@ -22,10 +22,10 @@ vi.mock('../api/bandEvents.js', () => ({
   deleteBandEvent: vi.fn().mockResolvedValue({}),
 }))
 
-import BandEventsPage from '../pages/BandEventsPage.jsx'
-import BandEventDetailPage from '../pages/BandEventDetailPage.jsx'
-import { deleteBandEvent, listBandEvents, getBandEvent, updateBandEvent } from '../api/bandEvents.js'
-import theme from '../theme.js'
+import BandEventsPage from '../pages/BandEventsPage.tsx'
+import BandEventDetailPage from '../pages/BandEventDetailPage.tsx'
+import { deleteBandEvent, listBandEvents, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
+import theme from '../theme.ts'
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
   return render(

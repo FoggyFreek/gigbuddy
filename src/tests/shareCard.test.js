@@ -3,7 +3,7 @@ import {
   formatGigCity,
   formatGigVenue,
   formatGigVenueName,
-} from '../utils/shareCard.js'
+} from '../utils/shareCard.ts'
 
 const makeGig = ({ venue = null, festival = null } = {}) => ({
   event_date: '2026-07-04',

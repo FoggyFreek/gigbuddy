@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/journal.js', () => ({
+vi.mock('../api/journal.ts', () => ({
   listJournals: vi.fn(),
   getJournal: vi.fn(),
   createJournal: vi.fn(),
@@ -14,17 +14,17 @@ vi.mock('../api/journal.js', () => ({
   approveJournals: vi.fn(),
 }))
 
-vi.mock('../api/accounts.js', () => ({
+vi.mock('../api/accounts.ts', () => ({
   listAccounts: vi.fn(async () => [
     { id: 1, code: '62100', name: 'Instruments & Equipment', type: 'expense', is_active: true },
     { id: 2, code: '11000', name: 'Primary Bank Account', type: 'asset', is_active: true },
   ]),
 }))
 
-import * as journalApi from '../api/journal.js'
-import JournalPage from '../pages/JournalPage.jsx'
-import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
-import theme from '../theme.js'
+import * as journalApi from '../api/journal.ts'
+import JournalPage from '../pages/JournalPage.tsx'
+import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
+import theme from '../theme.ts'
 
 function wrap(ui, { compact = false } = {}) {
   return render(

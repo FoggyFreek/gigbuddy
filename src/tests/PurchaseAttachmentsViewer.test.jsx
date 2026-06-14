@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import PropTypes from 'prop-types'
 
 // jsdom can't run the pdf.js worker; stub react-pdf with inspectable elements.
 vi.mock('react-pdf', () => {
@@ -16,15 +15,9 @@ vi.mock('react-pdf', () => {
       </div>
     )
   }
-  Document.propTypes = {
-    file: PropTypes.string,
-    children: PropTypes.node,
-    onLoadSuccess: PropTypes.func,
-  }
   function Page({ pageNumber }) {
     return <div data-testid="pdf-page" data-page={pageNumber} />
   }
-  Page.propTypes = { pageNumber: PropTypes.number }
   return {
     Document,
     Page,
@@ -32,8 +25,8 @@ vi.mock('react-pdf', () => {
   }
 })
 
-import PurchaseAttachmentsViewer from '../components/purchases/PurchaseAttachmentsViewer.jsx'
-import theme from '../theme.js'
+import PurchaseAttachmentsViewer from '../components/purchases/PurchaseAttachmentsViewer.tsx'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

@@ -2,16 +2,16 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import theme from '../theme.js'
+import theme from '../theme.ts'
 
-vi.mock('../utils/shareCard.js', async (importOriginal) => ({
+vi.mock('../utils/shareCard.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   renderNodeToBlob: vi.fn().mockResolvedValue(new Blob(['img'], { type: 'image/png' })),
   downloadBlob: vi.fn(),
   copyBlobToClipboard: vi.fn().mockResolvedValue(undefined),
 }))
 
-import BannerMosaicDialog from '../components/BannerMosaicDialog.jsx'
+import BannerMosaicDialog from '../components/BannerMosaicDialog.tsx'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

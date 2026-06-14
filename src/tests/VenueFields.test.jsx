@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it } from 'vitest'
-import VenueFields from '../components/VenueFields.jsx'
-import theme from '../theme.js'
+import VenueFields from '../components/VenueFields.tsx'
+import theme from '../theme.ts'
 import Grid from '@mui/material/Grid'
 
 function wrap(form, extra = {}) {

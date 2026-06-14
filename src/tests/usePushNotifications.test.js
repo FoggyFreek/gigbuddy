@@ -1,18 +1,18 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/push.js', () => ({
+vi.mock('../api/push.ts', () => ({
   getVapidPublicKey: vi.fn(),
   saveSubscription: vi.fn(),
   removeSubscription: vi.fn(),
 }))
 
-import { usePushNotifications } from '../hooks/usePushNotifications.js'
+import { usePushNotifications } from '../hooks/usePushNotifications.ts'
 import {
   getVapidPublicKey,
   saveSubscription,
   removeSubscription,
-} from '../api/push.js'
+} from '../api/push.ts'
 
 // Valid base64url for urlBase64ToUint8Array: 65 bytes of zeros encoded.
 const VAPID_KEY = 'A'.repeat(86) + '='

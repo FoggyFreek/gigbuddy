@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { venueHeadline, venueCity, venueOptionLabel } from '../utils/venueDisplay.js'
+import { venueHeadline, venueCity, venueOptionLabel } from '../utils/venueDisplay.ts'
 
 describe('venueHeadline', () => {
   it('returns empty string for null', () => {

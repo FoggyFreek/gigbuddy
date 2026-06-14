@@ -24,6 +24,17 @@ export default defineConfig({
       },
     },
   },
+  // `npm run preview` (and `build:all`) serve the production bundle; mirror the
+  // dev proxy so /api still reaches the API on :3002.
+  preview: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3002',
+        changeOrigin: false,
+        cookieDomainRewrite: 'localhost',
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,
@@ -39,7 +50,7 @@ export default defineConfig({
       include: ['src/**'],
       exclude: [
         'src/tests/**',
-        'src/main.jsx',
+        'src/main.tsx',
         'public/**',
         '**/*.config.js',
       ],

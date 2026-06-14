@@ -1,13 +1,13 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import RequireAuth from '../components/RequireAuth.jsx'
+import RequireAuth from '../components/RequireAuth.tsx'
 
-vi.mock('../contexts/authContext.js', () => ({
+vi.mock('../contexts/authContext.ts', () => ({
   useAuth: vi.fn(),
 }))
 
-import { useAuth } from '../contexts/authContext.js'
+import { useAuth } from '../contexts/authContext.ts'
 
 function setup(initialEntry) {
   return render(

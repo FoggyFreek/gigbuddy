@@ -8,8 +8,8 @@ vi.mock('@mui/material/useMediaQuery', () => ({
   default: () => mockIsMobile,
 }))
 
-import RehearsalsTable from '../components/RehearsalsTable.jsx'
-import theme from '../theme.js'
+import RehearsalsTable from '../components/RehearsalsTable.tsx'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

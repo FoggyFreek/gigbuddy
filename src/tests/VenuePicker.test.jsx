@@ -5,13 +5,13 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The picker's only side effect is the debounced venue search.
-vi.mock('../api/venues.js', () => ({
+vi.mock('../api/venues.ts', () => ({
   searchVenues: vi.fn().mockResolvedValue([]),
 }))
 
-import VenuePicker from '../components/VenuePicker.jsx'
-import { searchVenues } from '../api/venues.js'
-import theme from '../theme.js'
+import VenuePicker from '../components/VenuePicker.tsx'
+import { searchVenues } from '../api/venues.ts'
+import theme from '../theme.ts'
 
 const VENUE = { id: 10, name: 'Big Hall', city: 'Amsterdam', category: 'venue' }
 const VENUE_LABEL = 'Big Hall — Amsterdam' // venueOptionLabel(VENUE)

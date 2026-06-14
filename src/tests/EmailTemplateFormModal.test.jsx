@@ -20,7 +20,7 @@ vi.mock('@tiptap/starter-kit', () => ({ default: { configure: vi.fn().mockReturn
 vi.mock('@tiptap/extension-link', () => ({ default: { configure: vi.fn().mockReturnValue({}) } }))
 vi.mock('@tiptap/extension-underline', () => ({ default: {} }))
 
-vi.mock('../api/emailTemplates.js', () => ({
+vi.mock('../api/emailTemplates.ts', () => ({
   createEmailTemplate: vi.fn().mockResolvedValue({ id: 99 }),
   getEmailTemplate: vi.fn().mockResolvedValue({
     id: 1,
@@ -31,9 +31,9 @@ vi.mock('../api/emailTemplates.js', () => ({
   updateEmailTemplate: vi.fn().mockResolvedValue({}),
 }))
 
-import EmailTemplateFormModal from '../components/EmailTemplateFormModal.jsx'
-import { createEmailTemplate, getEmailTemplate, updateEmailTemplate } from '../api/emailTemplates.js'
-import theme from '../theme.js'
+import EmailTemplateFormModal from '../components/EmailTemplateFormModal.tsx'
+import { createEmailTemplate, getEmailTemplate, updateEmailTemplate } from '../api/emailTemplates.ts'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

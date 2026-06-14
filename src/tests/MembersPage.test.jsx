@@ -3,24 +3,24 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import theme from '../theme.js'
-import MembersPage from '../pages/MembersPage.jsx'
+import theme from '../theme.ts'
+import MembersPage from '../pages/MembersPage.tsx'
 
-vi.mock('../api/users.js', () => ({
+vi.mock('../api/users.ts', () => ({
   listMemberships: vi.fn(),
   updateMembership: vi.fn(),
   updateMembershipBandMember: vi.fn(),
   removeMembership: vi.fn(),
 }))
 
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn(),
   createMember: vi.fn(),
   updateMember: vi.fn(),
   deleteMember: vi.fn(),
 }))
 
-vi.mock('../contexts/authContext.js', () => ({
+vi.mock('../contexts/authContext.ts', () => ({
   useAuth: vi.fn(),
   AuthContext: { Provider: ({ children }) => children },
 }))
@@ -30,9 +30,9 @@ import {
   updateMembership,
   updateMembershipBandMember,
   removeMembership,
-} from '../api/users.js'
-import { listMembers } from '../api/bandMembers.js'
-import { useAuth } from '../contexts/authContext.js'
+} from '../api/users.ts'
+import { listMembers } from '../api/bandMembers.ts'
+import { useAuth } from '../contexts/authContext.ts'
 
 const ADMIN_USER = {
   id: 99,

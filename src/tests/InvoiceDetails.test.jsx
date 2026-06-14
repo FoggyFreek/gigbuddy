@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/invoices.js', () => ({
+vi.mock('../api/invoices.ts', () => ({
   createInvoicePaymentLink: vi.fn(),
   deleteInvoicePaymentLink: vi.fn(),
   deleteInvoice: vi.fn(async () => {}),
@@ -16,9 +16,9 @@ vi.mock('../api/invoices.js', () => ({
   uploadInvoiceLogo: vi.fn(),
 }))
 
-import * as invoicesApi from '../api/invoices.js'
-import InvoiceDetails from '../components/InvoiceDetails.jsx'
-import theme from '../theme.js'
+import * as invoicesApi from '../api/invoices.ts'
+import InvoiceDetails from '../components/InvoiceDetails.tsx'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

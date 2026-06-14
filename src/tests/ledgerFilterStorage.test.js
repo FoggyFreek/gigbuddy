@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { loadLedgerFilters, saveLedgerFilters } from '../utils/ledgerFilterStorage.js'
+import { loadLedgerFilters, saveLedgerFilters } from '../utils/ledgerFilterStorage.ts'
 
 const KEY = 'gigbuddy.ledgerFilters.v1'
 

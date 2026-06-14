@@ -4,10 +4,10 @@ import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import RehearsalFormModal from '../components/RehearsalFormModal.jsx'
-import theme from '../theme.js'
+import RehearsalFormModal from '../components/RehearsalFormModal.tsx'
+import theme from '../theme.ts'
 
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([
     { id: 10, name: 'Alice', color: '#e53935', position: 'lead' },
     { id: 11, name: 'Bob', color: '#1e88e5', position: 'lead' },
@@ -15,7 +15,7 @@ vi.mock('../api/bandMembers.js', () => ({
   ]),
 }))
 
-vi.mock('../api/rehearsals.js', () => ({
+vi.mock('../api/rehearsals.ts', () => ({
   createRehearsal: vi.fn().mockResolvedValue({ id: 99 }),
   updateRehearsal: vi.fn().mockResolvedValue({}),
   getRehearsal: vi.fn().mockResolvedValue({
@@ -43,7 +43,7 @@ import {
   removeParticipant,
   setVote,
   updateRehearsal,
-} from '../api/rehearsals.js'
+} from '../api/rehearsals.ts'
 
 function wrap(ui) {
   return render(

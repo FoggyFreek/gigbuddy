@@ -6,7 +6,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/rehearsals.js', () => ({
+vi.mock('../api/rehearsals.ts', () => ({
   getRehearsal: vi.fn(),
   updateRehearsal: vi.fn(),
   deleteRehearsal: vi.fn(),
@@ -16,17 +16,17 @@ vi.mock('../api/rehearsals.js', () => ({
   addSong: vi.fn(),
   removeSong: vi.fn(),
 }))
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
 }))
-vi.mock('../api/songs.js', () => ({
+vi.mock('../api/songs.ts', () => ({
   searchSongs: vi.fn(),
 }))
 
-import RehearsalDetailPage from '../pages/RehearsalDetailPage.jsx'
-import { addSong, getRehearsal, removeSong } from '../api/rehearsals.js'
-import { searchSongs } from '../api/songs.js'
-import theme from '../theme.js'
+import RehearsalDetailPage from '../pages/RehearsalDetailPage.tsx'
+import { addSong, getRehearsal, removeSong } from '../api/rehearsals.ts'
+import { searchSongs } from '../api/songs.ts'
+import theme from '../theme.ts'
 
 const baseRehearsal = {
   id: 1,

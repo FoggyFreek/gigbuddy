@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
 
-import SetlistPreviewModal from '../components/setlist/SetlistPreviewModal.jsx'
-import theme from '../theme.js'
+import SetlistPreviewModal from '../components/setlist/SetlistPreviewModal.tsx'
+import theme from '../theme.ts'
 
 const song = (id, title, extra = {}) => ({
   id, item_type: 'song', title, song_key: 'G', tempo: 120,

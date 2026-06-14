@@ -4,14 +4,14 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/vatReturns.js', () => ({
+vi.mock('../api/vatReturns.ts', () => ({
   listVatReturns: vi.fn(),
   previewVatReturn: vi.fn(),
   createVatReturn: vi.fn(),
   getVatReturn: vi.fn(),
   recordVatPayment: vi.fn(),
 }))
-vi.mock('../api/accounts.js', () => ({
+vi.mock('../api/accounts.ts', () => ({
   listAccounts: vi.fn(),
   getAccountingSettings: vi.fn(),
 }))
@@ -22,11 +22,11 @@ import {
   createVatReturn,
   getVatReturn,
   recordVatPayment,
-} from '../api/vatReturns.js'
-import { listAccounts, getAccountingSettings } from '../api/accounts.js'
-import VatReturnsPage from '../pages/VatReturnsPage.jsx'
-import VatReturnDetailPage from '../pages/VatReturnDetailPage.jsx'
-import theme from '../theme.js'
+} from '../api/vatReturns.ts'
+import { listAccounts, getAccountingSettings } from '../api/accounts.ts'
+import VatReturnsPage from '../pages/VatReturnsPage.tsx'
+import VatReturnDetailPage from '../pages/VatReturnDetailPage.tsx'
+import theme from '../theme.ts'
 
 const PAYABLE_RETURN = {
   id: 1,

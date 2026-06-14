@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/venues.js', () => ({
+vi.mock('../api/venues.ts', () => ({
   getVenue: vi.fn(),
   updateVenue: vi.fn().mockResolvedValue({}),
   deleteVenue: vi.fn().mockResolvedValue({}),
@@ -15,23 +15,23 @@ vi.mock('../api/venues.js', () => ({
   removeVenueContact: vi.fn().mockResolvedValue({}),
 }))
 
-vi.mock('../api/contacts.js', () => ({
+vi.mock('../api/contacts.ts', () => ({
   searchContacts: vi.fn().mockResolvedValue([]),
   createContact: vi.fn(),
   getContact: vi.fn(),
   updateContact: vi.fn().mockResolvedValue({}),
 }))
 
-import VenueDetailPage from '../pages/VenueDetailPage.jsx'
+import VenueDetailPage from '../pages/VenueDetailPage.tsx'
 import {
   getVenue,
   listVenueContacts,
   addVenueContact,
   setVenueContactPrimary,
   removeVenueContact,
-} from '../api/venues.js'
-import { searchContacts } from '../api/contacts.js'
-import theme from '../theme.js'
+} from '../api/venues.ts'
+import { searchContacts } from '../api/contacts.ts'
+import theme from '../theme.ts'
 
 const VENUE = { id: 1, category: 'venue', name: 'Test Venue' }
 

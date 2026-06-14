@@ -3,19 +3,19 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import theme from '../theme.js'
-import AppShell from '../components/AppShell.jsx'
+import theme from '../theme.ts'
+import AppShell from '../components/AppShell.tsx'
 
-vi.mock('../contexts/authContext.js', () => ({
+vi.mock('../contexts/authContext.ts', () => ({
   useAuth: vi.fn(),
 }))
-vi.mock('../contexts/profileContext.js', () => ({
+vi.mock('../contexts/profileContext.ts', () => ({
   useProfile: () => ({ bandName: 'Band A' }),
 }))
-vi.mock('../contexts/themeModeContext.js', () => ({
+vi.mock('../contexts/themeModeContext.ts', () => ({
   useThemeMode: () => ({ mode: 'light', toggleTheme: vi.fn() }),
 }))
-vi.mock('../hooks/usePushNotifications.js', () => ({
+vi.mock('../hooks/usePushNotifications.ts', () => ({
   usePushNotifications: () => ({
     status: 'unsupported',
     subscribe: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('../hooks/usePushNotifications.js', () => ({
   }),
 }))
 
-import { useAuth } from '../contexts/authContext.js'
+import { useAuth } from '../contexts/authContext.ts'
 
 function wrap(ui) {
   return render(

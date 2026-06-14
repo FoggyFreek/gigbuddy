@@ -2,19 +2,19 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AvailabilityPage from '../pages/AvailabilityPage.jsx'
-import { listAvailability } from '../api/availability.js'
-import { listGigs } from '../api/gigs.js'
-import theme from '../theme.js'
+import AvailabilityPage from '../pages/AvailabilityPage.tsx'
+import { listAvailability } from '../api/availability.ts'
+import { listGigs } from '../api/gigs.ts'
+import theme from '../theme.ts'
 
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
   createMember: vi.fn(),
   updateMember: vi.fn(),
   deleteMember: vi.fn(),
 }))
 
-vi.mock('../api/availability.js', () => ({
+vi.mock('../api/availability.ts', () => ({
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock('../api/availability.js', () => ({
   getAvailabilityOn: vi.fn(),
 }))
 
-vi.mock('../api/gigs.js', () => ({
+vi.mock('../api/gigs.ts', () => ({
   listGigs: vi.fn().mockResolvedValue([]),
 }))
 

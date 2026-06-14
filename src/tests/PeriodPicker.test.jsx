@@ -3,15 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import PeriodPicker from '../components/shared/periodPicker.jsx'
+import PeriodPicker from '../components/shared/periodPicker.tsx'
 import {
   defaultPeriod,
   defaultPeriodForDates,
   invoiceInPeriod,
   periodLabel,
   periodQueryString,
-} from '../utils/invoicePeriod.js'
-import theme from '../theme.js'
+} from '../utils/invoicePeriod.ts'
+import theme from '../theme.ts'
 
 const FIXED_NOW = new Date('2026-06-08T12:00:00.000Z')
 const AVAILABLE_DATES = ['2026-03-15', '2026-06-15', '2025-09-15']

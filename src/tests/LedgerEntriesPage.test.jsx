@@ -4,22 +4,25 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/ledger.js', () => ({
+vi.mock('../api/ledger.ts', () => ({
   listLedger: vi.fn(),
   listLedgerPeriods: vi.fn(),
 }))
-vi.mock('../components/shared/periodPicker.jsx', () => ({
-  default: ({ value, onChange }) => (
-    <button onClick={() => onChange({ mode: 'month', year: 2026, month: 2 })}>
+vi.mock('../components/shared/periodPicker.tsx', () => ({
+  default: ({ availableDates, value, onChange }) => (
+    <button
+      data-available={(availableDates ?? []).join(',')}
+      onClick={() => onChange({ mode: 'month', year: 2026, month: 2 })}
+    >
       {`FY ${value.year ?? ''}`}
     </button>
   ),
 }))
 
-import { listLedger, listLedgerPeriods } from '../api/ledger.js'
-import LedgerEntriesPage from '../pages/LedgerEntriesPage.jsx'
-import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
-import theme from '../theme.js'
+import { listLedger, listLedgerPeriods } from '../api/ledger.ts'
+import LedgerEntriesPage from '../pages/LedgerEntriesPage.tsx'
+import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
+import theme from '../theme.ts'
 
 const ROWS = [
   { id: 5, entry_date: '2026-06-12', type: 'Purchase', group: 'purchases', voided: false, receipt: 9, description: 'Bill from mi5 Studios: TEST', amount_cents: -2500, source_type: 'purchase', source_id: 9 },
@@ -136,6 +139,14 @@ describe('LedgerEntriesPage', () => {
 
     const journalRow = screen.getByText('T').closest('tr')
     expect(within(journalRow).queryByText(/€/)).not.toBeInTheDocument()
+  })
+
+  it('feeds the fetched entry dates to the period picker', async () => {
+    // Regression: the page used to read a non-existent `.key` off each date
+    // string, collapsing availableDates to [] so no period cell was selectable.
+    wrap(<LedgerEntriesPage />)
+    const picker = await screen.findByRole('button', { name: /FY 2026/ })
+    await waitFor(() => expect(picker).toHaveAttribute('data-available', ROWS.map((r) => r.entry_date).join(',')))
   })
 
   it('refetches when the period changes', async () => {

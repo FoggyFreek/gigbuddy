@@ -8,8 +8,8 @@ vi.mock('@mui/material/useMediaQuery', () => ({
   default: () => mockIsMobile,
 }))
 
-import GigsTable from '../components/GigsTable.jsx'
-import theme from '../theme.js'
+import GigsTable from '../components/GigsTable.tsx'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

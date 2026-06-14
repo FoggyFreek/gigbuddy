@@ -8,8 +8,8 @@ vi.mock('@mui/material/useMediaQuery', () => ({
   default: () => mockIsMobile,
 }))
 
-import BandEventsTable from '../components/BandEventsTable.jsx'
-import theme from '../theme.js'
+import BandEventsTable from '../components/BandEventsTable.tsx'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

@@ -3,27 +3,27 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import GigContactsSection from '../components/GigContactsSection.jsx'
-import theme from '../theme.js'
+import GigContactsSection from '../components/GigContactsSection.tsx'
+import theme from '../theme.ts'
 
-vi.mock('../api/gigs.js', () => ({
+vi.mock('../api/gigs.ts', () => ({
   listGigContacts: vi.fn().mockResolvedValue([]),
   addGigContact: vi.fn(),
   setGigContactPrimary: vi.fn().mockResolvedValue({}),
   removeGigContact: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('../api/venues.js', () => ({
+vi.mock('../api/venues.ts', () => ({
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock('../api/contacts.js', () => ({
+vi.mock('../api/contacts.ts', () => ({
   searchContacts: vi.fn().mockResolvedValue([]),
 }))
 
-import { listGigContacts, addGigContact, setGigContactPrimary, removeGigContact } from '../api/gigs.js'
-import { listVenueContacts } from '../api/venues.js'
-import { searchContacts } from '../api/contacts.js'
+import { listGigContacts, addGigContact, setGigContactPrimary, removeGigContact } from '../api/gigs.ts'
+import { listVenueContacts } from '../api/venues.ts'
+import { searchContacts } from '../api/contacts.ts'
 
 function wrap(ui) {
   return render(

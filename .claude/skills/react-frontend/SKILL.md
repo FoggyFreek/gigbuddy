@@ -38,6 +38,8 @@ This skill provides the authoritative rules for writing correct, idiomatic React
 ## Key file locations in this project
 - `src/pages/` — page-level components
 - `src/components/` — shared and feature components
-- `src/hooks/` — custom hooks (`useHoldings`, `useTransactions`, `useStaking`, `useToast`, …)
-- `src/context/AppContext.tsx` — global React context
-- `src/lib/` — pure utility functions (no hooks, no JSX)
+- `src/hooks/` — custom hooks (`useDebouncedSave`, `useCompactLayout`, `useGigMapData`, `usePushNotifications`, `useTenantQuerySync`)
+- `src/contexts/` — global React context providers (`AuthContext`, `ProfileContext`, `ThemeContext`, `ToastContext`, …)
+- `src/utils/` — pure utility functions (no hooks, no JSX)
+- `src/types/` — shared entity types (`entities.ts`) and api shapes (`api.ts`)
+- `src/api/` — thin `request<T>()` wrappers, one per resource (the only place that knows the `/api/*` path)

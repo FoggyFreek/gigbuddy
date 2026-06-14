@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import BannerMosaicCard from '../components/share/BannerMosaicCard.jsx'
+import BannerMosaicCard from '../components/share/BannerMosaicCard.tsx'
 
 const makeGigs = (count) => Array.from({ length: count }, (_, i) => ({
   id: i + 1,

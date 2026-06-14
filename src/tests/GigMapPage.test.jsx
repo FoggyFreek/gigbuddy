@@ -3,7 +3,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../hooks/useGigMapData.js', () => ({ useGigMapData: vi.fn() }))
+vi.mock('../hooks/useGigMapData.ts', () => ({ useGigMapData: vi.fn() }))
 // Stub Leaflet so the real GigWorldMap renders its markers/popups in jsdom without
 // actually booting a map. Popup/Marker pass children straight through so the
 // per-gig links render and we can assert them.
@@ -18,9 +18,9 @@ vi.mock('leaflet', () => ({
   default: { divIcon: vi.fn(() => ({})), latLngBounds: vi.fn(() => ({})) },
 }))
 
-import GigMapPage from '../pages/GigMapPage.jsx'
-import { useGigMapData } from '../hooks/useGigMapData.js'
-import theme from '../theme.js'
+import GigMapPage from '../pages/GigMapPage.tsx'
+import { useGigMapData } from '../hooks/useGigMapData.ts'
+import theme from '../theme.ts'
 
 function wrap() {
   return render(

@@ -6,7 +6,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/gigs.js', () => ({
+vi.mock('../api/gigs.ts', () => ({
   listGigs: vi.fn(),
   getGig: vi.fn(),
   createGig: vi.fn(),
@@ -17,25 +17,25 @@ vi.mock('../api/gigs.js', () => ({
   setGigContactPrimary: vi.fn().mockResolvedValue({}),
   removeGigContact: vi.fn().mockResolvedValue(undefined),
 }))
-vi.mock('../api/venues.js', async (importOriginal) => ({
+vi.mock('../api/venues.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
-vi.mock('../api/availability.js', () => ({
+vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),
   deleteSlot: vi.fn(),
 }))
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
 }))
 
-import GigsPage from '../pages/GigsPage.jsx'
-import GigDetailPage from '../pages/GigDetailPage.jsx'
-import { deleteGig, getGig, listGigs } from '../api/gigs.js'
-import theme from '../theme.js'
+import GigsPage from '../pages/GigsPage.tsx'
+import GigDetailPage from '../pages/GigDetailPage.tsx'
+import { deleteGig, getGig, listGigs } from '../api/gigs.ts'
+import theme from '../theme.ts'
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
   return render(

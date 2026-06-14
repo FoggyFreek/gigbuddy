@@ -4,14 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/contacts.js', () => ({
+vi.mock('../api/contacts.ts', () => ({
   searchContacts: vi.fn(async () => []),
   createContact: vi.fn(),
 }))
 
-import * as contactsApi from '../api/contacts.js'
-import SupplierAutocomplete from '../components/purchases/SupplierAutocomplete.jsx'
-import theme from '../theme.js'
+import * as contactsApi from '../api/contacts.ts'
+import SupplierAutocomplete from '../components/purchases/SupplierAutocomplete.tsx'
+import theme from '../theme.ts'
 
 function Harness({ onPick }) {
   const [name, setName] = useState('')

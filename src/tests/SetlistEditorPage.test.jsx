@@ -13,7 +13,7 @@ beforeAll(() => {
   }
 })
 
-vi.mock('../api/setlists.js', () => ({
+vi.mock('../api/setlists.ts', () => ({
   getSetlist: vi.fn(),
   updateSetlist: vi.fn().mockResolvedValue({}),
   deleteSetlist: vi.fn().mockResolvedValue({}),
@@ -28,14 +28,14 @@ vi.mock('../api/setlists.js', () => ({
   saveItemNote: vi.fn(),
 }))
 
-vi.mock('../api/songs.js', () => ({
+vi.mock('../api/songs.ts', () => ({
   listSongs: vi.fn().mockResolvedValue([]),
 }))
 
-import SetlistEditorPage from '../pages/SetlistEditorPage.jsx'
-import { addItem, deleteItem, getSetlist, saveItemNote, updateItem, updateSet } from '../api/setlists.js'
-import { ToastProvider } from '../contexts/ToastContext.jsx'
-import theme from '../theme.js'
+import SetlistEditorPage from '../pages/SetlistEditorPage.tsx'
+import { addItem, deleteItem, getSetlist, saveItemNote, updateItem, updateSet } from '../api/setlists.ts'
+import { ToastProvider } from '../contexts/ToastContext.tsx'
+import theme from '../theme.ts'
 
 const song = (id, title, extra = {}) => ({
   id, set_id: 10, item_type: 'song', song_id: id - 99, title,

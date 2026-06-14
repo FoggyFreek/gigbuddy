@@ -2,8 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import AvailabilitySlotDialog from '../components/AvailabilitySlotDialog.jsx'
-import theme from '../theme.js'
+import AvailabilitySlotDialog from '../components/AvailabilitySlotDialog.tsx'
+import theme from '../theme.ts'
 
 const MEMBERS = [
   { id: 1, name: 'Alice' },

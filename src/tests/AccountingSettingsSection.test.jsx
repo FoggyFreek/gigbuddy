@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/accounts.js', () => ({
+vi.mock('../api/accounts.ts', () => ({
   listAccounts: vi.fn(),
   createAccount: vi.fn(),
   updateAccount: vi.fn(),
@@ -12,9 +12,9 @@ vi.mock('../api/accounts.js', () => ({
   updateAccountingSettings: vi.fn(),
 }))
 
-import * as accountsApi from '../api/accounts.js'
-import AccountingSettingsSection from '../components/settings/AccountingSettingsSection.jsx'
-import theme from '../theme.js'
+import * as accountsApi from '../api/accounts.ts'
+import AccountingSettingsSection from '../components/settings/AccountingSettingsSection.tsx'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/merch.js', () => ({
+vi.mock('../api/merch.ts', () => ({
   listProducts: vi.fn(),
   createProduct: vi.fn(),
   updateProduct: vi.fn(),
@@ -13,15 +13,15 @@ vi.mock('../api/merch.js', () => ({
   recordMerchSale: vi.fn(),
   voidMerchSale: vi.fn(),
 }))
-vi.mock('../api/gigs.js', () => ({
+vi.mock('../api/gigs.ts', () => ({
   listGigs: vi.fn(),
 }))
 
-import * as api from '../api/merch.js'
-import * as gigsApi from '../api/gigs.js'
-import MerchPage from '../pages/MerchPage.jsx'
-import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
-import theme from '../theme.js'
+import * as api from '../api/merch.ts'
+import * as gigsApi from '../api/gigs.ts'
+import MerchPage from '../pages/MerchPage.tsx'
+import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
+import theme from '../theme.ts'
 
 function wrap(ui, { compact = false } = {}) {
   return render(

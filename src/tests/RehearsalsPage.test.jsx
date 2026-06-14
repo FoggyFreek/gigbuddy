@@ -6,7 +6,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/rehearsals.js', () => ({
+vi.mock('../api/rehearsals.ts', () => ({
   listRehearsals: vi.fn().mockResolvedValue([
     {
       id: 1,
@@ -35,14 +35,14 @@ vi.mock('../api/rehearsals.js', () => ({
   removeParticipant: vi.fn(),
   setVote: vi.fn(),
 }))
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
 }))
 
-import RehearsalsPage from '../pages/RehearsalsPage.jsx'
-import RehearsalDetailPage from '../pages/RehearsalDetailPage.jsx'
-import { deleteRehearsal, listRehearsals, updateRehearsal } from '../api/rehearsals.js'
-import theme from '../theme.js'
+import RehearsalsPage from '../pages/RehearsalsPage.tsx'
+import RehearsalDetailPage from '../pages/RehearsalDetailPage.tsx'
+import { deleteRehearsal, listRehearsals, updateRehearsal } from '../api/rehearsals.ts'
+import theme from '../theme.ts'
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
   return render(

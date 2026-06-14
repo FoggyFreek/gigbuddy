@@ -3,17 +3,17 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import theme from '../theme.js'
-import { AuthProvider } from '../contexts/AuthContext.jsx'
-import { useAuth } from '../contexts/authContext.js'
+import theme from '../theme.ts'
+import { AuthProvider } from '../contexts/AuthContext.tsx'
+import { useAuth } from '../contexts/authContext.ts'
 
-vi.mock('../api/auth.js', () => ({
+vi.mock('../api/auth.ts', () => ({
   getCurrentUser: vi.fn(),
   logout: vi.fn(),
   setActiveTenant: vi.fn(),
 }))
 
-import { getCurrentUser, logout, setActiveTenant } from '../api/auth.js'
+import { getCurrentUser, logout, setActiveTenant } from '../api/auth.ts'
 
 function TestConsumer() {
   const { user, logout: doLogout, switchTenant } = useAuth()

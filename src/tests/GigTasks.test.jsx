@@ -2,10 +2,10 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import GigTasks from '../components/GigTasks.jsx'
-import theme from '../theme.js'
+import GigTasks from '../components/GigTasks.tsx'
+import theme from '../theme.ts'
 
-vi.mock('../api/gigs.js', () => ({
+vi.mock('../api/gigs.ts', () => ({
   createTask: vi.fn().mockImplementation((_gigId, body) =>
     Promise.resolve({ id: 99, gig_id: _gigId, title: body.title, done: false, due_date: body.due_date || null, assigned_to: null })
   ),
@@ -15,7 +15,7 @@ vi.mock('../api/gigs.js', () => ({
   deleteTask: vi.fn().mockResolvedValue(null),
 }))
 
-import { createTask, deleteTask, updateTask } from '../api/gigs.js'
+import { createTask, deleteTask, updateTask } from '../api/gigs.ts'
 
 const MEMBERS = [
   { id: 1, name: 'Alice' },

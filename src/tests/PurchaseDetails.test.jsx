@@ -10,19 +10,19 @@ vi.mock('react-pdf', () => ({
   pdfjs: { GlobalWorkerOptions: {} },
 }))
 
-vi.mock('../api/purchases.js', () => ({
+vi.mock('../api/purchases.ts', () => ({
   updatePurchase: vi.fn(async () => ({})),
   getPurchase: vi.fn(),
   deletePurchase: vi.fn(async () => {}),
   registerPurchasePayment: vi.fn(async () => ({ id: 5, status: 'paid' })),
 }))
 
-vi.mock('../api/contacts.js', () => ({
+vi.mock('../api/contacts.ts', () => ({
   searchContacts: vi.fn(async () => []),
   createContact: vi.fn(),
 }))
 
-vi.mock('../api/accounts.js', () => ({
+vi.mock('../api/accounts.ts', () => ({
   getAccountingSettings: vi.fn(async () => ({
     default_expense_account_code: '62100',
     primary_checking_account_code: '11000',
@@ -36,7 +36,7 @@ vi.mock('../api/accounts.js', () => ({
   ]),
 }))
 
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn(async () => [
     { id: 1, user_id: 11, name: 'Alice', role: 'Guitar', position: 'lead' },
     { id: 2, user_id: null, name: 'Session Player', role: 'Keys', position: 'sub' },
@@ -44,11 +44,11 @@ vi.mock('../api/bandMembers.js', () => ({
   ]),
 }))
 
-import * as purchasesApi from '../api/purchases.js'
-import * as accountsApi from '../api/accounts.js'
-import * as bandMembersApi from '../api/bandMembers.js'
-import PurchaseDetails from '../components/PurchaseDetails.jsx'
-import theme from '../theme.js'
+import * as purchasesApi from '../api/purchases.ts'
+import * as accountsApi from '../api/accounts.ts'
+import * as bandMembersApi from '../api/bandMembers.ts'
+import PurchaseDetails from '../components/PurchaseDetails.tsx'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

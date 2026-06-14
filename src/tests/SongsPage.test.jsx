@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/songs.js', () => ({
+vi.mock('../api/songs.ts', () => ({
   listSongs: vi.fn(),
   getSong: vi.fn(),
   createSong: vi.fn(),
@@ -22,16 +22,16 @@ vi.mock('../api/songs.js', () => ({
   deleteSongRecording: vi.fn().mockResolvedValue({}),
 }))
 
-import SongsPage from '../pages/SongsPage.jsx'
-import SongDetailPage from '../pages/SongDetailPage.jsx'
+import SongsPage from '../pages/SongsPage.tsx'
+import SongDetailPage from '../pages/SongDetailPage.tsx'
 import {
   deleteSong,
   getSong,
   listSongs,
   setSongTags,
   updateSong,
-} from '../api/songs.js'
-import theme from '../theme.js'
+} from '../api/songs.ts'
+import theme from '../theme.ts'
 
 const SONG = {
   id: 1,

@@ -11,7 +11,7 @@ vi.mock('react-pdf', () => ({
   pdfjs: { GlobalWorkerOptions: {} },
 }))
 
-vi.mock('../api/purchases.js', () => ({
+vi.mock('../api/purchases.ts', () => ({
   listPurchases: vi.fn(),
   listPurchasePeriods: vi.fn(),
   getPurchase: vi.fn(),
@@ -21,12 +21,12 @@ vi.mock('../api/purchases.js', () => ({
   registerPurchasePayment: vi.fn(),
 }))
 
-vi.mock('../api/contacts.js', () => ({
+vi.mock('../api/contacts.ts', () => ({
   searchContacts: vi.fn(async () => []),
   createContact: vi.fn(),
 }))
 
-vi.mock('../api/accounts.js', () => ({
+vi.mock('../api/accounts.ts', () => ({
   getAccountingSettings: vi.fn(async () => ({
     default_expense_account_code: '62100',
   })),
@@ -35,10 +35,10 @@ vi.mock('../api/accounts.js', () => ({
   ]),
 }))
 
-import * as purchasesApi from '../api/purchases.js'
-import PurchaseDetailPage from '../pages/PurchaseDetailPage.jsx'
-import PurchasesPage from '../pages/PurchasesPage.jsx'
-import theme from '../theme.js'
+import * as purchasesApi from '../api/purchases.ts'
+import PurchaseDetailPage from '../pages/PurchaseDetailPage.tsx'
+import PurchasesPage from '../pages/PurchasesPage.tsx'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(

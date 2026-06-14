@@ -1,10 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import GigAvailabilityPanel from '../components/GigAvailabilityPanel.jsx'
-import theme from '../theme.js'
+import GigAvailabilityPanel from '../components/GigAvailabilityPanel.tsx'
+import theme from '../theme.ts'
 
-vi.mock('../api/availability.js', () => ({
+vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn(),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
@@ -12,7 +12,7 @@ vi.mock('../api/availability.js', () => ({
   deleteSlot: vi.fn(),
 }))
 
-import { getAvailabilityOn } from '../api/availability.js'
+import { getAvailabilityOn } from '../api/availability.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

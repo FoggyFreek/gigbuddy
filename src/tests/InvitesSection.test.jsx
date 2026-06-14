@@ -2,16 +2,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import theme from '../theme.js'
-import InvitesSection from '../components/InvitesSection.jsx'
+import theme from '../theme.ts'
+import InvitesSection from '../components/InvitesSection.tsx'
 
-vi.mock('../api/invites.js', () => ({
+vi.mock('../api/invites.ts', () => ({
   listInvites: vi.fn(),
   createInvite: vi.fn(),
   revokeInvite: vi.fn(),
 }))
 
-import { listInvites, createInvite, revokeInvite } from '../api/invites.js'
+import { listInvites, createInvite, revokeInvite } from '../api/invites.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

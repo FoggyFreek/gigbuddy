@@ -4,24 +4,24 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Routes, Route, useParams } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/gigs.js', () => ({ listGigs: vi.fn() }))
-vi.mock('../api/rehearsals.js', () => ({ listRehearsals: vi.fn() }))
-vi.mock('../api/tasks.js', () => ({ listAllTasks: vi.fn() }))
-vi.mock('../contexts/authContext.js', () => ({ useAuth: vi.fn() }))
+vi.mock('../api/gigs.ts', () => ({ listGigs: vi.fn() }))
+vi.mock('../api/rehearsals.ts', () => ({ listRehearsals: vi.fn() }))
+vi.mock('../api/tasks.ts', () => ({ listAllTasks: vi.fn() }))
+vi.mock('../contexts/authContext.ts', () => ({ useAuth: vi.fn() }))
 // The world-map tile loads its own data (and Leaflet); stub it so these tests stay
 // focused on the dashboard sections and listGigs is only called by the page itself.
-vi.mock('../components/dashboard/GigMapTile.jsx', () => ({
+vi.mock('../components/dashboard/GigMapTile.tsx', () => ({
   default: () => <div data-testid="gig-map-tile" />,
 }))
-vi.mock('../api/profile.js', () => ({ getProfile: vi.fn() }))
+vi.mock('../api/profile.ts', () => ({ getProfile: vi.fn() }))
 
-import DashboardPage from '../pages/DashboardPage.jsx'
-import { listGigs } from '../api/gigs.js'
-import { listRehearsals } from '../api/rehearsals.js'
-import { listAllTasks } from '../api/tasks.js'
-import { getProfile } from '../api/profile.js'
-import { useAuth } from '../contexts/authContext.js'
-import theme from '../theme.js'
+import DashboardPage from '../pages/DashboardPage.tsx'
+import { listGigs } from '../api/gigs.ts'
+import { listRehearsals } from '../api/rehearsals.ts'
+import { listAllTasks } from '../api/tasks.ts'
+import { getProfile } from '../api/profile.ts'
+import { useAuth } from '../contexts/authContext.ts'
+import theme from '../theme.ts'
 
 function GigDetailProbe() {
   const { id } = useParams()

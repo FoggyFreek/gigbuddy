@@ -3,13 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/reimbursements.js', () => ({
+vi.mock('../api/reimbursements.ts', () => ({
   listMemberPurchases: vi.fn(),
 }))
 
-import * as api from '../api/reimbursements.js'
-import RegisterReimbursementDialog from '../components/reimbursements/RegisterReimbursementDialog.jsx'
-import theme from '../theme.js'
+import * as api from '../api/reimbursements.ts'
+import RegisterReimbursementDialog from '../components/reimbursements/RegisterReimbursementDialog.tsx'
+import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)

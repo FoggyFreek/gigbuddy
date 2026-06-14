@@ -3,15 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/ledger.js', () => ({
+vi.mock('../api/ledger.ts', () => ({
   listLedgerPeriods: vi.fn(),
   getFinancialReport: vi.fn(),
   exportFinancialReport: vi.fn(),
 }))
 
-import { listLedgerPeriods, getFinancialReport, exportFinancialReport } from '../api/ledger.js'
-import ReportsPage from '../pages/ReportsPage.jsx'
-import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
+import { listLedgerPeriods, getFinancialReport, exportFinancialReport } from '../api/ledger.ts'
+import ReportsPage from '../pages/ReportsPage.tsx'
+import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
 
 const theme = createTheme()
 

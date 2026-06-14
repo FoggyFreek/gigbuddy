@@ -3,19 +3,19 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import theme from '../theme.js'
-import RedeemInvitePage from '../pages/RedeemInvitePage.jsx'
+import theme from '../theme.ts'
+import RedeemInvitePage from '../pages/RedeemInvitePage.tsx'
 
-vi.mock('../api/invites.js', () => ({
+vi.mock('../api/invites.ts', () => ({
   redeemInvite: vi.fn(),
 }))
 
-vi.mock('../contexts/authContext.js', () => ({
+vi.mock('../contexts/authContext.ts', () => ({
   useAuth: vi.fn(),
 }))
 
-import { redeemInvite } from '../api/invites.js'
-import { useAuth } from '../contexts/authContext.js'
+import { redeemInvite } from '../api/invites.ts'
+import { useAuth } from '../contexts/authContext.ts'
 
 function wrap(ui, initialEntry = '/redeem-invite') {
   return render(

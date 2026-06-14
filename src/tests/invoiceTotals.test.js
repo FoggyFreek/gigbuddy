@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeInvoiceTotals as clientCompute } from '../utils/invoiceTotals.js'
+import { computeInvoiceTotals as clientCompute } from '../utils/invoiceTotals.ts'
 import { computeInvoiceTotals as serverCompute } from '../../server/utils/computeInvoiceTotals.js'
 
 const FIXTURES = [

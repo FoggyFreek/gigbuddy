@@ -5,10 +5,10 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import GigDetailContent from '../components/GigDetailContent.jsx'
-import theme from '../theme.js'
+import GigDetailContent from '../components/GigDetailContent.tsx'
+import theme from '../theme.ts'
 
-vi.mock('../api/availability.js', () => ({
+vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
@@ -16,11 +16,11 @@ vi.mock('../api/availability.js', () => ({
   deleteSlot: vi.fn(),
 }))
 
-vi.mock('../api/bandMembers.js', () => ({
+vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock('../api/gigs.js', () => ({
+vi.mock('../api/gigs.ts', () => ({
   getGig: vi.fn().mockResolvedValue({
     id: 1,
     event_date: '2026-06-15',
@@ -53,12 +53,12 @@ vi.mock('../api/gigs.js', () => ({
   removeGigContact: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('../api/venues.js', async (importOriginal) => ({
+vi.mock('../api/venues.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 
-import { getGig, updateGig } from '../api/gigs.js'
+import { getGig, updateGig } from '../api/gigs.ts'
 
 const GIG_PAID = {
   id: 1,

@@ -1,23 +1,23 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import { AuthContext } from '../contexts/authContext.js'
-import TenantSettingsPage from '../pages/TenantSettingsPage.jsx'
-import theme from '../theme.js'
+import { AuthContext } from '../contexts/authContext.ts'
+import TenantSettingsPage from '../pages/TenantSettingsPage.tsx'
+import theme from '../theme.ts'
 
-vi.mock('../api/profile.js', () => ({
+vi.mock('../api/profile.ts', () => ({
   updateProfile: vi.fn().mockResolvedValue({}),
   getMollieKey: vi.fn().mockResolvedValue({ isSet: false }),
   setMollieKey: vi.fn(),
   clearMollieKey: vi.fn(),
 }))
 
-vi.mock('../api/statistics.js', () => ({
+vi.mock('../api/statistics.ts', () => ({
   getMyStorageStats: vi.fn().mockResolvedValue({ storage_bytes: 0, object_count: 0 }),
   refreshMyStorageStats: vi.fn(),
 }))
 
-vi.mock('../api/accounts.js', () => ({
+vi.mock('../api/accounts.ts', () => ({
   listAccounts: vi.fn().mockResolvedValue([]),
   getAccountingSettings: vi.fn().mockResolvedValue({
     currency: 'EUR',
@@ -34,7 +34,7 @@ vi.mock('../api/accounts.js', () => ({
   updateAccountingSettings: vi.fn(),
 }))
 
-vi.mock('../contexts/profileContext.js', () => ({
+vi.mock('../contexts/profileContext.ts', () => ({
   useProfile: vi.fn(() => ({ accentColor: null, setAccentColor: vi.fn() })),
 }))
 

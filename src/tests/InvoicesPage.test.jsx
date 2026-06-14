@@ -4,19 +4,19 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/invoices.js', () => ({
+vi.mock('../api/invoices.ts', () => ({
   listInvoices: vi.fn(),
   listInvoicePeriods: vi.fn(),
 }))
 // Avoid rendering the full split-view router shell; InvoicesPage still needs
 // useNavigate / useParams so we keep MemoryRouter.
-vi.mock('../components/SplitView.jsx', () => ({
+vi.mock('../components/SplitView.tsx', () => ({
   default: ({ children }) => <>{children}</>,
 }))
-vi.mock('../components/NewInvoiceDialog.jsx', () => ({
+vi.mock('../components/NewInvoiceDialog.tsx', () => ({
   default: ({ onClose }) => <button onClick={onClose}>close-new-dialog</button>,
 }))
-vi.mock('../components/shared/periodPicker.jsx', () => ({
+vi.mock('../components/shared/periodPicker.tsx', () => ({
   default: ({ value, onChange }) => (
     <button onClick={() => onChange({ mode: 'month', year: 2026, month: 2 })}>
       {`FY ${value.year ?? ''}`}
@@ -24,10 +24,10 @@ vi.mock('../components/shared/periodPicker.jsx', () => ({
   ),
 }))
 
-import { listInvoicePeriods, listInvoices } from '../api/invoices.js'
-import InvoicesPage from '../pages/InvoicesPage.jsx'
-import { CompactLayoutContext } from '../hooks/useCompactLayout.js'
-import theme from '../theme.js'
+import { listInvoicePeriods, listInvoices } from '../api/invoices.ts'
+import InvoicesPage from '../pages/InvoicesPage.tsx'
+import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
+import theme from '../theme.ts'
 
 // Fix "today" to 2026-06-08 noon UTC so date comparisons are deterministic.
 // We fake only Date (not setTimeout/setInterval) so waitFor still works.

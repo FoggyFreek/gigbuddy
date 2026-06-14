@@ -4,15 +4,15 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../hooks/useGigMapData.js', () => ({ useGigMapData: vi.fn() }))
+vi.mock('../hooks/useGigMapData.ts', () => ({ useGigMapData: vi.fn() }))
 // Stub the (lazy-loaded) map so jsdom never runs Leaflet.
-vi.mock('../components/map/GigWorldMap.jsx', () => ({
+vi.mock('../components/map/GigWorldMap.tsx', () => ({
   default: ({ markers }) => <div data-testid="world-map">map:{markers.length}</div>,
 }))
 
-import GigMapTile from '../components/dashboard/GigMapTile.jsx'
-import { useGigMapData } from '../hooks/useGigMapData.js'
-import theme from '../theme.js'
+import GigMapTile from '../components/dashboard/GigMapTile.tsx'
+import { useGigMapData } from '../hooks/useGigMapData.ts'
+import theme from '../theme.ts'
 
 function wrap() {
   return render(

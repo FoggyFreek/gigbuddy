@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock every contacts API export the page imports so the module loads, plus the
 // three reverse venue-link fns under test.
-vi.mock('../api/contacts.js', () => ({
+vi.mock('../api/contacts.ts', () => ({
   getContact: vi.fn(),
   updateContact: vi.fn().mockResolvedValue({}),
   deleteContact: vi.fn().mockResolvedValue({}),
@@ -18,19 +18,19 @@ vi.mock('../api/contacts.js', () => ({
 }))
 
 // VenuePicker searches venues; nothing else from that module is exercised here.
-vi.mock('../api/venues.js', () => ({
+vi.mock('../api/venues.ts', () => ({
   searchVenues: vi.fn().mockResolvedValue([]),
 }))
 
-import ContactDetailPage from '../pages/ContactDetailPage.jsx'
+import ContactDetailPage from '../pages/ContactDetailPage.tsx'
 import {
   getContact,
   listContactVenues,
   addContactVenue,
   removeContactVenue,
-} from '../api/contacts.js'
-import { searchVenues } from '../api/venues.js'
-import theme from '../theme.js'
+} from '../api/contacts.ts'
+import { searchVenues } from '../api/venues.ts'
+import theme from '../theme.ts'
 
 const CONTACT = { id: 5, name: 'Carol', email: '', phone: '', category: 'press', notes: [] }
 

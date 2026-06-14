@@ -4,11 +4,11 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/ledger.js', () => ({
+vi.mock('../api/ledger.ts', () => ({
   getLedgerOverview: vi.fn(),
   listLedgerPeriods: vi.fn(),
 }))
-vi.mock('../components/shared/periodPicker.jsx', () => ({
+vi.mock('../components/shared/periodPicker.tsx', () => ({
   default: ({ value, onChange }) => (
     <button onClick={() => onChange({ mode: 'quarter', year: 2026, quarter: 2 })}>
       {`FY ${value.year ?? ''}`}
@@ -35,11 +35,11 @@ vi.mock('@mui/x-charts/ChartsXAxis', () => ({ ChartsXAxis: () => null }))
 vi.mock('@mui/x-charts/ChartsYAxis', () => ({ ChartsYAxis: () => null }))
 vi.mock('@mui/x-charts/ChartsAxisHighlight', () => ({ ChartsAxisHighlight: () => null }))
 vi.mock('@mui/x-charts/ChartsGrid', () => ({ ChartsGrid: () => null }))
-vi.mock('../components/financial/ResultChartTooltip.jsx', () => ({ default: () => null }))
+vi.mock('../components/financial/ResultChartTooltip.tsx', () => ({ default: () => null }))
 
-import { getLedgerOverview, listLedgerPeriods } from '../api/ledger.js'
-import FinancialDashboardPage from '../pages/FinancialDashboardPage.jsx'
-import theme from '../theme.js'
+import { getLedgerOverview, listLedgerPeriods } from '../api/ledger.ts'
+import FinancialDashboardPage from '../pages/FinancialDashboardPage.tsx'
+import theme from '../theme.ts'
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   key: `2026-${String(i + 1).padStart(2, '0')}`,

@@ -2,8 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import AvailabilityCalendar from '../components/AvailabilityCalendar.jsx'
-import theme from '../theme.js'
+import AvailabilityCalendar from '../components/AvailabilityCalendar.tsx'
+import theme from '../theme.ts'
 
 const MEMBERS = [
   { id: 1, name: 'Alice', color: '#e53935' },

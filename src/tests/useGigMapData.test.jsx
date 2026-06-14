@@ -1,12 +1,12 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/gigs.js', () => ({ listGigs: vi.fn() }))
-vi.mock('../utils/geocode.js', () => ({ geocodePlace: vi.fn() }))
+vi.mock('../api/gigs.ts', () => ({ listGigs: vi.fn() }))
+vi.mock('../utils/geocode.ts', () => ({ geocodePlace: vi.fn() }))
 
-import { listGigs } from '../api/gigs.js'
-import { geocodePlace } from '../utils/geocode.js'
-import { useGigMapData } from '../hooks/useGigMapData.js'
+import { listGigs } from '../api/gigs.ts'
+import { geocodePlace } from '../utils/geocode.ts'
+import { useGigMapData } from '../hooks/useGigMapData.ts'
 
 // "today" fixed at 2026-05-30; venue/festival arrive as nested objects with city.
 beforeEach(() => {
