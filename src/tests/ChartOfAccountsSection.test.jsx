@@ -120,6 +120,37 @@ describe('ChartOfAccountsSection — deactivate', () => {
   })
 })
 
+describe('ChartOfAccountsSection — capitalizable', () => {
+  it('toggles is_capitalizable on an asset account', async () => {
+    accountsApi.updateAccount.mockResolvedValue({ ...ACCOUNTS[5], is_capitalizable: true })
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Checking Account'))
+
+    const row = screen.getByTestId('account-row-10')
+    await user.click(within(row).getByRole('button', { name: /set capitalizable/i }))
+
+    await waitFor(() => {
+      expect(accountsApi.updateAccount).toHaveBeenCalledWith(10, { is_capitalizable: true })
+    })
+  })
+
+  it('does not render a capitalizable toggle on expense accounts', async () => {
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Equipment & Instr.'))
+    const row = screen.getByTestId('account-row-3')
+    expect(within(row).queryByRole('button', { name: /capitalizable/i })).toBeNull()
+  })
+
+  it('shows a Capitalizable chip for flagged asset accounts', async () => {
+    accountsApi.listAccounts.mockResolvedValue(
+      ACCOUNTS.map((a) => (a.id === 10 ? { ...a, is_capitalizable: true } : a)),
+    )
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Capitalizable'))
+  })
+})
+
 describe('ChartOfAccountsSection — 409 in-use error', () => {
   it('shows account_in_use helper text when deactivate returns 409', async () => {
     accountsApi.updateAccount.mockRejectedValue(

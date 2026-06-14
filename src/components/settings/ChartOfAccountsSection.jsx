@@ -18,6 +18,8 @@ import Typography from '@mui/material/Typography'
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
+import SavingsIcon from '@mui/icons-material/Savings'
+import SavingsOutlinedIcon from '@mui/icons-material/SavingsOutlined'
 import ToggleOffIcon from '@mui/icons-material/ToggleOff'
 import ToggleOnIcon from '@mui/icons-material/ToggleOn'
 import { listAccounts, createAccount, updateAccount, deleteAccount } from '../../api/accounts.js'
@@ -50,7 +52,7 @@ function buildTree(accounts) {
   return roots
 }
 
-function AccountRow({ account, depth, onAddChild, onToggleActive, onDelete, errorId }) {
+function AccountRow({ account, depth, onAddChild, onToggleActive, onToggleCapitalizable, onDelete, errorId }) {
   return (
     <>
       <Stack
@@ -69,6 +71,25 @@ function AccountRow({ account, depth, onAddChild, onToggleActive, onDelete, erro
         </Typography>
         {!account.is_active && (
           <Chip label="Inactive" size="small" sx={{ mr: 1, fontSize: 11 }} />
+        )}
+        {account.is_capitalizable && (
+          <Chip label="Capitalizable" size="small" color="primary" variant="outlined" sx={{ mr: 1, fontSize: 11 }} />
+        )}
+        {account.type === 'asset' && (
+          <Tooltip title={account.is_capitalizable
+            ? 'Stop offering this asset account on purchases'
+            : 'Allow capitalizing purchases to this asset account'}
+          >
+            <IconButton
+              size="small"
+              aria-label={account.is_capitalizable ? 'unset capitalizable' : 'set capitalizable'}
+              onClick={() => onToggleCapitalizable(account)}
+            >
+              {account.is_capitalizable
+                ? <SavingsIcon fontSize="small" color="primary" />
+                : <SavingsOutlinedIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
         )}
         <Tooltip title="Add sub-account">
           <IconButton
@@ -111,6 +132,7 @@ function AccountRow({ account, depth, onAddChild, onToggleActive, onDelete, erro
           depth={depth + 1}
           onAddChild={onAddChild}
           onToggleActive={onToggleActive}
+          onToggleCapitalizable={onToggleCapitalizable}
           onDelete={onDelete}
           errorId={errorId}
         />
@@ -124,6 +146,7 @@ AccountRow.propTypes = {
   depth: PropTypes.number.isRequired,
   onAddChild: PropTypes.func.isRequired,
   onToggleActive: PropTypes.func.isRequired,
+  onToggleCapitalizable: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
   errorId: PropTypes.number,
 }
@@ -161,6 +184,16 @@ export default function ChartOfAccountsSection() {
       await reload()
     } catch (err) {
       if (err.status === 409) setErrorId(account.id)
+    }
+  }
+
+  async function handleToggleCapitalizable(account) {
+    setErrorId(null)
+    try {
+      await updateAccount(account.id, { is_capitalizable: !account.is_capitalizable })
+      await reload()
+    } catch {
+      // leave previous state
     }
   }
 
@@ -239,6 +272,7 @@ export default function ChartOfAccountsSection() {
                 depth={0}
                 onAddChild={handleAddChild}
                 onToggleActive={handleToggleActive}
+                onToggleCapitalizable={handleToggleCapitalizable}
                 onDelete={handleDeleteClick}
                 errorId={errorId}
               />

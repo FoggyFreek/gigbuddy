@@ -20,6 +20,7 @@ import {
 } from './ledgerService.js'
 
 const ALLOWED_TAX_RATES_SET = new Set(ALLOWED_TAX_RATES)
+const PAYMENT_METHODS = new Set(['bank', 'cash'])
 
 function parseCents(val) {
   const n = Number(val)
@@ -126,7 +127,7 @@ export async function archiveProduct(executor, tenantId, id) {
 const SALE_COLUMNS = `s.id, s.product_id, p.name AS product_name, s.gig_id,
   to_char(s.sale_date, 'YYYY-MM-DD') AS sale_date,
   s.quantity, s.unit_price_incl_cents, s.vat_rate, s.unit_cost_cents,
-  s.status, s.voided_at, s.created_at`
+  s.payment_method, s.status, s.voided_at, s.created_at`
 
 export async function listMerchSales(executor, tenantId) {
   const { rows } = await executor.query(
@@ -149,6 +150,11 @@ export async function recordMerchSale(pool, tenantId, body, actorUserId = null) 
 
   const saleDate = body.sale_date ?? new Date().toISOString().slice(0, 10)
   if (!isValidCalendarDate(saleDate)) return { error: { status: 400, body: { error: 'Invalid sale_date' } } }
+
+  const paymentMethod = body.payment_method ?? 'bank'
+  if (!PAYMENT_METHODS.has(paymentMethod)) {
+    return { error: { status: 400, body: { error: 'Invalid payment_method', code: 'invalid_payment_method' } } }
+  }
 
   let gigId = null
   if (body.gig_id != null) {
@@ -198,11 +204,11 @@ export async function recordMerchSale(pool, tenantId, body, actorUserId = null) 
     const { rows: inserted } = await client.query(
       `INSERT INTO merch_sales
          (tenant_id, product_id, gig_id, sale_date, quantity,
-          unit_price_incl_cents, vat_rate, unit_cost_cents, created_by_user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          unit_price_incl_cents, vat_rate, unit_cost_cents, payment_method, created_by_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [tenantId, productId, gigId, saleDate, quantity,
-        unitPriceInclCents, vatRate, product.unit_cost_cents, actorUserId],
+        unitPriceInclCents, vatRate, product.unit_cost_cents, paymentMethod, actorUserId],
     )
     const saleId = inserted[0].id
 
@@ -219,6 +225,7 @@ export async function recordMerchSale(pool, tenantId, body, actorUserId = null) 
       unit_price_incl_cents: unitPriceInclCents,
       vat_rate: vatRate,
       unit_cost_cents: product.unit_cost_cents,
+      payment_method: paymentMethod,
       product_name: product.name,
     }, { actorUserId })
 

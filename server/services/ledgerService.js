@@ -13,6 +13,7 @@ import { classify, describe, receiptFor } from './ledgerEntryTypes.js'
 import {
   listTransactions,
   getTransaction,
+  getTransactionBySource,
   listLines,
   listEntryDates,
   monthlyResultTotals,
@@ -201,7 +202,20 @@ export async function postJournal(client, tenantId, {
 
 // ---------- read helpers (ledger browser) ----------
 
-// One ledger-browser list row. Amount is the gross debit total signed by the
+// The browser headline is the value of the primary economic event. For most
+// types that is the gross debit total. A merch sale is a *compound* journal
+// (the sale plus the COGS↔inventory cost relief), so summing both debit legs
+// over-counts by the cost — use the gross sale from the source doc instead.
+// This holds for the void and reversal mirrors too: they carry the same gross,
+// and the sign comes from classify().
+function headlineAmount(row) {
+  if (row.source_type === 'merch_sale' && row.merch_sale_unit_price_incl_cents != null) {
+    return row.merch_sale_quantity * row.merch_sale_unit_price_incl_cents
+  }
+  return row.total_debit_cents
+}
+
+// One ledger-browser list row. Amount is the headline event value signed by the
 // entry type (purchases/outgoing money negative); journals show no amount.
 function toListRow(row) {
   const { type, group, voided, sign } = classify(row.source_type, row.source_event)
@@ -215,7 +229,7 @@ function toListRow(row) {
     voided: voided || row.voided_at != null,
     receipt: receiptFor(row),
     description: describe(row),
-    amount_cents: sign === null ? null : sign * row.total_debit_cents,
+    amount_cents: sign === null ? null : sign * headlineAmount(row),
     source_type: row.source_type,
     source_id: row.source_id,
     source_event: row.source_event,
@@ -280,6 +294,36 @@ export async function getLedgerEntryDetail(executor, tenantId, transactionId) {
 // Posts a correcting transaction: a new journal dated today with every line of
 // `original` debit/credit-swapped. `mode` is 'void' or 'reversal'; the
 // source_event records which.
+// Marks an original transaction as voided by its (open-period) compensating
+// entry: the original then hides from the default list and drops from reports.
+async function markVoided(client, tenantId, originalId, byTransactionId) {
+  await client.query(
+    `UPDATE ledger_transactions SET voided_by_transaction_id = $1, voided_at = NOW()
+      WHERE id = $2 AND tenant_id = $3`,
+    [byTransactionId, originalId, tenantId],
+  )
+}
+
+// Marks an original as reversed by a visible (closed-period) correction: both
+// halves stay in the ledger and in reports, netting the mistake out forward.
+async function markReversed(client, tenantId, originalId, byTransactionId) {
+  await client.query(
+    `UPDATE ledger_transactions SET reversed_by_transaction_id = $1
+      WHERE id = $2 AND tenant_id = $3`,
+    [byTransactionId, originalId, tenantId],
+  )
+}
+
+// Flags a transaction's own voided_at so it drops from reports. Used on the
+// compensating half of a domain void (merch) that isn't a ledger_transaction/void,
+// so the open-period pair nets to zero like a manual void does.
+async function markVoidedAt(client, tenantId, transactionId) {
+  await client.query(
+    `UPDATE ledger_transactions SET voided_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+    [transactionId, tenantId],
+  )
+}
+
 async function postReversingJournal(client, tenantId, original, mode, actorUserId) {
   const verb = mode === 'void' ? 'Void' : 'Reversal'
   const lines = (await listLines(client, tenantId, original.id)).map((l) => ({
@@ -355,14 +399,13 @@ async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode)
       return { error: { status: 409, body: { error: 'Entry already corrected', code } } }
     }
 
-    // Mark the original. Column names are internal constants (not user input).
-    const markerColumn = mode === 'void' ? 'voided_by_transaction_id' : 'reversed_by_transaction_id'
-    const setVoidedAt = mode === 'void' ? ', voided_at = NOW()' : ''
-    await client.query(
-      `UPDATE ledger_transactions SET ${markerColumn} = $1${setVoidedAt}
-        WHERE id = $2 AND tenant_id = $3`,
-      [result.transactionId, transactionId, tenantId],
-    )
+    // Mark the original. The compensating ledger_transaction/void is excluded
+    // from reports by its source_event, so only the original needs marking.
+    if (mode === 'void') {
+      await markVoided(client, tenantId, transactionId, result.transactionId)
+    } else {
+      await markReversed(client, tenantId, transactionId, result.transactionId)
+    }
 
     await client.query('COMMIT')
     return { transactionId: result.transactionId }
@@ -636,13 +679,17 @@ export async function postBillPaid(client, tenantId, purchase, opts = {}) {
 // ---------- merch sale journals (revenue + COGS) ----------
 
 // Merch sale recorded, one balanced journal combining the sale and cost legs:
-// DR checking gross (cash up), CR merch revenue net, CR output VAT;
+// DR the receipt account gross (cash up — bank or cash on hand per the sale's
+// payment_method), CR merch revenue net, CR output VAT;
 // DR COGS / CR inventory at quantity × the sale's snapshotted unit cost.
 // COGS uses the sale's snapshot of the product's moving-average cost, the same
 // basis at which purchases booked the goods into inventory.
 export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
-  const checking = requireCode(settings, 'primary_checking_account_code')
+  const cashAccount = requireCode(
+    settings,
+    sale.payment_method === 'cash' ? 'cash_account_code' : 'primary_checking_account_code',
+  )
   const revenue = requireCode(settings, 'merch_revenue_account_code')
   const grossCents = sale.quantity * sale.unit_price_incl_cents
   const { netCents, vatCents } = computePurchaseLineTotals({
@@ -652,7 +699,7 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
   const memo = `Merch sale: ${sale.quantity} × ${sale.product_name}`
 
   const lines = [
-    { account_code: checking, debit_cents: grossCents, memo },
+    { account_code: cashAccount, debit_cents: grossCents, memo },
     { account_code: revenue, credit_cents: netCents, memo },
   ]
   if (vatCents > 0) {
@@ -670,20 +717,36 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
   })
 }
 
-// Merch sale voided: exact mirror of `recorded`, dated today (corrections-forward).
+// Merch sale voided: an exact mirror of `recorded` (debit/credit swapped) dated
+// today (corrections-forward), which also marks the original recorded entry so
+// the void is reflected in the ledger browser. Splits on the original's booking
+// period exactly like a manual correction:
+//   open period   → the original is *voided*: both halves hide from the default
+//                   list and drop from reports. The compensating carries its own
+//                   voided_at so the pair still nets to zero.
+//   closed period → the original is *reversed*: a visible 'reversal' correction
+//                   that stays in the ledger and reports, never mutating the
+//                   closed period.
 export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
+  const original = await getTransactionBySource(client, tenantId, 'merch_sale', sale.id, 'recorded')
+  const closedThrough = await fetchBooksClosedThrough(client, tenantId)
+  const isClosed = Boolean(original && closedThrough && original.entry_date <= closedThrough)
+
   const settings = await loadAccountingSettings(client, tenantId)
-  const checking = requireCode(settings, 'primary_checking_account_code')
+  const cashAccount = requireCode(
+    settings,
+    sale.payment_method === 'cash' ? 'cash_account_code' : 'primary_checking_account_code',
+  )
   const revenue = requireCode(settings, 'merch_revenue_account_code')
   const grossCents = sale.quantity * sale.unit_price_incl_cents
   const { netCents, vatCents } = computePurchaseLineTotals({
     amount_incl_cents: grossCents, tax_rate: sale.vat_rate,
   })
   const cogsCents = sale.quantity * sale.unit_cost_cents
-  const memo = `Merch sale voided: ${sale.quantity} × ${sale.product_name}`
+  const memo = `Merch sale ${isClosed ? 'reversed' : 'voided'}: ${sale.quantity} × ${sale.product_name}`
 
   const lines = [
-    { account_code: checking, credit_cents: grossCents, memo },
+    { account_code: cashAccount, credit_cents: grossCents, memo },
     { account_code: revenue, debit_cents: netCents, memo },
   ]
   if (vatCents > 0) {
@@ -694,11 +757,22 @@ export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
     lines.push({ account_code: requireCode(settings, 'merch_inventory_account_code'), debit_cents: cogsCents, memo })
   }
 
-  return postJournal(client, tenantId, {
+  const result = await postJournal(client, tenantId, {
     entryDate: today(),
     description: memo,
-    sourceType: 'merch_sale', sourceId: sale.id, sourceEvent: 'voided', lines, ...opts,
+    sourceType: 'merch_sale', sourceId: sale.id,
+    sourceEvent: isClosed ? 'reversal' : 'voided', lines, ...opts,
   })
+
+  if (result.posted && original) {
+    if (isClosed) {
+      await markReversed(client, tenantId, original.id, result.transactionId)
+    } else {
+      await markVoided(client, tenantId, original.id, result.transactionId)
+      await markVoidedAt(client, tenantId, result.transactionId)
+    }
+  }
+  return result
 }
 
 // ---------- reimbursement journals (settling member debt) ----------

@@ -226,7 +226,7 @@ describe('PurchaseDetails', () => {
     await screen.findByDisplayValue(/62100 - Instruments & Equipment/)
 
     // Type to filter the account combobox down to a single match, then pick it.
-    const accountInput = screen.getByRole('combobox', { name: /expense account/i })
+    const accountInput = screen.getByRole('combobox', { name: /expense \/ asset account/i })
     await user.click(accountInput)
     await user.clear(accountInput)
     await user.type(accountInput, 'Travel')
@@ -258,7 +258,7 @@ describe('PurchaseDetails', () => {
 
     await user.click(screen.getByRole('button', { name: /save as draft/i }))
 
-    expect(await screen.findByText(/replace the inactive expense account/i)).toBeInTheDocument()
+    expect(await screen.findByText(/replace the inactive account/i)).toBeInTheDocument()
     expect(purchasesApi.updatePurchase).not.toHaveBeenCalled()
   })
 

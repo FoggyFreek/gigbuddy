@@ -9,6 +9,7 @@ export const ACCOUNT_TYPES = new Set([
 export const SETTINGS_TYPE_MAP = {
   receivable_account_code: 'asset',
   primary_checking_account_code: 'asset',
+  cash_account_code: 'asset',
   default_revenue_account_code: 'revenue',
   payable_account_code: 'liability',
   default_reimbursement_account_code: 'liability',
@@ -38,11 +39,16 @@ export function validateAccountCreate(body) {
   if (!name) return { error: 'name_required' }
   if (!ACCOUNT_TYPES.has(type)) return { error: 'invalid_type' }
 
+  // Only asset accounts can be a capitalizable purchase target.
+  const isCapitalizable = Boolean(body.is_capitalizable)
+  if (isCapitalizable && type !== 'asset') return { error: 'capitalizable_requires_asset' }
+
   return {
     code,
     name,
     type,
     parent_code: body.parent_code != null ? String(body.parent_code).trim() || null : null,
+    is_capitalizable: isCapitalizable,
   }
 }
 

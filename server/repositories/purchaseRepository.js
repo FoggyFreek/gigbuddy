@@ -42,16 +42,20 @@ export async function insertPurchaseLines(executor, purchaseId, tenantId, lines)
   }
 }
 
-// Returns the subset of `codes` that exist for the tenant, are active, and are
-// expense or cost-of-goods-sold accounts (the 5xxxx/6xxxx codes a bill may debit).
-// The line FK only proves existence; this also enforces active + correct type.
-export async function fetchValidExpenseCodes(executor, tenantId, codes) {
+// Returns the subset of `codes` a purchase line may book to: active expense or
+// cost-of-goods-sold accounts (the 5xxxx/6xxxx codes a bill may debit), plus
+// active asset accounts explicitly flagged `is_capitalizable` (owned gear,
+// vehicles) so a purchase can be capitalized onto the balance sheet rather than
+// expensed. Other assets (bank, VAT, receivable, inventory) are excluded.
+// The line FK only proves existence; this also enforces active + allowed type.
+export async function fetchValidPurchaseLineCodes(executor, tenantId, codes) {
   const unique = [...new Set(codes.filter(Boolean))]
   if (!unique.length) return new Set()
   const { rows } = await executor.query(
     `SELECT code FROM chart_of_accounts
-      WHERE tenant_id = $1 AND code = ANY($2)
-        AND is_active AND type IN ('expense', 'cost_of_goods_sold')`,
+      WHERE tenant_id = $1 AND code = ANY($2) AND is_active
+        AND (type IN ('expense', 'cost_of_goods_sold')
+             OR (type = 'asset' AND is_capitalizable))`,
     [tenantId, unique],
   )
   return new Set(rows.map((r) => r.code))

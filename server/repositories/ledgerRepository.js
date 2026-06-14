@@ -17,7 +17,8 @@ const SOURCE_JOIN_COLUMNS = `
        COALESCE(vr.quarter, vrr.quarter) AS vat_return_quarter,
        vrp.direction AS vat_payment_direction,
        mp.name AS merch_sale_product_name,
-       ms.quantity AS merch_sale_quantity`
+       ms.quantity AS merch_sale_quantity,
+       ms.unit_price_incl_cents AS merch_sale_unit_price_incl_cents`
 
 const SOURCE_JOINS = `
   LEFT JOIN invoices i
@@ -319,6 +320,19 @@ export async function getTransaction(executor, tenantId, transactionId) {
        ${SOURCE_JOINS}
       WHERE lt.id = $2 AND lt.tenant_id = $1`,
     [tenantId, transactionId],
+  )
+  return rows[0] || null
+}
+
+// The transaction posted for a specific source event, or null. Used when a
+// domain void/reversal needs to find and mark the original it compensates.
+export async function getTransactionBySource(executor, tenantId, sourceType, sourceId, sourceEvent) {
+  const { rows } = await executor.query(
+    `SELECT id, to_char(entry_date, 'YYYY-MM-DD') AS entry_date,
+            voided_at, voided_by_transaction_id, reversed_by_transaction_id
+       FROM ledger_transactions
+      WHERE tenant_id = $1 AND source_type = $2 AND source_id = $3 AND source_event = $4`,
+    [tenantId, sourceType, sourceId, sourceEvent],
   )
   return rows[0] || null
 }

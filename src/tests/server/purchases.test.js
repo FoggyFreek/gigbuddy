@@ -342,6 +342,47 @@ describe('purchases — line account_code', () => {
   })
 })
 
+describe('purchases — capitalizing fixed assets', () => {
+  it('accepts a capitalizable asset account on a line and round-trips it', async () => {
+    const created = await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ lines: [{ description: 'PA system', account_code: '13000', tax_rate: 21, amount_incl_cents: 121000 }] }))
+      .expect(201)
+    expect(created.body.lines[0].account_code).toBe('13000')
+    const got = await asUserA(request(app).get(`/api/purchases/${created.body.id}`)).expect(200)
+    expect(got.body.lines[0].account_code).toBe('13000')
+  })
+
+  it('posts the net cost as a debit to the asset account on approval', async () => {
+    const created = await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ lines: [{ description: 'PA system', account_code: '13000', tax_rate: 21, amount_incl_cents: 121000 }] }))
+      .expect(201)
+    await approve(created.body.id, asUserA)
+
+    const { rows } = await pool.query(
+      `SELECT le.account_code, le.debit_cents, le.credit_cents
+         FROM ledger_entries le
+         JOIN ledger_transactions lt ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+        WHERE le.tenant_id = $1 AND lt.source_type = 'purchase'
+          AND lt.source_id = $2 AND lt.source_event = 'accrued'`,
+      [seed.tenantA.id, created.body.id],
+    )
+    const byCode = Object.fromEntries(rows.map((r) => [r.account_code, r]))
+    // 121000 incl @21% → 100000 net to the gear asset, 21000 input VAT, 121000 payable.
+    expect(byCode['13000'].debit_cents).toBe(100000)
+    expect(byCode['13000'].credit_cents).toBe(0)
+    expect(byCode['15000'].debit_cents).toBe(21000)
+    expect(byCode['21100'].credit_cents).toBe(121000)
+  })
+
+  it('rejects a non-capitalizable asset account with 400', async () => {
+    // 12200 (merch inventory) is an asset but not flagged capitalizable.
+    const res = await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ lines: [{ description: 'x', account_code: '12200', tax_rate: 21, amount_incl_cents: 1000 }] }))
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('invalid_account_code')
+  })
+})
+
 describe('purchases — attachments', () => {
   const pdfBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<< >>\nendobj\ntrailer\n<< >>\n%%EOF\n')
   let pngBuffer

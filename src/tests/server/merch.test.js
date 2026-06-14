@@ -289,6 +289,38 @@ describe('merch sales — posting', () => {
     expect(byCode['42000'].credit_cents).toBe(6000)
   })
 
+  it('books the gross to cash on hand (11100) when payment_method is cash', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 10)
+
+    const sale = await asUserA(request(app).post('/api/merch/sales')).send({
+      product_id: product.id,
+      quantity: 1,
+      unit_price_incl_cents: 3630,
+      vat_rate: 21,
+      sale_date: '2026-06-01',
+      payment_method: 'cash',
+    }).expect(201)
+
+    const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'recorded')
+    const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
+    expect(byCode['11100'].debit_cents).toBe(3630)  // cash on hand gross
+    expect(byCode['11000']).toBeUndefined()         // not the bank account
+    expect(byCode['42000'].credit_cents).toBe(3000) // revenue net unchanged
+    expect(byCode['24000'].credit_cents).toBe(630)
+    expect(byCode['51000'].debit_cents).toBe(1200)
+    expect(byCode['12200'].credit_cents).toBe(1200)
+  })
+
+  it('rejects an invalid payment_method', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 5)
+    const res = await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, payment_method: 'paypal' })
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('invalid_payment_method')
+  })
+
   it('insufficient stock → 409, no ledger row, stock unchanged', async () => {
     const product = await createProduct(asUserA)
     await stockProduct(asUserA, product.id, 2)
@@ -364,6 +396,21 @@ describe('merch sales — void', () => {
     expect(again.body.code).toBe('already_voided')
   })
 
+  it('voiding a cash sale credits cash on hand (11100), not the bank', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 10)
+    const sale = await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, unit_price_incl_cents: 3630, vat_rate: 21, payment_method: 'cash' })
+      .expect(201)
+
+    await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
+
+    const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'voided')
+    const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
+    expect(byCode['11100'].credit_cents).toBe(3630)
+    expect(byCode['11000']).toBeUndefined()
+  })
+
   it('void reverses the snapshotted cost even after the product cost changes', async () => {
     const product = await createProduct(asUserA)
     await stockProduct(asUserA, product.id, 5)
@@ -377,6 +424,71 @@ describe('merch sales — void', () => {
     const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'voided')
     const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
     expect(byCode['51000'].credit_cents).toBe(1200)
+  })
+
+  // The original recorded ledger entry must reflect the void, not just the
+  // compensating journal — otherwise it keeps showing as a live sale.
+  it('voiding an open-period sale marks the original recorded entry voided and nets reports to zero', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 10)
+    const sale = await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 2, sale_date: '2026-06-01' }).expect(201)
+
+    await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
+
+    const { rows } = await pool.query(
+      `SELECT voided_at, voided_by_transaction_id, reversed_by_transaction_id
+         FROM ledger_transactions
+        WHERE tenant_id = $1 AND source_type = 'merch_sale'
+          AND source_id = $2 AND source_event = 'recorded'`,
+      [seed.tenantA.id, sale.body.id],
+    )
+    expect(rows[0].voided_at).not.toBeNull()
+    expect(rows[0].voided_by_transaction_id).not.toBeNull()
+    expect(rows[0].reversed_by_transaction_id).toBeNull()
+
+    // The ledger browser flags both halves voided (the default view hides them).
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const merch = list.body.filter((r) => r.source_type === 'merch_sale')
+    expect(merch).toHaveLength(2)
+    expect(merch.every((r) => r.voided)).toBe(true)
+
+    // Both halves drop out of the financial overview → merch nets to zero.
+    const overview = await asUserA(request(app).get('/api/ledger/overview')).expect(200)
+    expect(overview.body.merch.revenue_cents).toBe(0)
+    expect(overview.body.merch.cogs_cents).toBe(0)
+  })
+
+  it('voiding a closed-period sale posts a visible reversal and never mutates the closed period', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 10)
+    const sale = await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 2, sale_date: '2026-05-15' }).expect(201)
+    // Close May after recording: the sale now sits in a closed period.
+    await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ books_closed_through: '2026-05-31' }).expect(200)
+
+    await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
+
+    // The closed-period original is left untouched, only marked reversed.
+    const { rows } = await pool.query(
+      `SELECT voided_at, reversed_by_transaction_id FROM ledger_transactions
+        WHERE tenant_id = $1 AND source_type = 'merch_sale'
+          AND source_id = $2 AND source_event = 'recorded'`,
+      [seed.tenantA.id, sale.body.id],
+    )
+    expect(rows[0].voided_at).toBeNull()
+    expect(rows[0].reversed_by_transaction_id).not.toBeNull()
+
+    // The correction is a visible 'reversal', not a hidden 'voided' entry.
+    const reversalLines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'reversal')
+    expect(reversalLines.length).toBeGreaterThan(0)
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const reversal = list.body.find(
+      (r) => r.source_type === 'merch_sale' && r.source_event === 'reversal',
+    )
+    expect(reversal).toBeDefined()
+    expect(reversal.voided).toBe(false)
   })
 })
 
@@ -450,6 +562,29 @@ describe('merch sales — list & ledger browser', () => {
     // Merch counts toward the overall result totals too.
     expect(res.body.totals.revenue_cents).toBe(6000)
     expect(res.body.totals.expense_cents).toBe(2400)
+  })
+
+  it('headline amount is the gross sale, not gross + COGS (recorded and void)', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 10)
+    const sale = await asUserA(request(app).post('/api/merch/sales')).send({
+      product_id: product.id, quantity: 1, unit_price_incl_cents: 3630, vat_rate: 21, sale_date: '2026-06-01',
+    }).expect(201)
+
+    const res = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const recorded = res.body.find(
+      (r) => r.source_type === 'merch_sale' && r.source_id === sale.body.id && r.source_event === 'recorded',
+    )
+    // The €36.30 gross the customer paid — the €12 COGS leg must not inflate it.
+    expect(recorded.amount_cents).toBe(3630)
+
+    // The void mirror shows the same magnitude, negated — not -(gross + COGS).
+    await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
+    const after = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const voidRow = after.body.find(
+      (r) => r.source_type === 'merch_sale' && r.source_id === sale.body.id && r.source_event === 'voided',
+    )
+    expect(voidRow.amount_cents).toBe(-3630)
   })
 
   it('classifies and describes merch sales in the ledger browser', async () => {

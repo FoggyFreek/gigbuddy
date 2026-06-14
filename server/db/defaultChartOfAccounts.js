@@ -12,9 +12,10 @@ export const DEFAULT_ACCOUNTS = [
   { code: '60000', name: 'Operating Expenses',type: 'expense',            parent_code: null },  
   // ---- level 1 ----
   { code: '11000', name: 'Primary Bank Account',                          type: 'asset',              parent_code: '10000' },
+  { code: '11100', name: 'Cash on hand',                                  type: 'asset',              parent_code: '10000' },
   { code: '12000', name: 'Inventory',                                     type: 'asset',              parent_code: '10000' },
-  { code: '13000', name: 'Owned Gear',                                    type: 'asset',              parent_code: '10000' },
-  { code: '14000', name: 'Band Van or Vehicle',                           type: 'asset',              parent_code: '10000' },
+  { code: '13000', name: 'Owned Gear',                                    type: 'asset',              parent_code: '10000', capitalizable: true },
+  { code: '14000', name: 'Band Van or Vehicle',                           type: 'asset',              parent_code: '10000', capitalizable: true },
   { code: '15000', name: 'Value Added Tax / VAT Receivable',              type: 'asset',              parent_code: '10000' },
   { code: '15010', name: 'VAT Receivable from Tax Authority',             type: 'asset',              parent_code: '10000' },
   { code: '21000', name: 'Short-term Payables',                           type: 'liability',          parent_code: '20000' },
@@ -39,6 +40,7 @@ export const DEFAULT_ACCOUNTS = [
   { code: '11200', name: 'Accounts Receivable',                           type: 'asset',              parent_code: '11000' },
   { code: '12100', name: 'Inventory - Vinyl and CDs',                     type: 'asset',              parent_code: '12000' },
   { code: '12200', name: 'Inventory - Merchandise',                       type: 'asset',              parent_code: '12000' },
+  { code: '13100', name: 'Accumulated Depreciation - Gear',               type: 'asset',              parent_code: '13000' },
   { code: '21100', name: 'Accounts Payable',                              type: 'liability',          parent_code: '21000' },                                                                                                                                                    
   { code: '21200', name: 'Accrued Expenses',                              type: 'liability',          parent_code: '21000' },
   { code: '42100', name: 'Merchandise Sales - Vinyl and CDs',             type: 'revenue',            parent_code: '42000' },
@@ -51,6 +53,7 @@ export const DEFAULT_ACCOUNTS = [
   { code: '62200', name: 'Gear Maintenance & Repairs',                    type: 'expense',            parent_code: '62000' },
   { code: '62300', name: 'Studio Rental & Engineering',                   type: 'expense',            parent_code: '62000' },
   { code: '62400', name: 'Rehearsal Space Rent',                          type: 'expense',            parent_code: '62000' },
+  { code: '62900', name: 'Depreciation Expense',                          type: 'expense',            parent_code: '62000' },
   { code: '63100', name: 'Advertising & PR',                              type: 'expense',            parent_code: '63000' },
   { code: '63200', name: 'Artwork, Photo & Video',                        type: 'expense',            parent_code: '63000' },
   { code: '63300', name: 'Digital Distribution & Software Subscriptions', type: 'expense',            parent_code: '63000' },
@@ -65,6 +68,7 @@ const DEFAULT_SETTINGS = {
   default_reimbursement_account_code: '22000',
   default_expense_account_code: '62100',
   primary_checking_account_code: '11000',
+  cash_account_code: '11100',
   output_vat_account_code: '24000',
   input_vat_account_code: '15000',
   vat_receivable_settlement_account_code: '15010',
@@ -80,10 +84,10 @@ const DEFAULT_SETTINGS = {
 export async function seedTenantAccounting(client, tenantId) {
   for (const acc of DEFAULT_ACCOUNTS) {
     await client.query(
-      `INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_code, is_system)
-       VALUES ($1, $2, $3, $4, $5, true)
+      `INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_code, is_system, is_capitalizable)
+       VALUES ($1, $2, $3, $4, $5, true, $6)
        ON CONFLICT (tenant_id, code) DO NOTHING`,
-      [tenantId, acc.code, acc.name, acc.type, acc.parent_code ?? null],
+      [tenantId, acc.code, acc.name, acc.type, acc.parent_code ?? null, acc.capitalizable ?? false],
     )
   }
   await client.query(
@@ -91,11 +95,11 @@ export async function seedTenantAccounting(client, tenantId) {
        tenant_id, currency,
        receivable_account_code, default_revenue_account_code,
        payable_account_code, default_reimbursement_account_code, default_expense_account_code,
-       primary_checking_account_code,
+       primary_checking_account_code, cash_account_code,
        output_vat_account_code, input_vat_account_code,
        vat_receivable_settlement_account_code, vat_payable_settlement_account_code,
        merch_inventory_account_code, merch_revenue_account_code, merch_cogs_account_code
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      ON CONFLICT (tenant_id) DO NOTHING`,
     [
       tenantId,
@@ -106,6 +110,7 @@ export async function seedTenantAccounting(client, tenantId) {
       DEFAULT_SETTINGS.default_reimbursement_account_code,
       DEFAULT_SETTINGS.default_expense_account_code,
       DEFAULT_SETTINGS.primary_checking_account_code,
+      DEFAULT_SETTINGS.cash_account_code,
       DEFAULT_SETTINGS.output_vat_account_code,
       DEFAULT_SETTINGS.input_vat_account_code,
       DEFAULT_SETTINGS.vat_receivable_settlement_account_code,

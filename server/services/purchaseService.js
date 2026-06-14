@@ -12,7 +12,7 @@ import {
   insertPurchaseLines,
   replacePurchaseLines,
   validateContactIdForTenant,
-  fetchValidExpenseCodes,
+  fetchValidPurchaseLineCodes,
   fetchValidProductIds,
   validateBandMemberForTenant,
   listPurchases as listPurchaseRows,
@@ -93,12 +93,13 @@ export async function createPurchaseAttachment({ db, tenantId, purchaseId, file 
 }
 
 // Validates any explicit per-line account codes against the tenant chart: each
-// must exist, be active, and be an expense/COGS account. Lines without a code
-// fall back to the tenant default expense account at posting time.
+// must exist, be active, and be an expense/COGS account or a capitalizable asset
+// account. Lines without a code fall back to the tenant default expense account
+// at posting time.
 async function validateLineAccounts(executor, tenantId, lines) {
   const codes = lines.map((l) => l.account_code).filter(Boolean)
   if (!codes.length) return null
-  const valid = await fetchValidExpenseCodes(executor, tenantId, codes)
+  const valid = await fetchValidPurchaseLineCodes(executor, tenantId, codes)
   const invalid = codes.find((c) => !valid.has(c))
   if (invalid) {
     return { error: { status: 400, body: { error: 'Invalid account_code', code: 'invalid_account_code', account_code: invalid } } }

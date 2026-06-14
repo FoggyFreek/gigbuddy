@@ -39,6 +39,7 @@ const DEFAULT_CODES = {
   default_reimbursement_account_code: '22000',
   default_expense_account_code: '61200',
   primary_checking_account_code: '11000',
+  cash_account_code: '11100',
   output_vat_account_code: '24000',
   input_vat_account_code: '15000',
   vat_receivable_settlement_account_code: '15010',
@@ -159,6 +160,7 @@ export async function patchSettings(tenantId, body = {}) {
         default_reimbursement_account_code: null,
         default_expense_account_code: null,
         primary_checking_account_code: null,
+        cash_account_code: null,
         output_vat_account_code: null,
         input_vat_account_code: null,
         vat_receivable_settlement_account_code: null,
@@ -193,7 +195,7 @@ export async function createAccount(db, tenantId, body = {}) {
   const validated = validateAccountCreate(body)
   if (validated.error) return { error: { status: 400, body: { error: validated.error } } }
 
-  const { code, name, type, parent_code } = validated
+  const { code, name, type, parent_code, is_capitalizable } = validated
 
   if (parent_code) {
     const parentType = await getAccountTypeByCode(db, tenantId, parent_code)
@@ -204,7 +206,7 @@ export async function createAccount(db, tenantId, body = {}) {
   }
 
   try {
-    const account = await insertAccount(db, tenantId, { code, name, type, parent_code })
+    const account = await insertAccount(db, tenantId, { code, name, type, parent_code, is_capitalizable })
     return { account }
   } catch (err) {
     if (err.code === '23505') return { error: { status: 409, body: { error: 'code_taken' } } }
@@ -234,6 +236,15 @@ export async function patchAccount(db, tenantId, id, body = {}) {
       }
     }
     updates.is_active = isActive
+  }
+
+  if ('is_capitalizable' in body) {
+    const isCapitalizable = Boolean(body.is_capitalizable)
+    // Only asset accounts can be a capitalizable purchase target.
+    if (isCapitalizable && existing.type !== 'asset') {
+      return { error: { status: 400, body: { error: 'capitalizable_requires_asset' } } }
+    }
+    updates.is_capitalizable = isCapitalizable
   }
 
   if (Object.keys(updates).length === 0) {

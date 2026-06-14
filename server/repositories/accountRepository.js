@@ -6,7 +6,7 @@ const SETTINGS_INSERT_COLUMNS = [
   'currency',
   'receivable_account_code', 'default_revenue_account_code',
   'payable_account_code', 'default_reimbursement_account_code', 'default_expense_account_code',
-  'primary_checking_account_code',
+  'primary_checking_account_code', 'cash_account_code',
   'output_vat_account_code', 'input_vat_account_code',
   'vat_receivable_settlement_account_code', 'vat_payable_settlement_account_code',
   'merch_inventory_account_code', 'merch_revenue_account_code', 'merch_cogs_account_code',
@@ -120,18 +120,18 @@ export async function getAccountTypeByCode(executor, tenantId, code) {
   return rows[0]?.type ?? null
 }
 
-export async function insertAccount(executor, tenantId, { code, name, type, parent_code }) {
+export async function insertAccount(executor, tenantId, { code, name, type, parent_code, is_capitalizable = false }) {
   const { rows } = await executor.query(
-    `INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_code, is_system)
-     VALUES ($1, $2, $3, $4, $5, false) RETURNING *`,
-    [tenantId, code, name, type, parent_code],
+    `INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_code, is_system, is_capitalizable)
+     VALUES ($1, $2, $3, $4, $5, false, $6) RETURNING *`,
+    [tenantId, code, name, type, parent_code, is_capitalizable],
   )
   return rows[0]
 }
 
 export async function getAccountById(executor, tenantId, id) {
   const { rows } = await executor.query(
-    'SELECT id, code FROM chart_of_accounts WHERE id = $1 AND tenant_id = $2',
+    'SELECT id, code, type FROM chart_of_accounts WHERE id = $1 AND tenant_id = $2',
     [id, tenantId],
   )
   return rows[0] || null
@@ -147,6 +147,7 @@ export async function isCodeReferencedInSettings(executor, tenantId, code) {
        default_reimbursement_account_code = $2 OR
        default_expense_account_code = $2 OR
        primary_checking_account_code = $2 OR
+       cash_account_code = $2 OR
        output_vat_account_code = $2 OR
        input_vat_account_code = $2 OR
        vat_receivable_settlement_account_code = $2 OR

@@ -22,6 +22,7 @@ function wrap(ui) {
 
 const ACCOUNTS = [
   { id: 1,  code: '11000', name: 'Checking Account',     type: 'asset',     is_active: true,  tenant_id: 1 },
+  { id: 10, code: '11100', name: 'Cash on hand',         type: 'asset',     is_active: true,  tenant_id: 1 },
   { id: 2,  code: '11200', name: 'Accounts Receivable',  type: 'asset',     is_active: true,  tenant_id: 1 },
   { id: 3,  code: '11500', name: 'Savings Account',      type: 'asset',     is_active: false, tenant_id: 1 },
   { id: 4,  code: '21100', name: 'Accounts Payable',     type: 'liability', is_active: true,  tenant_id: 1 },
@@ -41,6 +42,7 @@ const SETTINGS = {
   default_reimbursement_account_code: '22000',
   default_expense_account_code: '61200',
   primary_checking_account_code: '11000',
+  cash_account_code: '11100',
   output_vat_account_code: '24000',
   input_vat_account_code: '15000',
 }
@@ -88,6 +90,25 @@ describe('AccountingSettingsSection — rendering', () => {
     wrap(<AccountingSettingsSection />)
     await waitFor(() => {
       expect(screen.getByLabelText(/default reimbursement account/i)).toBeInTheDocument()
+    })
+  })
+
+  it('renders the cash account select and saves a chosen asset account', async () => {
+    accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, cash_account_code: '11000' })
+    const user = userEvent.setup()
+    wrap(<AccountingSettingsSection />)
+    await waitFor(() => screen.getByLabelText(/cash account/i))
+
+    // Current value is 11100; switch to another active asset account so onChange fires.
+    const cashSelect = screen.getByRole('combobox', { name: /cash account/i })
+    await user.click(cashSelect)
+    await waitFor(() => screen.getByRole('option', { name: /11000/ }))
+    await user.click(screen.getByRole('option', { name: /11000/ }))
+
+    await waitFor(() => {
+      expect(accountsApi.updateAccountingSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ cash_account_code: '11000' }),
+      )
     })
   })
 })

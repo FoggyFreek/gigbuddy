@@ -20,6 +20,7 @@ const CURRENCY_OPTIONS = ['EUR', 'USD', 'GBP']
 const FIELD_TYPE = {
   receivable_account_code: 'asset',
   primary_checking_account_code: 'asset',
+  cash_account_code: 'asset',
   default_revenue_account_code: 'revenue',
   payable_account_code: 'liability',
   default_reimbursement_account_code: 'liability',
@@ -31,6 +32,7 @@ const FIELD_TYPE = {
 const FIELD_LABELS = {
   receivable_account_code: 'Receivable account',
   primary_checking_account_code: 'Primary checking account',
+  cash_account_code: 'Cash account',
   default_revenue_account_code: 'Default revenue account',
   payable_account_code: 'Accounts payable',
   default_reimbursement_account_code: 'Default reimbursement account',

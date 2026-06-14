@@ -26,6 +26,7 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }) {
   const [priceInclCents, setPriceInclCents] = useState(0)
   const [vatRate, setVatRate] = useState(21)
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [paymentMethod, setPaymentMethod] = useState('bank')
   const [gigId, setGigId] = useState('')
   const [gigs, setGigs] = useState([])
   const [busy, setBusy] = useState(false)
@@ -65,6 +66,7 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }) {
         unit_price_incl_cents: priceInclCents,
         vat_rate: vatRate,
         sale_date: saleDate,
+        payment_method: paymentMethod,
         gig_id: gigId || null,
       })
       onClose()
@@ -125,6 +127,16 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }) {
             value={saleDate}
             onChange={(e) => setSaleDate(e.target.value)}
           />
+          <TextField
+            label="Paid into"
+            size="small"
+            select
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value)}
+          >
+            <MenuItem value="bank">Bank account</MenuItem>
+            <MenuItem value="cash">Cash on hand</MenuItem>
+          </TextField>
           <TextField
             label="Gig (optional)"
             size="small"

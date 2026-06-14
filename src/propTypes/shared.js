@@ -263,6 +263,7 @@ export const accountShape = PropTypes.shape({
   parent_code: PropTypes.string,
   is_active: PropTypes.bool,
   is_system: PropTypes.bool,
+  is_capitalizable: PropTypes.bool,
 })
 
 export const accountingSettingsShape = PropTypes.shape({
@@ -414,6 +415,7 @@ export const merchSaleShape = PropTypes.shape({
   unit_price_incl_cents: PropTypes.number,
   vat_rate: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   unit_cost_cents: PropTypes.number,
+  payment_method: PropTypes.oneOf(['bank', 'cash']),
   status: PropTypes.oneOf(['recorded', 'voided']),
   voided_at: PropTypes.string,
 })

@@ -17,6 +17,7 @@ import { TAX_RATES } from './purchaseFormHelpers.js'
 import { accountShape, productShape } from '../../propTypes/shared.js'
 
 const ACCOUNT_TYPE_LABELS = {
+  asset: 'Fixed Assets (capitalize)',
   cost_of_goods_sold: 'Cost of Goods Sold',
   expense: 'Expenses',
 }
@@ -133,7 +134,7 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
           renderInput={(params) => (
             <TextField
               {...params}
-              label="Expense account"
+              label="Expense / asset account"
               placeholder={stocksProduct ? 'Books to inventory' : 'Default expense account'}
               error={Boolean(errors.account_code)}
               helperText={errors.account_code}

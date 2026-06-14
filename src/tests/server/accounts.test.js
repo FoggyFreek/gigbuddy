@@ -119,9 +119,23 @@ describe('accounts — migration backfill parity', () => {
       'utf8',
     )
     await pool.query(vatMigrationSql)
+    // 081 adds the is_capitalizable flag + the depreciation accounts (13100/62900)
+    // for existing tenants; replay it too so the SQL-backfilled tenant matches.
+    const capitalizableMigrationSql = readFileSync(
+      join(__dirname, '../../../server/db/migrations/081_account_capitalizable.sql'),
+      'utf8',
+    )
+    await pool.query(capitalizableMigrationSql)
+    // 082 adds the cash-on-hand account (11100) for existing tenants; replay it
+    // too so the SQL-backfilled tenant matches the JS seed.
+    const cashAccountMigrationSql = readFileSync(
+      join(__dirname, '../../../server/db/migrations/082_merch_cash_account.sql'),
+      'utf8',
+    )
+    await pool.query(cashAccountMigrationSql)
 
     const { rows: accs } = await pool.query(
-      'SELECT code, name, type, parent_code FROM chart_of_accounts WHERE tenant_id = $1 ORDER BY code',
+      'SELECT code, name, type, parent_code, is_capitalizable FROM chart_of_accounts WHERE tenant_id = $1 ORDER BY code',
       [bare.id],
     )
     const jsCodes = DEFAULT_ACCOUNTS.map((a) => a.code).sort()
@@ -134,6 +148,7 @@ describe('accounts — migration backfill parity', () => {
       expect(row.name).toBe(acc.name)
       expect(row.type).toBe(acc.type)
       expect(row.parent_code).toBe(acc.parent_code ?? null)
+      expect(row.is_capitalizable).toBe(Boolean(acc.capitalizable))
     }
 
     const { rows: [s] } = await pool.query(
@@ -143,7 +158,73 @@ describe('accounts — migration backfill parity', () => {
     expect(s).toBeDefined()
     expect(s.currency).toBe('EUR')
     expect(s.primary_checking_account_code).toBe('11000')
+    expect(s.cash_account_code).toBe('11100')
     expect(s.default_reimbursement_account_code).toBe('22000')
+  })
+})
+
+describe('accounts — capitalizable flag', () => {
+  it('seeds the gear and vehicle asset accounts as capitalizable, others not', async () => {
+    const { rows } = await pool.query(
+      `SELECT code, is_capitalizable FROM chart_of_accounts
+        WHERE tenant_id = $1 AND code IN ('13000','14000','13100','11000','62100')`,
+      [seed.tenantA.id],
+    )
+    const byCode = Object.fromEntries(rows.map((r) => [r.code, r.is_capitalizable]))
+    expect(byCode['13000']).toBe(true)
+    expect(byCode['14000']).toBe(true)
+    expect(byCode['13100']).toBe(false) // accumulated depreciation is never a purchase target
+    expect(byCode['11000']).toBe(false)
+    expect(byCode['62100']).toBe(false)
+  })
+
+  it('GET /api/accounts exposes is_capitalizable', async () => {
+    const res = await asUserA(request(app).get('/api/accounts')).expect(200)
+    const gear = res.body.find((a) => a.code === '13000')
+    expect(gear.is_capitalizable).toBe(true)
+  })
+
+  it('POST creates a capitalizable asset sub-account', async () => {
+    const res = await asUserA(request(app).post('/api/accounts'))
+      .send({ code: '13500', name: 'Studio Monitors', type: 'asset', parent_code: '13000', is_capitalizable: true })
+      .expect(201)
+    expect(res.body.is_capitalizable).toBe(true)
+  })
+
+  it('POST defaults is_capitalizable to false when omitted', async () => {
+    const res = await asUserA(request(app).post('/api/accounts'))
+      .send({ code: '13600', name: 'Spare Cables', type: 'asset', parent_code: '13000' })
+      .expect(201)
+    expect(res.body.is_capitalizable).toBe(false)
+  })
+
+  it('POST 400 when is_capitalizable is set on a non-asset account', async () => {
+    const res = await asUserA(request(app).post('/api/accounts'))
+      .send({ code: '62950', name: 'Bad', type: 'expense', parent_code: '62000', is_capitalizable: true })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/capitalizable/)
+  })
+
+  it('PATCH toggles is_capitalizable on an asset account', async () => {
+    const { rows: [acc] } = await pool.query(
+      `SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '14000'`,
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ is_capitalizable: false })
+      .expect(200)
+    expect(res.body.is_capitalizable).toBe(false)
+  })
+
+  it('PATCH 400 when enabling is_capitalizable on a non-asset account', async () => {
+    const { rows: [acc] } = await pool.query(
+      `SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '62100'`,
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ is_capitalizable: true })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/capitalizable/)
   })
 })
 
@@ -453,12 +534,37 @@ describe('accounts/settings — CRUD', () => {
     expect(res.body.error).toMatch(/wrong_account_type/)
   })
 
+  it('PATCH /api/accounts/settings updates the cash account to an asset', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ cash_account_code: '11100' })
+      .expect(200)
+    expect(res.body.cash_account_code).toBe('11100')
+  })
+
+  it('PATCH /api/accounts/settings 400 when cash account is not an asset', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ cash_account_code: '24000' }) // 24000 is a liability
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/wrong_account_type/)
+  })
+
   it('GET /api/accounts/settings backstop includes VAT defaults when row is missing', async () => {
     await pool.query('DELETE FROM tenant_accounting_settings WHERE tenant_id = $1', [seed.tenantA.id])
     const res = await asUserA(request(app).get('/api/accounts/settings')).expect(200)
     expect(res.body.output_vat_account_code).toBe('24000')
     expect(res.body.input_vat_account_code).toBe('15000')
     expect(res.body.default_reimbursement_account_code).toBe('22000')
+    expect(res.body.cash_account_code).toBe('11100')
+  })
+
+  it('PATCH deactivating the cash-referenced account returns 409 account_in_use', async () => {
+    const { rows: [acc] } = await pool.query(
+      `SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '11100'`,
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(request(app).patch(`/api/accounts/${acc.id}`)).send({ is_active: false })
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatch(/account_in_use/)
   })
 
   it('PATCH deactivating a VAT-referenced account returns 409 account_in_use', async () => {

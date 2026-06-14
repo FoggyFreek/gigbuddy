@@ -336,6 +336,7 @@ function SalesList({ sales, onVoid }) {
               <TableCell align="right">Qty</TableCell>
               <MoneyHeaderCells label="Unit price" />
               <MoneyHeaderCells label="Total" />
+              <TableCell>Paid into</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -350,6 +351,7 @@ function SalesList({ sales, onVoid }) {
                 <TableCell align="right">{s.quantity}</TableCell>
                 <MoneyCells cents={s.unit_price_incl_cents} />
                 <MoneyCells cents={s.quantity * s.unit_price_incl_cents} />
+                <TableCell>{s.payment_method === 'cash' ? 'Cash on hand' : 'Bank'}</TableCell>
                 <TableCell align="right">
                   <VoidSaleButton sale={s} onVoid={onVoid} />
                 </TableCell>

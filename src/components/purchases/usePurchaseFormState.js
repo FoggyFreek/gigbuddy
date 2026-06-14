@@ -29,7 +29,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
   const [form, setForm] = useState(null)
   const [purchase, setPurchase] = useState(null)
   const [accounts, setAccounts] = useState([])
-  const [expenseAccounts, setExpenseAccounts] = useState([])
+  const [lineAccounts, setLineAccounts] = useState([])
   const [accountsLoaded, setAccountsLoaded] = useState(false)
   const [accountingSettings, setAccountingSettings] = useState(null)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
@@ -60,21 +60,27 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     return () => { cancelled = true }
   }, [purchaseId])
 
-  // Expense accounts load independently so a slow/failed fetch never blocks the
-  // form (which is gated only on the purchase load above).
+  // Line accounts load independently so a slow/failed fetch never blocks the
+  // form (which is gated only on the purchase load above). A purchase line may
+  // book to an expense/COGS account or a capitalizable asset account (owned
+  // gear) — the same set the backend accepts.
   useEffect(() => {
     let cancelled = false
     listAccounts()
       .then((accounts) => {
         if (cancelled) return
         setAccounts(accounts || [])
-        setExpenseAccounts(
+        setLineAccounts(
           (accounts || []).filter(
-            (a) => a.is_active && (a.type === 'expense' || a.type === 'cost_of_goods_sold'),
+            (a) => a.is_active && (
+              a.type === 'expense'
+              || a.type === 'cost_of_goods_sold'
+              || (a.type === 'asset' && a.is_capitalizable)
+            ),
           ),
         )
       })
-      .catch(() => { /* best-effort; leave expenseAccounts empty */ })
+      .catch(() => { /* best-effort; leave lineAccounts empty */ })
       .finally(() => { if (!cancelled) setAccountsLoaded(true) })
     return () => { cancelled = true }
   }, [])
@@ -211,12 +217,12 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     }
     if (status === 'approved' && !validateApprovalFields()) return
     // Once accounts are known, block a line that still references an account that
-    // is no longer an active expense account — the backend would reject it.
+    // is no longer a valid line account — the backend would reject it.
     if (accountsLoaded) {
-      const validCodes = new Set(expenseAccounts.map((a) => a.code))
+      const validCodes = new Set(lineAccounts.map((a) => a.code))
       const badIdx = form.lines.findIndex((l) => l.account_code && !validCodes.has(l.account_code))
       if (badIdx >= 0) {
-        setError(`Replace the inactive expense account on line ${badIdx + 1}`)
+        setError(`Replace the inactive account on line ${badIdx + 1}`)
         return
       }
     }
@@ -340,7 +346,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }) 
     readOnly,
     isPaid,
     totals,
-    expenseAccounts,
+    lineAccounts,
     products,
     paymentAccount,
     lineErrors,
