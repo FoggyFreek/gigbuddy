@@ -489,6 +489,19 @@ describe('purchases — attachments', () => {
     const detail = await asUserA(request(app).get(`/api/purchases/${p.id}`)).expect(200)
     expect(detail.body.attachments).toHaveLength(0)
   })
+
+  it('deleting a draft purchase removes its attachment objects from storage', async () => {
+    const p = await createPurchaseA()
+    const a = await uploadA(p.id, pdfBuffer, 'receipt.pdf', 'application/pdf').expect(201)
+    const b = await uploadA(p.id, pngBuffer, 'photo.png', 'image/png').expect(201)
+    expect(objectStore.has(a.body.object_key)).toBe(true)
+    expect(objectStore.has(b.body.object_key)).toBe(true)
+
+    await asUserA(request(app).delete(`/api/purchases/${p.id}`)).expect(204)
+
+    expect(objectStore.has(a.body.object_key)).toBe(false)
+    expect(objectStore.has(b.body.object_key)).toBe(false)
+  })
 })
 
 describe('contacts — duplicate', () => {

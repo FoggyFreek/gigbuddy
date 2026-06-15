@@ -706,7 +706,9 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
     settings,
     sale.payment_method === 'cash' ? 'cash_account_code' : 'primary_checking_account_code',
   )
-  const revenue = requireCode(settings, 'merch_revenue_account_code')
+  // The sale snapshots the product's chosen revenue account; fall back to the
+  // band default (incl. pre-snapshot sales whose code is null).
+  const revenue = sale.revenue_account_code || requireCode(settings, 'merch_revenue_account_code')
   const grossCents = sale.quantity * sale.unit_price_incl_cents
   const { netCents, vatCents } = computePurchaseLineTotals({
     amount_incl_cents: grossCents, tax_rate: sale.vat_rate,
@@ -755,7 +757,9 @@ export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
     settings,
     sale.payment_method === 'cash' ? 'cash_account_code' : 'primary_checking_account_code',
   )
-  const revenue = requireCode(settings, 'merch_revenue_account_code')
+  // Same snapshotted account as the original recorded posting so the reversal
+  // nets out exactly, even if the product's account changed since the sale.
+  const revenue = sale.revenue_account_code || requireCode(settings, 'merch_revenue_account_code')
   const grossCents = sale.quantity * sale.unit_price_incl_cents
   const { netCents, vatCents } = computePurchaseLineTotals({
     amount_incl_cents: grossCents, tax_rate: sale.vat_rate,

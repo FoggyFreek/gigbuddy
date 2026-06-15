@@ -93,6 +93,25 @@ describe('AccountingSettingsSection — rendering', () => {
     })
   })
 
+  it('renders the merchandise revenue account select and saves a chosen revenue account', async () => {
+    accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, merch_revenue_account_code: '41000' })
+    const user = userEvent.setup()
+    wrap(<AccountingSettingsSection />)
+    await waitFor(() => screen.getByLabelText(/merchandise revenue account/i))
+
+    const merchSelect = screen.getByRole('combobox', { name: /merchandise revenue account/i })
+    await user.click(merchSelect)
+    // Filtered to revenue accounts only (41000 is the lone active revenue account).
+    await waitFor(() => screen.getByRole('option', { name: /41000/ }))
+    await user.click(screen.getByRole('option', { name: /41000/ }))
+
+    await waitFor(() => {
+      expect(accountsApi.updateAccountingSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ merch_revenue_account_code: '41000' }),
+      )
+    })
+  })
+
   it('renders the cash account select and saves a chosen asset account', async () => {
     accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, cash_account_code: '11000' })
     const user = userEvent.setup()

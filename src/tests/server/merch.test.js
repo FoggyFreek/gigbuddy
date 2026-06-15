@@ -528,6 +528,113 @@ describe('merch — accounting settings', () => {
   })
 })
 
+describe('merch — per-product revenue account', () => {
+  async function saleRevenueAccount(saleId) {
+    const { rows } = await pool.query(
+      'SELECT revenue_account_code FROM merch_sales WHERE id = $1', [saleId],
+    )
+    return rows[0]?.revenue_account_code
+  }
+
+  it('accepts the merch parent itself or a descendant on create/update', async () => {
+    // 42100 (Merchandise Sales - Vinyl and CDs) is a child of 42000.
+    const created = await createProduct(asUserA, { revenue_account_code: '42100' })
+    expect(created.revenue_account_code).toBe('42100')
+
+    // 42000 itself is allowed.
+    const toParent = await asUserA(request(app).patch(`/api/merch/products/${created.id}`))
+      .send({ revenue_account_code: '42000' }).expect(200)
+    expect(toParent.body.revenue_account_code).toBe('42000')
+
+    // Clearing falls back to the band default.
+    const cleared = await asUserA(request(app).patch(`/api/merch/products/${created.id}`))
+      .send({ revenue_account_code: null }).expect(200)
+    expect(cleared.body.revenue_account_code).toBeNull()
+  })
+
+  it('rejects a revenue account outside the merch subtree', async () => {
+    // 41000 (Gig fees) is revenue but under 40000, not 42000.
+    const res = await asUserA(request(app).post('/api/merch/products'))
+      .send(shirtPayload({ revenue_account_code: '41000' }))
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('product_validation')
+  })
+
+  it('rejects an unknown account code', async () => {
+    const res = await asUserA(request(app).post('/api/merch/products'))
+      .send(shirtPayload({ revenue_account_code: '49999' }))
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('product_validation')
+  })
+
+  it('rejects when the band merch revenue account is unset', async () => {
+    await pool.query(
+      'UPDATE tenant_accounting_settings SET merch_revenue_account_code = NULL WHERE tenant_id = $1',
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(request(app).post('/api/merch/products'))
+      .send(shirtPayload({ revenue_account_code: '42100' }))
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('merch_revenue_account_not_configured')
+  })
+
+  it('posts revenue to the product account and snapshots it on the sale', async () => {
+    const product = await createProduct(asUserA, { revenue_account_code: '42100' })
+    await stockProduct(asUserA, product.id, 10)
+    const sale = await asUserA(request(app).post('/api/merch/sales')).send({
+      product_id: product.id, quantity: 1, unit_price_incl_cents: 3630, vat_rate: 21,
+    }).expect(201)
+
+    const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'recorded')
+    const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
+    expect(byCode['42100'].credit_cents).toBe(3000) // product revenue account
+    expect(byCode['42000']).toBeUndefined()         // not the band default
+    expect(await saleRevenueAccount(sale.body.id)).toBe('42100')
+  })
+
+  it('a product with no account posts to the band default', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 10)
+    const sale = await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, unit_price_incl_cents: 3630, vat_rate: 21 }).expect(201)
+
+    const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'recorded')
+    const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
+    expect(byCode['42000'].credit_cents).toBe(3000)
+    expect(await saleRevenueAccount(sale.body.id)).toBeNull()
+  })
+
+  it('void reverses the snapshotted account even after the product account changes', async () => {
+    const product = await createProduct(asUserA, { revenue_account_code: '42100' })
+    await stockProduct(asUserA, product.id, 10)
+    const sale = await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, unit_price_incl_cents: 3630, vat_rate: 21 }).expect(201)
+
+    // Repoint the product to the parent after the sale.
+    await asUserA(request(app).patch(`/api/merch/products/${product.id}`))
+      .send({ revenue_account_code: '42000' }).expect(200)
+    await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
+
+    const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'voided')
+    const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
+    expect(byCode['42100'].debit_cents).toBe(3000) // reversed to the snapshot, not 42000
+    expect(byCode['42000']).toBeUndefined()
+  })
+
+  it('a code that exists only in another tenant is rejected (isolation)', async () => {
+    // Tenant B gets a custom sub-account under its own 42000; tenant A has no
+    // such code, so A can't reference it.
+    await asUserB(request(app).post('/api/accounts')).send({
+      code: '42900', name: 'B-only merch', type: 'revenue', parent_code: '42000',
+    }).expect(201)
+
+    const res = await asUserA(request(app).post('/api/merch/products'))
+      .send(shirtPayload({ revenue_account_code: '42900' }))
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('product_validation')
+  })
+})
+
 describe('merch sales — list & ledger browser', () => {
   it('lists sales with product name, newest first', async () => {
     const product = await createProduct(asUserA)

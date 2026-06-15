@@ -294,6 +294,7 @@ export interface AccountingSettings {
   cash_account_code?: string
   output_vat_account_code?: string
   input_vat_account_code?: string
+  merch_revenue_account_code?: string
   books_closed_through?: string
 }
 
@@ -419,6 +420,7 @@ export interface Product {
   default_price_incl_cents?: number
   vat_rate?: number | string
   quantity_on_hand?: number
+  revenue_account_code?: string | null
   archived_at?: string
 }
 
@@ -434,6 +436,7 @@ export interface MerchSale {
   vat_rate?: number | string
   unit_cost_cents?: number
   payment_method?: 'bank' | 'cash'
+  revenue_account_code?: string | null
   status?: 'recorded' | 'voided'
   voided_at?: string
 }

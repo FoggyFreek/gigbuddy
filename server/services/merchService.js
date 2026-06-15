@@ -13,6 +13,8 @@
 import { ALLOWED_TAX_RATES } from '../validators/purchaseValidators.js'
 import { isValidCalendarDate } from '../validators/accountValidators.js'
 import { validateGigIdForTenant } from '../repositories/invoiceRepository.js'
+import { isAccountAtOrBelow } from '../repositories/accountRepository.js'
+import { getSettings } from './accountService.js'
 import {
   ledgerErrorResult,
   postMerchSaleRecorded,
@@ -35,7 +37,38 @@ function parsePositiveInt(val) {
 // ---------- products ----------
 
 const PRODUCT_COLUMNS = `id, name, unit_cost_cents, default_price_incl_cents,
-  vat_rate, quantity_on_hand, archived_at, created_at, updated_at`
+  vat_rate, quantity_on_hand, revenue_account_code, archived_at, created_at, updated_at`
+
+// A product may book its merch revenue to the band's merch revenue account
+// (merch_revenue_account_code) or any hierarchical descendant of it. Returns
+// { value } (the trimmed code, or null to clear → falls back to the band
+// default) or { error } on a bad reference. Needs DB access, so it lives outside
+// the pure validateProductBody.
+async function resolveProductRevenueAccount(executor, tenantId, raw) {
+  if (raw === null || raw === undefined || String(raw).trim() === '') {
+    return { value: null }
+  }
+  const code = String(raw).trim()
+  const { settings } = await getSettings(executor, tenantId)
+  const parent = settings?.merch_revenue_account_code
+  if (!parent) {
+    return { error: { status: 400, body: { error: 'Merch revenue account not configured', code: 'merch_revenue_account_not_configured' } } }
+  }
+  const ok = await isAccountAtOrBelow(executor, tenantId, code, parent)
+  if (!ok) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          error: 'Invalid revenue account',
+          code: 'product_validation',
+          fields: [{ field: 'revenue_account_code', message: 'Must be the merch revenue account or a sub-account of it' }],
+        },
+      },
+    }
+  }
+  return { value: code }
+}
 
 export async function listProducts(executor, tenantId) {
   const { rows } = await executor.query(
@@ -85,11 +118,13 @@ export async function createProduct(executor, tenantId, body) {
   const validated = validateProductBody(body)
   if (validated.error) return validated
   const v = validated.values
+  const revenue = await resolveProductRevenueAccount(executor, tenantId, body.revenue_account_code)
+  if (revenue.error) return revenue
   const { rows } = await executor.query(
-    `INSERT INTO products (tenant_id, name, unit_cost_cents, default_price_incl_cents, vat_rate)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO products (tenant_id, name, unit_cost_cents, default_price_incl_cents, vat_rate, revenue_account_code)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING ${PRODUCT_COLUMNS}`,
-    [tenantId, v.name, v.unit_cost_cents, v.default_price_incl_cents, v.vat_rate],
+    [tenantId, v.name, v.unit_cost_cents, v.default_price_incl_cents, v.vat_rate, revenue.value],
   )
   return { product: rows[0] }
 }
@@ -97,19 +132,25 @@ export async function createProduct(executor, tenantId, body) {
 export async function updateProduct(executor, tenantId, id, body) {
   const validated = validateProductBody(body, { partial: true })
   if (validated.error) return validated
-  const entries = Object.entries(validated.values)
+  const values = { ...validated.values }
+  if ('revenue_account_code' in body) {
+    const revenue = await resolveProductRevenueAccount(executor, tenantId, body.revenue_account_code)
+    if (revenue.error) return revenue
+    values.revenue_account_code = revenue.value
+  }
+  const entries = Object.entries(values)
   if (!entries.length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
 
   const setClauses = entries.map(([k], i) => `${k} = $${i + 1}`)
   setClauses.push('updated_at = NOW()')
-  const values = entries.map(([, v]) => v)
-  values.push(id, tenantId)
+  const params = entries.map(([, v]) => v)
+  params.push(id, tenantId)
 
   const { rows } = await executor.query(
     `UPDATE products SET ${setClauses.join(', ')}
-      WHERE id = $${values.length - 1} AND tenant_id = $${values.length}
+      WHERE id = $${params.length - 1} AND tenant_id = $${params.length}
       RETURNING ${PRODUCT_COLUMNS}`,
-    values,
+    params,
   )
   if (!rows[0]) return { error: { status: 404, body: { error: 'Not found' } } }
   return { product: rows[0] }
@@ -133,7 +174,7 @@ export async function archiveProduct(executor, tenantId, id) {
 const SALE_COLUMNS = `s.id, s.product_id, p.name AS product_name, s.gig_id,
   to_char(s.sale_date, 'YYYY-MM-DD') AS sale_date,
   s.quantity, s.unit_price_incl_cents, s.vat_rate, s.unit_cost_cents,
-  s.payment_method, s.status, s.voided_at, s.created_at`
+  s.payment_method, s.revenue_account_code, s.status, s.voided_at, s.created_at`
 
 export async function listMerchSales(executor, tenantId) {
   const { rows } = await executor.query(
@@ -207,14 +248,21 @@ export async function recordMerchSale(pool, tenantId, body, actorUserId = null) 
       return { error: { status: 400, body: { error: 'Invalid vat_rate' } } }
     }
 
+    // Snapshot the revenue account at sale time (the product's chosen account,
+    // else null → the ledger falls back to the band's merch_revenue_account_code)
+    // so a later void reverses to the exact same account.
+    const revenueAccountCode = product.revenue_account_code ?? null
+
     const { rows: inserted } = await client.query(
       `INSERT INTO merch_sales
          (tenant_id, product_id, gig_id, sale_date, quantity,
-          unit_price_incl_cents, vat_rate, unit_cost_cents, payment_method, created_by_user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          unit_price_incl_cents, vat_rate, unit_cost_cents, payment_method,
+          revenue_account_code, created_by_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [tenantId, productId, gigId, saleDate, quantity,
-        unitPriceInclCents, vatRate, product.unit_cost_cents, paymentMethod, actorUserId],
+        unitPriceInclCents, vatRate, product.unit_cost_cents, paymentMethod,
+        revenueAccountCode, actorUserId],
     )
     const saleId = inserted[0].id
 
@@ -232,6 +280,7 @@ export async function recordMerchSale(pool, tenantId, body, actorUserId = null) 
       vat_rate: vatRate,
       unit_cost_cents: product.unit_cost_cents,
       payment_method: paymentMethod,
+      revenue_account_code: revenueAccountCode,
       product_name: product.name,
     }, { actorUserId })
 

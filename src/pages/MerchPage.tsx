@@ -43,7 +43,7 @@ interface SaleBody {
 }
 
 export default function MerchPage() {
-  const { products, sales, error, setError, reload } = useMerchState()
+  const { products, sales, revenueAccounts, error, setError, reload } = useMerchState()
   const [productDialog, setProductDialog] = useState<Product | 'new' | null>(null)
   const [saleDialogOpen, setSaleDialogOpen] = useState(false)
   const [voidTarget, setVoidTarget] = useState<MerchSale | null>(null)
@@ -140,6 +140,7 @@ export default function MerchPage() {
       {productDialog && (
         <ProductDialog
           product={productDialog === 'new' ? undefined : productDialog}
+          revenueAccounts={revenueAccounts}
           onSubmit={handleProductSubmit}
           onClose={() => setProductDialog(null)}
         />

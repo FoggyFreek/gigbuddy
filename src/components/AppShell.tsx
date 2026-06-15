@@ -139,7 +139,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
     icon: AccountBalanceTwoTone,
     children: [
       { to: '/journal', label: 'Journal', icon: MenuBookOutlined },
-      { to: '/ledger', label: 'Ledger entries', icon: ListAltOutlined },
+      { to: '/ledger', label: 'Ledger', icon: ListAltOutlined },
       { to: '/vat-returns', label: 'VAT declarations', icon: AccountBalanceOutlined, adminOnly: true },
       { to: '/reports', label: 'Reports', icon: AssessmentOutlined },
     ],

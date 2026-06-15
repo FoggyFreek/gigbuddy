@@ -141,8 +141,8 @@ export default function LedgerEntriesPage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          Ledger entries
-        </Typography>
+          Ledger transactions
+</Typography>
         <Chip size="small" label={visibleEntries.length} />
         <TextField
           size="small"

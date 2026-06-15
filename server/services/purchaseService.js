@@ -597,7 +597,14 @@ export async function deletePurchase(db, tenantId, id) {
   if (status !== 'draft') {
     return { error: { status: 409, body: { error: 'Only draft purchases can be deleted', code: 'purchase_finalized' } } }
   }
+  // Collect attachment object keys before the row (and its cascading
+  // purchase_attachments rows, migration 076) is deleted, otherwise the RustFS
+  // objects are orphaned with no DB reference left to find them by.
+  const attachments = await fetchPurchaseAttachments(db, id, tenantId)
   await deletePurchaseRow(db, id, tenantId)
+  for (const { object_key } of attachments) {
+    safeRemove(object_key, 'Failed to delete purchase attachment object:')
+  }
   return {}
 }
 

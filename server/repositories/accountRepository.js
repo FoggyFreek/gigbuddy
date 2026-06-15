@@ -104,6 +104,31 @@ export async function findAccountByCode(executor, tenantId, code) {
   return rows[0] || null
 }
 
+// True when `code` is `ancestorCode` itself, or a descendant of it reachable by
+// walking parent_code upward. Also requires the candidate account to be active.
+// Tenant-scoped at every hop so one tenant's chart can never satisfy another's.
+export async function isAccountAtOrBelow(executor, tenantId, code, ancestorCode) {
+  const { rows } = await executor.query(
+    `WITH RECURSIVE ancestry AS (
+       SELECT code, parent_code, is_active
+         FROM chart_of_accounts
+        WHERE tenant_id = $1 AND code = $2
+       UNION ALL
+       SELECT c.code, c.parent_code, c.is_active
+         FROM chart_of_accounts c
+         JOIN ancestry a ON c.code = a.parent_code
+        WHERE c.tenant_id = $1
+     )
+     SELECT 1
+       FROM ancestry
+      WHERE code = $3
+        AND (SELECT is_active FROM ancestry WHERE code = $2)
+      LIMIT 1`,
+    [tenantId, code, ancestorCode],
+  )
+  return rows.length > 0
+}
+
 export async function listAccounts(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM chart_of_accounts WHERE tenant_id = $1 ORDER BY code',

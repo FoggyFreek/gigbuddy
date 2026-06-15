@@ -16,9 +16,14 @@ vi.mock('../api/merch.ts', () => ({
 vi.mock('../api/gigs.ts', () => ({
   listGigs: vi.fn(),
 }))
+vi.mock('../api/accounts.ts', () => ({
+  listAccounts: vi.fn(),
+  getAccountingSettings: vi.fn(),
+}))
 
 import * as api from '../api/merch.ts'
 import * as gigsApi from '../api/gigs.ts'
+import * as accountsApi from '../api/accounts.ts'
 import MerchPage from '../pages/MerchPage.tsx'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
 import theme from '../theme.ts'
@@ -60,7 +65,16 @@ beforeEach(() => {
   api.recordMerchSale.mockResolvedValue({ id: 6 })
   api.voidMerchSale.mockResolvedValue({})
   gigsApi.listGigs.mockResolvedValue([])
+  accountsApi.listAccounts.mockResolvedValue([])
+  accountsApi.getAccountingSettings.mockResolvedValue({})
 })
+
+const REVENUE_ACCOUNTS = [
+  { code: '40000', name: 'Revenue', type: 'revenue', parent_code: null, is_active: true },
+  { code: '42000', name: 'Merchandise Sales', type: 'revenue', parent_code: '40000', is_active: true },
+  { code: '42100', name: 'Vinyl and CDs', type: 'revenue', parent_code: '42000', is_active: true },
+  { code: '41000', name: 'Gig fees', type: 'revenue', parent_code: '40000', is_active: true },
+]
 
 describe('MerchPage — products', () => {
   it('renders the product table with stock and prices', async () => {
@@ -95,6 +109,46 @@ describe('MerchPage — products', () => {
     await screen.findAllByText('Band T-Shirt')
     await user.click(screen.getAllByRole('button', { name: /archive/i })[0])
     await waitFor(() => expect(api.archiveProduct).toHaveBeenCalledWith(1))
+  })
+
+  it('offers only the merch revenue account and its descendants, and submits the chosen code', async () => {
+    accountsApi.listAccounts.mockResolvedValue(REVENUE_ACCOUNTS)
+    accountsApi.getAccountingSettings.mockResolvedValue({ merch_revenue_account_code: '42000' })
+    const user = userEvent.setup()
+    wrap(<MerchPage />)
+    await screen.findAllByText('Band T-Shirt')
+    await user.click(screen.getByRole('button', { name: /new product/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/name/i), 'Hoodie')
+
+    await user.click(within(dialog).getByLabelText(/revenue account/i))
+    const listbox = await screen.findByRole('listbox')
+    // The merch parent and its descendant are offered; an unrelated revenue
+    // account (41000 Gig fees) is not.
+    expect(within(listbox).getByText(/42000 — Merchandise Sales/)).toBeInTheDocument()
+    expect(within(listbox).getByText(/42100 — Vinyl and CDs/)).toBeInTheDocument()
+    expect(within(listbox).queryByText(/41000/)).toBeNull()
+    await user.click(within(listbox).getByText(/42100 — Vinyl and CDs/))
+
+    await user.click(within(dialog).getByRole('button', { name: /create/i }))
+    await waitFor(() => expect(api.createProduct).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Hoodie', revenue_account_code: '42100' }),
+    ))
+  })
+
+  it('submits a null revenue account when none is chosen', async () => {
+    accountsApi.listAccounts.mockResolvedValue(REVENUE_ACCOUNTS)
+    accountsApi.getAccountingSettings.mockResolvedValue({ merch_revenue_account_code: '42000' })
+    const user = userEvent.setup()
+    wrap(<MerchPage />)
+    await screen.findAllByText('Band T-Shirt')
+    await user.click(screen.getByRole('button', { name: /new product/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/name/i), 'Hoodie')
+    await user.click(within(dialog).getByRole('button', { name: /create/i }))
+    await waitFor(() => expect(api.createProduct).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Hoodie', revenue_account_code: null }),
+    ))
   })
 })
 

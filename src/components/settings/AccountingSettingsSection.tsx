@@ -28,6 +28,7 @@ const FIELD_TYPE: Record<string, string> = {
   default_expense_account_code: 'expense',
   output_vat_account_code: 'liability',
   input_vat_account_code: 'asset',
+  merch_revenue_account_code: 'revenue',
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -40,6 +41,7 @@ const FIELD_LABELS: Record<string, string> = {
   default_expense_account_code: 'Default expense account',
   output_vat_account_code: 'Output VAT account (sales)',
   input_vat_account_code: 'Input VAT account (purchases)',
+  merch_revenue_account_code: 'Merchandise revenue account',
 }
 
 interface AccountSelectProps {

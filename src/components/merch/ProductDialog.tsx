@@ -10,17 +10,19 @@ import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import MoneyInput from '../invoices/MoneyInput.tsx'
 import { VAT_RATES } from './vatRates.ts'
-import type { Product } from '../../types/entities.ts'
+import type { Product, Account } from '../../types/entities.ts'
 
 interface ProductBody {
   name: string
   default_price_incl_cents: number
   vat_rate: number
   unit_cost_cents?: number
+  revenue_account_code: string | null
 }
 
 interface ProductDialogProps {
   product?: Product
+  revenueAccounts?: Account[]
   onSubmit: (body: ProductBody) => Promise<void>
   onClose: () => void
 }
@@ -28,11 +30,12 @@ interface ProductDialogProps {
 // Create or edit a product. The unit cost is a moving average maintained by
 // purchase stock-ins, so it is only enterable at creation (as the starting
 // cost for stock added before any purchase) and read-only afterwards.
-export default function ProductDialog({ product, onSubmit, onClose }: ProductDialogProps) {
+export default function ProductDialog({ product, revenueAccounts = [], onSubmit, onClose }: ProductDialogProps) {
   const [name, setName] = useState(product?.name ?? '')
   const [unitCostCents, setUnitCostCents] = useState(product?.unit_cost_cents ?? 0)
   const [priceInclCents, setPriceInclCents] = useState(product?.default_price_incl_cents ?? 0)
   const [vatRate, setVatRate] = useState(Number(product?.vat_rate ?? 21))
+  const [revenueAccountCode, setRevenueAccountCode] = useState(product?.revenue_account_code ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,6 +50,8 @@ export default function ProductDialog({ product, onSubmit, onClose }: ProductDia
         name: name.trim(),
         default_price_incl_cents: priceInclCents,
         vat_rate: vatRate,
+        // null clears the per-product account → sales fall back to the band default.
+        revenue_account_code: revenueAccountCode || null,
       }
       // Once the product exists, purchases own the (moving average) cost.
       if (!product) body.unit_cost_cents = unitCostCents
@@ -98,6 +103,21 @@ export default function ProductDialog({ product, onSubmit, onClose }: ProductDia
               <MenuItem key={rate} value={rate}>{rate}%</MenuItem>
             ))}
           </TextField>
+          {revenueAccounts.length > 0 && (
+            <TextField
+              label="Revenue account"
+              size="small"
+              select
+              value={revenueAccountCode}
+              onChange={(e) => setRevenueAccountCode(e.target.value)}
+              helperText="Where this product's sales revenue is booked"
+            >
+              <MenuItem value=""><em>Default (band merch revenue)</em></MenuItem>
+              {revenueAccounts.map((a) => (
+                <MenuItem key={a.code} value={a.code}>{a.code} — {a.name}</MenuItem>
+              ))}
+            </TextField>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>
