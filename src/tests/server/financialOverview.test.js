@@ -162,6 +162,30 @@ describe('financial overview', () => {
     expect(res.body.totals).toEqual({ revenue_cents: 100000, expense_cents: 2066, result_cents: 97934 })
   })
 
+  it('reports the trailing three calendar years of result, pinned to today', async () => {
+    await createSentInvoice() // revenue 100000 net, this year
+    await createAccruedPurchase() // expense 2066 net, this year
+    await createSentInvoice({ issue_date: `${LAST_YEAR}-03-01` }) // revenue 100000 net, last year
+
+    const res = await asUserA(
+      request(app).get('/api/ledger/overview').query({ mode: 'fiscal_year', year: THIS_YEAR }),
+    ).expect(200)
+
+    // Three years regardless of the selected period, oldest → newest.
+    expect(res.body.annual_results).toHaveLength(3)
+    expect(res.body.annual_results.map((r) => r.year)).toEqual([THIS_YEAR - 2, LAST_YEAR, THIS_YEAR])
+
+    const thisYear = res.body.annual_results.find((r) => r.year === THIS_YEAR)
+    expect(thisYear).toEqual({ year: THIS_YEAR, has_data: true, revenue_cents: 100000, expense_cents: 2066, result_cents: 97934 })
+
+    const lastYear = res.body.annual_results.find((r) => r.year === LAST_YEAR)
+    expect(lastYear).toEqual({ year: LAST_YEAR, has_data: true, revenue_cents: 100000, expense_cents: 0, result_cents: 100000 })
+
+    // No activity two years ago → flagged so the chart renders a gap, not a zero.
+    const oldest = res.body.annual_results.find((r) => r.year === THIS_YEAR - 2)
+    expect(oldest).toEqual({ year: THIS_YEAR - 2, has_data: false, revenue_cents: 0, expense_cents: 0, result_cents: 0 })
+  })
+
   it('reports the VAT position of the current quarter with its due date', async () => {
     await createSentInvoice() // output VAT 21000, today
     await createAccruedPurchase() // input VAT 434, today
@@ -227,6 +251,7 @@ describe('financial overview', () => {
       request(app).get('/api/ledger/overview').query({ mode: 'fiscal_year', year: THIS_YEAR }),
     ).expect(200)
     expect(resB.body.totals).toEqual({ revenue_cents: 0, expense_cents: 0, result_cents: 0 })
+    expect(resB.body.annual_results.every((r) => r.result_cents === 0)).toBe(true)
     expect(resB.body.vat.output_cents).toBe(0)
     expect(resB.body.vat.input_cents).toBe(0)
     expect(resB.body.vat.net_cents).toBe(0)

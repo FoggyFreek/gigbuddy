@@ -17,6 +17,7 @@ import {
   listLines,
   listEntryDates,
   monthlyResultTotals,
+  annualResultTotals,
   vatTotals,
   checkingAccountBalance,
   merchTotals,
@@ -505,16 +506,36 @@ export async function resolveEffectiveRange(executor, tenantId, range) {
 export async function getFinancialOverview(executor, tenantId, range) {
   const effectiveRange = await resolveEffectiveRange(executor, tenantId, range)
 
+  // Trailing-three-calendar-years result trend, pinned to "today" (independent
+  // of the selected period, like the VAT and bank figures).
+  const TREND_YEARS = 3
+  const currentYear = new Date().getFullYear()
+  const firstTrendYear = currentYear - (TREND_YEARS - 1)
+  const annualRange = { from: `${firstTrendYear}-01-01`, toExclusive: `${currentYear + 1}-01-01` }
+
   const vatQuarter = currentVatQuarter()
-  const [monthRows, vat, buckets, settings, bankBalanceCents, merch, merchInventoryCents] = await Promise.all([
-    monthlyResultTotals(executor, tenantId, effectiveRange),
-    vatTotals(executor, tenantId, vatQuarter.range),
-    openInvoiceBuckets(executor, tenantId),
-    loadAccountingSettings(executor, tenantId),
-    checkingAccountBalance(executor, tenantId),
-    merchTotals(executor, tenantId, effectiveRange),
-    merchInventoryValue(executor, tenantId),
-  ])
+  const [monthRows, annualRows, vat, buckets, settings, bankBalanceCents, merch, merchInventoryCents] =
+    await Promise.all([
+      monthlyResultTotals(executor, tenantId, effectiveRange),
+      annualResultTotals(executor, tenantId, annualRange),
+      vatTotals(executor, tenantId, vatQuarter.range),
+      openInvoiceBuckets(executor, tenantId),
+      loadAccountingSettings(executor, tenantId),
+      checkingAccountBalance(executor, tenantId),
+      merchTotals(executor, tenantId, effectiveRange),
+      merchInventoryValue(executor, tenantId),
+    ])
+
+  const annualByYear = new Map(annualRows.map((r) => [r.year, r]))
+  const annualResults = Array.from({ length: TREND_YEARS }, (_, i) => {
+    const year = firstTrendYear + i
+    const row = annualByYear.get(year)
+    const revenue = row?.revenue_cents || 0
+    const expense = row?.expense_cents || 0
+    // has_data distinguishes a real zero result from a year with no ledger
+    // activity at all — the chart renders the latter as a gap, not a point.
+    return { year, has_data: Boolean(row), revenue_cents: revenue, expense_cents: expense, result_cents: revenue - expense }
+  })
 
   const byKey = new Map(monthRows.map((r) => [r.month_key, r]))
   const months = enumerateMonths(effectiveRange.from, effectiveRange.toExclusive).map(({ year, month }) => {
@@ -540,6 +561,7 @@ export async function getFinancialOverview(executor, tenantId, range) {
     currency: settings?.currency || 'EUR',
     months,
     totals,
+    annual_results: annualResults,
     bank: { balance_cents: bankBalanceCents },
     vat: {
       year: vatQuarter.year,

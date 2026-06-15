@@ -30,7 +30,20 @@ vi.mock('@mui/x-charts/ChartsContainer', () => ({
   ),
 }))
 vi.mock('@mui/x-charts/BarChart', () => ({ BarPlot: () => null }))
-vi.mock('@mui/x-charts/LineChart', () => ({ LinePlot: () => null }))
+vi.mock('@mui/x-charts/LineChart', () => ({
+  LinePlot: () => null,
+  // High-level chart used by the result-trend card; expose its series, x-axis
+  // and the y-axis min/max (the zero-anchored bounds).
+  LineChart: ({ series, xAxis, yAxis }) => (
+    <div
+      data-testid="result-trend-chart"
+      data-series={JSON.stringify(series.map((s) => s.data))}
+      data-xaxis={JSON.stringify(xAxis?.[0]?.data ?? null)}
+      data-ymin={JSON.stringify(yAxis?.[0]?.min ?? null)}
+      data-ymax={JSON.stringify(yAxis?.[0]?.max ?? null)}
+    />
+  ),
+}))
 vi.mock('@mui/x-charts/ChartsXAxis', () => ({ ChartsXAxis: () => null }))
 vi.mock('@mui/x-charts/ChartsYAxis', () => ({ ChartsYAxis: () => null }))
 vi.mock('@mui/x-charts/ChartsAxisHighlight', () => ({ ChartsAxisHighlight: () => null }))
@@ -55,6 +68,11 @@ const OVERVIEW = {
   currency: 'EUR',
   months: MONTHS,
   totals: { revenue_cents: 100000, expense_cents: 2066, result_cents: 97934 },
+  annual_results: [
+    { year: 2024, has_data: true, revenue_cents: 50000, expense_cents: 10000, result_cents: 40000 },
+    { year: 2025, has_data: true, revenue_cents: 80000, expense_cents: 20000, result_cents: 60000 },
+    { year: 2026, has_data: true, revenue_cents: 100000, expense_cents: 2066, result_cents: 97934 },
+  ],
   bank: { balance_cents: 118500 },
   vat: { year: 2026, quarter: 2, due_date: '2026-07-31', output_cents: 21000, input_cents: 434, net_cents: 20566 },
   invoices: {
@@ -144,6 +162,65 @@ describe('FinancialDashboardPage', () => {
     expect(within(card).getByText(/€\s?20,66/)).toBeInTheDocument()
     expect(within(card).getByText('Profit')).toBeInTheDocument()
     expect(within(card).getByText(/€\s?979,34/)).toBeInTheDocument()
+  })
+
+  it('feeds the yearly result (in euros) and years to the result-trend chart', async () => {
+    wrap(<FinancialDashboardPage />)
+    await screen.findByText(/result in eur/i)
+
+    const card = screen.getByText(/result trend/i).closest('[data-card]')
+    const chart = within(card).getByTestId('result-trend-chart')
+    expect(JSON.parse(chart.dataset.series)).toEqual([[400, 600, 979.34]])
+    expect(JSON.parse(chart.dataset.xaxis)).toEqual(['2024', '2025', '2026'])
+  })
+
+  it('renders a gap (null) for a year with no ledger activity', async () => {
+    getLedgerOverview.mockResolvedValue({
+      ...OVERVIEW,
+      annual_results: [
+        { year: 2024, has_data: false, revenue_cents: 0, expense_cents: 0, result_cents: 0 },
+        { year: 2025, has_data: true, revenue_cents: 80000, expense_cents: 20000, result_cents: 60000 },
+        { year: 2026, has_data: true, revenue_cents: 100000, expense_cents: 2066, result_cents: 97934 },
+      ],
+    })
+    wrap(<FinancialDashboardPage />)
+    await screen.findByText(/result in eur/i)
+
+    const card = screen.getByText(/result trend/i).closest('[data-card]')
+    const chart = within(card).getByTestId('result-trend-chart')
+    // The empty year is null (skipped point / broken line); 0 stays out of the data.
+    expect(JSON.parse(chart.dataset.series)).toEqual([[null, 600, 979.34]])
+    // The y-axis ignores the empty year when anchoring to 0.
+    expect(JSON.parse(chart.dataset.ymin)).toBe(0)
+    expect(JSON.parse(chart.dataset.ymax)).toBe(979.34)
+  })
+
+  it('anchors the trend y-axis to 0 (above the line for an all-profit series)', async () => {
+    wrap(<FinancialDashboardPage />)
+    await screen.findByText(/result in eur/i)
+
+    const card = screen.getByText(/result trend/i).closest('[data-card]')
+    const chart = within(card).getByTestId('result-trend-chart')
+    expect(JSON.parse(chart.dataset.ymin)).toBe(0)
+    expect(JSON.parse(chart.dataset.ymax)).toBe(979.34)
+  })
+
+  it('extends the trend y-axis below 0 for a loss year', async () => {
+    getLedgerOverview.mockResolvedValue({
+      ...OVERVIEW,
+      annual_results: [
+        { year: 2024, has_data: true, revenue_cents: 10000, expense_cents: 50000, result_cents: -40000 },
+        { year: 2025, has_data: true, revenue_cents: 80000, expense_cents: 20000, result_cents: 60000 },
+        { year: 2026, has_data: true, revenue_cents: 100000, expense_cents: 2066, result_cents: 97934 },
+      ],
+    })
+    wrap(<FinancialDashboardPage />)
+    await screen.findByText(/result in eur/i)
+
+    const card = screen.getByText(/result trend/i).closest('[data-card]')
+    const chart = within(card).getByTestId('result-trend-chart')
+    expect(JSON.parse(chart.dataset.ymin)).toBe(-400)
+    expect(JSON.parse(chart.dataset.ymax)).toBe(979.34)
   })
 
   it('shows the bank balance derived from the ledger', async () => {

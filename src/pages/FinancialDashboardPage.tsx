@@ -10,7 +10,7 @@ import { useTheme } from '@mui/material/styles'
 import AddOutlined from '@mui/icons-material/AddOutlined'
 import { ChartsContainer } from '@mui/x-charts/ChartsContainer'
 import { BarPlot } from '@mui/x-charts/BarChart'
-import { LinePlot } from '@mui/x-charts/LineChart'
+import { LineChart, LinePlot } from '@mui/x-charts/LineChart'
 import { ChartsXAxis } from '@mui/x-charts/ChartsXAxis'
 import { ChartsYAxis } from '@mui/x-charts/ChartsYAxis'
 import { ChartsAxisHighlight } from '@mui/x-charts/ChartsAxisHighlight'
@@ -61,6 +61,14 @@ interface BankData {
   balance_cents: number
 }
 
+interface AnnualResult {
+  year: number
+  has_data: boolean
+  revenue_cents: number
+  expense_cents: number
+  result_cents: number
+}
+
 interface MerchData {
   revenue_cents: number
   cogs_cents: number
@@ -72,6 +80,7 @@ interface OverviewData {
   currency: string
   totals: Totals
   months: MonthData[]
+  annual_results: AnnualResult[]
   bank: BankData
   invoices: InvoicesData
   vat: VatData
@@ -84,6 +93,13 @@ interface OverviewData {
 const toEuros = (cents: number) => cents / 100
 const formatChartValue = (value: number | null | undefined) =>
   formatEur(Math.round((value ?? 0) * 100))
+
+// Compact euro for axis ticks (e.g. "€15K") — the full amount stays in the
+// hover overlay via the series valueFormatter.
+const compactEur = new Intl.NumberFormat('en-US', {
+  style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1,
+})
+const formatCompactChartValue = (value: number | null | undefined) => compactEur.format(value ?? 0)
 
 export default function FinancialDashboardPage() {
   const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
@@ -156,8 +172,19 @@ export default function FinancialDashboardPage() {
           <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1' } }}>
             <ResultChartCard currency={data.currency} months={data.months} totals={data.totals} />
           </Box>
-          <OverviewCard totals={data.totals} bank={data.bank} />
-          <InvoicesCard invoices={data.invoices} />
+          <Box
+            sx={{
+              gridColumn: { xs: 'auto', md: '1 / -1' },
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+              alignItems: 'stretch',
+            }}
+          >
+            <OverviewCard totals={data.totals} bank={data.bank} />
+            <ResultsTrendCard currency={data.currency} annualResults={data.annual_results} />
+            <InvoicesCard invoices={data.invoices} />
+          </Box>
           <VatCard vat={data.vat} />
           {data.merch && <MerchCard merch={data.merch} totals={data.totals} />}
         </Box>
@@ -373,6 +400,65 @@ function OverviewCard({ totals, bank }: OverviewCardProps) {
         <Typography variant="body2" color="text.secondary">Bank balance</Typography>
         <Typography variant="body1" sx={{ fontWeight: 600 }}>{formatEur(bank.balance_cents)}</Typography>
       </Box>
+    </DashboardCard>
+  )
+}
+
+// Compact line chart of the yearly result over the trailing calendar years,
+// sized at half the Overview card's width and seated beside it.
+interface ResultsTrendCardProps {
+  currency: string
+  annualResults: AnnualResult[]
+}
+
+function ResultsTrendCard({ currency, annualResults }: ResultsTrendCardProps) {
+  const theme = useTheme()
+  const latestResult = annualResults[annualResults.length - 1]?.result_cents ?? 0
+  const lineColor = latestResult >= 0 ? theme.palette.success.main : theme.palette.error.main
+
+  // Years without ledger activity render as gaps (null) — no marker, and the
+  // line breaks rather than connecting through a fabricated zero.
+  const seriesData = annualResults.map((r) => (r.has_data ? toEuros(r.result_cents) : null))
+
+  // Anchor the y-axis to 0 so the zero line is always in view — the line sits
+  // above it for a profit, below it for a loss. (A degenerate all-zero/empty
+  // series leaves the bounds unset so x-charts picks a sensible range.)
+  const values = annualResults.filter((r) => r.has_data).map((r) => toEuros(r.result_cents))
+  const yMin = Math.min(0, ...values)
+  const yMax = Math.max(0, ...values)
+  const yBounds = yMin === yMax ? {} : { min: yMin, max: yMax }
+
+  return (
+    <DashboardCard
+      title={(
+        <>
+          Result trend{' '}
+          <Typography component="span" variant="caption" color="text.secondary">
+            Last {annualResults.length} yrs · {currency}
+          </Typography>
+        </>
+      )}
+    >
+      <LineChart
+        height={196}
+        margin={{ left: 4, right: 24, top: 8, bottom: 14 }}
+        xAxis={[{ data: annualResults.map((r) => String(r.year)), scaleType: 'point', disableLine: true, disableTicks: true }]}
+        yAxis={[{ width: Y_AXIS_MARGIN_PX, disableLine: true, disableTicks: true, valueFormatter: formatCompactChartValue, ...yBounds }]}
+        series={[{
+          data: seriesData,
+          color: lineColor,
+          curve: 'linear',
+          showMark: true,
+          connectNulls: false,
+          valueFormatter: formatChartValue,
+        }]}
+        grid={{ horizontal: true }}
+        sx={{
+          '& .MuiLineElement-root': { strokeWidth: 1.5 },
+          // Ticks are hidden, so nudge the year labels clear of the plot bottom.
+          '& .MuiChartsAxis-bottom .MuiChartsAxis-tickLabel': { transform: 'translateY(8px)' },
+        }}
+      />
     </DashboardCard>
   )
 }
