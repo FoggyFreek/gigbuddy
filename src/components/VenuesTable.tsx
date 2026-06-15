@@ -17,7 +17,7 @@ import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
-import TablePagination from '@mui/material/TablePagination'
+import ListPagination from './shared/ListPagination.tsx'
 import TableRow from '@mui/material/TableRow'
 import TableSortLabel from '@mui/material/TableSortLabel'
 import TextField from '@mui/material/TextField'
@@ -358,8 +358,7 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
           )}
         </Paper>
         {sorted.length > rowsPerPage && (
-          <TablePagination
-            component="div"
+          <ListPagination
             count={sorted.length}
             page={page}
             rowsPerPage={rowsPerPage}
@@ -456,8 +455,7 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
             </TableBody>
           </Table>
         </TableContainer>
-        <TablePagination
-          component="div"
+        <ListPagination
           count={sorted.length}
           page={page}
           rowsPerPage={rowsPerPage}

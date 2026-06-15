@@ -7,6 +7,8 @@ import {
   updateProduct,
   archiveProduct,
   listMerchSales,
+  merchSalesSummary,
+  merchSalesPeriods,
   recordMerchSale,
   voidMerchSale,
 } from '../services/merchService.js'
@@ -52,8 +54,21 @@ router.delete('/products/:id', async (req, res) => {
 
 // ---------- sales ----------
 
+// Per-product totals for the selected period (master list).
+router.get('/sales/summary', async (req, res) => {
+  const result = await merchSalesSummary(pool, req.tenantId, req.query)
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.json(result.rows)
+})
+
+// Distinct sale dates for the period picker.
+router.get('/sales/periods', async (req, res) => {
+  res.json(await merchSalesPeriods(pool, req.tenantId))
+})
+
 router.get('/sales', async (req, res) => {
-  const result = await listMerchSales(pool, req.tenantId)
+  const result = await listMerchSales(pool, req.tenantId, req.query)
+  if (result.error) return res.status(result.error.status).json(result.error.body)
   res.json(result.sales)
 })
 

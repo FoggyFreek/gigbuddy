@@ -333,6 +333,23 @@ export interface LedgerEntryRow {
   source_id?: Id
 }
 
+/** One entry-line result of the ledger entry search (GET /api/ledger/entries). */
+export interface LedgerEntryLineRow {
+  id?: Id
+  transaction_id?: Id
+  entry_date?: string
+  account_code?: string
+  account_name?: string
+  type?: string
+  description?: string | null
+  memo?: string | null
+  debit_cents?: number
+  credit_cents?: number
+  source_type?: string
+  source_event?: string
+  voided?: boolean
+}
+
 /** One journal line in the ledger entry detail (GET /api/ledger/:id). */
 export interface LedgerLine {
   id?: Id
@@ -439,4 +456,15 @@ export interface MerchSale {
   revenue_account_code?: string | null
   status?: 'recorded' | 'voided'
   voided_at?: string
+}
+
+// One row of the per-product sales summary (master list): recorded-sale totals
+// for a product in the selected period.
+export interface MerchSalesSummaryRow {
+  product_id: Id
+  product_name: string
+  revenue_account_code: string | null
+  revenue_account_name: string | null
+  total_qty: number
+  total_amount_cents: number
 }

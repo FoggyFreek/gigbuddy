@@ -11,7 +11,7 @@ import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
-import TablePagination from '@mui/material/TablePagination'
+import ListPagination from '../components/shared/ListPagination.tsx'
 import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -298,8 +298,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }: InvoicesListProps) {
   const paged = invoices.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)
 
   const pagination = invoices.length > rowsPerPage && (
-    <TablePagination
-      component="div"
+    <ListPagination
       count={invoices.length}
       page={safePage}
       rowsPerPage={rowsPerPage}

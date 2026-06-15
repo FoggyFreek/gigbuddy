@@ -27,16 +27,22 @@ export function invoiceInPeriod(inv: Invoice, period: Period): boolean {
   }
 }
 
-export function periodQueryString(period: Period | null | undefined): string {
-  if (!period?.mode) return ''
-
-  const params = new URLSearchParams({ mode: period.mode })
+// Adds the period's fields to an existing URLSearchParams (no-op for an empty
+// period). Lets callers merge period params with their own (e.g. product_id)
+// in a single params object instead of string-concatenating query fragments.
+export function appendPeriodParams(params: URLSearchParams, period: Period | null | undefined): void {
+  if (!period?.mode) return
+  params.set('mode', period.mode)
   if (period.year !== undefined) params.set('year', String(period.year))
   if (period.month !== undefined) params.set('month', String(period.month))
   if (period.quarter !== undefined) params.set('quarter', String(period.quarter))
   if (period.from) params.set('from', period.from)
   if (period.to) params.set('to', period.to)
+}
 
+export function periodQueryString(period: Period | null | undefined): string {
+  const params = new URLSearchParams()
+  appendPeriodParams(params, period)
   const query = params.toString()
   return query ? `?${query}` : ''
 }

@@ -321,6 +321,34 @@ export async function reportEntryLines(executor, tenantId, { from, toExclusive }
   return rows
 }
 
+// Individual ledger entry lines for the given accounts inside the (optional)
+// period, joined to the chart of accounts for names. Unlike the report queries
+// this keeps voided rows (the service flags them via classify()/voided_at so
+// the browser's "Show voided" toggle works); the service derives type/voided.
+// `period` is buildPeriodWhere(query, 'lt.entry_date', 3) — its placeholders
+// start at $3, after $1=tenantId and $2=accountCodes.
+export async function listEntriesByAccounts(executor, tenantId, accountCodes, period = EMPTY_PERIOD) {
+  const { rows } = await executor.query(
+    `SELECT le.id, lt.id AS transaction_id,
+            to_char(lt.entry_date, 'YYYY-MM-DD') AS entry_date,
+            le.account_code, coa.name AS account_name,
+            lt.description, le.memo,
+            le.debit_cents, le.credit_cents,
+            lt.source_type, lt.source_event, lt.voided_at
+       FROM ledger_entries le
+       JOIN ledger_transactions lt
+         ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+       LEFT JOIN chart_of_accounts coa
+         ON coa.tenant_id = le.tenant_id AND coa.code = le.account_code
+      WHERE le.tenant_id = $1
+        AND le.account_code = ANY($2::text[])
+        ${period.sql}
+      ORDER BY lt.entry_date DESC, lt.id DESC, le.id ASC`,
+    [tenantId, accountCodes, ...period.values],
+  )
+  return rows
+}
+
 // Distinct entry dates for the PeriodPicker availability grid.
 export async function listEntryDates(executor, tenantId) {
   const { rows } = await executor.query(

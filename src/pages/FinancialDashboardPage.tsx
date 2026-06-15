@@ -76,6 +76,21 @@ interface MerchData {
   inventory_value_cents: number
 }
 
+interface FeeStatusBucket {
+  count: number
+  total_cents: number
+}
+
+interface UpcomingFeesData {
+  total_cents: number
+  gig_count: number
+  by_status: {
+    option: FeeStatusBucket
+    confirmed: FeeStatusBucket
+    announced: FeeStatusBucket
+  }
+}
+
 interface OverviewData {
   currency: string
   totals: Totals
@@ -85,6 +100,7 @@ interface OverviewData {
   invoices: InvoicesData
   vat: VatData
   merch?: MerchData
+  upcoming_fees: UpcomingFeesData
   revenue_cents?: number
   expense_cents?: number
   net_cents?: number
@@ -185,8 +201,19 @@ export default function FinancialDashboardPage() {
             <ResultsTrendCard currency={data.currency} annualResults={data.annual_results} />
             <InvoicesCard invoices={data.invoices} />
           </Box>
-          <VatCard vat={data.vat} />
-          {data.merch && <MerchCard merch={data.merch} totals={data.totals} />}
+          <Box
+            sx={{
+              gridColumn: { xs: 'auto', md: '1 / -1' },
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+              alignItems: 'stretch',
+            }}
+          >
+            <VatCard vat={data.vat} />
+            <UpcomingFeesCard fees={data.upcoming_fees} />
+            {data.merch && <MerchCard merch={data.merch} totals={data.totals} />}
+          </Box>
         </Box>
       )}
     </Box>
@@ -563,6 +590,57 @@ function MerchCard({ merch, totals }: MerchCardProps) {
         Sales {formatEur(merch.revenue_cents)} − cost of goods {formatEur(merch.cogs_cents)}
         {sharePct !== null && ` — ${sharePct}% of total revenue`}
       </Typography>
+    </DashboardCard>
+  )
+}
+
+// Upcoming gross band-fee pipeline: a headline total across all future gigs in
+// the active statuses, with a per-status breakdown of count and fees. Pinned to
+// "today" (like VAT/bank), independent of the selected period.
+interface UpcomingFeesCardProps {
+  fees: UpcomingFeesData
+}
+
+const FEE_STATUS_META: { key: keyof UpcomingFeesData['by_status']; label: string; dotColor: string }[] = [
+  { key: 'confirmed', label: 'Confirmed', dotColor: 'success.main' },
+  { key: 'announced', label: 'Announced', dotColor: 'info.main' },
+  { key: 'option', label: 'Option', dotColor: 'warning.main' },
+]
+
+function UpcomingFeesCard({ fees }: UpcomingFeesCardProps) {
+  return (
+    <DashboardCard
+      title="Upcoming fees"
+      action={(
+        <Button component={RouterLink} to="/gigs" size="small" variant="outlined">
+          View gigs
+        </Button>
+      )}
+    >
+      <Box>
+        <Typography variant="caption" color="text.secondary">Gross band fees</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 600, my: 0.5, color: 'success.main' }}>
+          {formatEur(fees.total_cents)}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {fees.gig_count === 0
+            ? 'No upcoming gigs with a fee'
+            : `Across ${fees.gig_count} upcoming ${fees.gig_count === 1 ? 'gig' : 'gigs'}`}
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 2 }}>
+        {FEE_STATUS_META.map(({ key, label, dotColor }) => (
+          <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: dotColor }} />
+            <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+              {label} ({fees.by_status[key].count})
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {formatEur(fees.by_status[key].total_cents)}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
     </DashboardCard>
   )
 }

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -10,27 +11,26 @@ import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
-import TablePagination from '@mui/material/TablePagination'
 import TableRow from '@mui/material/TableRow'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined'
-import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined'
 import ProductDialog from '../components/merch/ProductDialog.tsx'
-import VoidSaleDialog from '../components/merch/VoidSaleDialog.tsx'
 import RecordSaleDialog from '../components/merch/RecordSaleDialog.tsx'
 import { useMerchState } from '../components/merch/useMerchState.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import PeriodPicker from '../components/shared/periodPicker.tsx'
+import SplitView from '../components/SplitView.tsx'
 import {
   createProduct, updateProduct, archiveProduct,
-  recordMerchSale, voidMerchSale,
+  recordMerchSale, listMerchSalePeriods, listMerchSalesSummary,
 } from '../api/merch.ts'
 import { formatEur } from '../utils/purchaseTotals.ts'
 import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
-import type { Product, MerchSale, Id } from '../types/entities.ts'
+import type { Product, MerchSale, MerchSalesSummaryRow, Period, Id } from '../types/entities.ts'
 
 interface SaleBody {
   product_id: Id
@@ -43,10 +43,58 @@ interface SaleBody {
 }
 
 export default function MerchPage() {
-  const { products, sales, revenueAccounts, error, setError, reload } = useMerchState()
+  const navigate = useNavigate()
+  const { id: selectedIdParam } = useParams()
+  const selectedId = selectedIdParam ? Number(selectedIdParam) : null
+  const { products, revenueAccounts, error, setError, reload } = useMerchState()
   const [productDialog, setProductDialog] = useState<Product | 'new' | null>(null)
   const [saleDialogOpen, setSaleDialogOpen] = useState(false)
-  const [voidTarget, setVoidTarget] = useState<MerchSale | null>(null)
+
+  // Merch defaults to all-time: bands want their full sales-per-product picture
+  // first, then narrow by period if they care to.
+  const [period, setPeriod] = useState<Period>(() => ({ mode: 'all_time' }))
+  const [availableDates, setAvailableDates] = useState<string[]>([])
+  const [periodsLoaded, setPeriodsLoaded] = useState(false)
+  const [summary, setSummary] = useState<MerchSalesSummaryRow[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(true)
+
+  const refreshPeriods = useCallback(async ({ signalLoaded = false } = {}) => {
+    try {
+      const dates = await listMerchSalePeriods()
+      setAvailableDates(dates.filter(Boolean))
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (signalLoaded) setPeriodsLoaded(true)
+    }
+  }, [setError])
+
+  const loadSummary = useCallback(async () => {
+    try {
+      setSummaryLoading(true)
+      setSummary(await listMerchSalesSummary(period))
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSummaryLoading(false)
+    }
+  }, [period, setError])
+
+  useEffect(() => {
+    refreshPeriods({ signalLoaded: true })
+  }, [refreshPeriods])
+
+  useEffect(() => {
+    if (periodsLoaded) loadSummary()
+  }, [loadSummary, periodsLoaded])
+
+  // The detail pane fires this after a void: the totals change and a product may
+  // drop out of the summary (and its dates out of the picker) entirely.
+  const handleSalesChanged = useCallback(() => {
+    refreshPeriods()
+    loadSummary()
+    reload()
+  }, [refreshPeriods, loadSummary, reload])
 
   async function handleProductSubmit(body: Partial<Product>) {
     if (productDialog === 'new') await createProduct(body)
@@ -66,25 +114,13 @@ export default function MerchPage() {
 
   async function handleRecordSale(body: SaleBody): Promise<void> {
     await recordMerchSale(body as Partial<MerchSale>)
-    await reload()
+    handleSalesChanged()
   }
 
-  async function handleVoid() {
-    const sale = voidTarget
-    setVoidTarget(null)
-    try {
-      setError(null)
-      await voidMerchSale(sale!.id!)
-      await reload()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
-
-  const loading = products === null || sales === null
+  const loading = products === null
 
   return (
-    <Box>
+    <SplitView basePath="/merch" outletContext={{ onReload: handleSalesChanged, period }}>
       <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>Merchandise</Typography>
 
       {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
@@ -125,14 +161,20 @@ export default function MerchPage() {
             />
           )}
 
-          <Typography variant="h6" sx={{ mb: 1 }}>Sales</Typography>
-          {!sales!.length && (
-            <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-              No sales recorded yet.
-            </Typography>
-          )}
-          {Boolean(sales!.length) && (
-            <SalesList sales={sales!} onVoid={(s) => setVoidTarget(s)} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+            <Typography variant="h6" sx={{ flexGrow: 1 }}>Sales by product</Typography>
+            <Chip size="small" label={summary.length} />
+            <PeriodPicker availableDates={availableDates} value={period} onChange={setPeriod} />
+          </Box>
+
+          {summaryLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={28} /></Box>
+          ) : (
+            <ProductSalesSummaryList
+              rows={summary}
+              selectedId={selectedId}
+              onRowClick={(row) => navigate(`/merch/${row.product_id}`)}
+            />
           )}
         </>
       )}
@@ -152,14 +194,7 @@ export default function MerchPage() {
           onClose={() => setSaleDialogOpen(false)}
         />
       )}
-      {voidTarget && (
-        <VoidSaleDialog
-          sale={voidTarget}
-          onConfirm={handleVoid}
-          onClose={() => setVoidTarget(null)}
-        />
-      )}
-    </Box>
+    </SplitView>
   )
 }
 
@@ -270,72 +305,61 @@ function ProductsList({ products, onEdit, onArchive }: ProductsListProps) {
   )
 }
 
-interface VoidSaleButtonProps {
-  sale: MerchSale
-  onVoid: (s: MerchSale) => void
+function accountLabel(row: MerchSalesSummaryRow): string {
+  if (!row.revenue_account_code) return '—'
+  return row.revenue_account_name
+    ? `${row.revenue_account_code} — ${row.revenue_account_name}`
+    : row.revenue_account_code
 }
 
-function VoidSaleButton({ sale, onVoid }: VoidSaleButtonProps) {
-  if (sale.status !== 'recorded') return null
-  return (
-    <Tooltip title="Void sale">
-      <IconButton size="small" onClick={() => onVoid(sale)}>
-        <BlockOutlinedIcon fontSize="small" />
-      </IconButton>
-    </Tooltip>
-  )
+interface ProductSalesSummaryListProps {
+  rows: MerchSalesSummaryRow[]
+  selectedId: Id | null
+  onRowClick: (row: MerchSalesSummaryRow) => void
 }
 
-const SALES_PAGE_SIZE = 25
-
-interface SalesListProps {
-  sales: MerchSale[]
-  onVoid: (s: MerchSale) => void
-}
-
-function SalesList({ sales, onVoid }: SalesListProps) {
+function ProductSalesSummaryList({ rows, selectedId, onRowClick }: ProductSalesSummaryListProps) {
   const isCompact = useCompactLayout()
-  const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(SALES_PAGE_SIZE)
 
-  // Clamp so a shrinking list can't strand the user on an empty page.
-  const pageCount = Math.max(0, Math.ceil(sales.length / rowsPerPage) - 1)
-  const safePage = Math.min(page, pageCount)
-  const paged = sales.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)
-
-  const pagination = sales.length > rowsPerPage && (
-    <TablePagination
-      component="div"
-      count={sales.length}
-      page={safePage}
-      rowsPerPage={rowsPerPage}
-      rowsPerPageOptions={[25, 50, 100]}
-      onPageChange={(_, p) => setPage(p)}
-      onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0) }}
-    />
-  )
+  if (!rows.length) {
+    return (
+      <Paper variant="outlined">
+        <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+          No sales in this period.
+        </Typography>
+      </Paper>
+    )
+  }
 
   if (isCompact) {
     return (
       <Paper variant="outlined">
-        {paged.map((s) => (
-          <Box key={String(s.id)} sx={{ ...cardSx, opacity: s.status === 'voided' ? 0.5 : 1 }}>
+        {rows.map((row) => (
+          <Box
+            key={String(row.product_id)}
+            onClick={() => onRowClick(row)}
+            sx={{
+              ...cardSx,
+              cursor: 'pointer',
+              '&:hover': { bgcolor: 'action.hover' },
+              boxShadow: row.product_id === selectedId
+                ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}`
+                : 'none',
+            }}
+          >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.product_name}</Typography>
-                {s.status === 'voided' && <Chip label="Voided" size="small" />}
-              </Box>
+              <Typography variant="body2" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {row.product_name}
+              </Typography>
               <Typography variant="caption" color="text.secondary">
-                {s.sale_date} · {s.quantity} × {formatEur(s.unit_price_incl_cents)}
+                {accountLabel(row)} · {row.total_qty} sold
               </Typography>
             </Box>
             <Typography variant="body1" sx={{ fontWeight: 500, flexShrink: 0 }}>
-              {formatEur((s.quantity ?? 0) * (s.unit_price_incl_cents ?? 0))}
+              {formatEur(row.total_amount_cents)}
             </Typography>
-            <VoidSaleButton sale={s} onVoid={onVoid} />
           </Box>
         ))}
-        {pagination}
       </Paper>
     )
   }
@@ -346,36 +370,30 @@ function SalesList({ sales, onVoid }: SalesListProps) {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Date</TableCell>
               <TableCell>Product</TableCell>
+              <TableCell>Account</TableCell>
               <TableCell align="right">Qty</TableCell>
-              <MoneyHeaderCells label="Unit price" />
               <MoneyHeaderCells label="Total" />
-              <TableCell>Paid into</TableCell>
-              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {paged.map((s) => (
-              <TableRow key={String(s.id)} sx={s.status === 'voided' ? { opacity: 0.5 } : undefined}>
-                <TableCell>{s.sale_date}</TableCell>
-                <TableCell>
-                  {s.product_name}
-                  {s.status === 'voided' && <Chip label="Voided" size="small" sx={{ ml: 1 }} />}
-                </TableCell>
-                <TableCell align="right">{s.quantity}</TableCell>
-                <MoneyCells cents={s.unit_price_incl_cents} />
-                <MoneyCells cents={(s.quantity ?? 0) * (s.unit_price_incl_cents ?? 0)} />
-                <TableCell>{s.payment_method === 'cash' ? 'Cash on hand' : 'Bank'}</TableCell>
-                <TableCell align="right">
-                  <VoidSaleButton sale={s} onVoid={onVoid} />
-                </TableCell>
+            {rows.map((row) => (
+              <TableRow
+                key={String(row.product_id)}
+                hover
+                selected={row.product_id === selectedId}
+                sx={{ cursor: 'pointer' }}
+                onClick={() => onRowClick(row)}
+              >
+                <TableCell>{row.product_name}</TableCell>
+                <TableCell>{accountLabel(row)}</TableCell>
+                <TableCell align="right">{row.total_qty}</TableCell>
+                <MoneyCells cents={row.total_amount_cents} />
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </TableContainer>
-      {pagination}
     </Paper>
   )
 }

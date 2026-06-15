@@ -63,7 +63,7 @@ afterEach(() => {
 describe('LedgerEntriesPage', () => {
   it('renders the heading and the non-voided rows by default', async () => {
     wrap(<LedgerEntriesPage />)
-    expect(screen.getByRole('heading', { name: /ledger entries/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /ledger transactions/i })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('Bill from mi5 Studios: TEST')).toBeInTheDocument())
     expect(listLedger).toHaveBeenCalledWith({ mode: 'fiscal_year', year: 2026 })
 

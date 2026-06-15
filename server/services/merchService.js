@@ -12,6 +12,7 @@
 // matches quantity × average cost.
 import { ALLOWED_TAX_RATES } from '../validators/purchaseValidators.js'
 import { isValidCalendarDate } from '../validators/accountValidators.js'
+import { buildPeriodWhere } from '../utils/periodQuery.js'
 import { validateGigIdForTenant } from '../repositories/invoiceRepository.js'
 import { isAccountAtOrBelow } from '../repositories/accountRepository.js'
 import { getSettings } from './accountService.js'
@@ -176,16 +177,76 @@ const SALE_COLUMNS = `s.id, s.product_id, p.name AS product_name, s.gig_id,
   s.quantity, s.unit_price_incl_cents, s.vat_rate, s.unit_cost_cents,
   s.payment_method, s.revenue_account_code, s.status, s.voided_at, s.created_at`
 
-export async function listMerchSales(executor, tenantId) {
+// Lists individual sales for the detail pane. Optional period (sale_date) and
+// product_id filters; returns all statuses so voided rows still show greyed.
+export async function listMerchSales(executor, tenantId, query = {}) {
+  const period = buildPeriodWhere(query, 's.sale_date')
+  if (period.error) return { error: { status: 400, body: { error: period.error } } }
+
+  let productSql = ''
+  const params = [tenantId, ...period.values]
+  if (query.product_id !== undefined && query.product_id !== null && String(query.product_id) !== '') {
+    const productId = parsePositiveInt(query.product_id)
+    if (!productId) return { error: { status: 400, body: { error: 'Invalid product_id' } } }
+    params.push(productId)
+    productSql = ` AND s.product_id = $${params.length}`
+  }
+
   const { rows } = await executor.query(
     `SELECT ${SALE_COLUMNS}
        FROM merch_sales s
        JOIN products p ON p.id = s.product_id AND p.tenant_id = s.tenant_id
       WHERE s.tenant_id = $1
+        ${period.sql}${productSql}
       ORDER BY s.sale_date DESC, s.id DESC`,
-    [tenantId],
+    params,
   )
   return { sales: rows }
+}
+
+// Per-product summary for the master list. Lists one row per product that had
+// at least one non-voided sale in the period (voided sales add no row and no
+// total). Account resolves per product (current revenue_account_code, else the
+// band default) so each product is exactly one row.
+export async function merchSalesSummary(executor, tenantId, query = {}) {
+  const period = buildPeriodWhere(query, 's.sale_date')
+  if (period.error) return { error: { status: 400, body: { error: period.error } } }
+
+  const { rows } = await executor.query(
+    `SELECT s.product_id,
+            p.name AS product_name,
+            COALESCE(p.revenue_account_code, tas.merch_revenue_account_code) AS revenue_account_code,
+            coa.name AS revenue_account_name,
+            SUM(s.quantity)::int AS total_qty,
+            SUM(s.quantity * s.unit_price_incl_cents)::int AS total_amount_cents
+       FROM merch_sales s
+       JOIN products p ON p.id = s.product_id AND p.tenant_id = s.tenant_id
+       JOIN tenant_accounting_settings tas ON tas.tenant_id = s.tenant_id
+       LEFT JOIN chart_of_accounts coa
+         ON coa.tenant_id = s.tenant_id
+        AND coa.code = COALESCE(p.revenue_account_code, tas.merch_revenue_account_code)
+      WHERE s.tenant_id = $1
+        AND s.status = 'recorded'
+        ${period.sql}
+      GROUP BY s.product_id, p.name,
+               COALESCE(p.revenue_account_code, tas.merch_revenue_account_code), coa.name
+      ORDER BY total_amount_cents DESC, p.name ASC`,
+    [tenantId, ...period.values],
+  )
+  return { rows }
+}
+
+// Distinct sale dates (recorded only, matching the summary) feeding the period
+// picker so it never offers a period whose sales are all voided.
+export async function merchSalesPeriods(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT DISTINCT to_char(sale_date, 'YYYY-MM-DD') AS date
+       FROM merch_sales
+      WHERE tenant_id = $1 AND status = 'recorded'
+      ORDER BY date DESC`,
+    [tenantId],
+  )
+  return rows.map((row) => row.date)
 }
 
 export async function recordMerchSale(pool, tenantId, body, actorUserId = null) {

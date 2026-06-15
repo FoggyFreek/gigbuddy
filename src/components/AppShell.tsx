@@ -40,6 +40,7 @@ import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined'
 import SellOutlined from '@mui/icons-material/SellOutlined'
 import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined'
 import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
+import ManageSearchOutlined from '@mui/icons-material/ManageSearchOutlined'
 import VolunteerActivismOutlined from '@mui/icons-material/VolunteerActivismOutlined'
 import AccountBalanceOutlined from '@mui/icons-material/AccountBalanceOutlined'
 import AssessmentOutlined from '@mui/icons-material/AssessmentOutlined'
@@ -140,6 +141,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
     children: [
       { to: '/journal', label: 'Journal', icon: MenuBookOutlined },
       { to: '/ledger', label: 'Ledger', icon: ListAltOutlined },
+      { to: '/ledger-entries', label: 'Ledger entries', icon: ManageSearchOutlined },
       { to: '/vat-returns', label: 'VAT declarations', icon: AccountBalanceOutlined, adminOnly: true },
       { to: '/reports', label: 'Reports', icon: AssessmentOutlined },
     ],

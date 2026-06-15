@@ -10,7 +10,7 @@ import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
-import TablePagination from '@mui/material/TablePagination'
+import ListPagination from './shared/ListPagination.tsx'
 import TableRow from '@mui/material/TableRow'
 import TableSortLabel from '@mui/material/TableSortLabel'
 import TextField from '@mui/material/TextField'
@@ -164,8 +164,7 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }: Son
   )
 
   const pagination = sorted.length > rowsPerPage || !isCompact ? (
-    <TablePagination
-      component="div"
+    <ListPagination
       count={sorted.length}
       page={page}
       rowsPerPage={rowsPerPage}

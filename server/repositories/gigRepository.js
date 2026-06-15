@@ -110,6 +110,26 @@ export async function listGigsWithTaskCounts(executor, tenantId) {
   return rows
 }
 
+// Pipeline of gross band fees for upcoming gigs (event_date >= today) in the
+// active statuses, grouped by status. Only gigs with a fee set contribute, so
+// the per-status count and total stay consistent. Pinned to "today" like the
+// VAT/bank figures — independent of the selected dashboard period.
+export async function upcomingBandFeesByStatus(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT status,
+            COUNT(*)::int AS gig_count,
+            COALESCE(SUM(booking_fee_cents), 0)::int AS total_cents
+       FROM gigs
+      WHERE tenant_id = $1
+        AND event_date >= CURRENT_DATE
+        AND status IN ('option', 'confirmed', 'announced')
+        AND booking_fee_cents IS NOT NULL
+      GROUP BY status`,
+    [tenantId],
+  )
+  return rows
+}
+
 export async function listBandMembers(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM band_members WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',

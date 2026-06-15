@@ -6,12 +6,21 @@ import pool from '../db/index.js'
 import { buildPeriodWhere, resolvePeriodRange } from '../utils/periodQuery.js'
 import { parseId } from '../validators/journalValidators.js'
 import { listEntryDates, getTenantDisplayName } from '../repositories/ledgerRepository.js'
-import { getLedgerList, getLedgerEntryDetail, getFinancialOverview, voidLedgerTransaction, reverseLedgerTransaction } from '../services/ledgerService.js'
+import { getLedgerList, getLedgerEntriesByAccount, getLedgerEntryDetail, getFinancialOverview, voidLedgerTransaction, reverseLedgerTransaction } from '../services/ledgerService.js'
 import { getFinancialReport, getReportEntryLines } from '../services/financialReportService.js'
 import { renderFinancialReportXlsx } from '../utils/renderFinancialReportXlsx.js'
 import { renderFinancialReportPdf } from '../utils/renderFinancialReportPdf.js'
 
 const router = Router()
+
+// Parse the `accounts` query param (comma-separated account codes) into a
+// deduped list of valid codes. Anything malformed is dropped; missing/blank
+// yields [] (the service then returns no rows without scanning the ledger).
+function parseAccountCodes(raw) {
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (typeof value !== 'string') return []
+  return [...new Set(value.split(',').map((c) => c.trim()).filter((c) => /^[0-9]{4,6}$/.test(c)))]
+}
 
 // Human label for the requested period, used in export headers/filenames.
 function periodLabelFor(query) {
@@ -35,6 +44,14 @@ router.get('/', async (req, res) => {
 // ---------- periods (for the PeriodPicker availability grid) ----------
 router.get('/periods', async (req, res) => {
   res.json(await listEntryDates(pool, req.tenantId))
+})
+
+// ---------- entry-line search by account (must precede /:id) ----------
+router.get('/entries', async (req, res) => {
+  const period = buildPeriodWhere(req.query, 'lt.entry_date', 3) // $1 tenant, $2 codes, period from $3
+  if (period.error) return res.status(400).json({ error: period.error })
+  const codes = parseAccountCodes(req.query.accounts)
+  res.json(await getLedgerEntriesByAccount(pool, req.tenantId, codes, period))
 })
 
 // ---------- financial dashboard overview (must precede /:id) ----------

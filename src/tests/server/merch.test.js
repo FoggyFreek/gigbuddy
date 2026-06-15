@@ -708,3 +708,107 @@ describe('merch sales — list & ledger browser', () => {
     expect(row.description).toBe('Merch sale: 3 × Band T-Shirt')
   })
 })
+
+describe('merch sales — per-product summary & period filters', () => {
+  it('summarizes recorded sales per product with account code, name, qty and amount', async () => {
+    const product = await createProduct(asUserA, { revenue_account_code: '42100' })
+    await stockProduct(asUserA, product.id, 10)
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 2, unit_price_incl_cents: 3630, vat_rate: 21, sale_date: '2026-06-01' }).expect(201)
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, unit_price_incl_cents: 3630, vat_rate: 21, sale_date: '2026-06-05' }).expect(201)
+
+    const res = await asUserA(request(app).get('/api/merch/sales/summary'))
+      .query({ mode: 'fiscal_year', year: 2026 }).expect(200)
+    expect(res.body).toHaveLength(1)
+    const row = res.body[0]
+    expect(row.product_id).toBe(product.id)
+    expect(row.product_name).toBe('Band T-Shirt')
+    expect(row.revenue_account_code).toBe('42100')
+    expect(row.revenue_account_name).toBe('Merchandise Sales - Vinyl and CDs')
+    expect(row.total_qty).toBe(3)
+    expect(row.total_amount_cents).toBe(3 * 3630)
+  })
+
+  it('falls back to the band default account when the product has none', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 5)
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, sale_date: '2026-06-01' }).expect(201)
+
+    const res = await asUserA(request(app).get('/api/merch/sales/summary'))
+      .query({ mode: 'fiscal_year', year: 2026 }).expect(200)
+    expect(res.body[0].revenue_account_code).toBe('42000')
+    expect(res.body[0].revenue_account_name).toBe('Merchandise Sales')
+  })
+
+  it('excludes voided sales from totals and omits a fully-voided product', async () => {
+    const sold = await createProduct(asUserA, { name: 'Sold Out' })
+    await stockProduct(asUserA, sold.id, 10)
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: sold.id, quantity: 2, sale_date: '2026-06-01' }).expect(201)
+
+    const voidedOnly = await createProduct(asUserA, { name: 'All Voided' })
+    await stockProduct(asUserA, voidedOnly.id, 10)
+    const v = await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: voidedOnly.id, quantity: 3, sale_date: '2026-06-02' }).expect(201)
+    await asUserA(request(app).post(`/api/merch/sales/${v.body.id}/void`)).expect(200)
+
+    const res = await asUserA(request(app).get('/api/merch/sales/summary'))
+      .query({ mode: 'fiscal_year', year: 2026 }).expect(200)
+    expect(res.body).toHaveLength(1)
+    expect(res.body[0].product_id).toBe(sold.id)
+    expect(res.body[0].total_qty).toBe(2)
+
+    // The voided rows still surface in the period-filtered detail list.
+    const detail = await asUserA(request(app).get('/api/merch/sales'))
+      .query({ mode: 'fiscal_year', year: 2026, product_id: voidedOnly.id }).expect(200)
+    expect(detail.body).toHaveLength(1)
+    expect(detail.body[0].status).toBe('voided')
+  })
+
+  it('summary is scoped to the active tenant', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 5)
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, sale_date: '2026-06-01' }).expect(201)
+
+    const res = await asUserB(request(app).get('/api/merch/sales/summary'))
+      .query({ mode: 'fiscal_year', year: 2026 }).expect(200)
+    expect(res.body).toHaveLength(0)
+  })
+
+  it('respects the period filter', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 10)
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, sale_date: '2025-06-01' }).expect(201)
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 2, sale_date: '2026-06-01' }).expect(201)
+
+    const res = await asUserA(request(app).get('/api/merch/sales/summary'))
+      .query({ mode: 'fiscal_year', year: 2026 }).expect(200)
+    expect(res.body).toHaveLength(1)
+    expect(res.body[0].total_qty).toBe(2)
+  })
+
+  it('periods lists only dates with a recorded sale', async () => {
+    const product = await createProduct(asUserA)
+    await stockProduct(asUserA, product.id, 10)
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, sale_date: '2026-06-01' }).expect(201)
+    const v = await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: product.id, quantity: 1, sale_date: '2026-07-01' }).expect(201)
+    await asUserA(request(app).post(`/api/merch/sales/${v.body.id}/void`)).expect(200)
+
+    const res = await asUserA(request(app).get('/api/merch/sales/periods')).expect(200)
+    expect(res.body).toContain('2026-06-01')
+    expect(res.body).not.toContain('2026-07-01')
+  })
+
+  it('rejects a malformed product_id and a malformed period with 400', async () => {
+    await asUserA(request(app).get('/api/merch/sales')).query({ product_id: 'abc' }).expect(400)
+    await asUserA(request(app).get('/api/merch/sales/summary'))
+      .query({ mode: 'fiscal_year', year: 'nope' }).expect(400)
+  })
+})

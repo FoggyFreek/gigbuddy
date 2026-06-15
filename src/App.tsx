@@ -36,8 +36,10 @@ const InvoiceDetailPage = lazy(() => import('./pages/InvoiceDetailPage.tsx'))
 const PurchasesPage = lazy(() => import('./pages/PurchasesPage.tsx'))
 const PurchaseDetailPage = lazy(() => import('./pages/PurchaseDetailPage.tsx'))
 const MerchPage = lazy(() => import('./pages/MerchPage.tsx'))
+const MerchandiseDetailsPage = lazy(() => import('./pages/MerchandiseDetailsPage.tsx'))
 const JournalPage = lazy(() => import('./pages/JournalPage.tsx'))
 const LedgerEntriesPage = lazy(() => import('./pages/LedgerEntriesPage.tsx'))
+const LedgerEntrySearchPage = lazy(() => import('./pages/LedgerEntrySearchPage.tsx'))
 const LedgerEntryDetailPage = lazy(() => import('./pages/LedgerEntryDetailPage.tsx'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage.tsx'))
 const ReimbursementsPage = lazy(() => import('./pages/ReimbursementsPage.tsx'))
@@ -92,9 +94,12 @@ export default function App() {
             <Route path="/purchases" element={<PurchasesPage />}>
               <Route path=":id" element={<PurchaseDetailPage />} />
             </Route>
-            <Route path="/merch" element={<MerchPage />} />
+            <Route path="/merch" element={<MerchPage />}>
+              <Route path=":id" element={<MerchandiseDetailsPage />} />
+            </Route>
             <Route path="/journal" element={<JournalPage />} />
             <Route path="/ledger" element={<LedgerEntriesPage />} />
+            <Route path="/ledger-entries" element={<LedgerEntrySearchPage />} />
             <Route path="/ledger/:id" element={<LedgerEntryDetailPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/reimbursements" element={<ReimbursementsPage />} />

@@ -197,6 +197,85 @@ describe('ledger browser — periods', () => {
   })
 })
 
+describe('ledger browser — entry search', () => {
+  // An accrued purchase posts: Dr expense (62100) net, Dr input VAT (15000),
+  // Cr accounts payable (21100) gross 2500.
+  it('returns the entry lines hitting the selected account(s)', async () => {
+    await createAccruedPurchase()
+
+    const payable = await asUserA(
+      request(app).get('/api/ledger/entries').query({ accounts: '21100' }),
+    ).expect(200)
+    expect(payable.body).toHaveLength(1)
+    const line = payable.body[0]
+    expect(line.account_code).toBe('21100')
+    expect(line.account_name).toBeTruthy()
+    expect(line.type).toBe('Purchase')
+    expect(line.voided).toBe(false)
+    expect(line.credit_cents).toBe(2500)
+    expect(line.debit_cents).toBe(0)
+    expect(line.transaction_id).toBeGreaterThan(0)
+    expect(line.memo).toBeDefined()
+
+    // Multiple accounts return all matching lines.
+    const both = await asUserA(
+      request(app).get('/api/ledger/entries').query({ accounts: '62100,21100' }),
+    ).expect(200)
+    const codes = both.body.map((r) => r.account_code).sort()
+    expect(codes).toEqual(['21100', '62100'])
+  })
+
+  it('returns [] when no accounts are selected', async () => {
+    await createAccruedPurchase()
+    const none = await asUserA(request(app).get('/api/ledger/entries')).expect(200)
+    expect(none.body).toEqual([])
+    const blank = await asUserA(
+      request(app).get('/api/ledger/entries').query({ accounts: '' }),
+    ).expect(200)
+    expect(blank.body).toEqual([])
+  })
+
+  it('filters by period and 400s on an invalid period', async () => {
+    await createAccruedPurchase() // entry_date 2026-06-12
+
+    const inPeriod = await asUserA(
+      request(app).get('/api/ledger/entries').query({ accounts: '21100', mode: 'month', year: 2026, month: 5 }),
+    ).expect(200)
+    expect(inPeriod.body).toHaveLength(1)
+
+    const outOfPeriod = await asUserA(
+      request(app).get('/api/ledger/entries').query({ accounts: '21100', mode: 'month', year: 2026, month: 0 }),
+    ).expect(200)
+    expect(outOfPeriod.body).toHaveLength(0)
+
+    await asUserA(
+      request(app).get('/api/ledger/entries').query({ accounts: '21100', mode: 'nope' }),
+    ).expect(400)
+  })
+
+  it('flags voided entries so the "Show voided" toggle can hide them', async () => {
+    await createAccruedPurchase()
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const row = list.body.find((r) => r.source_type === 'purchase')
+    await asUserA(request(app).post(`/api/ledger/${row.id}/void`)).expect(200)
+
+    const entries = await asUserA(
+      request(app).get('/api/ledger/entries').query({ accounts: '21100' }),
+    ).expect(200)
+    // Original payable line + the void's mirror line, both on 21100, both voided.
+    expect(entries.body.length).toBe(2)
+    expect(entries.body.every((r) => r.voided === true)).toBe(true)
+  })
+
+  it('is tenant-isolated: B sees none of A\'s entries', async () => {
+    await createAccruedPurchase()
+    const resB = await asUserB(
+      request(app).get('/api/ledger/entries').query({ accounts: '21100,62100' }),
+    ).expect(200)
+    expect(resB.body).toEqual([])
+  })
+})
+
 describe('ledger browser — detail', () => {
   it('returns header, lines joined to account names, and origin', async () => {
     const purchase = await createAccruedPurchase()

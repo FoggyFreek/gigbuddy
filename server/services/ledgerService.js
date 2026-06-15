@@ -12,6 +12,7 @@ import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import { classify, describe, receiptFor } from './ledgerEntryTypes.js'
 import {
   listTransactions,
+  listEntriesByAccounts,
   getTransaction,
   getTransactionBySource,
   listLines,
@@ -24,6 +25,7 @@ import {
   merchInventoryValue,
 } from '../repositories/ledgerRepository.js'
 import { openInvoiceBuckets } from '../repositories/invoiceRepository.js'
+import { upcomingBandFeesByStatus } from '../repositories/gigRepository.js'
 
 // Thrown when a journal needs a tenant default account that isn't configured.
 // The HTTP layer maps this to 409 accounting_not_configured and rolls back, so
@@ -241,6 +243,38 @@ function toListRow(row) {
 export async function getLedgerList(executor, tenantId, period) {
   const rows = await listTransactions(executor, tenantId, period)
   return rows.map(toListRow)
+}
+
+// One ledger-entry (line-level) search row. Type and voided are classified
+// server-side like toListRow so the entry-search page matches the browser:
+// a manually voided original carries no void source_event, so fold in voided_at.
+function toEntryLineRow(row) {
+  const { type } = classify(row.source_type, row.source_event)
+  return {
+    id: row.id,
+    transaction_id: row.transaction_id,
+    entry_date: row.entry_date,
+    account_code: row.account_code,
+    account_name: row.account_name,
+    type,
+    description: row.description ?? null,
+    memo: row.memo ?? null,
+    debit_cents: row.debit_cents,
+    credit_cents: row.credit_cents,
+    source_type: row.source_type,
+    source_event: row.source_event,
+    voided: classify(row.source_type, row.source_event).voided || row.voided_at != null,
+  }
+}
+
+// Line-level entry search for the "Ledger entries" page: every ledger_entries
+// row hitting one of `accountCodes` in `period`. Empty selection returns []
+// (the page skips the fetch to avoid scanning the whole ledger). `period` is
+// buildPeriodWhere(query, 'lt.entry_date', 3).
+export async function getLedgerEntriesByAccount(executor, tenantId, accountCodes, period) {
+  if (!accountCodes.length) return []
+  const rows = await listEntriesByAccounts(executor, tenantId, accountCodes, period)
+  return rows.map(toEntryLineRow)
 }
 
 function originFor(row) {
@@ -514,7 +548,7 @@ export async function getFinancialOverview(executor, tenantId, range) {
   const annualRange = { from: `${firstTrendYear}-01-01`, toExclusive: `${currentYear + 1}-01-01` }
 
   const vatQuarter = currentVatQuarter()
-  const [monthRows, annualRows, vat, buckets, settings, bankBalanceCents, merch, merchInventoryCents] =
+  const [monthRows, annualRows, vat, buckets, settings, bankBalanceCents, merch, merchInventoryCents, feeRows] =
     await Promise.all([
       monthlyResultTotals(executor, tenantId, effectiveRange),
       annualResultTotals(executor, tenantId, annualRange),
@@ -524,6 +558,7 @@ export async function getFinancialOverview(executor, tenantId, range) {
       checkingAccountBalance(executor, tenantId),
       merchTotals(executor, tenantId, effectiveRange),
       merchInventoryValue(executor, tenantId),
+      upcomingBandFeesByStatus(executor, tenantId),
     ])
 
   const annualByYear = new Map(annualRows.map((r) => [r.year, r]))
@@ -557,6 +592,18 @@ export async function getFinancialOverview(executor, tenantId, range) {
   const outputCents = vat?.output_cents || 0
   const inputCents = vat?.input_cents || 0
 
+  // Upcoming gross band fees, pinned to "today": a single total plus a per-status
+  // breakdown across the active gig statuses (independent of the selected period).
+  const FEE_STATUSES = ['option', 'confirmed', 'announced']
+  const feeByStatus = Object.fromEntries(FEE_STATUSES.map((s) => [s, { count: 0, total_cents: 0 }]))
+  let feeTotalCents = 0
+  let feeGigCount = 0
+  for (const row of feeRows) {
+    feeByStatus[row.status] = { count: row.gig_count, total_cents: row.total_cents }
+    feeTotalCents += row.total_cents
+    feeGigCount += row.gig_count
+  }
+
   return {
     currency: settings?.currency || 'EUR',
     months,
@@ -583,6 +630,11 @@ export async function getFinancialOverview(executor, tenantId, range) {
       cogs_cents: merch.cogs_cents,
       gross_profit_cents: merch.revenue_cents - merch.cogs_cents,
       inventory_value_cents: merchInventoryCents,
+    },
+    upcoming_fees: {
+      total_cents: feeTotalCents,
+      gig_count: feeGigCount,
+      by_status: feeByStatus,
     },
   }
 }

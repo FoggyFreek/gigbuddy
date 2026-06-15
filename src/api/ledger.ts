@@ -1,5 +1,5 @@
 import { request, requestBlob } from './_client.ts'
-import type { LedgerEntryRow, LedgerLine, Period, Id } from '../types/entities.ts'
+import type { LedgerEntryRow, LedgerEntryLineRow, LedgerLine, Period, Id } from '../types/entities.ts'
 import { periodQueryString } from '../utils/invoicePeriod.ts'
 
 interface LedgerEntry {
@@ -37,6 +37,14 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
 
 export const listLedger = (period: Period) => api<LedgerEntryRow[]>(`/${periodQueryString(period)}`)
 export const listLedgerPeriods = () => api<string[]>('/periods')
+
+// Entry-line search by account: `accountCodes` already includes any selected
+// parents' descendants, so it is sent as-is.
+export const listLedgerEntries = (period: Period, accountCodes: string[]) => {
+  const qs = periodQueryString(period)
+  const sep = qs ? '&' : '?'
+  return api<LedgerEntryLineRow[]>(`/entries${qs}${sep}accounts=${accountCodes.join(',')}`)
+}
 export const getLedgerOverview = (period: Period) =>
   api<LedgerOverview>(`/overview${periodQueryString(period)}`)
 export const getLedgerEntry = (id: Id) => api<LedgerEntry>(`/${id}`)

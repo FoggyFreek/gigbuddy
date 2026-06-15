@@ -100,6 +100,19 @@ async function createAccruedPurchase(as = asUserA) {
   return r.body
 }
 
+// Inserts a gig directly (the create API doesn't accept a fee; it's patched
+// later). Returns nothing — these only feed the upcoming-fees aggregate.
+async function insertGig(tenantId, { daysFromToday, status, feeCents }) {
+  const d = new Date(NOW)
+  d.setDate(d.getDate() + daysFromToday)
+  const eventDate = d.toISOString().slice(0, 10)
+  await pool.query(
+    `INSERT INTO gigs (tenant_id, event_date, event_description, status, booking_fee_cents)
+     VALUES ($1, $2, 'Test gig', $3, $4)`,
+    [tenantId, eventDate, status, feeCents],
+  )
+}
+
 // ============================================================
 describe('financial overview', () => {
   it('aggregates monthly revenue/expenses/result for a fiscal year', async () => {
@@ -243,9 +256,49 @@ describe('financial overview', () => {
     expect(res.body.invoices.overdue).toEqual({ count: 1, total_cents: 121000 })
   })
 
+  it('sums upcoming gross band fees with a per-status breakdown', async () => {
+    await insertGig(seed.tenantA.id, { daysFromToday: 7, status: 'confirmed', feeCents: 250000 })
+    await insertGig(seed.tenantA.id, { daysFromToday: 30, status: 'announced', feeCents: 100000 })
+    await insertGig(seed.tenantA.id, { daysFromToday: 14, status: 'option', feeCents: 50000 })
+    // Excluded: a past gig, and an upcoming gig with no fee set.
+    await insertGig(seed.tenantA.id, { daysFromToday: -7, status: 'confirmed', feeCents: 999999 })
+    await insertGig(seed.tenantA.id, { daysFromToday: 21, status: 'confirmed', feeCents: null })
+
+    const res = await asUserA(
+      request(app).get('/api/ledger/overview').query({ mode: 'fiscal_year', year: THIS_YEAR }),
+    ).expect(200)
+
+    expect(res.body.upcoming_fees).toEqual({
+      total_cents: 400000,
+      gig_count: 3,
+      by_status: {
+        option: { count: 1, total_cents: 50000 },
+        confirmed: { count: 1, total_cents: 250000 },
+        announced: { count: 1, total_cents: 100000 },
+      },
+    })
+  })
+
+  it('reports zero upcoming fees when there are no future fee-bearing gigs', async () => {
+    const res = await asUserA(
+      request(app).get('/api/ledger/overview').query({ mode: 'fiscal_year', year: THIS_YEAR }),
+    ).expect(200)
+
+    expect(res.body.upcoming_fees).toEqual({
+      total_cents: 0,
+      gig_count: 0,
+      by_status: {
+        option: { count: 0, total_cents: 0 },
+        confirmed: { count: 0, total_cents: 0 },
+        announced: { count: 0, total_cents: 0 },
+      },
+    })
+  })
+
   it('is tenant-isolated: B sees zeros for A\'s activity', async () => {
     await createSentInvoice()
     await createAccruedPurchase()
+    await insertGig(seed.tenantA.id, { daysFromToday: 7, status: 'confirmed', feeCents: 250000 })
 
     const resB = await asUserB(
       request(app).get('/api/ledger/overview').query({ mode: 'fiscal_year', year: THIS_YEAR }),
@@ -259,5 +312,7 @@ describe('financial overview', () => {
     expect(resB.body.invoices.draft).toEqual({ count: 0, total_cents: 0 })
     expect(resB.body.invoices.unpaid).toEqual({ count: 0, total_cents: 0 })
     expect(resB.body.invoices.overdue).toEqual({ count: 0, total_cents: 0 })
+    expect(resB.body.upcoming_fees.total_cents).toBe(0)
+    expect(resB.body.upcoming_fees.gig_count).toBe(0)
   })
 })

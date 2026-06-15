@@ -86,6 +86,15 @@ const OVERVIEW = {
     gross_profit_cents: 3600,
     inventory_value_cents: 9600,
   },
+  upcoming_fees: {
+    total_cents: 450000,
+    gig_count: 3,
+    by_status: {
+      option: { count: 1, total_cents: 100000 },
+      confirmed: { count: 1, total_cents: 250000 },
+      announced: { count: 1, total_cents: 100000 },
+    },
+  },
 }
 
 function wrap(ui) {
@@ -296,6 +305,41 @@ describe('FinancialDashboardPage', () => {
 
     const card = screen.getByText(/^merchandise$/i).closest('[data-card]')
     expect(within(card).getByText(/no merch sales in this period/i)).toBeInTheDocument()
+  })
+
+  it('shows the upcoming gross band fees with a per-status breakdown', async () => {
+    wrap(<FinancialDashboardPage />)
+    await screen.findByText(/result in eur/i)
+
+    const card = screen.getByText(/^upcoming fees$/i).closest('[data-card]')
+    expect(within(card).getByText(/gross band fees/i)).toBeInTheDocument()
+    expect(within(card).getByText(/€\s?4\.500,00/)).toBeInTheDocument()
+    expect(within(card).getByText(/across 3 upcoming gigs/i)).toBeInTheDocument()
+    expect(within(card).getByText(/confirmed \(1\)/i)).toBeInTheDocument()
+    expect(within(card).getByText(/€\s?2\.500,00/)).toBeInTheDocument()
+    expect(within(card).getByText(/announced \(1\)/i)).toBeInTheDocument()
+    expect(within(card).getByText(/option \(1\)/i)).toBeInTheDocument()
+    expect(within(card).getByRole('link', { name: /view gigs/i })).toBeInTheDocument()
+  })
+
+  it('shows a no-gigs hint when there are no upcoming fees', async () => {
+    getLedgerOverview.mockResolvedValue({
+      ...OVERVIEW,
+      upcoming_fees: {
+        total_cents: 0,
+        gig_count: 0,
+        by_status: {
+          option: { count: 0, total_cents: 0 },
+          confirmed: { count: 0, total_cents: 0 },
+          announced: { count: 0, total_cents: 0 },
+        },
+      },
+    })
+    wrap(<FinancialDashboardPage />)
+    await screen.findByText(/result in eur/i)
+
+    const card = screen.getByText(/^upcoming fees$/i).closest('[data-card]')
+    expect(within(card).getByText(/no upcoming gigs with a fee/i)).toBeInTheDocument()
   })
 
   it('refetches when another period is picked', async () => {

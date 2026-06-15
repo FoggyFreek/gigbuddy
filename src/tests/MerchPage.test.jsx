@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useParams } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/merch.ts', () => ({
@@ -10,6 +10,8 @@ vi.mock('../api/merch.ts', () => ({
   updateProduct: vi.fn(),
   archiveProduct: vi.fn(),
   listMerchSales: vi.fn(),
+  listMerchSalesSummary: vi.fn(),
+  listMerchSalePeriods: vi.fn(),
   recordMerchSale: vi.fn(),
   voidMerchSale: vi.fn(),
 }))
@@ -28,11 +30,24 @@ import MerchPage from '../pages/MerchPage.tsx'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
 import theme from '../theme.ts'
 
+function DetailStub() {
+  const { id } = useParams()
+  return <div>Detail for {id}</div>
+}
+
+// Renders MerchPage inside the real nested-route shape so summary-row clicks can
+// navigate to the detail outlet.
 function wrap(ui, { compact = false } = {}) {
   return render(
     <MemoryRouter initialEntries={['/merch']}>
       <ThemeProvider theme={theme}>
-        <CompactLayoutContext.Provider value={compact}>{ui}</CompactLayoutContext.Provider>
+        <CompactLayoutContext.Provider value={compact}>
+          <Routes>
+            <Route path="/merch" element={ui}>
+              <Route path=":id" element={<DetailStub />} />
+            </Route>
+          </Routes>
+        </CompactLayoutContext.Provider>
       </ThemeProvider>
     </MemoryRouter>,
   )
@@ -49,18 +64,19 @@ const PRODUCTS = [
   },
 ]
 
-const SALES = [
+const SUMMARY = [
   {
-    id: 5, product_id: 1, product_name: 'Band T-Shirt', gig_id: null, sale_date: '2026-06-01',
-    quantity: 2, unit_price_incl_cents: 3630, vat_rate: '21.00', unit_cost_cents: 1200,
-    status: 'recorded', voided_at: null,
+    product_id: 1, product_name: 'Band T-Shirt', revenue_account_code: '42000',
+    revenue_account_name: 'Merchandise Sales', total_qty: 2, total_amount_cents: 7260,
   },
 ]
 
 beforeEach(() => {
   vi.clearAllMocks()
   api.listProducts.mockResolvedValue([...PRODUCTS])
-  api.listMerchSales.mockResolvedValue([...SALES])
+  api.listMerchSalesSummary.mockResolvedValue([...SUMMARY])
+  api.listMerchSalePeriods.mockResolvedValue(['2026-06-01'])
+  api.listMerchSales.mockResolvedValue([])
   api.createProduct.mockResolvedValue({ id: 3 })
   api.recordMerchSale.mockResolvedValue({ id: 6 })
   api.voidMerchSale.mockResolvedValue({})
@@ -79,7 +95,7 @@ const REVENUE_ACCOUNTS = [
 describe('MerchPage — products', () => {
   it('renders the product table with stock and prices', async () => {
     wrap(<MerchPage />)
-    // The name shows in both the products and the sales table.
+    // The name shows in both the products table and the per-product summary.
     const [productCell] = await screen.findAllByText('Band T-Shirt')
     const row = productCell.closest('tr')
     expect(within(row).getByText('9')).toBeInTheDocument()
@@ -123,8 +139,6 @@ describe('MerchPage — products', () => {
 
     await user.click(within(dialog).getByLabelText(/revenue account/i))
     const listbox = await screen.findByRole('listbox')
-    // The merch parent and its descendant are offered; an unrelated revenue
-    // account (41000 Gig fees) is not.
     expect(within(listbox).getByText(/42000 — Merchandise Sales/)).toBeInTheDocument()
     expect(within(listbox).getByText(/42100 — Vinyl and CDs/)).toBeInTheDocument()
     expect(within(listbox).queryByText(/41000/)).toBeNull()
@@ -152,8 +166,34 @@ describe('MerchPage — products', () => {
   })
 })
 
-describe('MerchPage — sales', () => {
-  it('record-sale dialog prefills price and VAT from the selected product and submits', async () => {
+describe('MerchPage — per-product summary', () => {
+  it('renders one summary row per product with account, qty and total', async () => {
+    wrap(<MerchPage />)
+    const accountCell = await screen.findByText(/42000 — Merchandise Sales/)
+    const row = accountCell.closest('tr')
+    expect(within(row).getByText('2')).toBeInTheDocument()        // total qty
+    expect(within(row).getByText('72,60')).toBeInTheDocument()    // total amount
+  })
+
+  it('navigates to the product detail when a summary row is clicked', async () => {
+    const user = userEvent.setup()
+    wrap(<MerchPage />)
+    const accountCell = await screen.findByText(/42000 — Merchandise Sales/)
+    await user.click(within(accountCell.closest('tr')).getByText('Band T-Shirt'))
+    expect(await screen.findByText('Detail for 1')).toBeInTheDocument()
+  })
+
+  it('queries the summary for all time by default', async () => {
+    wrap(<MerchPage />)
+    await screen.findByText(/42000 — Merchandise Sales/)
+    await waitFor(() => expect(api.listMerchSalesSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'all_time' }),
+    ))
+  })
+})
+
+describe('MerchPage — recording a sale', () => {
+  it('records a sale and refreshes the summary', async () => {
     const user = userEvent.setup()
     wrap(<MerchPage />)
     await screen.findAllByText('Band T-Shirt')
@@ -161,22 +201,17 @@ describe('MerchPage — sales', () => {
 
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByLabelText(/product/i))
-    // Archived products are not sellable.
     const listbox = await screen.findByRole('listbox')
+    // Archived products are not sellable.
     expect(within(listbox).queryByText(/Old Cap/)).toBeNull()
     await user.click(within(listbox).getByText(/Band T-Shirt/))
 
     await user.click(within(dialog).getByRole('button', { name: /record sale/i }))
     await waitFor(() => expect(api.recordMerchSale).toHaveBeenCalledWith(
-      expect.objectContaining({
-        product_id: 1,
-        quantity: 1,
-        unit_price_incl_cents: 3630,
-        vat_rate: 21,
-        gig_id: null,
-      }),
+      expect.objectContaining({ product_id: 1, quantity: 1, unit_price_incl_cents: 3630, vat_rate: 21, gig_id: null }),
     ))
-    await waitFor(() => expect(api.listMerchSales).toHaveBeenCalledTimes(2))
+    // The summary reloads after recording.
+    await waitFor(() => expect(api.listMerchSalesSummary).toHaveBeenCalledTimes(2))
   })
 
   it('surfaces an insufficient-stock error in the dialog', async () => {
@@ -192,77 +227,5 @@ describe('MerchPage — sales', () => {
 
     expect(await screen.findByText(/insufficient stock/i)).toBeInTheDocument()
   })
-
-  it('voids a sale after confirmation', async () => {
-    const user = userEvent.setup()
-    wrap(<MerchPage />)
-    await screen.findAllByText('Band T-Shirt')
-    await user.click(screen.getByRole('button', { name: /void sale/i }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: /void sale/i }))
-
-    await waitFor(() => expect(api.voidMerchSale).toHaveBeenCalledWith(5))
-    await waitFor(() => expect(api.listMerchSales).toHaveBeenCalledTimes(2))
-  })
 })
 
-describe('MerchPage — sales pagination', () => {
-  it('paginates sales at 25 rows per page', async () => {
-    const user = userEvent.setup()
-    const many = Array.from({ length: 30 }, (_, i) => ({
-      id: 100 + i, product_id: 1, product_name: `Sale Item ${100 + i}`, gig_id: null,
-      sale_date: '2026-06-01', quantity: 1, unit_price_incl_cents: 1000,
-      vat_rate: '21.00', unit_cost_cents: 500, status: 'recorded', voided_at: null,
-    }))
-    api.listMerchSales.mockResolvedValue(many)
-    wrap(<MerchPage />)
-    await screen.findByText('Sale Item 100')
-
-    expect(screen.getByText('Sale Item 124')).toBeInTheDocument()
-    expect(screen.queryByText('Sale Item 125')).not.toBeInTheDocument()
-    expect(screen.getByText('1–25 of 30')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: /next page/i }))
-
-    expect(screen.getByText('Sale Item 125')).toBeInTheDocument()
-    expect(screen.queryByText('Sale Item 100')).not.toBeInTheDocument()
-  })
-
-  it('hides pagination controls when sales fit on one page', async () => {
-    wrap(<MerchPage />)
-    await screen.findAllByText('Band T-Shirt')
-    expect(screen.queryByRole('button', { name: /next page/i })).not.toBeInTheDocument()
-  })
-})
-
-describe('MerchPage — compact layout', () => {
-  it('renders products and sales as cards instead of tables', async () => {
-    wrap(<MerchPage />, { compact: true })
-    await screen.findAllByText('Band T-Shirt')
-    expect(screen.queryByRole('table')).toBeNull()
-    // Product card content
-    expect(screen.getByText('Old Cap')).toBeInTheDocument()
-    expect(screen.getByText('Archived')).toBeInTheDocument()
-    expect(screen.getByText(/9 on hand/i)).toBeInTheDocument()
-    // Sale card content
-    expect(screen.getByText(/2\s*×/)).toBeInTheDocument()
-  })
-
-  it('product card actions still work', async () => {
-    const user = userEvent.setup()
-    wrap(<MerchPage />, { compact: true })
-    await screen.findAllByText('Band T-Shirt')
-    await user.click(screen.getAllByRole('button', { name: /archive/i })[0])
-    await waitFor(() => expect(api.archiveProduct).toHaveBeenCalledWith(1))
-  })
-
-  it('voids a sale from a card', async () => {
-    const user = userEvent.setup()
-    wrap(<MerchPage />, { compact: true })
-    await screen.findAllByText('Band T-Shirt')
-    await user.click(screen.getByRole('button', { name: /void sale/i }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: /void sale/i }))
-    await waitFor(() => expect(api.voidMerchSale).toHaveBeenCalledWith(5))
-  })
-})
