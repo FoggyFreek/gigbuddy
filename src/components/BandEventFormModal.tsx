@@ -88,7 +88,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       title: form.title.trim(),
       start_date: form.start_date,
       end_date: form.end_date || null,
-      ...({ start_time: form.start_time || null, end_time: form.end_time || null, notes: form.notes || null } as Partial<BandEventDetail>),
+      ...({ start_time: form.start_time || null, end_time: form.end_time || null, location: form.location || null, notes: form.notes || null } as Partial<BandEventDetail>),
     } as Partial<BandEventDetail>)
     onClose()
   }
