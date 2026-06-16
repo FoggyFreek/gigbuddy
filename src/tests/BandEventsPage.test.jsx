@@ -26,12 +26,19 @@ import BandEventsPage from '../pages/BandEventsPage.tsx'
 import BandEventDetailPage from '../pages/BandEventDetailPage.tsx'
 import { deleteBandEvent, listBandEvents, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
 import theme from '../theme.ts'
+import { AuthContext } from '../contexts/authContext.ts'
+
+// Render as a writer (super admin grants every planning.write capability) so the
+// create/edit/delete affordances gated on canWritePlanning are present.
+const writerAuth = { user: { isSuperAdmin: true } }
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+        <AuthContext.Provider value={writerAuth}>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+        </AuthContext.Provider>
       </ThemeProvider>
     </MemoryRouter>
   )
@@ -41,13 +48,15 @@ function wrapWithRoutes({ initialEntries }) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDayjs}>
-          <Routes>
-            <Route path="/events" element={<BandEventsPage />}>
-              <Route path=":id" element={<BandEventDetailPage />} />
-            </Route>
-          </Routes>
-        </LocalizationProvider>
+        <AuthContext.Provider value={writerAuth}>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <Routes>
+              <Route path="/events" element={<BandEventsPage />}>
+                <Route path=":id" element={<BandEventDetailPage />} />
+              </Route>
+            </Routes>
+          </LocalizationProvider>
+        </AuthContext.Provider>
       </ThemeProvider>
     </MemoryRouter>
   )
