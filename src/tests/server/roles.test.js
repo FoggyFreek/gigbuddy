@@ -109,6 +109,80 @@ describe('purchase.create split', () => {
     const mine = await as(c2.user.id, seed.tenantA.id)(request(app).get('/api/purchases/mine')).expect(200)
     expect(mine.body).toHaveLength(0)
   })
+
+  it('a contributor cannot create an already-approved purchase (no ledger or stock side effects)', async () => {
+    const { user } = await createRoleUser({ email: 'c4@a.local', role: 'contributor', tenantId: seed.tenantA.id })
+    const res = await as(user.id, seed.tenantA.id)(
+      request(app).post('/api/purchases').send(purchasePayload({ status: 'approved' })),
+    )
+    expect(res.status).toBe(403)
+    expect(res.body.code).toBe('approval_requires_finance_manage')
+    // The 403 short-circuits before any insert: no purchase row and no accrual journal.
+    const { rows: purchases } = await pool.query('SELECT id FROM purchases WHERE tenant_id = $1', [seed.tenantA.id])
+    expect(purchases).toHaveLength(0)
+    const { rows: ledger } = await pool.query(
+      `SELECT 1 FROM ledger_transactions WHERE tenant_id = $1 AND source_type = 'purchase'`,
+      [seed.tenantA.id],
+    )
+    expect(ledger).toHaveLength(0)
+  })
+
+  it('a financial_admin may create an already-approved purchase directly', async () => {
+    const fa = await createRoleUser({ email: 'fa3@a.local', role: 'financial_admin', tenantId: seed.tenantA.id })
+    const created = await as(fa.user.id, seed.tenantA.id)(
+      request(app).post('/api/purchases').send(purchasePayload({ status: 'approved' })),
+    ).expect(201)
+    expect(created.body.status).toBe('approved')
+    const { rows } = await pool.query(
+      `SELECT 1 FROM ledger_transactions
+        WHERE tenant_id = $1 AND source_type = 'purchase' AND source_id = $2 AND source_event = 'accrued'`,
+      [seed.tenantA.id, created.body.id],
+    )
+    expect(rows.length).toBeGreaterThan(0)
+  })
+
+  it('a contributor submits a draft that a financial_admin approves through the intended path', async () => {
+    const contributor = await createRoleUser({ email: 'c5@a.local', role: 'contributor', tenantId: seed.tenantA.id })
+    const fa = await createRoleUser({ email: 'fa4@a.local', role: 'financial_admin', tenantId: seed.tenantA.id })
+    const { rows: prod } = await pool.query(
+      `INSERT INTO products (tenant_id, name, unit_cost_cents, quantity_on_hand)
+       VALUES ($1, 'Tour shirt', 0, 0) RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const productId = prod[0].id
+
+    // Contributor creates the purchase: it defaults to draft, posting nothing and
+    // changing no stock even though it carries a product line.
+    const created = await as(contributor.user.id, seed.tenantA.id)(
+      request(app).post('/api/purchases').send(purchasePayload({
+        lines: [{ description: 'shirts', tax_rate: 21, amount_incl_cents: 12000, product_id: productId, quantity: 10 }],
+      })),
+    ).expect(201)
+    expect(created.body.status).toBe('draft')
+
+    const draftLedger = await pool.query(
+      `SELECT 1 FROM ledger_transactions WHERE tenant_id = $1 AND source_type = 'purchase' AND source_id = $2`,
+      [seed.tenantA.id, created.body.id],
+    )
+    expect(draftLedger.rows).toHaveLength(0)
+    let stock = await pool.query('SELECT quantity_on_hand FROM products WHERE id = $1', [productId])
+    expect(stock.rows[0].quantity_on_hand).toBe(0)
+
+    // The financial admin approves via PATCH (finance.manage): now the accrual
+    // journal posts and the stock lands.
+    await as(fa.user.id, seed.tenantA.id)(
+      request(app).patch(`/api/purchases/${created.body.id}`).send({ status: 'approved' }),
+    ).expect(200)
+
+    const approvedLedger = await pool.query(
+      `SELECT 1 FROM ledger_transactions
+        WHERE tenant_id = $1 AND source_type = 'purchase' AND source_id = $2 AND source_event = 'accrued'`,
+      [seed.tenantA.id, created.body.id],
+    )
+    expect(approvedLedger.rows.length).toBeGreaterThan(0)
+    stock = await pool.query('SELECT quantity_on_hand FROM products WHERE id = $1', [productId])
+    expect(stock.rows[0].quantity_on_hand).toBe(10)
+  })
 })
 
 describe('planning.write gating', () => {

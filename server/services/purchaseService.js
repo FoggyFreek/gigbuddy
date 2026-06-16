@@ -205,7 +205,7 @@ async function validateApprovalLines(executor, tenantId, lines) {
 
 // ---------- create ----------
 
-export async function createPurchase(pool, tenantId, body, actorUserId = null) {
+export async function createPurchase(pool, tenantId, body, actorUserId = null, { canManageFinance = false } = {}) {
   const supplierName = String(body.supplier_name ?? '').trim()
   if (!supplierName) return { error: { status: 400, body: { error: 'supplier_name is required' } } }
 
@@ -228,7 +228,7 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   const dueDate = body.due_date || null
   const currency = String(body.currency || 'EUR').trim() || 'EUR'
 
-  const statusResult = resolveCreateStatus(body)
+  const statusResult = resolveCreateStatus(body, { canManageFinance })
   if (statusResult.error) return statusResult
   const { status } = statusResult
 
@@ -275,7 +275,7 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   return { purchaseId }
 }
 
-function resolveCreateStatus(body) {
+function resolveCreateStatus(body, { canManageFinance = false } = {}) {
   // Only draft/approved may be set on create; paying goes through the payment endpoint.
   let status = 'draft'
   if (body.status !== undefined) {
@@ -283,6 +283,13 @@ function resolveCreateStatus(body) {
       return { error: { status: 400, body: { error: 'Invalid status' } } }
     }
     status = body.status
+  }
+  // Creating an already-approved purchase posts the accrual journal + stock-in —
+  // a finance.manage action. Contributors hold purchase.create (to submit drafts
+  // for reimbursement) but must not bypass approval; the approval path is
+  // PATCH /:id, which is finance.manage-gated.
+  if (status === 'approved' && !canManageFinance) {
+    return { error: { status: 403, body: { error: 'Forbidden', code: 'approval_requires_finance_manage' } } }
   }
   return { status }
 }

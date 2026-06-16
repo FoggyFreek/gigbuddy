@@ -90,7 +90,9 @@ router.delete('/:id/attachments/:attachmentId', requirePermission(PERMISSIONS.FI
 
 // ---------- create ----------
 router.post('/', requirePermission(PERMISSIONS.PURCHASE_CREATE), async (req, res) => {
-  const result = await createPurchase(pool, req.tenantId, req.body || {}, req.user.id)
+  const result = await createPurchase(pool, req.tenantId, req.body || {}, req.user.id, {
+    canManageFinance: can(req, PERMISSIONS.FINANCE_MANAGE),
+  })
   if (result.error) return sendError(res, result.error)
   const detail = await getPurchaseDetail(pool, req.tenantId, result.purchaseId)
   res.status(201).json(detail.purchase)
