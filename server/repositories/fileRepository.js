@@ -5,7 +5,8 @@
 
 export async function objectKeyBelongsToTenant(executor, tenantId, objectKey) {
   const { rows } = await executor.query(
-    `SELECT 1 FROM tenants WHERE id = $1 AND logo_path = $2
+    `SELECT 1 FROM tenants WHERE id = $1
+        AND (logo_path = $2 OR banner_path = $2 OR avatar_path = $2 OR logo_dark_path = $2)
      UNION ALL
      SELECT 1 FROM gigs WHERE tenant_id = $1 AND banner_path = $2
      UNION ALL

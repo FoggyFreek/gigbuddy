@@ -33,7 +33,25 @@ export const deleteLink = (linkId: Id) => api<void>(`/links/${linkId}`, { method
 export function uploadLogo(file: File) {
   const fd = new FormData()
   fd.append('logo', file)
-  return requestForm<Profile>('/api/profile/logo', fd)
+  return requestForm<{ logo_path: string | null }>('/api/profile/logo', fd)
+}
+
+export function uploadBanner(file: File) {
+  const fd = new FormData()
+  fd.append('banner', file)
+  return requestForm<{ banner_path: string | null }>('/api/profile/banner', fd)
+}
+
+export function uploadAvatar(file: File) {
+  const fd = new FormData()
+  fd.append('avatar', file)
+  return requestForm<{ avatar_path: string | null }>('/api/profile/avatar', fd)
+}
+
+export function uploadLogoDark(file: File) {
+  const fd = new FormData()
+  fd.append('logo_dark', file)
+  return requestForm<{ logo_dark_path: string | null }>('/api/profile/logo-dark', fd)
 }
 
 export const getMollieKey = () => api<MollieKey>('/mollie-key')

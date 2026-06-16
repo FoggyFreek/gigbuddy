@@ -27,7 +27,6 @@ interface ShareLayoutProps {
   logoSrc?: string
   bandName?: string
   showLogo?: boolean
-  invertLogo?: boolean
   format?: string
 }
 
@@ -66,7 +65,7 @@ function TextStrip({ children, color = INK, background = WHITE, size, radius, st
   )
 }
 
-function PhotoSquare({ gig, photoSrc, pan = 0, accent, bandName, sticker, stickerPosition, logoSrc, showLogo = true, invertLogo }: ShareLayoutProps) {
+function PhotoSquare({ gig, photoSrc, pan = 0, accent, bandName, sticker, stickerPosition, logoSrc, showLogo = true }: ShareLayoutProps) {
   const f = SHARE_FORMATS.square
   const date = formatGigDateShort(gig)
   const weekdayShort = date.weekday ? date.weekday.slice(0, 2) : ''
@@ -120,7 +119,7 @@ function PhotoSquare({ gig, photoSrc, pan = 0, accent, bandName, sticker, sticke
             width: 320,
             height: 'auto',
             transform: 'translateX(-50%)',
-            filter: `${invertLogo ? 'invert(1) ' : ''}drop-shadow(0 3px 10px rgba(0,0,0,0.55))`,
+            filter: 'drop-shadow(0 3px 10px rgba(0,0,0,0.55))',
           }}
         />
       )}
@@ -169,7 +168,7 @@ function PhotoSquare({ gig, photoSrc, pan = 0, accent, bandName, sticker, sticke
   )
 }
 
-function PhotoStory({ gig, photoSrc, zoom, pan = 0, accent, bandName, sticker, stickerPosition, logoSrc, showLogo = true, invertLogo }: ShareLayoutProps) {
+function PhotoStory({ gig, photoSrc, zoom, pan = 0, accent, bandName, sticker, stickerPosition, logoSrc, showLogo = true }: ShareLayoutProps) {
   const f = SHARE_FORMATS.story
   const date = formatGigDateShort(gig)
   const weekdayShort = date.weekday ? date.weekday.slice(0, 2) : ''
@@ -222,7 +221,7 @@ function PhotoStory({ gig, photoSrc, zoom, pan = 0, accent, bandName, sticker, s
             width: 320,
             height: 'auto',
             transform: 'translateX(-50%)',
-            filter: `${invertLogo ? 'invert(1) ' : ''}drop-shadow(0 3px 10px rgba(0,0,0,0.55))`,
+            filter: 'drop-shadow(0 3px 10px rgba(0,0,0,0.55))',
           }}
         />
       )}

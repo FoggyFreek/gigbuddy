@@ -231,6 +231,37 @@ describe('InvoiceDetails', () => {
     expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
   })
 
+  it('hides the "Use dark logo" toggle when the tenant has no dark logo', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    expect(screen.queryByLabelText('Use dark logo')).toBeNull()
+  })
+
+  it('shows the "Use dark logo" toggle and switches the preview when tenant has a dark logo', async () => {
+    const invoiceWithLogos = {
+      ...EDIT_INVOICE,
+      tenant: {
+        ...EDIT_INVOICE.tenant,
+        logo_path: 'logo/light.png',
+        logo_dark_path: 'logo/dark.png',
+      },
+    }
+    invoicesApi.getInvoice.mockResolvedValueOnce(invoiceWithLogos)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+
+    const toggle = screen.getByLabelText('Use dark logo')
+    expect(toggle).not.toBeChecked()
+    // Preview shows the light logo initially.
+    expect(screen.getByAltText('Invoice logo').src).toContain('/api/files/logo/light.png')
+
+    await userEvent.click(toggle)
+
+    // Preview now shows the dark logo.
+    expect(screen.getByAltText('Invoice logo').src).toContain('/api/files/logo/dark.png')
+  })
+
   it('loads the default personal message into the EML dialog', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     invoicesApi.getInvoiceEmlDefaults.mockResolvedValueOnce({ personalMessage: 'Hartelijk dank voor de samenwerking.' })

@@ -1,23 +1,37 @@
-import type { RefObject } from 'react'
+import { useState } from 'react'
 import type { ProfileForm } from './profileForm.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import ButtonBase from '@mui/material/ButtonBase'
 import CircularProgress from '@mui/material/CircularProgress'
 import Grid from '@mui/material/Grid'
+import IconButton from '@mui/material/IconButton'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import Stack from '@mui/material/Stack'
 import { alpha } from '@mui/material/styles'
+import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import CheckIcon from '@mui/icons-material/Check'
 import EditIcon from '@mui/icons-material/Edit'
+import PersonIcon from '@mui/icons-material/Person'
+import { useThemeMode } from '../../contexts/themeModeContext.ts'
 
-const LOGO_IMG_SX = { maxWidth: 200, maxHeight: 120, objectFit: 'contain', display: 'block' }
+// 820×360 stored; display 820×312 desktop, 640×360 compact
+const BANNER_ASPECT_DESKTOP = (312 / 820) * 100  // 38.05%
+const BANNER_ASPECT_COMPACT = (360 / 640) * 100  // 56.25%
 
-function logoSrc(logoPath?: string): string {
-  return logoPath ? `/api/files/${logoPath}` : '/share/logo.png'
+const AVATAR_SIZE = 166
+const AVATAR_SIZE_COMPACT = 110
+const AVATAR_OVERLAP = Math.round(AVATAR_SIZE / 2)        // 83px
+const AVATAR_OVERLAP_COMPACT = Math.round(AVATAR_SIZE_COMPACT / 2)  // 45px
+
+interface ImageSlot {
+  path: string | null
+  uploading: boolean
+  onUploadClick?: () => void
 }
 
 interface ProfileIdentityCardProps {
@@ -26,90 +40,209 @@ interface ProfileIdentityCardProps {
   editing?: boolean
   onToggleEditing: () => void
   onChange: (field: keyof ProfileForm, value: string) => void
-  logoPath?: string
-  logoUploading?: boolean
-  logoInputRef: RefObject<HTMLInputElement | null>
-  onLogoFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  logo: ImageSlot
+  logoDark: ImageSlot
+  banner: ImageSlot
+  avatar: ImageSlot
+}
+
+function logoSrc(path: string | null | undefined): string {
+  return path ? `/api/files/${path}` : '/share/logo.png'
+}
+
+interface CameraButtonProps {
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void
+  disabled?: boolean
+  tooltipTitle: string
+  sx?: object
+  iconSize?: number
+}
+
+function CameraButton({ onClick, disabled, tooltipTitle, sx, iconSize = 16 }: CameraButtonProps) {
+  return (
+    <Tooltip title={tooltipTitle}>
+      <span>
+        <IconButton
+          size="small"
+          onClick={onClick}
+          disabled={disabled}
+          sx={{
+            bgcolor: 'rgba(0,0,0,0.5)',
+            color: '#fff',
+            width: 28,
+            height: 28,
+            '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
+            '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.5)' },
+            ...sx,
+          }}
+        >
+          <CameraAltIcon sx={{ fontSize: iconSize }} />
+        </IconButton>
+      </span>
+    </Tooltip>
+  )
+}
+
+interface UploadOverlayProps {
+  show: boolean
+  borderRadius?: string
+}
+
+function UploadOverlay({ show, borderRadius = '0' }: UploadOverlayProps) {
+  if (!show) return null
+  return (
+    <Box sx={{
+      position: 'absolute', inset: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      bgcolor: 'rgba(0,0,0,0.4)',
+      borderRadius,
+    }}>
+      <CircularProgress size={28} sx={{ color: '#fff' }} />
+    </Box>
+  )
 }
 
 export default function ProfileIdentityCard({
   form, isAdmin, editing, onToggleEditing, onChange,
-  logoPath, logoUploading, logoInputRef, onLogoFileChange,
+  logo, logoDark, banner, avatar,
 }: ProfileIdentityCardProps) {
+  const { mode } = useThemeMode()
+  const [logoMenuAnchor, setLogoMenuAnchor] = useState<HTMLElement | null>(null)
+
+  // Theme-aware logo: dark variant in dark mode when available, else light logo
+  const displayLogoPath = mode === 'dark' && logoDark.path ? logoDark.path : logo.path
+  const logoUploading = logo.uploading || logoDark.uploading
+
   return (
     <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
+
+      {/* ── Banner ──────────────────────────────────────────────────────── */}
       <Box sx={(theme) => ({
-        mx: -3,
-        mt: -3,
-        mb: 3,
-        py: 3,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        background: theme.palette.mode === 'dark'
-          ? `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.55)}, ${alpha(theme.palette.primary.main, 0.35)})`
-          : `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.82)}, ${alpha(theme.palette.primary.main, 0.65)})`,
-        boxShadow: '0 3px 10px rgba(0,0,0,0.22)',
+        mx: -3, mt: -3,
+        position: 'relative',
+        paddingTop: { xs: `${BANNER_ASPECT_COMPACT}%`, md: `${BANNER_ASPECT_DESKTOP}%` },
+        overflow: 'hidden',
         borderRadius: `${theme.shape.borderRadius}px ${theme.shape.borderRadius}px 0 0`,
       })}>
-        <Tooltip title={isAdmin ? 'Click to change logo' : ''} disableHoverListener={!isAdmin}>
-          <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-            {isAdmin ? (
-              <>
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  style={{ display: 'none' }}
-                  onChange={onLogoFileChange}
-                />
-                <ButtonBase
-                  onClick={() => logoInputRef.current?.click()}
-                  disabled={logoUploading}
-                  sx={{ borderRadius: 1, overflow: 'hidden', cursor: 'pointer' }}
-                >
-                  <Box
-                    component="img"
-                    src={logoSrc(logoPath)}
-                    alt="Band logo"
-                    sx={LOGO_IMG_SX}
-                    onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.src = '/share/logo.png' }}
-                  />
-                </ButtonBase>
-                {logoUploading && (
-                  <Box sx={{
-                    position: 'absolute', inset: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 1,
-                  }}>
-                    <CircularProgress size={28} />
-                  </Box>
-                )}
-              </>
-            ) : (
+        {banner.path ? (
+          <Box
+            component="img"
+            src={`/api/files/${banner.path}`}
+            alt="Profile banner"
+            sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <Box sx={(theme) => ({
+            position: 'absolute', inset: 0,
+            background: theme.palette.mode === 'dark'
+              ? `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.55)}, ${alpha(theme.palette.primary.main, 0.35)})`
+              : `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.82)}, ${alpha(theme.palette.primary.main, 0.65)})`,
+          })} />
+        )}
+        <UploadOverlay show={banner.uploading} />
+        {isAdmin && editing && banner.onUploadClick && (
+          <CameraButton
+            tooltipTitle="Change banner"
+            onClick={banner.onUploadClick}
+            disabled={banner.uploading}
+            sx={{ position: 'absolute', top: 8, right: 8 }}
+            iconSize={18}
+          />
+        )}
+      </Box>
+
+      {/* ── Avatar | Logo | Edit row ──────────────────────────────────────── */}
+      <Box sx={{ display: 'flex', alignItems: 'flex-end', mt: { xs: `-${AVATAR_OVERLAP_COMPACT}px`, md: `-${AVATAR_OVERLAP}px` }, mb: 2, position: 'relative', zIndex: 1 }}>
+
+        {/* Avatar — left */}
+        <Box sx={{ flexShrink: 0, position: 'relative' }}>
+          <Box sx={{
+            width: { xs: AVATAR_SIZE_COMPACT, md: AVATAR_SIZE },
+            height: { xs: AVATAR_SIZE_COMPACT, md: AVATAR_SIZE },
+            borderRadius: '50%',
+            overflow: 'hidden',
+            border: '3px solid',
+            borderColor: 'background.paper',
+            bgcolor: 'action.hover',
+            flexShrink: 0,
+          }}>
+            {avatar.path ? (
               <Box
                 component="img"
-                src={logoSrc(logoPath)}
-                alt="Band logo"
-                sx={LOGO_IMG_SX}
-                onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.src = '/share/logo.png' }}
+                src={`/api/files/${avatar.path}`}
+                alt="Profile picture"
+                sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none' }}
               />
+            ) : (
+              <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <PersonIcon sx={{ fontSize: { xs: 36, md: 68 }, color: 'text.disabled' }} />
+              </Box>
             )}
           </Box>
-        </Tooltip>
+          <UploadOverlay show={avatar.uploading} borderRadius="50%" />
+          {isAdmin && editing && avatar.onUploadClick && (
+            <CameraButton
+              tooltipTitle="Change profile picture"
+              onClick={avatar.onUploadClick}
+              disabled={avatar.uploading}
+              sx={{ position: 'absolute', bottom: 6, right: 6 }}
+            />
+          )}
+        </Box>
+
+        {/* Logo — centered over full row width */}
+        <Box sx={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 4 }}>
+          <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+            <Box
+              component="img"
+              src={logoSrc(displayLogoPath)}
+              alt="Band logo"
+              sx={{ maxWidth: 140, maxHeight: 80, objectFit: 'contain', display: 'block' }}
+              onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.src = '/share/logo.png' }}
+            />
+            <UploadOverlay show={logoUploading} borderRadius="4px" />
+            {isAdmin && editing && (logo.onUploadClick || logoDark.onUploadClick) && (
+              <>
+                <CameraButton
+                  tooltipTitle="Change logo"
+                  onClick={(e) => setLogoMenuAnchor(e.currentTarget)}
+                  disabled={logoUploading}
+                  sx={{ position: 'absolute', top: -10, right: -10 }}
+                />
+                <Menu
+                  anchorEl={logoMenuAnchor}
+                  open={Boolean(logoMenuAnchor)}
+                  onClose={() => setLogoMenuAnchor(null)}
+                >
+                  <MenuItem onClick={() => { setLogoMenuAnchor(null); logo.onUploadClick?.() }}>
+                    Light theme logo
+                  </MenuItem>
+                  <MenuItem onClick={() => { setLogoMenuAnchor(null); logoDark.onUploadClick?.() }}>
+                    Dark theme logo
+                  </MenuItem>
+                </Menu>
+              </>
+            )}
+          </Box>
+        </Box>
+
+        <Box sx={{ flex: 1 }} />
+
+        {/* Edit button — right */}
+        <Box sx={{ flexShrink: 0, pb: 0.5 }}>
+          <Button
+            size="small"
+            startIcon={editing ? <CheckIcon /> : <EditIcon />}
+            onClick={onToggleEditing}
+            variant={editing ? 'contained' : 'outlined'}
+          >
+            {editing ? 'Done' : 'Edit'}
+          </Button>
+        </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-        <Button
-          size="small"
-          startIcon={editing ? <CheckIcon /> : <EditIcon />}
-          onClick={onToggleEditing}
-          variant={editing ? 'contained' : 'outlined'}
-        >
-          {editing ? 'Done' : 'Edit'}
-        </Button>
-      </Box>
-
+      {/* ── Band name + bio ─────────────────────────────────────────────── */}
       {editing ? (
         <Grid container spacing={2}>
           <Grid size={12}>

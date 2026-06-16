@@ -1,6 +1,7 @@
 ﻿import type { ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTheme } from '@mui/material/styles'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -160,6 +161,7 @@ function Row({ primary, secondary, chip, onClick }: RowProps) {
 
 interface ProfileData {
   logo_path?: string | null
+  logo_dark_path?: string | null
   bandsintown_artist_name?: string
   [key: string]: unknown
 }
@@ -168,6 +170,7 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const bandMemberId = user?.bandMemberId ?? null
   const navigate = useNavigate()
+  const theme = useTheme()
   const [loading, setLoading] = useState(true)
   const [sections, setSections] = useState<Sections | null>(null)
   const [profile, setProfile] = useState<ProfileData | null>(null)
@@ -216,7 +219,7 @@ export default function DashboardPage() {
         ) : (
           <Box
             component="img"
-            src={logoSrc(profile?.logo_path as string | null | undefined)}
+            src={logoSrc(theme.palette.mode === 'dark' && profile?.logo_dark_path ? profile.logo_dark_path : profile?.logo_path)}
             alt="Band logo"
             onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.src = '/share/logo.png' }}
             sx={{ maxHeight: 48, maxWidth: 120, objectFit: 'contain', display: 'block' }}

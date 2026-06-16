@@ -1,6 +1,5 @@
 import PDFDocument from 'pdfkit'
 import QRCode from 'qrcode'
-import sharp from 'sharp'
 import { computeInvoiceTotals } from './computeInvoiceTotals.js'
 
 const PAGE_MARGIN = 48
@@ -72,15 +71,6 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
     appliesKor: tenant.applies_kor,
   })
 
-  let effectiveLogo = logoBuffer
-  if (logoBuffer && invoice.invert_logo) {
-    try {
-      effectiveLogo = await sharp(logoBuffer).negate({ alpha: false }).toBuffer()
-    } catch {
-      effectiveLogo = logoBuffer
-    }
-  }
-
   // Generate QR code buffer if a payment link exists.
   let qrBuffer = null
   if (invoice.mollie_payment_link_url) {
@@ -96,7 +86,7 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
     }
   }
 
-  const titleBottom = drawTitle(doc, invoice, tenant, effectiveLogo)
+  const titleBottom = drawTitle(doc, invoice, tenant, logoBuffer)
   const addrBottom  = drawAddresses(doc, invoice, tenant, titleBottom + 20)
   hline(doc, PAGE_MARGIN, RIGHT_EDGE, addrBottom + 8)
   const linesBottom = drawLinesTable(doc, lines, totals.perLine, invoice.tax_inclusive, tenant.applies_kor, addrBottom + 24)

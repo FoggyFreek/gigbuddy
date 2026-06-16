@@ -1,6 +1,6 @@
 // Canonical prop set passed to every Square/Story layout:
 // { gig, photoSrc, pan, zoom, accent, socials, sticker, stickerPosition,
-//   logoSrc, bannerSrc, bandName, showLogo, invertLogo }
+//   logoSrc, bannerSrc, bandName, showLogo }
 // Each layout destructures only the subset it uses.
 
 import type { ComponentType } from 'react'
@@ -22,7 +22,6 @@ export interface VariationSupports {
   socials: boolean
   banner: boolean
   toggleLogo: boolean
-  invertLogo: boolean
 }
 
 export interface ShareVariation {
@@ -37,21 +36,21 @@ export const SHARE_VARIATIONS: ShareVariation[] = [
   {
     id: 'vintage',
     label: 'Vintage',
-    supports: { accent: true, pan: true, zoom: true, sticker: true, socials: true, banner: true, toggleLogo: false, invertLogo: true },
+    supports: { accent: true, pan: true, zoom: true, sticker: true, socials: true, banner: true, toggleLogo: false },
     Square: VintageSquare,
     Story: VintageStory,
   },
   {
     id: 'minimal',
     label: 'Minimal',
-    supports: { accent: true, pan: true, zoom: false, sticker: true, socials: true, banner: true, toggleLogo: false, invertLogo: true },
+    supports: { accent: true, pan: true, zoom: false, sticker: true, socials: true, banner: true, toggleLogo: false },
     Square: MinimalSquare,
     Story: MinimalStory,
   },
   {
     id: 'photo',
     label: 'Photo',
-    supports: { accent: true, pan: true, zoom: true, sticker: true, socials: false, banner: false, toggleLogo: true, invertLogo: true },
+    supports: { accent: true, pan: true, zoom: true, sticker: true, socials: false, banner: false, toggleLogo: true },
     Square: PhotoSquare,
     Story: PhotoStory,
   },

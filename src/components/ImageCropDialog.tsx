@@ -13,6 +13,7 @@ import Typography from '@mui/material/Typography'
 
 interface CropContentProps {
   imageSrc: string
+  aspect?: number
   onConfirm: (blob: Blob) => void
   onCancel: () => void
 }
@@ -20,15 +21,17 @@ interface CropContentProps {
 interface ImageCropDialogProps {
   open: boolean
   imageSrc?: string | null
+  aspect?: number
   onConfirm: (blob: Blob) => void
   onCancel: () => void
   title?: string
 }
 
-function getInitialCrop(naturalWidth: number, naturalHeight: number): PercentCrop {
-  // Start with 100% of the image selected (no crop applied by default)
+function getInitialCrop(naturalWidth: number, naturalHeight: number, aspect?: number): PercentCrop {
+  const ratio = aspect ?? naturalWidth / naturalHeight
+  const width = aspect ? 90 : 100
   return centerCrop(
-    makeAspectCrop({ unit: '%', width: 100 }, naturalWidth / naturalHeight, naturalWidth, naturalHeight),
+    makeAspectCrop({ unit: '%', width }, ratio, naturalWidth, naturalHeight),
     naturalWidth,
     naturalHeight,
   )
@@ -52,15 +55,15 @@ function cropToBlob(imgEl: HTMLImageElement, crop: PercentCrop): Promise<Blob> {
   })
 }
 
-function CropContent({ imageSrc, onConfirm, onCancel }: CropContentProps) {
+function CropContent({ imageSrc, aspect, onConfirm, onCancel }: CropContentProps) {
   const imgRef = useRef<HTMLImageElement | null>(null)
   const [crop, setCrop] = useState<Crop | undefined>()
   const [completedCrop, setCompletedCrop] = useState<PercentCrop | undefined>()
 
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth, naturalHeight } = e.currentTarget
-    setCrop(getInitialCrop(naturalWidth, naturalHeight))
-  }, [])
+    setCrop(getInitialCrop(naturalWidth, naturalHeight, aspect))
+  }, [aspect])
 
   async function handleConfirm() {
     if (!imgRef.current || !completedCrop) return
@@ -88,6 +91,7 @@ function CropContent({ imageSrc, onConfirm, onCancel }: CropContentProps) {
               onComplete={(_, pct) => setCompletedCrop(pct)}
               minWidth={10}
               minHeight={10}
+              aspect={aspect}
               style={{ maxWidth: '100%', maxHeight: '70vh' }}
             >
               <img
@@ -112,12 +116,12 @@ function CropContent({ imageSrc, onConfirm, onCancel }: CropContentProps) {
   )
 }
 
-export default function ImageCropDialog({ open, imageSrc, onConfirm, onCancel, title = 'Crop image' }: ImageCropDialogProps) {
+export default function ImageCropDialog({ open, imageSrc, aspect, onConfirm, onCancel, title = 'Crop image' }: ImageCropDialogProps) {
   return (
     <Dialog open={open} onClose={onCancel} maxWidth="md" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       {/* key resets all crop state when a new image is loaded */}
-      <CropContent key={imageSrc || ''} imageSrc={imageSrc ?? ''} onConfirm={onConfirm} onCancel={onCancel} />
+      <CropContent key={imageSrc || ''} imageSrc={imageSrc ?? ''} aspect={aspect} onConfirm={onConfirm} onCancel={onCancel} />
     </Dialog>
   )
 }

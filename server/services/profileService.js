@@ -3,7 +3,10 @@
 // { error: { status, body } }; success returns a domain payload. Invalid-URL
 // validation throws (err.status 400) to match the legacy global-handler shape.
 import { randomUUID } from 'node:crypto'
-import { uploadObject, removeObject, safeRemove, bandLogoKey } from './storageService.js'
+import {
+  uploadObject, removeObject, safeRemove,
+  bandLogoKey, bandProfileBannerKey, bandAvatarKey, bandLogoDarkKey,
+} from './storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import {
   FINANCIAL_FIELDS_SET,
@@ -23,8 +26,8 @@ import {
   getMollieKey,
   setMollieKey,
   clearMollieKey,
-  getLogoPath,
-  setLogoPath,
+  getTenantImagePath,
+  setTenantImagePath,
 } from '../repositories/profileRepository.js'
 
 function badRequest(error) {
@@ -122,27 +125,39 @@ export async function clearMollieKeyValue(db, tenantId) {
   return { isSet: false, preview: null }
 }
 
-// ---------- logo ----------
+// ---------- image uploads (logo, banner, avatar, dark logo) ----------
 
-// Re-encodes the uploaded image, stores it, points the tenant at the new object,
-// and removes the previous one. Rolls the new object back if the DB update fails.
-export async function uploadLogo(db, tenantId, file) {
+// Re-encodes the uploaded image, stores it under the given column, and removes
+// the previous object. Rolls the new object back if the DB update fails.
+async function uploadTenantImage(db, tenantId, file, keyBuilder, column) {
   const image = await validateAndReencodeImage(file.buffer, file.mimetype)
   const ext = extensionForImageMime(image.mimetype)
-  const objectKey = bandLogoKey(tenantId, randomUUID(), ext)
+  const objectKey = keyBuilder(tenantId, randomUUID(), ext)
 
-  const oldKey = await getLogoPath(db, tenantId)
+  const oldKey = await getTenantImagePath(db, tenantId, column)
 
   await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
 
   let updatedKey
   try {
-    updatedKey = await setLogoPath(db, tenantId, objectKey)
+    updatedKey = await setTenantImagePath(db, tenantId, column, objectKey)
   } catch (err) {
     removeObject(objectKey).catch(() => {})
     throw err
   }
 
-  safeRemove(oldKey, 'Failed to delete old logo object:')
-  return { logo_path: updatedKey }
+  safeRemove(oldKey, `Failed to delete old ${column}:`)
+  return { [column]: updatedKey }
 }
+
+export const uploadLogo = (db, tenantId, file) =>
+  uploadTenantImage(db, tenantId, file, bandLogoKey, 'logo_path')
+
+export const uploadBanner = (db, tenantId, file) =>
+  uploadTenantImage(db, tenantId, file, bandProfileBannerKey, 'banner_path')
+
+export const uploadAvatar = (db, tenantId, file) =>
+  uploadTenantImage(db, tenantId, file, bandAvatarKey, 'avatar_path')
+
+export const uploadLogoDark = (db, tenantId, file) =>
+  uploadTenantImage(db, tenantId, file, bandLogoDarkKey, 'logo_dark_path')

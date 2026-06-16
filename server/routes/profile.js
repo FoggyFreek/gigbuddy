@@ -14,16 +14,33 @@ import {
   setMollieKeyValue,
   clearMollieKeyValue,
   uploadLogo,
+  uploadBanner,
+  uploadAvatar,
+  uploadLogoDark,
 } from '../services/profileService.js'
 
 const router = Router()
 
 const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const JPEG_PNG = new Set(['image/jpeg', 'image/png'])
 
 const logoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
 })
+
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+})
+
+async function handleImageUpload(req, res, uploadFn, allowedTypes) {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (!allowedTypes.has(req.file.mimetype)) {
+    return res.status(400).json({ error: 'File type not allowed' })
+  }
+  res.json(await uploadFn(pool, req.tenantId, req.file))
+}
 
 function requireLinkId(req, res) {
   const linkId = parseId(req.params.linkId)
@@ -94,12 +111,19 @@ router.delete('/mollie-key', requirePermission(PERMISSIONS.FINANCE_MANAGE), asyn
 })
 
 // Upload / replace band logo (tenant admin only)
-router.post('/logo', requirePermission(PERMISSIONS.FINANCE_MANAGE), logoUpload.single('logo'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
-  if (!LOGO_ALLOWED_TYPES.has(req.file.mimetype)) {
-    return res.status(400).json({ error: 'File type not allowed' })
-  }
-  res.json(await uploadLogo(pool, req.tenantId, req.file))
-})
+router.post('/logo', requirePermission(PERMISSIONS.TENANT_MANAGE), logoUpload.single('logo'), async (req, res) =>
+  handleImageUpload(req, res, uploadLogo, LOGO_ALLOWED_TYPES))
+
+// Upload / replace profile banner (tenant admin only)
+router.post('/banner', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpload.single('banner'), async (req, res) =>
+  handleImageUpload(req, res, uploadBanner, JPEG_PNG))
+
+// Upload / replace profile avatar (tenant admin only)
+router.post('/avatar', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpload.single('avatar'), async (req, res) =>
+  handleImageUpload(req, res, uploadAvatar, JPEG_PNG))
+
+// Upload / replace dark-theme logo variant (tenant admin only)
+router.post('/logo-dark', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpload.single('logo_dark'), async (req, res) =>
+  handleImageUpload(req, res, uploadLogoDark, LOGO_ALLOWED_TYPES))
 
 export default router

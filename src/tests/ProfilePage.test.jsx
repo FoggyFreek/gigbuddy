@@ -48,6 +48,9 @@ vi.mock('../api/profile.ts', () => ({
   }),
   updateProfile: vi.fn().mockResolvedValue({}),
   uploadLogo: vi.fn().mockResolvedValue({ logo_path: 'logo/test.jpg' }),
+  uploadBanner: vi.fn().mockResolvedValue({ banner_path: 'profile-banner/test.jpg' }),
+  uploadAvatar: vi.fn().mockResolvedValue({ avatar_path: 'avatar/test.jpg' }),
+  uploadLogoDark: vi.fn().mockResolvedValue({ logo_dark_path: 'logo-dark/test.jpg' }),
   createLink: vi.fn().mockResolvedValue({ id: 11, label: 'Website', url: 'https://example.com', sort_order: 1 }),
   updateLink: vi.fn().mockResolvedValue({}),
   deleteLink: vi.fn().mockResolvedValue(null),
@@ -58,6 +61,8 @@ vi.mock('../utils/compressImage.ts', () => ({
     if (file.type === 'image/gif') throw new Error('File type not allowed')
     return Promise.resolve(file)
   }),
+  compressBanner: vi.fn().mockImplementation((file) => Promise.resolve(file)),
+  compressAvatar: vi.fn().mockImplementation((file) => Promise.resolve(file)),
 }))
 
 import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '../api/profile.ts'

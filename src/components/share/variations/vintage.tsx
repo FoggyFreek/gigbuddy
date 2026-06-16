@@ -45,11 +45,10 @@ interface ShareLayoutProps {
   bannerSrc?: string
   bandName?: string
   showLogo?: boolean
-  invertLogo?: boolean
   format?: string
 }
 
-function VintageSquare({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }: ShareLayoutProps) {
+function VintageSquare({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }: ShareLayoutProps) {
   const f = SHARE_FORMATS.square
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
@@ -92,7 +91,7 @@ function VintageSquare({ gig, photoSrc, pan = 0, accent = ACCENT, socials, stick
           left: 70,
           width: 250,
           height: 'auto',
-          filter: `${invertLogo ? 'invert(1) ' : ''}drop-shadow(0 2px 6px rgba(0,0,0,0.6))`,
+          filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))',
         }}
       />
       {bannerSrc && (
@@ -190,7 +189,7 @@ function VintageSquare({ gig, photoSrc, pan = 0, accent = ACCENT, socials, stick
   )
 }
 
-function VintageStory({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }: ShareLayoutProps) {
+function VintageStory({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }: ShareLayoutProps) {
   const f = SHARE_FORMATS.story
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
@@ -233,7 +232,7 @@ function VintageStory({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, 
           transform: 'translateX(-50%)',
           width: 420,
           height: 'auto',
-          filter: `${invertLogo ? 'invert(1) ' : ''}drop-shadow(0 3px 10px rgba(0,0,0,0.7))`,
+          filter: 'drop-shadow(0 3px 10px rgba(0,0,0,0.7))',
         }}
       />
 

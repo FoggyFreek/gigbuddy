@@ -80,6 +80,8 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
   const [includePast, setIncludePast] = useState(false)
   const [socials, setSocials] = useState<Record<string, string>>({})
   const [logoSrc, setLogoSrc] = useState('/share/logo.png')
+  const [logoDarkSrc, setLogoDarkSrc] = useState<string | null>(null)
+  const [useDarkLogo, setUseDarkLogo] = useState(false)
   const [busy, setBusy] = useState(false)
   const [snackbar, setSnackbar] = useState<{ msg: string } | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -121,6 +123,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
       setSelectedYear(CURRENT_YEAR)
       setMonthsAhead('all')
       setIncludePast(false)
+      setUseDarkLogo(false)
       setBusy(false)
       loadPhotos()
       getProfile().then((p) => {
@@ -130,6 +133,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
           tiktok: (p as Record<string, unknown>)?.tiktok_handle as string || '',
         })
         setLogoSrc((p as Record<string, unknown>)?.logo_path ? `/api/files/${(p as Record<string, unknown>).logo_path}` : '/share/logo.png')
+        setLogoDarkSrc((p as Record<string, unknown>)?.logo_dark_path ? `/api/files/${(p as Record<string, unknown>).logo_dark_path}` : null)
       }).catch(() => {})
     }
   }, [open])  
@@ -334,6 +338,18 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                   label={<Typography variant="caption">Show banners</Typography>}
                 />
               )}
+              {logoDarkSrc && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={useDarkLogo}
+                      onChange={(e) => setUseDarkLogo(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label={<Typography variant="caption">Dark logo</Typography>}
+                />
+              )}
             </Stack>
 
             {/* Preview */}
@@ -370,7 +386,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                   format={format}
                   socials={socials}
                   year={selectedYear}
-                  logoSrc={logoSrc}
+                  logoSrc={useDarkLogo && logoDarkSrc ? logoDarkSrc : logoSrc}
                   showBanners={showBanners}
                 />
               </Box>
