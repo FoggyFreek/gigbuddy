@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/invoiceValidators.js'
 import {
   listInvoices,
@@ -69,14 +71,14 @@ router.get('/:id', async (req, res) => {
 })
 
 // Create invoice
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const result = await createInvoice(pool, req.tenantId, req.user.id, req.body || {})
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.invoice)
 })
 
 // Update invoice (partial)
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchInvoice(pool, req.tenantId, id, req.body || {}, req.user.id)
   if (result.error) return sendError(res, result.error)
@@ -84,7 +86,7 @@ router.patch('/:id', async (req, res) => {
 })
 
 // Delete invoice (drafts only)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteInvoice(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -92,7 +94,7 @@ router.delete('/:id', async (req, res) => {
 })
 
 // Retry PDF render
-router.post('/:id/render', async (req, res) => {
+router.post('/:id/render', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await retryRenderPdf(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -100,7 +102,7 @@ router.post('/:id/render', async (req, res) => {
 })
 
 // Upload custom logo
-router.post('/:id/logo', logoUpload.single('logo'), async (req, res) => {
+router.post('/:id/logo', requirePermission(PERMISSIONS.FINANCE_MANAGE), logoUpload.single('logo'), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!LOGO_ALLOWED_TYPES.has(req.file.mimetype)) {
@@ -112,7 +114,7 @@ router.post('/:id/logo', logoUpload.single('logo'), async (req, res) => {
 })
 
 // Remove custom logo
-router.delete('/:id/logo', async (req, res) => {
+router.delete('/:id/logo', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await removeInvoiceLogo(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -120,7 +122,7 @@ router.delete('/:id/logo', async (req, res) => {
 })
 
 // Create payment link (finalizes the invoice)
-router.post('/:id/payment-link', async (req, res) => {
+router.post('/:id/payment-link', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await createInvoicePaymentLink(pool, req.tenantId, id, req.user.id, req.body || {})
   if (result.error) return sendError(res, result.error)
@@ -128,7 +130,7 @@ router.post('/:id/payment-link', async (req, res) => {
 })
 
 // Remove payment link
-router.delete('/:id/payment-link', async (req, res) => {
+router.delete('/:id/payment-link', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await removeInvoicePaymentLink(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -136,7 +138,7 @@ router.delete('/:id/payment-link', async (req, res) => {
 })
 
 // Sync payment status from Mollie
-router.post('/:id/payment-link/sync', async (req, res) => {
+router.post('/:id/payment-link/sync', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await syncInvoicePaymentLink(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -153,7 +155,7 @@ router.get('/:id/eml-defaults', async (req, res) => {
 
 // Generates and streams the .eml file.
 // X-Unsent: 1 verified working in Outlook 1.2026.105.100 (WebView2 143).
-router.post('/:id/eml', async (req, res) => {
+router.post('/:id/eml', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await buildInvoiceEml(pool, req.tenantId, id, req.body?.personalMessage)
   if (result.error) return sendError(res, result.error)

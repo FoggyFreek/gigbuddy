@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/rehearsalValidators.js'
 import {
   listRehearsals,
@@ -45,7 +47,7 @@ router.get('/:id', async (req, res) => {
 })
 
 // Create rehearsal
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createRehearsal(req.tenantId, req.user.id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.rehearsal)
@@ -53,7 +55,7 @@ router.post('/', async (req, res) => {
 })
 
 // Update rehearsal (partial)
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchRehearsal(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
@@ -62,7 +64,7 @@ router.patch('/:id', async (req, res) => {
 })
 
 // Delete rehearsal
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteRehearsal(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -70,7 +72,7 @@ router.delete('/:id', async (req, res) => {
 })
 
 // Add participant
-router.post('/:id/participants', async (req, res) => {
+router.post('/:id/participants', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const memberId = parseId(req.body.band_member_id)
   if (memberId === null) return res.status(400).json({ error: 'Invalid band_member_id' })
@@ -80,7 +82,7 @@ router.post('/:id/participants', async (req, res) => {
 })
 
 // Remove participant
-router.delete('/:id/participants/:bandMemberId', async (req, res) => {
+router.delete('/:id/participants/:bandMemberId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const memberId = requireParam(req, res, 'bandMemberId'); if (memberId === null) return
   const result = await removeParticipant(pool, req.tenantId, id, memberId)
@@ -88,17 +90,19 @@ router.delete('/:id/participants/:bandMemberId', async (req, res) => {
   res.status(204).end()
 })
 
-// Update vote
-router.patch('/:id/participants/:bandMemberId', async (req, res) => {
+// Update vote. Readers may set their own participation vote; the self-scope is
+// enforced in the service via the caller context below.
+router.patch('/:id/participants/:bandMemberId', requirePermission(PERMISSIONS.REHEARSAL_RESPOND_SELF), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const memberId = requireParam(req, res, 'bandMemberId'); if (memberId === null) return
-  const result = await setParticipantVote(pool, req.tenantId, req.user.id, id, memberId, req.body)
+  const caller = { role: req.membership?.role, isSuperAdmin: !!req.user?.is_super_admin }
+  const result = await setParticipantVote(pool, req.tenantId, req.user.id, id, memberId, req.body, caller)
   if (result.error) return sendError(res, result.error)
   res.json(result.rehearsal)
 })
 
 // Link song
-router.post('/:id/songs', async (req, res) => {
+router.post('/:id/songs', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const songId = parseId(req.body.song_id)
   if (songId === null) return res.status(400).json({ error: 'Invalid song_id' })
@@ -108,7 +112,7 @@ router.post('/:id/songs', async (req, res) => {
 })
 
 // Unlink song
-router.delete('/:id/songs/:songId', async (req, res) => {
+router.delete('/:id/songs/:songId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const songId = requireParam(req, res, 'songId'); if (songId === null) return
   const result = await unlinkSong(pool, req.tenantId, id, songId)

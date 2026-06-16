@@ -28,6 +28,21 @@ export async function objectKeyBelongsToTenant(executor, tenantId, objectKey) {
   return rows.length > 0
 }
 
+// The user who created the purchase an attachment object belongs to, used to
+// gate self-scoped (purchase.create) access to receipt files. Null when the key
+// is not a purchase attachment in this tenant.
+export async function purchaseAttachmentCreatedByUserId(executor, tenantId, objectKey) {
+  const { rows } = await executor.query(
+    `SELECT p.created_by_user_id
+       FROM purchase_attachments pa
+       JOIN purchases p ON p.id = pa.purchase_id AND p.tenant_id = pa.tenant_id
+      WHERE pa.object_key = $1 AND pa.tenant_id = $2
+      LIMIT 1`,
+    [objectKey, tenantId],
+  )
+  return rows[0]?.created_by_user_id ?? null
+}
+
 // Original upload filename for downloadable object types (used to set
 // Content-Disposition). Returns null for object types without a stored name.
 export async function fetchOriginalFilename(executor, objectKey, tenantId) {

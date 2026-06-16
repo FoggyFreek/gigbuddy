@@ -110,7 +110,13 @@ export async function validateContactIdForTenant(executor, rawId, tenantId) {
 // List rows for the table/search. Includes the first line's description (the
 // per-line description lives in purchase_lines, not on the purchase row).
 // `periodSql`/`periodValues` come from buildPeriodWhere (placeholders $2+).
-export async function listPurchases(executor, tenantId, periodSql, periodValues) {
+export async function listPurchases(executor, tenantId, periodSql, periodValues, createdByUserId = null) {
+  const params = [tenantId, ...periodValues]
+  let ownerSql = ''
+  if (createdByUserId != null) {
+    params.push(createdByUserId)
+    ownerSql = `AND p.created_by_user_id = $${params.length}`
+  }
   const { rows } = await executor.query(
     `SELECT p.id, p.receipt_number, p.supplier_name, p.supplier_contact_id,
             p.receipt_date, p.due_date, p.currency, p.status,
@@ -127,8 +133,9 @@ export async function listPurchases(executor, tenantId, periodSql, periodValues)
        ) fl ON TRUE
       WHERE p.tenant_id = $1
         ${periodSql}
+        ${ownerSql}
       ORDER BY p.receipt_date DESC, p.id DESC`,
-    [tenantId, ...periodValues],
+    params,
   )
   return rows
 }

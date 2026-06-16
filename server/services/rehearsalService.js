@@ -2,6 +2,7 @@
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function).
 import pool from '../db/index.js'
+import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { sendPushToTenant } from '../utils/sendPush.js'
 import {
   VALID_STATUSES,
@@ -206,13 +207,21 @@ export async function removeParticipant(db, tenantId, rehearsalId, memberId) {
   return {}
 }
 
-export async function setParticipantVote(db, tenantId, userId, rehearsalId, memberId, body) {
+export async function setParticipantVote(db, tenantId, userId, rehearsalId, memberId, body, caller = {}) {
   if (!('vote' in body)) {
     return { error: { status: 400, body: { error: 'vote is required' } } }
   }
   const vote = body.vote
   if (vote !== null && !VALID_VOTES.has(vote)) {
     return { error: { status: 400, body: { error: 'Invalid vote value' } } }
+  }
+
+  // Readers (no planning.write) may only set their own participation vote.
+  if (!hasPermission(caller.role, PERMISSIONS.PLANNING_WRITE, { isSuperAdmin: caller.isSuperAdmin })) {
+    const callerMemberId = await getBandMemberIdForUser(db, userId, tenantId)
+    if (callerMemberId == null || memberId !== callerMemberId) {
+      return { error: { status: 403, body: { error: 'Forbidden' } } }
+    }
   }
 
   const participant = await updateParticipantVote(db, tenantId, rehearsalId, memberId, vote, userId)

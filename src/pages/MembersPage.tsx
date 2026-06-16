@@ -103,6 +103,41 @@ function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatu
   )
 }
 
+// Roles a tenant admin may assign. `tenant_admin` is added separately and stays
+// super-admin-only; legacy `member` rows render their own option so the Select
+// value still matches. Mirrors ASSIGNABLE_ROLES in src/auth/permissions.ts.
+const ASSIGNABLE_ROLE_OPTIONS = ['reader', 'contributor', 'financial_admin']
+
+interface RoleSelectProps {
+  r: MembershipRow
+  callerIsSuperAdmin: boolean
+  isSelf: boolean
+  onRole: (userId: Id, role: string) => void
+}
+
+function RoleSelect({ r, callerIsSuperAdmin, isSelf, onRole }: RoleSelectProps) {
+  // Non-super callers cannot touch a tenant_admin's role, nor grant tenant_admin.
+  const cannotDemoteAdmin = r.role === 'tenant_admin' && !callerIsSuperAdmin && !isSelf
+  const cannotPromote = !callerIsSuperAdmin
+  return (
+    <FormControl size="small" fullWidth>
+      <Select
+        value={r.role ?? ''}
+        disabled={cannotDemoteAdmin}
+        onChange={(e) => r.user_id != null && onRole(r.user_id, e.target.value)}
+      >
+        {r.role === 'member' && <MenuItem value="member">member (legacy)</MenuItem>}
+        {ASSIGNABLE_ROLE_OPTIONS.map((role) => (
+          <MenuItem key={role} value={role}>{role}</MenuItem>
+        ))}
+        <MenuItem value="tenant_admin" disabled={cannotPromote && r.role !== 'tenant_admin'}>
+          tenant_admin
+        </MenuItem>
+      </Select>
+    </FormControl>
+  )
+}
+
 interface MembersTableProps {
   rows: MembershipRow[]
   bandMembers: Member[]
@@ -138,9 +173,6 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
               const availableMembers = bandMembers.filter(
                 (bm) => !(bm as MemberWithUser).user_id || (bm as MemberWithUser).user_id === r.user_id,
               )
-              const cannotDemoteAdmin =
-                r.role === 'tenant_admin' && !callerIsSuperAdmin && !isSelf
-              const cannotPromote = !callerIsSuperAdmin
               const cannotDelete =
                 isSelf ||
                 r.is_super_admin ||
@@ -163,18 +195,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                     <Chip label={r.status} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
                   </TableCell>
                   <TableCell sx={{ minWidth: 140 }}>
-                    <FormControl size="small" fullWidth>
-                      <Select
-                        value={r.role ?? ''}
-                        disabled={cannotDemoteAdmin || (cannotPromote && r.role === 'member')}
-                        onChange={(e) => r.user_id != null && onRole(r.user_id, e.target.value)}
-                      >
-                        <MenuItem value="member">member</MenuItem>
-                        <MenuItem value="tenant_admin" disabled={cannotPromote && r.role !== 'tenant_admin'}>
-                          tenant_admin
-                        </MenuItem>
-                      </Select>
-                    </FormControl>
+                    <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} onRole={onRole} />
                   </TableCell>
                   <TableCell sx={{ minWidth: 160 }}>
                     <FormControl size="small" fullWidth>
@@ -221,8 +242,6 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
           const availableMembers = bandMembers.filter(
             (bm) => !(bm as MemberWithUser).user_id || (bm as MemberWithUser).user_id === r.user_id,
           )
-          const cannotDemoteAdmin = r.role === 'tenant_admin' && !callerIsSuperAdmin && !isSelf
-          const cannotPromote = !callerIsSuperAdmin
           const cannotDelete = isSelf || r.is_super_admin || (r.role === 'tenant_admin' && !callerIsSuperAdmin)
           return (
             <Card key={String(r.user_id)} variant="outlined">
@@ -251,18 +270,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                   <Chip label={r.status} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
                 </Stack>
                 <Stack spacing={1}>
-                  <FormControl size="small" fullWidth>
-                    <Select
-                      value={r.role ?? ''}
-                      disabled={cannotDemoteAdmin || (cannotPromote && r.role === 'member')}
-                      onChange={(e) => r.user_id != null && onRole(r.user_id, e.target.value)}
-                    >
-                      <MenuItem value="member">member</MenuItem>
-                      <MenuItem value="tenant_admin" disabled={cannotPromote && r.role !== 'tenant_admin'}>
-                        tenant_admin
-                      </MenuItem>
-                    </Select>
-                  </FormControl>
+                  <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} onRole={onRole} />
                   <FormControl size="small" fullWidth>
                     <Select
                       value={linked ?? ''}

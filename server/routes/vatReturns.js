@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/accountValidators.js'
 import {
   parseYearQuarter,
@@ -39,7 +41,7 @@ router.get('/', async (req, res, next) => {
   }
 })
 
-router.post('/', async (req, res, next) => {
+router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
   const body = validateReturnCreate(req.body || {})
   if (body.error) return res.status(400).json({ error: body.error })
   try {
@@ -63,7 +65,7 @@ router.get('/:id', async (req, res, next) => {
   }
 })
 
-router.post('/:id/payments', async (req, res, next) => {
+router.post('/:id/payments', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
   const id = parseId(req.params.id)
   if (id === null) return res.status(400).json({ error: 'Invalid id' })
   const payment = validatePayment(req.body || {})

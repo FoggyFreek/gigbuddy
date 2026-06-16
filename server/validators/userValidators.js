@@ -1,7 +1,8 @@
 // Input parsing and validation for user/membership routes. No DB access here.
+import { ALL_ROLES } from '../auth/permissions.js'
 
 export const ALLOWED_STATUS = new Set(['pending', 'approved', 'rejected'])
-export const ALLOWED_ROLE = new Set(['member', 'tenant_admin'])
+export const ALLOWED_ROLE = ALL_ROLES
 
 export function parseId(val) {
   const n = Number(val)

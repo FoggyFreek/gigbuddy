@@ -2,6 +2,7 @@
 // and delegate here. Functions that can fail with a specific HTTP outcome return
 // { error: { status, body } }; success returns a domain payload.
 import pool from '../db/index.js'
+import { ALL_ROLES } from '../auth/permissions.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
 import {
   validSlug,
@@ -121,7 +122,7 @@ export async function addMembership(db, tenantId, body, actingUserId) {
   const userId = Number(body?.userId)
   const role = body?.role ?? 'member'
   if (!Number.isInteger(userId)) return badRequest('userId is required')
-  if (role !== 'member' && role !== 'tenant_admin') return badRequest('Invalid role')
+  if (!ALL_ROLES.has(role)) return badRequest('Invalid role')
 
   const tenant = await fetchTenantArchiveState(db, tenantId)
   if (!tenant) return notFound('Tenant not found')

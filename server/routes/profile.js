@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
-import { requireTenantAdmin } from '../middleware/tenant.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/profileValidators.js'
 import {
   getProfile,
@@ -81,19 +82,19 @@ router.get('/mollie-key', async (req, res) => {
 })
 
 // Set or replace Mollie API key (tenant admin only)
-router.put('/mollie-key', requireTenantAdmin, async (req, res) => {
+router.put('/mollie-key', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const result = await setMollieKeyValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.status)
 })
 
 // Clear Mollie API key (tenant admin only)
-router.delete('/mollie-key', requireTenantAdmin, async (req, res) => {
+router.delete('/mollie-key', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   res.json(await clearMollieKeyValue(pool, req.tenantId))
 })
 
 // Upload / replace band logo (tenant admin only)
-router.post('/logo', requireTenantAdmin, logoUpload.single('logo'), async (req, res) => {
+router.post('/logo', requirePermission(PERMISSIONS.FINANCE_MANAGE), logoUpload.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!LOGO_ALLOWED_TYPES.has(req.file.mimetype)) {
     return res.status(400).json({ error: 'File type not allowed' })

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
-import { requireTenantAdmin } from '../middleware/tenant.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/accountValidators.js'
 import {
   getSettings,
@@ -38,7 +39,7 @@ router.get('/settings', async (req, res, next) => {
 })
 
 // ---------- PATCH /api/accounts/settings ----------
-router.patch('/settings', requireTenantAdmin, async (req, res, next) => {
+router.patch('/settings', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
   try {
     const result = await patchSettings(req.tenantId, req.body || {})
     if (result.error) return sendError(res, result.error)
@@ -58,7 +59,7 @@ router.get('/', async (req, res, next) => {
 })
 
 // ---------- POST /api/accounts ----------
-router.post('/', requireTenantAdmin, async (req, res, next) => {
+router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
   try {
     const result = await createAccount(pool, req.tenantId, req.body || {})
     if (result.error) return sendError(res, result.error)
@@ -69,7 +70,7 @@ router.post('/', requireTenantAdmin, async (req, res, next) => {
 })
 
 // ---------- PATCH /api/accounts/:id ----------
-router.patch('/:id', requireTenantAdmin, async (req, res, next) => {
+router.patch('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   try {
     const result = await patchAccount(pool, req.tenantId, id, req.body || {})
@@ -81,7 +82,7 @@ router.patch('/:id', requireTenantAdmin, async (req, res, next) => {
 })
 
 // ---------- DELETE /api/accounts/:id ----------
-router.delete('/:id', requireTenantAdmin, async (req, res, next) => {
+router.delete('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   try {
     const result = await deleteAccount(pool, req.tenantId, id)

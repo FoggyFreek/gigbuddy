@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/journalValidators.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import {
@@ -40,14 +42,14 @@ router.get('/members/:id/purchases', async (req, res) => {
 })
 
 // ---------- register a reimbursement ----------
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const result = await createReimbursement(pool, req.tenantId, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   res.status(201).json(result.reimbursement)
 })
 
 // ---------- reimburse a member's full outstanding balance ----------
-router.post('/members/:id/full', async (req, res) => {
+router.post('/members/:id/full', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await reimburseMemberFull(pool, req.tenantId, id, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)

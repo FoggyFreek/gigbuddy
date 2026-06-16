@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/availabilityValidators.js'
 import {
   listRange,
@@ -34,20 +36,20 @@ router.get('/on/:date', async (req, res) => {
   res.json(await listOnDate(pool, req.tenantId, req.params.date))
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createSlot(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.slot)
 })
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await patchSlot(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.slot)
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await deleteSlot(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)

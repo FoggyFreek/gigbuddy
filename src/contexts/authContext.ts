@@ -19,6 +19,8 @@ export interface User {
   isSuperAdmin?: boolean
   activeTenantId?: Id | null
   activeTenantRole?: string | null
+  /** Permission keys for the active tenant, sent by /auth/me (see src/auth/permissions.ts). */
+  permissions?: string[]
   bandMemberId?: Id | null
   memberships?: UserMembership[]
 }

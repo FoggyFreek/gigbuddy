@@ -11,6 +11,7 @@ import {
   firstApprovedTenantId,
   isApprovedMember,
 } from '../repositories/authRepository.js'
+import { permissionsForRole } from '../auth/permissions.js'
 
 // Builds the /me payload for a user, resolving the active tenant. The session's
 // preferred active tenant wins when it's still an approved membership, else the
@@ -45,6 +46,9 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
       isSuperAdmin: !!user.is_super_admin,
       activeTenantId,
       activeTenantRole: activeMembership?.role ?? null,
+      permissions: activeMembership
+        ? permissionsForRole(activeMembership.role, { isSuperAdmin: !!user.is_super_admin })
+        : [],
       bandMemberId,
       memberships: memberships.map((m) => ({
         tenantId: m.tenant_id,

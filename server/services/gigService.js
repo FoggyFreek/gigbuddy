@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import pool from '../db/index.js'
+import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { uploadObject, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
@@ -43,6 +44,8 @@ import {
   setGigBannerPath,
   clearGigBannerPath,
   insertGigTask,
+  getGigTaskById,
+  getBandMemberIdForUser,
   deleteGigTask as deleteGigTaskRow,
   insertGigAttachment,
   deleteGigAttachment as deleteGigAttachmentRow,
@@ -338,9 +341,32 @@ async function resolveTaskAssignee(db, tenantId, body) {
   return { body: { ...body, assigned_to: assignedTo } }
 }
 
+// Readers (no planning.write) may only toggle `done` on a task assigned to their
+// own band member. Any other field, an unassigned/foreign task, or an unlinked
+// caller is rejected 403. Returns { error } on denial, or {} when allowed.
+async function authorizeSelfTaskPatch(db, tenantId, gigId, taskId, body, userId) {
+  const forbidden = { error: { status: 403, body: { error: 'Forbidden' } } }
+  const keys = Object.keys(body)
+  const onlyDone = keys.length > 0 && keys.every((key) => key === 'done')
+  if (!onlyDone) return forbidden
+
+  const task = await getGigTaskById(db, taskId, gigId, tenantId)
+  if (!task) return NOT_FOUND
+  const callerMemberId = await getBandMemberIdForUser(db, userId, tenantId)
+  if (callerMemberId == null || task.assigned_to !== callerMemberId) return forbidden
+  return {}
+}
+
 // Validates and applies a gig-task PATCH. Returns { error } or { task }. Fires
 // the assignment push notification as a side effect when assigned_to is set.
-export async function patchGigTask(db, tenantId, gigId, taskId, body) {
+// `caller` ({ role, isSuperAdmin, userId }) gates the reader self-scope:
+// holders of planning.write patch any task/field; readers only their own `done`.
+export async function patchGigTask(db, tenantId, gigId, taskId, body, caller = {}) {
+  if (!hasPermission(caller.role, PERMISSIONS.PLANNING_WRITE, { isSuperAdmin: caller.isSuperAdmin })) {
+    const denial = await authorizeSelfTaskPatch(db, tenantId, gigId, taskId, body, caller.userId)
+    if (denial.error) return denial
+  }
+
   const assignee = await resolveTaskAssignee(db, tenantId, body)
   if (assignee.error) return assignee
   const normalizedBody = assignee.body

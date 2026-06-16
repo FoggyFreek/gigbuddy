@@ -39,6 +39,8 @@ import {
   requireTenantAdmin,
   requireSuperAdmin,
 } from '../middleware/tenant.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { csrf } from '../middleware/csrf.js'
 
 const router = Router()
@@ -115,6 +117,9 @@ router.use('/auth', authRouter)
 const tenantMember = [requireApproved, resolveTenantId, requireTenantMember]
 const tenantAdmin = [requireApproved, resolveTenantId, requireTenantAdmin]
 const superAdmin = [requireApproved, requireSuperAdmin]
+// Finance surfaces: any read/export requires finance.view; routers gate their
+// own mutations/side-effects with requirePermission(finance.manage) internally.
+const financeView = [...tenantMember, requirePermission(PERMISSIONS.FINANCE_VIEW)]
 
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 router.use('/admin/tenants', superAdmin, tenantsRouter)
@@ -136,14 +141,16 @@ router.use('/venues', tenantMember, venuesRouter)
 router.use('/contacts', tenantMember, contactsRouter)
 router.use('/songs', tenantMember, songsRouter)
 router.use('/setlists', tenantMember, setlistsRouter)
-router.use('/invoices', tenantMember, invoicesRouter)
+router.use('/invoices', financeView, invoicesRouter)
+// Purchases is mixed: contributors create + view their own purchases
+// (purchase.create); the full register and payments are finance-gated inside.
 router.use('/purchases', tenantMember, purchasesRouter)
-router.use('/merch', tenantMember, merchRouter)
-router.use('/accounts', tenantMember, accountsRouter)
-router.use('/journal', tenantMember, journalRouter)
-router.use('/ledger', tenantMember, ledgerRouter)
-router.use('/reimbursements', tenantMember, reimbursementsRouter)
-router.use('/vat-returns', tenantAdmin, vatReturnsRouter)
+router.use('/merch', financeView, merchRouter)
+router.use('/accounts', financeView, accountsRouter)
+router.use('/journal', financeView, journalRouter)
+router.use('/ledger', financeView, ledgerRouter)
+router.use('/reimbursements', financeView, reimbursementsRouter)
+router.use('/vat-returns', financeView, vatReturnsRouter)
 router.use('/push', tenantMember, pushRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)
 router.use('/files', tenantMember, filesRouter)

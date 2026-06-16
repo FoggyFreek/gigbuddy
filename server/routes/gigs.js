@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/gigValidators.js'
 import {
   listGigs,
@@ -76,7 +78,7 @@ router.get('/:id', async (req, res) => {
 })
 
 // Bulk import gigs from Bandsintown CSV export
-router.post('/import', async (req, res) => {
+router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await importGigs(req.tenantId, req.user.id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json({ created: result.created, skipped: result.skipped })
@@ -84,7 +86,7 @@ router.post('/import', async (req, res) => {
 })
 
 // Create gig
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createGig(req.tenantId, req.user.id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.gig)
@@ -92,7 +94,7 @@ router.post('/', async (req, res) => {
 })
 
 // Update gig (partial)
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchGig(pool, req.tenantId, id, req.body || {})
   if (result.error) return sendError(res, result.error)
@@ -101,7 +103,7 @@ router.patch('/:id', async (req, res) => {
 })
 
 // Delete gig
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteGig(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -111,7 +113,7 @@ router.delete('/:id', async (req, res) => {
 // --- Banner ---
 
 // Upload / replace gig banner
-router.post('/:id/banner', bannerUpload.single('banner'), async (req, res) => {
+router.post('/:id/banner', requirePermission(PERMISSIONS.PLANNING_WRITE), bannerUpload.single('banner'), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!BANNER_ALLOWED_TYPES.has(req.file.mimetype)) {
@@ -124,7 +126,7 @@ router.post('/:id/banner', bannerUpload.single('banner'), async (req, res) => {
 })
 
 // Delete gig banner
-router.delete('/:id/banner', async (req, res) => {
+router.delete('/:id/banner', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteGigBanner(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -133,7 +135,7 @@ router.delete('/:id/banner', async (req, res) => {
 
 // --- Attachments ---
 
-router.post('/:id/attachments', attachmentUpload.single('file'), async (req, res) => {
+router.post('/:id/attachments', requirePermission(PERMISSIONS.PLANNING_WRITE), attachmentUpload.single('file'), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!ATTACHMENT_ALLOWED_TYPES.has(req.file.mimetype))
@@ -144,7 +146,7 @@ router.post('/:id/attachments', attachmentUpload.single('file'), async (req, res
   res.status(201).json(result.attachment)
 })
 
-router.delete('/:id/attachments/:attachmentId', async (req, res) => {
+router.delete('/:id/attachments/:attachmentId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const attachmentId = requireParam(req, res, 'attachmentId'); if (attachmentId === null) return
   const result = await deleteGigAttachment(pool, req.tenantId, id, attachmentId)
@@ -155,24 +157,26 @@ router.delete('/:id/attachments/:attachmentId', async (req, res) => {
 // --- Tasks ---
 
 // Add task to gig
-router.post('/:id/tasks', async (req, res) => {
+router.post('/:id/tasks', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const gigId = requireParam(req, res, 'id'); if (gigId === null) return
   const result = await addGigTask(pool, req.tenantId, gigId, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.task)
 })
 
-// Update task
-router.patch('/:id/tasks/:taskId', async (req, res) => {
+// Update task. Readers may toggle `done` on their own assigned task; the
+// self-scope is enforced in the service via the caller context below.
+router.patch('/:id/tasks/:taskId', requirePermission(PERMISSIONS.TASK_COMPLETE_SELF), async (req, res) => {
   const gigId = requireParam(req, res, 'id'); if (gigId === null) return
   const taskId = requireParam(req, res, 'taskId'); if (taskId === null) return
-  const result = await patchGigTask(pool, req.tenantId, gigId, taskId, req.body || {})
+  const caller = { role: req.membership?.role, isSuperAdmin: !!req.user?.is_super_admin, userId: req.user.id }
+  const result = await patchGigTask(pool, req.tenantId, gigId, taskId, req.body || {}, caller)
   if (result.error) return sendError(res, result.error)
   res.json(result.task)
 })
 
 // Delete task
-router.delete('/:id/tasks/:taskId', async (req, res) => {
+router.delete('/:id/tasks/:taskId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const gigId = requireParam(req, res, 'id'); if (gigId === null) return
   const taskId = requireParam(req, res, 'taskId'); if (taskId === null) return
   const result = await deleteGigTask(pool, req.tenantId, gigId, taskId)
@@ -183,7 +187,7 @@ router.delete('/:id/tasks/:taskId', async (req, res) => {
 // --- Participants ---
 
 // Add participant
-router.post('/:id/participants', async (req, res) => {
+router.post('/:id/participants', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const gigId = requireParam(req, res, 'id'); if (gigId === null) return
   const memberId = parseId(req.body.band_member_id)
   if (memberId === null) return res.status(400).json({ error: 'Invalid band_member_id' })
@@ -194,7 +198,7 @@ router.post('/:id/participants', async (req, res) => {
 })
 
 // Remove participant
-router.delete('/:id/participants/:bandMemberId', async (req, res) => {
+router.delete('/:id/participants/:bandMemberId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const gigId = requireParam(req, res, 'id'); if (gigId === null) return
   const memberId = requireParam(req, res, 'bandMemberId'); if (memberId === null) return
   const result = await removeParticipant(pool, req.tenantId, gigId, memberId)
@@ -202,8 +206,8 @@ router.delete('/:id/participants/:bandMemberId', async (req, res) => {
   res.status(204).end()
 })
 
-// Update participant vote
-router.patch('/:id/participants/:bandMemberId', async (req, res) => {
+// Update participant vote (gig availability) — a planning write.
+router.patch('/:id/participants/:bandMemberId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const gigId = requireParam(req, res, 'id'); if (gigId === null) return
   const memberId = requireParam(req, res, 'bandMemberId'); if (memberId === null) return
   const result = await setParticipantVote(pool, req.tenantId, req.user.id, gigId, memberId, req.body)
@@ -220,7 +224,7 @@ router.get('/:id/contacts', async (req, res) => {
   res.json(result.contacts)
 })
 
-router.post('/:id/contacts', async (req, res) => {
+router.post('/:id/contacts', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const gigId = requireParam(req, res, 'id'); if (gigId === null) return
   const contactId = parseId(req.body.contact_id)
   if (contactId === null) return res.status(400).json({ error: 'contact_id is required' })
@@ -230,7 +234,7 @@ router.post('/:id/contacts', async (req, res) => {
   res.status(201).json(result.contact)
 })
 
-router.patch('/:id/contacts/:contactId', async (req, res) => {
+router.patch('/:id/contacts/:contactId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const gigId = requireParam(req, res, 'id'); if (gigId === null) return
   const contactId = requireParam(req, res, 'contactId'); if (contactId === null) return
 
@@ -243,7 +247,7 @@ router.patch('/:id/contacts/:contactId', async (req, res) => {
   res.json(result.link)
 })
 
-router.delete('/:id/contacts/:contactId', async (req, res) => {
+router.delete('/:id/contacts/:contactId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const gigId = requireParam(req, res, 'id'); if (gigId === null) return
   const contactId = requireParam(req, res, 'contactId'); if (contactId === null) return
   const result = await removeGigContact(pool, req.tenantId, gigId, contactId)
