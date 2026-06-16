@@ -61,6 +61,7 @@ interface GigContactsSectionProps {
   venueId?: Id
   festivalId?: Id
   flush?: () => Promise<void>
+  canWrite?: boolean
 }
 
 // One read-only contact inherited from the gig's venue or festival. Tagged with
@@ -96,7 +97,7 @@ function InheritedRow({ contact, source, onOpen }: InheritedRowProps) {
   )
 }
 
-export default function GigContactsSection({ gigId, venueId, festivalId, flush }: GigContactsSectionProps) {
+export default function GigContactsSection({ gigId, venueId, festivalId, flush, canWrite = true }: GigContactsSectionProps) {
   const navigate = useNavigate()
   const [linked, setLinked] = useState<LinkedContact[]>([])
   const [venueContacts, setVenueContacts] = useState<InheritedContact[]>([])
@@ -178,33 +179,39 @@ export default function GigContactsSection({ gigId, venueId, festivalId, flush }
               {c.phone || ' '}
             </Typography>
           </Box>
-          <Tooltip title={c.is_primary ? 'Primary contact — click to unset' : 'Mark as primary'}>
-            <IconButton
-              size="small"
-              color={c.is_primary ? 'warning' : 'default'}
-              onClick={() => handleSetPrimary(c.id!, !c.is_primary)}
-              aria-label={c.is_primary ? 'unset primary' : 'set primary'}
-            >
-              {c.is_primary ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
+          {canWrite && (
+            <Tooltip title={c.is_primary ? 'Primary contact — click to unset' : 'Mark as primary'}>
+              <IconButton
+                size="small"
+                color={c.is_primary ? 'warning' : 'default'}
+                onClick={() => handleSetPrimary(c.id!, !c.is_primary)}
+                aria-label={c.is_primary ? 'unset primary' : 'set primary'}
+              >
+                {c.is_primary ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Open contact">
             <IconButton size="small" onClick={() => openContact(c.id!)} aria-label="open contact">
               <OpenInNewIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <IconButton size="small" onClick={() => handleRemoveContact(c.id!)} aria-label="remove contact">
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {canWrite && (
+            <IconButton size="small" onClick={() => handleRemoveContact(c.id!)} aria-label="remove contact">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       ))}
 
-      <Box sx={{ mt: 1 }}>
-        <ContactPicker
-          onSelect={handleAddContact}
-          excludeIds={linked.map((c) => c.id).filter((id): id is Id => id != null)}
-        />
-      </Box>
+      {canWrite && (
+        <Box sx={{ mt: 1 }}>
+          <ContactPicker
+            onSelect={handleAddContact}
+            excludeIds={linked.map((c) => c.id).filter((id): id is Id => id != null)}
+          />
+        </Box>
+      )}
     </Box>
   )
 }

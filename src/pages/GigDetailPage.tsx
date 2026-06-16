@@ -67,6 +67,7 @@ export default function GigDetailPage() {
       <GigDetailContent
         ref={contentRef}
         gigId={gigId}
+        canWrite={canWritePlanning}
         onBannerUpdate={outletCtx.onGigUpdate as ((gigId: Id, patch: Record<string, unknown>) => void) | undefined}
         onGigLoaded={setGig as (gig: Gig) => void}
       />

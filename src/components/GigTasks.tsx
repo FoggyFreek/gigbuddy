@@ -31,6 +31,11 @@ interface GigTasksProps {
   gigId: Id
   initialTasks?: LocalGigTask[]
   members?: Member[]
+  // Planning-write gates creating/deleting/editing tasks. Readers keep one
+  // self-action: ticking *their own* assigned task done (task.complete.self on
+  // the server), so the done checkbox stays live for tasks assigned to them.
+  canWrite?: boolean
+  currentBandMemberId?: Id | null
 }
 
 function toDateInputValue(val: string | null | undefined): string {
@@ -57,7 +62,7 @@ function DueDateAdornment({ label, onClick }: DueDateAdornmentProps) {
   )
 }
 
-export default function GigTasks({ gigId, initialTasks = [], members = [] }: GigTasksProps) {
+export default function GigTasks({ gigId, initialTasks = [], members = [], canWrite = true, currentBandMemberId = null }: GigTasksProps) {
   const [tasks, setTasks] = useState<LocalGigTask[]>(initialTasks)
   const [newTitle, setNewTitle] = useState('')
   const [newDue, setNewDue] = useState('')
@@ -115,45 +120,47 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }: Gig
 
   return (
     <Box>
-      {/* Add row */}
-      <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-        <TextField
-          placeholder="New task…"
-          size="small"
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
-          sx={{ flexGrow: 1 }}
-        />
-        <TextField
-          type="date"
-          size="small"
-          value={newDue}
-          onChange={(e) => setNewDue(e.target.value)}
-          onFocus={() => setDueFocused(true)}
-          onBlur={() => setDueFocused(false)}
-          slotProps={{
-            htmlInput: { ref: newDueInputRef },
-            input: {
-              endAdornment: <DueDateAdornment label="open due date picker" onClick={openNewDuePicker} />,
-            },
-            inputLabel: { shrink: dueFocused || !!newDue },
-          }}
-          label="Due"
-          sx={{
-            width: 160,
-            '& input::-webkit-datetime-edit': {
-              opacity: dueFocused || newDue ? 1 : 0,
-            },
-            '& input::-webkit-calendar-picker-indicator': {
-              display: 'none',
-            },
-          }}
-        />
-        <IconButton onClick={handleAdd} color="primary" disabled={!newTitle.trim()}>
-          <AddIcon />
-        </IconButton>
-      </Stack>
+      {/* Add row — planning-write only */}
+      {canWrite && (
+        <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
+          <TextField
+            placeholder="New task…"
+            size="small"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
+            sx={{ flexGrow: 1 }}
+          />
+          <TextField
+            type="date"
+            size="small"
+            value={newDue}
+            onChange={(e) => setNewDue(e.target.value)}
+            onFocus={() => setDueFocused(true)}
+            onBlur={() => setDueFocused(false)}
+            slotProps={{
+              htmlInput: { ref: newDueInputRef },
+              input: {
+                endAdornment: <DueDateAdornment label="open due date picker" onClick={openNewDuePicker} />,
+              },
+              inputLabel: { shrink: dueFocused || !!newDue },
+            }}
+            label="Due"
+            sx={{
+              width: 160,
+              '& input::-webkit-datetime-edit': {
+                opacity: dueFocused || newDue ? 1 : 0,
+              },
+              '& input::-webkit-calendar-picker-indicator': {
+                display: 'none',
+              },
+            }}
+          />
+          <IconButton onClick={handleAdd} color="primary" disabled={!newTitle.trim()}>
+            <AddIcon />
+          </IconButton>
+        </Stack>
+      )}
 
       {tasks.length === 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
@@ -161,7 +168,11 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }: Gig
         </Typography>
       )}
 
-      {tasks.map((task) => (
+      {tasks.map((task) => {
+        // Readers may tick only their own assigned task done; everything else on
+        // the row is planning-write.
+        const canToggleDone = canWrite || (task.assigned_to != null && task.assigned_to === currentBandMemberId)
+        return (
         <Box
           key={String(task.id)}
           sx={{
@@ -178,6 +189,7 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }: Gig
           <Checkbox
             size="small"
             checked={task.done ?? false}
+            disabled={!canToggleDone}
             onChange={() => handleToggle(task)}
             sx={{ flexShrink: 0, gridRow: '1 / 3', alignSelf: 'center' }}
           />
@@ -208,6 +220,7 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }: Gig
             <TextField
               type="date"
               size="small"
+              disabled={!canWrite}
               value={toDateInputValue(task.due_date)}
               onChange={(e) => handleDueChange(task, e.target.value)}
               onFocus={() => setFocusedDueTaskId(task.id ?? null)}
@@ -240,6 +253,7 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }: Gig
             {members.length > 0 && (
               <Select
                 size="small"
+                disabled={!canWrite}
                 value={task.assigned_to ?? ''}
                 onChange={(e) => handleAssign(task, e.target.value as string)}
                 displayEmpty
@@ -253,16 +267,19 @@ export default function GigTasks({ gigId, initialTasks = [], members = [] }: Gig
               </Select>
             )}
           </Box>
-          <IconButton
-            size="small"
-            aria-label={`Delete task ${task.title}`}
-            onClick={() => handleDelete(task.id!)}
-            sx={{ flexShrink: 0, gridRow: '1 / 3', alignSelf: 'center' }}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {canWrite && (
+            <IconButton
+              size="small"
+              aria-label={`Delete task ${task.title}`}
+              onClick={() => handleDelete(task.id!)}
+              sx={{ flexShrink: 0, gridRow: '1 / 3', alignSelf: 'center' }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
-      ))}
+        )
+      })}
     </Box>
   )
 }

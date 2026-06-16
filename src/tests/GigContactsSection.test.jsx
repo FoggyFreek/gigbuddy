@@ -128,4 +128,18 @@ describe('GigContactsSection — gig contacts', () => {
     await user.click(screen.getByLabelText('remove contact'))
     expect(removeGigContact).toHaveBeenCalledWith(1, 5)
   })
+
+  it('reader mode hides the add picker and the primary/remove actions but keeps Open', async () => {
+    const contact = { id: 5, name: 'Gary Gig', email: 'g@gig.com', phone: '333', category: 'booker', is_primary: false }
+    listGigContacts.mockResolvedValue([contact])
+
+    wrap(<GigContactsSection gigId={1} venueId={null} festivalId={null} flush={vi.fn()} canWrite={false} />)
+
+    await waitFor(() => expect(screen.getByText(/Gary Gig/)).toBeInTheDocument())
+    expect(screen.queryByLabelText('set primary')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('remove contact')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Add contact')).not.toBeInTheDocument()
+    // Reads stay available.
+    expect(screen.getByLabelText('open contact')).toBeInTheDocument()
+  })
 })

@@ -24,9 +24,10 @@ const ACCEPT = '.pdf,.xls,.xlsx,.doc,.docx,.txt'
 interface GigAttachmentsProps {
   gigId: Id
   initialAttachments?: PurchaseAttachment[]
+  canWrite?: boolean
 }
 
-export default function GigAttachments({ gigId, initialAttachments = [] }: GigAttachmentsProps) {
+export default function GigAttachments({ gigId, initialAttachments = [], canWrite = true }: GigAttachmentsProps) {
   const [attachments, setAttachments] = useState<PurchaseAttachment[]>(initialAttachments)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -108,29 +109,33 @@ export default function GigAttachments({ gigId, initialAttachments = [] }: GigAt
               {formatBytes(a.file_size ?? 0)}
             </Typography>
           </Box>
-          <IconButton size="small" color="error" onClick={() => setConfirmId(a.id ?? null)}>
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {canWrite && (
+            <IconButton size="small" color="error" onClick={() => setConfirmId(a.id ?? null)}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </Stack>
       ))}
-      <Box>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPT}
-          style={{ display: 'none' }}
-          onChange={handleFileChange}
-        />
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <AttachFileIcon />}
-          disabled={uploading}
-          onClick={() => inputRef.current?.click()}
-        >
-          {uploading ? 'Uploading…' : 'Add'}
-        </Button>
-      </Box>
+      {canWrite && (
+        <Box>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPT}
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <AttachFileIcon />}
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+          >
+            {uploading ? 'Uploading…' : 'Add'}
+          </Button>
+        </Box>
+      )}
 
       <Dialog open={confirmId !== null} onClose={() => setConfirmId(null)}>
         <DialogTitle>Delete attachment?</DialogTitle>
