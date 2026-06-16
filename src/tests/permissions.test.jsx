@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import * as fe from '../auth/permissions.ts'
 import * as be from '../../server/auth/permissions.js'
 
-// Roles whose permission sets must match byte-for-byte across the frontend
-// mirror and the backend source of truth.
+// The matrix is defined once in shared/permissions.js; both the server and the
+// frontend re-export it, so these assertions now hold by construction. The test
+// is kept as a regression guard: if anyone re-introduces a hand-maintained
+// matrix in either wrapper instead of re-exporting the shared source, parity
+// breaks here.
 const ROLES = ['reader', 'contributor', 'member', 'financial_admin', 'tenant_admin']
 
 describe('permission matrix parity (frontend mirrors backend)', () => {

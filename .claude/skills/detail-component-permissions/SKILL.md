@@ -29,8 +29,9 @@ and sub-control as editable.
    ```
 
 2. **The page resolves the capability and passes it down.** Capabilities come
-   from `usePermissions()` (mirror of the server matrix in
-   `src/auth/permissions.ts`), never from an ad-hoc role string check.
+   from `usePermissions()` (backed by the shared role→permission matrix in
+   `shared/permissions.js`, surfaced via `src/auth/permissions.ts`), never from
+   an ad-hoc role string check.
    ```tsx
    const { canWritePlanning } = usePermissions()
    <GigDetailContent gigId={gigId} canWrite={canWritePlanning} … />
