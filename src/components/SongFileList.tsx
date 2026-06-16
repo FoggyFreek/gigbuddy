@@ -29,6 +29,7 @@ interface SongFileListProps {
   deleteFn: (songId: number, fileId: Id | undefined) => Promise<void>
   isAudio?: boolean
   addLabel?: string
+  canWrite?: boolean
 }
 
 export default function SongFileList({
@@ -40,6 +41,7 @@ export default function SongFileList({
   deleteFn,
   isAudio = false,
   addLabel = 'Add',
+  canWrite = true,
 }: SongFileListProps) {
   const [files, setFiles] = useState<SongFile[]>(initialFiles)
   const [uploading, setUploading] = useState(false)
@@ -116,9 +118,11 @@ export default function SongFileList({
                 {formatBytes(f.file_size)}
               </Typography>
             </Box>
-            <IconButton size="small" color="error" onClick={() => setConfirmId(f.id ?? null)} aria-label="delete file">
-              <DeleteIcon fontSize="small" />
-            </IconButton>
+            {canWrite && (
+              <IconButton size="small" color="error" onClick={() => setConfirmId(f.id ?? null)} aria-label="delete file">
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            )}
           </Stack>
           {isAudio && (
             <Box
@@ -132,24 +136,26 @@ export default function SongFileList({
         </Box>
       ))}
 
-      <Box>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          style={{ display: 'none' }}
-          onChange={handleFileChange}
-        />
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <AttachFileIcon />}
-          disabled={uploading}
-          onClick={() => inputRef.current?.click()}
-        >
-          {uploading ? 'Uploading…' : addLabel}
-        </Button>
-      </Box>
+      {canWrite && (
+        <Box>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={accept}
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <AttachFileIcon />}
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+          >
+            {uploading ? 'Uploading…' : addLabel}
+          </Button>
+        </Box>
+      )}
 
       <Dialog open={confirmId !== null} onClose={() => setConfirmId(null)}>
         <DialogTitle>Delete file?</DialogTitle>

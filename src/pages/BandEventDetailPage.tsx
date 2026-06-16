@@ -20,6 +20,7 @@ import { toDateInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import BandEventFields from '../components/BandEventFields.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
+import { usePermissions } from '../hooks/usePermissions.ts'
 
 const REQUIRED_FIELDS = ['title', 'start_date']
 
@@ -43,6 +44,7 @@ interface BandEventForm {
 export default function BandEventDetailPage() {
   const { id } = useParams()
   const bandEventId = Number(id)
+  const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
@@ -141,11 +143,13 @@ export default function BandEventDetailPage() {
         <SaveStatusLabel status={saveStatus} />
       </Box>
 
-      <Box sx={{ mt: 4 }}>
-        <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
-          Delete
-        </Button>
-      </Box>
+      {canWritePlanning && (
+        <Box sx={{ mt: 4 }}>
+          <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+            Delete
+          </Button>
+        </Box>
+      )}
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <DialogTitle>Delete band event?</DialogTitle>

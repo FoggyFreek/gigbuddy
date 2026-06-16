@@ -35,6 +35,7 @@ import RichTextEditor from '../components/RichTextEditor.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import SongLinks from '../components/SongLinks.tsx'
 import SongFileList from '../components/SongFileList.tsx'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Song, SongTag, Id } from '../types/entities.ts'
 
 const DOCUMENT_ACCEPT = '.pdf,application/pdf'

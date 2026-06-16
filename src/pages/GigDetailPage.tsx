@@ -15,11 +15,13 @@ import GigDetailContent from '../components/GigDetailContent.tsx'
 import GigShareMenu from '../components/GigShareMenu.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { deleteGig } from '../api/gigs.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Gig, Id } from '../types/entities.ts'
 
 export default function GigDetailPage() {
   const { id } = useParams()
   const gigId = Number(id)
+  const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
@@ -73,11 +75,13 @@ export default function GigDetailPage() {
         <SaveStatusLabel status={polledStatus} />
       </Box>
 
-      <Box sx={{ mt: 4 }}>
-        <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
-          Delete
-        </Button>
-      </Box>
+      {canWritePlanning && (
+        <Box sx={{ mt: 4 }}>
+          <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+            Delete
+          </Button>
+        </Box>
+      )}
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <DialogTitle>Delete gig?</DialogTitle>

@@ -15,9 +15,10 @@ import { addSongLink, deleteSongLink } from '../api/songs.ts'
 interface SongLinksProps {
   songId: number
   initialLinks?: SongLink[]
+  canWrite?: boolean
 }
 
-export default function SongLinks({ songId, initialLinks = [] }: SongLinksProps) {
+export default function SongLinks({ songId, initialLinks = [], canWrite = true }: SongLinksProps) {
   const [links, setLinks] = useState<SongLink[]>(initialLinks)
   const [label, setLabel] = useState('')
   const [url, setUrl] = useState('')
@@ -76,35 +77,39 @@ export default function SongLinks({ songId, initialLinks = [] }: SongLinksProps)
               </Typography>
             )}
           </Box>
-          <IconButton size="small" color="error" onClick={() => handleDelete(l.id)} aria-label="delete link">
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {canWrite && (
+            <IconButton size="small" color="error" onClick={() => handleDelete(l.id)} aria-label="delete link">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </Stack>
       ))}
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <TextField
-          size="small"
-          label="Label"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          sx={{ flex: '0 0 30%' }}
-        />
-        <TextField
-          size="small"
-          label="URL"
-          placeholder="https://…"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
-          sx={{ flexGrow: 1 }}
-          error={!!error}
-          helperText={error || ''}
-        />
-        <Button variant="outlined" startIcon={<AddIcon />} onClick={handleAdd} disabled={!url.trim()}>
-          Add
-        </Button>
-      </Stack>
+      {canWrite && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <TextField
+            size="small"
+            label="Label"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            sx={{ flex: '0 0 30%' }}
+          />
+          <TextField
+            size="small"
+            label="URL"
+            placeholder="https://…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
+            sx={{ flexGrow: 1 }}
+            error={!!error}
+            helperText={error || ''}
+          />
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={handleAdd} disabled={!url.trim()}>
+            Add
+          </Button>
+        </Stack>
+      )}
     </Stack>
   )
 }

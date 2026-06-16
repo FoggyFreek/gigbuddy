@@ -7,6 +7,7 @@ import TasksTable from '../components/TasksTable.tsx'
 import type { GigTask } from '../components/TasksTable.tsx'
 import GigFormModal from '../components/GigFormModal.tsx'
 import { useAuth } from '../contexts/authContext.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { listAllTasks } from '../api/tasks.ts'
 import { updateTask } from '../api/gigs.ts'
 import type { Id } from '../types/entities.ts'
@@ -18,6 +19,7 @@ interface Task extends GigTask {
 
 export default function TasksPage() {
   const { user } = useAuth()
+  const { canWritePlanning } = usePermissions()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -102,7 +104,9 @@ export default function TasksPage() {
       {!loading && (
         <TasksTable
           tasks={visibleTasks}
-          onRowClick={(task) => { const gigId = (task as Task).gig_id; if (gigId !== undefined) setModal({ mode: 'edit', gigId }) }}
+          onRowClick={canWritePlanning
+            ? (task) => { const gigId = (task as Task).gig_id; if (gigId !== undefined) setModal({ mode: 'edit', gigId }) }
+            : undefined}
           onToggleDone={handleToggle}
         />
       )}

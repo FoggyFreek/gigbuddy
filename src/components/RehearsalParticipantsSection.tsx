@@ -25,6 +25,10 @@ interface RehearsalParticipantsSectionProps {
   onAddParticipant?: () => void
   onPromote?: () => void
   onDemote?: () => void
+  // Presentation gating for readers: when false, only the current member's own
+  // vote control is shown; all add/remove/promote/demote controls are hidden.
+  canWrite?: boolean
+  currentMemberId?: Id | null
 }
 
 export default function RehearsalParticipantsSection({
@@ -37,6 +41,8 @@ export default function RehearsalParticipantsSection({
   onAddParticipant,
   onPromote,
   onDemote,
+  canWrite = true,
+  currentMemberId = null,
 }: RehearsalParticipantsSectionProps) {
   const participantIds = useMemo(
     () => new Set((rehearsal.participants ?? []).map((p) => p.band_member_id)),
@@ -60,12 +66,14 @@ export default function RehearsalParticipantsSection({
             size="small"
           />
           <Box sx={{ flexGrow: 1 }} />
-          {rehearsal.status === 'option' ? (
-            <Button variant="contained" disabled={!allYes} onClick={onPromote}>
-              Plan this rehearsal
-            </Button>
-          ) : (
-            <Button variant="outlined" onClick={onDemote}>Revert to option</Button>
+          {canWrite && (
+            rehearsal.status === 'option' ? (
+              <Button variant="contained" disabled={!allYes} onClick={onPromote}>
+                Plan this rehearsal
+              </Button>
+            ) : (
+              <Button variant="outlined" onClick={onDemote}>Revert to option</Button>
+            )
           )}
         </Box>
         {rehearsal.status === 'option' && !allYes && (
@@ -122,22 +130,26 @@ export default function RehearsalParticipantsSection({
                 </Typography>
                 <Chip size="small" label={p.position} variant="outlined" />
                 <Box sx={{ flexGrow: 1 }} />
-                <VoteToggle
-                  vote={p.vote}
-                  onChange={(v) => onVote?.(p.band_member_id, v)}
-                />
-                <IconButton
-                  size="small"
-                  aria-label={`remove ${p.name}`}
-                  onClick={() => onRemoveParticipant?.(p.band_member_id)}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
+                {(canWrite || p.band_member_id === currentMemberId) && (
+                  <VoteToggle
+                    vote={p.vote}
+                    onChange={(v) => onVote?.(p.band_member_id, v)}
+                  />
+                )}
+                {canWrite && (
+                  <IconButton
+                    size="small"
+                    aria-label={`remove ${p.name}`}
+                    onClick={() => onRemoveParticipant?.(p.band_member_id)}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                )}
               </Box>
             ))}
           </Stack>
 
-          {candidateMembers.length > 0 && (
+          {canWrite && candidateMembers.length > 0 && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
               <FormControl size="small" sx={{ minWidth: 220 }}>
                 <InputLabel id="add-participant-label">Add participant</InputLabel>
