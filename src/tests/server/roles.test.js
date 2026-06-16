@@ -220,6 +220,26 @@ describe('membership role-assignment authority', () => {
   })
 })
 
+describe('members.manage / tenant.manage gating', () => {
+  // These admin surfaces gate on the capability, not the tenant_admin role. A
+  // financial_admin holds finance.* but neither members.manage nor tenant.manage,
+  // so it is the sharpest probe that the gate is permission-based.
+  it('financial_admin (no members.manage / tenant.manage) is blocked (403)', async () => {
+    const { user } = await createRoleUser({ email: 'fa-gate@a.local', role: 'financial_admin', tenantId: seed.tenantA.id })
+    const a = as(user.id, seed.tenantA.id)
+    await a(request(app).get('/api/invites')).expect(403)
+    await a(request(app).get('/api/users')).expect(403)
+    await a(request(app).get('/api/statistics/storage')).expect(403)
+  })
+
+  it('tenant_admin holds members.manage and tenant.manage (200)', async () => {
+    const a = as(seed.userA.id, seed.tenantA.id) // userA is tenant_admin in A
+    await a(request(app).get('/api/invites')).expect(200)
+    await a(request(app).get('/api/users')).expect(200)
+    await a(request(app).get('/api/statistics/storage')).expect(200)
+  })
+})
+
 describe('reader self-scope', () => {
   it('reader may toggle done on their own task only', async () => {
     const reader = await createRoleUser({ email: 'r3@a.local', role: 'reader', tenantId: seed.tenantA.id, link: true })

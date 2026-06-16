@@ -36,7 +36,6 @@ import { loadUser, requireApproved } from '../middleware/auth.js'
 import {
   resolveTenantId,
   requireTenantMember,
-  requireTenantAdmin,
   requireSuperAdmin,
 } from '../middleware/tenant.js'
 import { requirePermission } from '../middleware/permissions.js'
@@ -115,19 +114,24 @@ router.use('/auth/callback', authLimiter)
 router.use('/auth', authRouter)
 
 const tenantMember = [requireApproved, resolveTenantId, requireTenantMember]
-const tenantAdmin = [requireApproved, resolveTenantId, requireTenantAdmin]
 const superAdmin = [requireApproved, requireSuperAdmin]
 // Finance surfaces: any read/export requires finance.view; routers gate their
 // own mutations/side-effects with requirePermission(finance.manage) internally.
 const financeView = [...tenantMember, requirePermission(PERMISSIONS.FINANCE_VIEW)]
+// Membership administration (invites, role changes) is gated on members.manage;
+// tenant-level settings/usage on tenant.manage. These capabilities map to the
+// tenant_admin role in the matrix, but the routes gate on the *permission* so
+// the matrix stays the single source of truth (see auth/permissions.js).
+const membersManage = [...tenantMember, requirePermission(PERMISSIONS.MEMBERS_MANAGE)]
+const tenantManage = [...tenantMember, requirePermission(PERMISSIONS.TENANT_MANAGE)]
 
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 router.use('/admin/tenants', superAdmin, tenantsRouter)
 router.use('/admin/users', superAdmin, adminUsersRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
-router.use('/invites', tenantAdmin, invitesAdminRouter)
-router.use('/users', tenantAdmin, usersRouter)
-router.use('/statistics', tenantAdmin, statisticsRouter)
+router.use('/invites', membersManage, invitesAdminRouter)
+router.use('/users', membersManage, usersRouter)
+router.use('/statistics', tenantManage, statisticsRouter)
 router.use('/gigs', tenantMember, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
 router.use('/tasks', tenantMember, tasksRouter)

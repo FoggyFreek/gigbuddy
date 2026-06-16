@@ -19,11 +19,6 @@ interface NavMenuItemDef {
   icon: SvgIconComponent
 }
 
-const TENANT_ADMIN_NAV_ITEMS: NavMenuItemDef[] = [
-  { to: '/members', label: 'Members', icon: GroupIcon },
-  { to: '/settings', label: 'Band Settings', icon: SettingsIcon },
-]
-
 const SUPER_ADMIN_NAV_ITEMS: NavMenuItemDef[] = [
   { to: '/admin/tenants', label: 'Tenants', icon: ApartmentIcon },
   { to: '/admin/users', label: 'All Users', icon: PeopleAltIcon },
@@ -47,11 +42,19 @@ interface SettingsMenuProps {
   onClose: () => void
   mode: string
   onToggleTheme: () => void
-  isTenantAdmin?: boolean
+  canManageMembers?: boolean
+  canManageTenant?: boolean
   isSuperAdmin?: boolean
 }
 
-export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, isTenantAdmin, isSuperAdmin }: SettingsMenuProps) {
+export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, canManageMembers, canManageTenant, isSuperAdmin }: SettingsMenuProps) {
+  // Each item is gated on its own capability, not on the tenant_admin role, so
+  // the permission matrix stays the single source of truth (see auth/permissions).
+  const adminNavItems: NavMenuItemDef[] = [
+    canManageMembers && { to: '/members', label: 'Members', icon: GroupIcon },
+    canManageTenant && { to: '/settings', label: 'Band Settings', icon: SettingsIcon },
+  ].filter((item): item is NavMenuItemDef => Boolean(item))
+
   return (
     <Menu
       anchorEl={anchorEl}
@@ -66,12 +69,12 @@ export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTh
         </ListItemIcon>
         <ListItemText primary={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} />
       </MenuItem>
-      {isTenantAdmin && [
+      {adminNavItems.length > 0 && [
         <Divider key="tenant-admin-divider" />,
         <ListSubheader key="tenant-admin-header" component="div" disableSticky>
           Tenant admin
         </ListSubheader>,
-        ...TENANT_ADMIN_NAV_ITEMS.map((item) => renderNavItem(item, onClose)),
+        ...adminNavItems.map((item) => renderNavItem(item, onClose)),
       ]}
       {isSuperAdmin && [
         <Divider key="super-admin-divider" />,

@@ -176,9 +176,7 @@ export default function AppShell() {
   }
 
   const isSuperAdmin = !!user?.isSuperAdmin
-  const isTenantAdmin =
-    isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
-  const { can } = usePermissions()
+  const { can, canManageMembers, canManageTenant } = usePermissions()
 
   // Nav items carrying a `permission` are hidden unless the active role grants
   // it; the matching routes sit behind RequirePermission and the API behind the
@@ -315,7 +313,8 @@ export default function AppShell() {
             onClose={() => setSettingsMenuAnchor(null)}
             mode={mode}
             onToggleTheme={() => { toggleTheme(); setSettingsMenuAnchor(null) }}
-            isTenantAdmin={isTenantAdmin}
+            canManageMembers={canManageMembers}
+            canManageTenant={canManageTenant}
             isSuperAdmin={isSuperAdmin}
           />
           {user && (

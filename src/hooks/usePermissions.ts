@@ -14,6 +14,7 @@ export interface PermissionsApi {
   canViewFinance: boolean
   canManageFinance: boolean
   canManageMembers: boolean
+  canManageTenant: boolean
   canCreatePurchase: boolean
 }
 
@@ -41,6 +42,7 @@ export function usePermissions(): PermissionsApi {
       canViewFinance: can(PERMISSIONS.FINANCE_VIEW),
       canManageFinance: can(PERMISSIONS.FINANCE_MANAGE),
       canManageMembers: can(PERMISSIONS.MEMBERS_MANAGE),
+      canManageTenant: can(PERMISSIONS.TENANT_MANAGE),
       canCreatePurchase: can(PERMISSIONS.PURCHASE_CREATE),
     }
   }, [user])

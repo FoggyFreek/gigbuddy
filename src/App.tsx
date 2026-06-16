@@ -2,7 +2,6 @@ import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import AppShell from './components/AppShell.tsx'
 import RequireAuth from './components/RequireAuth.tsx'
-import RequireTenantAdmin from './components/RequireTenantAdmin.tsx'
 import RequireSuperAdmin from './components/RequireSuperAdmin.tsx'
 import RequirePermission from './components/RequirePermission.tsx'
 import { PERMISSIONS } from './auth/permissions.ts'
@@ -120,8 +119,10 @@ export default function App() {
               <Route path="events/:id" element={<BandEventDetailPage />} />
             </Route>
             <Route path="/email-templates" element={<EmailTemplatesPage />} />
-            <Route element={<RequireTenantAdmin />}>
+            <Route element={<RequirePermission permission={PERMISSIONS.MEMBERS_MANAGE} />}>
               <Route path="/members" element={<MembersPage />} />
+            </Route>
+            <Route element={<RequirePermission permission={PERMISSIONS.TENANT_MANAGE} />}>
               <Route path="/settings" element={<TenantSettingsPage />} />
             </Route>
             <Route element={<RequireSuperAdmin />}>

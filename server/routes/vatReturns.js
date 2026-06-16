@@ -16,9 +16,9 @@ import {
   getVatReturn,
 } from '../services/vatReturnService.js'
 
-// Mounted under the tenantAdmin gate (see routes/index.js): filing returns and
-// recording payments are tenant-admin actions. Filed returns are permanent —
-// there is no DELETE.
+// Mounted under the financeView gate (see routes/index.js): reads require
+// finance.view and the filing/payment mutations require finance.manage. Filed
+// returns are permanent — there is no DELETE.
 const router = Router()
 
 router.get('/preview', async (req, res, next) => {

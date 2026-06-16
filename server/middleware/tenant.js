@@ -47,13 +47,11 @@ export function requireTenantMember(req, res, next) {
   next()
 }
 
-export function requireTenantAdmin(req, res, next) {
-  if (!req.membership) return res.status(403).json({ error: 'Forbidden' })
-  if (req.membership.status !== 'approved') return res.status(403).json({ error: 'Forbidden' })
-  if (req.membership.role === 'tenant_admin') return next()
-  if (req.user?.is_super_admin) return next()
-  return res.status(403).json({ error: 'Forbidden' })
-}
+// Tenant-admin authorization is expressed through the permission matrix
+// (members.manage / tenant.manage) and enforced with requirePermission — see
+// middleware/permissions.js and routes/index.js. There is intentionally no
+// role-based requireTenantAdmin gate so the matrix stays the single source of
+// truth for capabilities.
 
 export function requireSuperAdmin(req, res, next) {
   loadUser(req, res, (err) => {
