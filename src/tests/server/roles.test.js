@@ -203,6 +203,22 @@ describe('planning.write gating', () => {
 })
 
 describe('membership role-assignment authority', () => {
+  it('rejects an unrecognised role value with 400', async () => {
+    const target = await createRoleUser({ email: 'target0@a.local', role: 'reader', tenantId: seed.tenantA.id })
+    const res = await as(seed.userA.id, seed.tenantA.id)(
+      request(app).patch(`/api/users/${target.user.id}/membership`).send({ role: 'superstar' }),
+    ).expect(400)
+    expect(res.body.error).toMatch(/invalid role/i)
+  })
+
+  it('rejects the legacy member alias on role update (400)', async () => {
+    const target = await createRoleUser({ email: 'target-member@a.local', role: 'reader', tenantId: seed.tenantA.id })
+    const res = await as(seed.userA.id, seed.tenantA.id)(
+      request(app).patch(`/api/users/${target.user.id}/membership`).send({ role: 'member' }),
+    ).expect(400)
+    expect(res.body.error).toMatch(/invalid role/i)
+  })
+
   it('tenant admin may assign the new roles but not tenant_admin', async () => {
     const target = await createRoleUser({ email: 'target@a.local', role: 'reader', tenantId: seed.tenantA.id })
     const a = as(seed.userA.id, seed.tenantA.id) // userA is tenant_admin in A

@@ -37,6 +37,15 @@ export const ALL_ROLES = Object.freeze([
   ROLES.TENANT_ADMIN,
 ])
 
+// Roles valid for new writes (invites and role changes). Excludes the legacy
+// `member` alias — new assignments must use `contributor`.
+export const WRITE_ROLES = Object.freeze([
+  ROLES.READER,
+  ROLES.CONTRIBUTOR,
+  ROLES.FINANCIAL_ADMIN,
+  ROLES.TENANT_ADMIN,
+])
+
 export const PERMISSIONS = Object.freeze({
   APP_VIEW: 'app.view', // view all non-finance resources
   TASK_COMPLETE_SELF: 'task.complete.self', // mark own assigned task done

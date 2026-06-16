@@ -1,7 +1,7 @@
 // Input parsing and validation for invite routes. No DB access here.
-import { ALL_ROLES } from '../auth/permissions.js'
+import { WRITE_ROLES } from '../auth/permissions.js'
 
-export const ALLOWED_ROLES = ALL_ROLES
+export const ALLOWED_ROLES = WRITE_ROLES
 
 // Invite ids only need to be integers (the route never enforced > 0).
 export function parseId(val) {

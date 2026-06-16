@@ -1,8 +1,8 @@
 // Input parsing and validation for user/membership routes. No DB access here.
-import { ALL_ROLES } from '../auth/permissions.js'
+import { WRITE_ROLES } from '../auth/permissions.js'
 
 export const ALLOWED_STATUS = new Set(['pending', 'approved', 'rejected'])
-export const ALLOWED_ROLE = ALL_ROLES
+export const ALLOWED_ROLE = WRITE_ROLES
 
 export function parseId(val) {
   const n = Number(val)
@@ -14,7 +14,7 @@ export function validateMembershipPatch(status, role) {
   if (status !== undefined && !ALLOWED_STATUS.has(status)) {
     return { error: { status: 400, body: { error: 'Invalid status' } } }
   }
-  if (role !== undefined && !ALLOWED_ROLE.has(role)) {
+  if (role !== undefined && !ALLOWED_ROLE.includes(role)) {
     return { error: { status: 400, body: { error: 'Invalid role' } } }
   }
   if (status === undefined && role === undefined) {
