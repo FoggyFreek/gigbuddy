@@ -400,10 +400,24 @@ describe('accounts — CRUD', () => {
 })
 
 describe('accounts — admin gating', () => {
-  it('GET /api/accounts returns 200 for plain member', async () => {
+  it('GET /api/accounts returns 403 for a plain member (no finance access)', async () => {
     const mem = await seedMemberUser()
     await request(app).get('/api/accounts')
       .set('x-test-user-id', String(mem.id))
+      .set('x-test-tenant-id', String(seed.tenantA.id))
+      .expect(403)
+  })
+
+  it('GET /api/accounts returns 200 for a financial_admin', async () => {
+    const { rows: [u] } = await pool.query(
+      `INSERT INTO users (google_sub, email, name, status) VALUES ('sub-fa', 'fa@test.local', 'FinAdmin', 'approved') RETURNING *`,
+    )
+    await pool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at) VALUES ($1, $2, 'financial_admin', 'approved', NOW())`,
+      [u.id, seed.tenantA.id],
+    )
+    await request(app).get('/api/accounts')
+      .set('x-test-user-id', String(u.id))
       .set('x-test-tenant-id', String(seed.tenantA.id))
       .expect(200)
   })

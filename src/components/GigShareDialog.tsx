@@ -76,11 +76,12 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
   const [snackbar, setSnackbar] = useState<{ msg: string } | null>(null)
   const [socials, setSocials] = useState({ instagram: '', facebook: '', tiktok: '' })
   const [logoSrc, setLogoSrc] = useState('/share/logo.png')
+  const [logoDarkSrc, setLogoDarkSrc] = useState<string | null>(null)
   const [bandName, setBandName] = useState('')
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<HTMLElement | null>(null)
   const [showBanner, setShowBanner] = useState(false)
   const [showLogo, setShowLogo] = useState(true)
-  const [invertLogo, setInvertLogo] = useState(false)
+  const [useDarkLogo, setUseDarkLogo] = useState(false)
   const photoInputRef = useRef<HTMLInputElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
 
@@ -124,7 +125,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
       setDownloadMenuAnchor(null)
       setShowBanner(!!gig?.banner_path)
       setShowLogo(true)
-      setInvertLogo(false)
+      setUseDarkLogo(false)
       setBandName('')
       loadPhotos()
       getProfile().then((p) => {
@@ -134,6 +135,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
           tiktok: p?.tiktok_handle || '',
         })
         setLogoSrc(p?.logo_path ? `/api/files/${p.logo_path}` : '/share/logo.png')
+        setLogoDarkSrc(p?.logo_dark_path ? `/api/files/${p.logo_dark_path}` : null)
         setBandName(p?.band_name || '')
       }).catch(() => {})
     }
@@ -310,16 +312,16 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
               />
             )}
 
-            {supports.invertLogo && (
+            {logoDarkSrc && (
               <FormControlLabel
                 control={
                   <Switch
-                    checked={invertLogo}
-                    onChange={(e) => setInvertLogo(e.target.checked)}
+                    checked={useDarkLogo}
+                    onChange={(e) => setUseDarkLogo(e.target.checked)}
                     size="small"
                   />
                 }
-                label="Invert logo"
+                label="Dark logo"
               />
             )}
 
@@ -407,11 +409,10 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                   socials={socials}
                   sticker={sticker}
                   stickerPosition={stickerPos}
-                  logoSrc={logoSrc}
+                  logoSrc={useDarkLogo && logoDarkSrc ? logoDarkSrc : logoSrc}
                   bannerSrc={bannerSrc}
                   bandName={bandName}
                   showLogo={showLogo}
-                  invertLogo={invertLogo}
                 />
               </Box>
             </Box>

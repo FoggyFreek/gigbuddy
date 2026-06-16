@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/songValidators.js'
 import {
   listSongs,
@@ -71,20 +73,20 @@ router.get('/:id', async (req, res) => {
   res.json(result.song)
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createSong(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.song)
 })
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchSong(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.song)
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteSong(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -93,7 +95,7 @@ router.delete('/:id', async (req, res) => {
 
 // ---------- tags ----------
 
-router.put('/:id/tags', async (req, res) => {
+router.put('/:id/tags', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await setSongTags(req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
@@ -102,14 +104,14 @@ router.put('/:id/tags', async (req, res) => {
 
 // ---------- links ----------
 
-router.post('/:id/links', async (req, res) => {
+router.post('/:id/links', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await createSongLink(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.link)
 })
 
-router.patch('/:id/links/:linkId', async (req, res) => {
+router.patch('/:id/links/:linkId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const linkId = requireParam(req, res, 'linkId'); if (linkId === null) return
   const result = await patchSongLink(pool, req.tenantId, id, linkId, req.body)
@@ -117,7 +119,7 @@ router.patch('/:id/links/:linkId', async (req, res) => {
   res.json(result.link)
 })
 
-router.delete('/:id/links/:linkId', async (req, res) => {
+router.delete('/:id/links/:linkId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const linkId = requireParam(req, res, 'linkId'); if (linkId === null) return
   const result = await deleteSongLink(pool, req.tenantId, id, linkId)
@@ -127,7 +129,7 @@ router.delete('/:id/links/:linkId', async (req, res) => {
 
 // ---------- documents (pdf) ----------
 
-router.post('/:id/documents', documentUpload.single('file'), async (req, res) => {
+router.post('/:id/documents', requirePermission(PERMISSIONS.PLANNING_WRITE), documentUpload.single('file'), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!DOCUMENT_ALLOWED_TYPES.has(req.file.mimetype)) {
@@ -138,7 +140,7 @@ router.post('/:id/documents', documentUpload.single('file'), async (req, res) =>
   res.status(201).json(result.document)
 })
 
-router.delete('/:id/documents/:docId', async (req, res) => {
+router.delete('/:id/documents/:docId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const docId = requireParam(req, res, 'docId'); if (docId === null) return
   const result = await deleteSongDocument(pool, req.tenantId, id, docId)
@@ -148,7 +150,7 @@ router.delete('/:id/documents/:docId', async (req, res) => {
 
 // ---------- recordings (mp3) ----------
 
-router.post('/:id/recordings', recordingUpload.single('file'), async (req, res) => {
+router.post('/:id/recordings', requirePermission(PERMISSIONS.PLANNING_WRITE), recordingUpload.single('file'), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!RECORDING_ALLOWED_TYPES.has(req.file.mimetype)) {
@@ -159,7 +161,7 @@ router.post('/:id/recordings', recordingUpload.single('file'), async (req, res) 
   res.status(201).json(result.recording)
 })
 
-router.delete('/:id/recordings/:recId', async (req, res) => {
+router.delete('/:id/recordings/:recId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const recId = requireParam(req, res, 'recId'); if (recId === null) return
   const result = await deleteSongRecording(pool, req.tenantId, id, recId)
@@ -169,7 +171,7 @@ router.delete('/:id/recordings/:recId', async (req, res) => {
 
 // ---------- import ----------
 
-router.post('/import', async (req, res) => {
+router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await importSongs(req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.summary)

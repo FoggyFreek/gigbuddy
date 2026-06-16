@@ -17,18 +17,21 @@ interface RehearsalSongsSectionProps {
   songs: RehearsalSong[]
   onAddSong: (song: Song) => void
   onRemoveSong: (songId: Id | undefined) => void
+  canWrite?: boolean
 }
 
-export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong }: RehearsalSongsSectionProps) {
+export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong, canWrite = true }: RehearsalSongsSectionProps) {
   return (
     <Grid size={12}>
       <Divider sx={{ my: 1 }} />
       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
         Songs
       </Typography>
-      <Box sx={{ maxWidth: 400, mb: songs.length ? 2 : 0 }}>
-        <SongPicker onSelect={onAddSong} excludeIds={songs.map((s) => s.song_id).filter((id): id is Id => id !== undefined)} />
-      </Box>
+      {canWrite && (
+        <Box sx={{ maxWidth: 400, mb: songs.length ? 2 : 0 }}>
+          <SongPicker onSelect={onAddSong} excludeIds={songs.map((s) => s.song_id).filter((id): id is Id => id !== undefined)} />
+        </Box>
+      )}
       {songs.length > 0 && (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {songs.map((s) => (
@@ -68,13 +71,15 @@ export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong }
                   <OpenInNewIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <IconButton
-                size="small"
-                aria-label={`detach ${s.title}`}
-                onClick={() => onRemoveSong(s.song_id)}
-              >
-                <CloseIcon fontSize="small" />
-              </IconButton>
+              {canWrite && (
+                <IconButton
+                  size="small"
+                  aria-label={`detach ${s.title}`}
+                  onClick={() => onRemoveSong(s.song_id)}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
             </Box>
           ))}
         </Box>

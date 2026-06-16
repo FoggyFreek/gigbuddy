@@ -12,6 +12,15 @@ export const gigAttachmentKey = (tenantId, uuid, ext) =>
 export const bandLogoKey = (tenantId, uuid, ext) =>
   `tenants/${tenantId}/logo/${uuid}${ext}`
 
+export const bandProfileBannerKey = (tenantId, uuid, ext) =>
+  `tenants/${tenantId}/profile-banner/${uuid}${ext}`
+
+export const bandAvatarKey = (tenantId, uuid, ext) =>
+  `tenants/${tenantId}/avatar/${uuid}${ext}`
+
+export const bandLogoDarkKey = (tenantId, uuid, ext) =>
+  `tenants/${tenantId}/logo-dark/${uuid}${ext}`
+
 export const sharePhotoKey = (tenantId, uuid, ext) =>
   `tenants/${tenantId}/share/${uuid}${ext}`
 

@@ -3,6 +3,8 @@
 // reimbursement state machines (and voidLedgerTransaction here).
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { buildPeriodWhere, resolvePeriodRange } from '../utils/periodQuery.js'
 import { parseId } from '../validators/journalValidators.js'
 import { listEntryDates, getTenantDisplayName } from '../repositories/ledgerRepository.js'
@@ -108,7 +110,7 @@ router.get('/:id', async (req, res) => {
 })
 
 // ---------- void (open period: hidden + excluded from reports) ----------
-router.post('/:id/void', async (req, res) => {
+router.post('/:id/void', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = parseId(req.params.id)
   if (id === null) return res.status(400).json({ error: 'Invalid id' })
   const result = await voidLedgerTransaction(pool, req.tenantId, id, req.user.id)
@@ -117,7 +119,7 @@ router.post('/:id/void', async (req, res) => {
 })
 
 // ---------- reverse (closed period: visible corrections-forward entry) ----------
-router.post('/:id/reverse', async (req, res) => {
+router.post('/:id/reverse', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = parseId(req.params.id)
   if (id === null) return res.status(400).json({ error: 'Invalid id' })
   const result = await reverseLedgerTransaction(pool, req.tenantId, id, req.user.id)

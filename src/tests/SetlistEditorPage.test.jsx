@@ -36,6 +36,11 @@ import SetlistEditorPage from '../pages/SetlistEditorPage.tsx'
 import { addItem, deleteItem, getSetlist, saveItemNote, updateItem, updateSet } from '../api/setlists.ts'
 import { ToastProvider } from '../contexts/ToastContext.tsx'
 import theme from '../theme.ts'
+import { AuthContext } from '../contexts/authContext.ts'
+
+// Render as a writer (super admin grants every planning.write capability) so the
+// create/edit/delete affordances gated on canWritePlanning are present.
+const writerAuth = { user: { isSuperAdmin: true } }
 
 const song = (id, title, extra = {}) => ({
   id, set_id: 10, item_type: 'song', song_id: id - 99, title,
@@ -72,11 +77,13 @@ function wrap() {
   return render(
     <MemoryRouter initialEntries={['/setlists/5']}>
       <ThemeProvider theme={theme}>
-        <ToastProvider>
-          <Routes>
-            <Route path="/setlists/:id" element={<SetlistEditorPage />} />
-          </Routes>
-        </ToastProvider>
+        <AuthContext.Provider value={writerAuth}>
+          <ToastProvider>
+            <Routes>
+              <Route path="/setlists/:id" element={<SetlistEditorPage />} />
+            </Routes>
+          </ToastProvider>
+        </AuthContext.Provider>
       </ThemeProvider>
     </MemoryRouter>,
   )

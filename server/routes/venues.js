@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/venueValidators.js'
 import {
   listVenues,
@@ -58,14 +60,14 @@ router.get('/:id/category-impact', async (req, res) => {
 })
 
 // Create venue
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createVenue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.venue)
 })
 
 // Update venue (partial)
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchVenue(req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
@@ -73,7 +75,7 @@ router.patch('/:id', async (req, res) => {
 })
 
 // Delete venue
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteVenue(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -89,7 +91,7 @@ router.get('/:id/contacts', async (req, res) => {
 })
 
 // Link contact to venue
-router.post('/:id/contacts', async (req, res) => {
+router.post('/:id/contacts', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const contactId = parseId(req.body.contact_id)
   if (contactId === null) return res.status(400).json({ error: 'contact_id is required' })
@@ -99,7 +101,7 @@ router.post('/:id/contacts', async (req, res) => {
 })
 
 // Toggle primary contact
-router.patch('/:id/contacts/:contactId', async (req, res) => {
+router.patch('/:id/contacts/:contactId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const contactId = requireParam(req, res, 'contactId'); if (contactId === null) return
   if (typeof req.body.is_primary !== 'boolean') {
@@ -111,7 +113,7 @@ router.patch('/:id/contacts/:contactId', async (req, res) => {
 })
 
 // Unlink contact from venue
-router.delete('/:id/contacts/:contactId', async (req, res) => {
+router.delete('/:id/contacts/:contactId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const contactId = requireParam(req, res, 'contactId'); if (contactId === null) return
   const result = await unlinkVenueContact(pool, req.tenantId, id, contactId)
@@ -120,7 +122,7 @@ router.delete('/:id/contacts/:contactId', async (req, res) => {
 })
 
 // Bulk import
-router.post('/import', async (req, res) => {
+router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await importVenues(req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.summary)

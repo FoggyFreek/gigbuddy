@@ -14,6 +14,7 @@ import ContactImportDialog from '../components/ContactImportDialog.tsx'
 import SplitView from '../components/SplitView.tsx'
 import { listContacts } from '../api/contacts.ts'
 import { ALL_CONTACT_CATEGORIES, contactMatchesCategoryFilter } from '../utils/contactCategories.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Contact } from '../types/entities.ts'
 
 interface ListFilter {
@@ -44,6 +45,7 @@ export default function ContactDirectoryPage({
   allowImport = true,
   emptyMessage = 'No contacts yet - add one or import from CSV.',
 }: ContactDirectoryPageProps) {
+  const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -106,20 +108,22 @@ export default function ContactDirectoryPage({
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>
           {title}
         </Typography>
-        {allowImport && (
+        {allowImport && canWritePlanning && (
           <Tooltip title="Import">
             <IconButton onClick={() => setImportOpen(true)}>
               <FileUploadOutlinedIcon />
             </IconButton>
           </Tooltip>
         )}
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setModal({ mode: 'create' })}
-        >
-          Add
-        </Button>
+        {canWritePlanning && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setModal({ mode: 'create' })}
+          >
+            Add
+          </Button>
+        )}
       </Box>
 
       {loading && (

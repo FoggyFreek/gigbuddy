@@ -1,7 +1,9 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { statObject, getObject } from '../services/storageService.js'
-import { resolveFileAccess } from '../services/fileService.js'
+import { resolveFileAccess, canReadFinanceFile } from '../services/fileService.js'
+import { can } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { sanitizeFilename } from '../utils/sanitizeFilename.js'
 
 const router = Router()
@@ -14,6 +16,15 @@ router.get('/*objectKey', async (req, res) => {
 
   const { allowed, originalFilename } = await resolveFileAccess(pool, req.tenantId, objectKey)
   if (!allowed) return res.status(404).json({ error: 'Not found' })
+
+  // Financial documents (invoice PDFs, purchase receipts) require finance.view;
+  // a contributor may read a receipt only on a purchase they created.
+  const financeOk = await canReadFinanceFile(pool, req.tenantId, objectKey, {
+    canFinanceView: can(req, PERMISSIONS.FINANCE_VIEW),
+    canPurchaseCreate: can(req, PERMISSIONS.PURCHASE_CREATE),
+    userId: req.user.id,
+  })
+  if (!financeOk) return res.status(404).json({ error: 'Not found' })
 
   try {
     const stat = await statObject(objectKey)

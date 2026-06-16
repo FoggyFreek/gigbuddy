@@ -5,7 +5,8 @@
 
 export async function objectKeyBelongsToTenant(executor, tenantId, objectKey) {
   const { rows } = await executor.query(
-    `SELECT 1 FROM tenants WHERE id = $1 AND logo_path = $2
+    `SELECT 1 FROM tenants WHERE id = $1
+        AND (logo_path = $2 OR banner_path = $2 OR avatar_path = $2 OR logo_dark_path = $2)
      UNION ALL
      SELECT 1 FROM gigs WHERE tenant_id = $1 AND banner_path = $2
      UNION ALL
@@ -26,6 +27,21 @@ export async function objectKeyBelongsToTenant(executor, tenantId, objectKey) {
     [tenantId, objectKey],
   )
   return rows.length > 0
+}
+
+// The user who created the purchase an attachment object belongs to, used to
+// gate self-scoped (purchase.create) access to receipt files. Null when the key
+// is not a purchase attachment in this tenant.
+export async function purchaseAttachmentCreatedByUserId(executor, tenantId, objectKey) {
+  const { rows } = await executor.query(
+    `SELECT p.created_by_user_id
+       FROM purchase_attachments pa
+       JOIN purchases p ON p.id = pa.purchase_id AND p.tenant_id = pa.tenant_id
+      WHERE pa.object_key = $1 AND pa.tenant_id = $2
+      LIMIT 1`,
+    [objectKey, tenantId],
+  )
+  return rows[0]?.created_by_user_id ?? null
 }
 
 // Original upload filename for downloadable object types (used to set

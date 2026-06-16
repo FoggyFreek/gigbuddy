@@ -13,9 +13,11 @@ import SongFormModal from '../components/SongFormModal.tsx'
 import SongImportDialog from '../components/SongImportDialog.tsx'
 import SplitView from '../components/SplitView.tsx'
 import { listSongs } from '../api/songs.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Song, Id } from '../types/entities.ts'
 
 export default function SongsPage() {
+  const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -62,18 +64,22 @@ export default function SongsPage() {
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
           Songs
         </Typography>
-        <Tooltip title="Import">
-          <IconButton onClick={() => setImportOpen(true)}>
-            <FileUploadOutlinedIcon />
-          </IconButton>
-        </Tooltip>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setModal({ mode: 'create' })}
-        >
-          Add
-        </Button>
+        {canWritePlanning && (
+          <Tooltip title="Import">
+            <IconButton onClick={() => setImportOpen(true)}>
+              <FileUploadOutlinedIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+        {canWritePlanning && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setModal({ mode: 'create' })}
+          >
+            Add
+          </Button>
+        )}
       </Box>
 
       {loading && (

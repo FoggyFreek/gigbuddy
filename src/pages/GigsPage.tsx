@@ -24,10 +24,12 @@ import BannerMosaicDialog from '../components/BannerMosaicDialog.tsx'
 import BandsintownImportDialog from '../components/BandsintownImportDialog.tsx'
 import { listGigs } from '../api/gigs.ts'
 import { getProfile } from '../api/profile.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { downloadBandsintownCsv } from '../utils/bandsintownExport.ts'
 import type { Gig } from '../types/entities.ts'
 
 export default function GigsPage() {
+  const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -95,25 +97,29 @@ export default function GigsPage() {
           Gigs
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
-        <Tooltip title="Import">
-          <IconButton onClick={(e) => setImportMenuAnchor(e.currentTarget)}>
-            <FileUploadOutlinedIcon />
-          </IconButton>
-        </Tooltip>
-        <Menu
-          anchorEl={importMenuAnchor}
-          open={!!importMenuAnchor}
-          onClose={() => setImportMenuAnchor(null)}
-        >
-          <MenuItem
-            onClick={() => { setImportMenuAnchor(null); setBandsintownImportOpen(true) }}
-            dense
-          >
-            <Button variant="outlined" size="small" fullWidth>
-              Import from Bandsintown
-            </Button>
-          </MenuItem>
-        </Menu>
+        {canWritePlanning && (
+          <>
+            <Tooltip title="Import">
+              <IconButton onClick={(e) => setImportMenuAnchor(e.currentTarget)}>
+                <FileUploadOutlinedIcon />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={importMenuAnchor}
+              open={!!importMenuAnchor}
+              onClose={() => setImportMenuAnchor(null)}
+            >
+              <MenuItem
+                onClick={() => { setImportMenuAnchor(null); setBandsintownImportOpen(true) }}
+                dense
+              >
+                <Button variant="outlined" size="small" fullWidth>
+                  Import from Bandsintown
+                </Button>
+              </MenuItem>
+            </Menu>
+          </>
+        )}
         <Tooltip title="Export">
           <IconButton onClick={(e) => setExportMenuAnchor(e.currentTarget)}>
             <FileDownloadOutlinedIcon />
@@ -184,13 +190,15 @@ export default function GigsPage() {
             </Button>
           </MenuItem>
         </Menu>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setModal({ mode: 'create' })}
-        >
-          Add
-        </Button>
+        {canWritePlanning && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setModal({ mode: 'create' })}
+          >
+            Add
+          </Button>
+        )}
       </Box>
 
       {loading && (

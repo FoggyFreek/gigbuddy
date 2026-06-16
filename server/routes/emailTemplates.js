@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/emailTemplateValidators.js'
 import {
   listEmailTemplates,
@@ -35,20 +37,20 @@ router.get('/:id', async (req, res) => {
   res.json(result.template)
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createEmailTemplate(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.template)
 })
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await patchEmailTemplate(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.template)
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await deleteEmailTemplate(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)

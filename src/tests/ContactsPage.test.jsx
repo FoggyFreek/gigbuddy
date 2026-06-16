@@ -29,6 +29,11 @@ import SuppliersPage from '../pages/SuppliersPage.tsx'
 import ContactDetailPage from '../pages/ContactDetailPage.tsx'
 import { addContactNote, createContact, deleteContactNote, deleteContact, listContacts, getContact, updateContact } from '../api/contacts.ts'
 import theme from '../theme.ts'
+import { AuthContext } from '../contexts/authContext.ts'
+
+// Render as a writer (super admin grants every planning.write capability) so the
+// create/edit/delete affordances gated on canWritePlanning are present.
+const writerAuth = { user: { isSuperAdmin: true } }
 
 const NOTE = { id: 10, contact_id: 1, tenant_id: 1, note: 'Test note', created_at: '2026-01-01T12:00:00Z' }
 const CONTACT = { id: 1, name: 'Alice', email: '', phone: '', category: 'press', notes: [] }
@@ -38,14 +43,16 @@ function wrapWithRoutes({ initialEntries }) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
-        <Routes>
-          <Route path="/contacts" element={<ContactsPage />}>
-            <Route path=":id" element={<ContactDetailPage />} />
-          </Route>
-          <Route path="/suppliers" element={<SuppliersPage />}>
-            <Route path=":id" element={<ContactDetailPage />} />
-          </Route>
-        </Routes>
+        <AuthContext.Provider value={writerAuth}>
+          <Routes>
+            <Route path="/contacts" element={<ContactsPage />}>
+              <Route path=":id" element={<ContactDetailPage />} />
+            </Route>
+            <Route path="/suppliers" element={<SuppliersPage />}>
+              <Route path=":id" element={<ContactDetailPage />} />
+            </Route>
+          </Routes>
+        </AuthContext.Provider>
       </ThemeProvider>
     </MemoryRouter>
   )

@@ -89,20 +89,28 @@ export async function clearMollieKey(executor, tenantId) {
   )
 }
 
-// ---------- logo ----------
+// ---------- tenant image paths (logo, banner, avatar, logo_dark) ----------
 
-export async function getLogoPath(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT logo_path FROM tenants WHERE id = $1',
-    [tenantId],
-  )
-  return rows[0]?.logo_path || null
+const IMAGE_COLUMNS = Object.freeze({
+  logo_path: 'logo_path',
+  banner_path: 'banner_path',
+  avatar_path: 'avatar_path',
+  logo_dark_path: 'logo_dark_path',
+})
+
+export async function getTenantImagePath(executor, tenantId, column) {
+  const col = IMAGE_COLUMNS[column]
+  if (!col) throw new Error(`Unknown image column: ${column}`)
+  const { rows } = await executor.query(`SELECT ${col} FROM tenants WHERE id = $1`, [tenantId])
+  return rows[0]?.[col] || null
 }
 
-export async function setLogoPath(executor, tenantId, objectKey) {
+export async function setTenantImagePath(executor, tenantId, column, objectKey) {
+  const col = IMAGE_COLUMNS[column]
+  if (!col) throw new Error(`Unknown image column: ${column}`)
   const { rows } = await executor.query(
-    'UPDATE tenants SET logo_path = $1, updated_at = NOW() WHERE id = $2 RETURNING logo_path',
+    `UPDATE tenants SET ${col} = $1, updated_at = NOW() WHERE id = $2 RETURNING ${col}`,
     [objectKey, tenantId],
   )
-  return rows[0].logo_path
+  return rows[0][col]
 }

@@ -24,6 +24,8 @@ import RehearsalFields from '../components/RehearsalFields.tsx'
 import RehearsalParticipantsSection from '../components/RehearsalParticipantsSection.tsx'
 import RehearsalSongsSection from '../components/RehearsalSongsSection.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
+import { useAuth } from '../contexts/authContext.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Rehearsal, Member, Song, Id } from '../types/entities.ts'
 
 interface RehearsalDetailOutletContext {
@@ -47,6 +49,8 @@ export default function RehearsalDetailPage() {
   const { id } = useParams()
   const rehearsalId = Number(id)
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const { canWritePlanning } = usePermissions()
   const outletCtx = (useOutletContext<RehearsalDetailOutletContext>() || {}) as RehearsalDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
 
@@ -200,11 +204,14 @@ export default function RehearsalDetailPage() {
                 onAddParticipant={handleAddParticipant}
                 onPromote={handlePromote}
                 onDemote={handleDemote}
+                canWrite={canWritePlanning}
+                currentMemberId={user?.bandMemberId ?? null}
               />
               <RehearsalSongsSection
                 songs={rehearsal.songs ?? []}
                 onAddSong={handleAddSong}
                 onRemoveSong={handleRemoveSong}
+                canWrite={canWritePlanning}
               />
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
@@ -226,11 +233,13 @@ export default function RehearsalDetailPage() {
         <SaveStatusLabel status={saveStatus} />
       </Box>
 
-      <Box sx={{ mt: 4 }}>
-        <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
-          Delete
-        </Button>
-      </Box>
+      {canWritePlanning && (
+        <Box sx={{ mt: 4 }}>
+          <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+            Delete
+          </Button>
+        </Box>
+      )}
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <DialogTitle>Delete rehearsal?</DialogTitle>

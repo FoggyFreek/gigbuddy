@@ -289,6 +289,22 @@ export async function clearGigBannerPath(executor, gigId, tenantId) {
   )
 }
 
+export async function getBandMemberIdForUser(executor, userId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2',
+    [userId, tenantId],
+  )
+  return rows[0]?.id ?? null
+}
+
+export async function getGigTaskById(executor, taskId, gigId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT * FROM gig_tasks WHERE id = $1 AND gig_id = $2 AND tenant_id = $3',
+    [taskId, gigId, tenantId],
+  )
+  return rows[0] || null
+}
+
 export async function insertGigTask(executor, tenantId, gigId, title, dueDate) {
   const { rows } = await executor.query(
     `INSERT INTO gig_tasks (tenant_id, gig_id, title, due_date)

@@ -27,6 +27,11 @@ import RehearsalDetailPage from '../pages/RehearsalDetailPage.tsx'
 import { addSong, getRehearsal, removeSong } from '../api/rehearsals.ts'
 import { searchSongs } from '../api/songs.ts'
 import theme from '../theme.ts'
+import { AuthContext } from '../contexts/authContext.ts'
+
+// Render as a writer (super admin grants every planning.write capability) so the
+// create/edit/delete affordances gated on canWritePlanning are present.
+const writerAuth = { user: { isSuperAdmin: true } }
 
 const baseRehearsal = {
   id: 1,
@@ -44,11 +49,13 @@ function wrap() {
   return render(
     <MemoryRouter initialEntries={['/rehearsals/1']}>
       <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDayjs}>
-          <Routes>
-            <Route path="/rehearsals/:id" element={<RehearsalDetailPage />} />
-          </Routes>
-        </LocalizationProvider>
+        <AuthContext.Provider value={writerAuth}>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <Routes>
+              <Route path="/rehearsals/:id" element={<RehearsalDetailPage />} />
+            </Routes>
+          </LocalizationProvider>
+        </AuthContext.Provider>
       </ThemeProvider>
     </MemoryRouter>
   )

@@ -26,6 +26,7 @@ import AddIcon from '@mui/icons-material/Add'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { listInvites, createInvite, revokeInvite } from '../api/invites.ts'
+import { ASSIGNABLE_ROLES, ROLES } from '../auth/permissions.ts'
 import type { Id } from '../types/entities.ts'
 
 interface Invite {
@@ -56,7 +57,7 @@ export default function InvitesSection({ canIssueAdmin = false }: InvitesSection
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [role, setRole] = useState('member')
+  const [role, setRole] = useState('contributor')
   const [expiresInDays, setExpiresInDays] = useState('14')
   const [submitting, setSubmitting] = useState(false)
   const [copiedId, setCopiedId] = useState<Id | null>(null)
@@ -78,7 +79,7 @@ export default function InvitesSection({ canIssueAdmin = false }: InvitesSection
       const created = await createInvite(payload as Parameters<typeof createInvite>[0])
       setInvites((prev) => [created as Invite, ...prev])
       setDialogOpen(false)
-      setRole('member')
+      setRole('contributor')
       setExpiresInDays('14')
     } catch (err) {
       setError((err as Error).message || 'Create failed')
@@ -239,9 +240,11 @@ export default function InvitesSection({ canIssueAdmin = false }: InvitesSection
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
               >
-                <MenuItem value="member">member</MenuItem>
-                <MenuItem value="tenant_admin" disabled={!canIssueAdmin}>
-                  tenant_admin {canIssueAdmin ? '' : '(super admin only)'}
+                {[...ASSIGNABLE_ROLES].map((r) => (
+                  <MenuItem key={r} value={r}>{r}</MenuItem>
+                ))}
+                <MenuItem value={ROLES.TENANT_ADMIN} disabled={!canIssueAdmin}>
+                  {ROLES.TENANT_ADMIN}{canIssueAdmin ? '' : ' (super admin only)'}
                 </MenuItem>
               </Select>
             </FormControl>

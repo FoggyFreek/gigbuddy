@@ -40,6 +40,7 @@ interface VenuePickerProps {
 }
 const VenuePicker = _VenuePickerRaw as React.ComponentType<VenuePickerProps>
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
+import { useAuth } from '../contexts/authContext.ts'
 import { addGigParticipant, deleteGigBanner, getGig, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../api/gigs.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import { compressBanner } from '../utils/compressImage.ts'
@@ -103,6 +104,10 @@ interface GigDetailContentProps {
   gigId: Id
   onBannerUpdate?: (gigId: Id, patch: Record<string, unknown>) => void
   onGigLoaded?: (gig: GigDetail) => void
+  // Readers (no planning.write) see the gig read-only: fields disabled, no
+  // banner/participant/contact/attachment/task-edit affordances. They keep the
+  // one self-action — ticking their own assigned task done (see GigTasks).
+  canWrite?: boolean
 }
 
 function feeToDisplay(cents: number | null | undefined): string {
@@ -117,7 +122,9 @@ function feeToCents(str: string): number | null {
   return Math.round(n * 100)
 }
 
-const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded }, ref) {
+const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, canWrite = true }, ref) {
+  const { user } = useAuth()
+  const currentBandMemberId = user?.bandMemberId ?? null
   const [form, setForm] = useState<GigForm>({
     event_date: '',
     event_description: '',
@@ -227,6 +234,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   }
 
   function handleChange(field: string, value: unknown) {
+    if (!canWrite) return
     if (field === 'admission' && value === 'free') {
       setForm((prev) => ({ ...prev, admission: 'free', ticket_link: '' }))
       if (hasRequiredErrors(form, REQUIRED_FIELDS)) return
@@ -309,6 +317,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             label="Date"
             fullWidth
             required
+            disabled={!canWrite}
             value={form.event_date}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('event_date', e.target.value)}
             error={!!requiredErrors.event_date}
@@ -319,6 +328,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           <TimePicker
             label="Start time"
             ampm={false}
+            disabled={!canWrite}
             value={timeStringToDayjs(form.start_time)}
             onChange={(v) => handleChange('start_time', dayjsToTimeString(v))}
             slotProps={{ textField: { fullWidth: true } }}
@@ -328,6 +338,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           <TimePicker
             label="End time"
             ampm={false}
+            disabled={!canWrite}
             value={timeStringToDayjs(form.end_time)}
             onChange={(v) => handleChange('end_time', dayjsToTimeString(v))}
             slotProps={{ textField: { fullWidth: true } }}
@@ -338,6 +349,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             select
             label="Status"
             fullWidth
+            disabled={!canWrite}
             value={form.status}
             onChange={(e) => handleChange('status', e.target.value)}
           >
@@ -351,6 +363,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             label="Event description"
             fullWidth
             required
+            disabled={!canWrite}
             value={form.event_description}
             onChange={(e) => handleChange('event_description', e.target.value)}
             error={!!requiredErrors.event_description}
@@ -360,6 +373,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         <Grid size={{ xs: 12, sm: 6 }}>
           <VenuePicker
             categoryFilter="festival"
+            disabled={!canWrite}
             value={selectedFestival}
             onChange={(v: Venue | null) => {
               setSelectedFestival(v)
@@ -370,6 +384,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         <Grid size={{ xs: 12, sm: 6 }}>
           <VenuePicker
             categoryFilter="venue"
+            disabled={!canWrite}
             value={selectedVenue}
             onChange={(v: Venue | null) => {
               setSelectedVenue(v)
@@ -382,6 +397,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             label="Event link"
             type="url"
             fullWidth
+            disabled={!canWrite}
             value={form.event_link}
             onChange={(e) => handleChange('event_link', e.target.value)}
             slotProps={{
@@ -411,6 +427,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             control={
               <Switch
                 checked={form.admission === 'paid'}
+                disabled={!canWrite}
                 onChange={(e) =>
                   handleChange('admission', e.target.checked ? 'paid' : 'free')
                 }
@@ -423,6 +440,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           <TextField
             label="Band fee"
             fullWidth
+            disabled={!canWrite}
             value={form.booking_fee}
             onChange={(e) => handleChange('booking_fee', e.target.value)}
             placeholder="0.00"
@@ -439,6 +457,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               label="Ticket link"
               type="url"
               fullWidth
+              disabled={!canWrite}
               value={form.ticket_link}
               onChange={(e) => handleChange('ticket_link', e.target.value)}
               slotProps={{
@@ -476,6 +495,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             venueId={selectedVenue?.id ?? undefined}
             festivalId={selectedFestival?.id ?? undefined}
             flush={flush}
+            canWrite={canWrite}
           />
         </Grid>
 
@@ -490,6 +510,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               control={
                 <Switch
                   checked={form.has_pa_system}
+                  disabled={!canWrite}
                   onChange={(e) => handleChange('has_pa_system', e.target.checked)}
                 />
               }
@@ -499,6 +520,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               control={
                 <Switch
                   checked={form.has_drumkit}
+                  disabled={!canWrite}
                   onChange={(e) => handleChange('has_drumkit', e.target.checked)}
                 />
               }
@@ -508,6 +530,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               control={
                 <Switch
                   checked={form.has_stage_lights}
+                  disabled={!canWrite}
                   onChange={(e) => handleChange('has_stage_lights', e.target.checked)}
                 />
               }
@@ -531,6 +554,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               onAddParticipant={handleAddParticipant}
               onRemoveParticipant={handleRemoveParticipant}
               onVote={handleVote}
+              canWrite={canWrite}
             />
           ) : (
             <GigAvailabilityPanel eventDate={form.event_date} />
@@ -543,7 +567,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
             Tasks
           </Typography>
-          <GigTasks key={String(gigId)} gigId={gigId} initialTasks={initialTasks} members={members} />
+          <GigTasks key={String(gigId)} gigId={gigId} initialTasks={initialTasks} members={members} canWrite={canWrite} currentBandMemberId={currentBandMemberId} />
         </Grid>
 
         {/* Attachments */}
@@ -552,7 +576,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
             Attachments
           </Typography>
-          <GigAttachments key={String(gigId)} gigId={gigId} initialAttachments={gig?.attachments ?? []} />
+          <GigAttachments key={String(gigId)} gigId={gigId} initialAttachments={gig?.attachments ?? []} canWrite={canWrite} />
         </Grid>
 
         {/* Notes */}
@@ -563,6 +587,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             fullWidth
             multiline
             minRows={3}
+            disabled={!canWrite}
             value={form.notes}
             onChange={(e) => handleChange('notes', e.target.value)}
           />
@@ -608,35 +633,37 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                 <Typography variant="caption">No banner</Typography>
               </Box>
             )}
-            <Stack spacing={1}>
-              <input
-                ref={bannerInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={handleBannerFileChange}
-              />
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={bannerBusy ? <CircularProgress size={14} color="inherit" /> : <AddPhotoAlternateIcon />}
-                disabled={bannerBusy}
-                onClick={() => bannerInputRef.current?.click()}
-              >
-                {bannerPath ? 'Replace' : 'Upload banner'}
-              </Button>
-              {bannerPath && (
+            {canWrite && (
+              <Stack spacing={1}>
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={handleBannerFileChange}
+                />
                 <Button
                   size="small"
-                  color="error"
-                  startIcon={<DeleteIcon />}
+                  variant="outlined"
+                  startIcon={bannerBusy ? <CircularProgress size={14} color="inherit" /> : <AddPhotoAlternateIcon />}
                   disabled={bannerBusy}
-                  onClick={handleBannerDelete}
+                  onClick={() => bannerInputRef.current?.click()}
                 >
-                  Remove
+                  {bannerPath ? 'Replace' : 'Upload banner'}
                 </Button>
-              )}
-            </Stack>
+                {bannerPath && (
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    disabled={bannerBusy}
+                    onClick={handleBannerDelete}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </Stack>
+            )}
           </Stack>
         </Grid>
       </Grid>

@@ -95,7 +95,10 @@ export interface Tenant {
   id?: Id
   band_name?: string
   formal_name?: string
-  logo_path?: string
+  logo_path?: string | null
+  banner_path?: string | null
+  avatar_path?: string | null
+  logo_dark_path?: string | null
   applies_kor?: boolean
   tax_percentage?: number | string
   address_street?: string

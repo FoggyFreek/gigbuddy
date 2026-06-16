@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/purchaseValidators.js'
 import {
   listProducts,
@@ -31,13 +33,13 @@ router.get('/products', async (req, res) => {
   res.json(result.products)
 })
 
-router.post('/products', async (req, res) => {
+router.post('/products', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const result = await createProduct(pool, req.tenantId, req.body || {})
   if (result.error) return res.status(result.error.status).json(result.error.body)
   res.status(201).json(result.product)
 })
 
-router.patch('/products/:id', async (req, res) => {
+router.patch('/products/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await updateProduct(pool, req.tenantId, id, req.body || {})
   if (result.error) return res.status(result.error.status).json(result.error.body)
@@ -45,7 +47,7 @@ router.patch('/products/:id', async (req, res) => {
 })
 
 // Archive, not delete: sales and purchase lines keep referencing the product.
-router.delete('/products/:id', async (req, res) => {
+router.delete('/products/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await archiveProduct(pool, req.tenantId, id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
@@ -72,13 +74,13 @@ router.get('/sales', async (req, res) => {
   res.json(result.sales)
 })
 
-router.post('/sales', async (req, res) => {
+router.post('/sales', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const result = await recordMerchSale(pool, req.tenantId, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   res.status(201).json({ id: result.saleId })
 })
 
-router.post('/sales/:id/void', async (req, res) => {
+router.post('/sales/:id/void', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await voidMerchSale(pool, req.tenantId, id, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)

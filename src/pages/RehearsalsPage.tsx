@@ -11,6 +11,7 @@ import SplitView from '../components/SplitView.tsx'
 import { listRehearsals, setVote } from '../api/rehearsals.ts'
 import { rehearsalShareUrl } from '../utils/shareUtils.ts'
 import { useAuth } from '../contexts/authContext.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Rehearsal, Id } from '../types/entities.ts'
 
 function applyVoteToRehearsals(rehearsals: Rehearsal[], rehearsalId: Id, memberId: Id, vote: string): Rehearsal[] {
@@ -25,6 +26,7 @@ function applyVoteToRehearsals(rehearsals: Rehearsal[], rehearsalId: Id, memberI
 
 export default function RehearsalsPage() {
   const { user } = useAuth()
+  const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -79,13 +81,15 @@ export default function RehearsalsPage() {
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
           Rehearsals
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setModal({ mode: 'create' })}
-        >
-          Add
-        </Button>
+        {canWritePlanning && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setModal({ mode: 'create' })}
+          >
+            Add
+          </Button>
+        )}
       </Box>
 
       {loading && (

@@ -38,7 +38,7 @@ function isOverdue(task: GigTask) {
 
 interface MobileTaskCardProps {
   task: GigTask
-  onRowClick: (task: GigTask) => void
+  onRowClick?: (task: GigTask) => void
   onToggleDone: (task: GigTask) => void
 }
 
@@ -61,9 +61,9 @@ function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps)
 
         {/* Row 1 Left: Title */}
         <Box
-          onClick={() => onRowClick(task)}
+          onClick={() => onRowClick?.(task)}
           sx={{
-            cursor: 'pointer',
+            cursor: onRowClick ? 'pointer' : 'default',
             gridColumn: '2 / 3',
             textDecoration: task.done ? 'line-through' : 'none',
             color: task.done ? 'text.disabled' : 'text.primary',
@@ -77,9 +77,9 @@ function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps)
 
         {/* Row 1 Right: Assigned to */}
         <Box
-          onClick={() => onRowClick(task)}
+          onClick={() => onRowClick?.(task)}
           sx={{
-            cursor: 'pointer',
+            cursor: onRowClick ? 'pointer' : 'default',
             gridColumn: '3 / 4',
             textAlign: 'right',
           }}
@@ -94,9 +94,9 @@ function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps)
 
         {/* Row 2 Left: Gig */}
         <Box
-          onClick={() => onRowClick(task)}
+          onClick={() => onRowClick?.(task)}
           sx={{
-            cursor: 'pointer',
+            cursor: onRowClick ? 'pointer' : 'default',
             gridColumn: '2 / 3',
             pt: 1,
             borderTop: '1px solid',
@@ -111,9 +111,9 @@ function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps)
 
         {/* Row 2 Right: Due date */}
         <Box
-          onClick={() => onRowClick(task)}
+          onClick={() => onRowClick?.(task)}
           sx={{
-            cursor: 'pointer',
+            cursor: onRowClick ? 'pointer' : 'default',
             gridColumn: '3 / 4',
             textAlign: 'right',
           }}
@@ -142,7 +142,7 @@ function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps)
 
 interface TasksTableProps {
   tasks: GigTask[]
-  onRowClick: (task: GigTask) => void
+  onRowClick?: (task: GigTask) => void
   onToggleDone: (task: GigTask) => void
 }
 
@@ -196,8 +196,8 @@ export default function TasksTable({ tasks, onRowClick, onToggleDone }: TasksTab
               <TableRow
                 key={String(task.id)}
                 hover
-                onClick={() => onRowClick(task)}
-                sx={{ cursor: 'pointer' }}
+                onClick={() => onRowClick?.(task)}
+                sx={{ cursor: onRowClick ? 'pointer' : 'default' }}
               >
                 <TableCell padding="checkbox">
                   <Checkbox

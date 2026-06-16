@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import {
   parseId,
   parseOrderedSetIds,
@@ -43,7 +45,7 @@ router.get('/', async (req, res) => {
   res.json(await listSetlists(pool, req.tenantId))
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createSetlist(req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.setlist)
@@ -56,14 +58,14 @@ router.get('/:id', async (req, res) => {
   res.json(result.tree)
 })
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchSetlist(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.setlist)
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteSetlist(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -73,7 +75,7 @@ router.delete('/:id', async (req, res) => {
 // ---------- sets ----------
 
 // Reorder sets — registered before '/:id/sets/:setId' so 'reorder' isn't matched as an id.
-router.patch('/:id/sets/reorder', async (req, res) => {
+router.patch('/:id/sets/reorder', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const parsed = parseOrderedSetIds(req.body)
   if (parsed.error) return res.status(400).json({ error: parsed.error })
@@ -82,14 +84,14 @@ router.patch('/:id/sets/reorder', async (req, res) => {
   res.status(204).end()
 })
 
-router.post('/:id/sets', async (req, res) => {
+router.post('/:id/sets', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await createSet(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.set)
 })
 
-router.patch('/:id/sets/:setId', async (req, res) => {
+router.patch('/:id/sets/:setId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const setId = requireParam(req, res, 'setId'); if (setId === null) return
   const result = await patchSet(pool, req.tenantId, id, setId, req.body)
@@ -97,7 +99,7 @@ router.patch('/:id/sets/:setId', async (req, res) => {
   res.json(result.set)
 })
 
-router.delete('/:id/sets/:setId', async (req, res) => {
+router.delete('/:id/sets/:setId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const setId = requireParam(req, res, 'setId'); if (setId === null) return
   const result = await deleteSet(pool, req.tenantId, id, setId)
@@ -108,7 +110,7 @@ router.delete('/:id/sets/:setId', async (req, res) => {
 // ---------- items ----------
 
 // Reorder/move items — registered before '/:id/items/:itemId'.
-router.patch('/:id/items/reorder', async (req, res) => {
+router.patch('/:id/items/reorder', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const parsed = parseReorderItemsPayload(req.body)
   if (parsed.error) return res.status(400).json({ error: parsed.error })
@@ -117,7 +119,7 @@ router.patch('/:id/items/reorder', async (req, res) => {
   res.json({ clearedIds: result.clearedIds })
 })
 
-router.post('/:id/sets/:setId/items', async (req, res) => {
+router.post('/:id/sets/:setId/items', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const setId = requireParam(req, res, 'setId'); if (setId === null) return
   const result = await createItem(pool, req.tenantId, id, setId, req.body)
@@ -125,7 +127,7 @@ router.post('/:id/sets/:setId/items', async (req, res) => {
   res.status(201).json(result.item)
 })
 
-router.patch('/:id/items/:itemId', async (req, res) => {
+router.patch('/:id/items/:itemId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const itemId = requireParam(req, res, 'itemId'); if (itemId === null) return
   const result = await patchItem(pool, req.tenantId, id, itemId, req.body)
@@ -134,7 +136,7 @@ router.patch('/:id/items/:itemId', async (req, res) => {
 })
 
 // Upsert/clear the requesting user's personal note on a song item.
-router.put('/:id/items/:itemId/note', async (req, res) => {
+router.put('/:id/items/:itemId/note', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const itemId = requireParam(req, res, 'itemId'); if (itemId === null) return
   const result = await setItemNote(pool, req.tenantId, id, req.user.id, itemId, req.body)
@@ -142,7 +144,7 @@ router.put('/:id/items/:itemId/note', async (req, res) => {
   res.json({ my_note: result.my_note })
 })
 
-router.delete('/:id/items/:itemId', async (req, res) => {
+router.delete('/:id/items/:itemId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const itemId = requireParam(req, res, 'itemId'); if (itemId === null) return
   const result = await deleteItem(req.tenantId, id, itemId)

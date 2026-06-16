@@ -36,7 +36,9 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: 
     )
   }
 
-  const logoKey = s.invoice?.custom_logo_path || s.tenant?.logo_path
+  const logoKey = s.invoice?.custom_logo_path
+    || (s.form.invert_logo && s.tenant?.logo_dark_path ? s.tenant.logo_dark_path : s.tenant?.logo_path)
+    || undefined
   const bandHeading = s.tenant?.formal_name || s.tenant?.band_name || ''
 
   const dialogs = (

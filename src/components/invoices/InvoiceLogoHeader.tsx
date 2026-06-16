@@ -44,7 +44,7 @@ export default function InvoiceLogoHeader({
               component="img"
               src={`/api/files/${logoKey}`}
               alt="Invoice logo"
-              sx={{ maxHeight: 64, maxWidth: 160, objectFit: 'contain', borderRadius: 1, border: '1px solid', borderColor: 'divider', p: 0.5 }}
+              sx={{ maxHeight: 64, maxWidth: 160, objectFit: 'contain', borderRadius: 1, border: '1px solid', borderColor: 'divider', p: 0.5, bgcolor: '#ffffff' }}
             />
             {!readOnly && (
               <Stack direction="row" spacing={0.5}>
@@ -69,18 +69,20 @@ export default function InvoiceLogoHeader({
             Add logo
           </Button>
         )}
-        <FormControlLabel
-          sx={{ mt: 0.5 }}
-          control={
-            <Switch
-              size="small"
-              checked={!!form.invert_logo}
-              onChange={(e) => patchForm({ invert_logo: e.target.checked })}
-              disabled={readOnly}
-            />
-          }
-          label={<Typography variant="caption">Invert logo colors</Typography>}
-        />
+        {tenant?.logo_dark_path && (
+          <FormControlLabel
+            sx={{ mt: 0.5, ml: 0.5 }}
+            control={
+              <Switch
+                size="small"
+                checked={!!form.invert_logo}
+                onChange={(e) => patchForm({ invert_logo: e.target.checked })}
+                disabled={readOnly}
+              />
+            }
+            label={<Typography variant="caption">Use dark logo</Typography>}
+          />
+        )}
       </Box>
 
       <Box sx={{ textAlign: 'right' }}>

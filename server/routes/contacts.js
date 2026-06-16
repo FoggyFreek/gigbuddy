@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/contactValidators.js'
 import {
   listContacts,
@@ -48,20 +50,20 @@ router.get('/:id', async (req, res) => {
   res.json(result.contact)
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createContact(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.contact)
 })
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchContact(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.contact)
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteContact(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -70,14 +72,14 @@ router.delete('/:id', async (req, res) => {
 
 // ---------- notes ----------
 
-router.post('/:id/notes', async (req, res) => {
+router.post('/:id/notes', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await createNote(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.note)
 })
 
-router.delete('/:id/notes/:noteId', async (req, res) => {
+router.delete('/:id/notes/:noteId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const noteId = requireParam(req, res, 'noteId'); if (noteId === null) return
   const result = await deleteNote(pool, req.tenantId, id, noteId)
@@ -97,14 +99,14 @@ router.get('/:id/venues', async (req, res) => {
   res.json(result.venues)
 })
 
-router.post('/:id/venues', async (req, res) => {
+router.post('/:id/venues', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await linkVenue(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.venue)
 })
 
-router.delete('/:id/venues/:venueId', async (req, res) => {
+router.delete('/:id/venues/:venueId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const venueId = requireParam(req, res, 'venueId'); if (venueId === null) return
   const result = await unlinkVenue(pool, req.tenantId, id, venueId)
@@ -114,7 +116,7 @@ router.delete('/:id/venues/:venueId', async (req, res) => {
 
 // ---------- import ----------
 
-router.post('/import', async (req, res) => {
+router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await importContacts(req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.summary)

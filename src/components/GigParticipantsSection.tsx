@@ -20,6 +20,9 @@ interface GigParticipantsSectionProps {
   onAddParticipant: () => void
   onRemoveParticipant: (memberId: Id) => void
   onVote: (memberId: Id, vote: string | null) => void
+  // Voting on a gig participant is planning.write (unlike rehearsals); readers
+  // see the roster read-only with no add/remove/vote affordances.
+  canWrite?: boolean
 }
 
 export default function GigParticipantsSection({
@@ -30,6 +33,7 @@ export default function GigParticipantsSection({
   onAddParticipant,
   onRemoveParticipant,
   onVote,
+  canWrite = true,
 }: GigParticipantsSectionProps) {
   return (
     <Stack spacing={1}>
@@ -66,18 +70,21 @@ export default function GigParticipantsSection({
           <Box sx={{ flexGrow: 1 }} />
           <VoteToggle
             vote={p.vote}
+            disabled={!canWrite}
             onChange={(v: string | null) => onVote(p.band_member_id!, v)}
           />
-          <IconButton
-            size="small"
-            aria-label={`remove ${p.name}`}
-            onClick={() => onRemoveParticipant(p.band_member_id!)}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {canWrite && (
+            <IconButton
+              size="small"
+              aria-label={`remove ${p.name}`}
+              onClick={() => onRemoveParticipant(p.band_member_id!)}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       ))}
-      {candidateMembers.length > 0 && (
+      {canWrite && candidateMembers.length > 0 && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
           <FormControl size="small" sx={{ minWidth: 220 }}>
             <InputLabel id="add-gig-participant-label">Add participant</InputLabel>

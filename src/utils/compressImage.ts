@@ -27,11 +27,22 @@ export function compressLogo(file: File): Promise<File> {
 
 const BANNER_OPTIONS: Options = {
   maxSizeMB: 1,
-  maxWidthOrHeight: 1920,
+  maxWidthOrHeight: 820,
   initialQuality: 0.88,
   useWebWorker: true,
 }
 
 export function compressBanner(file: File): Promise<File> {
   return imageCompression(file, BANNER_OPTIONS)
+}
+
+const AVATAR_OPTIONS: Options = {
+  maxSizeMB: 2,
+  maxWidthOrHeight: 720,
+  initialQuality: 0.9,
+  useWebWorker: true,
+}
+
+export function compressAvatar(file: File): Promise<File> {
+  return imageCompression(file, AVATAR_OPTIONS)
 }

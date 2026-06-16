@@ -32,9 +32,11 @@ const USER = {
   pictureUrl: null,
   isSuperAdmin: false,
   activeTenantId: 1,
-  activeTenantRole: 'member',
+  // tenant_admin so every nav group (incl. Financial/Accounting) is visible —
+  // these tests exercise accordion behaviour, not permission filtering.
+  activeTenantRole: 'tenant_admin',
   memberships: [
-    { tenantId: 1, tenantSlug: 'a', tenantName: 'Band A', role: 'member', status: 'approved' },
+    { tenantId: 1, tenantSlug: 'a', tenantName: 'Band A', role: 'tenant_admin', status: 'approved' },
   ],
 }
 

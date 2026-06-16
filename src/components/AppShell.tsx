@@ -48,6 +48,8 @@ import LibraryMusicOutlined from '@mui/icons-material/LibraryMusicOutlined'
 import QueueMusicOutlined from '@mui/icons-material/QueueMusicOutlined'
 import { useProfile } from '../contexts/profileContext.ts'
 import { useAuth } from '../contexts/authContext.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
+import { PERMISSIONS, type Permission } from '../auth/permissions.ts'
 import { usePushNotifications } from '../hooks/usePushNotifications.ts'
 import { useTenantQuerySync } from '../hooks/useTenantQuerySync.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
@@ -60,12 +62,13 @@ import UserMenu from './appShell/UserMenu.tsx'
 import type { Id } from '../types/entities.ts'
 
 // Local type for NAV_GROUPS that mirrors the NavGroupDef shape NavGroup.tsx expects
-// but also allows the optional adminOnly flag on child entries.
+// but also allows an optional permission gate on child entries. Items with a
+// `permission` are hidden unless the active tenant role grants it.
 interface NavChildEntry {
   to: string
   label: string
   icon: SvgIconComponent
-  adminOnly?: boolean
+  permission?: Permission
 }
 
 interface NavGroupEntry {
@@ -87,7 +90,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
     icon: SpaceDashboardTwoTone,
     children: [
       { to: '/', label: 'Dashboard', icon: DashboardOutlined },
-      { to: '/financial', label: 'Financial', icon: QueryStatsOutlined },
+      { to: '/financial', label: 'Financial', icon: QueryStatsOutlined, permission: PERMISSIONS.FINANCE_VIEW },
       { to: '/profile', label: 'Profile', icon: PersonOutlined },
     ],
   },
@@ -128,10 +131,10 @@ const NAV_GROUPS: NavGroupEntry[] = [
     label: 'Financial',
     icon: PaymentsTwoTone,
     children: [
-      { to: '/invoices', label: 'Invoices', icon: ReceiptLongOutlined },
-      { to: '/purchases', label: 'Purchases', icon: ShoppingCartOutlined },
-      { to: '/merch', label: 'Merchandise', icon: SellOutlined },
-      { to: '/reimbursements', label: 'Reimbursements', icon: VolunteerActivismOutlined },
+      { to: '/invoices', label: 'Invoices', icon: ReceiptLongOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/purchases', label: 'Purchases', icon: ShoppingCartOutlined, permission: PERMISSIONS.PURCHASE_CREATE },
+      { to: '/merch', label: 'Merchandise', icon: SellOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/reimbursements', label: 'Reimbursements', icon: VolunteerActivismOutlined, permission: PERMISSIONS.FINANCE_VIEW },
     ],
   },
   {
@@ -139,11 +142,11 @@ const NAV_GROUPS: NavGroupEntry[] = [
     label: 'Accounting',
     icon: AccountBalanceTwoTone,
     children: [
-      { to: '/journal', label: 'Journal', icon: MenuBookOutlined },
-      { to: '/ledger', label: 'Ledger', icon: ListAltOutlined },
-      { to: '/ledger-entries', label: 'Ledger entries', icon: ManageSearchOutlined },
-      { to: '/vat-returns', label: 'VAT declarations', icon: AccountBalanceOutlined, adminOnly: true },
-      { to: '/reports', label: 'Reports', icon: AssessmentOutlined },
+      { to: '/journal', label: 'Journal', icon: MenuBookOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/ledger', label: 'Ledger', icon: ListAltOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/ledger-entries', label: 'Ledger entries', icon: ManageSearchOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/vat-returns', label: 'VAT declarations', icon: AccountBalanceOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/reports', label: 'Reports', icon: AssessmentOutlined, permission: PERMISSIONS.FINANCE_VIEW },
     ],
   },
 
@@ -173,18 +176,17 @@ export default function AppShell() {
   }
 
   const isSuperAdmin = !!user?.isSuperAdmin
-  const isTenantAdmin =
-    isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
+  const { can, canManageMembers, canManageTenant } = usePermissions()
 
-  // Admin-only nav items (adminOnly: true) are hidden from plain members; the
-  // matching routes sit behind RequireTenantAdmin and the API behind the
-  // tenantAdmin gate, so this is presentation, not the defense.
+  // Nav items carrying a `permission` are hidden unless the active role grants
+  // it; the matching routes sit behind RequirePermission and the API behind the
+  // matching gate, so this is presentation, not the defense.
   const visibleGroups = useMemo(
     () =>
       NAV_GROUPS
-        .map((g) => ({ ...g, children: g.children.filter((c) => !('adminOnly' in c && c.adminOnly) || isTenantAdmin) }))
+        .map((g) => ({ ...g, children: g.children.filter((c) => !c.permission || can(c.permission)) }))
         .filter((g) => g.children.length > 0),
-    [isTenantAdmin],
+    [can],
   )
 
   // Single-open accordion: the group containing the active route auto-expands,
@@ -311,7 +313,8 @@ export default function AppShell() {
             onClose={() => setSettingsMenuAnchor(null)}
             mode={mode}
             onToggleTheme={() => { toggleTheme(); setSettingsMenuAnchor(null) }}
-            isTenantAdmin={isTenantAdmin}
+            canManageMembers={canManageMembers}
+            canManageTenant={canManageTenant}
             isSuperAdmin={isSuperAdmin}
           />
           {user && (

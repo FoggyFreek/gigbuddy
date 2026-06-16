@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/accountValidators.js'
 import {
   parseYearQuarter,
@@ -14,9 +16,9 @@ import {
   getVatReturn,
 } from '../services/vatReturnService.js'
 
-// Mounted under the tenantAdmin gate (see routes/index.js): filing returns and
-// recording payments are tenant-admin actions. Filed returns are permanent —
-// there is no DELETE.
+// Mounted under the financeView gate (see routes/index.js): reads require
+// finance.view and the filing/payment mutations require finance.manage. Filed
+// returns are permanent — there is no DELETE.
 const router = Router()
 
 router.get('/preview', async (req, res, next) => {
@@ -39,7 +41,7 @@ router.get('/', async (req, res, next) => {
   }
 })
 
-router.post('/', async (req, res, next) => {
+router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
   const body = validateReturnCreate(req.body || {})
   if (body.error) return res.status(400).json({ error: body.error })
   try {
@@ -63,7 +65,7 @@ router.get('/:id', async (req, res, next) => {
   }
 })
 
-router.post('/:id/payments', async (req, res, next) => {
+router.post('/:id/payments', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
   const id = parseId(req.params.id)
   if (id === null) return res.status(400).json({ error: 'Invalid id' })
   const payment = validatePayment(req.body || {})

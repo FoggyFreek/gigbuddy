@@ -93,8 +93,8 @@ export function computeAndApply(invoiceFields, lines, tenant) {
 
 // ---------- PDF ----------
 
-async function loadLogoBuffer(tenant, customLogoPath) {
-  const key = customLogoPath || tenant.logo_path
+async function loadLogoBuffer(tenant, customLogoPath, useDarkLogo = false) {
+  const key = customLogoPath || (useDarkLogo && tenant.logo_dark_path ? tenant.logo_dark_path : tenant.logo_path)
   if (!key) return null
   try {
     const stream = await getObject(key)
@@ -112,7 +112,7 @@ export async function renderAndStorePdf(pool, invoiceId, tenantId) {
   if (!invoice) return null
   const tenant = await fetchTenant(pool, tenantId)
   const lines = await fetchLines(pool, invoiceId, tenantId)
-  const logoBuffer = await loadLogoBuffer(tenant, invoice.custom_logo_path)
+  const logoBuffer = await loadLogoBuffer(tenant, invoice.custom_logo_path, !!invoice.invert_logo)
 
   const pdfBuffer = await renderInvoicePdf({ invoice, lines, tenant, logoBuffer })
   const previousKey = invoice.pdf_path

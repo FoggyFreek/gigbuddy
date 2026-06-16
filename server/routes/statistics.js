@@ -7,7 +7,7 @@ import {
 } from '../services/statisticsService.js'
 
 // Tenant-admin view: usage for the active tenant only.
-// Mounted at /api/statistics behind [requireApproved, resolveTenantId, requireTenantAdmin].
+// Mounted at /api/statistics behind the tenant.manage gate (see routes/index.js).
 export const tenantRouter = Router()
 
 tenantRouter.get('/storage', async (req, res, next) => {

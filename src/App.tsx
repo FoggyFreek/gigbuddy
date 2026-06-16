@@ -2,8 +2,9 @@ import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import AppShell from './components/AppShell.tsx'
 import RequireAuth from './components/RequireAuth.tsx'
-import RequireTenantAdmin from './components/RequireTenantAdmin.tsx'
 import RequireSuperAdmin from './components/RequireSuperAdmin.tsx'
+import RequirePermission from './components/RequirePermission.tsx'
+import { PERMISSIONS } from './auth/permissions.ts'
 
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage.tsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.tsx'))
@@ -61,7 +62,6 @@ export default function App() {
           <Route path="/redeem-invite" element={<RedeemInvitePage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardPage />} />
-            <Route path="/financial" element={<FinancialDashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/gigs" element={<GigsPage />}>
               <Route path=":id" element={<GigDetailPage />} />
@@ -88,33 +88,42 @@ export default function App() {
             </Route>
             <Route path="/setlists" element={<SetlistsPage />} />
             <Route path="/setlists/:id" element={<SetlistEditorPage />} />
-            <Route path="/invoices" element={<InvoicesPage />}>
-              <Route path=":id" element={<InvoiceDetailPage />} />
+            {/* Contributors+ (purchase.create) may add purchases for reimbursement. */}
+            <Route element={<RequirePermission permission={PERMISSIONS.PURCHASE_CREATE} />}>
+              <Route path="/purchases" element={<PurchasesPage />}>
+                <Route path=":id" element={<PurchaseDetailPage />} />
+              </Route>
             </Route>
-            <Route path="/purchases" element={<PurchasesPage />}>
-              <Route path=":id" element={<PurchaseDetailPage />} />
+            {/* Finance surfaces — financial_admin / tenant_admin / super admin. */}
+            <Route element={<RequirePermission permission={PERMISSIONS.FINANCE_VIEW} />}>
+              <Route path="/financial" element={<FinancialDashboardPage />} />
+              <Route path="/invoices" element={<InvoicesPage />}>
+                <Route path=":id" element={<InvoiceDetailPage />} />
+              </Route>
+              <Route path="/merch" element={<MerchPage />}>
+                <Route path=":id" element={<MerchandiseDetailsPage />} />
+              </Route>
+              <Route path="/journal" element={<JournalPage />} />
+              <Route path="/ledger" element={<LedgerEntriesPage />} />
+              <Route path="/ledger-entries" element={<LedgerEntrySearchPage />} />
+              <Route path="/ledger/:id" element={<LedgerEntryDetailPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/reimbursements" element={<ReimbursementsPage />} />
+              <Route path="/vat-returns" element={<VatReturnsPage />}>
+                <Route path=":id" element={<VatReturnDetailPage />} />
+              </Route>
             </Route>
-            <Route path="/merch" element={<MerchPage />}>
-              <Route path=":id" element={<MerchandiseDetailsPage />} />
-            </Route>
-            <Route path="/journal" element={<JournalPage />} />
-            <Route path="/ledger" element={<LedgerEntriesPage />} />
-            <Route path="/ledger-entries" element={<LedgerEntrySearchPage />} />
-            <Route path="/ledger/:id" element={<LedgerEntryDetailPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/reimbursements" element={<ReimbursementsPage />} />
             <Route path="/availability" element={<AvailabilityPage />}>
               <Route path="gigs/:id" element={<GigDetailPage />} />
               <Route path="rehearsals/:id" element={<RehearsalDetailPage />} />
               <Route path="events/:id" element={<BandEventDetailPage />} />
             </Route>
             <Route path="/email-templates" element={<EmailTemplatesPage />} />
-            <Route element={<RequireTenantAdmin />}>
+            <Route element={<RequirePermission permission={PERMISSIONS.MEMBERS_MANAGE} />}>
               <Route path="/members" element={<MembersPage />} />
+            </Route>
+            <Route element={<RequirePermission permission={PERMISSIONS.TENANT_MANAGE} />}>
               <Route path="/settings" element={<TenantSettingsPage />} />
-              <Route path="/vat-returns" element={<VatReturnsPage />}>
-                <Route path=":id" element={<VatReturnDetailPage />} />
-              </Route>
             </Route>
             <Route element={<RequireSuperAdmin />}>
               <Route path="/admin/tenants" element={<TenantsPage />} />

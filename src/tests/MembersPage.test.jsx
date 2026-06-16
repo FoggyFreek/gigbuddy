@@ -156,12 +156,17 @@ describe('MembersPage', () => {
     expect(updateMembershipBandMember).toHaveBeenCalledWith(1, 10)
   })
 
-  it('non-super admin cannot promote a member to tenant_admin', async () => {
+  it('non-super admin can assign the new roles but not tenant_admin', async () => {
+    const user = userEvent.setup()
     wrap(<MembersPage />)
     await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
-    // Role select for first row is the first combobox; should be disabled for member rows.
+    // The role select itself is now enabled (tenant admins may assign the new
+    // roles); only the tenant_admin option stays disabled for non-super callers.
     const allCombos = screen.getAllByRole('combobox')
-    expect(allCombos[0]).toHaveAttribute('aria-disabled', 'true')
+    expect(allCombos[0]).not.toHaveAttribute('aria-disabled', 'true')
+    await user.click(allCombos[0])
+    expect(screen.getByRole('option', { name: 'financial_admin' })).not.toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('option', { name: 'tenant_admin' })).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('super admin can promote a member to tenant_admin', async () => {

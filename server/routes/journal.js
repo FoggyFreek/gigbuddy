@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/journalValidators.js'
 import {
   listJournals,
@@ -30,14 +32,14 @@ router.get('/', async (req, res) => {
 
 // ---------- approve many (powers "Approve all") ----------
 // Declared before '/:id' so 'approve' isn't parsed as an id.
-router.post('/approve', async (req, res) => {
+router.post('/approve', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
   const result = await approveMany(pool, req.tenantId, ids, req.user.id)
   res.json(result)
 })
 
 // ---------- create ----------
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const result = await createJournal(pool, req.tenantId, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   const { journal } = await getJournal(pool, req.tenantId, result.journalId)
@@ -53,7 +55,7 @@ router.get('/:id', async (req, res) => {
 })
 
 // ---------- patch (draft only) ----------
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await updateJournal(pool, req.tenantId, id, req.body || {})
   if (result.error) return res.status(result.error.status).json(result.error.body)
@@ -62,7 +64,7 @@ router.patch('/:id', async (req, res) => {
 })
 
 // ---------- delete (draft only) ----------
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await deleteJournal(pool, req.tenantId, id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
@@ -70,7 +72,7 @@ router.delete('/:id', async (req, res) => {
 })
 
 // ---------- approve single ----------
-router.post('/:id/approve', async (req, res) => {
+router.post('/:id/approve', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireId(req, res); if (id === null) return
   const result = await approveJournal(pool, req.tenantId, id, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)

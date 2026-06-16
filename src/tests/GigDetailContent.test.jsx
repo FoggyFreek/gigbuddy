@@ -137,6 +137,38 @@ describe('GigDetailContent — field rendering', () => {
   })
 })
 
+describe('GigDetailContent — reader mode (canWrite=false)', () => {
+  beforeEach(() => {
+    getGig.mockClear()
+    updateGig.mockClear()
+  })
+
+  it('disables the editable fields', async () => {
+    wrap(<GigDetailContent gigId={1} canWrite={false} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+    expect(screen.getByLabelText(/event description/i)).toBeDisabled()
+    expect(screen.getByLabelText(/paid admission/i)).toBeDisabled()
+    expect(screen.getByLabelText(/band fee/i)).toBeDisabled()
+    expect(screen.getByLabelText(/notes/i)).toBeDisabled()
+  })
+
+  it('hides the banner upload control', async () => {
+    wrap(<GigDetailContent gigId={1} canWrite={false} />)
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    expect(screen.queryByRole('button', { name: /upload banner/i })).not.toBeInTheDocument()
+  })
+
+  it('does not auto-save when a disabled control is clicked', async () => {
+    // pointerEventsCheck:0 lets us drive the click through the disabled control;
+    // because the input is disabled its onChange never fires, so nothing saves.
+    const user = userEvent.setup({ pointerEventsCheck: 0 })
+    wrap(<GigDetailContent gigId={1} canWrite={false} />)
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await user.click(screen.getByLabelText(/paid admission/i))
+    expect(updateGig).not.toHaveBeenCalled()
+  })
+})
+
 describe('GigDetailContent — admission toggle', () => {
   beforeEach(() => {
     getGig.mockClear()

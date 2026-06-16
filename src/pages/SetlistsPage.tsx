@@ -15,6 +15,7 @@ import AddIcon from '@mui/icons-material/Add'
 import QueueMusicIcon from '@mui/icons-material/QueueMusic'
 import { createSetlist, listSetlists } from '../api/setlists.ts'
 import { formatDuration } from '../utils/formatDuration.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Setlist } from '../types/entities.ts'
 
 interface SetlistCardProps {
@@ -55,6 +56,7 @@ function SetlistCard({ setlist, onClick }: SetlistCardProps) {
 }
 
 export default function SetlistsPage() {
+  const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const [setlists, setSetlists] = useState<Setlist[]>([])
   const [loading, setLoading] = useState(true)
@@ -91,9 +93,11 @@ export default function SetlistsPage() {
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
           Setlists
         </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>
-          Add
-        </Button>
+        {canWritePlanning && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>
+            Add
+          </Button>
+        )}
       </Box>
 
       {loading && (

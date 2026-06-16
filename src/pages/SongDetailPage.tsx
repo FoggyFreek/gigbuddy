@@ -35,6 +35,7 @@ import RichTextEditor from '../components/RichTextEditor.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import SongLinks from '../components/SongLinks.tsx'
 import SongFileList from '../components/SongFileList.tsx'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Song, SongTag, Id } from '../types/entities.ts'
 
 const DOCUMENT_ACCEPT = '.pdf,application/pdf'
@@ -69,6 +70,7 @@ function SectionHeading({ children }: { children: ReactNode }) {
 export default function SongDetailPage() {
   const { id } = useParams()
   const songId = Number(id)
+  const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const outletCtx = (useOutletContext<SongDetailOutletContext>() || {}) as SongDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
@@ -237,6 +239,7 @@ export default function SongDetailPage() {
               <Autocomplete
                 multiple
                 freeSolo
+                readOnly={!canWritePlanning}
                 options={tagOptions}
                 value={tags}
                 onChange={handleTagsChange}
@@ -263,7 +266,7 @@ export default function SongDetailPage() {
 
           <Divider sx={{ my: 3 }} />
           <SectionHeading>Links</SectionHeading>
-          <SongLinks songId={songId} initialLinks={song.links || []} />
+          <SongLinks songId={songId} initialLinks={song.links || []} canWrite={canWritePlanning} />
 
           <Divider sx={{ my: 3 }} />
           <SectionHeading>Documents</SectionHeading>
@@ -275,6 +278,7 @@ export default function SongDetailPage() {
             uploadFn={uploadSongDocument}
             deleteFn={(id, fileId) => fileId !== undefined ? deleteSongDocument(id, fileId) : Promise.resolve()}
             addLabel="Add PDF"
+            canWrite={canWritePlanning}
           />
 
           <Divider sx={{ my: 3 }} />
@@ -288,6 +292,7 @@ export default function SongDetailPage() {
             deleteFn={(id, fileId) => fileId !== undefined ? deleteSongRecording(id, fileId) : Promise.resolve()}
             isAudio
             addLabel="Add mp3"
+            canWrite={canWritePlanning}
           />
 
           <Divider sx={{ my: 3 }} />
@@ -307,7 +312,7 @@ export default function SongDetailPage() {
         <SaveStatusLabel status={saveStatus} />
       </Box>
 
-      {!loading && song && (
+      {!loading && song && canWritePlanning && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
             Delete

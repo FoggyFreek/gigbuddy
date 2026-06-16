@@ -118,3 +118,28 @@ describe('GigTasks', () => {
     expect(screen.queryAllByRole('combobox')).toHaveLength(0)
   })
 })
+
+describe('GigTasks — reader mode (canWrite=false)', () => {
+  it('hides the add row and delete buttons', () => {
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} canWrite={false} currentBandMemberId={1} />)
+    expect(screen.queryByPlaceholderText(/new task/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /delete task/i })).not.toBeInTheDocument()
+  })
+
+  it('disables due-date and assignment edits', () => {
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} canWrite={false} currentBandMemberId={1} />)
+    expect(screen.getByLabelText(/Due date for Book sound engineer/i)).toBeDisabled()
+    screen.getAllByRole('combobox').forEach((c) => expect(c).toHaveAttribute('aria-disabled', 'true'))
+  })
+
+  it('lets a reader tick only their own assigned task done', async () => {
+    const user = userEvent.setup()
+    // INITIAL_TASKS[0] is unassigned; INITIAL_TASKS[1] is assigned to member 1.
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} canWrite={false} currentBandMemberId={1} />)
+    const checkboxes = screen.getAllByRole('checkbox')
+    expect(checkboxes[0]).toBeDisabled()
+    expect(checkboxes[1]).toBeEnabled()
+    await user.click(checkboxes[1])
+    await waitFor(() => expect(updateTask).toHaveBeenCalledWith(42, 2, { done: false }))
+  })
+})

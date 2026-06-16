@@ -47,12 +47,16 @@ const ATTACHMENT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
 // Receipt/attachment upload. Allowed at any purchase status. Images take the
 // share-photo security path (magic bytes + sharp re-encode, which strips
 // EXIF/metadata); PDFs are magic-byte verified and stored as-is.
-export async function createPurchaseAttachment({ db, tenantId, purchaseId, file }) {
+export async function createPurchaseAttachment({ db, tenantId, purchaseId, file, requireCreatedByUserId = null }) {
   const { rows } = await db.query(
-    'SELECT id FROM purchases WHERE id = $1 AND tenant_id = $2',
+    'SELECT id, created_by_user_id FROM purchases WHERE id = $1 AND tenant_id = $2',
     [purchaseId, tenantId],
   )
   if (!rows.length) return { error: { status: 404, body: { error: 'Not found' } } }
+  // Self-scoped callers may only attach to their own purchase (hide as 404).
+  if (requireCreatedByUserId != null && rows[0].created_by_user_id !== requireCreatedByUserId) {
+    return { error: { status: 404, body: { error: 'Not found' } } }
+  }
 
   let buffer = file.buffer
   let size = file.size
@@ -201,7 +205,7 @@ async function validateApprovalLines(executor, tenantId, lines) {
 
 // ---------- create ----------
 
-export async function createPurchase(pool, tenantId, body, actorUserId = null) {
+export async function createPurchase(pool, tenantId, body, actorUserId = null, { canManageFinance = false } = {}) {
   const supplierName = String(body.supplier_name ?? '').trim()
   if (!supplierName) return { error: { status: 400, body: { error: 'supplier_name is required' } } }
 
@@ -224,7 +228,7 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   const dueDate = body.due_date || null
   const currency = String(body.currency || 'EUR').trim() || 'EUR'
 
-  const statusResult = resolveCreateStatus(body)
+  const statusResult = resolveCreateStatus(body, { canManageFinance })
   if (statusResult.error) return statusResult
   const { status } = statusResult
 
@@ -271,7 +275,7 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null) {
   return { purchaseId }
 }
 
-function resolveCreateStatus(body) {
+function resolveCreateStatus(body, { canManageFinance = false } = {}) {
   // Only draft/approved may be set on create; paying goes through the payment endpoint.
   let status = 'draft'
   if (body.status !== undefined) {
@@ -279,6 +283,13 @@ function resolveCreateStatus(body) {
       return { error: { status: 400, body: { error: 'Invalid status' } } }
     }
     status = body.status
+  }
+  // Creating an already-approved purchase posts the accrual journal + stock-in —
+  // a finance.manage action. Contributors hold purchase.create (to submit drafts
+  // for reimbursement) but must not bypass approval; the approval path is
+  // PATCH /:id, which is finance.manage-gated.
+  if (status === 'approved' && !canManageFinance) {
+    return { error: { status: 403, body: { error: 'Forbidden', code: 'approval_requires_finance_manage' } } }
   }
   return { status }
 }
@@ -568,10 +579,10 @@ function validatePaymentPreconditions(existing) {
 
 // ---------- reads / composition ----------
 
-export async function listPurchases(db, tenantId, query) {
+export async function listPurchases(db, tenantId, query, { createdByUserId = null } = {}) {
   const period = buildPeriodWhere(query, 'p.receipt_date')
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
-  return { purchases: await listPurchaseRows(db, tenantId, period.sql, period.values) }
+  return { purchases: await listPurchaseRows(db, tenantId, period.sql, period.values, createdByUserId) }
 }
 
 export async function listPeriods(db, tenantId) {
@@ -580,9 +591,14 @@ export async function listPeriods(db, tenantId) {
 
 // Composes a purchase with its lines (and optionally attachments). Used both for
 // GET /:id and to shape the response after create/patch/payment.
-export async function getPurchaseDetail(db, tenantId, id, { withAttachments = false } = {}) {
+export async function getPurchaseDetail(db, tenantId, id, { withAttachments = false, requireCreatedByUserId = null } = {}) {
   const purchase = await fetchPurchase(db, tenantId, id)
   if (!purchase) return { error: { status: 404, body: { error: 'Not found' } } }
+  // Self-scoped callers (contributors without finance.view) may only see their
+  // own purchases — hide others as 404 rather than leaking existence.
+  if (requireCreatedByUserId != null && purchase.created_by_user_id !== requireCreatedByUserId) {
+    return { error: { status: 404, body: { error: 'Not found' } } }
+  }
   const lines = await fetchPurchaseLines(db, id, tenantId)
   if (!withAttachments) return { purchase: { ...purchase, lines } }
   const attachments = await fetchPurchaseAttachments(db, id, tenantId)

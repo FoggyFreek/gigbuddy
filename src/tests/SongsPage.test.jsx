@@ -32,6 +32,11 @@ import {
   updateSong,
 } from '../api/songs.ts'
 import theme from '../theme.ts'
+import { AuthContext } from '../contexts/authContext.ts'
+
+// Render as a writer (super admin grants every planning.write capability) so the
+// create/edit/delete affordances gated on canWritePlanning are present.
+const writerAuth = { user: { isSuperAdmin: true } }
 
 const SONG = {
   id: 1,
@@ -59,11 +64,13 @@ function wrapWithRoutes({ initialEntries }) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
-        <Routes>
-          <Route path="/songs" element={<SongsPage />}>
-            <Route path=":id" element={<SongDetailPage />} />
-          </Route>
-        </Routes>
+        <AuthContext.Provider value={writerAuth}>
+          <Routes>
+            <Route path="/songs" element={<SongsPage />}>
+              <Route path=":id" element={<SongDetailPage />} />
+            </Route>
+          </Routes>
+        </AuthContext.Provider>
       </ThemeProvider>
     </MemoryRouter>,
   )

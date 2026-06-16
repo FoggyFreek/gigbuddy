@@ -44,6 +44,7 @@ import {
   updateSetlist,
 } from '../api/setlists.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { useToast } from '../contexts/toastContext.ts'
 import { formatDuration } from '../utils/formatDuration.ts'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
@@ -114,6 +115,7 @@ function countSongsBeforeSet(sets: SetlistSet[], setIndex: number): number {
 export default function SetlistEditorPage() {
   const { id } = useParams()
   const setlistId = Number(id)
+  const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const showToast = useToast()
 
@@ -408,14 +410,16 @@ export default function SetlistEditorPage() {
               Total {formatDuration(total) || '0:00'}
             </Typography>
             <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
-              <Button
-                startIcon={editing ? <DoneIcon /> : <EditIcon />}
-                onClick={handleToggleEditing}
-                size="small"
-                variant={editing ? 'contained' : 'text'}
-              >
-                {editing ? 'Done' : 'Edit'}
-              </Button>
+              {canWritePlanning && (
+                <Button
+                  startIcon={editing ? <DoneIcon /> : <EditIcon />}
+                  onClick={handleToggleEditing}
+                  size="small"
+                  variant={editing ? 'contained' : 'text'}
+                >
+                  {editing ? 'Done' : 'Edit'}
+                </Button>
+              )}
               <Button
                 startIcon={<PlagiarismOutlinedIcon />}
                 onClick={() => setPreviewOpen(true)}

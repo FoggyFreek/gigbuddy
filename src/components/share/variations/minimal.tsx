@@ -34,7 +34,6 @@ interface ShareLayoutProps {
   bannerSrc?: string
   bandName?: string
   showLogo?: boolean
-  invertLogo?: boolean
   format?: string
 }
 
@@ -66,7 +65,7 @@ function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }
   )
 }
 
-function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }: ShareLayoutProps) {
+function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }: ShareLayoutProps) {
   const f = SHARE_FORMATS.square
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
@@ -190,7 +189,6 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
           width: 530,
           height: 'auto',
           opacity: 0.85,
-          filter: invertLogo ? 'invert(1)' : undefined,
         }}
       />
       {bannerSrc && (
@@ -217,7 +215,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
   )
 }
 
-function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc, invertLogo }: ShareLayoutProps) {
+function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }: ShareLayoutProps) {
   const f = SHARE_FORMATS.story
   const date = formatGigDateShort(gig)
   const venueName = formatGigVenueName(gig)
@@ -315,7 +313,6 @@ function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, sticke
           transform: 'translateX(-50%)',
           width: 310,
           height: 'auto',
-          filter: invertLogo ? 'invert(1)' : undefined,
         }}
       />
       {bannerSrc && (
