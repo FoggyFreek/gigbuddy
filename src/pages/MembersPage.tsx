@@ -34,6 +34,7 @@ import {
 import { listMembers } from '../api/bandMembers.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import InvitesSection from '../components/InvitesSection.tsx'
+import { ASSIGNABLE_ROLES } from '../auth/permissions.ts'
 import type { Member, Id } from '../types/entities.ts'
 
 const STATUS_COLOR: Record<string, 'warning' | 'success' | 'error'> = {
@@ -106,7 +107,7 @@ function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatu
 // Roles a tenant admin may assign. `tenant_admin` is added separately and stays
 // super-admin-only; legacy `member` rows render their own option so the Select
 // value still matches. Mirrors ASSIGNABLE_ROLES in src/auth/permissions.ts.
-const ASSIGNABLE_ROLE_OPTIONS = ['reader', 'contributor', 'financial_admin']
+const ASSIGNABLE_ROLE_OPTIONS = [...ASSIGNABLE_ROLES]
 
 interface RoleSelectProps {
   r: MembershipRow

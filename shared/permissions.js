@@ -22,14 +22,14 @@ export const ROLES = Object.freeze({
 
 // Roles a tenant admin (or super admin) may assign. Promotion to `tenant_admin`
 // stays super-admin-only and is enforced in the membership/invite services.
-export const ASSIGNABLE_ROLES = new Set([
+export const ASSIGNABLE_ROLES = Object.freeze([
   ROLES.READER,
   ROLES.CONTRIBUTOR,
   ROLES.FINANCIAL_ADMIN,
 ])
 
 // Every role accepted on a membership/invite (incl. the legacy `member` alias).
-export const ALL_ROLES = new Set([
+export const ALL_ROLES = Object.freeze([
   ROLES.READER,
   ROLES.CONTRIBUTOR,
   'member',

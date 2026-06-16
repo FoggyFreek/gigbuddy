@@ -122,7 +122,7 @@ export async function addMembership(db, tenantId, body, actingUserId) {
   const userId = Number(body?.userId)
   const role = body?.role ?? 'member'
   if (!Number.isInteger(userId)) return badRequest('userId is required')
-  if (!ALL_ROLES.has(role)) return badRequest('Invalid role')
+  if (!ALL_ROLES.includes(role)) return badRequest('Invalid role')
 
   const tenant = await fetchTenantArchiveState(db, tenantId)
   if (!tenant) return notFound('Tenant not found')

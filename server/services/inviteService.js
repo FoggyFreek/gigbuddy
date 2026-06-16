@@ -70,8 +70,8 @@ export async function listInvites(db, tenantId) {
 }
 
 export async function createInvite(db, tenantId, user, body) {
-  const role = body?.role ?? 'member'
-  if (!ALLOWED_ROLES.has(role)) return { error: badRequest('Invalid role') }
+  const role = body?.role ?? 'contributor'
+  if (!ALLOWED_ROLES.includes(role)) return { error: badRequest('Invalid role') }
   if (role === 'tenant_admin' && !user?.is_super_admin) {
     return { error: forbidden('Only super admins can issue tenant_admin invites') }
   }
