@@ -185,11 +185,26 @@ export async function checkingAccountBalance(executor, tenantId) {
 
 // Merch revenue/COGS movement inside [from, toExclusive) on the tenant's
 // configured merch accounts. Revenue grows with credits, COGS with debits.
-// Zeros when accounting settings or the merch account codes are missing.
+// Revenue spans the merch revenue account AND every descendant of it, since a
+// product may book to a sub-account (e.g. 42100 under 42000). COGS books only to
+// the single configured COGS account. Zeros when accounting settings or the
+// merch account codes are missing.
 export async function merchTotals(executor, tenantId, { from, toExclusive }) {
   const { rows } = await executor.query(
-    `SELECT COALESCE(SUM(e.credit_cents - e.debit_cents)
-              FILTER (WHERE e.account_code = tas.merch_revenue_account_code), 0)::int AS revenue_cents,
+    `WITH RECURSIVE revenue_accounts AS (
+       SELECT code
+         FROM chart_of_accounts
+        WHERE tenant_id = $1
+          AND code = (SELECT merch_revenue_account_code
+                        FROM tenant_accounting_settings WHERE tenant_id = $1)
+       UNION ALL
+       SELECT child.code
+         FROM chart_of_accounts child
+         JOIN revenue_accounts ON child.parent_code = revenue_accounts.code
+        WHERE child.tenant_id = $1
+     )
+     SELECT COALESCE(SUM(e.credit_cents - e.debit_cents)
+              FILTER (WHERE e.account_code IN (SELECT code FROM revenue_accounts)), 0)::int AS revenue_cents,
             COALESCE(SUM(e.debit_cents - e.credit_cents)
               FILTER (WHERE e.account_code = tas.merch_cogs_account_code), 0)::int AS cogs_cents
        FROM tenant_accounting_settings tas

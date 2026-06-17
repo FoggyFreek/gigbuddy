@@ -671,6 +671,25 @@ describe('merch sales — list & ledger browser', () => {
     expect(res.body.totals.expense_cents).toBe(2400)
   })
 
+  it('overview merch revenue includes sub-accounts under the merch revenue account', async () => {
+    // One product books to the band default (42000), another to a sub-account
+    // (42100 Merchandise Sales - Vinyl and CDs). Both must count as merch revenue.
+    const shirt = await createProduct(asUserA)
+    const vinyl = await createProduct(asUserA, { name: 'Vinyl', revenue_account_code: '42100' })
+    await stockProduct(asUserA, shirt.id, 10)
+    await stockProduct(asUserA, vinyl.id, 10)
+    // €30 net each on both products.
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: shirt.id, quantity: 1, unit_price_incl_cents: 3630, vat_rate: 21, sale_date: '2026-06-01' }).expect(201)
+    await asUserA(request(app).post('/api/merch/sales'))
+      .send({ product_id: vinyl.id, quantity: 1, unit_price_incl_cents: 3630, vat_rate: 21, sale_date: '2026-06-01' }).expect(201)
+
+    const res = await asUserA(request(app).get('/api/ledger/overview'))
+      .query({ mode: 'fiscal_year', year: 2026 }).expect(200)
+    // €30 (42000) + €30 (42100) = €60, not just the parent-account €30.
+    expect(res.body.merch.revenue_cents).toBe(6000)
+  })
+
   it('headline amount is the gross sale, not gross + COGS (recorded and void)', async () => {
     const product = await createProduct(asUserA)
     await stockProduct(asUserA, product.id, 10)
