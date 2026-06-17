@@ -1,6 +1,9 @@
 import { request } from './_client.ts'
 import { appendPeriodParams } from '../utils/invoicePeriod.ts'
-import type { Product, MerchSale, MerchSalesSummaryRow, Period, Id } from '../types/entities.ts'
+import type {
+  Product, MerchSale, MerchSalesSummaryRow, Period, Id,
+  ShopifyOrdersPage, ShopifyImportBody, ShopifyImportResult,
+} from '../types/entities.ts'
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/merch${path}`, options)
@@ -31,3 +34,16 @@ export const recordMerchSale = (body: Partial<MerchSale>) =>
   api<MerchSale>('/sales', { method: 'POST', body: JSON.stringify(body) })
 export const voidMerchSale = (id: Id) =>
   api<MerchSale>(`/sales/${id}/void`, { method: 'POST' })
+
+// ---------- shopify import ----------
+
+export const fetchShopifyOrders = (params: { cursor?: string; limit?: number } = {}) => {
+  const q = new URLSearchParams()
+  if (params.cursor) q.set('cursor', params.cursor)
+  if (params.limit != null) q.set('limit', String(params.limit))
+  const query = q.toString()
+  return api<ShopifyOrdersPage>(`/shopify/orders${query ? `?${query}` : ''}`)
+}
+
+export const importShopifyOrders = (body: ShopifyImportBody) =>
+  api<ShopifyImportResult>('/shopify/import', { method: 'POST', body: JSON.stringify(body) })

@@ -89,6 +89,79 @@ export async function clearMollieKey(executor, tenantId) {
   )
 }
 
+// ---------- shopify app credentials (client id + secret) ----------
+
+export async function getShopifyClientId(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT shopify_client_id FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  return rows[0]?.shopify_client_id || null
+}
+
+export async function setShopifyClientId(executor, tenantId, clientId) {
+  const { rows } = await executor.query(
+    'UPDATE tenants SET shopify_client_id = $1, updated_at = NOW() WHERE id = $2 RETURNING shopify_client_id',
+    [clientId, tenantId],
+  )
+  return rows[0]?.shopify_client_id || null
+}
+
+export async function clearShopifyClientId(executor, tenantId) {
+  await executor.query(
+    'UPDATE tenants SET shopify_client_id = NULL, updated_at = NOW() WHERE id = $1',
+    [tenantId],
+  )
+}
+
+export async function getShopifyClientSecret(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT shopify_client_secret FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  return rows[0]?.shopify_client_secret || null
+}
+
+export async function setShopifyClientSecret(executor, tenantId, secret) {
+  const { rows } = await executor.query(
+    'UPDATE tenants SET shopify_client_secret = $1, updated_at = NOW() WHERE id = $2 RETURNING shopify_client_secret',
+    [secret, tenantId],
+  )
+  return rows[0]?.shopify_client_secret
+}
+
+export async function clearShopifyClientSecret(executor, tenantId) {
+  await executor.query(
+    'UPDATE tenants SET shopify_client_secret = NULL, updated_at = NOW() WHERE id = $1',
+    [tenantId],
+  )
+}
+
+// ---------- shopify store domain (non-secret) ----------
+
+export async function getShopifyDomain(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT shopify_shop_domain FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  return rows[0]?.shopify_shop_domain || null
+}
+
+export async function setShopifyDomain(executor, tenantId, domain) {
+  const { rows } = await executor.query(
+    'UPDATE tenants SET shopify_shop_domain = $1, updated_at = NOW() WHERE id = $2 RETURNING shopify_shop_domain',
+    [domain, tenantId],
+  )
+  return rows[0]?.shopify_shop_domain || null
+}
+
+export async function clearShopifyDomain(executor, tenantId) {
+  await executor.query(
+    'UPDATE tenants SET shopify_shop_domain = NULL, updated_at = NOW() WHERE id = $1',
+    [tenantId],
+  )
+}
+
 // ---------- tenant image paths (logo, banner, avatar, logo_dark) ----------
 
 const IMAGE_COLUMNS = Object.freeze({

@@ -252,7 +252,7 @@ export default function ChartOfAccountsSection() {
   return (
     <Paper variant="outlined" sx={{ p: 3, mt: 3 }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
-        <AccountBalanceIcon fontSize="small" color="action" />
+        <AccountBalanceIcon fontSize="small" color="primary" />
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           Chart of Accounts
         </Typography>

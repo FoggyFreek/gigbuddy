@@ -8,6 +8,31 @@ export function isValidMollieKey(key) {
   return typeof key === 'string' && MOLLIE_KEY_RE.test(key)
 }
 
+// Shopify app credentials (Dev Dashboard): the Client ID and Client Secret are
+// hex strings (32+ chars). Used with the client_credentials grant to mint a
+// short-lived Admin API access token at request time.
+export const SHOPIFY_CREDENTIAL_RE = /^[a-fA-F0-9]{32,}$/
+
+export function isValidShopifyClientId(value) {
+  return typeof value === 'string' && SHOPIFY_CREDENTIAL_RE.test(value.trim())
+}
+
+export function isValidShopifyClientSecret(value) {
+  return typeof value === 'string' && SHOPIFY_CREDENTIAL_RE.test(value.trim())
+}
+
+// Shopify store domain, e.g. "yourband.myshopify.com" — the Admin REST API host.
+export const SHOPIFY_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i
+
+export function isValidShopifyDomain(domain) {
+  return typeof domain === 'string' && SHOPIFY_DOMAIN_RE.test(domain.trim())
+}
+
+// Trims and lowercases a valid domain to the canonical form used for storage.
+export function normalizeShopifyDomain(domain) {
+  return domain.trim().toLowerCase()
+}
+
 export const PROFILE_FIELDS = [
   'band_name',
   'bio',

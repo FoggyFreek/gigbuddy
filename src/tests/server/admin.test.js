@@ -382,7 +382,7 @@ describe('/api/admin/tenants — super admin only', () => {
     expect(rows).toHaveLength(0)
   })
 
-  it('POST /:id/memberships grants a member-role membership directly', async () => {
+  it('POST /:id/memberships grants a contributor-role membership directly', async () => {
     const created = await asSuper(
       request(app).post('/api/admin/tenants').send({ slug: 'zeta', band_name: 'Zeta' }),
     ).expect(201)
@@ -391,19 +391,19 @@ describe('/api/admin/tenants — super admin only', () => {
         .post(`/api/admin/tenants/${created.body.id}/memberships`)
         .send({ userId: seed.userA.id }),
     ).expect(201)
-    expect(res.body.role).toBe('member')
+    expect(res.body.role).toBe('contributor')
     expect(res.body.status).toBe('approved')
     expect(res.body.tenant_id).toBe(created.body.id)
   })
 
   it('POST /:id/memberships upserts existing membership and can promote role', async () => {
-    // userA is already tenant_admin in seed.tenantA. Force role=member.
+    // userA is already tenant_admin in seed.tenantA. Force role=contributor.
     const res = await asSuper(
       request(app)
         .post(`/api/admin/tenants/${seed.tenantA.id}/memberships`)
-        .send({ userId: seed.userA.id, role: 'member' }),
+        .send({ userId: seed.userA.id, role: 'contributor' }),
     ).expect(201)
-    expect(res.body.role).toBe('member')
+    expect(res.body.role).toBe('contributor')
   })
 
   it('POST /:id/memberships rejects an archived tenant', async () => {

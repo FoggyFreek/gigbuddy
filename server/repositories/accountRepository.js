@@ -137,6 +137,18 @@ export async function listAccounts(executor, tenantId) {
   return rows
 }
 
+// True when `code` is an existing active account of the given type for the
+// tenant. Used to validate a revenue account chosen for a Shopify revenue-only
+// import line. Tenant-scoped so one tenant's chart can't satisfy another's.
+export async function accountExistsOfType(executor, tenantId, code, type) {
+  const { rows } = await executor.query(
+    `SELECT 1 FROM chart_of_accounts
+      WHERE tenant_id = $1 AND code = $2 AND type = $3 AND is_active = true`,
+    [tenantId, code, type],
+  )
+  return rows.length > 0
+}
+
 export async function getAccountTypeByCode(executor, tenantId, code) {
   const { rows } = await executor.query(
     'SELECT type FROM chart_of_accounts WHERE tenant_id = $1 AND code = $2',

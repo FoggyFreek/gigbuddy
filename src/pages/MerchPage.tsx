@@ -18,8 +18,10 @@ import AddIcon from '@mui/icons-material/Add'
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined'
+import CloudDownloadOutlinedIcon from '@mui/icons-material/CloudDownloadOutlined'
 import ProductDialog from '../components/merch/ProductDialog.tsx'
 import RecordSaleDialog from '../components/merch/RecordSaleDialog.tsx'
+import ShopifyImportDialog from '../components/merch/ShopifyImportDialog.tsx'
 import { useMerchState } from '../components/merch/useMerchState.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import PeriodPicker from '../components/shared/periodPicker.tsx'
@@ -49,6 +51,7 @@ export default function MerchPage() {
   const { products, revenueAccounts, error, setError, reload } = useMerchState()
   const [productDialog, setProductDialog] = useState<Product | 'new' | null>(null)
   const [saleDialogOpen, setSaleDialogOpen] = useState(false)
+  const [shopifyOpen, setShopifyOpen] = useState(false)
 
   // Merch defaults to all-time: bands want their full sales-per-product picture
   // first, then narrow by period if they care to.
@@ -162,8 +165,17 @@ export default function MerchPage() {
           )}
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>Sales by product</Typography>
-            <Chip size="small" label={summary.length} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1 }}>
+              <Typography variant="h6">Sales by product</Typography>
+              <Chip size="small" label={summary.length} />
+            </Box>
+            <Button
+              size="small"
+              startIcon={<CloudDownloadOutlinedIcon />}
+              onClick={() => setShopifyOpen(true)}
+            >
+              Import from Shopify
+            </Button>
             <PeriodPicker availableDates={availableDates} value={period} onChange={setPeriod} />
           </Box>
 
@@ -192,6 +204,15 @@ export default function MerchPage() {
           products={products || []}
           onSubmit={handleRecordSale}
           onClose={() => setSaleDialogOpen(false)}
+        />
+      )}
+      {shopifyOpen && (
+        <ShopifyImportDialog
+          products={products || []}
+          onClose={(imported) => {
+            setShopifyOpen(false)
+            if (imported) handleSalesChanged()
+          }}
         />
       )}
     </SplitView>

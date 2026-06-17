@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Invoice, Id } from '../../types/entities.ts'
+import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -43,6 +44,7 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const { mode } = useThemeMode()
 
   const hasLink = Boolean(invoice.mollie_payment_link_id)
   const url = invoice.mollie_payment_link_url
@@ -117,6 +119,12 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
 
   return (
     <Box>
+      <Box
+        component="img"
+        src={mode === 'dark' ? '/share/mollie/Mollie-Logo-White-2023.png' : '/share/mollie/Mollie-Logo-Black-2023.png'}
+        alt="Mollie"
+        sx={{ height: 20, display: 'block', mb: 1 }}
+      />
       <Typography variant="subtitle2" sx={{ mb: 1 }}>Payment link</Typography>
 
       {error && (

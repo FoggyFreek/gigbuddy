@@ -25,7 +25,8 @@ type SortKey = 'date' | 'qty' | 'amount'
 type SortDir = 'asc' | 'desc'
 
 function saleAmount(s: MerchSale): number {
-  return (s.quantity ?? 0) * (s.unit_price_incl_cents ?? 0)
+  // Imported sales carry the exact gross; manual sales use quantity × unit price.
+  return s.gross_incl_cents ?? (s.quantity ?? 0) * (s.unit_price_incl_cents ?? 0)
 }
 
 interface MerchandiseDetailsProps {

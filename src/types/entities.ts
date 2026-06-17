@@ -453,6 +453,10 @@ export interface MerchSale {
   sale_date?: string
   quantity?: number
   unit_price_incl_cents?: number
+  // Exact inclusive line total for imported (Shopify) sales whose discounted
+  // gross isn't divisible by quantity; null for manual sales (use quantity ×
+  // unit_price_incl_cents).
+  gross_incl_cents?: number | null
   vat_rate?: number | string
   unit_cost_cents?: number
   payment_method?: 'bank' | 'cash'
@@ -470,4 +474,60 @@ export interface MerchSalesSummaryRow {
   revenue_account_name: string | null
   total_qty: number
   total_amount_cents: number
+}
+
+// ---------- Shopify import ----------
+
+// A Shopify order line as returned by the import picker (slim DTO + UI flags).
+export interface ShopifyLineItem {
+  id: string
+  title: string
+  sku: string | null
+  quantity: number
+  current_quantity: number
+  price: string
+  total_discount: string
+  already_imported: boolean
+  skip_reason: string | null
+}
+
+// A Shopify order as returned by GET /api/merch/shopify/orders.
+export interface ShopifyOrder {
+  id: string
+  name: string
+  created_at: string
+  processed_at: string
+  financial_status: string
+  fulfillment_status: string | null
+  cancelled_at: string | null
+  currency: string
+  taxes_included: boolean
+  total_incl_cents: number
+  line_items: ShopifyLineItem[]
+  skip_reason: string | null
+  fully_imported: boolean
+}
+
+export interface ShopifyOrdersPage {
+  orders: ShopifyOrder[]
+  nextCursor: string | null
+}
+
+// Per-line mapping decision the user makes in step 2 of the import dialog.
+export type ShopifyLineMapping =
+  | { type: 'product'; product_id: Id }
+  | { type: 'revenue'; account_code: string; vat_rate: number }
+  | { type: 'skip' }
+
+export interface ShopifyImportBody {
+  orders: {
+    shopify_order_id: string
+    lines: { shopify_line_id: string; mapping: ShopifyLineMapping }[]
+  }[]
+}
+
+export interface ShopifyImportResult {
+  imported: number
+  skipped: number
+  results: { shopify_line_id: string; status: string }[]
 }

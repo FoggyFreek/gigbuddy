@@ -133,13 +133,13 @@ describe('audit logging', () => {
     await asSuperUser(
       request(app)
         .post('/api/invites')
-        .send({ role: 'member', expiresInDays: 7 }),
+        .send({ role: 'contributor', expiresInDays: 7 }),
     ).expect(201)
 
     const entries = capture.getEntries().filter((e) => e.action === 'invite.create')
     capture.restore()
     expect(entries).toHaveLength(1)
-    expect(entries[0].role).toBe('member')
+    expect(entries[0].role).toBe('contributor')
     expect(entries[0].inviteId).toBeDefined()
     expect(entries[0].tenantId).toBe(seed.tenantA.id)
   })
@@ -147,7 +147,7 @@ describe('audit logging', () => {
   it('writes invite.revoke entry when an invite is revoked', async () => {
     // Create an invite to revoke
     const createRes = await asSuperUser(
-      request(app).post('/api/invites').send({ role: 'member' }),
+      request(app).post('/api/invites').send({ role: 'contributor' }),
     ).expect(201)
     const inviteId = createRes.body.id
 

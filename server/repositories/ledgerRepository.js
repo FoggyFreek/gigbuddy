@@ -18,7 +18,8 @@ const SOURCE_JOIN_COLUMNS = `
        vrp.direction AS vat_payment_direction,
        mp.name AS merch_sale_product_name,
        ms.quantity AS merch_sale_quantity,
-       ms.unit_price_incl_cents AS merch_sale_unit_price_incl_cents`
+       ms.unit_price_incl_cents AS merch_sale_unit_price_incl_cents,
+       ms.gross_incl_cents AS merch_sale_gross_incl_cents`
 
 const SOURCE_JOINS = `
   LEFT JOIN invoices i

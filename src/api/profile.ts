@@ -58,3 +58,31 @@ export const getMollieKey = () => api<MollieKey>('/mollie-key')
 export const setMollieKey = (key: string) =>
   api<void>('/mollie-key', { method: 'PUT', body: JSON.stringify({ key }) })
 export const clearMollieKey = () => api<void>('/mollie-key', { method: 'DELETE' })
+
+interface ShopifyClientId {
+  clientId?: string | null
+}
+
+interface ShopifySecretStatus {
+  isSet?: boolean
+  preview?: string | null
+}
+
+export const getShopifyClientId = () => api<ShopifyClientId>('/shopify-client-id')
+export const setShopifyClientId = (clientId: string) =>
+  api<ShopifyClientId>('/shopify-client-id', { method: 'PUT', body: JSON.stringify({ clientId }) })
+export const clearShopifyClientId = () => api<ShopifyClientId>('/shopify-client-id', { method: 'DELETE' })
+
+export const getShopifySecret = () => api<ShopifySecretStatus>('/shopify-secret')
+export const setShopifySecret = (secret: string) =>
+  api<ShopifySecretStatus>('/shopify-secret', { method: 'PUT', body: JSON.stringify({ secret }) })
+export const clearShopifySecret = () => api<ShopifySecretStatus>('/shopify-secret', { method: 'DELETE' })
+
+interface ShopifyDomain {
+  domain?: string | null
+}
+
+export const getShopifyDomain = () => api<ShopifyDomain>('/shopify-domain')
+export const setShopifyDomain = (domain: string) =>
+  api<ShopifyDomain>('/shopify-domain', { method: 'PUT', body: JSON.stringify({ domain }) })
+export const clearShopifyDomain = () => api<ShopifyDomain>('/shopify-domain', { method: 'DELETE' })

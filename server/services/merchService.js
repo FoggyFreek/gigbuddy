@@ -174,7 +174,7 @@ export async function archiveProduct(executor, tenantId, id) {
 
 const SALE_COLUMNS = `s.id, s.product_id, p.name AS product_name, s.gig_id,
   to_char(s.sale_date, 'YYYY-MM-DD') AS sale_date,
-  s.quantity, s.unit_price_incl_cents, s.vat_rate, s.unit_cost_cents,
+  s.quantity, s.unit_price_incl_cents, s.gross_incl_cents, s.vat_rate, s.unit_cost_cents,
   s.payment_method, s.revenue_account_code, s.status, s.voided_at, s.created_at`
 
 // Lists individual sales for the detail pane. Optional period (sale_date) and
@@ -218,7 +218,7 @@ export async function merchSalesSummary(executor, tenantId, query = {}) {
             COALESCE(p.revenue_account_code, tas.merch_revenue_account_code) AS revenue_account_code,
             coa.name AS revenue_account_name,
             SUM(s.quantity)::int AS total_qty,
-            SUM(s.quantity * s.unit_price_incl_cents)::int AS total_amount_cents
+            SUM(COALESCE(s.gross_incl_cents, s.quantity * s.unit_price_incl_cents))::int AS total_amount_cents
        FROM merch_sales s
        JOIN products p ON p.id = s.product_id AND p.tenant_id = s.tenant_id
        JOIN tenant_accounting_settings tas ON tas.tenant_id = s.tenant_id
@@ -249,7 +249,16 @@ export async function merchSalesPeriods(executor, tenantId) {
   return rows.map((row) => row.date)
 }
 
-export async function recordMerchSale(pool, tenantId, body, actorUserId = null) {
+// Core of recording one sale, operating on a caller-supplied in-transaction
+// `client` (no BEGIN/COMMIT here — the caller owns the transaction and rolls
+// back on a returned { error }). Shared by the manual sale path (recordMerchSale)
+// and the Shopify import (merchShopifyService), which records many lines across
+// its own per-line transactions.
+//
+// `body.gross_incl_cents` is the exact inclusive line total override used by
+// imports whose discounted gross isn't divisible by quantity; manual sales omit
+// it and the gross stays quantity * unit_price_incl_cents.
+export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = null } = {}) {
   const productId = parsePositiveInt(body.product_id)
   if (!productId) return { error: { status: 400, body: { error: 'Invalid product_id' } } }
 
@@ -266,87 +275,96 @@ export async function recordMerchSale(pool, tenantId, body, actorUserId = null) 
 
   let gigId = null
   if (body.gig_id != null) {
-    gigId = await validateGigIdForTenant(pool, body.gig_id, tenantId)
+    gigId = await validateGigIdForTenant(client, body.gig_id, tenantId)
     if (gigId === null) return { error: { status: 400, body: { error: 'Invalid gig_id' } } }
   }
 
+  // Lock the product row: serializes concurrent sales of the same product so
+  // the stock check below can't race (CHECK quantity_on_hand >= 0 backstops).
+  const { rows: productRows } = await client.query(
+    'SELECT * FROM products WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+    [productId, tenantId],
+  )
+  const product = productRows[0]
+  if (!product) return { error: { status: 400, body: { error: 'Invalid product_id' } } }
+  if (product.archived_at) {
+    return { error: { status: 400, body: { error: 'Product is archived', code: 'product_archived' } } }
+  }
+  if (product.quantity_on_hand < quantity) {
+    return {
+      error: {
+        status: 409,
+        body: { error: 'Insufficient stock', code: 'insufficient_stock', available: product.quantity_on_hand },
+      },
+    }
+  }
+
+  const unitPriceInclCents = parseCents(body.unit_price_incl_cents ?? product.default_price_incl_cents)
+  if (unitPriceInclCents === null) {
+    return { error: { status: 400, body: { error: 'Invalid unit_price_incl_cents' } } }
+  }
+  const vatRate = Number(body.vat_rate ?? product.vat_rate)
+  if (!ALLOWED_TAX_RATES_SET.has(vatRate)) {
+    return { error: { status: 400, body: { error: 'Invalid vat_rate' } } }
+  }
+
+  let grossInclCents = null
+  if (body.gross_incl_cents != null) {
+    grossInclCents = parseCents(body.gross_incl_cents)
+    if (grossInclCents === null) return { error: { status: 400, body: { error: 'Invalid gross_incl_cents' } } }
+  }
+
+  // Snapshot the revenue account at sale time (the product's chosen account,
+  // else null → the ledger falls back to the band's merch_revenue_account_code)
+  // so a later void reverses to the exact same account.
+  const revenueAccountCode = product.revenue_account_code ?? null
+
+  const { rows: inserted } = await client.query(
+    `INSERT INTO merch_sales
+       (tenant_id, product_id, gig_id, sale_date, quantity,
+        unit_price_incl_cents, gross_incl_cents, vat_rate, unit_cost_cents, payment_method,
+        revenue_account_code, created_by_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING id`,
+    [tenantId, productId, gigId, saleDate, quantity,
+      unitPriceInclCents, grossInclCents, vatRate, product.unit_cost_cents, paymentMethod,
+      revenueAccountCode, actorUserId],
+  )
+  const saleId = inserted[0].id
+
+  await client.query(
+    `UPDATE products SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
+      WHERE id = $2 AND tenant_id = $3`,
+    [quantity, productId, tenantId],
+  )
+
+  await postMerchSaleRecorded(client, tenantId, {
+    id: saleId,
+    sale_date: saleDate,
+    quantity,
+    unit_price_incl_cents: unitPriceInclCents,
+    gross_incl_cents: grossInclCents,
+    vat_rate: vatRate,
+    unit_cost_cents: product.unit_cost_cents,
+    payment_method: paymentMethod,
+    revenue_account_code: revenueAccountCode,
+    product_name: product.name,
+  }, { actorUserId })
+
+  return { saleId }
+}
+
+export async function recordMerchSale(pool, tenantId, body, actorUserId = null) {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    // Lock the product row: serializes concurrent sales of the same product so
-    // the stock check below can't race (CHECK quantity_on_hand >= 0 backstops).
-    const { rows: productRows } = await client.query(
-      'SELECT * FROM products WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
-      [productId, tenantId],
-    )
-    const product = productRows[0]
-    if (!product) {
+    const result = await recordMerchSaleTx(client, tenantId, body, { actorUserId })
+    if (result.error) {
       await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'Invalid product_id' } } }
+      return result
     }
-    if (product.archived_at) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'Product is archived', code: 'product_archived' } } }
-    }
-    if (product.quantity_on_hand < quantity) {
-      await client.query('ROLLBACK')
-      return {
-        error: {
-          status: 409,
-          body: { error: 'Insufficient stock', code: 'insufficient_stock', available: product.quantity_on_hand },
-        },
-      }
-    }
-
-    const unitPriceInclCents = parseCents(body.unit_price_incl_cents ?? product.default_price_incl_cents)
-    if (unitPriceInclCents === null) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'Invalid unit_price_incl_cents' } } }
-    }
-    const vatRate = Number(body.vat_rate ?? product.vat_rate)
-    if (!ALLOWED_TAX_RATES_SET.has(vatRate)) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'Invalid vat_rate' } } }
-    }
-
-    // Snapshot the revenue account at sale time (the product's chosen account,
-    // else null → the ledger falls back to the band's merch_revenue_account_code)
-    // so a later void reverses to the exact same account.
-    const revenueAccountCode = product.revenue_account_code ?? null
-
-    const { rows: inserted } = await client.query(
-      `INSERT INTO merch_sales
-         (tenant_id, product_id, gig_id, sale_date, quantity,
-          unit_price_incl_cents, vat_rate, unit_cost_cents, payment_method,
-          revenue_account_code, created_by_user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING id`,
-      [tenantId, productId, gigId, saleDate, quantity,
-        unitPriceInclCents, vatRate, product.unit_cost_cents, paymentMethod,
-        revenueAccountCode, actorUserId],
-    )
-    const saleId = inserted[0].id
-
-    await client.query(
-      `UPDATE products SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
-        WHERE id = $2 AND tenant_id = $3`,
-      [quantity, productId, tenantId],
-    )
-
-    await postMerchSaleRecorded(client, tenantId, {
-      id: saleId,
-      sale_date: saleDate,
-      quantity,
-      unit_price_incl_cents: unitPriceInclCents,
-      vat_rate: vatRate,
-      unit_cost_cents: product.unit_cost_cents,
-      payment_method: paymentMethod,
-      revenue_account_code: revenueAccountCode,
-      product_name: product.name,
-    }, { actorUserId })
-
     await client.query('COMMIT')
-    return { saleId }
+    return { saleId: result.saleId }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     const mapped = ledgerErrorResult(err)

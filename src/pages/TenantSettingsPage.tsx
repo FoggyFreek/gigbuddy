@@ -9,16 +9,17 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import AddIcon from '@mui/icons-material/Add'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
-import KeyIcon from '@mui/icons-material/Key'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import StorageIcon from '@mui/icons-material/Storage'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import { useAuth } from '../contexts/authContext.ts'
 import { useProfile } from '../contexts/profileContext.ts'
-import { clearMollieKey, getMollieKey, setMollieKey, updateProfile } from '../api/profile.ts'
+import { useThemeMode } from '../contexts/themeModeContext.ts'
+import { clearMollieKey, getMollieKey, setMollieKey, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain, updateProfile } from '../api/profile.ts'
 import { getMyStorageStats, refreshMyStorageStats } from '../api/statistics.ts'
 import { formatBytes } from '../utils/formatBytes.ts'
 import ChartOfAccountsSection from '../components/settings/ChartOfAccountsSection.tsx'
@@ -160,7 +161,15 @@ export default function TenantSettingsPage() {
       </Paper>
 
       {isAdmin && <StorageUsageSection />}
-      {isAdmin && <MollieKeySection />}
+      {isAdmin && (
+        <>
+          <Typography variant="h6" sx={{ mt: 4, mb: 0 }}>
+            Integrations
+          </Typography>
+          <MollieKeySection />
+          <ShopifyKeySection />
+        </>
+      )}
       {isAdmin && <ChartOfAccountsSection />}
       {isAdmin && <AccountingSettingsSection />}
     </Box>
@@ -194,7 +203,7 @@ function StorageUsageSection() {
   return (
     <Paper variant="outlined" sx={{ p: 3, mt: 3 }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-        <StorageIcon fontSize="small" color="action" />
+        <StorageIcon fontSize="small" color="primary" />
         <Typography variant="subtitle1" sx={{ fontWeight: 600,  flexGrow: 1  }}>
           Storage used
         </Typography>
@@ -225,6 +234,381 @@ function StorageUsageSection() {
         </Typography>
       )}
     </Paper>
+  )
+}
+
+// Wraps a third-party integration's settings. Until something is configured the
+// card collapses to just the logo + an "Add integration" button; configuring (or
+// clicking the button) expands the full editor. Keeps the Integrations list tidy.
+interface IntegrationCardProps {
+  logoLight: string
+  logoDark: string
+  alt: string
+  title: string
+  description: string
+  configured: boolean
+  mt?: number
+  children: React.ReactNode
+}
+
+function IntegrationCard({ logoLight, logoDark, alt, title, description, configured, mt = 2, children }: IntegrationCardProps) {
+  const { mode } = useThemeMode()
+  const [manuallyExpanded, setManuallyExpanded] = useState(false)
+  // Expanded when already configured, or once the user opts in via the button.
+  const expanded = manuallyExpanded || configured
+
+  const logo = (
+    <Box
+      component="img"
+      src={mode === 'dark' ? logoDark : logoLight}
+      alt={alt}
+      sx={{ height: 20, width: 'auto' }}
+    />
+  )
+
+  if (!expanded) {
+    return (
+      <Paper variant="outlined" sx={{ p: 3, mt }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Box sx={{ flex: 1, display: 'flex' }}>{logo}</Box>
+          <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setManuallyExpanded(true)}>
+            Add integration
+          </Button>
+        </Stack>
+      </Paper>
+    )
+  }
+
+  return (
+    <Paper variant="outlined" sx={{ p: 3, mt }}>
+      <Stack direction="column" spacing={0.5} sx={{ mb: 0.5 }}>
+        <Box sx={{ alignSelf: 'flex-start', display: 'flex' }}>{logo}</Box>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{title}</Typography>
+      </Stack>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{description}</Typography>
+      {children}
+    </Paper>
+  )
+}
+
+function shopifyKeyErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message === 'invalid_shopify_client_secret') {
+    return 'Invalid secret format. The app secret is at least 32 hexadecimal characters.'
+  }
+  return 'Failed to save the app secret. Please try again.'
+}
+
+interface ShopifyKeyStatus {
+  isSet?: boolean
+  preview?: string
+}
+
+function ShopifyKeySection() {
+  const [status, setStatus] = useState<ShopifyKeyStatus | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [inputKey, setInputKey] = useState('')
+  const [showKey, setShowKey] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [domain, setDomainInput] = useState('')
+  const [savedDomain, setSavedDomain] = useState<string | null>(null)
+  const [domainSaving, setDomainSaving] = useState(false)
+  const [domainError, setDomainError] = useState<string | null>(null)
+
+  const [clientId, setClientIdInput] = useState('')
+  const [savedClientId, setSavedClientId] = useState<string | null>(null)
+  const [clientIdEditing, setClientIdEditing] = useState(false)
+  const [clientIdSaving, setClientIdSaving] = useState(false)
+  const [clientIdError, setClientIdError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getShopifySecret().then((s) => setStatus(s as unknown as ShopifyKeyStatus)).catch(() => {})
+    getShopifyDomain().then((d) => {
+      setSavedDomain(d.domain ?? null)
+      setDomainInput(d.domain ?? '')
+    }).catch(() => {})
+    getShopifyClientId().then((c) => {
+      setSavedClientId(c.clientId ?? null)
+      setClientIdInput(c.clientId ?? '')
+    }).catch(() => {})
+  }, [])
+
+  async function handleSaveDomain() {
+    const trimmed = domain.trim()
+    if (!trimmed) return
+    setDomainSaving(true)
+    setDomainError(null)
+    try {
+      const result = await setShopifyDomain(trimmed)
+      setSavedDomain(result.domain ?? null)
+      setDomainInput(result.domain ?? '')
+    } catch {
+      setDomainError('Invalid domain. Use the form yourband.myshopify.com.')
+    } finally {
+      setDomainSaving(false)
+    }
+  }
+
+  function startEditingClientId() {
+    setClientIdInput('')
+    setClientIdError(null)
+    setClientIdEditing(true)
+  }
+
+  function cancelEditingClientId() {
+    setClientIdEditing(false)
+    setClientIdInput('')
+    setClientIdError(null)
+  }
+
+  async function handleSaveClientId() {
+    const trimmed = clientId.trim()
+    if (!trimmed) return
+    setClientIdSaving(true)
+    setClientIdError(null)
+    try {
+      const result = await setShopifyClientId(trimmed)
+      setSavedClientId(result.clientId ?? null)
+      setClientIdInput('')
+      setClientIdEditing(false)
+    } catch {
+      setClientIdError('Invalid Client ID. It is at least 32 hexadecimal characters.')
+    } finally {
+      setClientIdSaving(false)
+    }
+  }
+
+  async function handleClearClientId() {
+    setClientIdSaving(true)
+    try {
+      await clearShopifyClientId()
+      setSavedClientId(null)
+      setClientIdInput('')
+      setClientIdEditing(false)
+    } finally {
+      setClientIdSaving(false)
+    }
+  }
+
+  function startEditing() {
+    setInputKey('')
+    setShowKey(false)
+    setError(null)
+    setEditing(true)
+  }
+
+  function cancelEditing() {
+    setEditing(false)
+    setInputKey('')
+    setError(null)
+  }
+
+  async function handleSave() {
+    if (!inputKey.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await setShopifySecret(inputKey.trim())
+      setStatus(result as unknown as ShopifyKeyStatus)
+      setEditing(false)
+      setInputKey('')
+    } catch (err: unknown) {
+      setError(shopifyKeyErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleClear() {
+    setSaving(true)
+    try {
+      const result = await clearShopifySecret()
+      setStatus(result as unknown as ShopifyKeyStatus)
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const configured = !!(savedClientId || status?.isSet || savedDomain)
+
+  return (
+    <IntegrationCard
+      logoLight="/share/shopify/shopify_logo_black.png"
+      logoDark="/share/shopify/shopify_logo_white.png"
+      alt="Shopify"
+      title="Shopify app credentials"
+      description="Connect your Shopify store to read orders and import them to merchandise. Enter your app's Client ID and secret (from the Shopify Dev Dashboard) and your store domain — a short-lived access token is fetched automatically when importing. The secret is stored securely and never shown in full after saving."
+      configured={configured}
+      mt={2}
+    >
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+        Client ID
+      </Typography>
+      {clientIdEditing ? (
+        <Stack spacing={1.5} sx={{ mb: 3 }}>
+          <TextField
+            label="Client ID"
+            fullWidth
+            size="small"
+            value={clientId}
+            onChange={(e) => { setClientIdInput(e.target.value); setClientIdError(null) }}
+            placeholder="32-character app Client ID"
+            error={!!clientIdError}
+            helperText={clientIdError || 'Your app\'s Client ID from the Shopify Dev Dashboard.'}
+            autoComplete="off"
+            slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'none' } }}
+          />
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={handleSaveClientId}
+              disabled={!clientId.trim() || clientIdSaving}
+              startIcon={clientIdSaving ? <CircularProgress size={14} color="inherit" /> : null}
+            >
+              Save
+            </Button>
+            <Button size="small" onClick={cancelEditingClientId} disabled={clientIdSaving}>
+              Cancel
+            </Button>
+          </Stack>
+        </Stack>
+      ) : (
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 3 }}>
+          <Box sx={{ flex: 1 }}>
+            {savedClientId ? (
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                {savedClientId}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.disabled">Not configured</Typography>
+            )}
+          </Box>
+          <Button size="small" variant="outlined" onClick={startEditingClientId} disabled={clientIdSaving}>
+            {savedClientId ? 'Replace ID' : 'Configure'}
+          </Button>
+          {savedClientId && (
+            <Tooltip title="Remove Client ID">
+              <span>
+                <IconButton size="small" color="error" onClick={handleClearClientId} disabled={clientIdSaving}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+        </Stack>
+      )}
+
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+        App secret
+      </Typography>
+      {editing ? (
+        <Stack spacing={1.5}>
+          <TextField
+            label="App secret"
+            fullWidth
+            size="small"
+            value={inputKey}
+            onChange={(e) => { setInputKey(e.target.value); setError(null) }}
+            type={showKey ? 'text' : 'password'}
+            placeholder="32-character app secret"
+            error={!!error}
+            helperText={error || 'Paste your app\'s client secret from the Shopify Dev Dashboard.'}
+            autoComplete="off"
+            slotProps={{
+              htmlInput: { spellCheck: false },
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setShowKey((v) => !v)}
+                      edge="end"
+                      aria-label={showKey ? 'Hide key' : 'Show key'}
+                    >
+                      {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={handleSave}
+              disabled={!inputKey.trim() || saving}
+              startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
+            >
+              Save
+            </Button>
+            <Button size="small" onClick={cancelEditing} disabled={saving}>
+              Cancel
+            </Button>
+          </Stack>
+        </Stack>
+      ) : (
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Box sx={{ flex: 1 }}>
+            {status === null ? (
+              <CircularProgress size={18} />
+            ) : status.isSet ? (
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                {status.preview}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.disabled">Not configured</Typography>
+            )}
+          </Box>
+          <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
+            {status?.isSet ? 'Replace secret' : 'Configure'}
+          </Button>
+          {status?.isSet && (
+            <Tooltip title="Remove secret">
+              <span>
+                <IconButton size="small" color="error" onClick={handleClear} disabled={saving}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+        </Stack>
+      )}
+
+      <Box sx={{ mt: 3 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+          Store domain
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Your myshopify.com domain — required to read orders for import.
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+          <TextField
+            size="small"
+            fullWidth
+            value={domain}
+            onChange={(e) => { setDomainInput(e.target.value); setDomainError(null) }}
+            placeholder="yourband.myshopify.com"
+            error={!!domainError}
+            helperText={domainError || undefined}
+            autoComplete="off"
+            slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'none' } }}
+          />
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleSaveDomain}
+            disabled={domainSaving || !domain.trim() || domain.trim() === savedDomain}
+            startIcon={domainSaving ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            Save
+          </Button>
+        </Stack>
+      </Box>
+    </IntegrationCard>
   )
 }
 
@@ -366,17 +750,15 @@ function MollieKeySection() {
   }
 
   return (
-    <Paper variant="outlined" sx={{ p: 3, mt: 3 }}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-        <KeyIcon fontSize="small" color="action" />
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Mollie API key
-        </Typography>
-      </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Used to process payments via Mollie. The key is stored securely and never shown in full after saving.
-      </Typography>
-
+    <IntegrationCard
+      logoLight="/share/mollie/Mollie-Logo-Black-2023.png"
+      logoDark="/share/mollie/Mollie-Logo-White-2023.png"
+      alt="Mollie"
+      title="Mollie API key"
+      description="Used to create payment links via Mollie. The key is stored securely and never shown in full after saving."
+      configured={!!status?.isSet}
+      mt={3}
+    >
       {editing ? (
         <MollieKeyEditor
           inputKey={inputKey}
@@ -407,6 +789,6 @@ function MollieKeySection() {
           )}
         </Stack>
       )}
-    </Paper>
+    </IntegrationCard>
   )
 }

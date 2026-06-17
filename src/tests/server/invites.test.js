@@ -48,11 +48,11 @@ async function createOutsider({ email = 'outside@test.local', name = 'Outside', 
 }
 
 describe('/api/invites — admin endpoints', () => {
-  it('POST / creates a member invite for the active tenant', async () => {
+  it('POST / creates a contributor invite for the active tenant', async () => {
     const res = await asAdminA(
-      request(app).post('/api/invites').send({ role: 'member', expiresInDays: 7 }),
+      request(app).post('/api/invites').send({ role: 'contributor', expiresInDays: 7 }),
     ).expect(201)
-    expect(res.body.role).toBe('member')
+    expect(res.body.role).toBe('contributor')
     expect(res.body.tenant_id).toBe(seed.tenantA.id)
     expect(res.body.code).toMatch(/^[A-Za-z0-9_-]+$/)
     expect(res.body.url).toContain('/redeem-invite?code=')
@@ -126,7 +126,7 @@ describe('/api/invites — admin endpoints', () => {
 })
 
 describe('/api/invites/redeem', () => {
-  async function newInvite(tenantId, role = 'member', expiresAt = null) {
+  async function newInvite(tenantId, role = 'contributor', expiresAt = null) {
     const { rows } = await pool.query(
       `INSERT INTO tenant_invites (code, tenant_id, role, created_by_user_id, expires_at)
        VALUES ($1, $2, $3, $4, $5)
@@ -151,7 +151,7 @@ describe('/api/invites/redeem', () => {
       [outsider.id, seed.tenantA.id],
     )
     expect(rows[0].status).toBe('pending')
-    expect(rows[0].role).toBe('member')
+    expect(rows[0].role).toBe('contributor')
 
     const { rows: inviteRows } = await pool.query(
       'SELECT used_at, used_by_user_id FROM tenant_invites WHERE id = $1',

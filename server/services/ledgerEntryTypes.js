@@ -14,6 +14,7 @@ const TYPE_MAP = {
   'merch_sale/recorded': { type: 'Merch sale',            group: 'invoices',  voided: false, sign: 1 },
   'merch_sale/voided':   { type: 'Merch sale (void)',     group: 'invoices',  voided: true,  sign: -1 },
   'merch_sale/reversal': { type: 'Merch sale (reversal)', group: 'invoices',  voided: false, sign: -1 },
+  'shopify_revenue_line/recorded': { type: 'Shopify revenue', group: 'invoices', voided: false, sign: 1 },
   'journal/posted':     { type: 'Journal',          group: 'journals',  voided: false, sign: null },
   'ledger_transaction/void': { type: 'Void',        group: 'journals',  voided: true,  sign: null },
   // A reversal is a *visible* correction of a closed-period entry: unlike a

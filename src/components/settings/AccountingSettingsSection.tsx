@@ -115,7 +115,7 @@ export default function AccountingSettingsSection() {
   return (
     <Paper variant="outlined" sx={{ p: 3, mt: 3 }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
-        <AccountBalanceWalletIcon fontSize="small" color="action" />
+        <AccountBalanceWalletIcon fontSize="small" color="primary" />
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           Accounting Settings
         </Typography>

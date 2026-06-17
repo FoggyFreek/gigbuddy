@@ -13,6 +13,15 @@ import {
   getMollieKeyStatus,
   setMollieKeyValue,
   clearMollieKeyValue,
+  getShopifyClientIdStatus,
+  setShopifyClientIdValue,
+  clearShopifyClientIdValue,
+  getShopifySecretStatus,
+  setShopifySecretValue,
+  clearShopifySecretValue,
+  getShopifyDomainStatus,
+  setShopifyDomainValue,
+  clearShopifyDomainValue,
   uploadLogo,
   uploadBanner,
   uploadAvatar,
@@ -108,6 +117,57 @@ router.put('/mollie-key', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (
 // Clear Mollie API key (tenant admin only)
 router.delete('/mollie-key', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   res.json(await clearMollieKeyValue(pool, req.tenantId))
+})
+
+// Get Shopify app Client ID (non-secret, returned in full)
+router.get('/shopify-client-id', async (req, res) => {
+  res.json(await getShopifyClientIdStatus(pool, req.tenantId))
+})
+
+// Set or replace Shopify app Client ID (tenant admin only)
+router.put('/shopify-client-id', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
+  const result = await setShopifyClientIdValue(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.status)
+})
+
+// Clear Shopify app Client ID (tenant admin only)
+router.delete('/shopify-client-id', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
+  res.json(await clearShopifyClientIdValue(pool, req.tenantId))
+})
+
+// Get Shopify app secret status (returns masked preview, never the raw secret)
+router.get('/shopify-secret', async (req, res) => {
+  res.json(await getShopifySecretStatus(pool, req.tenantId))
+})
+
+// Set or replace Shopify app secret (tenant admin only)
+router.put('/shopify-secret', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
+  const result = await setShopifySecretValue(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.status)
+})
+
+// Clear Shopify app secret (tenant admin only)
+router.delete('/shopify-secret', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
+  res.json(await clearShopifySecretValue(pool, req.tenantId))
+})
+
+// Get Shopify store domain (non-secret, returned in full)
+router.get('/shopify-domain', async (req, res) => {
+  res.json(await getShopifyDomainStatus(pool, req.tenantId))
+})
+
+// Set or replace Shopify store domain (tenant admin only)
+router.put('/shopify-domain', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
+  const result = await setShopifyDomainValue(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.status)
+})
+
+// Clear Shopify store domain (tenant admin only)
+router.delete('/shopify-domain', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
+  res.json(await clearShopifyDomainValue(pool, req.tenantId))
 })
 
 // Upload / replace band logo (tenant admin only)

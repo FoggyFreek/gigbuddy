@@ -11,6 +11,10 @@ import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageP
 import {
   FINANCIAL_FIELDS_SET,
   isValidMollieKey,
+  isValidShopifyClientId,
+  isValidShopifyClientSecret,
+  isValidShopifyDomain,
+  normalizeShopifyDomain,
   normalizeRequiredProfileUrl,
   buildProfileUpdate,
   buildLinkUpdate,
@@ -26,6 +30,15 @@ import {
   getMollieKey,
   setMollieKey,
   clearMollieKey,
+  getShopifyClientId,
+  setShopifyClientId,
+  clearShopifyClientId,
+  getShopifyClientSecret,
+  setShopifyClientSecret,
+  clearShopifyClientSecret,
+  getShopifyDomain,
+  setShopifyDomain,
+  clearShopifyDomain,
   getTenantImagePath,
   setTenantImagePath,
 } from '../repositories/profileRepository.js'
@@ -38,7 +51,7 @@ function notFound(error) {
   return { error: { status: 404, body: { error } } }
 }
 
-function maskMollieKey(key) {
+function maskKey(key) {
   if (!key) return null
   const prefix = key.slice(0, 5)
   const last4 = key.slice(-4)
@@ -46,11 +59,12 @@ function maskMollieKey(key) {
   return `${prefix}${dots}${last4}`
 }
 
-// mollie_api_key is never returned in profile payloads — use the mollie-key
-// endpoints for masked status.
-function stripMollieKey(tenant) {
+// mollie_api_key and shopify_client_secret are never returned in profile
+// payloads — use the dedicated endpoints for masked status.
+function stripSecretKeys(tenant) {
   const copy = { ...tenant }
   delete copy.mollie_api_key
+  delete copy.shopify_client_secret
   return copy
 }
 
@@ -60,7 +74,7 @@ export async function getProfile(db, tenantId) {
   const tenant = await fetchTenant(db, tenantId)
   if (!tenant) return notFound('Profile not found')
   const links = await listProfileLinks(db, tenantId)
-  return { profile: { ...stripMollieKey(tenant), links } }
+  return { profile: { ...stripSecretKeys(tenant), links } }
 }
 
 // `isAdmin` is computed by the route (tenant_admin or super admin); financial
@@ -77,7 +91,7 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
 
   const updated = await updateTenantFields(db, tenantId, built.fields, built.values)
   if (!updated) return notFound('Profile not found')
-  return { profile: stripMollieKey(updated) }
+  return { profile: stripSecretKeys(updated) }
 }
 
 // ---------- links ----------
@@ -110,19 +124,76 @@ export async function deleteLink(db, tenantId, linkId) {
 
 export async function getMollieKeyStatus(db, tenantId) {
   const key = await getMollieKey(db, tenantId)
-  return { isSet: !!key, preview: maskMollieKey(key) }
+  return { isSet: !!key, preview: maskKey(key) }
 }
 
 export async function setMollieKeyValue(db, tenantId, body) {
   const { key } = body || {}
   if (!isValidMollieKey(key)) return badRequest('invalid_mollie_key')
   const stored = await setMollieKey(db, tenantId, key)
-  return { status: { isSet: !!stored, preview: maskMollieKey(stored) } }
+  return { status: { isSet: !!stored, preview: maskKey(stored) } }
 }
 
 export async function clearMollieKeyValue(db, tenantId) {
   await clearMollieKey(db, tenantId)
   return { isSet: false, preview: null }
+}
+
+// ---------- shopify app credentials ----------
+
+// Client ID is not a secret; returned in full so the user can verify it.
+export async function getShopifyClientIdStatus(db, tenantId) {
+  const clientId = await getShopifyClientId(db, tenantId)
+  return { clientId: clientId || null }
+}
+
+export async function setShopifyClientIdValue(db, tenantId, body) {
+  const { clientId } = body || {}
+  if (!isValidShopifyClientId(clientId)) return badRequest('invalid_shopify_client_id')
+  const stored = await setShopifyClientId(db, tenantId, clientId.trim())
+  return { status: { clientId: stored } }
+}
+
+export async function clearShopifyClientIdValue(db, tenantId) {
+  await clearShopifyClientId(db, tenantId)
+  return { clientId: null }
+}
+
+// Client secret is masked, like the Mollie key.
+export async function getShopifySecretStatus(db, tenantId) {
+  const secret = await getShopifyClientSecret(db, tenantId)
+  return { isSet: !!secret, preview: maskKey(secret) }
+}
+
+export async function setShopifySecretValue(db, tenantId, body) {
+  const { secret } = body || {}
+  if (!isValidShopifyClientSecret(secret)) return badRequest('invalid_shopify_client_secret')
+  const stored = await setShopifyClientSecret(db, tenantId, secret.trim())
+  return { status: { isSet: !!stored, preview: maskKey(stored) } }
+}
+
+export async function clearShopifySecretValue(db, tenantId) {
+  await clearShopifyClientSecret(db, tenantId)
+  return { isSet: false, preview: null }
+}
+
+// ---------- shopify store domain (non-secret, returned in full) ----------
+
+export async function getShopifyDomainStatus(db, tenantId) {
+  const domain = await getShopifyDomain(db, tenantId)
+  return { domain: domain || null }
+}
+
+export async function setShopifyDomainValue(db, tenantId, body) {
+  const { domain } = body || {}
+  if (!isValidShopifyDomain(domain)) return badRequest('invalid_shopify_domain')
+  const stored = await setShopifyDomain(db, tenantId, normalizeShopifyDomain(domain))
+  return { status: { domain: stored } }
+}
+
+export async function clearShopifyDomainValue(db, tenantId) {
+  await clearShopifyDomain(db, tenantId)
+  return { domain: null }
 }
 
 // ---------- image uploads (logo, banner, avatar, dark logo) ----------

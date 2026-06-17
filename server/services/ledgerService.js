@@ -213,7 +213,9 @@ export async function postJournal(client, tenantId, {
 // and the sign comes from classify().
 function headlineAmount(row) {
   if (row.source_type === 'merch_sale' && row.merch_sale_unit_price_incl_cents != null) {
-    return row.merch_sale_quantity * row.merch_sale_unit_price_incl_cents
+    // Imported sales carry the exact gross (gross_incl_cents); manual sales use
+    // quantity × unit price.
+    return row.merch_sale_gross_incl_cents ?? row.merch_sale_quantity * row.merch_sale_unit_price_incl_cents
   }
   return row.total_debit_cents
 }
@@ -783,7 +785,10 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
   // The sale snapshots the product's chosen revenue account; fall back to the
   // band default (incl. pre-snapshot sales whose code is null).
   const revenue = sale.revenue_account_code || requireCode(settings, 'merch_revenue_account_code')
-  const grossCents = sale.quantity * sale.unit_price_incl_cents
+  // Imported sales carry an exact inclusive total (gross_incl_cents) because a
+  // discounted Shopify line gross may not divide evenly by quantity; manual
+  // sales fall back to quantity × unit price.
+  const grossCents = sale.gross_incl_cents ?? sale.quantity * sale.unit_price_incl_cents
   const { netCents, vatCents } = computePurchaseLineTotals({
     amount_incl_cents: grossCents, tax_rate: sale.vat_rate,
   })
@@ -834,7 +839,9 @@ export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
   // Same snapshotted account as the original recorded posting so the reversal
   // nets out exactly, even if the product's account changed since the sale.
   const revenue = sale.revenue_account_code || requireCode(settings, 'merch_revenue_account_code')
-  const grossCents = sale.quantity * sale.unit_price_incl_cents
+  // Reverse the exact same gross the original recorded (gross_incl_cents for
+  // imports, else quantity × unit price) so the pair nets to zero.
+  const grossCents = sale.gross_incl_cents ?? sale.quantity * sale.unit_price_incl_cents
   const { netCents, vatCents } = computePurchaseLineTotals({
     amount_incl_cents: grossCents, tax_rate: sale.vat_rate,
   })
@@ -871,6 +878,35 @@ export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
     }
   }
   return result
+}
+
+// ---------- shopify import: revenue-only line ----------
+
+// A Shopify order line mapped to a tenant revenue account rather than a product
+// (shipping, a non-catalog item, …). No inventory/COGS: DR checking gross (all
+// imports settle to bank), CR revenue net, CR output VAT. `line.id` is the
+// shopify_order_imports row id, which is also the idempotency source_id.
+export async function postShopifyRevenueLine(client, tenantId, line, opts = {}) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const checking = requireCode(settings, 'primary_checking_account_code')
+  const { netCents, vatCents } = computePurchaseLineTotals({
+    amount_incl_cents: line.amount_incl_cents, tax_rate: line.vat_rate,
+  })
+  const memo = line.memo
+
+  const lines = [
+    { account_code: checking, debit_cents: line.amount_incl_cents, memo },
+    { account_code: line.revenue_account_code, credit_cents: netCents, memo },
+  ]
+  if (vatCents > 0) {
+    lines.push({ account_code: requireCode(settings, 'output_vat_account_code'), credit_cents: vatCents, memo })
+  }
+
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(line.entry_date),
+    description: memo,
+    sourceType: 'shopify_revenue_line', sourceId: line.id, sourceEvent: 'recorded', lines, ...opts,
+  })
 }
 
 // ---------- reimbursement journals (settling member debt) ----------

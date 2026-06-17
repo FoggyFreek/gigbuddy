@@ -14,6 +14,8 @@ import {
   recordMerchSale,
   voidMerchSale,
 } from '../services/merchService.js'
+import { fetchRecentOrders } from '../services/shopifyService.js'
+import { importShopifyOrders } from '../services/merchShopifyService.js'
 
 const router = Router()
 
@@ -85,6 +87,23 @@ router.post('/sales/:id/void', requirePermission(PERMISSIONS.FINANCE_MANAGE), as
   const result = await voidMerchSale(pool, req.tenantId, id, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   res.json({})
+})
+
+// ---------- shopify import ----------
+
+// Recent Shopify orders for the import picker (fetched via the tenant's stored
+// token + store domain). `cursor` pages older orders via the Link header.
+router.get('/shopify/orders', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const result = await fetchRecentOrders(pool, req.tenantId, { cursor: req.query.cursor, limit: req.query.limit })
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.json({ orders: result.orders, nextCursor: result.nextCursor })
+})
+
+// Import selected order lines (ids + mappings only; amounts re-fetched server-side).
+router.post('/shopify/import', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const result = await importShopifyOrders(pool, req.tenantId, req.body || {}, req.user.id)
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.json(result)
 })
 
 export default router

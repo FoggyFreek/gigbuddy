@@ -10,6 +10,15 @@ vi.mock('../api/profile.ts', () => ({
   getMollieKey: vi.fn().mockResolvedValue({ isSet: false }),
   setMollieKey: vi.fn(),
   clearMollieKey: vi.fn(),
+  getShopifySecret: vi.fn().mockResolvedValue({ isSet: false }),
+  setShopifySecret: vi.fn(),
+  clearShopifySecret: vi.fn(),
+  getShopifyClientId: vi.fn().mockResolvedValue({ clientId: null }),
+  setShopifyClientId: vi.fn().mockResolvedValue({ clientId: null }),
+  clearShopifyClientId: vi.fn(),
+  getShopifyDomain: vi.fn().mockResolvedValue({ domain: null }),
+  setShopifyDomain: vi.fn().mockResolvedValue({ domain: null }),
+  clearShopifyDomain: vi.fn(),
 }))
 
 vi.mock('../api/statistics.ts', () => ({
