@@ -5,7 +5,8 @@ import { MemoryRouter, Routes, Route, useParams } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/gigs.ts', () => ({ listGigs: vi.fn() }))
-vi.mock('../api/rehearsals.ts', () => ({ listRehearsals: vi.fn() }))
+vi.mock('../api/rehearsals.ts', () => ({ getNextRehearsal: vi.fn() }))
+vi.mock('../api/bandEvents.ts', () => ({ listBandEvents: vi.fn() }))
 vi.mock('../api/tasks.ts', () => ({ listAllTasks: vi.fn() }))
 vi.mock('../contexts/authContext.ts', () => ({ useAuth: vi.fn() }))
 // The world-map tile loads its own data (and Leaflet); stub it so these tests stay
@@ -17,7 +18,8 @@ vi.mock('../api/profile.ts', () => ({ getProfile: vi.fn() }))
 
 import DashboardPage from '../pages/DashboardPage.tsx'
 import { listGigs } from '../api/gigs.ts'
-import { listRehearsals } from '../api/rehearsals.ts'
+import { getNextRehearsal } from '../api/rehearsals.ts'
+import { listBandEvents } from '../api/bandEvents.ts'
 import { listAllTasks } from '../api/tasks.ts'
 import { getProfile } from '../api/profile.ts'
 import { useAuth } from '../contexts/authContext.ts'
@@ -49,10 +51,9 @@ const GIGS = [
   { id: 2, event_date: '2026-06-15', event_description: 'Jazz Night', venue: { id: 12, name: 'Cafe X', city: 'Amsterdam' }, festival: null, status: 'confirmed', banner_path: 'tenants/1/gig-banners/abc.png' },
   { id: 3, event_date: '2026-07-01', event_description: 'Summer Festival', venue: null, festival: { id: 13, name: 'Park Fest', city: 'Rotterdam' }, status: 'announced' },
 ]
-const REHEARSALS = [
-  { id: 20, proposed_date: '2026-06-01', location: 'Studio A', status: 'planned' },
-  { id: 21, proposed_date: '2026-02-01', location: 'Old Studio', status: 'planned' },
-]
+// The dashboard asks the server for the single next rehearsal (GET /rehearsals/next);
+// upcoming/past filtering happens server-side, so the mock returns one rehearsal or null.
+const NEXT_REHEARSAL = { id: 20, proposed_date: '2026-06-01', location: 'Studio A', status: 'planned' }
 const TASKS = [
   { id: 50, gig_id: 3, title: 'Send invoice', done: false, due_date: null, assigned_to: 7, event_description: 'Tour Stop' },
   { id: 51, gig_id: 2, title: 'Confirm rider', done: false, due_date: '2026-06-01', assigned_to: 9, event_description: 'Jazz Night' },
@@ -60,7 +61,8 @@ const TASKS = [
 ]
 function resolveAll() {
   listGigs.mockResolvedValue(GIGS)
-  listRehearsals.mockResolvedValue(REHEARSALS)
+  getNextRehearsal.mockResolvedValue(NEXT_REHEARSAL)
+  listBandEvents.mockResolvedValue([])
   listAllTasks.mockResolvedValue(TASKS)
   getProfile.mockResolvedValue({ logo_path: null })
 }
@@ -87,7 +89,7 @@ describe('DashboardPage', () => {
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
     // Next gig: venue name and its city, derived from the nested venue object.
-    expect(screen.getByText('Cafe X · Amsterdam')).toBeInTheDocument()
+    expect(screen.getByText('Cafe X, Amsterdam')).toBeInTheDocument()
     // Upcoming show backed by a festival: city comes from the festival object.
     expect(screen.getByText(/Rotterdam/)).toBeInTheDocument()
   })
@@ -105,10 +107,10 @@ describe('DashboardPage', () => {
     expect(listGigs).toHaveBeenCalledTimes(1)
   })
 
-  it('shows upcoming rehearsals, excluding past ones', async () => {
+  it('shows the next rehearsal returned by getNextRehearsal', async () => {
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Studio A')).toBeInTheDocument())
-    expect(screen.queryByText('Old Studio')).not.toBeInTheDocument()
+    expect(getNextRehearsal).toHaveBeenCalledTimes(1)
   })
 
   it('does not render invoice or purchase cards (moved to the financial dashboard)', async () => {
@@ -135,7 +137,7 @@ describe('DashboardPage', () => {
 
   it('renders empty states when sources return nothing', async () => {
     listGigs.mockResolvedValue([])
-    listRehearsals.mockResolvedValue([])
+    getNextRehearsal.mockResolvedValue(null)
     listAllTasks.mockResolvedValue([])
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText(/no upcoming shows/i)).toBeInTheDocument())
@@ -163,7 +165,7 @@ describe('DashboardPage', () => {
   })
 
   it('shows a per-card error when one source fails, while the others still render', async () => {
-    listRehearsals.mockRejectedValue(new Error('boom'))
+    getNextRehearsal.mockRejectedValue(new Error('boom'))
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument()
