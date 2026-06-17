@@ -293,7 +293,7 @@ function IntegrationCard({ logoLight, logoDark, alt, title, description, configu
 
 function shopifyKeyErrorMessage(err: unknown): string {
   if (err instanceof Error && err.message === 'invalid_shopify_client_secret') {
-    return 'Invalid secret format. The app secret is at least 32 hexadecimal characters.'
+    return 'Invalid secret format. The app secret starts with "shpss_" followed by 32 hexadecimal characters.'
   }
   return 'Failed to save the app secret. Please try again.'
 }
@@ -513,7 +513,7 @@ function ShopifyKeySection() {
             value={inputKey}
             onChange={(e) => { setInputKey(e.target.value); setError(null) }}
             type={showKey ? 'text' : 'password'}
-            placeholder="32-character app secret"
+            placeholder="shpss_…"
             error={!!error}
             helperText={error || 'Paste your app\'s client secret from the Shopify Dev Dashboard.'}
             autoComplete="off"

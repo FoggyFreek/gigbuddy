@@ -8,17 +8,19 @@ export function isValidMollieKey(key) {
   return typeof key === 'string' && MOLLIE_KEY_RE.test(key)
 }
 
-// Shopify app credentials (Dev Dashboard): the Client ID and Client Secret are
-// hex strings (32+ chars). Used with the client_credentials grant to mint a
-// short-lived Admin API access token at request time.
-export const SHOPIFY_CREDENTIAL_RE = /^[a-fA-F0-9]{32,}$/
+// Shopify app credentials (Dev Dashboard). Used with the client_credentials
+// grant to mint a short-lived Admin API access token at request time. The
+// Client ID (API key) is a 32+ char hex string; the Client Secret carries an
+// "shpss_" prefix followed by 32 hex chars, e.g.
+export const SHOPIFY_CLIENT_ID_RE = /^[a-fA-F0-9]{32,}$/
+export const SHOPIFY_CLIENT_SECRET_RE = /^shpss_[a-fA-F0-9]{32}$/
 
 export function isValidShopifyClientId(value) {
-  return typeof value === 'string' && SHOPIFY_CREDENTIAL_RE.test(value.trim())
+  return typeof value === 'string' && SHOPIFY_CLIENT_ID_RE.test(value.trim())
 }
 
 export function isValidShopifyClientSecret(value) {
-  return typeof value === 'string' && SHOPIFY_CREDENTIAL_RE.test(value.trim())
+  return typeof value === 'string' && SHOPIFY_CLIENT_SECRET_RE.test(value.trim())
 }
 
 // Shopify store domain, e.g. "yourband.myshopify.com" — the Admin REST API host.

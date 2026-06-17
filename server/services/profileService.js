@@ -53,9 +53,10 @@ function notFound(error) {
 
 function maskKey(key) {
   if (!key) return null
-  const prefix = key.slice(0, 5)
+  const underscore = key.indexOf('_')
+  const prefix = underscore >= 0 ? key.slice(0, underscore + 1) : key.slice(0, 5)
   const last4 = key.slice(-4)
-  const dots = '•'.repeat(Math.max(0, key.length - 9))
+  const dots = '•'.repeat(Math.max(0, key.length - prefix.length - 4))
   return `${prefix}${dots}${last4}`
 }
 

@@ -125,3 +125,59 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body.error).toBe('No valid fields to update')
   })
 })
+
+describe('PUT /api/profile/shopify-secret — app secret validation & masking', () => {
+  // Stub secret in the real "shpss_" + 32-hex format — not a real credential.
+  // Built by concatenation so the full token never appears as a literal in source
+  // (otherwise GitHub push protection flags it as a leaked Shopify secret).
+  const validSecret = 'shpss_' + '0123456789abcdef'.repeat(2)
+
+  it('accepts an "shpss_"-prefixed 32-hex secret and returns a masked preview', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).put('/api/profile/shopify-secret').send({ secret: validSecret }),
+    ).expect(200)
+    expect(res.body.isSet).toBe(true)
+    // Preview keeps the "shpss_" prefix and last 4 chars visible, masks the rest,
+    // and never echoes the raw secret.
+    expect(res.body.preview).toMatch(/^shpss_•+cdef$/)
+    expect(res.body.preview).not.toContain('0123456789')
+  })
+
+  it('persists the secret so a re-read reports it set with the same mask', async () => {
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).put('/api/profile/shopify-secret').send({ secret: validSecret }),
+    ).expect(200)
+    const reread = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).get('/api/profile/shopify-secret'),
+    ).expect(200)
+    expect(reread.body.isSet).toBe(true)
+    expect(reread.body.preview).toMatch(/^shpss_•+cdef$/)
+  })
+
+  it('rejects a bare 32-hex secret (no "shpss_" prefix) with 400', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).put('/api/profile/shopify-secret').send({ secret: 'a'.repeat(32) }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_shopify_client_secret')
+  })
+
+  it('rejects an "shpss_" secret with a non-hex body with 400', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).put('/api/profile/shopify-secret').send({ secret: 'shpss_' + 'z'.repeat(32) }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_shopify_client_secret')
+  })
+
+  it('rejects an "shpss_" secret of the wrong length with 400', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).put('/api/profile/shopify-secret').send({ secret: 'shpss_abc123' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_shopify_client_secret')
+  })
+
+  it('forbids a plain member from setting the secret → 403', async () => {
+    await as(seed.userA.id, seed.tenantA.id)(
+      request(app).put('/api/profile/shopify-secret').send({ secret: validSecret }),
+    ).expect(403)
+  })
+})
