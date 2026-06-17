@@ -13,6 +13,7 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import ListSubheader from '@mui/material/ListSubheader'
 import MenuItem from '@mui/material/MenuItem'
+import Paper from '@mui/material/Paper'
 import Select from '@mui/material/Select'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
@@ -24,6 +25,7 @@ import Link from '@mui/material/Link'
 import { Link as RouterLink } from 'react-router-dom'
 import { fetchShopifyOrders, importShopifyOrders } from '../../api/merch.ts'
 import { listAccounts } from '../../api/accounts.ts'
+import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import { formatEur } from '../../utils/purchaseTotals.ts'
 import type {
   Account, Product, ShopifyOrder, ShopifyLineItem, ShopifyLineMapping, ShopifyImportResult,
@@ -56,8 +58,28 @@ const ORDER_SKIP_LABELS: Record<string, string> = {
   skipped_unpaid: 'Unpaid',
 }
 
+// Multi-row card shell for the compact (mobile) layout, matching the merch list cards.
+const cardSx = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 1.5,
+  p: 1.5,
+  borderBottom: '1px solid',
+  borderColor: 'divider',
+  '&:last-of-type': { borderBottom: 'none' },
+}
+
 function lineMappable(line: ShopifyLineItem): boolean {
   return !line.skip_reason && !line.already_imported
+}
+
+// The status pill shown for an order in both the table and the compact card.
+function OrderStatusChip({ order }: { order: ShopifyOrder }) {
+  if (order.skip_reason) {
+    return <Chip size="small" color="default" label={ORDER_SKIP_LABELS[order.skip_reason] ?? order.skip_reason} />
+  }
+  if (order.fully_imported) return <Chip size="small" color="success" label="Imported" />
+  return <Chip size="small" variant="outlined" label={order.financial_status} />
 }
 
 // Turns a Shopify API failure into an actionable message. The backend forwards
@@ -295,9 +317,55 @@ interface SelectStepProps {
 }
 
 function SelectStep({ orders, selected, onToggle, nextCursor, loadingMore, onLoadMore }: SelectStepProps) {
+  const isCompact = useCompactLayout()
+
   if (!orders.length) {
     return <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>No recent orders found.</Typography>
   }
+
+  const loadMore = nextCursor && (
+    <Box sx={{ textAlign: 'center', mt: 2 }}>
+      <Button onClick={onLoadMore} disabled={loadingMore}>
+        {loadingMore ? 'Loading…' : 'Load older orders'}
+      </Button>
+    </Box>
+  )
+
+  if (isCompact) {
+    return (
+      <>
+        <Paper variant="outlined">
+          {orders.map((o) => {
+            const disabled = !!o.skip_reason || o.fully_imported
+            const lines = o.line_items.length
+            return (
+              <Box key={o.id} component="label" sx={{ ...cardSx, cursor: disabled ? 'default' : 'pointer' }}>
+                <Checkbox
+                  sx={{ flexShrink: 0 }}
+                  checked={selected.has(o.id)}
+                  disabled={disabled}
+                  onChange={() => onToggle(o.id)}
+                />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {o.name}
+                    </Typography>
+                    <OrderStatusChip order={o} />
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    {o.created_at?.slice(0, 10)} · {lines} line{lines === 1 ? '' : 's'} · {formatEur(o.total_incl_cents)}
+                  </Typography>
+                </Box>
+              </Box>
+            )
+          })}
+        </Paper>
+        {loadMore}
+      </>
+    )
+  }
+
   return (
     <>
       <Table size="small">
@@ -325,13 +393,7 @@ function SelectStep({ orders, selected, onToggle, nextCursor, loadingMore, onLoa
                 </TableCell>
                 <TableCell>{o.name}</TableCell>
                 <TableCell>{o.created_at?.slice(0, 10)}</TableCell>
-                <TableCell>
-                  {o.skip_reason
-                    ? <Chip size="small" color="default" label={ORDER_SKIP_LABELS[o.skip_reason] ?? o.skip_reason} />
-                    : o.fully_imported
-                      ? <Chip size="small" color="success" label="Imported" />
-                      : <Chip size="small" variant="outlined" label={o.financial_status} />}
-                </TableCell>
+                <TableCell><OrderStatusChip order={o} /></TableCell>
                 <TableCell align="right">{o.line_items.length}</TableCell>
                 <TableCell align="right">{formatEur(o.total_incl_cents)}</TableCell>
               </TableRow>
@@ -339,13 +401,7 @@ function SelectStep({ orders, selected, onToggle, nextCursor, loadingMore, onLoa
           })}
         </TableBody>
       </Table>
-      {nextCursor && (
-        <Box sx={{ textAlign: 'center', mt: 2 }}>
-          <Button onClick={onLoadMore} disabled={loadingMore}>
-            {loadingMore ? 'Loading…' : 'Load older orders'}
-          </Button>
-        </Box>
-      )}
+      {loadMore}
     </>
   )
 }
@@ -360,8 +416,73 @@ interface MapStepProps {
   onVatChange: (lineId: string, code: string, vat: number) => void
 }
 
+interface LineMapControlProps {
+  line: ShopifyLineItem
+  mapping: ShopifyLineMapping | undefined
+  activeProducts: Product[]
+  revenueAccounts: Account[]
+  mappingValue: (m: ShopifyLineMapping | undefined) => string
+  onMappingSelect: (line: ShopifyLineItem, value: string) => void
+  onVatChange: (lineId: string, code: string, vat: number) => void
+  compact?: boolean
+}
+
+// The "Map to" control for a single line — locked chip, or a product/revenue
+// select with an optional VAT picker. Shared by the table and the compact cards.
+function LineMapControl({
+  line, mapping, activeProducts, revenueAccounts, mappingValue, onMappingSelect, onVatChange, compact = false,
+}: LineMapControlProps) {
+  if (!lineMappable(line)) {
+    return (
+      <Chip
+        size="small"
+        label={line.already_imported ? 'Imported' : 'Refunded'}
+        color={line.already_imported ? 'success' : 'default'}
+      />
+    )
+  }
+  return (
+    <Box sx={{ display: 'flex', flexDirection: compact ? 'column' : 'row', gap: 1, alignItems: compact ? 'stretch' : 'center' }}>
+      <FormControl size="small" sx={compact ? { width: '100%' } : { minWidth: 200 }}>
+        <Select
+          value={mappingValue(mapping)}
+          onChange={(e) => onMappingSelect(line, e.target.value)}
+        >
+          <MenuItem value="skip">Skip</MenuItem>
+          {activeProducts.length > 0 && <ListSubheader>Products</ListSubheader>}
+          {activeProducts.map((p) => (
+            <MenuItem key={String(p.id)} value={`product:${p.id}`}>{p.name}</MenuItem>
+          ))}
+          {revenueAccounts.length > 0 && <ListSubheader>Revenue accounts</ListSubheader>}
+          {revenueAccounts.map((a) => (
+            <MenuItem key={String(a.code)} value={`revenue:${a.code}`}>
+              {a.code} — {a.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      {mapping?.type === 'revenue' && (
+        <FormControl size="small" sx={compact ? { alignSelf: 'flex-start', minWidth: 120 } : { minWidth: 90 }}>
+          <InputLabel>VAT</InputLabel>
+          <Select
+            label="VAT"
+            value={mapping.vat_rate}
+            onChange={(e) => onVatChange(line.id, mapping.account_code, Number(e.target.value))}
+          >
+            {VAT_RATES.map((r) => <MenuItem key={r} value={r}>{r}%</MenuItem>)}
+          </Select>
+        </FormControl>
+      )}
+    </Box>
+  )
+}
+
 function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, onMappingSelect, onVatChange }: MapStepProps) {
+  const isCompact = useCompactLayout()
   const activeProducts = products.filter((p) => !p.archived_at)
+
+  const controlProps = { activeProducts, revenueAccounts, mappingValue, onMappingSelect, onVatChange }
+
   return (
     <>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -373,74 +494,49 @@ function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, on
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
             {order.name} · {order.created_at?.slice(0, 10)}
           </Typography>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-                <TableCell>Item</TableCell>
-                <TableCell align="right">Qty</TableCell>
-                <TableCell>Map to</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {order.line_items.map((line) => {
-                const locked = !lineMappable(line)
-                const mapping = mappings[line.id]
-                return (
-                  <TableRow key={line.id}>
-                    <TableCell>
-                      {line.title}
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        {line.current_quantity} × €{line.price}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">{line.current_quantity}</TableCell>
-                    <TableCell>
-                      {locked ? (
-                        <Chip
-                          size="small"
-                          label={line.already_imported ? 'Imported' : 'Refunded'}
-                          color={line.already_imported ? 'success' : 'default'}
-                        />
-                      ) : (
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                          <FormControl size="small" sx={{ minWidth: 200 }}>
-                            <Select
-                              value={mappingValue(mapping)}
-                              onChange={(e) => onMappingSelect(line, e.target.value)}
-                            >
-                              <MenuItem value="skip">Skip</MenuItem>
-                              {activeProducts.length > 0 && <ListSubheader>Products</ListSubheader>}
-                              {activeProducts.map((p) => (
-                                <MenuItem key={String(p.id)} value={`product:${p.id}`}>{p.name}</MenuItem>
-                              ))}
-                              {revenueAccounts.length > 0 && <ListSubheader>Revenue accounts</ListSubheader>}
-                              {revenueAccounts.map((a) => (
-                                <MenuItem key={String(a.code)} value={`revenue:${a.code}`}>
-                                  {a.code} — {a.name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                          {mapping?.type === 'revenue' && (
-                            <FormControl size="small" sx={{ minWidth: 90 }}>
-                              <InputLabel>VAT</InputLabel>
-                              <Select
-                                label="VAT"
-                                value={mapping.vat_rate}
-                                onChange={(e) => onVatChange(line.id, mapping.account_code, Number(e.target.value))}
-                              >
-                                {VAT_RATES.map((r) => <MenuItem key={r} value={r}>{r}%</MenuItem>)}
-                              </Select>
-                            </FormControl>
-                          )}
-                        </Box>
-                      )}
-                    </TableCell>
+          {isCompact ? (
+            <Paper variant="outlined">
+              {order.line_items.map((line) => (
+                <Box key={line.id} sx={{ ...cardSx, flexDirection: 'column', alignItems: 'stretch' }}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{line.title}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {line.current_quantity} × €{line.price}
+                    </Typography>
+                  </Box>
+                  <LineMapControl line={line} mapping={mappings[line.id]} compact {...controlProps} />
+                </Box>
+              ))}
+            </Paper>
+          ) : (
+            <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ '& th': { fontWeight: 600 } }}>
+                    <TableCell>Item</TableCell>
+                    <TableCell align="right">Qty</TableCell>
+                    <TableCell>Map to</TableCell>
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                </TableHead>
+                <TableBody>
+                  {order.line_items.map((line) => (
+                    <TableRow key={line.id}>
+                      <TableCell>
+                        {line.title}
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          {line.current_quantity} × €{line.price}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">{line.current_quantity}</TableCell>
+                      <TableCell>
+                        <LineMapControl line={line} mapping={mappings[line.id]} {...controlProps} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Paper>
+          )}
         </Box>
       ))}
     </>
@@ -448,6 +544,7 @@ function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, on
 }
 
 function DoneStep({ result }: { result: ShopifyImportResult }) {
+  const isCompact = useCompactLayout()
   const skippedReasons = result.results.filter((r) => r.status !== 'imported')
   return (
     <>
@@ -456,22 +553,35 @@ function DoneStep({ result }: { result: ShopifyImportResult }) {
         {result.skipped > 0 ? `, skipped ${result.skipped}` : ''}.
       </Alert>
       {skippedReasons.length > 0 && (
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-              <TableCell>Line</TableCell>
-              <TableCell>Reason</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+        isCompact ? (
+          <Paper variant="outlined">
             {skippedReasons.map((r) => (
-              <TableRow key={r.shopify_line_id}>
-                <TableCell>{r.shopify_line_id}</TableCell>
-                <TableCell>{STATUS_LABELS[r.status] ?? r.status}</TableCell>
-              </TableRow>
+              <Box key={r.shopify_line_id} sx={{ ...cardSx, justifyContent: 'space-between' }}>
+                <Typography variant="body2" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.shopify_line_id}
+                </Typography>
+                <Chip size="small" variant="outlined" label={STATUS_LABELS[r.status] ?? r.status} sx={{ flexShrink: 0 }} />
+              </Box>
             ))}
-          </TableBody>
-        </Table>
+          </Paper>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ '& th': { fontWeight: 600 } }}>
+                <TableCell>Line</TableCell>
+                <TableCell>Reason</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {skippedReasons.map((r) => (
+                <TableRow key={r.shopify_line_id}>
+                  <TableCell>{r.shopify_line_id}</TableCell>
+                  <TableCell>{STATUS_LABELS[r.status] ?? r.status}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )
       )}
     </>
   )

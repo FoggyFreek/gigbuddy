@@ -5,6 +5,7 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/rehearsals${path}`, options)
 
 export const listRehearsals = () => api<Rehearsal[]>('/')
+export const getNextRehearsal = () => api<Rehearsal | null>('/next')
 export const getRehearsal = (id: Id) => api<Rehearsal>(`/${id}`)
 export const createRehearsal = (body: Partial<Rehearsal>) =>
   api<Rehearsal>('/', { method: 'POST', body: JSON.stringify(body) })

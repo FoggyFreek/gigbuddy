@@ -13,6 +13,7 @@ import {
 import {
   listRehearsals as listRehearsalRows,
   fetchRehearsal,
+  fetchNextRehearsal,
   rehearsalExistsInTenant,
   memberExistsInTenant,
   songExistsInTenant,
@@ -79,6 +80,12 @@ async function autoDemoteIfNeeded(db, rehearsalId, tenantId) {
 }
 
 // ---------- reads ----------
+
+export async function getNextRehearsal(db, tenantId) {
+  const rehearsal = await fetchNextRehearsal(db, tenantId)
+  if (!rehearsal) return { rehearsal: null }
+  return getRehearsal(db, tenantId, rehearsal.id)
+}
 
 export async function listRehearsals(db, tenantId) {
   const rehearsals = await listRehearsalRows(db, tenantId)

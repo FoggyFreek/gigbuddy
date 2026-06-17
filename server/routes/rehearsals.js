@@ -6,6 +6,7 @@ import { parseId } from '../validators/rehearsalValidators.js'
 import {
   listRehearsals,
   getRehearsal,
+  getNextRehearsal,
   createRehearsal,
   patchRehearsal,
   deleteRehearsal,
@@ -36,6 +37,13 @@ function sendError(res, error) {
 // List all rehearsals with participants
 router.get('/', async (req, res) => {
   res.json(await listRehearsals(pool, req.tenantId))
+})
+
+// get the next rehearsal with participant
+router.get('/next', async (req, res) => {
+  const result = await getNextRehearsal(pool, req.tenantId)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.rehearsal)
 })
 
 // Get single rehearsal

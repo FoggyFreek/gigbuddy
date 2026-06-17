@@ -23,7 +23,7 @@ import GigMapTile from '../components/dashboard/GigMapTile.tsx'
 import { SOCIALS } from '../components/profile/profileForm.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { listGigs } from '../api/gigs.ts'
-import { listRehearsals } from '../api/rehearsals.ts'
+import { getNextRehearsal } from '../api/rehearsals.ts'
 import { listAllTasks } from '../api/tasks.ts'
 import { listBandEvents } from '../api/bandEvents.ts'
 import { getProfile } from '../api/profile.ts'
@@ -75,6 +75,11 @@ const settle = <T,>(r: PromiseSettledResult<T[]>): SettledResult<T> =>
     ? { status: 'ok', data: r.value || [] }
     : { status: 'error', data: [] }
 
+const settleOne = <T,>(r: PromiseSettledResult<T | null>): { status: 'ok' | 'error'; data: T | null } =>
+  r.status === 'fulfilled'
+    ? { status: 'ok', data: r.value ?? null }
+    : { status: 'error', data: null }
+
 interface Task {
   id?: number
   title?: string
@@ -94,14 +99,14 @@ interface SectionData<T> {
 interface Sections {
   nextGig: { status: 'ok' | 'error'; data: Gig | null }
   nextBandEvent: { status: 'ok' | 'error'; data: BandEvent | null }
+  nextRehearsal: { status: 'ok' | 'error'; data: Rehearsal | null }
   shows: SectionData<Gig>
-  rehearsals: SectionData<Rehearsal>
   tasks: SectionData<Task>
 }
 
 // Build the whole view-model in the effect (not in render) so render stays pure.
 function buildSections(
-  results: [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal[]>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>],
+  results: [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>],
   bandMemberId: number | string | null | undefined,
 ): Sections {
   const [gigsR, rehR, taskR, bandEventsR] = results
@@ -112,7 +117,7 @@ function buildSections(
     .filter((g) => dateKey(g.event_date) >= today)
     .sort(byDateAscNullsLast('event_date') as (a: Gig, b: Gig) => number)
 
-  const rehSettled = settle(rehR)
+  const rehSettled = settleOne(rehR)
   const taskSettled = settle(taskR)
   const bandEventsSettled = settle(bandEventsR)
   const upcomingBandEvents = [...bandEventsSettled.data]
@@ -121,9 +126,6 @@ function buildSections(
 
   // Featured "next gig" is dropped from the shows list, so total excludes it too.
   const upcomingShows = upcomingGigs.slice(1)
-  const upcomingRehearsals = [...rehSettled.data]
-    .filter((r) => dateKey(r.proposed_date) >= today)
-    .sort(byDateAscNullsLast('proposed_date') as (a: Rehearsal, b: Rehearsal) => number)
   const myTasks = taskSettled.data
     .filter((t) => !t.done && bandMemberId != null && t.assigned_to === bandMemberId)
     .sort(byDateAscNullsLast('due_date') as (a: Task, b: Task) => number)
@@ -132,11 +134,7 @@ function buildSections(
     nextGig: { status: gigsSettled.status, data: upcomingGigs[0] || null },
     nextBandEvent: { status: bandEventsSettled.status, data: upcomingBandEvents[0] || null },
     shows: { status: gigsSettled.status, total: upcomingShows.length, data: upcomingShows.slice(0, MAX_ROWS) },
-    rehearsals: {
-      status: rehSettled.status,
-      total: upcomingRehearsals.length,
-      data: upcomingRehearsals.slice(0, MAX_ROWS),
-    },
+    nextRehearsal: { status: rehSettled.status, data: rehSettled.data },
     tasks: {
       status: taskSettled.status,
       total: myTasks.length,
@@ -199,11 +197,11 @@ export default function DashboardPage() {
       setLoading(true)
       const results = await Promise.allSettled([
         listGigs(),
-        listRehearsals(),
+        getNextRehearsal(),
         listAllTasks() as Promise<Task[]>,
         listBandEvents(),
       ])
-      setSections(buildSections(results as [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal[]>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>], bandMemberId))
+      setSections(buildSections(results as [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>], bandMemberId))
     } finally {
       setLoading(false)
     }
@@ -219,7 +217,7 @@ export default function DashboardPage() {
     )
   }
 
-  const { nextGig, nextBandEvent, shows, rehearsals, tasks } = sections
+  const { nextGig, nextBandEvent, nextRehearsal, shows, tasks } = sections
   const activeSocials = SOCIALS.filter(({ field, prefix }) => prefix && profile?.[field])
 
   return (
@@ -257,143 +255,185 @@ export default function DashboardPage() {
       </Box>
 
       <Grid container spacing={3} sx={{ alignItems: 'stretch' }}>
-
-        {/* Next gig + Played here stacked in one column */}
+        {/* Next gig */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%' }}>
-            <DashboardCard
-              title="Next gig"
-              icon={EventIcon}
-              viewAllTo={nextGig.data ? `/gigs/${nextGig.data.id}` : undefined}
-              viewAllLabel="View details"
-              status={nextGig.status}
-              isEmpty={!nextGig.data}
-              emptyText="No upcoming gigs"
-              sx={{ height: 'auto', flexShrink: 0 }}
-            >
-              {nextGig.data && (
+          <DashboardCard
+            title="Next gig"
+            icon={EventIcon}
+            viewAllTo={nextGig.data ? `/gigs/${nextGig.data.id}` : undefined}
+            viewAllLabel="View details"
+            status={nextGig.status}
+            isEmpty={!nextGig.data}
+            emptyText="No upcoming gigs"
+            sx={{ height: 'auto', flexShrink: 0 }}
+          >
+            {nextGig.data && (
+              <Box
+                onClick={() => navigate(`/gigs/${nextGig.data!.id}`)}
+                sx={{ cursor: 'pointer', py: 0.5, display: 'flex', alignItems: 'center', gap: 2 }}
+              >
                 <Box
-                  onClick={() => navigate(`/gigs/${nextGig.data!.id}`)}
-                  sx={{ cursor: 'pointer', py: 0.5, display: 'flex', alignItems: 'center', gap: 2 }}
+                  sx={{
+                    display: 'grid',
+                    ml: 1,
+                    gridTemplateColumns: 'auto 1fr',
+                    columnGap: 3,
+                    alignItems: 'baseline',
+                    flexGrow: 1,
+                    minWidth: 0,
+                  }}
                 >
+                  <Typography variant="caption" sx={{ color: 'primary.main', textTransform: 'uppercase', textAlign: 'center' }}>
+                    {new Date(nextGig.data.event_date!).toLocaleDateString('nl-NL', { month: 'short' })}
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                    {nextGig.data.event_description}
+                  </Typography>
+                  <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
+                    {new Date(nextGig.data.event_date!).getDate()}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'light' }}>
+                    {(() => {
+                      const place = nextGig.data!.venue ?? nextGig.data!.festival
+                      return [venueHeadline(place), venueCity(place)].filter(Boolean).join(', ')
+                    })()}
+                  </Typography>
+                </Box>
+                {nextGig.data.banner_path && (
                   <Box
+                    component="img"
+                    src={`/api/files/${nextGig.data.banner_path}`}
+                    alt=""
                     sx={{
-                      display: 'grid',
-                      ml:1,
-                      gridTemplateColumns: 'auto 1fr',
-                      columnGap: 3,
-                      alignItems: 'baseline',
-                      flexGrow: 1,
-                      minWidth: 0,
+                      width: 56,
+                      height: 56,
+                      objectFit: 'cover',
+                      borderRadius: 1,
+                      flexShrink: 0,
+                      display: 'block',
                     }}
-                  >
-                    <Typography variant="caption" sx={{ color: 'primary.main', textTransform: 'uppercase', textAlign: 'center' }}>
-                      {new Date(nextGig.data.event_date!).toLocaleDateString('nl-NL', { month: 'short' })}
-                    </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                      {nextGig.data.event_description}
-                    </Typography>
-                    <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
-                      {new Date(nextGig.data.event_date!).getDate()}
-                    </Typography>
+                  />
+                )}
+              </Box>
+            )}
+          </DashboardCard>
+        </Grid>
+        {/* Next rehearsal */}
+        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+          <DashboardCard
+            title="Next rehearsal"
+            icon={MusicNoteIcon}
+            viewAllTo={nextRehearsal.data ? `/rehearsals/${nextRehearsal.data.id}` : '/rehearsals'}
+            viewAllLabel={nextRehearsal.data ? 'View details' : undefined}
+            status={nextRehearsal.status}
+            isEmpty={!nextRehearsal.data}
+            emptyText="No planned rehearsals"
+            sx={{ height: 'auto', flexShrink: 0 }}
+          >
+            {nextRehearsal.data && (
+              <Box
+                onClick={() => navigate(`/rehearsals/${nextRehearsal.data!.id}`)}
+                sx={{ cursor: 'pointer', py: 0.5 }}
+              >
+                <Box
+                  sx={{
+                    display: 'grid',
+                    ml: 1,
+                    gridTemplateColumns: 'auto 1fr',
+                    columnGap: 3,
+                    alignItems: 'baseline',
+                    minWidth: 0,
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: 'primary.main', textTransform: 'uppercase', textAlign: 'center' }}>
+                    {new Date(nextRehearsal.data.proposed_date!).toLocaleDateString('nl-NL', { month: 'short' })}
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {nextRehearsal.data.location || 'Rehearsal'}
+                  </Typography>
+                  <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
+                    {new Date(nextRehearsal.data.proposed_date!).getDate()}
+                  </Typography>
+                  {(nextRehearsal.data.start_time || nextRehearsal.data.end_time) && (
                     <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'light' }}>
-                      {(() => {
-                        const place = nextGig.data!.venue ?? nextGig.data!.festival
-                        return [venueHeadline(place), venueCity(place)].filter(Boolean).join(', ')
-                      })()}
+                      {[nextRehearsal.data.start_time, nextRehearsal.data.end_time].filter(Boolean).map(t => t!.slice(0, 5)).join(' – ')}
                     </Typography>
-                  </Box>
-                  {nextGig.data.banner_path && (
-                    <Box
-                      component="img"
-                      src={`/api/files/${nextGig.data.banner_path}`}
-                      alt=""
-                      sx={{
-                        width: 56,
-                        height: 56,
-                        objectFit: 'cover',
-                        borderRadius: 1,
-                        flexShrink: 0,
-                        display: 'block',
-                      }}
-                    />
                   )}
                 </Box>
-              )}
-            </DashboardCard>
-            <DashboardCard
-              title="Next band event"
-              icon={EventIcon}
-              viewAllTo={nextBandEvent.data ? `/band-events/${nextBandEvent.data.id}` : undefined}
-              viewAllLabel="View details"
-              status={nextBandEvent.status}
-              isEmpty={!nextBandEvent.data}
-              emptyText="No upcoming band events"
-              sx={{ height: 'auto', flexShrink: 0 }}
-            >
-              {nextBandEvent.data && (
-                <Box
-                  onClick={() => navigate(`/band-events/${nextBandEvent.data!.id}`)}
-                  sx={{ cursor: 'pointer', py: 0.5, display: 'flex', alignItems: 'center', gap: 2 }}
-                >
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      ml: 1,
-                      gridTemplateColumns: 'auto 1fr',
-                      columnGap: 3,
-                      alignItems: 'baseline',
-                      flexGrow: 1,
-                      minWidth: 0,
-                    }}
-                  >
-                    <Typography variant="caption" sx={{ color: 'primary.main', textTransform: 'uppercase', textAlign: 'center' }}>
-                      {new Date(nextBandEvent.data.start_date!).toLocaleDateString('nl-NL', { month: 'short' })}
-                    </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                      {nextBandEvent.data.title}
-                    </Typography>
-                    <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
-                      {new Date(nextBandEvent.data.start_date!).getDate()}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      {nextBandEvent.data.location}
-                    </Typography>
-                  </Box>
-                  {(() => {
-                    const isDark = theme.palette.mode === 'dark'
-                    if (profile?.avatar_path) {
-                      return (
-                        <Box
-                          component="img"
-                          src={`/api/files/${profile.avatar_path}`}
-                          alt=""
-                          sx={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                        />
-                      )
-                    }
-                    const logoPath = isDark && profile?.logo_dark_path ? profile.logo_dark_path : profile?.logo_path
-                    if (logoPath) {
-                      return (
-                        <Box
-                          component="img"
-                          src={`/api/files/${logoPath}`}
-                          alt=""
-                          sx={{ width: 44, height: 44, objectFit: 'contain', flexShrink: 0 }}
-                        />
-                      )
-                    }
-                    return null
-                  })()}
-                </Box>
-              )}
-            </DashboardCard>
-            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <GigMapTile />
-            </Box>
-          </Box>
+              </Box>
+            )}
+          </DashboardCard>
         </Grid>
-
+        {/* Next band event */}
+        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+          <DashboardCard
+            title="Next band event"
+            icon={EventIcon}
+            viewAllTo={nextBandEvent.data ? `/events/${nextBandEvent.data.id}` : undefined}
+            viewAllLabel="View details"
+            status={nextBandEvent.status}
+            isEmpty={!nextBandEvent.data}
+            emptyText="No upcoming band events"
+            sx={{ height: 'auto', flexShrink: 0 }}
+          >
+            {nextBandEvent.data && (
+              <Box
+                onClick={() => navigate(`/events/${nextBandEvent.data!.id}`)}
+                sx={{ cursor: 'pointer', py: 0.5, display: 'flex', alignItems: 'center', gap: 2 }}
+              >
+                <Box
+                  sx={{
+                    display: 'grid',
+                    ml: 1,
+                    gridTemplateColumns: 'auto 1fr',
+                    columnGap: 3,
+                    alignItems: 'baseline',
+                    flexGrow: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: 'primary.main', textTransform: 'uppercase', textAlign: 'center' }}>
+                    {new Date(nextBandEvent.data.start_date!).toLocaleDateString('nl-NL', { month: 'short' })}
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                    {nextBandEvent.data.title}
+                  </Typography>
+                  <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
+                    {new Date(nextBandEvent.data.start_date!).getDate()}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {nextBandEvent.data.location}
+                  </Typography>
+                </Box>
+                {(() => {
+                  const isDark = theme.palette.mode === 'dark'
+                  if (profile?.avatar_path) {
+                    return (
+                      <Box
+                        component="img"
+                        src={`/api/files/${profile.avatar_path}`}
+                        alt=""
+                        sx={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                      />
+                    )
+                  }
+                  const logoPath = isDark && profile?.logo_dark_path ? profile.logo_dark_path : profile?.logo_path
+                  if (logoPath) {
+                    return (
+                      <Box
+                        component="img"
+                        src={`/api/files/${logoPath}`}
+                        alt=""
+                        sx={{ width: 44, height: 44, objectFit: 'contain', flexShrink: 0 }}
+                      />
+                    )
+                  }
+                  return null
+                })()}
+              </Box>
+            )}
+          </DashboardCard>
+        </Grid>
         {/* Upcoming shows */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
@@ -410,49 +450,43 @@ export default function DashboardPage() {
                 const place = g.venue ?? g.festival
                 return (
                   <React.Fragment key={String(g.id)}>
-                  {i > 0 && <Divider sx={{ width: '50%', mx: 'auto' }} />}
-                  <ListItemButton
-                    onClick={() => navigate(`/gigs/${g.id}`)}
-                    disableGutters
-                    sx={{ borderRadius: 1, px: 1 }}
-                  >
-                    <Box
-                      sx={{
-                        display: 'grid',
-                        ml: 1,
-                        gridTemplateColumns: '40px 1fr',
-                        columnGap: 3,
-                        alignItems: 'baseline',
-                        flexGrow: 1,
-                        minWidth: 0,
-                      }}
+                    {i > 0 && <Divider sx={{ width: '50%', mx: 'auto' }} />}
+                    <ListItemButton
+                      onClick={() => navigate(`/gigs/${g.id}`)}
+                      disableGutters
+                      sx={{ borderRadius: 1, px: 1 }}
                     >
-                      <Typography variant="caption" sx={{ color: 'primary.main', textTransform: 'uppercase', textAlign: 'center' }}>
-                        {new Date(g.event_date!).toLocaleDateString('nl-NL', { month: 'short' })}
-                      </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {g.event_description}
-                      </Typography>
-                      <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
-                        {new Date(g.event_date!).getDate()}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'light' }}>
-                        {[venueHeadline(place), venueCity(place)].filter(Boolean).join(', ')}
-                      </Typography>
-                    </Box>
-                    <Chip
-                      size="small"
-                      label={g.status}
-                      color={GIG_STATUS_COLOR[g.status ?? ''] || 'default'}
-                    />
-                  </ListItemButton>
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          ml: 1,
+                          gridTemplateColumns: '40px 1fr',
+                          columnGap: 3,
+                          alignItems: 'baseline',
+                          flexGrow: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ color: 'primary.main', textTransform: 'uppercase', textAlign: 'center' }}>
+                          {new Date(g.event_date!).toLocaleDateString('nl-NL', { month: 'short' })}
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {g.event_description}
+                        </Typography>
+                        <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
+                          {new Date(g.event_date!).getDate()}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'light' }}>
+                          {[venueHeadline(place), venueCity(place)].filter(Boolean).join(', ')}
+                        </Typography>
+                      </Box>
+                    </ListItemButton>
                   </React.Fragment>
                 )
               })}
             </List>
           </DashboardCard>
         </Grid>
-
         {/* My tasks */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
@@ -478,57 +512,10 @@ export default function DashboardPage() {
             </List>
           </DashboardCard>
         </Grid>
-
-        {/* Rehearsals */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-          <DashboardCard
-            title="Rehearsals"
-            icon={MusicNoteIcon}
-            viewAllTo="/rehearsals"
-            status={rehearsals.status}
-            isEmpty={rehearsals.data.length === 0}
-            emptyText="No upcoming rehearsals"
-          >
-            <List dense disablePadding>
-              {rehearsals.data.map((r, i) => (
-                <React.Fragment key={String(r.id)}>
-                  {i > 0 && <Divider sx={{ width: '50%', mx: 'auto' }} />}
-                  <ListItemButton
-                    onClick={() => navigate(`/rehearsals/${r.id}`)}
-                    disableGutters
-                    sx={{ borderRadius: 1, px: 1 }}
-                  >
-                    <Box
-                      sx={{
-                        display: 'grid',
-                        ml: 1,
-                        gridTemplateColumns: '40px 1fr',
-                        columnGap: 3,
-                        alignItems: 'baseline',
-                        flexGrow: 1,
-                        minWidth: 0,
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ color: 'primary.main', textTransform: 'uppercase', textAlign: 'center' }}>
-                        {new Date(r.proposed_date!).toLocaleDateString('nl-NL', { month: 'short' })}
-                      </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {r.location || 'Rehearsal'}
-                      </Typography>
-                      <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
-                        {new Date(r.proposed_date!).getDate()}
-                      </Typography>
-                      {(r.start_time || r.end_time) && (
-                        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'light', gridColumn: 2 }}>
-                          {[r.start_time, r.end_time].filter(Boolean).map(t => t!.slice(0, 5)).join(' - ')}
-                        </Typography>
-                      )}
-                    </Box>
-                  </ListItemButton>
-                </React.Fragment>
-              ))}
-            </List>
-          </DashboardCard>
+          <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <GigMapTile />
+          </Box>
         </Grid>
 
       </Grid>
