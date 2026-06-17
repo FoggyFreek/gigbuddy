@@ -15,10 +15,17 @@ function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
 }
 
+function futureDateISO(daysFromNow) {
+  const d = new Date()
+  d.setDate(d.getDate() + daysFromNow)
+  d.setUTCHours(0, 0, 0, 0)
+  return d.toISOString()
+}
+
 const GIGS = [
   {
     id: 1,
-    event_date: '2026-06-15T00:00:00.000Z',
+    event_date: futureDateISO(5),
     event_description: 'Jazz Night',
     venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam' },
     start_time: '20:00:00',
@@ -28,7 +35,7 @@ const GIGS = [
   },
   {
     id: 2,
-    event_date: '2026-07-01T00:00:00.000Z',
+    event_date: futureDateISO(15),
     event_description: 'Summer Festival',
     venue: { id: 12, name: 'Summer Fest', category: 'festival', city: 'Rotterdam' },
     start_time: null,

@@ -58,7 +58,7 @@ describe('InvitesSection', () => {
     await user.click(screen.getByRole('button', { name: /new invite/i }))
     await user.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
-      expect(createInvite).toHaveBeenCalledWith({ role: 'member', expiresInDays: 14 }),
+      expect(createInvite).toHaveBeenCalledWith({ role: 'contributor', expiresInDays: 14 }),
     )
   })
 
