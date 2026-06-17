@@ -35,6 +35,10 @@ This skill provides the authoritative rules for writing correct, idiomatic React
 - Never pass a Hook as a prop or variable — always call it inline
 - Never write higher-order Hooks that wrap other Hooks dynamically
 
+### MUI styling conventions
+- **Never use the `color` prop directly on MUI `Typography` or `Box`.** Always put color inside `sx`: `sx={{ color: 'text.secondary' }}`, not `color="text.secondary"`.
+- All other MUI system props (`justifyContent`, `alignItems`, `gap`, etc.) also belong in `sx`, never as bare props.
+
 ## Key file locations in this project
 - `src/pages/` — page-level components
 - `src/components/` — shared and feature components
