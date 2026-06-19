@@ -11,11 +11,11 @@ interface TenantThemeProviderProps {
 
 export function TenantThemeProvider({ children }: TenantThemeProviderProps) {
   const { accentColor } = useProfile()
-  const { mode } = useThemeMode()
+  const { mode, variant } = useThemeMode()
 
   const theme = useMemo(
-    () => createAppTheme(mode, accentColor || undefined),
-    [mode, accentColor],
+    () => createAppTheme(mode, accentColor || undefined, variant),
+    [mode, accentColor, variant],
   )
 
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>

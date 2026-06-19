@@ -167,11 +167,14 @@ export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanel
 
   return (
     <Paper
-      elevation={6}
+      elevation={2}
       sx={{
-        mt: 2,
+        mt: 1,
         p: 1.5,
-        borderRadius: 1,
+        borderBottomLeftRadius: 14,
+        borderBottomRightRadius: 14,
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
         display: 'flex',
         flexDirection: 'column',
         maxHeight: 'calc(100vh - 96px)',
@@ -198,20 +201,22 @@ export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanel
         </Box>
       )}
 
-      <Typography variant="overline" color="text.secondary" sx={{ display: 'block', lineHeight: 1.6 }}>
-        Search in
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+        Searching for
       </Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 0.5 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, ml:1, mt: 1.5, mb: 1.5 }}>
         {active.map((cat) => (
           <Chip
             key={cat.key}
             label={cat.label}
             variant="outlined"
+            
             onDelete={() => removeCategory(cat.key)}
             deleteIcon={<CloseIcon />}
             size="small"
             sx={{
               fontSize: 12,
+              boxShadow: 1, 
               '& .MuiChip-deleteIcon': { fontSize: 14, backgroundColor: 'transparent' },
             }}
           />

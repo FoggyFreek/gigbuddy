@@ -7,7 +7,7 @@ import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import { alpha } from '@mui/material/styles'
+import { alpha, darken, lighten } from '@mui/material/styles'
 import type { Theme } from '@mui/material/styles'
 import type { SvgIconComponent } from '@mui/icons-material'
 import NavItem from './NavItem.tsx'
@@ -109,7 +109,9 @@ export default function NavGroup({ group, pathname, isNavCollapsed, expanded, on
                 bottom: 0,
                 width: 3,
                 backgroundColor: (t: Theme) =>
-                  t.palette.mode === 'light' ? t.palette.grey[500] : t.palette.grey[400],
+                  t.palette.mode === 'light'
+                    ? darken(t.palette.background.paper, 0.12)
+                    : lighten(t.palette.background.paper, 0.14),
               },
             }
           : {}),
@@ -130,7 +132,12 @@ export default function NavGroup({ group, pathname, isNavCollapsed, expanded, on
   )
 
   const expandedBg = expanded
-    ? { bgcolor: (t: Theme) => t.palette.mode === 'light' ? t.palette.grey[100] : t.palette.grey[800] }
+    ? {
+        bgcolor: (t: Theme) =>
+          t.palette.mode === 'light'
+            ? darken(t.palette.background.paper, 0.04)
+            : lighten(t.palette.background.paper, 0.06),
+      }
     : {}
 
   if (isNavCollapsed) {

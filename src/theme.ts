@@ -1,18 +1,42 @@
 import { createTheme } from '@mui/material/styles'
 import type { Theme } from '@mui/material/styles'
 
-export function createAppTheme(mode: 'light' | 'dark', primaryColor?: string | null): Theme {
+export type ThemeVariant = 'default' | 'warm' | 'slate'
+
+interface VariantTokenSet {
+  bg: string
+  paper: string
+  secondary: string
+  scrollThumb: string
+  scrollThumbHover: string
+}
+
+export const VARIANT_TOKENS: Record<ThemeVariant, { light: VariantTokenSet; dark: VariantTokenSet }> = {
+  default: {
+    light:  { bg: '#FFFBFE', paper: '#FFFFFF', secondary: '#625B71', scrollThumb: '#C4C0CF', scrollThumbHover: '#9E99A9' },
+    dark:   { bg: '#1C1B1F', paper: '#2B2930', secondary: '#CCC2DC', scrollThumb: '#4A4458', scrollThumbHover: '#625B71' },
+  },
+  warm: {
+    light:  { bg: '#FDF6EF', paper: '#FFF9F4', secondary: '#8B5A2B', scrollThumb: '#D4B49A', scrollThumbHover: '#B8906A' },
+    dark:   { bg: '#1C1510', paper: '#2A2016', secondary: '#D4A574', scrollThumb: '#4D3820', scrollThumbHover: '#6B5030' },
+  },
+  slate: {
+    light:  { bg: '#F8FAFC', paper: '#FFFFFF', secondary: '#475569', scrollThumb: '#CBD5E1', scrollThumbHover: '#94A3B8' },
+    dark:   { bg: '#0F172A', paper: '#1E293B', secondary: '#94A3B8', scrollThumb: '#334155', scrollThumbHover: '#475569' },
+  },
+}
+
+export function createAppTheme(mode: 'light' | 'dark', primaryColor?: string | null, variant: ThemeVariant = 'default'): Theme {
   const isDark = mode === 'dark'
+  const tokens = VARIANT_TOKENS[variant][isDark ? 'dark' : 'light']
   const primary = primaryColor || (isDark ? '#D0BCFF' : '#6750A4')
   return createTheme({
     palette: {
       mode,
       primary: { main: primary },
-      secondary: { main: isDark ? '#CCC2DC' : '#625B71' },
+      secondary: { main: tokens.secondary },
       success: { main: isDark ? '#6FC97D' : '#386A20' },
-      background: isDark
-        ? { default: '#1C1B1F', paper: '#2B2930' }
-        : { default: '#FFFBFE', paper: '#FFFFFF' },
+      background: { default: tokens.bg, paper: tokens.paper },
     },
     typography: {
       fontFamily: 'Roboto, sans-serif',
@@ -25,20 +49,16 @@ export function createAppTheme(mode: 'light' | 'dark', primaryColor?: string | n
         styleOverrides: {
           '*': {
             scrollbarWidth: 'thin',
-            scrollbarColor: isDark
-              ? '#4A4458 #2B2930'
-              : '#C4C0CF #FFFBFE',
+            scrollbarColor: `${tokens.scrollThumb} ${tokens.bg}`,
           },
           '*::-webkit-scrollbar': { width: 8, height: 8 },
-          '*::-webkit-scrollbar-track': {
-            background: isDark ? '#2B2930' : '#FFFBFE',
-          },
+          '*::-webkit-scrollbar-track': { background: tokens.bg },
           '*::-webkit-scrollbar-thumb': {
-            background: isDark ? '#4A4458' : '#C4C0CF',
+            background: tokens.scrollThumb,
             borderRadius: 4,
           },
           '*::-webkit-scrollbar-thumb:hover': {
-            background: isDark ? '#625B71' : '#9E99A9',
+            background: tokens.scrollThumbHover,
           },
         },
       },

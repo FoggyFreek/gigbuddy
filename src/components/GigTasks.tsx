@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
+import Chip from '@mui/material/Chip'
+import Collapse from '@mui/material/Collapse'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
 import MenuItem from '@mui/material/MenuItem'
@@ -10,7 +12,11 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
+import CheckIcon from '@mui/icons-material/Check'
+import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import PersonIcon from '@mui/icons-material/Person'
 import { createTask, deleteTask, updateTask } from '../api/gigs.ts'
 import type { Id, Member } from '../types/entities.ts'
 
@@ -43,9 +49,26 @@ function toDateInputValue(val: string | null | undefined): string {
   return String(val).slice(0, 10)
 }
 
-// A component (not a render-time helper) so the ref-reading onClick is passed as
-// an event-handler prop — react-hooks/refs forbids handing such functions to a
-// plain function invoked during render.
+function formatDueDate(val: string | null | undefined): string | undefined {
+  if (!val) return undefined
+  const parts = val.split('-')
+  if (parts.length < 3) return undefined
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const monthIdx = parseInt(parts[1], 10) - 1
+  const day = parseInt(parts[2], 10)
+  if (monthIdx < 0 || monthIdx > 11) return undefined
+  return `${months[monthIdx]} ${day}`
+}
+
+function isDueOverdue(due_date: string | null | undefined): boolean {
+  if (!due_date) return false
+  const parts = due_date.split('-').map(Number)
+  if (parts.length < 3) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return new Date(parts[0], parts[1] - 1, parts[2]) < today
+}
+
 function DueDateAdornment({ label, onClick }: DueDateAdornmentProps) {
   return (
     <InputAdornment position="end">
@@ -62,14 +85,31 @@ function DueDateAdornment({ label, onClick }: DueDateAdornmentProps) {
   )
 }
 
-export default function GigTasks({ gigId, initialTasks = [], members = [], canWrite = true, currentBandMemberId = null }: GigTasksProps) {
+export default function GigTasks({
+  gigId,
+  initialTasks = [],
+  members = [],
+  canWrite = true,
+  currentBandMemberId = null,
+}: GigTasksProps) {
   const [tasks, setTasks] = useState<LocalGigTask[]>(initialTasks)
+
+  // add-task form
+  const [showAddForm, setShowAddForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newDue, setNewDue] = useState('')
-  const [dueFocused, setDueFocused] = useState(false)
-  const [focusedDueTaskId, setFocusedDueTaskId] = useState<Id | null>(null)
+  const [newAssignTo, setNewAssignTo] = useState('')
+  const [newDueFocused, setNewDueFocused] = useState(false)
   const newDueInputRef = useRef<HTMLInputElement | null>(null)
+  const newTitleInputRef = useRef<HTMLInputElement | null>(null)
+
+  // per-task edit expansion
+  const [expandedId, setExpandedId] = useState<Id | null>(null)
+  const [focusedDueTaskId, setFocusedDueTaskId] = useState<Id | null>(null)
   const dueInputRefs = useRef<Map<Id, HTMLInputElement>>(new Map())
+
+  // completed section
+  const [showCompleted, setShowCompleted] = useState(false)
 
   const openNewDuePicker = () => {
     newDueInputRef.current?.focus()
@@ -90,100 +130,74 @@ export default function GigTasks({ gigId, initialTasks = [], members = [], canWr
     }
   }
 
+  function cancelAdd() {
+    setShowAddForm(false)
+    setNewTitle('')
+    setNewDue('')
+    setNewAssignTo('')
+  }
+
   async function handleAdd() {
     if (!newTitle.trim()) return
-    const task = await createTask(gigId, { title: newTitle.trim(), due_date: newDue || null })
+    const task = await createTask(gigId, {
+      title: newTitle.trim(),
+      due_date: newDue || null,
+      assigned_to: newAssignTo || null,
+    })
     setTasks((prev) => [...prev, task as LocalGigTask])
     setNewTitle('')
     setNewDue('')
+    setNewAssignTo('')
+    setTimeout(() => newTitleInputRef.current?.focus(), 0)
   }
 
   async function handleToggle(task: LocalGigTask) {
     const updated = await updateTask(gigId, task.id!, { done: !task.done })
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? updated as LocalGigTask : t)))
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as LocalGigTask) : t)))
   }
 
   async function handleDueChange(task: LocalGigTask, value: string) {
     const updated = await updateTask(gigId, task.id!, { due_date: value || null })
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? updated as LocalGigTask : t)))
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as LocalGigTask) : t)))
   }
 
   async function handleDelete(taskId: Id) {
     await deleteTask(gigId, taskId)
     setTasks((prev) => prev.filter((t) => t.id !== taskId))
+    if (expandedId === taskId) setExpandedId(null)
   }
 
   async function handleAssign(task: LocalGigTask, value: string) {
     const updated = await updateTask(gigId, task.id!, { assigned_to: value || null })
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? updated as LocalGigTask : t)))
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as LocalGigTask) : t)))
   }
 
-  return (
-    <Box>
-      {/* Add row — planning-write only */}
-      {canWrite && (
-        <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-          <TextField
-            placeholder="New task…"
-            size="small"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
-            sx={{ flexGrow: 1 }}
-          />
-          <TextField
-            type="date"
-            size="small"
-            value={newDue}
-            onChange={(e) => setNewDue(e.target.value)}
-            onFocus={() => setDueFocused(true)}
-            onBlur={() => setDueFocused(false)}
-            slotProps={{
-              htmlInput: { ref: newDueInputRef },
-              input: {
-                endAdornment: <DueDateAdornment label="open due date picker" onClick={openNewDuePicker} />,
-              },
-              inputLabel: { shrink: dueFocused || !!newDue },
-            }}
-            label="Due"
-            sx={{
-              width: 160,
-              '& input::-webkit-datetime-edit': {
-                opacity: dueFocused || newDue ? 1 : 0,
-              },
-              '& input::-webkit-calendar-picker-indicator': {
-                display: 'none',
-              },
-            }}
-          />
-          <IconButton onClick={handleAdd} color="primary" disabled={!newTitle.trim()}>
-            <AddIcon />
-          </IconButton>
-        </Stack>
-      )}
+  function getMemberName(id: Id | null | undefined): string | undefined {
+    if (!id) return undefined
+    return members.find((m) => m.id === id)?.name
+  }
 
-      {tasks.length === 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-          No tasks yet.
-        </Typography>
-      )}
+  // Render helper — not a component, does not use hooks
+  function renderTaskRow(task: LocalGigTask) {
+    const canToggleDone =
+      canWrite || (task.assigned_to != null && task.assigned_to === currentBandMemberId)
+    const isExpanded = expandedId === task.id
+    const dueLabel = formatDueDate(task.due_date)
+    const assigneeName = getMemberName(task.assigned_to)
+    const overdue = isDueOverdue(task.due_date) && !task.done
 
-      {tasks.map((task) => {
-        // Readers may tick only their own assigned task done; everything else on
-        // the row is planning-write.
-        const canToggleDone = canWrite || (task.assigned_to != null && task.assigned_to === currentBandMemberId)
-        return (
-        <Box
-          key={String(task.id)}
+    return (
+      <Box key={String(task.id)}>
+        {/* Main row */}
+        <Stack
+          direction="row"
+          spacing={0.5}
           sx={{
-            display: { xs: 'grid', sm: 'flex' },
-            gridTemplateColumns: 'auto 1fr auto',
-            flexWrap: 'nowrap',
-            alignItems: { xs: 'start', sm: 'center' },
-            gap: 0.5,
-            py: 0.5,
-            textDecoration: task.done ? 'line-through' : 'none',
-            color: task.done ? 'text.disabled' : 'text.primary',
+            alignItems: 'flex-start',
+            py: 0.75,
+            px: 0.5,
+            borderRadius: 1,
+            '&:hover': canWrite ? { bgcolor: 'action.hover' } : undefined,
           }}
         >
           <Checkbox
@@ -191,95 +205,299 @@ export default function GigTasks({ gigId, initialTasks = [], members = [], canWr
             checked={task.done ?? false}
             disabled={!canToggleDone}
             onChange={() => handleToggle(task)}
-            sx={{ flexShrink: 0, gridRow: '1 / 3', alignSelf: 'center' }}
+            sx={{ flexShrink: 0, p: 0.25, mt: 0.1 }}
           />
-          <Typography
-            variant="body2"
-            component="div"
-            sx={{
-              flex: '1 1 0',
-              minWidth: 0,
-              whiteSpace: 'normal',
-              wordBreak: 'break-word',
-              overflowWrap: 'anywhere',
-              lineHeight: 1.2,
-            }}
-          >
-            {task.title}
-          </Typography>
-          {/* On mobile: row 2 of col 2. On desktop: display:contents lets children flow in the parent flex. */}
+          {/* Title + meta chips — click area to expand edit controls */}
           <Box
-            sx={{
-              display: { xs: 'flex', sm: 'contents' },
-              flexWrap: 'wrap',
-              gap: 0.5,
-              gridColumn: '2',
-              gridRow: '2',
+            sx={{ flex: 1, minWidth: 0, cursor: canWrite ? 'pointer' : 'default' }}
+            onClick={() => {
+              if (canWrite) setExpandedId(isExpanded ? null : (task.id ?? null))
             }}
           >
-            <TextField
-              type="date"
-              size="small"
-              disabled={!canWrite}
-              value={toDateInputValue(task.due_date)}
-              onChange={(e) => handleDueChange(task, e.target.value)}
-              onFocus={() => setFocusedDueTaskId(task.id ?? null)}
-              onBlur={() => setFocusedDueTaskId(null)}
-              slotProps={{
-                htmlInput: {
-                  ref: setTaskDueInputRef(task.id!),
-                  'aria-label': `Due date for ${task.title}`,
-                },
-                input: {
-                  endAdornment: (
-                    <DueDateAdornment
-                      label={`open due date picker for ${task.title}`}
-                      onClick={openTaskDuePicker(task.id!)}
-                    />
-                  ),
-                },
-              }}
+            <Typography
+              variant="body2"
               sx={{
-                flexShrink: 0,
-                width: { xs: 140, sm: 150 },
-                '& input::-webkit-datetime-edit': {
-                  opacity: task.due_date || focusedDueTaskId === task.id ? 1 : 0,
-                },
-                '& input::-webkit-calendar-picker-indicator': {
-                  display: 'none',
-                },
+                wordBreak: 'break-word',
+                textDecoration: task.done ? 'line-through' : 'none',
+                color: task.done ? 'text.disabled' : 'text.primary',
+                lineHeight: 1.4,
               }}
-            />
-            {members.length > 0 && (
-              <Select
-                size="small"
-                disabled={!canWrite}
-                value={task.assigned_to ?? ''}
-                onChange={(e) => handleAssign(task, e.target.value as string)}
-                displayEmpty
-                inputProps={{ 'aria-label': `Assign ${task.title}` }}
-                sx={{ flexShrink: 0, width: 150 }}
-              >
-                <MenuItem value=""><em>Unassigned</em></MenuItem>
-                {members.map((m) => (
-                  <MenuItem key={String(m.id)} value={m.id}>{m.name}</MenuItem>
-                ))}
-              </Select>
+            >
+              {task.title}
+            </Typography>
+            {/* Metadata chips — hidden while expanded */}
+            {!isExpanded && (dueLabel || assigneeName) && (
+              <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+                {dueLabel && (
+                  <Chip
+                    icon={<CalendarMonthIcon />}
+                    label={dueLabel}
+                    size="small"
+                    color={overdue ? 'error' : 'default'}
+                    variant="outlined"
+                    sx={{
+                      height: 20,
+                      fontSize: '0.7rem',
+                      '& .MuiChip-icon': { fontSize: '0.8rem', ml: 0.5 },
+                      '& .MuiChip-label': { px: 0.75 },
+                    }}
+                  />
+                )}
+                {assigneeName && (
+                  <Chip
+                    icon={<PersonIcon />}
+                    label={assigneeName}
+                    size="small"
+                    variant="outlined"
+                    sx={{
+                      height: 20,
+                      fontSize: '0.7rem',
+                      '& .MuiChip-icon': { fontSize: '0.8rem', ml: 0.5 },
+                      '& .MuiChip-label': { px: 0.75 },
+                    }}
+                  />
+                )}
+              </Stack>
             )}
           </Box>
           {canWrite && (
             <IconButton
               size="small"
               aria-label={`Delete task ${task.title}`}
-              onClick={() => handleDelete(task.id!)}
-              sx={{ flexShrink: 0, gridRow: '1 / 3', alignSelf: 'center' }}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDelete(task.id!)
+              }}
+              sx={{ flexShrink: 0, opacity: 0.3, '&:hover': { opacity: 1 }, mt: 0.1 }}
             >
               <DeleteIcon fontSize="small" />
             </IconButton>
           )}
+        </Stack>
+
+        {/* Inline edit controls — date and assignee */}
+        {canWrite && (
+          <Collapse in={isExpanded}>
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{ pl: 5, pb: 1, flexWrap: 'wrap', alignItems: 'center' }}
+            >
+              <TextField
+                type="date"
+                size="small"
+                value={toDateInputValue(task.due_date)}
+                onChange={(e) => handleDueChange(task, e.target.value)}
+                onFocus={() => setFocusedDueTaskId(task.id ?? null)}
+                onBlur={() => setFocusedDueTaskId(null)}
+                slotProps={{
+                  htmlInput: {
+                    ref: setTaskDueInputRef(task.id!),
+                    'aria-label': `Due date for ${task.title}`,
+                  },
+                  input: {
+                    endAdornment: (
+                      <DueDateAdornment
+                        label={`open due date picker for ${task.title}`}
+                        onClick={openTaskDuePicker(task.id!)}
+                      />
+                    ),
+                  },
+                }}
+                sx={{
+                  width: 150,
+                  '& input::-webkit-datetime-edit': {
+                    opacity: task.due_date || focusedDueTaskId === task.id ? 1 : 0,
+                  },
+                  '& input::-webkit-calendar-picker-indicator': { display: 'none' },
+                }}
+              />
+              {members.length > 0 && (
+                <Select
+                  size="small"
+                  value={task.assigned_to ?? ''}
+                  onChange={(e) => handleAssign(task, e.target.value as string)}
+                  displayEmpty
+                  inputProps={{ 'aria-label': `Assign ${task.title}` }}
+                  sx={{ width: 150 }}
+                >
+                  <MenuItem value="">
+                    <em>Unassigned</em>
+                  </MenuItem>
+                  {members.map((m) => (
+                    <MenuItem key={String(m.id)} value={m.id}>
+                      {m.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              )}
+              <IconButton size="small" onClick={() => setExpandedId(null)} aria-label="Done editing">
+                <CheckIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+          </Collapse>
+        )}
+      </Box>
+    )
+  }
+
+  const openTasks = tasks.filter((t) => !t.done)
+  const doneTasks = tasks.filter((t) => t.done)
+
+  return (
+    <Box>
+      {/* Open tasks */}
+      {openTasks.length === 0 && doneTasks.length === 0 && !canWrite && (
+        <Typography variant="body2" sx={{ color: 'text.secondary', py: 1 }}>
+          No tasks yet.
+        </Typography>
+      )}
+      {openTasks.map((task) => renderTaskRow(task))}
+
+      {/* Add task */}
+      {canWrite && (
+        <Box sx={{ mt: openTasks.length > 0 ? 0.5 : 0 }}>
+          {showAddForm ? (
+            <Box>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', px: 0.5 }}>
+                {/* Align with task checkboxes */}
+                <Box sx={{ width: 30, flexShrink: 0 }} />
+                <TextField
+                  placeholder="Task name…"
+                  size="small"
+                  autoFocus
+                  value={newTitle}
+                  slotProps={{ htmlInput: { ref: newTitleInputRef } }}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAdd()
+                    if (e.key === 'Escape') cancelAdd()
+                  }}
+                  sx={{ flex: 1 }}
+                />
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={handleAdd}
+                  disabled={!newTitle.trim()}
+                  aria-label="Add task"
+                >
+                  <CheckIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small" onClick={cancelAdd} aria-label="Cancel">
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+              {/* Optional due date + assignee for new task */}
+              <Stack direction="row" spacing={0.5} sx={{ pl: 5.25, mt: 0.75, flexWrap: 'wrap' }}>
+                <TextField
+                  type="date"
+                  size="small"
+                  value={newDue}
+                  onChange={(e) => setNewDue(e.target.value)}
+                  onFocus={() => setNewDueFocused(true)}
+                  onBlur={() => setNewDueFocused(false)}
+                  slotProps={{
+                    htmlInput: { ref: newDueInputRef },
+                    input: {
+                      endAdornment: (
+                        <DueDateAdornment label="open due date picker" onClick={openNewDuePicker} />
+                      ),
+                    },
+                    inputLabel: { shrink: newDueFocused || !!newDue },
+                  }}
+                  label="Due"
+                  sx={{
+                    width: 150,
+                    '& input::-webkit-datetime-edit': {
+                      opacity: newDueFocused || newDue ? 1 : 0,
+                    },
+                    '& input::-webkit-calendar-picker-indicator': { display: 'none' },
+                  }}
+                />
+                {members.length > 0 && (
+                  <Select
+                    size="small"
+                    value={newAssignTo}
+                    onChange={(e) => setNewAssignTo(e.target.value as string)}
+                    displayEmpty
+                    sx={{ width: 150 }}
+                  >
+                    <MenuItem value="">
+                      <em>Unassigned</em>
+                    </MenuItem>
+                    {members.map((m) => (
+                      <MenuItem key={String(m.id)} value={m.id}>
+                        {m.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                )}
+              </Stack>
+            </Box>
+          ) : (
+            <Box
+              role="button"
+              tabIndex={0}
+              onClick={() => setShowAddForm(true)}
+              onKeyDown={(e) => e.key === 'Enter' && setShowAddForm(true)}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                py: 0.5,
+                px: 0.5,
+                borderRadius: 1,
+                cursor: 'pointer',
+                color: 'text.disabled',
+                transition: 'color 0.15s, background-color 0.15s',
+                '&:hover': { color: 'primary.main', bgcolor: 'action.hover' },
+              }}
+            >
+              <AddIcon fontSize="small" />
+              <Typography variant="body2" sx={{ color: 'inherit' }}>
+                Add task
+              </Typography>
+            </Box>
+          )}
         </Box>
-        )
-      })}
+      )}
+
+      {/* Completed tasks — collapsed by default */}
+      {doneTasks.length > 0 && (
+        <Box sx={{ mt: 1.5 }}>
+          <Box
+            role="button"
+            tabIndex={0}
+            onClick={() => setShowCompleted((prev) => !prev)}
+            onKeyDown={(e) => e.key === 'Enter' && setShowCompleted((prev) => !prev)}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.25,
+              cursor: 'pointer',
+              color: 'text.secondary',
+              py: 0.25,
+              '&:hover': { color: 'text.primary' },
+            }}
+          >
+            <ExpandMoreIcon
+              fontSize="small"
+              sx={{
+                transform: showCompleted ? 'rotate(0deg)' : 'rotate(-90deg)',
+                transition: 'transform 0.2s',
+                fontSize: '1rem',
+              }}
+            />
+            <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 500 }}>
+              Completed ({doneTasks.length})
+            </Typography>
+          </Box>
+          <Collapse in={showCompleted}>
+            {doneTasks.map((task) => renderTaskRow(task))}
+          </Collapse>
+        </Box>
+      )}
     </Box>
   )
 }

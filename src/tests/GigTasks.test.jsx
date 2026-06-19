@@ -59,22 +59,25 @@ describe('GigTasks', () => {
     const user = userEvent.setup()
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
 
-    const input = screen.getByPlaceholderText(/new task/i)
+    await user.click(screen.getByRole('button', { name: /add task/i }))
+    const input = screen.getByPlaceholderText(/task name/i)
     await user.type(input, 'Prepare set list{Enter}')
-    await waitFor(() => expect(createTask).toHaveBeenCalledWith(42, { title: 'Prepare set list', due_date: null }))
+    await waitFor(() =>
+      expect(createTask).toHaveBeenCalledWith(42, { title: 'Prepare set list', due_date: null, assigned_to: null })
+    )
   })
 
   it('adds a new task via Add button', async () => {
     const user = userEvent.setup()
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
 
-    const input = screen.getByPlaceholderText(/new task/i)
+    await user.click(screen.getByRole('button', { name: /add task/i }))
+    const input = screen.getByPlaceholderText(/task name/i)
     await user.type(input, 'Check PA system')
-    const addBtn = screen.getAllByRole('button').find(
-      (b) => b.querySelector('[data-testid="AddIcon"]')
+    await user.click(screen.getByRole('button', { name: /add task/i }))
+    await waitFor(() =>
+      expect(createTask).toHaveBeenCalledWith(42, { title: 'Check PA system', due_date: null, assigned_to: null })
     )
-    await user.click(addBtn)
-    await waitFor(() => expect(createTask).toHaveBeenCalledWith(42, { title: 'Check PA system', due_date: null }))
   })
 
   it('toggles task done state on checkbox click', async () => {
@@ -94,18 +97,20 @@ describe('GigTasks', () => {
     await waitFor(() => expect(deleteTask).toHaveBeenCalledWith(42, 1))
   })
 
-  it('renders assignment selects with member names when members are provided', () => {
+  it('renders assignment selects with member names when members are provided', async () => {
+    const user = userEvent.setup()
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} />)
-    const selects = screen.getAllByRole('combobox')
-    expect(selects.length).toBe(INITIAL_TASKS.length)
+    // Expand a task row to reveal its edit controls (Collapse is aria-hidden until opened)
+    await user.click(screen.getByText('Book sound engineer'))
+    expect(screen.getByRole('combobox')).toBeInTheDocument()
   })
 
   it('calls updateTask with assigned_to when a member is selected', async () => {
     const user = userEvent.setup()
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} />)
 
-    const selects = screen.getAllByRole('combobox')
-    await user.click(selects[0])
+    await user.click(screen.getByText('Book sound engineer'))
+    await user.click(screen.getByRole('combobox'))
     const option = await screen.findByRole('option', { name: 'Alice' })
     await user.click(option)
     await waitFor(() =>
@@ -128,17 +133,20 @@ describe('GigTasks — reader mode (canWrite=false)', () => {
 
   it('disables due-date and assignment edits', () => {
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} canWrite={false} currentBandMemberId={1} />)
-    expect(screen.getByLabelText(/Due date for Book sound engineer/i)).toBeDisabled()
-    screen.getAllByRole('combobox').forEach((c) => expect(c).toHaveAttribute('aria-disabled', 'true'))
+    // In reader mode the edit panel (date + assign) is not rendered at all
+    expect(screen.queryByLabelText(/due date for/i)).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0)
   })
 
   it('lets a reader tick only their own assigned task done', async () => {
     const user = userEvent.setup()
-    // INITIAL_TASKS[0] is unassigned; INITIAL_TASKS[1] is assigned to member 1.
+    // INITIAL_TASKS[0] is unassigned (open); INITIAL_TASKS[1] is assigned to member 1 (done).
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} canWrite={false} currentBandMemberId={1} />)
+    // The done task is inside the collapsed "Completed" section — expand it first
+    await user.click(screen.getByRole('button', { name: /completed/i }))
     const checkboxes = screen.getAllByRole('checkbox')
-    expect(checkboxes[0]).toBeDisabled()
-    expect(checkboxes[1]).toBeEnabled()
+    expect(checkboxes[0]).toBeDisabled()   // task 1: unassigned, reader can't toggle
+    expect(checkboxes[1]).toBeEnabled()    // task 2: assigned to currentBandMemberId
     await user.click(checkboxes[1])
     await waitFor(() => expect(updateTask).toHaveBeenCalledWith(42, 2, { done: false }))
   })

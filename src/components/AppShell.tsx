@@ -4,7 +4,6 @@ import AppBar from '@mui/material/AppBar'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
 import ClickAwayListener from '@mui/material/ClickAwayListener'
-import Collapse from '@mui/material/Collapse'
 import Drawer from '@mui/material/Drawer'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -305,7 +304,7 @@ export default function AppShell() {
           </Box>
           {!isMobile && (
             <ClickAwayListener onClickAway={() => setSearchOpen(false)}>
-              <Box sx={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', width: { sm: 380, md: 480 } }}>
+              <Box sx={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', width: { sm: 480, md: 540 } }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -315,11 +314,13 @@ export default function AppShell() {
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
                   onFocus={() => setSearchOpen(true)}
-                  slotProps={{ input: {
-                    startAdornment: (
-                      <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
-                    ),
-                  } }}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                      ),
+                    }
+                  }}
                 />
                 {searchOpen && (
                   <Box sx={{ position: 'absolute', top: '100%', left: 0, right: 0 }}>
@@ -394,8 +395,9 @@ export default function AppShell() {
             </>
           )}
         </Toolbar>
-        {isMobile && (
-          <Collapse in={searchOpen} unmountOnExit>
+        {isMobile && searchOpen && (
+          <ClickAwayListener onClickAway={() => setSearchOpen(false)}>
+            <Box>
             <Box sx={{ px: 2, pb: 1 }}>
               <TextField
                 fullWidth
@@ -405,28 +407,25 @@ export default function AppShell() {
                 autoComplete="off"
                 placeholder="Search…"
                 value={searchValue}
+                onFocus={() => setSearchOpen(true)}
                 onChange={(e) => setSearchValue(e.target.value)}
-                slotProps={{ input: {
-                  startAdornment: (
-                    <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton size="small" aria-label="close search" onClick={() => setSearchOpen(false)}>
-                        <CloseIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                } }}
-              />
-              <SearchPanel
-                key={activeTenantId ?? 'no-tenant'}
-                query={searchValue}
-                tenantId={activeTenantId}
-                onNavigate={() => { setSearchOpen(false); setSearchValue('') }}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                    )
+                  }
+                }}
               />
             </Box>
-          </Collapse>
+            <SearchPanel
+              key={activeTenantId ?? 'no-tenant'}
+              query={searchValue}
+              tenantId={activeTenantId}
+              onNavigate={() => { setSearchOpen(false); setSearchValue('') }}
+            />
+          </Box>
+          </ClickAwayListener>
         )}
       </AppBar>
 

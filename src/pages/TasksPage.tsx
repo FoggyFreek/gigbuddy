@@ -1,18 +1,18 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import ToggleButton from '@mui/material/ToggleButton'
 import Typography from '@mui/material/Typography'
 import TasksTable from '../components/TasksTable.tsx'
 import type { GigTask } from '../components/TasksTable.tsx'
-import GigFormModal from '../components/GigFormModal.tsx'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { listAllTasks } from '../api/tasks.ts'
 import { updateTask } from '../api/gigs.ts'
 import type { Id } from '../types/entities.ts'
 
-// GigTask extended with the gig_id needed for editing via GigFormModal
+// GigTask extended with the gig_id needed for navigation to the gig detail page
 interface Task extends GigTask {
   gig_id?: Id
 }
@@ -20,10 +20,10 @@ interface Task extends GigTask {
 export default function TasksPage() {
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
+  const navigate = useNavigate()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [modal, setModal] = useState<{ mode: 'edit'; gigId: Id } | null>(null)
   const [myTasksOnly, setMyTasksOnly] = useState(false)
   const [showFinished, setShowFinished] = useState(false)
 
@@ -41,11 +41,6 @@ export default function TasksPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
-
-  function handleClose() {
-    setModal(null)
-    load()
-  }
 
   async function handleToggle(task: Task) {
     setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, done: !t.done } : t)))
@@ -105,17 +100,9 @@ export default function TasksPage() {
         <TasksTable
           tasks={visibleTasks}
           onRowClick={canWritePlanning
-            ? (task) => { const gigId = (task as Task).gig_id; if (gigId !== undefined) setModal({ mode: 'edit', gigId }) }
+            ? (task) => { const gigId = (task as Task).gig_id; if (gigId !== undefined) navigate(`/gigs/${gigId}`) }
             : undefined}
           onToggleDone={handleToggle}
-        />
-      )}
-
-      {modal && (
-        <GigFormModal
-          mode={modal.mode}
-          gigId={modal.gigId}
-          onClose={handleClose}
         />
       )}
     </>

@@ -1,6 +1,8 @@
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
 import Tooltip from '@mui/material/Tooltip'
+import { darken, lighten } from '@mui/material/styles'
+import type { Theme } from '@mui/material/styles'
 
 function getInitials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
@@ -50,7 +52,10 @@ export default function MemberAvatarStack({ members }: MemberAvatarStackProps) {
               border: '2px solid',
               borderColor: 'background.paper',
               zIndex: visible.length - i,
-              bgcolor: 'grey.400',
+              bgcolor: (t: Theme) =>
+                t.palette.mode === 'light'
+                  ? darken(t.palette.background.paper, 0.14)
+                  : lighten(t.palette.background.paper, 0.18),
               ...STATUS_SX[m.status ?? ''],
             }}
           >
