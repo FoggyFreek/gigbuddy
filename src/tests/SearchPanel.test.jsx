@@ -14,12 +14,14 @@ vi.mock('../api/invoices.ts', () => ({ searchInvoices: vi.fn().mockResolvedValue
 vi.mock('../api/purchases.ts', () => ({ searchPurchases: vi.fn().mockResolvedValue([]) }))
 vi.mock('../api/ledger.ts', () => ({ searchLedgerTransactions: vi.fn().mockResolvedValue([]) }))
 vi.mock('../api/files.ts', () => ({ searchFiles: vi.fn().mockResolvedValue([]) }))
+vi.mock('../api/venues.ts', () => ({ searchVenues: vi.fn().mockResolvedValue([]) }))
 // Default to a finance-capable user so every category is visible.
 vi.mock('../hooks/usePermissions.ts', () => ({ usePermissions: () => ({ can: () => true }) }))
 
 import SearchPanel from '../components/appShell/SearchPanel.tsx'
 import { searchGigs } from '../api/gigs.ts'
 import { searchContacts } from '../api/contacts.ts'
+import { searchVenues } from '../api/venues.ts'
 
 const TENANT_ID = 1
 const STORAGE_KEY = `gigbuddy:recent-searches:${TENANT_ID}`
@@ -77,6 +79,7 @@ describe('SearchPanel', () => {
     localStorage.clear()
     searchGigs.mockReset().mockResolvedValue([])
     searchContacts.mockReset().mockResolvedValue([])
+    searchVenues.mockReset().mockResolvedValue([])
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -166,5 +169,29 @@ describe('SearchPanel', () => {
     fireEvent.click(result)
     await act(async () => { await vi.runAllTimersAsync() })
     expect(pathname()).toBe('/gigs/42')
+  })
+
+  it('searches venues and festivals with a category badge and navigates on click', async () => {
+    searchVenues.mockResolvedValue([
+      { id: 7, name: 'Alpha Hall', category: 'venue', city: 'Gent', region: 'OVL' },
+      { id: 8, name: 'Alpha Fest', category: 'festival', city: 'Brugge' },
+    ])
+    render(<Harness />)
+
+    // Venues is added on demand from the "Add new" menu.
+    fireEvent.click(screen.getByLabelText('add search category'))
+    fireEvent.click(screen.getByText('Venues'))
+    await search('Alpha')
+
+    expect(searchVenues).toHaveBeenCalledWith('Alpha')
+    expect(screen.getByText('Alpha Hall')).toBeInTheDocument()
+    expect(screen.getByText('Alpha Fest')).toBeInTheDocument()
+    // Each result carries its category badge.
+    expect(screen.getByText('Venue')).toBeInTheDocument()
+    expect(screen.getByText('Festival')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Alpha Fest'))
+    await act(async () => { await vi.runAllTimersAsync() })
+    expect(pathname()).toBe('/venues/8')
   })
 })

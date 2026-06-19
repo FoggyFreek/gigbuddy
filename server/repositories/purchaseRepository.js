@@ -110,12 +110,17 @@ export async function validateContactIdForTenant(executor, rawId, tenantId) {
 // List rows for the table/search. Includes the first line's description (the
 // per-line description lives in purchase_lines, not on the purchase row).
 // `periodSql`/`periodValues` come from buildPeriodWhere (placeholders $2+).
-export async function listPurchases(executor, tenantId, periodSql, periodValues, createdByUserId = null) {
+export async function listPurchases(executor, tenantId, periodSql, periodValues, createdByUserId = null, supplierContactId = null) {
   const params = [tenantId, ...periodValues]
   let ownerSql = ''
   if (createdByUserId != null) {
     params.push(createdByUserId)
     ownerSql = `AND p.created_by_user_id = $${params.length}`
+  }
+  let supplierSql = ''
+  if (supplierContactId != null) {
+    params.push(supplierContactId)
+    supplierSql = `AND p.supplier_contact_id = $${params.length}`
   }
   const { rows } = await executor.query(
     `SELECT p.id, p.receipt_number, p.supplier_name, p.supplier_contact_id,
@@ -134,6 +139,7 @@ export async function listPurchases(executor, tenantId, periodSql, periodValues,
       WHERE p.tenant_id = $1
         ${periodSql}
         ${ownerSql}
+        ${supplierSql}
       ORDER BY p.receipt_date DESC, p.id DESC`,
     params,
   )
@@ -155,14 +161,21 @@ export async function searchPurchases(executor, tenantId, like, limit) {
   return rows
 }
 
-export async function listPurchasePeriods(executor, tenantId) {
+export async function listPurchasePeriods(executor, tenantId, supplierContactId = null) {
+  const params = [tenantId]
+  let supplierSql = ''
+  if (supplierContactId != null) {
+    params.push(supplierContactId)
+    supplierSql = `AND supplier_contact_id = $${params.length}`
+  }
   const { rows } = await executor.query(
     `SELECT DISTINCT to_char(receipt_date, 'YYYY-MM-DD') AS date
        FROM purchases
       WHERE tenant_id = $1
         AND receipt_date IS NOT NULL
+        ${supplierSql}
       ORDER BY date DESC`,
-    [tenantId],
+    params,
   )
   return rows.map((row) => row.date)
 }

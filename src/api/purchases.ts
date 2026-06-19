@@ -1,6 +1,6 @@
 import { request, requestForm } from './_client.ts'
 import type { Purchase, PurchaseAttachment, Period, Id } from '../types/entities.ts'
-import { periodQueryString } from '../utils/invoicePeriod.ts'
+import { appendPeriodParams } from '../utils/invoicePeriod.ts'
 
 interface PaymentBody {
   paid_at?: string
@@ -9,12 +9,27 @@ interface PaymentBody {
   bank_account_code?: string
 }
 
+interface PurchaseListOptions {
+  supplierContactId?: Id
+}
+
 const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/purchases${path}`, options)
 
-export const listPurchases = (period: Period) =>
-  api<Purchase[]>(`/${periodQueryString(period)}`)
-export const listPurchasePeriods = () => api<string[]>('/periods')
+// Builds a `?…` query string merging the period params with an optional
+// supplier_contact_id filter in a single URLSearchParams (no manual ?/& joins).
+function purchaseQuery(period: Period | null, opts: PurchaseListOptions = {}): string {
+  const params = new URLSearchParams()
+  appendPeriodParams(params, period)
+  if (opts.supplierContactId != null) params.set('supplier_contact_id', String(opts.supplierContactId))
+  const query = params.toString()
+  return query ? `?${query}` : ''
+}
+
+export const listPurchases = (period: Period, opts: PurchaseListOptions = {}) =>
+  api<Purchase[]>(`/${purchaseQuery(period, opts)}`)
+export const listPurchasePeriods = (opts: PurchaseListOptions = {}) =>
+  api<string[]>(`/periods${purchaseQuery(null, opts)}`)
 export const searchPurchases = (q: string) =>
   api<Purchase[]>(`/search?${new URLSearchParams({ q })}`)
 export const getPurchase = (id: Id) => api<Purchase>(`/${id}`)

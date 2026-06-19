@@ -34,9 +34,10 @@ import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import { venueHeadline } from '../utils/venueDisplay.ts'
-import { contactMatchesCategoryFilter } from '../utils/contactCategories.ts'
+import { contactMatchesCategoryFilter, SUPPLIER_CATEGORY } from '../utils/contactCategories.ts'
 import ContactFields from '../components/ContactFields.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
+import SupplierPurchasesSection from '../components/SupplierPurchasesSection.tsx'
 import VenuePicker from '../components/VenuePicker.tsx'
 import type { Venue, Id } from '../types/entities.ts'
 
@@ -64,7 +65,7 @@ export default function ContactDetailPage() {
   const { id } = useParams()
   const contactId = Number(id)
   const navigate = useNavigate()
-  const { canWritePlanning: canWrite } = usePermissions()
+  const { canWritePlanning: canWrite, canViewFinance } = usePermissions()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
   const contactFilter = outletCtx.contactFilter as Record<string, string> | undefined
@@ -343,6 +344,10 @@ export default function ContactDetailPage() {
               )}
             </Box>
           ))}
+
+          {form.category === SUPPLIER_CATEGORY && canViewFinance && (
+            <SupplierPurchasesSection contactId={contactId} />
+          )}
         </>
       )}
 

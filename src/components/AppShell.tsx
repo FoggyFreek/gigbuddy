@@ -309,6 +309,8 @@ export default function AppShell() {
                 <TextField
                   fullWidth
                   size="small"
+                  type="search"
+                  autoComplete="off"
                   placeholder="Search for contacts, gigs or files…"
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
@@ -399,6 +401,8 @@ export default function AppShell() {
                 fullWidth
                 autoFocus
                 size="small"
+                type="search"
+                autoComplete="off"
                 placeholder="Search…"
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}

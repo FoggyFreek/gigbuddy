@@ -61,7 +61,9 @@ router.get('/search', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, r
 })
 
 router.get('/periods', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) => {
-  res.json(await listPeriods(pool, req.tenantId))
+  const result = await listPeriods(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.periods)
 })
 
 // ---------- single ----------

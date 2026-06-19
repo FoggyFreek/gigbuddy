@@ -30,6 +30,7 @@ import {
   SIMPLE_PATCH_FIELDS,
   STATUS_VALUES,
   normalizeLines,
+  parseId,
   parseReceiptNumber,
   parseSearchLimit,
 } from '../validators/purchaseValidators.js'
@@ -581,14 +582,30 @@ function validatePaymentPreconditions(existing) {
 
 // ---------- reads / composition ----------
 
+// Resolves the optional ?supplier_contact_id filter. Distinguishes "absent"
+// (no filter) from "present but malformed": a bad value must 400, not silently
+// drop the filter and leak the whole register. Returns { supplierContactId } on
+// success (null = no filter) or { error } on an invalid value.
+function resolveSupplierContactId(query) {
+  const raw = query?.supplier_contact_id
+  if (raw === undefined) return { supplierContactId: null }
+  const id = parseId(raw)
+  if (id === null) return { error: { status: 400, body: { error: 'Invalid supplier_contact_id' } } }
+  return { supplierContactId: id }
+}
+
 export async function listPurchases(db, tenantId, query, { createdByUserId = null } = {}) {
   const period = buildPeriodWhere(query, 'p.receipt_date')
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
-  return { purchases: await listPurchaseRows(db, tenantId, period.sql, period.values, createdByUserId) }
+  const supplier = resolveSupplierContactId(query)
+  if (supplier.error) return { error: supplier.error }
+  return { purchases: await listPurchaseRows(db, tenantId, period.sql, period.values, createdByUserId, supplier.supplierContactId) }
 }
 
-export async function listPeriods(db, tenantId) {
-  return listPurchasePeriods(db, tenantId)
+export async function listPeriods(db, tenantId, query = {}) {
+  const supplier = resolveSupplierContactId(query)
+  if (supplier.error) return { error: supplier.error }
+  return { periods: await listPurchasePeriods(db, tenantId, supplier.supplierContactId) }
 }
 
 // Global-search read: matches purchases by supplier, memo, or receipt number.

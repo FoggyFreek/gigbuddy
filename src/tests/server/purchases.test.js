@@ -134,6 +134,59 @@ describe('purchases — isolation', () => {
   })
 })
 
+describe('purchases — supplier_contact_id list filter', () => {
+  it('list filters to the given supplier and stays tenant-scoped', async () => {
+    // Two purchases for the same supplier contact + one unlinked, in tenant A.
+    await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ supplier_contact_id: contactA.id, receipt_date: '2026-05-01' })).expect(201)
+    await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ supplier_contact_id: contactA.id, receipt_date: '2026-04-01' })).expect(201)
+    await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ supplier_name: 'Unlinked' })).expect(201)
+    // Tenant B has its own linked purchase that must never leak.
+    await asUserB(request(app).post('/api/purchases'))
+      .send(basePayload({ supplier_contact_id: contactB.id })).expect(201)
+
+    const res = await asUserA(request(app).get(`/api/purchases?supplier_contact_id=${contactA.id}`)).expect(200)
+    expect(res.body).toHaveLength(2)
+    expect(res.body.every((p) => p.supplier_contact_id === contactA.id)).toBe(true)
+  })
+
+  it('cross-tenant supplier id returns no rows, not a leak', async () => {
+    await asUserB(request(app).post('/api/purchases'))
+      .send(basePayload({ supplier_contact_id: contactB.id })).expect(201)
+    // User A filtering by tenant B's contact id gets an empty list.
+    const res = await asUserA(request(app).get(`/api/purchases?supplier_contact_id=${contactB.id}`)).expect(200)
+    expect(res.body).toHaveLength(0)
+  })
+
+  it('invalid supplier_contact_id returns 400, not the full register', async () => {
+    await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).get('/api/purchases?supplier_contact_id=abc'))
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/supplier_contact_id/i)
+  })
+
+  it('periods filters to the given supplier and stays tenant-scoped', async () => {
+    await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ supplier_contact_id: contactA.id, receipt_date: '2026-05-01' })).expect(201)
+    await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ supplier_name: 'Unlinked', receipt_date: '2025-01-01' })).expect(201)
+
+    const all = await asUserA(request(app).get('/api/purchases/periods')).expect(200)
+    expect(all.body).toEqual(expect.arrayContaining(['2026-05-01', '2025-01-01']))
+
+    const filtered = await asUserA(request(app).get(`/api/purchases/periods?supplier_contact_id=${contactA.id}`)).expect(200)
+    expect(filtered.body).toEqual(['2026-05-01'])
+  })
+
+  it('periods rejects an invalid supplier_contact_id with 400', async () => {
+    const res = await asUserA(request(app).get('/api/purchases/periods?supplier_contact_id=abc'))
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/supplier_contact_id/i)
+  })
+})
+
 describe('purchases — receipt numbering', () => {
   it('produces sequential numbers per tenant', async () => {
     const r1 = await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)

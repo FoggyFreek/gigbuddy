@@ -61,13 +61,26 @@ vi.mock('../api/venues.ts', async (importOriginal) => ({
 }))
 
 import { createGig, getGig, updateGig } from '../api/gigs.ts'
+import { AuthContext } from '../contexts/authContext.ts'
+
+// Editing a gig (auto-save fields) is gated on planning.write, so the modal
+// needs an authenticated user with that permission in context.
+const AUTH_VALUE = {
+  user: { id: 1, permissions: ['app.view', 'planning.write', 'purchase.create'], activeTenantRole: 'contributor' },
+  setUser: () => {},
+  logout: async () => {},
+  switchTenant: async () => undefined,
+  refreshUser: async () => undefined,
+}
 
 function wrap(ui) {
   return render(
     <MemoryRouter>
-      <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
-      </ThemeProvider>
+      <AuthContext.Provider value={AUTH_VALUE}>
+        <ThemeProvider theme={theme}>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+        </ThemeProvider>
+      </AuthContext.Provider>
     </MemoryRouter>
   )
 }

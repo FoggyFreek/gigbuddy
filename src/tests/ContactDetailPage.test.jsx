@@ -30,9 +30,20 @@ import {
   removeContactVenue,
 } from '../api/contacts.ts'
 import { searchVenues } from '../api/venues.ts'
+import { AuthContext } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
 
 const CONTACT = { id: 5, name: 'Carol', email: '', phone: '', category: 'press', notes: [] }
+
+// Editing the contact (venue add/remove, notes) is gated on planning.write, so
+// the page needs an authenticated user with that permission in context.
+const AUTH_VALUE = {
+  user: { id: 1, permissions: ['app.view', 'planning.write', 'purchase.create'], activeTenantRole: 'contributor' },
+  setUser: () => {},
+  logout: async () => {},
+  switchTenant: async () => undefined,
+  refreshUser: async () => undefined,
+}
 
 function VenueStub() {
   const { id } = useParams()
@@ -42,12 +53,14 @@ function VenueStub() {
 function wrap() {
   return render(
     <MemoryRouter initialEntries={['/contacts/5']}>
-      <ThemeProvider theme={theme}>
-        <Routes>
-          <Route path="/contacts/:id" element={<ContactDetailPage />} />
-          <Route path="/venues/:id" element={<VenueStub />} />
-        </Routes>
-      </ThemeProvider>
+      <AuthContext.Provider value={AUTH_VALUE}>
+        <ThemeProvider theme={theme}>
+          <Routes>
+            <Route path="/contacts/:id" element={<ContactDetailPage />} />
+            <Route path="/venues/:id" element={<VenueStub />} />
+          </Routes>
+        </ThemeProvider>
+      </AuthContext.Provider>
     </MemoryRouter>,
   )
 }
