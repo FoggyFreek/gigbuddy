@@ -140,6 +140,9 @@ export interface Invoice {
   due_date?: string
   payment_term_days?: number
   customer_name?: string
+  // Event name of the linked gig, attached only by the invoice search read
+  // (invoices.gig_id → gigs). Null when the invoice isn't linked to a gig.
+  gig_event_description?: string | null
   total_cents?: number
   pdf_path?: string
   custom_logo_path?: string

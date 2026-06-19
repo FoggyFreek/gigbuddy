@@ -1,5 +1,10 @@
 import { isValidCalendarDate } from './accountValidators.js'
 
+export function parseId(val) {
+  const n = Number(val)
+  return Number.isInteger(n) && n > 0 ? n : null
+}
+
 // Quarterly periods only (NL convention). Year bounds keep obvious typos out.
 export function parseYearQuarter(input = {}) {
   const year = Number(input.year)

@@ -1,12 +1,26 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { statObject, getObject } from '../services/storageService.js'
-import { resolveFileAccess, canReadFinanceFile } from '../services/fileService.js'
+import { resolveFileAccess, canReadFinanceFile, searchFiles } from '../services/fileService.js'
 import { can } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { sanitizeFilename } from '../utils/sanitizeFilename.js'
 
 const router = Router()
+
+// Global file search (min 3 chars): matches uploads by filename. Purchase
+// receipts are finance-gated, so the caller's finance capabilities are passed
+// through (the search includes them only for those allowed to read them).
+// Registered before the catch-all below so "/search" isn't read as an object key.
+router.get('/search', async (req, res) => {
+  res.json(
+    await searchFiles(pool, req.tenantId, req.query, {
+      canFinanceView: can(req, PERMISSIONS.FINANCE_VIEW),
+      canPurchaseCreate: can(req, PERMISSIONS.PURCHASE_CREATE),
+      userId: req.user.id,
+    }),
+  )
+})
 
 router.get('/*objectKey', async (req, res) => {
   const segments = req.params.objectKey

@@ -317,3 +317,63 @@ describe('gig task assignment — assigned_to normalization', () => {
     expect(rows[0].assigned_to).toBeNull()
   })
 })
+
+describe('gig search', () => {
+  const descriptions = (res) => res.body.map((g) => g.event_description)
+
+  async function addVenueGig(tenantId, { category, name, city, event_description }) {
+    const { rows: [venue] } = await pool.query(
+      `INSERT INTO venues (tenant_id, category, name, city) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [tenantId, category, name, city],
+    )
+    const refColumn = category === 'festival' ? 'festival_id' : 'venue_id'
+    await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description, ${refColumn})
+       VALUES ($1, '2026-09-01', $2, $3)`,
+      [tenantId, event_description, venue.id],
+    )
+  }
+
+  it('matches on the event name', async () => {
+    const res = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Alpha' })).expect(200)
+    expect(descriptions(res)).toContain('Alpha Gig')
+  })
+
+  it('matches on the linked venue name and city', async () => {
+    await addVenueGig(seed.tenantA.id, {
+      category: 'venue', name: 'The Roxy', city: 'Antwerp', event_description: 'Mystery Show',
+    })
+    const byName = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Roxy' })).expect(200)
+    expect(descriptions(byName)).toContain('Mystery Show')
+    const byCity = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Antwerp' })).expect(200)
+    expect(descriptions(byCity)).toContain('Mystery Show')
+  })
+
+  it('matches on the linked festival name and city', async () => {
+    await addVenueGig(seed.tenantA.id, {
+      category: 'festival', name: 'Rock Werchter', city: 'Leuven', event_description: 'Festival Slot',
+    })
+    const byName = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Rock' })).expect(200)
+    expect(descriptions(byName)).toContain('Festival Slot')
+    const byCity = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Leuven' })).expect(200)
+    expect(descriptions(byCity)).toContain('Festival Slot')
+  })
+
+  it('returns nothing for queries shorter than 3 characters', async () => {
+    const res = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Al' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+
+  it('isolates tenants: userA cannot find tenant B gigs by name or venue city', async () => {
+    // Event name belonging to tenant B.
+    const byName = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Beta' })).expect(200)
+    expect(byName.body).toEqual([])
+
+    // Venue city belonging to tenant B must not leak to tenant A.
+    await addVenueGig(seed.tenantB.id, {
+      category: 'venue', name: 'Secret Club', city: 'Rotterdam', event_description: 'Hidden Show',
+    })
+    const byCity = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Rotterdam' })).expect(200)
+    expect(byCity.body).toEqual([])
+  })
+})

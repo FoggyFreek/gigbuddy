@@ -15,6 +15,8 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
 export const listPurchases = (period: Period) =>
   api<Purchase[]>(`/${periodQueryString(period)}`)
 export const listPurchasePeriods = () => api<string[]>('/periods')
+export const searchPurchases = (q: string) =>
+  api<Purchase[]>(`/search?${new URLSearchParams({ q })}`)
 export const getPurchase = (id: Id) => api<Purchase>(`/${id}`)
 export const createPurchase = (body: Partial<Purchase>) =>
   api<Purchase>('/', { method: 'POST', body: JSON.stringify(body) })

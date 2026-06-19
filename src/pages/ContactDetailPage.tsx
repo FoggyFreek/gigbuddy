@@ -31,6 +31,7 @@ import {
   updateContact,
 } from '../api/contacts.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import { venueHeadline } from '../utils/venueDisplay.ts'
 import { contactMatchesCategoryFilter } from '../utils/contactCategories.ts'
@@ -63,6 +64,7 @@ export default function ContactDetailPage() {
   const { id } = useParams()
   const contactId = Number(id)
   const navigate = useNavigate()
+  const { canWritePlanning: canWrite } = usePermissions()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
   const contactFilter = outletCtx.contactFilter as Record<string, string> | undefined
@@ -126,17 +128,20 @@ export default function ContactDetailPage() {
   }, [closeView, contactFilter, contactId])
 
   async function handleAddVenue(venue: Venue) {
+    if (!canWrite) return
     if (venues.some((v) => v.id === venue.id)) return
     const linked = await (addContactVenue(contactId, venue.id as Id) as unknown as Promise<LinkedVenue>)
     setVenues((prev) => [...prev, linked])
   }
 
   async function handleRemoveVenue(venueId: Id) {
+    if (!canWrite) return
     await removeContactVenue(contactId, venueId)
     setVenues((prev) => prev.filter((v) => v.id !== venueId))
   }
 
   async function handleAddNote() {
+    if (!canWrite) return
     const trimmed = newNote.trim()
     if (!trimmed) return
     const note = await addContactNote(contactId, trimmed)
@@ -145,11 +150,13 @@ export default function ContactDetailPage() {
   }
 
   async function handleDeleteNote(noteId: Id) {
+    if (!canWrite) return
     await deleteContactNote(contactId, noteId)
     setNotes((prev) => prev.filter((n) => n.id !== noteId))
   }
 
   function handleChange(field: string, value: string) {
+    if (!canWrite) return
     setForm((prev) => ({ ...prev, [field]: value }))
     if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
     schedule({ [field]: value || null } as Partial<ContactForm>)
@@ -197,6 +204,7 @@ export default function ContactDetailPage() {
               form={form}
               onChange={handleChange}
               errors={getRequiredErrors(form, REQUIRED_FIELDS)}
+              disabled={!canWrite}
             />
           </Grid>
 
@@ -255,24 +263,28 @@ export default function ContactDetailPage() {
                     <OpenInNewIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <IconButton
-                  size="small"
-                  onClick={() => v.id != null && handleRemoveVenue(v.id)}
-                  aria-label="remove venue"
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
+                {canWrite && (
+                  <IconButton
+                    size="small"
+                    onClick={() => v.id != null && handleRemoveVenue(v.id)}
+                    aria-label="remove venue"
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                )}
               </Box>
             )
           })}
 
-          <Box sx={{ mt: 1 }}>
-            <VenuePicker
-              onSelect={handleAddVenue}
-              excludeIds={venues.map((v) => v.id).filter((id): id is Id => id != null)}
-              label="Add venue / festival"
-            />
-          </Box>
+          {canWrite && (
+            <Box sx={{ mt: 1 }}>
+              <VenuePicker
+                onSelect={handleAddVenue}
+                excludeIds={venues.map((v) => v.id).filter((id): id is Id => id != null)}
+                label="Add venue / festival"
+              />
+            </Box>
+          )}
 
           <Divider sx={{ my: 3 }} />
 
@@ -280,25 +292,27 @@ export default function ContactDetailPage() {
             Notes
           </Typography>
 
-          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-            <TextField
-              fullWidth
-              multiline
-              minRows={2}
-              placeholder="Add a note…"
-              value={newNote}
-              onChange={(e) => setNewNote(e.target.value)}
-            />
-            <Button
-              variant="contained"
-              aria-label="Add note"
-              disabled={!newNote.trim()}
-              onClick={handleAddNote}
-              sx={{ alignSelf: 'flex-end' }}
-            >
-              Add
-            </Button>
-          </Box>
+          {canWrite && (
+            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+              <TextField
+                fullWidth
+                multiline
+                minRows={2}
+                placeholder="Add a note…"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+              />
+              <Button
+                variant="contained"
+                aria-label="Add note"
+                disabled={!newNote.trim()}
+                onClick={handleAddNote}
+                sx={{ alignSelf: 'flex-end' }}
+              >
+                Add
+              </Button>
+            </Box>
+          )}
 
           {notes.map((n) => (
             <Box
@@ -322,23 +336,29 @@ export default function ContactDetailPage() {
                   {n.note}
                 </Typography>
               </Box>
-              <IconButton size="small" onClick={() => n.id != null && handleDeleteNote(n.id)} aria-label="delete note">
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+              {canWrite && (
+                <IconButton size="small" onClick={() => n.id != null && handleDeleteNote(n.id)} aria-label="delete note">
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              )}
             </Box>
           ))}
         </>
       )}
 
-      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <SaveStatusLabel status={saveStatus} />
-      </Box>
+      {canWrite && (
+        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+          <SaveStatusLabel status={saveStatus} />
+        </Box>
+      )}
 
-      <Box sx={{ mt: 4 }}>
-        <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
-          Delete
-        </Button>
-      </Box>
+      {canWrite && (
+        <Box sx={{ mt: 4 }}>
+          <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
+            Delete
+          </Button>
+        </Box>
+      )}
 
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
         <DialogTitle>Delete contact?</DialogTitle>

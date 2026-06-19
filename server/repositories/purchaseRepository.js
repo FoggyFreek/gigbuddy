@@ -140,6 +140,21 @@ export async function listPurchases(executor, tenantId, periodSql, periodValues,
   return rows
 }
 
+// Global-search read: matches purchases on supplier name, memo, or receipt
+// number (cast to text). Most recent first. Tenant-scoped like every query.
+export async function searchPurchases(executor, tenantId, like, limit) {
+  const { rows } = await executor.query(
+    `SELECT id, receipt_number, supplier_name, total_cents, status, receipt_date
+       FROM purchases
+      WHERE tenant_id = $1
+        AND (supplier_name ILIKE $2 OR memo ILIKE $2 OR receipt_number::text ILIKE $2)
+      ORDER BY receipt_date DESC, id DESC
+      LIMIT $3`,
+    [tenantId, like, limit],
+  )
+  return rows
+}
+
 export async function listPurchasePeriods(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT DISTINCT to_char(receipt_date, 'YYYY-MM-DD') AS date

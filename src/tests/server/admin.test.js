@@ -458,6 +458,11 @@ describe('/api/admin/users — super admin only', () => {
     await asSuper(request(app).delete(`/api/admin/users/${seed.superUser.id}`)).expect(400)
   })
 
+  it('DELETE rejects invalid ids', async () => {
+    const res = await asSuper(request(app).delete('/api/admin/users/abc')).expect(400)
+    expect(res.body).toEqual({ error: 'Invalid id' })
+  })
+
   it('DELETE rejects deleting the bootstrap ADMIN_EMAIL user', async () => {
     // Promote userA to ADMIN_EMAIL for this test
     process.env.ADMIN_EMAIL = 'a@test.local'

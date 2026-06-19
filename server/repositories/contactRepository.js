@@ -22,17 +22,25 @@ export async function listContacts(executor, tenantId, { category, excludeCatego
   return rows
 }
 
-export async function searchContacts(executor, tenantId, like, prefix, limit) {
+export async function searchContacts(executor, tenantId, like, prefix, limit, { category = null, excludeCategory = null } = {}) {
+  const params = [tenantId, like, prefix, limit]
+  let categoryClause = ''
+  if (category) {
+    categoryClause = `AND category = $${params.push(category)}`
+  } else if (excludeCategory) {
+    categoryClause = `AND category <> $${params.push(excludeCategory)}`
+  }
   const { rows } = await executor.query(
     `SELECT id, name, category, email, phone
        FROM contacts
       WHERE tenant_id = $1
         AND (name ILIKE $2 OR email ILIKE $2)
+        ${categoryClause}
       ORDER BY
         CASE WHEN name ILIKE $3 THEN 0 ELSE 1 END,
         name ASC
       LIMIT $4`,
-    [tenantId, like, prefix, limit],
+    params,
   )
   return rows
 }

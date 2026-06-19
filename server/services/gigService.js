@@ -11,6 +11,7 @@ import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { sendPushToTenant, sendPushToMember } from '../utils/sendPush.js'
 import {
   parseId,
+  parseSearchLimit,
   toDateStr,
   venueDisplay,
   VALID_STATUSES,
@@ -24,6 +25,7 @@ import {
   assertVenueInTenant,
   memberExistsInTenant,
   gigExistsInTenant,
+  searchGigs as searchGigRows,
   fetchGigWithRelations,
   loadParticipants,
   listGigsWithTaskCounts,
@@ -166,6 +168,18 @@ export async function listGigs(db, tenantId) {
     })
 
     return { ...gig, members_availability: membersAvail }
+  })
+}
+
+// Global-search read: matches gigs on event name, venue/festival name or city.
+// Mirrors searchVenues — short queries (<3 chars) return nothing so we don't
+// run a wildcard scan on every keystroke.
+export async function searchGigs(db, tenantId, query) {
+  const q = String(query.q ?? '').trim()
+  if (q.length < 3) return []
+  return searchGigRows(db, tenantId, {
+    like: `%${q}%`,
+    limit: parseSearchLimit(query.limit),
   })
 }
 

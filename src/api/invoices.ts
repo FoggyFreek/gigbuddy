@@ -27,6 +27,8 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
 
 export const listInvoices = (period: Period) => api<Invoice[]>(`/${periodQueryString(period)}`)
 export const listInvoicePeriods = () => api<InvoicePeriod[]>('/periods')
+export const searchInvoices = (q: string) =>
+  api<Invoice[]>(`/search?${new URLSearchParams({ q })}`)
 export const getInvoice = (id: Id) => api<Invoice>(`/${id}`)
 export const draftFromGig = (gigId: Id) => api<Invoice>(`/draft-from-gig/${gigId}`)
 export const createInvoice = (body: Partial<Invoice>) =>

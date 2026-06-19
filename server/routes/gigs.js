@@ -6,6 +6,7 @@ import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/gigValidators.js'
 import {
   listGigs,
+  searchGigs,
   getGig,
   importGigs,
   createGig,
@@ -67,6 +68,11 @@ function sendError(res, error) {
 // List all gigs with open task count and member availability
 router.get('/', async (req, res) => {
   res.json(await listGigs(pool, req.tenantId))
+})
+
+// Global search (min 3 chars): event name, or linked venue/festival name or city
+router.get('/search', async (req, res) => {
+  res.json(await searchGigs(pool, req.tenantId, req.query))
 })
 
 // Get single gig with tasks, participants, and attachments

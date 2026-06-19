@@ -2,8 +2,8 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
-import { parseId } from '../validators/accountValidators.js'
 import {
+  parseId,
   parseYearQuarter,
   validateReturnCreate,
   validatePayment,

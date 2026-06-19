@@ -197,6 +197,32 @@ describe('ledger browser — periods', () => {
   })
 })
 
+describe('ledger browser — transaction search', () => {
+  it('matches transactions on the joined source-doc text (invoice customer)', async () => {
+    const inv = await createSentInvoice()
+    const res = await asUserA(request(app).get('/api/ledger/search').query({ q: 'Texel' })).expect(200)
+    expect(res.body.some((r) => r.source_type === 'invoice' && r.source_id === inv.id)).toBe(true)
+  })
+
+  it('matches transactions on a journal description', async () => {
+    await createPostedJournal()
+    const res = await asUserA(request(app).get('/api/ledger/search').query({ q: 'Initial' })).expect(200)
+    expect(res.body.map((r) => r.description)).toContain('Initial')
+  })
+
+  it('returns nothing for queries shorter than 3 characters', async () => {
+    await createSentInvoice()
+    const res = await asUserA(request(app).get('/api/ledger/search').query({ q: 'Te' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+
+  it('isolates tenants: userA cannot find tenant B transactions', async () => {
+    await createSentInvoice(asUserB)
+    const res = await asUserA(request(app).get('/api/ledger/search').query({ q: 'Texel' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+})
+
 describe('ledger browser — entry search', () => {
   // An accrued purchase posts: Dr expense (62100) net, Dr input VAT (15000),
   // Cr accounts payable (21100) gross 2500.

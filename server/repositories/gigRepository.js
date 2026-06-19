@@ -110,6 +110,36 @@ export async function listGigsWithTaskCounts(executor, tenantId) {
   return rows
 }
 
+// Full-text-ish search over a tenant's gigs: matches the event name, or the
+// linked venue/festival name or city. Exact name matches on the event sort
+// first, then by most recent date. Tenant-scoped like every other query.
+export async function searchGigs(executor, tenantId, { like, limit }) {
+  const { rows } = await executor.query(
+    `SELECT
+       g.id, g.event_date, g.event_description, g.status,
+       g.venue_id, g.festival_id,
+       ${VENUE_JSON_SELECT},
+       ${FESTIVAL_JSON_SELECT}
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = $1
+       AND (
+         g.event_description ILIKE $2
+         OR v.name ILIKE $2
+         OR v.city ILIKE $2
+         OR fv.name ILIKE $2
+         OR fv.city ILIKE $2
+       )
+     ORDER BY
+       CASE WHEN g.event_description ILIKE $2 THEN 0 ELSE 1 END,
+       g.event_date DESC
+     LIMIT $3`,
+    [tenantId, like, limit],
+  )
+  return rows
+}
+
 // Pipeline of gross band fees for upcoming gigs (event_date >= today) in the
 // active statuses, grouped by status. Only gigs with a fee set contribute, so
 // the per-status count and total stay consistent. Pinned to "today" like the

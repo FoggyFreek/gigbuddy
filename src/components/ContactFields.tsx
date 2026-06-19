@@ -12,9 +12,10 @@ interface ContactFieldsProps {
   onChange: (field: string, value: string) => void
   errors?: Record<string, string | undefined>
   categories?: string[]
+  disabled?: boolean
 }
 
-export default function ContactFields({ form, onChange, errors = {}, categories = ALL_CONTACT_CATEGORIES }: ContactFieldsProps) {
+export default function ContactFields({ form, onChange, errors = {}, categories = ALL_CONTACT_CATEGORIES, disabled = false }: ContactFieldsProps) {
   return (
     <>
       <Grid size={4}>
@@ -24,6 +25,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
             label="Category"
             value={form.category}
             onChange={(e) => onChange('category', e.target.value)}
+            disabled={disabled}
           >
             {categories.map((cat) => (
               <MenuItem key={cat} value={cat}>{contactCategoryLabel(cat)}</MenuItem>
@@ -40,6 +42,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
           onChange={(e) => onChange('name', e.target.value)}
           error={!!errors.name}
           helperText={errors.name}
+          disabled={disabled}
         />
       </Grid>
       <Grid size={6}>
@@ -50,6 +53,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
           value={form.email}
           onChange={(e) => onChange('email', e.target.value)}
           slotProps={{ input: { endAdornment: <CopyAdornment value={form.email} /> } }}
+          disabled={disabled}
         />
       </Grid>
       <Grid size={6}>
@@ -59,6 +63,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
           value={form.phone}
           onChange={(e) => onChange('phone', e.target.value)}
           slotProps={{ input: { endAdornment: <CopyAdornment value={form.phone} /> } }}
+          disabled={disabled}
         />
       </Grid>
     </>

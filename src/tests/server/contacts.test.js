@@ -64,6 +64,35 @@ describe('GET /api/contacts - category filters', () => {
   })
 })
 
+describe('GET /api/contacts/search — category filter', () => {
+  beforeEach(async () => {
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category) VALUES
+       ($1, 'Alpha Supplier', 'supplier'),
+       ($2, 'Beta Supplier', 'supplier')`,
+      [seed.tenantA.id, seed.tenantB.id],
+    )
+  })
+
+  it('excludeCategory=supplier returns contacts but not suppliers', async () => {
+    const res = await asUserA(request(app).get('/api/contacts/search')
+      .query({ q: 'Alpha', excludeCategory: 'supplier' })).expect(200)
+    expect(res.body.map((c) => c.name)).toEqual(['Alpha Contact'])
+  })
+
+  it('category=supplier returns only suppliers', async () => {
+    const res = await asUserA(request(app).get('/api/contacts/search')
+      .query({ q: 'Alpha', category: 'supplier' })).expect(200)
+    expect(res.body.map((c) => c.name)).toEqual(['Alpha Supplier'])
+  })
+
+  it('isolates tenants: userA cannot find tenant B suppliers', async () => {
+    const res = await asUserA(request(app).get('/api/contacts/search')
+      .query({ q: 'Beta Supplier', category: 'supplier' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+})
+
 describe('GET /api/contacts/:id — includes notes array', () => {
   it('returns empty notes array when contact has no notes', async () => {
     const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id

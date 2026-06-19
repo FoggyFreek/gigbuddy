@@ -55,6 +55,15 @@ export function parseId(val) {
   return Number.isInteger(n) && n > 0 ? n : null
 }
 
+// Clamp a requested search result limit to a sane range (default 10, max 25).
+export function parseSearchLimit(value) {
+  const parsedLimit = Number.parseInt(value, 10)
+  return Math.max(
+    1,
+    Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),
+  )
+}
+
 function pad4(n) { return String(n).padStart(4, '0') }
 
 export function formatInvoiceNumber(year, seq) {

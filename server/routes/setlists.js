@@ -9,6 +9,7 @@ import {
 } from '../validators/setlistValidators.js'
 import {
   listSetlists,
+  searchSetlists,
   getSetlist,
   createSetlist,
   patchSetlist,
@@ -43,6 +44,11 @@ function sendError(res, error) {
 
 router.get('/', async (req, res) => {
   res.json(await listSetlists(pool, req.tenantId))
+})
+
+// Global search (min 3 chars): setlist name. Must precede /:id.
+router.get('/search', async (req, res) => {
+  res.json(await searchSetlists(pool, req.tenantId, req.query))
 })
 
 router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {

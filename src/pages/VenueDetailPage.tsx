@@ -31,6 +31,7 @@ import {
   updateVenue,
 } from '../api/venues.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import ContactPicker from '../components/ContactPicker.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
@@ -57,6 +58,7 @@ export default function VenueDetailPage() {
   const { id } = useParams()
   const venueId = Number(id)
   const navigate = useNavigate()
+  const { canWritePlanning: canWrite } = usePermissions()
   const outletCtx = (useOutletContext<VenueDetailOutletContext>() || {}) as VenueDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
 
@@ -128,12 +130,14 @@ export default function VenueDetailPage() {
   }, [venueId])
 
   async function handleAddContact(contact: Contact) {
+    if (!canWrite) return
     if (contacts.some((c) => c.id === contact.id)) return
     const linked = await addVenueContact(venueId, contact.id!)
     setContacts((prev) => [...prev, linked as (Contact & { is_primary?: boolean })])
   }
 
   async function handleSetPrimary(contactId: Id, isPrimary: boolean) {
+    if (!canWrite) return
     await setVenueContactPrimary(venueId, contactId, isPrimary)
     setContacts((prev) =>
       prev.map((c) => ({
@@ -144,6 +148,7 @@ export default function VenueDetailPage() {
   }
 
   async function handleRemoveContact(contactId: Id) {
+    if (!canWrite) return
     await removeVenueContact(venueId, contactId)
     setContacts((prev) => prev.filter((c) => c.id !== contactId))
   }
@@ -182,6 +187,7 @@ export default function VenueDetailPage() {
   }
 
   function handleChange(field: string, value: string) {
+    if (!canWrite) return
     setForm((prev) => ({ ...prev, [field]: value }))
     if (field === 'category') {
       handleCategoryChangeCheck(value, form.category ?? '')
@@ -234,6 +240,7 @@ export default function VenueDetailPage() {
               form={form}
               onChange={handleChange}
               errors={getRequiredErrors(form as Record<string, unknown>, REQUIRED_FIELDS)}
+              disabled={!canWrite}
             />
           </Grid>
 
@@ -267,16 +274,18 @@ export default function VenueDetailPage() {
                   {c.phone || ' '}
                 </Typography>
               </Box>
-              <Tooltip title={c.is_primary ? 'Primary contact — click to unset' : 'Mark as primary'}>
-                <IconButton
-                  size="small"
-                  color={c.is_primary ? 'warning' : 'default'}
-                  onClick={() => handleSetPrimary(c.id!, !c.is_primary)}
-                  aria-label={c.is_primary ? 'unset primary' : 'set primary'}
-                >
-                  {c.is_primary ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
-                </IconButton>
-              </Tooltip>
+              {canWrite && (
+                <Tooltip title={c.is_primary ? 'Primary contact — click to unset' : 'Mark as primary'}>
+                  <IconButton
+                    size="small"
+                    color={c.is_primary ? 'warning' : 'default'}
+                    onClick={() => handleSetPrimary(c.id!, !c.is_primary)}
+                    aria-label={c.is_primary ? 'unset primary' : 'set primary'}
+                  >
+                    {c.is_primary ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title="Open contact">
                 <IconButton
                   size="small"
@@ -286,34 +295,42 @@ export default function VenueDetailPage() {
                   <OpenInNewIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <IconButton
-                size="small"
-                onClick={() => handleRemoveContact(c.id!)}
-                aria-label="remove contact"
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+              {canWrite && (
+                <IconButton
+                  size="small"
+                  onClick={() => handleRemoveContact(c.id!)}
+                  aria-label="remove contact"
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              )}
             </Box>
           ))}
 
-          <Box sx={{ mt: 1 }}>
-            <ContactPicker
-              onSelect={handleAddContact}
-              excludeIds={contacts.map((c) => c.id).filter((id): id is Id => id !== undefined)}
-            />
-          </Box>
+          {canWrite && (
+            <Box sx={{ mt: 1 }}>
+              <ContactPicker
+                onSelect={handleAddContact}
+                excludeIds={contacts.map((c) => c.id).filter((id): id is Id => id !== undefined)}
+              />
+            </Box>
+          )}
         </>
       )}
 
-      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <SaveStatusLabel status={categorySaving ? 'saving' : saveStatus} />
-      </Box>
+      {canWrite && (
+        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+          <SaveStatusLabel status={categorySaving ? 'saving' : saveStatus} />
+        </Box>
+      )}
 
-      <Box sx={{ mt: 4 }}>
-        <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
-          Delete
-        </Button>
-      </Box>
+      {canWrite && (
+        <Box sx={{ mt: 4 }}>
+          <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
+            Delete
+          </Button>
+        </Box>
+      )}
 
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
         <DialogTitle>Delete venue?</DialogTitle>

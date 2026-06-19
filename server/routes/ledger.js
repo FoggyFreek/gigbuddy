@@ -6,23 +6,23 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { buildPeriodWhere, resolvePeriodRange } from '../utils/periodQuery.js'
-import { parseId } from '../validators/journalValidators.js'
-import { listEntryDates, getTenantDisplayName } from '../repositories/ledgerRepository.js'
-import { getLedgerList, getLedgerEntriesByAccount, getLedgerEntryDetail, getFinancialOverview, voidLedgerTransaction, reverseLedgerTransaction } from '../services/ledgerService.js'
+import { parseId, parseAccountCodes } from '../validators/ledgerValidators.js'
+import {
+  getLedgerList,
+  searchLedgerTransactions,
+  getLedgerEntriesByAccount,
+  getLedgerEntryDetail,
+  getFinancialOverview,
+  listLedgerEntryDates,
+  getLedgerTenantDisplayName,
+  voidLedgerTransaction,
+  reverseLedgerTransaction,
+} from '../services/ledgerService.js'
 import { getFinancialReport, getReportEntryLines } from '../services/financialReportService.js'
 import { renderFinancialReportXlsx } from '../utils/renderFinancialReportXlsx.js'
 import { renderFinancialReportPdf } from '../utils/renderFinancialReportPdf.js'
 
 const router = Router()
-
-// Parse the `accounts` query param (comma-separated account codes) into a
-// deduped list of valid codes. Anything malformed is dropped; missing/blank
-// yields [] (the service then returns no rows without scanning the ledger).
-function parseAccountCodes(raw) {
-  const value = Array.isArray(raw) ? raw[0] : raw
-  if (typeof value !== 'string') return []
-  return [...new Set(value.split(',').map((c) => c.trim()).filter((c) => /^[0-9]{4,6}$/.test(c)))]
-}
 
 // Human label for the requested period, used in export headers/filenames.
 function periodLabelFor(query) {
@@ -45,7 +45,14 @@ router.get('/', async (req, res) => {
 
 // ---------- periods (for the PeriodPicker availability grid) ----------
 router.get('/periods', async (req, res) => {
-  res.json(await listEntryDates(pool, req.tenantId))
+  res.json(await listLedgerEntryDates(pool, req.tenantId))
+})
+
+// ---------- global transaction search (must precede /:id) ----------
+// Min 3 chars: transaction description or joined source-doc text. The whole
+// router is already finance-gated.
+router.get('/search', async (req, res) => {
+  res.json(await searchLedgerTransactions(pool, req.tenantId, req.query))
 })
 
 // ---------- entry-line search by account (must precede /:id) ----------
@@ -80,7 +87,7 @@ router.get('/report/export', async (req, res) => {
 
   const [report, name] = await Promise.all([
     getFinancialReport(pool, req.tenantId, period.range),
-    getTenantDisplayName(pool, req.tenantId),
+    getLedgerTenantDisplayName(pool, req.tenantId),
   ])
   const label = periodLabelFor(req.query)
   const safeLabel = label.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '-')

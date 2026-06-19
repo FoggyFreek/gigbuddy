@@ -10,13 +10,16 @@
 // Revenue increase with Credits. Every journal balances (Σ debits == Σ credits).
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import { classify, describe, receiptFor } from './ledgerEntryTypes.js'
+import { parseSearchLimit } from '../validators/ledgerValidators.js'
 import {
   listTransactions,
+  searchTransactions,
   listEntriesByAccounts,
   getTransaction,
   getTransactionBySource,
   listLines,
   listEntryDates,
+  getTenantDisplayName,
   monthlyResultTotals,
   annualResultTotals,
   vatTotals,
@@ -247,6 +250,16 @@ export async function getLedgerList(executor, tenantId, period) {
   return rows.map(toListRow)
 }
 
+// Global-search read: matches transactions by description or joined source-doc
+// text, mapped to the same list-row shape as getLedgerList. Short queries (<3
+// chars) return nothing so we don't run a wildcard scan on every keystroke.
+export async function searchLedgerTransactions(executor, tenantId, query) {
+  const q = String(query.q ?? '').trim()
+  if (q.length < 3) return []
+  const rows = await searchTransactions(executor, tenantId, `%${q}%`, parseSearchLimit(query.limit))
+  return rows.map(toListRow)
+}
+
 // One ledger-entry (line-level) search row. Type and voided are classified
 // server-side like toListRow so the entry-search page matches the browser:
 // a manually voided original carries no void source_event, so fold in voided_at.
@@ -277,6 +290,14 @@ export async function getLedgerEntriesByAccount(executor, tenantId, accountCodes
   if (!accountCodes.length) return []
   const rows = await listEntriesByAccounts(executor, tenantId, accountCodes, period)
   return rows.map(toEntryLineRow)
+}
+
+export async function listLedgerEntryDates(executor, tenantId) {
+  return listEntryDates(executor, tenantId)
+}
+
+export async function getLedgerTenantDisplayName(executor, tenantId) {
+  return getTenantDisplayName(executor, tenantId)
 }
 
 function originFor(row) {

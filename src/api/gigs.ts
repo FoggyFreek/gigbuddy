@@ -31,6 +31,8 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/gigs${path}`, options)
 
 export const listGigs = () => api<Gig[]>('/')
+export const searchGigs = (q: string) =>
+  api<Gig[]>(`/search?${new URLSearchParams({ q })}`)
 export const getGig = (id: Id, opts?: RequestInit) => api<Gig>(`/${id}`, opts)
 export const createGig = (body: Partial<Gig>) =>
   api<Gig>('/', { method: 'POST', body: JSON.stringify(body) })

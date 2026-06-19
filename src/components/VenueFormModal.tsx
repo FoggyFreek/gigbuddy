@@ -11,6 +11,7 @@ import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
 import { createVenue, getVenueCategoryImpact, getVenue, updateVenue } from '../api/venues.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
 import VenueFields from './VenueFields.tsx'
@@ -65,6 +66,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [categoryChange, setCategoryChange] = useState<CategoryChange | null>(null)
   const [categorySaving, setCategorySaving] = useState(false)
+  const { canWritePlanning: canWrite } = usePermissions()
 
   const saveFn = useCallback(
     async (patch: Record<string, unknown>) => {
@@ -133,6 +135,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
   }
 
   function handleChange(field: string, value: string) {
+    if (mode === 'edit' && !canWrite) return
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
     if (mode === 'edit') {
@@ -194,6 +197,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
               onChange={handleChange}
               errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
               lockedCategory={lockedCategory}
+              disabled={mode === 'edit' && !canWrite}
             />
           </Grid>
         </DialogContent>
@@ -219,7 +223,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
           </>
         ) : (
           <>
-            <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>
+            {canWrite && <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>}
             <Box sx={{ flexGrow: 1 }} />
             <Button variant="contained" onClick={handleClose}>Close</Button>
           </>

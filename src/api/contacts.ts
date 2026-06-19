@@ -23,8 +23,15 @@ export const listContacts = (filters: ContactFilters = {}) => {
   const query = params.toString()
   return api<Contact[]>(query ? `/?${query}` : '/')
 }
-export const searchContacts = (q: string) =>
-  api<Contact[]>(`/search?${new URLSearchParams({ q })}`)
+export const searchContacts = (
+  q: string,
+  opts: { category?: string; excludeCategory?: string } = {},
+) => {
+  const params = new URLSearchParams({ q })
+  if (opts.category) params.set('category', opts.category)
+  if (opts.excludeCategory) params.set('excludeCategory', opts.excludeCategory)
+  return api<Contact[]>(`/search?${params}`)
+}
 export const getContact = (id: Id) => api<Contact>(`/${id}`)
 export const createContact = (body: Partial<Contact>) =>
   api<Contact>('/', { method: 'POST', body: JSON.stringify(body) })

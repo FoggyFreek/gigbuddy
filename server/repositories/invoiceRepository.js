@@ -24,6 +24,27 @@ export async function listInvoices(executor, tenantId, period) {
   return rows
 }
 
+// Global-search read: matches invoices on invoice number, customer name, or the
+// linked gig's event name (invoices.gig_id → gigs(id, tenant_id), nullable).
+// Exact invoice-number matches sort first, then most recent. Tenant-scoped.
+export async function searchInvoices(executor, tenantId, like, limit) {
+  const { rows } = await executor.query(
+    `SELECT i.id, i.invoice_number, i.customer_name, i.total_cents, i.status,
+            i.issue_date, g.event_description AS gig_event_description
+       FROM invoices i
+       LEFT JOIN gigs g ON g.id = i.gig_id AND g.tenant_id = i.tenant_id
+      WHERE i.tenant_id = $1
+        AND (i.invoice_number ILIKE $2 OR i.customer_name ILIKE $2
+             OR g.event_description ILIKE $2)
+      ORDER BY
+        CASE WHEN i.invoice_number ILIKE $2 THEN 0 ELSE 1 END,
+        i.issue_date DESC, i.id DESC
+      LIMIT $3`,
+    [tenantId, like, limit],
+  )
+  return rows
+}
+
 export async function listInvoicePeriodDates(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT DISTINCT to_char(issue_date, 'YYYY-MM-DD') AS date

@@ -87,6 +87,42 @@ export async function listTransactions(executor, tenantId, period = EMPTY_PERIOD
   return rows
 }
 
+// Global-search read: matches transactions on their own description or any of
+// the joined source-doc text (invoice number/customer, purchase supplier/memo,
+// journal description). Same source joins and shape as listTransactions so the
+// service can reuse toListRow for a consistent display description. Voided
+// originals/reversers are excluded (like the default browser view).
+export async function searchTransactions(executor, tenantId, like, limit) {
+  const { rows } = await executor.query(
+    `SELECT lt.id, to_char(lt.entry_date, 'YYYY-MM-DD') AS entry_date,
+            lt.description, lt.source_type, lt.source_id, lt.source_event,
+            lt.created_at, lt.voided_at,
+            e.total_debit_cents,
+            ${SOURCE_JOIN_COLUMNS}
+       FROM ledger_transactions lt
+       JOIN LATERAL (
+         SELECT COALESCE(SUM(le.debit_cents), 0)::int AS total_debit_cents
+           FROM ledger_entries le
+          WHERE le.transaction_id = lt.id AND le.tenant_id = lt.tenant_id
+       ) e ON true
+       ${SOURCE_JOINS}
+      WHERE lt.tenant_id = $1
+        ${EXCLUDE_VOIDED_SQL}
+        AND (
+          lt.description ILIKE $2
+          OR i.invoice_number ILIKE $2
+          OR i.customer_name ILIKE $2
+          OR p.supplier_name ILIKE $2
+          OR p.memo ILIKE $2
+          OR j.description ILIKE $2
+        )
+      ORDER BY lt.entry_date DESC, lt.id DESC
+      LIMIT $3`,
+    [tenantId, like, limit],
+  )
+  return rows
+}
+
 // Revenue/expense totals per calendar month inside [from, toExclusive),
 // classified by the chart-of-accounts type of each entry's account. Revenue
 // increases with credits; expenses (incl. cost of goods sold) with debits.

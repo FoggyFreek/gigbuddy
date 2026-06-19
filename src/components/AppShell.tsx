@@ -3,9 +3,13 @@ import { Outlet, useLocation } from 'react-router-dom'
 import AppBar from '@mui/material/AppBar'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
+import ClickAwayListener from '@mui/material/ClickAwayListener'
+import Collapse from '@mui/material/Collapse'
 import Drawer from '@mui/material/Drawer'
 import IconButton from '@mui/material/IconButton'
+import InputAdornment from '@mui/material/InputAdornment'
 import List from '@mui/material/List'
+import TextField from '@mui/material/TextField'
 import Toolbar from '@mui/material/Toolbar'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
@@ -16,6 +20,8 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
+import SearchIcon from '@mui/icons-material/Search'
+import CloseIcon from '@mui/icons-material/Close'
 // Group headers use TwoTone icons (slightly larger); children use Outlined.
 import SpaceDashboardTwoTone from '@mui/icons-material/SpaceDashboardTwoTone'
 import EventNoteTwoTone from '@mui/icons-material/EventNoteTwoTone'
@@ -57,6 +63,7 @@ import { ContentWidthContext } from '../contexts/contentWidthContext.ts'
 import NavGroup from './appShell/NavGroup.tsx'
 import { isItemSelected } from './appShell/navSelection.ts'
 import NotificationToggle from './appShell/NotificationToggle.tsx'
+import SearchPanel from './appShell/SearchPanel.tsx'
 import SettingsMenu from './appShell/SettingsMenu.tsx'
 import UserMenu from './appShell/UserMenu.tsx'
 import type { Id } from '../types/entities.ts'
@@ -160,6 +167,8 @@ export default function AppShell() {
   const { mode, toggleTheme } = useThemeMode()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchValue, setSearchValue] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState<HTMLElement | null>(null)
@@ -294,6 +303,42 @@ export default function AppShell() {
               </Typography>
             )}
           </Box>
+          {!isMobile && (
+            <ClickAwayListener onClickAway={() => setSearchOpen(false)}>
+              <Box sx={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', width: { sm: 380, md: 480 } }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Search for contacts, gigs or files…"
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  onFocus={() => setSearchOpen(true)}
+                  slotProps={{ input: {
+                    startAdornment: (
+                      <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                    ),
+                  } }}
+                />
+                {searchOpen && (
+                  <Box sx={{ position: 'absolute', top: '100%', left: 0, right: 0 }}>
+                    <SearchPanel
+                      key={activeTenantId ?? 'no-tenant'}
+                      query={searchValue}
+                      tenantId={activeTenantId}
+                      onNavigate={() => { setSearchOpen(false); setSearchValue('') }}
+                    />
+                  </Box>
+                )}
+              </Box>
+            </ClickAwayListener>
+          )}
+          {isMobile && (
+            <Tooltip title="Search">
+              <IconButton onClick={() => setSearchOpen((o) => !o)} aria-label="open search">
+                <SearchIcon />
+              </IconButton>
+            </Tooltip>
+          )}
           <NotificationToggle
             status={pushStatus}
             onSubscribe={subscribe}
@@ -347,6 +392,38 @@ export default function AppShell() {
             </>
           )}
         </Toolbar>
+        {isMobile && (
+          <Collapse in={searchOpen} unmountOnExit>
+            <Box sx={{ px: 2, pb: 1 }}>
+              <TextField
+                fullWidth
+                autoFocus
+                size="small"
+                placeholder="Search…"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                slotProps={{ input: {
+                  startAdornment: (
+                    <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton size="small" aria-label="close search" onClick={() => setSearchOpen(false)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                } }}
+              />
+              <SearchPanel
+                key={activeTenantId ?? 'no-tenant'}
+                query={searchValue}
+                tenantId={activeTenantId}
+                onNavigate={() => { setSearchOpen(false); setSearchValue('') }}
+              />
+            </Box>
+          </Collapse>
+        )}
       </AppBar>
 
       {isMobile ? (

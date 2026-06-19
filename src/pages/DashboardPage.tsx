@@ -289,7 +289,7 @@ export default function DashboardPage() {
                   <Typography variant="body1" sx={{ fontWeight: 700 }}>
                     {nextGig.data.event_description}
                   </Typography>
-                  <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
+                  <Typography variant="h5" sx={{ color: 'text.primary', fontWeight: 700, textAlign: 'center' }}>
                     {new Date(nextGig.data.event_date!).getDate()}
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'light' }}>
@@ -351,7 +351,7 @@ export default function DashboardPage() {
                   <Typography variant="body1" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {nextRehearsal.data.location || 'Rehearsal'}
                   </Typography>
-                  <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
+                  <Typography variant="h5" sx={{ color: 'text.primary', fontWeight: 700, textAlign: 'center' }}>
                     {new Date(nextRehearsal.data.proposed_date!).getDate()}
                   </Typography>
                   {(nextRehearsal.data.start_time || nextRehearsal.data.end_time) && (
@@ -473,7 +473,7 @@ export default function DashboardPage() {
                         <Typography variant="body1" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {g.event_description}
                         </Typography>
-                        <Typography variant="h5" sx={{ color: 'text.secondary', fontWeight: 700, textAlign: 'center' }}>
+                        <Typography variant="h5" sx={{ color: 'text.primary', fontWeight: 700, textAlign: 'center' }}>
                           {new Date(g.event_date!).getDate()}
                         </Typography>
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'light' }}>

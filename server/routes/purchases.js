@@ -10,6 +10,7 @@ import {
   registerPayment,
   createPurchaseAttachment,
   listPurchases,
+  searchPurchases,
   listPeriods,
   getPurchaseDetail,
   deletePurchase,
@@ -51,6 +52,12 @@ router.get('/', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) =>
   const result = await listPurchases(pool, req.tenantId, req.query)
   if (result.error) return sendError(res, result.error)
   res.json(result.purchases)
+})
+
+// ---------- global search (full register, finance-gated) ----------
+// Min 3 chars: supplier name, memo, or receipt number. Must precede /:id.
+router.get('/search', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) => {
+  res.json(await searchPurchases(pool, req.tenantId, req.query))
 })
 
 router.get('/periods', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) => {

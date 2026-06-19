@@ -513,3 +513,38 @@ describe('invoices period filtering', () => {
     expect(res.body).toEqual(['2026-03-15'])
   })
 })
+
+describe('GET /api/invoices/search', () => {
+  const numbers = (res) => res.body.map((i) => i.invoice_number)
+
+  it('matches on customer name', async () => {
+    await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({ customer_name: 'Zappa Productions' })).expect(201)
+    const res = await asUserA(request(app).get('/api/invoices/search').query({ q: 'Zappa' })).expect(200)
+    expect(res.body).toHaveLength(1)
+    expect(res.body[0].customer_name).toBe('Zappa Productions')
+  })
+
+  it('matches on the linked gig event name', async () => {
+    // basePayload links gig_id = seed.gigA.id, whose event_description is 'Alpha Gig'.
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({ customer_name: 'No Match Customer' })).expect(201)
+    const res = await asUserA(request(app).get('/api/invoices/search').query({ q: 'Alpha Gig' })).expect(200)
+    expect(numbers(res)).toContain(created.body.invoice_number)
+    expect(res.body[0].gig_event_description).toBe('Alpha Gig')
+  })
+
+  it('returns nothing for queries shorter than 3 characters', async () => {
+    await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).get('/api/invoices/search').query({ q: 'Al' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+
+  it('isolates tenants: userA cannot find tenant B invoices', async () => {
+    await asUserB(request(app).post('/api/invoices')).send(basePayload({
+      gig_id: seed.gigB.id, customer_name: 'Secret Beta Customer',
+    })).expect(201)
+    const res = await asUserA(request(app).get('/api/invoices/search').query({ q: 'Secret Beta' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+})

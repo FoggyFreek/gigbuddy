@@ -35,6 +35,22 @@ export async function listSetlistsWithAggregates(executor, tenantId) {
   return rows
 }
 
+// Global-search read: matches setlists on name. Exact name matches sort first,
+// then alphabetically. Tenant-scoped like every other query.
+export async function searchSetlists(executor, tenantId, like, limit) {
+  const { rows } = await executor.query(
+    `SELECT id, name
+       FROM setlists
+      WHERE tenant_id = $1 AND name ILIKE $2
+      ORDER BY
+        CASE WHEN name ILIKE $2 THEN 0 ELSE 1 END,
+        name ASC
+      LIMIT $3`,
+    [tenantId, like, limit],
+  )
+  return rows
+}
+
 // Fetch one setlist as a nested tree, or null if it doesn't belong to the tenant.
 // Song items are enriched with title/artist/key/tempo/duration and their first tag,
 // plus `my_note`: the requesting user's personal note on that song-in-set (or null).

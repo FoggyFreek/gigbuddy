@@ -34,6 +34,7 @@ interface _VenuePickerProps {
 const VenuePicker = _VenuePickerRaw as React.ComponentType<_VenuePickerProps>
 import { createGig } from '../api/gigs.ts'
 import { dayjsToTimeString, timeStringToDayjs } from '../utils/eventFormUtils.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Id, Venue, Gig } from '../types/entities.ts'
 
 dayjs.extend(customParseFormat)
@@ -77,6 +78,7 @@ interface GigFormModalProps {
 
 export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigFormModalProps) {
   const contentRef = useRef<GigDetailHandle | null>(null)
+  const { canWritePlanning: canWrite } = usePermissions()
 
   // ── Create mode state ──────────────────────────────────────────────────────
   const [form, setForm] = useState<GigFormShape>(() =>
@@ -147,7 +149,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
 
       <DialogContent>
         {mode === 'edit' ? (
-          <GigDetailContent ref={contentRef} gigId={gigId!} />
+          <GigDetailContent ref={contentRef} gigId={gigId!} canWrite={canWrite} />
         ) : (
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 12, sm: 6 }}>

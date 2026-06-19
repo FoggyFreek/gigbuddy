@@ -4,12 +4,18 @@
 // to status codes without knowing the rules:
 //   { error: { status, body } }   — caller should respond with that status/body
 //   anything else                 — success payload (see each function)
-import { parseId, isValidIsoDate } from '../validators/journalValidators.js'
+import {
+  parseId,
+  isValidIsoDate,
+  buildReimbursementPeriodWhere,
+} from '../validators/reimbursementValidators.js'
 import { validateBandMemberForTenant } from '../repositories/purchaseRepository.js'
 import {
   fetchOutstandingByMember,
   fetchOutstandingPurchases,
   insertReimbursement,
+  listReimbursements,
+  fetchReimbursementPeriods,
   settlePurchases,
 } from '../repositories/reimbursementRepository.js'
 import {
@@ -45,6 +51,16 @@ export async function listMemberOutstandingPurchases(pool, tenantId, bandMemberI
   const member = await validateBandMemberForTenant(pool, bandMemberId, tenantId)
   if (member === null) return { error: { status: 404, body: { error: 'Not found' } } }
   return { items: await fetchOutstandingPurchases(pool, tenantId, member.id) }
+}
+
+export async function listReimbursementHistory(pool, tenantId, query = {}) {
+  const period = buildReimbursementPeriodWhere(query)
+  if (period.error) return { error: { status: 400, body: { error: period.error } } }
+  return { reimbursements: await listReimbursements(pool, tenantId, period) }
+}
+
+export async function listReimbursementPeriods(pool, tenantId) {
+  return { dates: await fetchReimbursementPeriods(pool, tenantId) }
 }
 
 // Registers a reimbursement that settles the selected member-paid purchases and

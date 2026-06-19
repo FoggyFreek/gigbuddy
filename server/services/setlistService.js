@@ -5,12 +5,14 @@
 import pool from '../db/index.js'
 import {
   trimOrNull,
+  parseSearchLimit,
   buildSetUpdateFields,
   parseNewItem,
   buildItemPatch,
 } from '../validators/setlistValidators.js'
 import {
   listSetlistsWithAggregates,
+  searchSetlists as searchSetlistRows,
   fetchSetlistTree,
   insertSetlist,
   updateSetlistName,
@@ -85,6 +87,14 @@ function buildNewFollowerMap(payloadSets) {
 
 export async function listSetlists(db, tenantId) {
   return listSetlistsWithAggregates(db, tenantId)
+}
+
+// Global-search read: matches setlists by name. Short queries (<3 chars) return
+// nothing so we don't run a wildcard scan on every keystroke (mirrors searchGigs).
+export async function searchSetlists(db, tenantId, query) {
+  const q = String(query.q ?? '').trim()
+  if (q.length < 3) return []
+  return searchSetlistRows(db, tenantId, `%${q}%`, parseSearchLimit(query.limit))
 }
 
 export async function getSetlist(db, tenantId, setlistId, userId) {

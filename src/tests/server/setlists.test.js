@@ -407,3 +407,27 @@ describe('Per-member song notes', () => {
       .send({ note: 'leak' })).expect(404)
   })
 })
+
+describe('GET /api/setlists/search', () => {
+  const names = (res) => res.body.map((s) => s.name)
+
+  it('matches setlists by name', async () => {
+    await createSetlistA('Summer Tour Set')
+    await createSetlistA('Acoustic Evening')
+    const res = await asUserA(request(app).get('/api/setlists/search').query({ q: 'Summer' })).expect(200)
+    expect(names(res)).toEqual(['Summer Tour Set'])
+  })
+
+  it('returns nothing for queries shorter than 3 characters', async () => {
+    await createSetlistA('Summer Tour Set')
+    const res = await asUserA(request(app).get('/api/setlists/search').query({ q: 'Su' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+
+  it('isolates tenants: userA cannot find tenant B setlists', async () => {
+    await pool.query('INSERT INTO setlists (tenant_id, name) VALUES ($1, $2)',
+      [seed.tenantB.id, 'Beta Secret Set'])
+    const res = await asUserA(request(app).get('/api/setlists/search').query({ q: 'Beta Secret' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+})

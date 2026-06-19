@@ -24,6 +24,7 @@ import {
   replaceInvoiceLines,
   validateGigIdForTenant,
   listInvoices as listInvoiceRows,
+  searchInvoices as searchInvoiceRows,
   listInvoicePeriodDates,
   fetchGig,
   fetchVenue,
@@ -42,6 +43,7 @@ import {
   STATUS_VALUES,
   normalizeLines,
   parseCreateInvoiceBody,
+  parseSearchLimit,
   computeDueDate,
   validatePaymentLinkOptions,
 } from '../validators/invoiceValidators.js'
@@ -474,6 +476,14 @@ export async function listInvoices(pool, tenantId, query) {
 
 export async function listInvoicePeriods(pool, tenantId) {
   return listInvoicePeriodDates(pool, tenantId)
+}
+
+// Global-search read: matches invoices by number or customer name. Short queries
+// (<3 chars) return nothing so we don't run a wildcard scan on every keystroke.
+export async function searchInvoices(pool, tenantId, query) {
+  const q = String(query.q ?? '').trim()
+  if (q.length < 3) return []
+  return searchInvoiceRows(pool, tenantId, `%${q}%`, parseSearchLimit(query.limit))
 }
 
 function buildBillingTarget(type, row) {

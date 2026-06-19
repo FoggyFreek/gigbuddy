@@ -2,15 +2,12 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
-import { parseId } from '../validators/journalValidators.js'
-import { buildPeriodWhere } from '../utils/periodQuery.js'
-import {
-  listReimbursements,
-  fetchReimbursementPeriods,
-} from '../repositories/reimbursementRepository.js'
+import { parseId } from '../validators/reimbursementValidators.js'
 import {
   listOutstanding,
   listMemberOutstandingPurchases,
+  listReimbursementHistory,
+  listReimbursementPeriods,
   createReimbursement,
   reimburseMemberFull,
 } from '../services/reimbursementService.js'
@@ -58,15 +55,14 @@ router.post('/members/:id/full', requirePermission(PERMISSIONS.FINANCE_MANAGE), 
 
 // ---------- history ----------
 router.get('/', async (req, res) => {
-  const period = buildPeriodWhere(req.query, 'r.paid_on')
-  if (period.error) return res.status(400).json({ error: period.error })
-  const rows = await listReimbursements(pool, req.tenantId, period)
-  res.json(rows)
+  const result = await listReimbursementHistory(pool, req.tenantId, req.query)
+  if (result.error) return res.status(result.error.status).json(result.error.body)
+  res.json(result.reimbursements)
 })
 
 router.get('/periods', async (req, res) => {
-  const dates = await fetchReimbursementPeriods(pool, req.tenantId)
-  res.json(dates)
+  const result = await listReimbursementPeriods(pool, req.tenantId)
+  res.json(result.dates)
 })
 
 export default router

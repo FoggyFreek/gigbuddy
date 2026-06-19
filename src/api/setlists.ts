@@ -5,6 +5,8 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/setlists${path}`, options)
 
 export const listSetlists = () => api<Setlist[]>('/')
+export const searchSetlists = (q: string) =>
+  api<Setlist[]>(`/search?${new URLSearchParams({ q })}`)
 export const getSetlist = (id: Id) => api<Setlist>(`/${id}`)
 export const createSetlist = (body: Partial<Setlist>) =>
   api<Setlist>('/', { method: 'POST', body: JSON.stringify(body) })

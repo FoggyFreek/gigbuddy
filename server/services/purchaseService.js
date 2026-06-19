@@ -16,6 +16,7 @@ import {
   fetchValidProductIds,
   validateBandMemberForTenant,
   listPurchases as listPurchaseRows,
+  searchPurchases as searchPurchaseRows,
   listPurchasePeriods,
   fetchPurchaseAttachments,
   getPurchaseStatus,
@@ -30,6 +31,7 @@ import {
   STATUS_VALUES,
   normalizeLines,
   parseReceiptNumber,
+  parseSearchLimit,
 } from '../validators/purchaseValidators.js'
 import {
   ledgerErrorResult,
@@ -587,6 +589,15 @@ export async function listPurchases(db, tenantId, query, { createdByUserId = nul
 
 export async function listPeriods(db, tenantId) {
   return listPurchasePeriods(db, tenantId)
+}
+
+// Global-search read: matches purchases by supplier, memo, or receipt number.
+// Short queries (<3 chars) return nothing so we don't run a wildcard scan on
+// every keystroke (mirrors searchInvoices).
+export async function searchPurchases(db, tenantId, query) {
+  const q = String(query.q ?? '').trim()
+  if (q.length < 3) return []
+  return searchPurchaseRows(db, tenantId, `%${q}%`, parseSearchLimit(query.limit))
 }
 
 // Composes a purchase with its lines (and optionally attachments). Used both for

@@ -38,6 +38,10 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
 export const listLedger = (period: Period) => api<LedgerEntryRow[]>(`/${periodQueryString(period)}`)
 export const listLedgerPeriods = () => api<string[]>('/periods')
 
+// Global transaction search (min 3 chars) — same list-row shape as listLedger.
+export const searchLedgerTransactions = (q: string) =>
+  api<LedgerEntryRow[]>(`/search?${new URLSearchParams({ q })}`)
+
 // Entry-line search by account: `accountCodes` already includes any selected
 // parents' descendants, so it is sent as-is.
 export const listLedgerEntries = (period: Period, accountCodes: string[]) => {

@@ -51,7 +51,14 @@ export async function listContacts(db, tenantId, query) {
 export async function searchContacts(db, tenantId, query) {
   const q = String(query.q ?? '').trim()
   if (q.length < 3) return []
-  return searchContactRows(db, tenantId, `%${q}%`, `${q}%`, parseSearchLimit(query.limit))
+  // Invalid category filters degrade to "no filter" — search never errors, it
+  // just returns fewer/zero rows (the route has no error path).
+  const category = parseCategoryFilter(query.category) || null
+  const excludeCategory = parseCategoryFilter(query.excludeCategory) || null
+  return searchContactRows(db, tenantId, `%${q}%`, `${q}%`, parseSearchLimit(query.limit), {
+    category,
+    excludeCategory,
+  })
 }
 
 export async function getContact(db, tenantId, contactId) {

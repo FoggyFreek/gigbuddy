@@ -7,6 +7,7 @@ import { parseId } from '../validators/invoiceValidators.js'
 import {
   listInvoices,
   listInvoicePeriods,
+  searchInvoices,
   buildDraftFromGig,
   getInvoice,
   createInvoice,
@@ -52,6 +53,12 @@ router.get('/', async (req, res) => {
 // Distinct issue dates (for the period filter)
 router.get('/periods', async (req, res) => {
   res.json(await listInvoicePeriods(pool, req.tenantId))
+})
+
+// Global search (min 3 chars): invoice number or customer name. The whole
+// router is already finance-gated. Must precede /:id.
+router.get('/search', async (req, res) => {
+  res.json(await searchInvoices(pool, req.tenantId, req.query))
 })
 
 // Pre-filled invoice draft from a gig

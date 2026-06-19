@@ -10,6 +10,7 @@ import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
 import { createContact, getContact, updateContact } from '../api/contacts.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import { ALL_CONTACT_CATEGORIES } from '../utils/contactCategories.ts'
 import type { Id, Contact } from '../types/entities.ts'
@@ -57,6 +58,7 @@ export default function ContactFormModal({
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(mode === 'edit')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const { canWritePlanning: canWrite } = usePermissions()
 
   const saveFn = useCallback(
     async (patch: Record<string, unknown>) => {
@@ -83,6 +85,7 @@ export default function ContactFormModal({
   }, [mode, contactId])
 
   function handleChange(field: string, value: string) {
+    if (mode === 'edit' && !canWrite) return
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
     if (mode === 'edit') {
@@ -126,6 +129,7 @@ export default function ContactFormModal({
               onChange={handleChange}
               errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
               categories={categories}
+              disabled={mode === 'edit' && !canWrite}
             />
           </Grid>
         </DialogContent>
@@ -151,7 +155,7 @@ export default function ContactFormModal({
           </>
         ) : (
           <>
-            <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>
+            {canWrite && <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>}
             <Box sx={{ flexGrow: 1 }} />
             <Button variant="contained" onClick={handleClose}>Close</Button>
           </>

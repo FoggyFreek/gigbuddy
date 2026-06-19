@@ -10,6 +10,15 @@ export function trimOrNull(val) {
   return s || null
 }
 
+// Clamp a requested search result limit to a sane range (default 10, max 25).
+export function parseSearchLimit(value) {
+  const parsedLimit = Number.parseInt(value, 10)
+  return Math.max(
+    1,
+    Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),
+  )
+}
+
 export function toNonNegInt(val) {
   const n = Number(val)
   return Number.isInteger(n) && n >= 0 ? n : null

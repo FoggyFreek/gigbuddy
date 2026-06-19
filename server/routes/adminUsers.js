@@ -2,6 +2,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { auditLog } from '../utils/auditLog.js'
 import { listUsers, deleteUser } from '../services/adminUserService.js'
+import { parseId } from '../validators/adminUserValidators.js'
 
 const router = Router()
 
@@ -14,7 +15,9 @@ router.get('/', async (req, res) => {
 })
 
 router.delete('/:id', async (req, res) => {
-  const result = await deleteUser(pool, req.user.id, Number(req.params.id))
+  const id = parseId(req.params.id)
+  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const result = await deleteUser(pool, req.user.id, id)
   if (result.audit) auditLog(req, result.audit.action, result.audit.details)
   if (result.error) return sendError(res, result.error)
   res.status(204).end()

@@ -550,3 +550,27 @@ describe('purchases period filtering', () => {
     expect(res.body).toEqual(['2026-03-15'])
   })
 })
+
+describe('GET /api/purchases/search', () => {
+  it('matches purchases by supplier name', async () => {
+    await asUserA(request(app).post('/api/purchases')).send(basePayload({ supplier_name: 'Acme Backline' })).expect(201)
+    const res = await asUserA(request(app).get('/api/purchases/search').query({ q: 'Acme' })).expect(200)
+    expect(res.body).toHaveLength(1)
+    expect(res.body[0].supplier_name).toBe('Acme Backline')
+  })
+
+  it('matches purchases by receipt number', async () => {
+    const created = await asUserA(request(app).post('/api/purchases')).send(basePayload()).expect(201)
+    // Receipt numbers auto-increment from 1; set a 3-digit one (editable while
+    // draft) so it clears the 3-char minimum-query guard.
+    await asUserA(request(app).patch(`/api/purchases/${created.body.id}`)).send({ receipt_number: 100 }).expect(200)
+    const res = await asUserA(request(app).get('/api/purchases/search').query({ q: '100' })).expect(200)
+    expect(res.body.map((p) => p.id)).toContain(created.body.id)
+  })
+
+  it('isolates tenants: userA cannot find tenant B purchases', async () => {
+    await asUserB(request(app).post('/api/purchases')).send(basePayload({ supplier_name: 'Beta Backline' })).expect(201)
+    const res = await asUserA(request(app).get('/api/purchases/search').query({ q: 'Beta Backline' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+})
