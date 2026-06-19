@@ -150,6 +150,34 @@ describe('POST /api/contacts/:id/notes', () => {
   })
 })
 
+describe('DELETE /api/contacts/:id — supplier guard', () => {
+  it('returns 409 when the contact is linked to purchases', async () => {
+    const { rows: [supplier] } = await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category) VALUES ($1, 'Linked Supplier', 'supplier') RETURNING id`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO purchases (tenant_id, receipt_number, supplier_name, supplier_contact_id, created_by_user_id)
+       VALUES ($1, 1, 'Linked Supplier', $2, $3)`,
+      [seed.tenantA.id, supplier.id, seed.userA.id],
+    )
+    const res = await asUserA(request(app).delete(`/api/contacts/${supplier.id}`)).expect(409)
+    expect(res.body.error).toMatch(/purchase/)
+    const { rows } = await pool.query('SELECT id FROM contacts WHERE id = $1', [supplier.id])
+    expect(rows).toHaveLength(1)
+  })
+
+  it('allows deletion when the contact has no linked purchases', async () => {
+    const { rows: [supplier] } = await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category) VALUES ($1, 'Unlinked Supplier', 'supplier') RETURNING id`,
+      [seed.tenantA.id],
+    )
+    await asUserA(request(app).delete(`/api/contacts/${supplier.id}`)).expect(204)
+    const { rows } = await pool.query('SELECT id FROM contacts WHERE id = $1', [supplier.id])
+    expect(rows).toHaveLength(0)
+  })
+})
+
 describe('DELETE /api/contacts/:id/notes/:noteId', () => {
   it('deletes an existing note and returns 204', async () => {
     const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id

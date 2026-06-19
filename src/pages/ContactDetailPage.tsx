@@ -40,6 +40,7 @@ import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import SupplierPurchasesSection from '../components/SupplierPurchasesSection.tsx'
 import VenuePicker from '../components/VenuePicker.tsx'
 import type { Venue, Id } from '../types/entities.ts'
+import { isApiError } from '../types/api.ts'
 
 const REQUIRED_FIELDS = ['name']
 
@@ -84,6 +85,7 @@ export default function ContactDetailPage() {
   const [venues, setVenues] = useState<LinkedVenue[]>([])
   const [loading, setLoading] = useState(true)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const saveFn = useCallback(
     async (patch: Partial<ContactForm>) => { await updateContact(contactId, patch) },
@@ -165,9 +167,17 @@ export default function ContactDetailPage() {
 
   async function handleDelete() {
     setConfirmingDelete(false)
-    await deleteContact(contactId)
-    onContactDelete?.(contactId)
-    closeView()
+    try {
+      await deleteContact(contactId)
+      onContactDelete?.(contactId)
+      closeView()
+    } catch (err) {
+      if (isApiError(err) && err.status === 409) {
+        setDeleteError(err.message)
+      } else {
+        throw err
+      }
+    }
   }
 
   async function handleBack() {
@@ -373,6 +383,16 @@ export default function ContactDetailPage() {
         <DialogActions>
           <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
           <Button color="error" variant="contained" onClick={handleDelete}>Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteError !== null} onClose={() => setDeleteError(null)}>
+        <DialogTitle>Cannot delete contact</DialogTitle>
+        <DialogContent>
+          <DialogContentText>{deleteError}</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteError(null)}>OK</Button>
         </DialogActions>
       </Dialog>
     </Box>

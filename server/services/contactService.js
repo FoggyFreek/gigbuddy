@@ -27,6 +27,7 @@ import {
   loadExistingImportKeys,
   insertImportContact,
 } from '../repositories/contactRepository.js'
+import { countPurchasesBySupplierContact } from '../repositories/purchaseRepository.js'
 
 const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
 
@@ -102,6 +103,19 @@ export async function patchContact(db, tenantId, contactId, body) {
 }
 
 export async function deleteContact(db, tenantId, contactId) {
+  const purchaseCount = await countPurchasesBySupplierContact(db, tenantId, contactId)
+  if (purchaseCount > 0) {
+    return {
+      error: {
+        status: 409,
+        body: {
+          error: `This supplier is linked to ${purchaseCount} purchase${purchaseCount === 1 ? '' : 's'} and cannot be deleted.`,
+          code: 'supplier_has_purchases',
+          count: purchaseCount,
+        },
+      },
+    }
+  }
   const deleted = await deleteContactRow(db, contactId, tenantId)
   return deleted ? {} : NOT_FOUND
 }

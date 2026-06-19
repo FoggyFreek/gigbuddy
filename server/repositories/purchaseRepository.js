@@ -1,6 +1,14 @@
 // Data-access helpers for purchases. Each takes an `executor` (a pool or a
 // transaction client) so callers control transaction boundaries.
 
+export async function countPurchasesBySupplierContact(executor, tenantId, contactId) {
+  const { rows } = await executor.query(
+    'SELECT COUNT(*)::int AS count FROM purchases WHERE tenant_id = $1 AND supplier_contact_id = $2',
+    [tenantId, contactId],
+  )
+  return rows[0].count
+}
+
 export async function fetchPurchase(executor, tenantId, purchaseId) {
   const { rows } = await executor.query(
     'SELECT * FROM purchases WHERE id = $1 AND tenant_id = $2',
