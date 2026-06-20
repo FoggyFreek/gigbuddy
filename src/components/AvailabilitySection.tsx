@@ -43,6 +43,7 @@ import { listGigs } from '../api/gigs.ts'
 import { listRehearsals } from '../api/rehearsals.ts'
 import { listBandEvents } from '../api/bandEvents.ts'
 import { exportMonthToICS } from '../utils/shareUtils.ts'
+import { useProfile } from '../contexts/profileContext.ts'
 import type { Gig, Member, BandEvent, Slot, Rehearsal, Id } from '../types/entities.ts'
 
 interface AvailabilitySectionProps {
@@ -63,6 +64,7 @@ function monthBounds(year: number, month: number) {
 
 export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 }: AvailabilitySectionProps = {}) {
   const isMobile = useCompactLayout()
+  const { bandName } = useProfile()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const gigHref = (id: Id) => (basePath ? `${basePath}/gigs/${id}` : `/gigs/${id}`)
@@ -477,6 +479,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
                 exportOptions.bandEvents ? bandEvents : [],
                 viewYear,
                 viewMonth,
+                bandName || undefined,
               )
               setExportModal(false)
             }}

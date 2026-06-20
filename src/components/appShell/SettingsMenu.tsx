@@ -11,6 +11,7 @@ import ApartmentIcon from '@mui/icons-material/Apartment'
 import GroupIcon from '@mui/icons-material/Group'
 import SettingsIcon from '@mui/icons-material/Settings'
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import type { SvgIconComponent } from '@mui/icons-material'
 
 interface NavMenuItemDef {
@@ -42,12 +43,13 @@ interface SettingsMenuProps {
   onClose: () => void
   mode: string
   onToggleTheme: () => void
+  onOpenCalendarFeed: () => void
   canManageMembers?: boolean
   canManageTenant?: boolean
   isSuperAdmin?: boolean
 }
 
-export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, canManageMembers, canManageTenant, isSuperAdmin }: SettingsMenuProps) {
+export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, onOpenCalendarFeed, canManageMembers, canManageTenant, isSuperAdmin }: SettingsMenuProps) {
   // Each item is gated on its own capability, not on the tenant_admin role, so
   // the permission matrix stays the single source of truth (see auth/permissions).
   const adminNavItems: NavMenuItemDef[] = [
@@ -68,6 +70,12 @@ export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTh
           {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
         </ListItemIcon>
         <ListItemText primary={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} />
+      </MenuItem>
+      <MenuItem onClick={() => { onOpenCalendarFeed(); onClose() }}>
+        <ListItemIcon>
+          <CalendarMonthIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Subscribe to calendar" />
       </MenuItem>
       {adminNavItems.length > 0 && [
         <Divider key="tenant-admin-divider" />,

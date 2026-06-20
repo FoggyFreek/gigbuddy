@@ -11,6 +11,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
 import type { Member, Slot, Id } from '../types/entities.ts'
+import DateEntryField from './DateEntryField.tsx'
 
 interface AvailabilitySlotDialogProps {
   open: boolean
@@ -93,26 +94,22 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
             ))}
           </TextField>
 
-          <TextField
+          <DateEntryField
             label="Start date"
-            type="date"
             value={form.start_date}
             onChange={(e) => set('start_date', e.target.value)}
             fullWidth
             size="small"
-            slotProps={{ inputLabel: { shrink: true } }}
             error={!!errors.start_date}
             helperText={errors.start_date}
           />
 
-          <TextField
+          <DateEntryField
             label="End date"
-            type="date"
             value={form.end_date}
             onChange={(e) => set('end_date', e.target.value)}
             fullWidth
             size="small"
-            slotProps={{ inputLabel: { shrink: true } }}
             error={!!errors.end_date}
             helperText={errors.end_date}
           />

@@ -12,21 +12,33 @@ import {
   getMemberColor,
 } from '../../utils/availabilityUtils.ts'
 import { venueHeadline } from '../../utils/venueDisplay.ts'
-import { getEventTextColor } from './calendarColors.ts'
+import { getEventTextColor, resolvePaletteColor } from './calendarColors.ts'
 import type { CalendarCell as CalendarCellData, Member, Slot, Gig, Rehearsal, BandEvent } from '../../types/entities.ts'
 
-const BAR_SX = {
+const SLOT_BAR_SX = {
   minHeight: 20,
   width: '100%',
   px: 0.5,
   py: 0.25,
-  borderRadius: 0.5,
+  borderRadius: 0,
   fontSize: '0.7rem',
   lineHeight: 1.2,
   fontWeight: 600,
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
+}
+
+function formatTime(time?: string | null): string | null {
+  if (!time) return null
+  return time.slice(0, 5)
+}
+
+function formatTimeRange(start?: string | null, end?: string | null): string | null {
+  const s = formatTime(start)
+  if (!s) return null
+  const e = formatTime(end)
+  return e ? `${s} – ${e}` : s
 }
 
 interface DayNumberProps {
@@ -108,15 +120,34 @@ interface GigBarProps {
 }
 
 function GigBar({ gig, theme, onGigClick }: GigBarProps) {
-  const backgroundColor = GIG_STATUS_COLORS[gig.status ?? ''] || 'grey.500'
+  const paletteColor = GIG_STATUS_COLORS[gig.status ?? ''] || 'grey.500'
+  const resolvedColor = resolvePaletteColor(theme, paletteColor)
+  const timeRange = formatTimeRange(gig.start_time, gig.end_time)
+  const title = gig.event_description || venueHeadline(gig.venue ?? gig.festival) || 'Gig'
   return (
     <Tooltip title={[gig.event_description, venueHeadline(gig.venue ?? gig.festival), gig.status].filter(Boolean).join(' — ')}>
       <Box
         data-gig-id={gig.id}
         onClick={(e) => { e.stopPropagation(); onGigClick?.(gig) }}
-        sx={{ ...BAR_SX, bgcolor: backgroundColor, color: getEventTextColor(theme, backgroundColor), cursor: onGigClick ? 'pointer' : 'default' }}
+        sx={{
+          width: '100%',
+          px: 0.75,
+          py: 0.375,
+          borderRadius: 0,
+          overflow: 'hidden',
+          borderLeft: `3px solid ${resolvedColor}`,
+          bgcolor: alpha(resolvedColor, 0.1),
+          cursor: onGigClick ? 'pointer' : 'default',
+        }}
       >
-        {gig.event_description || venueHeadline(gig.venue ?? gig.festival) || 'Gig'}
+        {timeRange && (
+          <Box sx={{ fontSize: '0.6rem', lineHeight: 1.2, color: 'text.secondary', fontStyle: 'italic', mb: 0.25 }}>
+            {timeRange}
+          </Box>
+        )}
+        <Box sx={{ fontSize: '0.7rem', lineHeight: 1.3, color: 'text.primary', fontWeight: 500, wordBreak: 'break-word' }}>
+          {title}
+        </Box>
       </Box>
     </Tooltip>
   )
@@ -132,22 +163,33 @@ function RehearsalBar({ reh, theme, onRehearsalClick }: RehearsalBarProps) {
   const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
   const total = reh.participants?.length ?? 0
   const isOption = reh.status === 'option'
-  const backgroundColor = REHEARSAL_STATUS_COLORS[reh.status ?? ''] || 'grey.400'
+  const paletteColor = REHEARSAL_STATUS_COLORS[reh.status ?? ''] || 'grey.400'
+  const resolvedColor = resolvePaletteColor(theme, paletteColor)
+  const timeRange = formatTimeRange(reh.start_time, reh.end_time)
   return (
     <Tooltip title={[`Rehearsal — ${reh.status}`, reh.location, `${yes}/${total} yes`].filter(Boolean).join(' — ')}>
       <Box
         data-rehearsal-id={reh.id}
         onClick={(e) => { e.stopPropagation(); onRehearsalClick?.(reh) }}
         sx={{
-          ...BAR_SX,
-          bgcolor: isOption ? 'transparent' : backgroundColor,
-          border: isOption ? '1px dashed' : 'none',
-          borderColor: isOption ? 'grey.500' : 'transparent',
-          color: isOption ? 'text.primary' : getEventTextColor(theme, backgroundColor),
+          width: '100%',
+          px: 0.75,
+          py: 0.375,
+          borderRadius: 0,
+          overflow: 'hidden',
+          borderLeft: `3px ${isOption ? 'dashed' : 'solid'} ${resolvedColor}`,
+          bgcolor: alpha(resolvedColor, isOption ? 0.05 : 0.1),
           cursor: onRehearsalClick ? 'pointer' : 'default',
         }}
       >
-        {`Reh ${yes}/${total}`}
+        {timeRange && (
+          <Box sx={{ fontSize: '0.6rem', lineHeight: 1.2, color: 'text.secondary', fontStyle: 'italic', mb: 0.25 }}>
+            {timeRange}
+          </Box>
+        )}
+        <Box sx={{ fontSize: '0.7rem', lineHeight: 1.3, color: 'text.primary', fontWeight: 500, wordBreak: 'break-word' }}>
+          {`Reh ${yes}/${total}`}
+        </Box>
       </Box>
     </Tooltip>
   )
@@ -160,14 +202,26 @@ interface BandEventBarProps {
 }
 
 function BandEventBar({ ev, theme, onBandEventClick }: BandEventBarProps) {
+  const resolvedColor = resolvePaletteColor(theme, BAND_EVENT_COLOR)
   return (
     <Tooltip title={[ev.title, ev.location].filter(Boolean).join(' — ')}>
       <Box
         data-band-event-id={ev.id}
         onClick={(e) => { e.stopPropagation(); onBandEventClick?.(ev) }}
-        sx={{ ...BAR_SX, bgcolor: BAND_EVENT_COLOR, color: getEventTextColor(theme, BAND_EVENT_COLOR), cursor: onBandEventClick ? 'pointer' : 'default' }}
+        sx={{
+          width: '100%',
+          px: 0.75,
+          py: 0.375,
+          borderRadius: 0,
+          overflow: 'hidden',
+          borderLeft: `3px solid ${resolvedColor}`,
+          bgcolor: alpha(resolvedColor, 0.1),
+          cursor: onBandEventClick ? 'pointer' : 'default',
+        }}
       >
-        {ev.title}
+        <Box sx={{ fontSize: '0.7rem', lineHeight: 1.3, color: 'text.primary', fontWeight: 500, wordBreak: 'break-word' }}>
+          {ev.title}
+        </Box>
       </Box>
     </Tooltip>
   )
@@ -192,7 +246,7 @@ function SlotBar({ slot, members, theme, onSlotClick }: SlotBarProps) {
         data-slot-id={slot.id}
         onClick={(e) => { e.stopPropagation(); onSlotClick(slot) }}
         sx={{
-          ...BAR_SX,
+          ...SLOT_BAR_SX,
           bgcolor: color,
           color: getEventTextColor(theme, color),
           cursor: 'pointer',
@@ -280,7 +334,9 @@ export default function CalendarCell({
         data-date={iso}
         onClick={(e) => onDayClick(iso, e.shiftKey, e.currentTarget)}
         sx={{
-          aspectRatio: '1 / 1',
+          // Mobile keeps square day tiles; desktop takes its height from the
+          // grid row so cells shrink to fit the viewport.
+          aspectRatio: mobile ? '1 / 1' : 'auto',
           borderRadius: 0,
           bgcolor,
           border: mobile ? 'none' : '1px solid',
@@ -290,6 +346,7 @@ export default function CalendarCell({
           cursor: 'pointer',
           p: mobile ? 0 : 0.5,
           minWidth: 0,
+          minHeight: 0,
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',

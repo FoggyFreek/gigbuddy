@@ -32,6 +32,8 @@ import { adminRouter as invitesAdminRouter, redeemRouter as invitesRedeemRouter 
 import { tenantRouter as statisticsRouter, adminRouter as adminStatisticsRouter } from './statistics.js'
 import publicMollieRouter from './publicMollie.js'
 import publicInvoicesRouter from './publicInvoices.js'
+import publicCalendarRouter from './publicCalendar.js'
+import calendarFeedRouter from './calendarFeed.js'
 import { loadUser, requireApproved } from '../middleware/auth.js'
 import {
   resolveTenantId,
@@ -105,6 +107,7 @@ router.get('/health', (_req, res) => {
 // Public unauthenticated routes — mounted before CSRF and auth middleware.
 router.use('/public/mollie', publicWebhookLimiter, publicMollieRouter)
 router.use('/public/invoices', publicWebhookLimiter, publicInvoicesRouter)
+router.use('/public/calendar', publicWebhookLimiter, publicCalendarRouter)
 
 router.use(apiLimiter)
 router.use(csrf)
@@ -156,6 +159,7 @@ router.use('/ledger', financeView, ledgerRouter)
 router.use('/reimbursements', financeView, reimbursementsRouter)
 router.use('/vat-returns', financeView, vatReturnsRouter)
 router.use('/push', tenantMember, pushRouter)
+router.use('/calendar-feed', tenantMember, calendarFeedRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)
 router.use('/files', tenantMember, filesRouter)
 

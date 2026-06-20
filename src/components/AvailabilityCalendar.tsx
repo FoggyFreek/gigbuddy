@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import IconButton from '@mui/material/IconButton'
@@ -64,6 +64,27 @@ export default function AvailabilityCalendar({
   onExport,
 }: AvailabilityCalendarProps) {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [gridHeight, setGridHeight] = useState<number>()
+
+  // Desktop: size the grid to the viewport so the week rows (and their cells)
+  // shrink to fit instead of forcing square cells that overflow the screen.
+  useLayoutEffect(() => {
+    if (mobile) {
+      setGridHeight(undefined)
+      return
+    }
+    const recalc = () => {
+      const el = gridRef.current
+      if (!el) return
+      const top = el.getBoundingClientRect().top
+      const avail = window.innerHeight - top - 24 // breathing room at the bottom
+      setGridHeight(Math.max(avail, 360))
+    }
+    recalc()
+    window.addEventListener('resize', recalc)
+    return () => window.removeEventListener('resize', recalc)
+  }, [mobile])
 
   const handleTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0]
@@ -114,7 +135,7 @@ export default function AvailabilityCalendar({
   }, [cells, slotsByDate, gigsByDate, rehearsalsByDate, bandEventsByDate, selectionStart, selectedDay, mobile, today])
 
   return (
-    <Box sx={{ maxWidth: 1024, mx: 'auto' }}>
+    <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
       <Stack direction="row" sx={{ mb: 1, width: '100%', alignItems: 'center' }}>
         <IconButton size="small" onClick={onPrev} aria-label="previous month">
           <ChevronLeftIcon />
@@ -167,7 +188,21 @@ export default function AvailabilityCalendar({
         </Box>
       ) : (
         <Card variant="outlined" sx={{ borderRadius: '12px' }}>
-          <Box sx={{ pt: 0.5, pr: '22px', pb: 2, pl: 0, display: 'grid', gridTemplateColumns: '22px repeat(7, 1fr)', gap: 0 }}>
+          <Box
+            ref={gridRef}
+            sx={{
+              pt: 0.5,
+              pr: '22px',
+              pb: 2,
+              pl: 0,
+              display: 'grid',
+              gridTemplateColumns: '22px repeat(7, 1fr)',
+              gridTemplateRows: 'auto',
+              gridAutoRows: 'minmax(56px, 1fr)',
+              gap: 0,
+              height: gridHeight,
+            }}
+          >
             <Typography variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
               Wk
             </Typography>

@@ -1,6 +1,7 @@
 import type { Gig, Rehearsal, BandEvent } from '../types/entities.ts'
 import { normalizeIsoDate } from './availabilityUtils.ts'
 import { venueHeadline, venueCity } from './venueDisplay.ts'
+import { buildIcsCalendar } from '../../shared/ics.js'
 
 const APP_URL = window.location.origin
 
@@ -46,69 +47,22 @@ export function gigShareUrl(gig: Gig): string {
 }
 
 // --- ICS calendar export ---
+//
+// Serialization (escaping, line folding, date/time, VCALENDAR/VEVENT) lives in
+// shared/ics.js so the server calendar feed produces identical output. Here we
+// only filter to the chosen month, map to the normalized IcsEvent shape, and
+// trigger the browser download.
 
-function icsDateUTC(date: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${date.getUTCFullYear()}${p(date.getUTCMonth() + 1)}${p(date.getUTCDate())}T${p(date.getUTCHours())}${p(date.getUTCMinutes())}${p(date.getUTCSeconds())}Z`
-}
-
-function escapeICS(text: string): string {
-  return String(text)
-    .replaceAll('\\', '\\\\')
-    .replaceAll(',', '\\,')
-    .replaceAll(';', '\\;')
-    .replaceAll('\n', '\\n')
-}
-
-function foldICSLine(line: string): string {
-  const encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null
-  const byteLen = (s: string) => (encoder ? encoder.encode(s).length : s.length)
-  if (byteLen(line) <= 75) return line
-  let result = ''
-  let lineBytes = 0
-  let first = true
-  for (const char of line) {
-    const cb = byteLen(char)
-    const limit = first ? 75 : 74
-    if (lineBytes + cb > limit) {
-      result += '\r\n '
-      lineBytes = 1
-      first = false
-    }
-    result += char
-    lineBytes += cb
-  }
-  return result
-}
-
-function isoToICSDate(isoStr: string): string {
-  return isoStr.replaceAll('-', '')
-}
-
-function timeToICS(timeStr: string): string {
-  // "HH:MM:SS" or "HH:MM" → "HHMMSS"
-  return timeStr.replaceAll(':', '').slice(0, 6).padEnd(6, '0')
-}
-
-function dtStartEnd(
-  lines: string[],
-  isoDate: string,
-  startTime: string | null | undefined,
-  endTime: string | null | undefined,
-  endIsoDate: string | null | undefined,
-): void {
-  if (startTime) {
-    lines.push(`DTSTART;TZID=Europe/Amsterdam:${isoToICSDate(isoDate)}T${timeToICS(startTime)}`)
-    const endT = endTime || startTime
-    const endD = endIsoDate || isoDate
-    lines.push(`DTEND;TZID=Europe/Amsterdam:${isoToICSDate(endD)}T${timeToICS(endT)}`)
-  } else {
-    lines.push(`DTSTART;VALUE=DATE:${isoToICSDate(isoDate)}`)
-    const afterEnd = new Date((endIsoDate || isoDate) + 'T00:00:00')
-    afterEnd.setDate(afterEnd.getDate() + 1)
-    const p = (n: number) => String(n).padStart(2, '0')
-    lines.push(`DTEND;VALUE=DATE:${afterEnd.getFullYear()}${p(afterEnd.getMonth() + 1)}${p(afterEnd.getDate())}`)
-  }
+interface IcsEvent {
+  uid: string
+  summary: string
+  description?: string
+  location?: string
+  url?: string
+  startDate: string
+  startTime?: string | null
+  endDate?: string | null
+  endTime?: string | null
 }
 
 // Rehearsal has optional extra fields used for ICS (start_time, end_time, notes)
@@ -131,21 +85,15 @@ export function exportMonthToICS(
   bandEvents: BandEventWithTimes[],
   year: number,
   month: number,
+  calName?: string,
 ): void {
   const p = (n: number) => String(n).padStart(2, '0')
   const monthStr = `${year}-${p(month)}`
   const monthStart = `${monthStr}-01`
   const lastDay = new Date(year, month, 0).getDate()
   const monthEnd = `${monthStr}-${p(lastDay)}`
-  const dtstamp = icsDateUTC(new Date())
 
-  const out: string[] = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//GigBuddy//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-  ]
+  const events: IcsEvent[] = []
 
   for (const gig of gigs) {
     const d = normalizeIsoDate(gig.event_date as string | undefined)
@@ -153,15 +101,18 @@ export function exportMonthToICS(
     const calVenue = gig.venue ?? gig.festival
     const summary = [gig.event_description, venueHeadline(calVenue)].filter(Boolean).join(' @ ') || 'Gig'
     const desc = [gig.status, venueCity(calVenue)].filter(Boolean).join(', ')
-    out.push('BEGIN:VEVENT')
-    dtStartEnd(out, d, gig.start_time, gig.end_time, null)
-    out.push(`DTSTAMP:${dtstamp}`, `SUMMARY:${escapeICS('Gig: ' + summary)}`)
     const gigUrl = `${APP_URL}/gigs?open=${gig.id}`
-    const gigDesc = [desc, `Open in GigBuddy: ${gigUrl}`].filter(Boolean).join('\n')
-    out.push(`DESCRIPTION:${escapeICS(gigDesc)}`)
     const location = [venueHeadline(calVenue), venueCity(calVenue)].filter(Boolean).join(', ')
-    if (location) out.push(`LOCATION:${escapeICS(location)}`)
-    out.push(`URL:${gigUrl}`, `UID:gigbuddy-gig-${gig.id}@gigbuddy`, 'END:VEVENT')
+    events.push({
+      uid: `gigbuddy-gig-${gig.id}@gigbuddy`,
+      summary: 'Gig: ' + summary,
+      description: [desc, `Open in GigBuddy: ${gigUrl}`].filter(Boolean).join('\n'),
+      location: location || undefined,
+      url: gigUrl,
+      startDate: d,
+      startTime: gig.start_time,
+      endTime: gig.end_time,
+    })
   }
 
   for (const reh of rehearsals) {
@@ -170,34 +121,38 @@ export function exportMonthToICS(
     const yes = reh.participants?.filter((q) => q.vote === 'yes').length ?? 0
     const total = reh.participants?.length ?? 0
     const desc = [reh.location, `${yes}/${total} yes`, reh.notes].filter(Boolean).join(' — ')
-    out.push('BEGIN:VEVENT')
-    dtStartEnd(out, d, reh.start_time, reh.end_time, null)
-    const statusSuffix = reh.status ? ` (${reh.status})` : ''
-    const rehSummary = `Rehearsal${statusSuffix}`
-    out.push(`DTSTAMP:${dtstamp}`, `SUMMARY:${escapeICS(rehSummary)}`)
     const rehUrl = `${APP_URL}/rehearsals?open=${reh.id}`
-    const rehDesc = [desc, `Open in GigBuddy: ${rehUrl}`].filter(Boolean).join('\n')
-    out.push(`DESCRIPTION:${escapeICS(rehDesc)}`)
-    if (reh.location) out.push(`LOCATION:${escapeICS(reh.location)}`)
-    out.push(`URL:${rehUrl}`, `UID:gigbuddy-rehearsal-${reh.id}@gigbuddy`, 'END:VEVENT')
+    events.push({
+      uid: `gigbuddy-rehearsal-${reh.id}@gigbuddy`,
+      summary: `Rehearsal${reh.status ? ` (${reh.status})` : ''}`,
+      description: [desc, `Open in GigBuddy: ${rehUrl}`].filter(Boolean).join('\n'),
+      location: reh.location || undefined,
+      url: rehUrl,
+      startDate: d,
+      startTime: reh.start_time,
+      endTime: reh.end_time,
+    })
   }
 
   for (const ev of bandEvents) {
     const start = normalizeIsoDate(ev.start_date)
     const end = normalizeIsoDate(ev.end_date) || start
     if (!start || end < monthStart || start > monthEnd) continue
-    out.push('BEGIN:VEVENT')
-    dtStartEnd(out, start, ev.start_time, ev.end_time, end)
-    out.push(`DTSTAMP:${dtstamp}`, `SUMMARY:${escapeICS(ev.title || 'Band Event')}`)
     const evUrl = `${APP_URL}/events?open=${ev.id}`
-    const evDesc = [ev.notes, `Open in GigBuddy: ${evUrl}`].filter(Boolean).join('\n')
-    out.push(`DESCRIPTION:${escapeICS(evDesc)}`)
-    if (ev.location) out.push(`LOCATION:${escapeICS(ev.location)}`)
-    out.push(`URL:${evUrl}`, `UID:gigbuddy-bandevent-${ev.id}@gigbuddy`, 'END:VEVENT')
+    events.push({
+      uid: `gigbuddy-bandevent-${ev.id}@gigbuddy`,
+      summary: ev.title || 'Band Event',
+      description: [ev.notes, `Open in GigBuddy: ${evUrl}`].filter(Boolean).join('\n'),
+      location: ev.location || undefined,
+      url: evUrl,
+      startDate: start,
+      startTime: ev.start_time,
+      endTime: ev.end_time,
+      endDate: end,
+    })
   }
 
-  out.push('END:VCALENDAR')
-  const icsContent = out.map(foldICSLine).join('\r\n')
+  const icsContent = buildIcsCalendar(events, { calName })
 
   const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
