@@ -4,7 +4,7 @@ import { Link as RouterLink } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import Paper from '@mui/material/Paper'
+import DashboardCard from '../components/dashboard/DashboardCard.tsx'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import AddOutlined from '@mui/icons-material/AddOutlined'
@@ -220,25 +220,6 @@ export default function FinancialDashboardPage() {
   )
 }
 
-interface DashboardCardProps {
-  title: ReactNode
-  action?: ReactNode
-  children?: ReactNode
-}
-
-function DashboardCard({ title, action, children }: DashboardCardProps) {
-  return (
-    <Paper variant="outlined" data-card sx={{ p: 2.5, display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, flex: 1 }}>
-          {title}
-        </Typography>
-        {action}
-      </Box>
-      {children}
-    </Paper>
-  )
-}
 
 // Inline "Label: value" figure in the result card's top-right corner.
 interface HeadlineStatProps {
@@ -534,7 +515,7 @@ function InvoicesCard({ invoices }: InvoicesCardProps) {
         </Button>
       )}
     >
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 1 }}>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
         <InvoiceBucket label="Overdue" bucket={invoices.overdue} dotColor="error.main" />
         <InvoiceBucket label="Unpaid" bucket={invoices.unpaid} dotColor="warning.main" />
         <InvoiceBucket label="Draft" bucket={invoices.draft} dotColor="info.main" />
@@ -687,7 +668,7 @@ function VatCard({ vat }: VatCardProps) {
         </Box>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
-        {owes ? 'You owe tax' : 'You get money back'} — VAT on sales {formatEur(vat.output_cents)},
+        {owes ? 'You owe tax' : 'You get money back'}: VAT on sales {formatEur(vat.output_cents)},
         on purchases {formatEur(vat.input_cents)}
       </Typography>
     </DashboardCard>

@@ -9,20 +9,21 @@ interface VariantTokenSet {
   secondary: string
   scrollThumb: string
   scrollThumbHover: string
+  fontFamily: string
 }
 
 export const VARIANT_TOKENS: Record<ThemeVariant, { light: VariantTokenSet; dark: VariantTokenSet }> = {
   default: {
-    light:  { bg: '#FFFBFE', paper: '#FFFFFF', secondary: '#625B71', scrollThumb: '#C4C0CF', scrollThumbHover: '#9E99A9' },
-    dark:   { bg: '#1C1B1F', paper: '#2B2930', secondary: '#CCC2DC', scrollThumb: '#4A4458', scrollThumbHover: '#625B71' },
+    light:  { bg: '#FFFBFE', paper: '#FFFFFF', secondary: '#625B71', scrollThumb: '#C4C0CF', scrollThumbHover: '#9E99A9', fontFamily: 'Roboto, sans-serif' },
+    dark:   { bg: '#1C1B1F', paper: '#2B2930', secondary: '#CCC2DC', scrollThumb: '#4A4458', scrollThumbHover: '#625B71', fontFamily: 'Roboto, sans-serif' },
   },
   warm: {
-    light:  { bg: '#FDF6EF', paper: '#FFF9F4', secondary: '#8B5A2B', scrollThumb: '#D4B49A', scrollThumbHover: '#B8906A' },
-    dark:   { bg: '#1C1510', paper: '#2A2016', secondary: '#D4A574', scrollThumb: '#4D3820', scrollThumbHover: '#6B5030' },
+    light:  { bg: '#FDF6EF', paper: '#FFF9F4', secondary: '#8B5A2B', scrollThumb: '#D4B49A', scrollThumbHover: '#B8906A', fontFamily: '"Segoe UI", sans-serif' },
+    dark:   { bg: '#1C1510', paper: '#2A2016', secondary: '#D4A574', scrollThumb: '#4D3820', scrollThumbHover: '#6B5030', fontFamily: '"Segoe UI", sans-serif' },
   },
   slate: {
-    light:  { bg: '#F8FAFC', paper: '#FFFFFF', secondary: '#475569', scrollThumb: '#CBD5E1', scrollThumbHover: '#94A3B8' },
-    dark:   { bg: '#0F172A', paper: '#1E293B', secondary: '#94A3B8', scrollThumb: '#334155', scrollThumbHover: '#475569' },
+    light:  { bg: '#F8FAFC', paper: '#FFFFFF', secondary: '#475569', scrollThumb: '#CBD5E1', scrollThumbHover: '#94A3B8', fontFamily: 'Lato, sans-serif' },
+    dark:   { bg: '#0F172A', paper: '#1E293B', secondary: '#94A3B8', scrollThumb: '#334155', scrollThumbHover: '#475569', fontFamily: 'Lato, sans-serif' },
   },
 }
 
@@ -39,7 +40,7 @@ export function createAppTheme(mode: 'light' | 'dark', primaryColor?: string | n
       background: { default: tokens.bg, paper: tokens.paper },
     },
     typography: {
-      fontFamily: 'Roboto, sans-serif',
+      fontFamily: tokens.fontFamily,
     },
     shape: {
       borderRadius: 12,

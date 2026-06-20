@@ -10,9 +10,10 @@ import type { SvgIconComponent } from '@mui/icons-material'
 import type { SxProps, Theme } from '@mui/material/styles'
 
 interface DashboardCardProps {
-  title: string
+  title: ReactNode
   icon?: SvgIconComponent
   count?: number
+  action?: ReactNode
   viewAllTo?: string
   viewAllLabel?: string
   status?: 'ok' | 'error'
@@ -32,6 +33,7 @@ export default function DashboardCard({
   title,
   icon: Icon,
   count,
+  action,
   viewAllTo,
   viewAllLabel = 'View all',
   status = 'ok',
@@ -56,7 +58,7 @@ export default function DashboardCard({
   }
 
   return (
-    <Card variant="outlined" sx={{ height: '100%', ...sx }}>
+    <Card variant="outlined" data-card sx={{ height: '100%', boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', ...sx }}>
       <CardContent sx={{ pb: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           {Icon && <Icon fontSize="small" sx={{ color: 'text.secondary' }} />}
@@ -84,6 +86,7 @@ export default function DashboardCard({
             </Box>
           )}
           <Box sx={{ flexGrow: 1 }} />
+          {action}
           {viewAllTo && (
             <Button
               component={RouterLink}
