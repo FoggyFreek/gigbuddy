@@ -22,8 +22,8 @@ export const VARIANT_TOKENS: Record<ThemeVariant, { light: VariantTokenSet; dark
     dark:   { bg: '#1C1510', paper: '#2A2016', secondary: '#D4A574', scrollThumb: '#4D3820', scrollThumbHover: '#6B5030', fontFamily: 'Lato, sans-serif' },
   },
   slate: {
-    light:  { bg: '#F8FAFC', paper: '#FFFFFF', secondary: '#475569', scrollThumb: '#CBD5E1', scrollThumbHover: '#94A3B8', fontFamily: 'Lato, sans-serif' },
-    dark:   { bg: '#0F172A', paper: '#1E293B', secondary: '#94A3B8', scrollThumb: '#334155', scrollThumbHover: '#475569', fontFamily: 'Lato, sans-serif' },
+    light:  { bg: '#F8FAFC', paper: '#FFFFFF', secondary: '#475569', scrollThumb: '#CBD5E1', scrollThumbHover: '#94A3B8', fontFamily: 'Lora, serif' },
+    dark:   { bg: '#0F172A', paper: '#1E293B', secondary: '#94A3B8', scrollThumb: '#334155', scrollThumbHover: '#475569', fontFamily: 'Lora, serif' },
   },
 }
 
