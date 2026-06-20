@@ -11,6 +11,10 @@ import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
 import { ProfileProvider } from './contexts/ProfileContext.tsx'
 import '@fontsource/bebas-neue/400.css'
+import '@fontsource/lato/400.css'
+import '@fontsource/lato/700.css'
+import '@fontsource/lora/400.css'
+import '@fontsource/lora/700.css'
 import './index.css'
 
 if ('serviceWorker' in navigator) {
