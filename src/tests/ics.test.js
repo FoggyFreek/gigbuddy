@@ -70,4 +70,35 @@ describe('shared/ics buildIcsCalendar', () => {
     expect(ics).not.toContain('LOCATION:')
     expect(ics).not.toContain('DESCRIPTION:')
   })
+
+  it('emits SEQUENCE:0 by default and uses the provided value when set', () => {
+    const bare = buildIcsCalendar([{ uid: 'u6@gigbuddy', summary: 'S', startDate: '2026-06-01' }])
+    expect(bare).toContain('SEQUENCE:0')
+
+    const versioned = buildIcsCalendar([
+      { uid: 'u7@gigbuddy', summary: 'S', startDate: '2026-06-01', sequence: 3 },
+    ])
+    expect(versioned).toContain('SEQUENCE:3')
+  })
+
+  it('emits LAST-MODIFIED when provided and omits it when absent', () => {
+    const withMod = buildIcsCalendar([
+      {
+        uid: 'u8@gigbuddy',
+        summary: 'S',
+        startDate: '2026-06-01',
+        lastModified: '20260619T141205Z',
+      },
+    ])
+    expect(withMod).toContain('LAST-MODIFIED:20260619T141205Z')
+
+    const bare = buildIcsCalendar([{ uid: 'u9@gigbuddy', summary: 'S', startDate: '2026-06-01' }])
+    expect(bare).not.toContain('LAST-MODIFIED:')
+  })
+
+  it('includes REFRESH-INTERVAL and X-PUBLISHED-TTL in the calendar header', () => {
+    const ics = buildIcsCalendar([])
+    expect(ics).toContain('REFRESH-INTERVAL;VALUE=DURATION:PT12H')
+    expect(ics).toContain('X-PUBLISHED-TTL:PT12H')
+  })
 })

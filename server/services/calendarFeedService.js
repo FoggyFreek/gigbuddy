@@ -6,7 +6,7 @@
 // output. This service only maps DB rows into the normalized IcsEvent shape.
 
 import { randomBytes } from 'node:crypto'
-import { buildIcsCalendar } from '../../shared/ics.js'
+import { buildIcsCalendar, icsDateUTC } from '../../shared/ics.js'
 import {
   getTokenByUserTenant,
   upsertToken,
@@ -58,6 +58,11 @@ export async function revokeFeed(pool, userId, tenantId) {
 
 const notFound = { error: { status: 404, body: { error: 'Not found' } } }
 
+function icsRevision(updatedAt) {
+  const ts = updatedAt instanceof Date ? updatedAt : new Date(updatedAt)
+  return { lastModified: icsDateUTC(ts) }
+}
+
 function venueHeadline(v) {
   return v?.name || ''
 }
@@ -81,6 +86,7 @@ function gigEvent(gig, base) {
     startDate: gig.event_date,
     startTime: gig.start_time,
     endTime: gig.end_time,
+    ...icsRevision(gig.updated_at),
   }
 }
 
@@ -98,6 +104,7 @@ function rehearsalEvent(reh, base) {
     startDate: reh.proposed_date,
     startTime: reh.start_time,
     endTime: reh.end_time,
+    ...icsRevision(reh.updated_at),
   }
 }
 
@@ -113,6 +120,7 @@ function bandEvent(ev, base) {
     startTime: ev.start_time,
     endTime: ev.end_time,
     endDate: ev.end_date,
+    ...icsRevision(ev.updated_at),
   }
 }
 

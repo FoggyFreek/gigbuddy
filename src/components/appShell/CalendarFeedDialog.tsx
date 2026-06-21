@@ -75,11 +75,15 @@ export default function CalendarFeedDialog({ open, onClose }: CalendarFeedDialog
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>Subscribe to calendar</DialogTitle>
       <DialogContent>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+          Keep your own calendar in sync with the band calendar.
+        </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Keep your own calendar in sync with the band calendar. Copy the link below and
-          add it to Google Calendar, Apple Calendar or Outlook as a subscribed calendar
-          (&ldquo;From URL&rdquo;). It includes gigs, rehearsals and band events, and updates
-          automatically. This link is personal — don&rsquo;t share it.
+          Copy the link below and add it to Google Calendar, Apple Calendar or Outlook as a subscribed calendar
+          (&ldquo;From URL&rdquo;).
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
+          This link is personal — don&rsquo;t share it.
         </Typography>
 
         {loading ? (

@@ -8,6 +8,7 @@ import Typography from '@mui/material/Typography'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
+import CloudSyncIcon from '@mui/icons-material/CloudSync'
 import { normalizeIsoDate, toIsoDate } from '../utils/availabilityUtils.ts'
 import {
   DAY_HEADERS,
@@ -40,6 +41,7 @@ interface AvailabilityCalendarProps {
   onNext: () => void
   onMonthJump: (year: number, month: number) => void
   onExport?: () => void
+  onSubscribe?: () => void
 }
 
 export default function AvailabilityCalendar({
@@ -62,6 +64,7 @@ export default function AvailabilityCalendar({
   onNext,
   onMonthJump,
   onExport,
+  onSubscribe,
 }: AvailabilityCalendarProps) {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -70,10 +73,7 @@ export default function AvailabilityCalendar({
   // Desktop: size the grid to the viewport so the week rows (and their cells)
   // shrink to fit instead of forcing square cells that overflow the screen.
   useLayoutEffect(() => {
-    if (mobile) {
-      setGridHeight(undefined)
-      return
-    }
+    if (mobile) return
     const recalc = () => {
       const el = gridRef.current
       if (!el) return
@@ -83,7 +83,10 @@ export default function AvailabilityCalendar({
     }
     recalc()
     window.addEventListener('resize', recalc)
-    return () => window.removeEventListener('resize', recalc)
+    return () => {
+      window.removeEventListener('resize', recalc)
+      setGridHeight(undefined)
+    }
   }, [mobile])
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -147,6 +150,13 @@ export default function AvailabilityCalendar({
           <MonthMenu year={year} month={month} onMonthJump={onMonthJump} />
         </Box>
 
+        {onSubscribe && (
+          <Tooltip title="Subscribe to calendar">
+            <IconButton size="small" onClick={onSubscribe} aria-label="subscribe to calendar">
+              <CloudSyncIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         {onExport && (
           <Tooltip title="Export month to calendar (.ics)">
             <IconButton size="small" onClick={onExport} aria-label="export to calendar">

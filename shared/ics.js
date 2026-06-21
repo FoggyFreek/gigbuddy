@@ -9,18 +9,20 @@
 // summaries and deep-link URLs are built caller-side.
 //
 // IcsEvent: {
-//   uid:         string                 // globally stable, e.g. "gigbuddy-gig-12@gigbuddy"
-//   summary:     string
-//   description?: string
-//   location?:   string
-//   url?:        string
-//   startDate:   string                 // "YYYY-MM-DD"
-//   startTime?:  string | null          // "HH:MM" / "HH:MM:SS"; absent => all-day
-//   endDate?:    string | null          // "YYYY-MM-DD"; defaults to startDate
-//   endTime?:    string | null          // defaults to startTime when timed
+//   uid:           string                 // globally stable, e.g. "gigbuddy-gig-12@gigbuddy"
+//   summary:       string
+//   description?:  string
+//   location?:     string
+//   url?:          string
+//   startDate:     string                 // "YYYY-MM-DD"
+//   startTime?:    string | null          // "HH:MM" / "HH:MM:SS"; absent => all-day
+//   endDate?:      string | null          // "YYYY-MM-DD"; defaults to startDate
+//   endTime?:      string | null          // defaults to startTime when timed
+//   sequence?:     number                 // RFC 5545 §3.8.7.4 revision counter; defaults to 0
+//   lastModified?: string                 // RFC 5545 §3.8.7.3 UTC string e.g. "20260619T141205Z"
 // }
 
-function icsDateUTC(date) {
+export function icsDateUTC(date) {
   const p = (n) => String(n).padStart(2, '0')
   return `${date.getUTCFullYear()}${p(date.getUTCMonth() + 1)}${p(date.getUTCDate())}T${p(date.getUTCHours())}${p(date.getUTCMinutes())}${p(date.getUTCSeconds())}Z`
 }
@@ -95,6 +97,8 @@ function pushDtStartEnd(lines, isoDate, startTime, endTime, endIsoDate) {
  * @property {string | null} [startTime]
  * @property {string | null} [endDate]
  * @property {string | null} [endTime]
+ * @property {number} [sequence]
+ * @property {string} [lastModified]
  */
 
 // Builds a complete VCALENDAR string from normalized events. `meta.calName`,
@@ -114,13 +118,17 @@ export function buildIcsCalendar(events, { prodId = '-//GigBuddy//EN', calName }
     `PRODID:${prodId}`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
+    'REFRESH-INTERVAL;VALUE=DURATION:PT12H',
+    'X-PUBLISHED-TTL:PT12H',
   ]
   if (calName) out.push(`X-WR-CALNAME:${escapeICS(calName)}`)
 
   for (const ev of events) {
     out.push('BEGIN:VEVENT')
     pushDtStartEnd(out, ev.startDate, ev.startTime, ev.endTime, ev.endDate)
-    out.push(`DTSTAMP:${dtstamp}`, `SUMMARY:${escapeICS(ev.summary)}`)
+    out.push(`DTSTAMP:${dtstamp}`, `SEQUENCE:${ev.sequence ?? 0}`)
+    if (ev.lastModified) out.push(`LAST-MODIFIED:${ev.lastModified}`)
+    out.push(`SUMMARY:${escapeICS(ev.summary)}`)
     if (ev.description) out.push(`DESCRIPTION:${escapeICS(ev.description)}`)
     if (ev.location) out.push(`LOCATION:${escapeICS(ev.location)}`)
     if (ev.url) out.push(`URL:${ev.url}`)

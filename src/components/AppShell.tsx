@@ -64,7 +64,6 @@ import { isItemSelected } from './appShell/navSelection.ts'
 import NotificationToggle from './appShell/NotificationToggle.tsx'
 import SearchPanel from './appShell/SearchPanel.tsx'
 import SettingsMenu from './appShell/SettingsMenu.tsx'
-import CalendarFeedDialog from './appShell/CalendarFeedDialog.tsx'
 import UserMenu from './appShell/UserMenu.tsx'
 import type { Id } from '../types/entities.ts'
 
@@ -173,7 +172,6 @@ export default function AppShell() {
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState<HTMLElement | null>(null)
   const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<HTMLElement | null>(null)
-  const [calendarFeedOpen, setCalendarFeedOpen] = useState(false)
   // When a SplitView opens its master-detail layout it asks for full width;
   // otherwise content stays capped and centered (see CONTENT_MAX_WIDTH).
   const [wideContent, setWideContent] = useState(false)
@@ -363,12 +361,10 @@ export default function AppShell() {
             onClose={() => setSettingsMenuAnchor(null)}
             mode={mode}
             onToggleTheme={() => { toggleTheme(); setSettingsMenuAnchor(null) }}
-            onOpenCalendarFeed={() => setCalendarFeedOpen(true)}
             canManageMembers={canManageMembers}
             canManageTenant={canManageTenant}
             isSuperAdmin={isSuperAdmin}
           />
-          <CalendarFeedDialog open={calendarFeedOpen} onClose={() => setCalendarFeedOpen(false)} />
           {user && (
             <>
               <Tooltip title={user.name || user.email}>

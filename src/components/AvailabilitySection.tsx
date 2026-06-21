@@ -44,6 +44,7 @@ import { listRehearsals } from '../api/rehearsals.ts'
 import { listBandEvents } from '../api/bandEvents.ts'
 import { exportMonthToICS } from '../utils/shareUtils.ts'
 import { useProfile } from '../contexts/profileContext.ts'
+import CalendarFeedDialog from './appShell/CalendarFeedDialog.tsx'
 import type { Gig, Member, BandEvent, Slot, Rehearsal, Id } from '../types/entities.ts'
 
 interface AvailabilitySectionProps {
@@ -84,6 +85,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   const [addMenu, setAddMenu] = useState<{ anchorEl: EventTarget & Element; date: string } | null>(null)
   const [createModal, setCreateModal] = useState<{ type: string; date: string } | null>(null)
   const [exportModal, setExportModal] = useState(false)
+  const [calendarFeedOpen, setCalendarFeedOpen] = useState(false)
   const [exportOptions, setExportOptions] = useState({ gigs: true, rehearsals: true, bandEvents: true })
   const fabRef = useRef<HTMLButtonElement | null>(null)
 
@@ -243,6 +245,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
         onNext={handleNext}
         onMonthJump={(y, m) => { setViewYear(y); setViewMonth(m) }}
         onExport={() => setExportModal(true)}
+        onSubscribe={() => setCalendarFeedOpen(true)}
       />
 
       {isMobile && selectedDay && (
@@ -426,6 +429,8 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
           onClose={() => { setDialog(null); setSelectionStart(null) }}
         />
       )}
+
+      <CalendarFeedDialog open={calendarFeedOpen} onClose={() => setCalendarFeedOpen(false)} />
 
       <Dialog open={exportModal} onClose={() => setExportModal(false)}>
         <DialogTitle>Export calendar</DialogTitle>
