@@ -8,6 +8,7 @@ import {
   logout as apiLogout,
   setActiveTenant as apiSetActiveTenant,
 } from '../api/auth.ts'
+import { clearBannerPathCache } from '../api/profile.ts'
 import type { Id } from '../types/entities.ts'
 
 interface AuthProviderProps {
@@ -46,12 +47,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     await apiLogout()
+    clearBannerPathCache()
     setUser(null)
     navigate('/login', { replace: true })
   }, [navigate])
 
   const switchTenant = useCallback(async (tenantId: Id) => {
     const updated = await apiSetActiveTenant(tenantId)
+    // Profile (and its banner) is tenant-scoped — drop the cached path so the
+    // next gig detail re-reads it for the now-active tenant.
+    clearBannerPathCache()
     setUser(updated as unknown as User)
     return updated as unknown as User
   }, [])

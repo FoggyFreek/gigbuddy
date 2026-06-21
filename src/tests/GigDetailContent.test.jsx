@@ -92,6 +92,14 @@ function wrap(ui) {
   )
 }
 
+// The detail body is split across tabbed panels (Event/Terms/Availability/
+// Tasks). Panels stay mounted but inactive ones are display:none, so a test
+// must activate the owning tab before interacting with (or role-querying) its
+// fields. Label/text/display-value queries still match across hidden panels.
+async function openTab(user, label) {
+  await user.click(screen.getByRole('button', { name: label }))
+}
+
 describe('GigDetailContent — field rendering', () => {
   beforeEach(() => {
     getGig.mockClear()
@@ -138,8 +146,10 @@ describe('GigDetailContent — field rendering', () => {
   })
 
   it('renders the Terms section heading', async () => {
+    const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await openTab(user, 'Terms')
     expect(screen.getByRole('heading', { name: /^terms$/i })).toBeInTheDocument()
   })
 
@@ -179,6 +189,7 @@ describe('GigDetailContent — Terms field saving', () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await openTab(user, 'Terms')
     await user.type(screen.getByLabelText(/merchandise cut/i), '15')
     await waitFor(
       () => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 }),
@@ -191,6 +202,7 @@ describe('GigDetailContent — Terms field saving', () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/percentage of net sales/i))
+    await openTab(user, 'Terms')
     await user.type(screen.getByLabelText(/percentage of net sales/i), '20')
     await waitFor(
       () => expect(updateGig).toHaveBeenCalledWith(1, { percentage_of_sales: 20 }),
@@ -203,6 +215,7 @@ describe('GigDetailContent — Terms field saving', () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByLabelText(/paid admission/i)).toBeChecked())
+    await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     await waitFor(
       () =>
@@ -243,6 +256,7 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 })
     wrap(<GigDetailContent gigId={1} canWrite={false} />)
     await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     expect(updateGig).not.toHaveBeenCalled()
   })
@@ -293,6 +307,7 @@ describe('GigDetailContent — admission toggle', () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     expect(screen.getByLabelText(/ticket link/i)).toBeInTheDocument()
   })
@@ -301,6 +316,7 @@ describe('GigDetailContent — admission toggle', () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     await waitFor(
       () => expect(updateGig).toHaveBeenCalledWith(1, { admission: 'paid' }),
@@ -312,6 +328,7 @@ describe('GigDetailContent — admission toggle', () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     expect(screen.getByLabelText(/ticket link/i)).toBeInTheDocument()
     await user.click(screen.getByLabelText(/paid admission/i))
@@ -322,6 +339,7 @@ describe('GigDetailContent — admission toggle', () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     await user.click(screen.getByLabelText(/paid admission/i))
     await waitFor(
@@ -346,6 +364,7 @@ describe('GigDetailContent — ticket link field', () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     await user.type(screen.getByLabelText(/ticket link/i), 'https://tickets.test')
     await waitFor(
@@ -359,9 +378,11 @@ describe('GigDetailContent — ticket link field', () => {
   })
 
   it('shows open-link anchor when ticket_link has a value', async () => {
+    const user = userEvent.setup()
     getGig.mockResolvedValueOnce(GIG_PAID)
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Terms')
     const links = screen.getAllByRole('link')
     expect(links.some((l) => l.getAttribute('href') === GIG_PAID.ticket_link)).toBe(true)
   })
@@ -370,6 +391,7 @@ describe('GigDetailContent — ticket link field', () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     // ticket_link is empty — no anchor with a ticket URL should exist
     const links = screen.queryAllByRole('link')

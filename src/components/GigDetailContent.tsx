@@ -9,6 +9,7 @@ import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
 import MenuItem from '@mui/material/MenuItem'
+import Paper from '@mui/material/Paper'
 import Snackbar from '@mui/material/Snackbar'
 import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
@@ -17,10 +18,15 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { alpha } from '@mui/material/styles'
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
+import ChecklistIcon from '@mui/icons-material/Checklist'
 import DeleteIcon from '@mui/icons-material/Delete'
+import FestivalIcon from '@mui/icons-material/Festival'
+import HandshakeIcon from '@mui/icons-material/Handshake'
 import ImageIcon from '@mui/icons-material/Image'
 import LocalMallIcon from '@mui/icons-material/LocalMall'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import PeopleIcon from '@mui/icons-material/People'
+import type { SvgIconComponent } from '@mui/icons-material'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
@@ -45,7 +51,7 @@ const VenuePicker = _VenuePickerRaw as React.ComponentType<VenuePickerProps>
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { addGigParticipant, deleteGigBanner, getGig, getGigMerchSummary, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../api/gigs.ts'
-import { getProfile } from '../api/profile.ts'
+import { getBannerPath } from '../api/profile.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import { compressBanner } from '../utils/compressImage.ts'
 import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
@@ -58,6 +64,18 @@ const REQUIRED_FIELDS = ['event_date', 'event_description']
 dayjs.extend(customParseFormat)
 
 const STATUSES = ['option', 'confirmed', 'announced']
+
+type TabKey = 'event' | 'terms' | 'availability' | 'tasks'
+
+// The detail body is split across four tabs, selected from the floating pill
+// that overlaps the banner. Panels stay mounted (toggled via `display`) so
+// auto-saving children (tasks/attachments) and form state survive tab switches.
+const TABS: { key: TabKey; label: string; Icon: SvgIconComponent }[] = [
+  { key: 'event', label: 'Event', Icon: FestivalIcon },
+  { key: 'terms', label: 'Terms', Icon: HandshakeIcon },
+  { key: 'availability', label: 'Availability', Icon: PeopleIcon },
+  { key: 'tasks', label: 'Tasks', Icon: ChecklistIcon },
+]
 
 interface LocalGigTask {
   id?: Id
@@ -180,6 +198,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const [merchSummary, setMerchSummary] = useState<GigMerchSummary | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<TabKey>('event')
   const bannerInputRef = useRef<HTMLInputElement | null>(null)
 
   const saveFn = useCallback(
@@ -231,7 +250,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     const ac = new AbortController()
     setLoading(true)
     listMembers().then(setMembers).catch(() => {})
-    getProfile().then((p) => setBandBannerPath(p.banner_path ?? null)).catch(() => {})
+    getBannerPath().then(setBandBannerPath).catch(() => {})
     getGig(gigId, { signal: ac.signal })
       .then(applyGig)
       .catch((err: Error) => { if (!ac.signal.aborted) console.error(err) })
@@ -359,8 +378,8 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       <Box
         sx={(theme) => ({
           position: 'relative',
-          height: { xs: 180, sm: 240 },
-          mb: 3,
+          height: { xs: 220, sm: 300 },
+          mb: 0,
           borderRadius: 1,
           overflow: 'hidden',
           // Gradient fallback when no band banner is set.
@@ -407,11 +426,16 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           />
         )}
 
-        {/* Event banner centered, or placeholder when unset */}
+        {/* Event banner centered, or placeholder when unset. The bottom inset
+            reserves the strip the tab pill overlaps so it never covers the
+            event banner. */}
         <Box
           sx={{
             position: 'absolute',
-            inset: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 32,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -511,210 +535,147 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         )}
       </Box>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 3 }}>
-          <DateEntryField
-            label="Date"
-            fullWidth
-            required
-            disabled={!canWrite}
-            value={form.event_date}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('event_date', e.target.value)}
-            error={!!requiredErrors.event_date}
-            helperText={requiredErrors.event_date}
-          />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 3 }}>
-          <TimePicker
-            label="Start time"
-            ampm={false}
-            disabled={!canWrite}
-            value={timeStringToDayjs(form.start_time)}
-            onChange={(v) => handleChange('start_time', dayjsToTimeString(v))}
-            slotProps={{ textField: { fullWidth: true } }}
-          />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 3 }}>
-          <TimePicker
-            label="End time"
-            ampm={false}
-            disabled={!canWrite}
-            value={timeStringToDayjs(form.end_time)}
-            onChange={(v) => handleChange('end_time', dayjsToTimeString(v))}
-            slotProps={{ textField: { fullWidth: true } }}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 3 }}>
-          <TextField
-            select
-            label="Status"
-            fullWidth
-            disabled={!canWrite}
-            value={form.status}
-            onChange={(e) => handleChange('status', e.target.value)}
-          >
-            {STATUSES.map((s) => (
-              <MenuItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <TextField
-            label="Event description"
-            fullWidth
-            required
-            disabled={!canWrite}
-            value={form.event_description}
-            onChange={(e) => handleChange('event_description', e.target.value)}
-            error={!!requiredErrors.event_description}
-            helperText={requiredErrors.event_description}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <VenuePicker
-            categoryFilter="festival"
-            disabled={!canWrite}
-            value={selectedFestival}
-            onChange={(v: Venue | null) => {
-              setSelectedFestival(v)
-              handleChange('festival_id', v?.id ?? null)
-            }}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <VenuePicker
-            categoryFilter="venue"
-            disabled={!canWrite}
-            value={selectedVenue}
-            onChange={(v: Venue | null) => {
-              setSelectedVenue(v)
-              handleChange('venue_id', v?.id ?? null)
-            }}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <TextField
-            label="Event link"
-            type="url"
-            fullWidth
-            disabled={!canWrite}
-            value={form.event_link}
-            onChange={(e) => handleChange('event_link', e.target.value)}
-            slotProps={{
-              input: {
-                endAdornment: form.event_link ? (
-                  <InputAdornment position="end">
-                    <Tooltip title="Open link">
-                      <IconButton
-                        size="small"
-                        edge="end"
-                        component="a"
-                        href={form.event_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <OpenInNewIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </InputAdornment>
-                ) : null,
-              },
-            }}
-          />
-        </Grid>
-        {/* Terms */}
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Terms
-          </Typography>
-        </Grid>
-        <Grid size={{ xs: 12 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.admission === 'paid'}
-                disabled={!canWrite}
-                onChange={(e) =>
-                  handleChange('admission', e.target.checked ? 'paid' : 'free')
-                }
-              />
-            }
-            label="Paid admission"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <TextField
-            label="Guaranteed fee"
-            fullWidth
-            disabled={!canWrite}
-            value={form.booking_fee}
-            onChange={(e) => handleChange('booking_fee', e.target.value)}
-            placeholder="0.00"
-            slotProps={{
-              input: {
-                startAdornment: <InputAdornment position="start">€</InputAdornment>,
-              },
-            }}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <TextField
-            label="Merchandise cut"
-            type="number"
-            fullWidth
-            disabled={!canWrite}
-            value={form.merchandise_cut}
-            onChange={(e) => handleChange('merchandise_cut', e.target.value)}
-            placeholder="0"
-            sx={NO_NUMBER_SPINNER_SX}
-            slotProps={{
-              htmlInput: { min: 0, max: 100, step: 0.5 },
-              input: {
-                endAdornment: <InputAdornment position="end">%</InputAdornment>,
-              },
-            }}
-          />
-        </Grid>
-        {form.admission === 'paid' && (
-          <Grid size={{ xs: 12, sm: 6 }}>
+      {/* ── Floating tab pill: rounded box overlapping the banner by ~50% of
+          its own height, splitting the detail body into four sections. ──── */}
+      <Box
+        sx={{
+          position: 'relative',
+          zIndex: 2,
+          display: 'flex',
+          justifyContent: 'center',
+          mt: -3.25,
+          mb: 3,
+        }}
+      >
+        <Paper elevation={6} sx={{ display: 'inline-flex', gap: 0.5, p: 0.75, borderRadius: 999 }}>
+          {TABS.map(({ key, label, Icon }) => {
+            const selected = activeTab === key
+            return (
+              <Tooltip key={key} title={label}>
+                <IconButton
+                  aria-label={label}
+                  aria-pressed={selected}
+                  onClick={() => setActiveTab(key)}
+                  color={selected ? 'primary' : 'default'}
+                  sx={{
+                    bgcolor: selected ? 'action.selected' : 'transparent',
+                    '&:hover': { bgcolor: selected ? 'action.selected' : 'action.hover' },
+                  }}
+                >
+                  <Icon />
+                </IconButton>
+              </Tooltip>
+            )
+          })}
+        </Paper>
+      </Box>
+
+      {/* ── Event ──────────────────────────────────────────────────────── */}
+      <Box sx={{ display: activeTab === 'event' ? 'block' : 'none' }}>
+        <Grid container spacing={2}>
+          <Grid size={12}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              Event details
+            </Typography>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <DateEntryField
+              label="Date"
+              fullWidth
+              required
+              disabled={!canWrite}
+              value={form.event_date}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('event_date', e.target.value)}
+              error={!!requiredErrors.event_date}
+              helperText={requiredErrors.event_date}
+            />
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3 }}>
+            <TimePicker
+              label="Start time"
+              ampm={false}
+              disabled={!canWrite}
+              value={timeStringToDayjs(form.start_time)}
+              onChange={(v) => handleChange('start_time', dayjsToTimeString(v))}
+              slotProps={{ textField: { fullWidth: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3 }}>
+            <TimePicker
+              label="End time"
+              ampm={false}
+              disabled={!canWrite}
+              value={timeStringToDayjs(form.end_time)}
+              onChange={(v) => handleChange('end_time', dayjsToTimeString(v))}
+              slotProps={{ textField: { fullWidth: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
             <TextField
-              label="Percentage of net sales"
-              type="number"
+              select
+              label="Status"
               fullWidth
               disabled={!canWrite}
-              value={form.percentage_of_sales}
-              onChange={(e) => handleChange('percentage_of_sales', e.target.value)}
-              placeholder="0"
-              sx={NO_NUMBER_SPINNER_SX}
-              slotProps={{
-                htmlInput: { min: 0, max: 100, step: 0.5 },
-                input: {
-                  endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                },
+              value={form.status}
+              onChange={(e) => handleChange('status', e.target.value)}
+            >
+              {STATUSES.map((s) => (
+                <MenuItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              label="Event description"
+              fullWidth
+              required
+              disabled={!canWrite}
+              value={form.event_description}
+              onChange={(e) => handleChange('event_description', e.target.value)}
+              error={!!requiredErrors.event_description}
+              helperText={requiredErrors.event_description}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <VenuePicker
+              categoryFilter="festival"
+              disabled={!canWrite}
+              value={selectedFestival}
+              onChange={(v: Venue | null) => {
+                setSelectedFestival(v)
+                handleChange('festival_id', v?.id ?? null)
               }}
             />
           </Grid>
-        )}
-        {form.admission === 'paid' && (
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <VenuePicker
+              categoryFilter="venue"
+              disabled={!canWrite}
+              value={selectedVenue}
+              onChange={(v: Venue | null) => {
+                setSelectedVenue(v)
+                handleChange('venue_id', v?.id ?? null)
+              }}
+            />
+          </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
-              label="Ticket link"
+              label="Event link"
               type="url"
               fullWidth
               disabled={!canWrite}
-              value={form.ticket_link}
-              onChange={(e) => handleChange('ticket_link', e.target.value)}
+              value={form.event_link}
+              onChange={(e) => handleChange('event_link', e.target.value)}
               slotProps={{
                 input: {
-                  endAdornment: form.ticket_link ? (
+                  endAdornment: form.event_link ? (
                     <InputAdornment position="end">
                       <Tooltip title="Open link">
                         <IconButton
                           size="small"
                           edge="end"
                           component="a"
-                          href={form.ticket_link}
+                          href={form.event_link}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
@@ -727,141 +688,251 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               }}
             />
           </Grid>
-        )}
+        </Grid>
+      </Box>
 
-        {/* Merch sold at this gig. Only rendered for non-readers (canWrite ==
-            planning.write here) and only when there were sales. */}
-        {canWrite && merchSummary && merchSummary.unitsSold > 0 && (
+      {/* ── Terms (incl. on-site equipment + merch sold) ───────────────── */}
+      <Box sx={{ display: activeTab === 'terms' ? 'block' : 'none' }}>
+        <Grid container spacing={2}>
           <Grid size={12}>
-            <Card variant="outlined" sx={{ p: 2 }}>
-              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                <LocalMallIcon color="action" />
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, flexGrow: 1 }}>
-                  Merchandise sold
-                </Typography>
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
-                    {formatEur(merchSummary.netCents)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {merchSummary.unitsSold} item{merchSummary.unitsSold === 1 ? '' : 's'} · excl. VAT
-                  </Typography>
-                </Box>
-              </Stack>
-            </Card>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              Terms
+            </Typography>
           </Grid>
-        )}
+          <Grid size={{ xs: 12 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.admission === 'paid'}
+                  disabled={!canWrite}
+                  onChange={(e) =>
+                    handleChange('admission', e.target.checked ? 'paid' : 'free')
+                  }
+                />
+              }
+              label="Paid admission"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              label="Guaranteed fee"
+              fullWidth
+              disabled={!canWrite}
+              value={form.booking_fee}
+              onChange={(e) => handleChange('booking_fee', e.target.value)}
+              placeholder="0.00"
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start">€</InputAdornment>,
+                },
+              }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              label="Merchandise cut"
+              type="number"
+              fullWidth
+              disabled={!canWrite}
+              value={form.merchandise_cut}
+              onChange={(e) => handleChange('merchandise_cut', e.target.value)}
+              placeholder="0"
+              sx={NO_NUMBER_SPINNER_SX}
+              slotProps={{
+                htmlInput: { min: 0, max: 100, step: 0.5 },
+                input: {
+                  endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                },
+              }}
+            />
+          </Grid>
+          {form.admission === 'paid' && (
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                label="Percentage of net sales"
+                type="number"
+                fullWidth
+                disabled={!canWrite}
+                value={form.percentage_of_sales}
+                onChange={(e) => handleChange('percentage_of_sales', e.target.value)}
+                placeholder="0"
+                sx={NO_NUMBER_SPINNER_SX}
+                slotProps={{
+                  htmlInput: { min: 0, max: 100, step: 0.5 },
+                  input: {
+                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                  },
+                }}
+              />
+            </Grid>
+          )}
+          {form.admission === 'paid' && (
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                label="Ticket link"
+                type="url"
+                fullWidth
+                disabled={!canWrite}
+                value={form.ticket_link}
+                onChange={(e) => handleChange('ticket_link', e.target.value)}
+                slotProps={{
+                  input: {
+                    endAdornment: form.ticket_link ? (
+                      <InputAdornment position="end">
+                        <Tooltip title="Open link">
+                          <IconButton
+                            size="small"
+                            edge="end"
+                            component="a"
+                            href={form.ticket_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <OpenInNewIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ) : null,
+                  },
+                }}
+              />
+            </Grid>
+          )}
 
-        {/* Contacts */}
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Contacts
-          </Typography>
-          <GigContactsSection
-            gigId={gigId}
-            venueId={selectedVenue?.id ?? undefined}
-            festivalId={selectedFestival?.id ?? undefined}
-            flush={flush}
-            canWrite={canWrite}
-          />
+          {/* Merch sold at this gig. Only rendered for non-readers (canWrite ==
+              planning.write here) and only when there were sales. */}
+          {canWrite && merchSummary && merchSummary.unitsSold > 0 && (
+            <Grid size={12}>
+              <Card variant="outlined" sx={{ p: 2 }}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                  <LocalMallIcon color="action" />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, flexGrow: 1 }}>
+                    Merchandise sold
+                  </Typography>
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
+                      {formatEur(merchSummary.netCents)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {merchSummary.unitsSold} item{merchSummary.unitsSold === 1 ? '' : 's'} · excl. VAT
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Card>
+            </Grid>
+          )}
+
+          {/* Equipment */}
+          <Grid size={12}>
+            <Divider sx={{ my: 1 }} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              Available equipment on-site
+            </Typography>
+            <FormGroup row>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.has_pa_system}
+                    disabled={!canWrite}
+                    onChange={(e) => handleChange('has_pa_system', e.target.checked)}
+                  />
+                }
+                label="PA system"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.has_drumkit}
+                    disabled={!canWrite}
+                    onChange={(e) => handleChange('has_drumkit', e.target.checked)}
+                  />
+                }
+                label="Drumkit"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.has_stage_lights}
+                    disabled={!canWrite}
+                    onChange={(e) => handleChange('has_stage_lights', e.target.checked)}
+                  />
+                }
+                label="Stage light"
+              />
+            </FormGroup>
+          </Grid>
         </Grid>
+      </Box>
 
-        {/* Equipment */}
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Available equipment on-site
-          </Typography>
-          <FormGroup row>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.has_pa_system}
-                  disabled={!canWrite}
-                  onChange={(e) => handleChange('has_pa_system', e.target.checked)}
-                />
-              }
-              label="PA system"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.has_drumkit}
-                  disabled={!canWrite}
-                  onChange={(e) => handleChange('has_drumkit', e.target.checked)}
-                />
-              }
-              label="Drumkit"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.has_stage_lights}
-                  disabled={!canWrite}
-                  onChange={(e) => handleChange('has_stage_lights', e.target.checked)}
-                />
-              }
-              label="Stage light"
-            />
-          </FormGroup>
-        </Grid>
-
-        {/* Availability / Participants */}
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Member availability
-          </Typography>
-          {form.status === 'option' ? (
-            <GigParticipantsSection
-              participants={gig?.participants ?? []}
-              candidateMembers={candidateMembers}
-              addMemberId={addMemberId}
-              onAddMemberChange={setAddMemberId}
-              onAddParticipant={handleAddParticipant}
-              onRemoveParticipant={handleRemoveParticipant}
-              onVote={handleVote}
+      {/* ── Availability (member availability + contacts) ──────────────── */}
+      <Box sx={{ display: activeTab === 'availability' ? 'block' : 'none' }}>
+        <Grid container spacing={2}>
+          <Grid size={12}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              Member availability
+            </Typography>
+            {form.status === 'option' ? (
+              <GigParticipantsSection
+                participants={gig?.participants ?? []}
+                candidateMembers={candidateMembers}
+                addMemberId={addMemberId}
+                onAddMemberChange={setAddMemberId}
+                onAddParticipant={handleAddParticipant}
+                onRemoveParticipant={handleRemoveParticipant}
+                onVote={handleVote}
+                canWrite={canWrite}
+              />
+            ) : (
+              <GigAvailabilityPanel eventDate={form.event_date} />
+            )}
+          </Grid>
+          <Grid size={12}>
+            <Divider sx={{ my: 1 }} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              Contacts
+            </Typography>
+            <GigContactsSection
+              gigId={gigId}
+              venueId={selectedVenue?.id ?? undefined}
+              festivalId={selectedFestival?.id ?? undefined}
+              flush={flush}
               canWrite={canWrite}
             />
-          ) : (
-            <GigAvailabilityPanel eventDate={form.event_date} />
-          )}
+          </Grid>
         </Grid>
+      </Box>
 
-        {/* Tasks */}
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Todos
-          </Typography>
-          <GigTasks key={String(gigId)} gigId={gigId} initialTasks={initialTasks} members={members} canWrite={canWrite} currentBandMemberId={currentBandMemberId} />
+      {/* ── Tasks (todos, attachments, notes) ──────────────────────────── */}
+      <Box sx={{ display: activeTab === 'tasks' ? 'block' : 'none' }}>
+        <Grid container spacing={2}>
+          <Grid size={12}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              Tasks
+            </Typography>
+            <GigTasks key={String(gigId)} gigId={gigId} initialTasks={initialTasks} members={members} canWrite={canWrite} currentBandMemberId={currentBandMemberId} />
+          </Grid>
+          <Grid size={12}>
+            <Divider sx={{ my: 1 }} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              Attachments
+            </Typography>
+            <GigAttachments key={String(gigId)} gigId={gigId} initialAttachments={gig?.attachments ?? []} canWrite={canWrite} />
+          </Grid>
+          <Grid size={12}>
+            <Divider sx={{ my: 1 }} />
+            <TextField
+              label="Notes"
+              fullWidth
+              multiline
+              minRows={3}
+              disabled={!canWrite}
+              value={form.notes}
+              onChange={(e) => handleChange('notes', e.target.value)}
+              sx={{ my: 2 }}
+            />
+          </Grid>
         </Grid>
-
-        {/* Attachments */}
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Attachments
-          </Typography>
-          <GigAttachments key={String(gigId)} gigId={gigId} initialAttachments={gig?.attachments ?? []} canWrite={canWrite} />
-        </Grid>
-
-        {/* Notes */}
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <TextField
-            label="Notes"
-            fullWidth
-            multiline
-            minRows={3}
-            disabled={!canWrite}
-            value={form.notes}
-            onChange={(e) => handleChange('notes', e.target.value)}
-          />
-        </Grid>
-
-      </Grid>
+      </Box>
 
       <ImageCropDialog
         open={cropOpen}

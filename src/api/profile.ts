@@ -24,6 +24,26 @@ export const getProfile = () => api<Profile>('/')
 export const updateProfile = (body: Partial<Profile>) =>
   api<Profile>('/', { method: 'PATCH', body: JSON.stringify(body) })
 
+// Band banner path, cached for the session. The banner only changes via
+// uploadBanner() (there is no removal path), so display-only callers that open
+// the gig detail repeatedly can skip refetching the whole profile JUST to read
+// one field. The cache is refreshed by uploadBanner and dropped by
+// clearBannerPathCache() on tenant switch / logout (the profile is
+// tenant-scoped). A full page reload re-fetches too, covering edits made from
+// another session.
+let bannerPathCache: { value: string | null } | null = null
+
+export async function getBannerPath(): Promise<string | null> {
+  if (bannerPathCache) return bannerPathCache.value
+  const profile = await getProfile()
+  bannerPathCache = { value: profile.banner_path ?? null }
+  return bannerPathCache.value
+}
+
+export function clearBannerPathCache(): void {
+  bannerPathCache = null
+}
+
 export const createLink = (body: Partial<ProfileLink>) =>
   api<ProfileLink>('/links', { method: 'POST', body: JSON.stringify(body) })
 export const updateLink = (linkId: Id, body: Partial<ProfileLink>) =>
@@ -36,10 +56,12 @@ export function uploadLogo(file: File) {
   return requestForm<{ logo_path: string | null }>('/api/profile/logo', fd)
 }
 
-export function uploadBanner(file: File) {
+export async function uploadBanner(file: File) {
   const fd = new FormData()
   fd.append('banner', file)
-  return requestForm<{ banner_path: string | null }>('/api/profile/banner', fd)
+  const result = await requestForm<{ banner_path: string | null }>('/api/profile/banner', fd)
+  bannerPathCache = { value: result.banner_path ?? null }
+  return result
 }
 
 export function uploadAvatar(file: File) {
