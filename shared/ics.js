@@ -167,5 +167,7 @@ export function buildIcsCalendar(events, { prodId = '-//GigBuddy//EN', calName }
   }
 
   out.push('END:VCALENDAR')
-  return out.map(foldICSLine).join('\r\n')
+  // RFC 5545 §3.1: every content line ends with CRLF, including the last. Emit a
+  // trailing CRLF, not just CRLF separators between lines.
+  return out.map(foldICSLine).join('\r\n') + '\r\n'
 }

@@ -120,6 +120,16 @@ describe('shared/ics buildIcsCalendar', () => {
     expect(bare).not.toContain('LAST-MODIFIED:')
   })
 
+  it('terminates the calendar with a trailing CRLF after END:VCALENDAR', () => {
+    // RFC 5545 §3.1 requires every content line — including the last — to end
+    // with CRLF. Google's strict importer silently imports nothing when the
+    // final END:VCALENDAR is unterminated.
+    const ics = buildIcsCalendar([
+      { uid: 'u10@gigbuddy', summary: 'S', startDate: '2026-06-01' },
+    ])
+    expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true)
+  })
+
   it('includes REFRESH-INTERVAL and X-PUBLISHED-TTL in the calendar header', () => {
     const ics = buildIcsCalendar([])
     expect(ics).toContain('REFRESH-INTERVAL;VALUE=DURATION:PT12H')
