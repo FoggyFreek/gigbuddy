@@ -86,37 +86,45 @@ export default function CalendarFeedDialog({ open, onClose }: CalendarFeedDialog
           This link is personal — don&rsquo;t share it.
         </Typography>
 
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-            <CircularProgress size={28} />
-          </Box>
-        ) : feed ? (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Calendar feed URL"
-                value={feed.url}
-                slotProps={{ htmlInput: { readOnly: true } }}
-                onFocus={(e) => e.target.select()}
-              />
-              <Tooltip title={copied ? 'Copied!' : 'Copy link'}>
-                <IconButton onClick={handleCopy} aria-label="copy calendar feed url">
-                  {copied ? <CheckIcon /> : <ContentCopyIcon />}
-                </IconButton>
-              </Tooltip>
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-              Regenerating creates a new link and breaks any calendar still using the old
-              one. Disabling stops the feed completely.
+        {(() => {
+          if (loading) {
+            return (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress size={28} />
+              </Box>
+            )
+          }
+          if (feed) {
+            return (
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'center', mt: 2, gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Calendar feed URL"
+                    value={feed.url}
+                    slotProps={{ htmlInput: { readOnly: true } }}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <Tooltip title={copied ? 'Copied!' : 'Copy link'}>
+                    <IconButton onClick={handleCopy} aria-label="copy calendar feed url">
+                      {copied ? <CheckIcon /> : <ContentCopyIcon />}
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                  Regenerating creates a new link and breaks any calendar still using the old
+                  one. Disabling stops the feed completely.
+                </Typography>
+              </>
+            )
+          }
+          return (
+            <Typography variant="body2">
+              No calendar feed yet. Generate a personal subscribe link to get started.
             </Typography>
-          </>
-        ) : (
-          <Typography variant="body2">
-            No calendar feed yet. Generate a personal subscribe link to get started.
-          </Typography>
-        )}
+          )
+        })()}
       </DialogContent>
       <DialogActions sx={{ flexWrap: 'wrap' }}>
         {feed && (

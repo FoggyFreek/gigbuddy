@@ -55,12 +55,36 @@ describe('shared/ics buildIcsCalendar', () => {
     expect(ics).toContain('SUMMARY:A\\, B\\; C')
   })
 
-  it('folds lines longer than 75 octets', () => {
+  it('folds lines longer than 75 octets, capping every physical line at 75', () => {
     const ics = buildIcsCalendar([
       { uid: 'u4@gigbuddy', summary: 'x'.repeat(200), startDate: '2026-06-01' },
     ])
     // A folded continuation line begins with CRLF + a single space.
     expect(ics).toContain('\r\n ')
+    // RFC 5545 §3.1: no content line may exceed 75 octets (excluding CRLF).
+    const enc = new TextEncoder()
+    const over = ics.split('\r\n').filter((l) => enc.encode(l).length > 75)
+    expect(over).toEqual([])
+  })
+
+  it('emits the Europe/Amsterdam VTIMEZONE once, before the first VEVENT, when any event is timed', () => {
+    const ics = buildIcsCalendar([
+      { uid: 't1@gigbuddy', summary: 'Show', startDate: '2026-07-01', startTime: '20:00' },
+    ])
+    expect(ics).toContain('BEGIN:VTIMEZONE')
+    expect(ics).toContain('TZID:Europe/Amsterdam')
+    expect(ics).toContain('RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU')
+    expect(ics).toContain('RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU')
+    // Exactly one definition, and it precedes the events that reference it.
+    expect(ics.match(/BEGIN:VTIMEZONE/g)).toHaveLength(1)
+    expect(ics.indexOf('BEGIN:VTIMEZONE')).toBeLessThan(ics.indexOf('BEGIN:VEVENT'))
+  })
+
+  it('omits the VTIMEZONE for a feed of only all-day events (no TZID referenced)', () => {
+    const ics = buildIcsCalendar([
+      { uid: 't2@gigbuddy', summary: 'Tour', startDate: '2026-07-01', endDate: '2026-07-03' },
+    ])
+    expect(ics).not.toContain('VTIMEZONE')
   })
 
   it('omits optional fields when absent', () => {

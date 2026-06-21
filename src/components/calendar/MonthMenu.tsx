@@ -91,7 +91,7 @@ export default function MonthMenu({ year, month, onMonthJump }: MonthMenuProps) 
       >
         {MONTH_NAMES.map((name, i) => (
           <md-menu-item
-            key={i}
+            key={name}
             data-idx={i}
             selected={i === month - 1}
             onClick={handleSelect}

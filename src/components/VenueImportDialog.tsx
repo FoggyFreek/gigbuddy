@@ -149,7 +149,7 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
               email.
             </Typography>
             <Button component="label">
-              Choose CSV file
+              {'Choose CSV file'}
               <input
                 ref={fileRef}
                 type="file"
@@ -216,7 +216,7 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
                 {previewRows.map((row, i) => {
                   const contact = [row.title, row.given_name, row.family_name].filter(Boolean).join(' ')
                   return (
-                    <TableRow key={i}>
+                    <TableRow key={`${i}-${row.name}`}>
                       <TableCell>{row.category || '—'}</TableCell>
                       <TableCell><strong>{row.name || '—'}</strong></TableCell>
                       <TableCell>{row.city || '—'}</TableCell>

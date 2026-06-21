@@ -228,6 +228,14 @@ export default function TenantsPage() {
               const isActive = user?.activeTenantId === t.id
               const archived = !!t.archived_at
               const stats = storageByTenant[String(t.id)]
+              let switchTooltip: string
+              if (archived) {
+                switchTooltip = 'Unarchive to switch in'
+              } else if (isActive) {
+                switchTooltip = 'Already active'
+              } else {
+                switchTooltip = 'Switch to this tenant'
+              }
               return (
                 <TableRow key={String(t.id)} selected={isActive}>
                   <TableCell>{t.id}</TableCell>
@@ -253,13 +261,7 @@ export default function TenantsPage() {
                       sx={{ justifyContent: 'flex-end' }}
                     >
                       <Tooltip
-                        title={
-                          archived
-                            ? 'Unarchive to switch in'
-                            : isActive
-                            ? 'Already active'
-                            : 'Switch to this tenant'
-                        }
+                        title={switchTooltip}
                       >
                         <span>
                           <IconButton
@@ -304,6 +306,14 @@ export default function TenantsPage() {
           const isActive = user?.activeTenantId === t.id
           const archived = !!t.archived_at
           const stats = storageByTenant[String(t.id)]
+          let switchTooltip: string
+          if (archived) {
+            switchTooltip = 'Unarchive to switch in'
+          } else if (isActive) {
+            switchTooltip = 'Already active'
+          } else {
+            switchTooltip = 'Switch to this tenant'
+          }
           return (
             <Card
               key={String(t.id)}
@@ -342,13 +352,7 @@ export default function TenantsPage() {
               <Divider />
               <CardActions sx={{ justifyContent: 'flex-end', px: 1, py: 0.5 }}>
                 <Tooltip
-                  title={
-                    archived
-                      ? 'Unarchive to switch in'
-                      : isActive
-                      ? 'Already active'
-                      : 'Switch to this tenant'
-                  }
+                  title={switchTooltip}
                 >
                   <span>
                     <IconButton

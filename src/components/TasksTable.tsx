@@ -1,4 +1,5 @@
 import type { Id } from '../types/entities.ts'
+import { type ReactNode } from 'react'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
@@ -44,6 +45,14 @@ interface MobileTaskCardProps {
 
 function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps) {
   const overdue = isOverdue(task)
+  let dueDateNode: ReactNode
+  if (!task.due_date) {
+    dueDateNode = <Typography variant="body2">—</Typography>
+  } else if (overdue) {
+    dueDateNode = <Chip label={formatDate(task.due_date)} color="error" size="small" />
+  } else {
+    dueDateNode = <Typography variant="body2">{formatDate(task.due_date)}</Typography>
+  }
   return (
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 2fr 1fr', gap: 1, alignItems: 'start' }}>
@@ -122,17 +131,7 @@ function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps)
             Due date
           </Typography>
           <Box>
-            {task.due_date ? (
-              overdue ? (
-                <Chip label={formatDate(task.due_date)} color="error" size="small" />
-              ) : (
-                <Typography variant="body2">
-                  {formatDate(task.due_date)}
-                </Typography>
-              )
-            ) : (
-              <Typography variant="body2">—</Typography>
-            )}
+            {dueDateNode}
           </Box>
         </Box>
       </Box>
@@ -192,6 +191,14 @@ export default function TasksTable({ tasks, onRowClick, onToggleDone }: TasksTab
           )}
           {tasks.map((task) => {
             const overdue = isOverdue(task)
+            let dueDateCell: ReactNode
+            if (!task.due_date) {
+              dueDateCell = '—'
+            } else if (overdue) {
+              dueDateCell = <Chip label={formatDate(task.due_date)} color="error" size="small" />
+            } else {
+              dueDateCell = formatDate(task.due_date)
+            }
             return (
               <TableRow
                 key={String(task.id)}
@@ -227,15 +234,7 @@ export default function TasksTable({ tasks, onRowClick, onToggleDone }: TasksTab
                 </TableCell>
                 <TableCell>{task.assigned_to_name ?? '—'}</TableCell>
                 <TableCell>
-                  {task.due_date ? (
-                    overdue ? (
-                      <Chip label={formatDate(task.due_date)} color="error" size="small" />
-                    ) : (
-                      formatDate(task.due_date)
-                    )
-                  ) : (
-                    '—'
-                  )}
+                  {dueDateCell}
                 </TableCell>
               </TableRow>
             )

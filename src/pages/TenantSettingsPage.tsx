@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -140,7 +140,7 @@ export default function TenantSettingsPage() {
                 '&:disabled': { opacity: 0.5, cursor: 'not-allowed' },
               }}
             >
-              +
+              <span>+</span>
               <input
                 ref={colorInputRef}
                 type="color"
@@ -531,6 +531,19 @@ function ShopifyKeySection() {
 
   const configured = !!(savedClientId || status?.isSet || savedDomain)
 
+  let secretStatusNode: ReactNode
+  if (status === null) {
+    secretStatusNode = <CircularProgress size={18} />
+  } else if (status.isSet) {
+    secretStatusNode = (
+      <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+        {status.preview}
+      </Typography>
+    )
+  } else {
+    secretStatusNode = <Typography variant="body2" color="text.disabled">Not configured</Typography>
+  }
+
   return (
     <IntegrationCard
       logoLight="/share/shopify/shopify_logo_black.png"
@@ -651,15 +664,7 @@ function ShopifyKeySection() {
       ) : (
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box sx={{ flex: 1 }}>
-            {status === null ? (
-              <CircularProgress size={18} />
-            ) : status.isSet ? (
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                {status.preview}
-              </Typography>
-            ) : (
-              <Typography variant="body2" color="text.disabled">Not configured</Typography>
-            )}
+            {secretStatusNode}
           </Box>
           <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
             {status?.isSet ? 'Replace secret' : 'Configure'}

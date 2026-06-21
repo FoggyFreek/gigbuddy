@@ -160,6 +160,15 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
     report(venue)
   }
 
+  let noOptionsText: string
+  if (tooShort) {
+    noOptionsText = `Type at least ${MIN_CHARS} characters…`
+  } else if (loading) {
+    noOptionsText = 'Searching…'
+  } else {
+    noOptionsText = 'No matches'
+  }
+
   return (
     <>
       <Autocomplete
@@ -182,13 +191,7 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
           if (isCreateAction(a) || isCreateAction(b)) return false
           return a?.id != null && a.id === b?.id
         }}
-        noOptionsText={
-          tooShort
-            ? `Type at least ${MIN_CHARS} characters…`
-            : loading
-              ? 'Searching…'
-              : 'No matches'
-        }
+        noOptionsText={noOptionsText}
         renderOption={(props, option: VenueOption) => {
           if (isCreateAction(option)) {
             return (

@@ -143,7 +143,7 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
               Category values: press, radio &amp; tv, booker, promotion, network (defaults to press if unrecognised).
             </Typography>
             <Button component="label">
-              Choose CSV file
+              {'Choose CSV file'}
               <input
                 ref={fileRef}
                 type="file"
@@ -207,7 +207,7 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
               </TableHead>
               <TableBody>
                 {previewRows.map((row, i) => (
-                  <TableRow key={i}>
+                  <TableRow key={`${i}-${row.name}`}>
                     <TableCell>{row.category || '—'}</TableCell>
                     <TableCell><strong>{row.name || '—'}</strong></TableCell>
                     <TableCell>{row.email || '—'}</TableCell>

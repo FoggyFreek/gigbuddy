@@ -140,26 +140,34 @@ export default function ContactFormModal({
       </Box>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        {mode === 'create' ? (
-          <>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button variant="contained" onClick={handleCreate}>{submitLabel ?? 'Add contact'}</Button>
-          </>
-        ) : confirmingDelete ? (
-          <>
-            <Typography variant="body2" sx={{ flexGrow: 1, color: 'text.secondary' }}>
-              Delete this contact?
-            </Typography>
-            <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
-            <Button color="error" variant="contained" onClick={onDelete}>Delete</Button>
-          </>
-        ) : (
-          <>
-            {canWrite && <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>}
-            <Box sx={{ flexGrow: 1 }} />
-            <Button variant="contained" onClick={handleClose}>Close</Button>
-          </>
-        )}
+        {(() => {
+          if (mode === 'create') {
+            return (
+              <>
+                <Button onClick={onClose}>Cancel</Button>
+                <Button variant="contained" onClick={handleCreate}>{submitLabel ?? 'Add contact'}</Button>
+              </>
+            )
+          }
+          if (confirmingDelete) {
+            return (
+              <>
+                <Typography variant="body2" sx={{ flexGrow: 1, color: 'text.secondary' }}>
+                  Delete this contact?
+                </Typography>
+                <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
+                <Button color="error" variant="contained" onClick={onDelete}>Delete</Button>
+              </>
+            )
+          }
+          return (
+            <>
+              {canWrite && <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>}
+              <Box sx={{ flexGrow: 1 }} />
+              <Button variant="contained" onClick={handleClose}>Close</Button>
+            </>
+          )
+        })()}
       </DialogActions>
     </Dialog>
   )

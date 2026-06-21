@@ -64,6 +64,16 @@ interface MemberRowActionsProps {
 }
 
 function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatus, onDelete }: MemberRowActionsProps) {
+  let removeTooltip: string
+  if (isSelf) {
+    removeTooltip = 'Cannot remove yourself'
+  } else if (r.is_super_admin) {
+    removeTooltip = 'Cannot remove a super admin'
+  } else if (r.role === 'tenant_admin' && !callerIsSuperAdmin) {
+    removeTooltip = 'Only super admins can remove a tenant admin'
+  } else {
+    removeTooltip = 'Remove from this tenant'
+  }
   return (
     <>
       {r.status !== 'approved' && !(r.role === 'tenant_admin' && !callerIsSuperAdmin) && (
@@ -84,15 +94,7 @@ function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatu
         </Button>
       )}
       <Tooltip
-        title={
-          isSelf
-            ? 'Cannot remove yourself'
-            : r.is_super_admin
-            ? 'Cannot remove a super admin'
-            : r.role === 'tenant_admin' && !callerIsSuperAdmin
-            ? 'Only super admins can remove a tenant admin'
-            : 'Remove from this tenant'
-        }
+        title={removeTooltip}
       >
         <span>
           <IconButton size="small" color="error" disabled={cannotDelete} aria-label="remove member" onClick={() => r.user_id != null && onDelete(r.user_id)}>

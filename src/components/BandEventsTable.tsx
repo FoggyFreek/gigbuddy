@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import Box from '@mui/material/Box'
 
 import Collapse from '@mui/material/Collapse'
@@ -200,22 +200,29 @@ export default function BandEventsTable({ events, onRowClick, onShare, selectedI
   const emptyAll = events.length === 0
 
   if (isCompact) {
+    let upcomingContent: ReactNode
+    if (emptyAll) {
+      upcomingContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No events yet — add one to get started.
+        </Box>
+      )
+    } else if (upcoming.length === 0) {
+      upcomingContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No upcoming events.
+        </Box>
+      )
+    } else {
+      upcomingContent = upcoming.map((e) => (
+        <EventCard key={String(e.id)} event={e} active={e.id === selectedId} onClick={() => onRowClick?.(e)} onShare={onShare} />
+      ))
+    }
+
     return (
       <Stack spacing={1.5}>
         <Paper variant="outlined">
-          {emptyAll ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No events yet — add one to get started.
-            </Box>
-          ) : upcoming.length === 0 ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No upcoming events.
-            </Box>
-          ) : (
-            upcoming.map((e) => (
-              <EventCard key={String(e.id)} event={e} active={e.id === selectedId} onClick={() => onRowClick?.(e)} onShare={onShare} />
-            ))
-          )}
+          {upcomingContent}
         </Paper>
         {past.length > 0 && (
           <Paper variant="outlined">

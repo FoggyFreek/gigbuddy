@@ -59,6 +59,12 @@ describe('calendar feed — management', () => {
 
 describe('calendar feed — public .ics', () => {
   it('serves the active tenant calendar as text/calendar with a no-store cache header', async () => {
+    // Give the gig a start time so the feed carries a timed event (and thus a TZID).
+    await pool.query('UPDATE gigs SET start_time = $1 WHERE id = $2 AND tenant_id = $3', [
+      '20:00',
+      seed.gigA.id,
+      seed.tenantA.id,
+    ])
     const feed = await createFeed()
     const res = await request(app).get(feedPath(feed.url)).expect(200)
 
@@ -69,6 +75,15 @@ describe('calendar feed — public .ics', () => {
     expect(res.text).toContain(`UID:gigbuddy-rehearsal-${seed.rehearsalA.id}@gigbuddy`)
     // The calendar name is set from the band name.
     expect(res.text).toContain('X-WR-CALNAME:Alpha Band')
+    // Timed events reference TZID=Europe/Amsterdam, so a matching VTIMEZONE must
+    // be defined exactly once and precede the first VEVENT (strict clients like
+    // Google Calendar reject a TZID with no definition).
+    expect(res.text.match(/BEGIN:VTIMEZONE/g)).toHaveLength(1)
+    expect(res.text).toContain('TZID:Europe/Amsterdam')
+    expect(res.text.indexOf('BEGIN:VTIMEZONE')).toBeLessThan(res.text.indexOf('BEGIN:VEVENT'))
+    // No content line may exceed 75 octets per RFC 5545 §3.1.
+    const enc = new TextEncoder()
+    expect(res.text.split('\r\n').filter((l) => enc.encode(l).length > 75)).toEqual([])
   })
 
   it('contains only the active tenant events (isolation)', async () => {

@@ -54,8 +54,8 @@ function formatDueDate(val: string | null | undefined): string | undefined {
   const parts = val.split('-')
   if (parts.length < 3) return undefined
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const monthIdx = parseInt(parts[1], 10) - 1
-  const day = parseInt(parts[2], 10)
+  const monthIdx = Number.parseInt(parts[1], 10) - 1
+  const day = Number.parseInt(parts[2], 10)
   if (monthIdx < 0 || monthIdx > 11) return undefined
   return `${months[monthIdx]} ${day}`
 }

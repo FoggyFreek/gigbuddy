@@ -98,6 +98,14 @@ export default function AdminUsersPage() {
             {users.map((u) => {
               const isSelf = u.id === currentUser?.id
               const cannotDelete = isSelf || u.is_super_admin
+              let deleteTooltip: string
+              if (isSelf) {
+                deleteTooltip = 'Cannot delete yourself'
+              } else if (u.is_super_admin) {
+                deleteTooltip = 'Cannot delete a super admin via this UI'
+              } else {
+                deleteTooltip = 'Delete user'
+              }
               return (
                 <TableRow key={String(u.id)}>
                   <TableCell sx={{ width: 48 }}>
@@ -135,13 +143,7 @@ export default function AdminUsersPage() {
                   </TableCell>
                   <TableCell align="right">
                     <Tooltip
-                      title={
-                        isSelf
-                          ? 'Cannot delete yourself'
-                          : u.is_super_admin
-                          ? 'Cannot delete a super admin via this UI'
-                          : 'Delete user'
-                      }
+                      title={deleteTooltip}
                     >
                       <span>
                         <IconButton
@@ -168,6 +170,14 @@ export default function AdminUsersPage() {
         {users.map((u) => {
           const isSelf = u.id === currentUser?.id
           const cannotDelete = isSelf || u.is_super_admin
+          let deleteTooltip: string
+          if (isSelf) {
+            deleteTooltip = 'Cannot delete yourself'
+          } else if (u.is_super_admin) {
+            deleteTooltip = 'Cannot delete a super admin via this UI'
+          } else {
+            deleteTooltip = 'Delete user'
+          }
           return (
             <Card key={String(u.id)} variant="outlined">
               <CardContent sx={{ pb: 1 }}>
@@ -216,13 +226,7 @@ export default function AdminUsersPage() {
               <Divider />
               <CardActions sx={{ justifyContent: 'flex-end', px: 1, py: 0.5 }}>
                 <Tooltip
-                  title={
-                    isSelf
-                      ? 'Cannot delete yourself'
-                      : u.is_super_admin
-                      ? 'Cannot delete a super admin via this UI'
-                      : 'Delete user'
-                  }
+                  title={deleteTooltip}
                 >
                   <span>
                     <IconButton

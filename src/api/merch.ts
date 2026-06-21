@@ -42,7 +42,8 @@ export const fetchShopifyOrders = (params: { cursor?: string; limit?: number } =
   if (params.cursor) q.set('cursor', params.cursor)
   if (params.limit != null) q.set('limit', String(params.limit))
   const query = q.toString()
-  return api<ShopifyOrdersPage>(`/shopify/orders${query ? `?${query}` : ''}`)
+  const suffix = query ? `?${query}` : ''
+  return api<ShopifyOrdersPage>(`/shopify/orders${suffix}`)
 }
 
 export const importShopifyOrders = (body: ShopifyImportBody) =>

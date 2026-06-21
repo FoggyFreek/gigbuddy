@@ -28,6 +28,7 @@ export interface InvoiceForm {
 
 /** One editable line inside the invoice form. */
 export interface InvoiceFormLine {
+  _key: string
   description: string
   quantity: number
   unit_price_cents: number
@@ -60,7 +61,7 @@ export function emptyDraft(taxPct = 9): InvoiceForm {
     discount_pct: 0,
     discount_cents: 0,
     lines: [
-      { description: '', quantity: 1, unit_price_cents: 0, tax_percentage: taxPct, position: 0 },
+      { _key: crypto.randomUUID(), description: '', quantity: 1, unit_price_cents: 0, tax_percentage: taxPct, position: 0 },
     ],
   }
 }
@@ -110,6 +111,7 @@ export function invoiceToForm(data: Record<string, unknown> & { lines?: InvoiceL
     discount_pct: Number(data.discount_pct) || 0,
     discount_cents: Number(data.discount_cents) || 0,
     lines: (data.lines || []).map((l, i) => ({
+      _key: crypto.randomUUID(),
       description: l.description || '',
       quantity: Number(l.quantity) || 1,
       unit_price_cents: Number(l.unit_price_cents) || 0,

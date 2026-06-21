@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
@@ -331,23 +331,30 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
   )
 
   if (isCompact) {
+    let upcomingContent: ReactNode
+    if (emptyAll) {
+      upcomingContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No gigs yet — add one to get started.
+        </Box>
+      )
+    } else if (upcoming.length === 0) {
+      upcomingContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No upcoming gigs.
+        </Box>
+      )
+    } else {
+      upcomingContent = upcoming.map((gig) => (
+        <GigCard key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
+      ))
+    }
+
     return (
       <Stack spacing={1.5}>
         {controls}
         <Paper variant="outlined">
-          {emptyAll ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No gigs yet — add one to get started.
-            </Box>
-          ) : upcoming.length === 0 ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No upcoming gigs.
-            </Box>
-          ) : (
-            upcoming.map((gig) => (
-              <GigCard key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
-            ))
-          )}
+          {upcomingContent}
         </Paper>
         {past.length > 0 && (
           <Paper variant="outlined">

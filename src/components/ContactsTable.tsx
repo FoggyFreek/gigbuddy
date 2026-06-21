@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { type ReactNode, useMemo, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -314,31 +314,38 @@ export default function ContactsTable({
   )
 
   if (isCompact) {
+    let compactContent: ReactNode
+    if (isEmpty) {
+      compactContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          {emptyMessage}
+        </Box>
+      )
+    } else if (sorted.length === 0) {
+      compactContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No results.
+        </Box>
+      )
+    } else {
+      compactContent = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((c) => (
+        <ContactCard
+          key={String(c.id)}
+          contact={c}
+          selected={c.id != null && selected.has(c.id)}
+          active={c.id === selectedId}
+          onToggle={() => c.id != null && toggleRow(c.id)}
+          onClick={() => onRowClick(c)}
+        />
+      ))
+    }
+
     return (
       <Stack spacing={1.5}>
         {controls}
         {selectionBar}
         <Paper variant="outlined">
-          {isEmpty ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              {emptyMessage}
-            </Box>
-          ) : sorted.length === 0 ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No results.
-            </Box>
-          ) : (
-            sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((c) => (
-              <ContactCard
-                key={String(c.id)}
-                contact={c}
-                selected={c.id != null && selected.has(c.id)}
-                active={c.id === selectedId}
-                onToggle={() => c.id != null && toggleRow(c.id)}
-                onClick={() => onRowClick(c)}
-              />
-            ))
-          )}
+          {compactContent}
         </Paper>
         {sorted.length > rowsPerPage && (
           <ListPagination

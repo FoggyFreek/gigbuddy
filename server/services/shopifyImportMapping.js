@@ -37,7 +37,7 @@ export function lineSkipReason(line) {
 // list); falls back to total_discount.
 function lineDiscountCents(line) {
   const allocations = Array.isArray(line.discount_allocations) ? line.discount_allocations : null
-  if (allocations && allocations.length) {
+  if (allocations?.length) {
     return allocations.reduce((sum, a) => sum + Math.round(Number(a.amount || 0) * 100), 0)
   }
   return Math.round(Number(line.total_discount || 0) * 100)

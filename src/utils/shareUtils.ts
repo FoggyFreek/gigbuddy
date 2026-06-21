@@ -28,7 +28,14 @@ export function gigShareUrl(gig: Gig): string {
   const deepLink = `${APP_URL}/gigs?open=${gig.id}`
   const start = formatTime(gig.start_time)
   const end = formatTime(gig.end_time)
-  const timeStr = start ? (end ? `${start} – ${end}` : start) : null
+  let timeStr: string | null
+  if (!start) {
+    timeStr = null
+  } else if (end) {
+    timeStr = `${start} – ${end}`
+  } else {
+    timeStr = start
+  }
   const displayVenue = gig.venue ?? gig.festival
   const venueLine = [venueHeadline(displayVenue), venueCity(displayVenue)].filter(Boolean).join(', ')
 
@@ -122,9 +129,10 @@ export function exportMonthToICS(
     const total = reh.participants?.length ?? 0
     const desc = [reh.location, `${yes}/${total} yes`, reh.notes].filter(Boolean).join(' — ')
     const rehUrl = `${APP_URL}/rehearsals?open=${reh.id}`
+    const statusSuffix = reh.status ? ` (${reh.status})` : ''
     events.push({
       uid: `gigbuddy-rehearsal-${reh.id}@gigbuddy`,
-      summary: `Rehearsal${reh.status ? ` (${reh.status})` : ''}`,
+      summary: `Rehearsal${statusSuffix}`,
       description: [desc, `Open in GigBuddy: ${rehUrl}`].filter(Boolean).join('\n'),
       location: reh.location || undefined,
       url: rehUrl,
@@ -167,7 +175,14 @@ export function rehearsalShareUrl(rehearsal: RehearsalWithTimes): string {
   const deepLink = `${APP_URL}/rehearsals?open=${rehearsal.id}`
   const start = formatTime(rehearsal.start_time)
   const end = formatTime(rehearsal.end_time)
-  const timeStr = start ? (end ? `${start} – ${end}` : start) : null
+  let timeStr: string | null
+  if (!start) {
+    timeStr = null
+  } else if (end) {
+    timeStr = `${start} – ${end}`
+  } else {
+    timeStr = start
+  }
 
   const lines = [
     `*Rehearsal*`,
@@ -192,7 +207,14 @@ export function bandEventShareUrl(event: BandEventWithTimes): string {
   const dateStr = endDate ? `${startDate} – ${endDate}` : startDate
   const startTime = formatTime(event.start_time)
   const endTime = formatTime(event.end_time)
-  const timeStr = startTime ? (endTime ? `${startTime} – ${endTime}` : startTime) : null
+  let timeStr: string | null
+  if (!startTime) {
+    timeStr = null
+  } else if (endTime) {
+    timeStr = `${startTime} – ${endTime}`
+  } else {
+    timeStr = startTime
+  }
 
   const lines = [
     `*Band Event*`,

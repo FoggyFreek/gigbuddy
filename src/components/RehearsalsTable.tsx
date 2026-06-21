@@ -1,5 +1,5 @@
 import type { Rehearsal, Participant, Id } from '../types/entities.ts'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Collapse from '@mui/material/Collapse'
@@ -255,22 +255,29 @@ export default function RehearsalsTable({ rehearsals = [], bandMemberId, onVote,
   const emptyAll = rehearsals.length === 0
 
   if (isCompact) {
+    let upcomingContent: ReactNode
+    if (emptyAll) {
+      upcomingContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No rehearsals yet — propose one to get started.
+        </Box>
+      )
+    } else if (upcoming.length === 0) {
+      upcomingContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No upcoming rehearsals.
+        </Box>
+      )
+    } else {
+      upcomingContent = upcoming.map((r) => (
+        <RehearsalCard key={String(r.id)} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick?.(r)} onShare={onShare} />
+      ))
+    }
+
     return (
       <Stack spacing={1.5}>
         <Paper variant="outlined">
-          {emptyAll ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No rehearsals yet — propose one to get started.
-            </Box>
-          ) : upcoming.length === 0 ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No upcoming rehearsals.
-            </Box>
-          ) : (
-            upcoming.map((r) => (
-              <RehearsalCard key={String(r.id)} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick?.(r)} onShare={onShare} />
-            ))
-          )}
+          {upcomingContent}
         </Paper>
         {past.length > 0 && (
           <Paper variant="outlined">

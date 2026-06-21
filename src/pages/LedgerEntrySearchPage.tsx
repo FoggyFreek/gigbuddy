@@ -33,7 +33,7 @@ import { loadLedgerEntrySearchFilters, saveLedgerEntrySearchFilters } from '../u
 import type { Account, LedgerEntryLineRow, Period } from '../types/entities.ts'
 
 type SortField = 'id' | 'entry_date' | 'amount'
-const SORT_FIELDS: SortField[] = ['id', 'entry_date', 'amount']
+const SORT_FIELDS: ReadonlySet<SortField> = new Set(['id', 'entry_date', 'amount'])
 
 // The single non-zero side of an entry, signed (debit positive, credit
 // negative) — the amount-sort key.
@@ -50,7 +50,7 @@ export default function LedgerEntrySearchPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState<string>(typeof saved?.searchQuery === 'string' ? saved.searchQuery : '')
   const [showVoided, setShowVoided] = useState<boolean>(typeof saved?.showVoided === 'boolean' ? saved.showVoided : false)
-  const [sortBy, setSortBy] = useState<SortField>(SORT_FIELDS.includes(saved?.sortBy as SortField) ? saved!.sortBy as SortField : 'entry_date')
+  const [sortBy, setSortBy] = useState<SortField>(SORT_FIELDS.has(saved?.sortBy as SortField) ? saved!.sortBy as SortField : 'entry_date')
   const [sortDesc, setSortDesc] = useState<boolean>(typeof saved?.sortDesc === 'boolean' ? saved.sortDesc : true)
   const [page, setPage] = useState<number>(typeof saved?.page === 'number' ? saved.page : 0)
   const [rowsPerPage, setRowsPerPage] = useState<number>(typeof saved?.rowsPerPage === 'number' ? saved.rowsPerPage : 50)
@@ -233,98 +233,106 @@ export default function LedgerEntrySearchPage() {
 
       {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
 
-      {!selectedCodes.size ? (
-        <Paper variant="outlined">
-          <Typography color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
-            Select one or more accounts to search their entries.
-          </Typography>
-        </Paper>
-      ) : loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <>
-          <Paper variant="outlined">
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{sortLabel('id', '#')}</TableCell>
-                    <TableCell>{sortLabel('entry_date', 'Date')}</TableCell>
-                    <TableCell>Account</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Memo</TableCell>
-                    <MoneyHeaderCells label={sortLabel('amount', 'Debit')} />
-                    <MoneyHeaderCells label="Credit" />
-                    <TableCell />
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {!pagedEntries.length && (
+      {(() => {
+        if (!selectedCodes.size) {
+          return (
+            <Paper variant="outlined">
+              <Typography color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
+                Select one or more accounts to search their entries.
+              </Typography>
+            </Paper>
+          )
+        }
+        if (loading) {
+          return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
+            </Box>
+          )
+        }
+        return (
+          <>
+            <Paper variant="outlined">
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
                     <TableRow>
-                      <TableCell colSpan={10}>
-                        <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                          No ledger entries found
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {pagedEntries.map((row) => (
-                    <TableRow key={String(row.id)} hover sx={{ opacity: row.voided ? 0.6 : 1 }}>
-                      <TableCell>{row.id}</TableCell>
-                      <TableCell>{formatShortDate(row.entry_date)}</TableCell>
-                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                        {row.account_code} — {row.account_name}
-                      </TableCell>
-                      <TableCell>{row.type}</TableCell>
-                      <TableCell>{row.memo || row.description || '-'}</TableCell>
-                      {row.debit_cents ? <MoneyCells cents={row.debit_cents} /> : (<><TableCell padding="none" /><TableCell /></>)}
-                      {row.credit_cents ? <MoneyCells cents={row.credit_cents} /> : (<><TableCell padding="none" /><TableCell /></>)}
-                      <TableCell padding="checkbox" align="center">
-                        <Tooltip title="Open transaction">
-                          <IconButton
-                            size="small"
-                            component={RouterLink}
-                            to={`/ledger/${row.transaction_id}`}
-                            aria-label="open transaction"
-                          >
-                            <LinkIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-                {!!visibleEntries.length && (
-                  <TableFooter>
-                    <TableRow>
-                      <TableCell colSpan={5} sx={{ fontWeight: 700, color: 'text.primary' }}>
-                        Totals ({visibleEntries.length})
-                      </TableCell>
-                      <MoneyCells cents={totals.debit} bold />
-                      <MoneyCells cents={totals.credit} bold />
+                      <TableCell>{sortLabel('id', '#')}</TableCell>
+                      <TableCell>{sortLabel('entry_date', 'Date')}</TableCell>
+                      <TableCell>Account</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Memo</TableCell>
+                      <MoneyHeaderCells label={sortLabel('amount', 'Debit')} />
+                      <MoneyHeaderCells label="Credit" />
                       <TableCell />
                     </TableRow>
-                  </TableFooter>
-                )}
-              </Table>
-            </TableContainer>
-          </Paper>
-          <ListPagination
-            count={visibleEntries.length}
-            page={safePage}
-            onPageChange={(_, newPage) => setPage(newPage)}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(Number(e.target.value))
-              setPage(0)
-            }}
-            rowsPerPageOptions={[25, 50, 100]}
-            labelRowsPerPage="per page"
-          />
-        </>
-      )}
+                  </TableHead>
+                  <TableBody>
+                    {!pagedEntries.length && (
+                      <TableRow>
+                        <TableCell colSpan={10}>
+                          <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+                            No ledger entries found
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {pagedEntries.map((row) => (
+                      <TableRow key={String(row.id)} hover sx={{ opacity: row.voided ? 0.6 : 1 }}>
+                        <TableCell>{row.id}</TableCell>
+                        <TableCell>{formatShortDate(row.entry_date)}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                          {row.account_code} — {row.account_name}
+                        </TableCell>
+                        <TableCell>{row.type}</TableCell>
+                        <TableCell>{row.memo || row.description || '-'}</TableCell>
+                        {row.debit_cents ? <MoneyCells cents={row.debit_cents} /> : (<><TableCell padding="none" /><TableCell /></>)}
+                        {row.credit_cents ? <MoneyCells cents={row.credit_cents} /> : (<><TableCell padding="none" /><TableCell /></>)}
+                        <TableCell padding="checkbox" align="center">
+                          <Tooltip title="Open transaction">
+                            <IconButton
+                              size="small"
+                              component={RouterLink}
+                              to={`/ledger/${row.transaction_id}`}
+                              aria-label="open transaction"
+                            >
+                              <LinkIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                  {!!visibleEntries.length && (
+                    <TableFooter>
+                      <TableRow>
+                        <TableCell colSpan={5} sx={{ fontWeight: 700, color: 'text.primary' }}>
+                          Totals ({visibleEntries.length})
+                        </TableCell>
+                        <MoneyCells cents={totals.debit} bold />
+                        <MoneyCells cents={totals.credit} bold />
+                        <TableCell />
+                      </TableRow>
+                    </TableFooter>
+                  )}
+                </Table>
+              </TableContainer>
+            </Paper>
+            <ListPagination
+              count={visibleEntries.length}
+              page={safePage}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(Number(e.target.value))
+                setPage(0)
+              }}
+              rowsPerPageOptions={[25, 50, 100]}
+              labelRowsPerPage="per page"
+            />
+          </>
+        )
+      })()}
     </Box>
   )
 }

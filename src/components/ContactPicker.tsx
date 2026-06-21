@@ -102,6 +102,15 @@ export default function ContactPicker({ onSelect, excludeIds = [], disabled, lab
     onSelect(contact)
   }
 
+  let noOptionsText: string
+  if (tooShort) {
+    noOptionsText = `Type at least ${MIN_CHARS} characters…`
+  } else if (loading) {
+    noOptionsText = 'Searching…'
+  } else {
+    noOptionsText = 'No matches'
+  }
+
   return (
     <>
       <Autocomplete
@@ -122,13 +131,7 @@ export default function ContactPicker({ onSelect, excludeIds = [], disabled, lab
           if (isActionOption(a) || isActionOption(b)) return false
           return a?.id != null && a.id === b?.id
         }}
-        noOptionsText={
-          tooShort
-            ? `Type at least ${MIN_CHARS} characters…`
-            : loading
-              ? 'Searching…'
-              : 'No matches'
-        }
+        noOptionsText={noOptionsText}
         renderOption={(props, option) => {
           if (isActionOption(option)) {
             return (

@@ -1,5 +1,5 @@
 import type { Venue, Id } from '../types/entities.ts'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -331,31 +331,38 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
   )
 
   if (isCompact) {
+    let compactContent: ReactNode
+    if (isEmpty) {
+      compactContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No venues yet — add one or import from CSV.
+        </Box>
+      )
+    } else if (sorted.length === 0) {
+      compactContent = (
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+          No results.
+        </Box>
+      )
+    } else {
+      compactContent = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((v) => (
+        <VenueCard
+          key={String(v.id)}
+          venue={v}
+          selected={v.id !== undefined && selected.has(v.id)}
+          active={v.id === selectedId}
+          onToggle={() => toggleRow(v.id)}
+          onClick={() => onRowClick(v)}
+        />
+      ))
+    }
+
     return (
       <Stack spacing={1.5}>
         {controls}
         {selectionBar}
         <Paper variant="outlined">
-          {isEmpty ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No venues yet — add one or import from CSV.
-            </Box>
-          ) : sorted.length === 0 ? (
-            <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-              No results.
-            </Box>
-          ) : (
-            sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((v) => (
-              <VenueCard
-                key={String(v.id)}
-                venue={v}
-                selected={v.id !== undefined && selected.has(v.id)}
-                active={v.id === selectedId}
-                onToggle={() => toggleRow(v.id)}
-                onClick={() => onRowClick(v)}
-              />
-            ))
-          )}
+          {compactContent}
         </Paper>
         {sorted.length > rowsPerPage && (
           <ListPagination

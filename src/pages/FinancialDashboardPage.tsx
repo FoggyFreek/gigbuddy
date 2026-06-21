@@ -604,9 +604,11 @@ function UpcomingFeesCard({ fees }: UpcomingFeesCardProps) {
           {formatEur(fees.total_cents)}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {fees.gig_count === 0
-            ? 'No upcoming gigs with a fee'
-            : `Across ${fees.gig_count} upcoming ${fees.gig_count === 1 ? 'gig' : 'gigs'}`}
+          {(() => {
+            if (fees.gig_count === 0) return 'No upcoming gigs with a fee'
+            const gigWord = fees.gig_count === 1 ? 'gig' : 'gigs'
+            return `Across ${fees.gig_count} upcoming ${gigWord}`
+          })()}
         </Typography>
       </Box>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 2 }}>

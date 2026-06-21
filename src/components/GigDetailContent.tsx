@@ -117,7 +117,7 @@ function feeToDisplay(cents: number | null | undefined): string {
 }
 
 function feeToCents(str: string): number | null {
-  const n = parseFloat(str)
+  const n = Number.parseFloat(str)
   if (Number.isNaN(n)) return null
   return Math.round(n * 100)
 }

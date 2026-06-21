@@ -59,6 +59,32 @@ export function foldICSLine(line) {
   return result
 }
 
+// Static VTIMEZONE for the single zone the app uses. Timed events reference it
+// via TZID=Europe/Amsterdam; strict clients (Google Calendar) reject a TZID with
+// no matching definition, so this block must be emitted whenever any event is
+// timed. The DTSTART anchors are last-Sundays and the offsets/transition hours
+// follow the EU DST rules (RFC 5545 §3.6.5). If a second zone is ever supported,
+// switch to a tz-database-backed generator instead of hand-maintaining this.
+const VTIMEZONE_AMSTERDAM = [
+  'BEGIN:VTIMEZONE',
+  'TZID:Europe/Amsterdam',
+  'BEGIN:DAYLIGHT',
+  'TZOFFSETFROM:+0100',
+  'TZOFFSETTO:+0200',
+  'TZNAME:CEST',
+  'DTSTART:19700329T020000',
+  'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+  'END:DAYLIGHT',
+  'BEGIN:STANDARD',
+  'TZOFFSETFROM:+0200',
+  'TZOFFSETTO:+0100',
+  'TZNAME:CET',
+  'DTSTART:19701025T030000',
+  'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+  'END:STANDARD',
+  'END:VTIMEZONE',
+]
+
 function isoToICSDate(isoStr) {
   return isoStr.replaceAll('-', '')
 }
@@ -122,6 +148,11 @@ export function buildIcsCalendar(events, { prodId = '-//GigBuddy//EN', calName }
     'X-PUBLISHED-TTL:PT12H',
   ]
   if (calName) out.push(`X-WR-CALNAME:${escapeICS(calName)}`)
+
+  // Any timed event references TZID=Europe/Amsterdam, so its VTIMEZONE must be
+  // defined once before the first VEVENT. All-day events use VALUE=DATE and
+  // need no zone, so a feed of only all-day events omits the block.
+  if (events.some((ev) => ev.startTime)) out.push(...VTIMEZONE_AMSTERDAM)
 
   for (const ev of events) {
     out.push('BEGIN:VEVENT')

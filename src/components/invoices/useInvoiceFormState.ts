@@ -125,6 +125,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
       lines: [
         ...prev.lines,
         {
+          _key: crypto.randomUUID(),
           description: '',
           quantity: 1,
           unit_price_cents: 0,

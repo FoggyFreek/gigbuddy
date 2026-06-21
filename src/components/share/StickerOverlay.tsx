@@ -50,7 +50,7 @@ export default function StickerOverlay({ sticker, position = 'right-top', accent
     >
       {config.lines.map((line, i) => (
         <div
-          key={i}
+          key={`${i}-${line}`}
           style={{
             fontFamily: '"Elephant", Georgia, serif',
             fontSize: config.sizes[i],

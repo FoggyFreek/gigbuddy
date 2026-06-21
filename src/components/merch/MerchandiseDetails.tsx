@@ -71,8 +71,11 @@ export default function MerchandiseDetails({ productId, period, onReload }: Merc
   const sorted = useMemo(() => {
     if (!sales) return []
     const dir = sortDir === 'asc' ? 1 : -1
-    const value = (s: MerchSale) =>
-      sortKey === 'date' ? (s.sale_date ?? '') : sortKey === 'qty' ? (s.quantity ?? 0) : saleAmount(s)
+    const value = (s: MerchSale) => {
+      if (sortKey === 'date') return s.sale_date ?? ''
+      if (sortKey === 'qty') return s.quantity ?? 0
+      return saleAmount(s)
+    }
     return sales.filter((s) => s.status !== 'voided').sort((a, b) => {
       const av = value(a)
       const bv = value(b)

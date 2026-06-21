@@ -125,7 +125,7 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
 
       {form.lines.map((line, idx) => (
         <InvoiceLineRow
-          key={idx}
+          key={line._key}
           line={line}
           idx={idx}
           lineTotals={totals.perLine[idx] || { grossCents: 0, netCents: 0, taxCents: 0 }}

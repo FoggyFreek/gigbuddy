@@ -102,7 +102,7 @@ function shopifyErrorMessage(err: unknown, fallback: string): string {
 // Default each mappable line to a product with a matching name, else skip.
 function defaultMapping(line: ShopifyLineItem, products: Product[]): ShopifyLineMapping {
   const match = products.find(
-    (p) => !p.archived_at && p.name && p.name.toLowerCase() === line.title.toLowerCase(),
+    (p) => !p.archived_at && p.name?.toLowerCase() === line.title.toLowerCase(),
   )
   return match?.id != null ? { type: 'product', product_id: match.id } : { type: 'skip' }
 }

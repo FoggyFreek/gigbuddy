@@ -95,9 +95,10 @@ function rehearsalEvent(reh, base) {
   const total = reh.participants?.length ?? 0
   const desc = [reh.location, `${yes}/${total} yes`, reh.notes].filter(Boolean).join(' — ')
   const url = `${base}/rehearsals?open=${reh.id}`
+  const statusSuffix = reh.status ? ` (${reh.status})` : ''
   return {
     uid: `gigbuddy-rehearsal-${reh.id}@gigbuddy`,
-    summary: `Rehearsal${reh.status ? ` (${reh.status})` : ''}`,
+    summary: `Rehearsal${statusSuffix}`,
     description: [desc, `Open in GigBuddy: ${url}`].filter(Boolean).join('\n'),
     location: reh.location || undefined,
     url,
