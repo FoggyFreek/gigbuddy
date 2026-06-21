@@ -52,7 +52,9 @@ export default function GigDetailPage() {
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Gig details</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+          {gig?.id === gigId ? (gig.event_description || 'Gig details') : 'Gig details'}
+        </Typography>
         <Box sx={{ flexGrow: 1 }} />
         {/* Identity gate: the lifted gig lags during async loads / split-view id
             changes, so only share once it matches the current id. */}

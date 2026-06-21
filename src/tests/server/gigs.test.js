@@ -152,6 +152,75 @@ describe('gig admission — tenant isolation', () => {
   })
 })
 
+describe('gig deal terms — merchandise_cut & percentage_of_sales', () => {
+  it('PATCH persists both percentages to DB', async () => {
+    await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}`)
+        .send({ merchandise_cut: 15, percentage_of_sales: '20.5' })
+    ).expect(200)
+    const { rows } = await pool.query(
+      'SELECT merchandise_cut, percentage_of_sales FROM gigs WHERE id = $1',
+      [seed.gigA.id]
+    )
+    expect(Number(rows[0].merchandise_cut)).toBe(15)
+    expect(Number(rows[0].percentage_of_sales)).toBe(20.5)
+  })
+
+  it('PATCH null clears a percentage field', async () => {
+    await asUserA(
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ merchandise_cut: 10 })
+    ).expect(200)
+    await asUserA(
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ merchandise_cut: null })
+    ).expect(200)
+    const { rows } = await pool.query(
+      'SELECT merchandise_cut FROM gigs WHERE id = $1',
+      [seed.gigA.id]
+    )
+    expect(rows[0].merchandise_cut).toBeNull()
+  })
+
+  it('PATCH rejects out-of-range and non-numeric percentages → 400, DB unchanged', async () => {
+    for (const bad of [150, -10, 'abc', '', '   ']) {
+      await asUserA(
+        request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ merchandise_cut: bad })
+      ).expect(400)
+    }
+    const { rows } = await pool.query(
+      'SELECT merchandise_cut FROM gigs WHERE id = $1',
+      [seed.gigA.id]
+    )
+    expect(rows[0].merchandise_cut).toBeNull()
+  })
+
+  it('PATCH percentages on foreign-tenant gig → 404, DB unchanged', async () => {
+    await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigB.id}`)
+        .send({ merchandise_cut: 25 })
+    ).expect(404)
+    const { rows } = await pool.query(
+      'SELECT merchandise_cut FROM gigs WHERE id = $1',
+      [seed.gigB.id]
+    )
+    expect(rows[0].merchandise_cut).toBeNull()
+  })
+
+  it('GET /api/gigs/:id includes both deal-term fields', async () => {
+    await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}`)
+        .send({ merchandise_cut: 12.5, percentage_of_sales: 30 })
+    ).expect(200)
+    const res = await asUserA(
+      request(app).get(`/api/gigs/${seed.gigA.id}`)
+    ).expect(200)
+    expect(Number(res.body.merchandise_cut)).toBe(12.5)
+    expect(Number(res.body.percentage_of_sales)).toBe(30)
+  })
+})
+
 describe('gig festival_id — venue category validation', () => {
   async function insertVenue(tenantId, category, name) {
     const { rows } = await pool.query(
@@ -375,5 +444,63 @@ describe('gig search', () => {
     })
     const byCity = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Rotterdam' })).expect(200)
     expect(byCity.body).toEqual([])
+  })
+})
+
+describe('gig merch summary — GET /api/gigs/:id/merch-summary', () => {
+  async function insertProduct(tenantId) {
+    const { rows } = await pool.query(
+      `INSERT INTO products (tenant_id, name) VALUES ($1, 'Tee') RETURNING id`,
+      [tenantId],
+    )
+    return rows[0].id
+  }
+
+  async function insertSale(tenantId, productId, { gigId = null, quantity, unitPriceInclCents, vatRate, status = 'recorded' }) {
+    await pool.query(
+      `INSERT INTO merch_sales
+         (tenant_id, product_id, gig_id, quantity, unit_price_incl_cents, vat_rate, unit_cost_cents, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 0, $7)`,
+      [tenantId, productId, gigId, quantity, unitPriceInclCents, vatRate, status],
+    )
+  }
+
+  async function setRoleA(role) {
+    await pool.query(
+      'UPDATE memberships SET role = $1 WHERE user_id = $2 AND tenant_id = $3',
+      [role, seed.userA.id, seed.tenantA.id],
+    )
+  }
+
+  it('sums units and net (Excl. VAT) across VAT rates, excluding voided and non-gig sales', async () => {
+    const productId = await insertProduct(seed.tenantA.id)
+    // gross 2420 @21% → net 2000; gross 3270 @9% → net 3000.
+    await insertSale(seed.tenantA.id, productId, { gigId: seed.gigA.id, quantity: 2, unitPriceInclCents: 1210, vatRate: 21 })
+    await insertSale(seed.tenantA.id, productId, { gigId: seed.gigA.id, quantity: 3, unitPriceInclCents: 1090, vatRate: 9 })
+    // Excluded: voided, and a sale not linked to the gig.
+    await insertSale(seed.tenantA.id, productId, { gigId: seed.gigA.id, quantity: 5, unitPriceInclCents: 1000, vatRate: 21, status: 'voided' })
+    await insertSale(seed.tenantA.id, productId, { gigId: null, quantity: 7, unitPriceInclCents: 1000, vatRate: 21 })
+
+    const res = await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}/merch-summary`)).expect(200)
+    expect(res.body).toEqual({ unitsSold: 5, netCents: 5000, grossCents: 5690 })
+  })
+
+  it('returns an all-zero summary for a gig with no merch', async () => {
+    const res = await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}/merch-summary`)).expect(200)
+    expect(res.body).toEqual({ unitsSold: 0, netCents: 0, grossCents: 0 })
+  })
+
+  it('returns 404 for a foreign-tenant gig (no leak via all-zero)', async () => {
+    const productId = await insertProduct(seed.tenantB.id)
+    await insertSale(seed.tenantB.id, productId, { gigId: seed.gigB.id, quantity: 4, unitPriceInclCents: 1210, vatRate: 21 })
+    await asUserA(request(app).get(`/api/gigs/${seed.gigB.id}/merch-summary`)).expect(404)
+  })
+
+  it('forbids readers (403) but allows contributors (200)', async () => {
+    await setRoleA('reader')
+    await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}/merch-summary`)).expect(403)
+
+    await setRoleA('contributor')
+    await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}/merch-summary`)).expect(200)
   })
 })

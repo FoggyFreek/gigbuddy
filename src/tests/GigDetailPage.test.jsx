@@ -20,6 +20,10 @@ vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
 }))
 
+vi.mock('../api/profile.ts', () => ({
+  getProfile: vi.fn().mockResolvedValue({ banner_path: null }),
+}))
+
 function gigFixture(id) {
   return {
     id,
@@ -87,10 +91,11 @@ function renderPage(id) {
   )
 }
 
-// The detail header is the row that holds the "Gig details" title; scope share-button
-// queries to it so the assertion can't be satisfied by a share button elsewhere.
+// The detail header is the row that holds the back button and title (the event name
+// once the gig loads); scope share-button queries to it so the assertion can't be
+// satisfied by a share button elsewhere.
 function header() {
-  return screen.getByText('Gig details').closest('div')
+  return screen.getByLabelText('back').closest('div')
 }
 
 describe('GigDetailPage — header share button', () => {

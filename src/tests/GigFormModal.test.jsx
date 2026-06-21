@@ -43,6 +43,7 @@ vi.mock('../api/gigs.ts', () => ({
     attachments: [],
     participants: [],
   }),
+  getGigMerchSummary: vi.fn().mockResolvedValue({ unitsSold: 0, netCents: 0, grossCents: 0 }),
   updateGig: vi.fn().mockResolvedValue({}),
   addGigParticipant: vi.fn().mockResolvedValue({}),
   removeGigParticipant: vi.fn().mockResolvedValue({}),
@@ -167,10 +168,10 @@ describe('GigFormModal — edit mode', () => {
     expect(screen.queryByRole('button', { name: /create/i })).not.toBeInTheDocument()
   })
 
-  it('renders band fee field in edit mode', async () => {
+  it('renders guaranteed fee field in edit mode', async () => {
     wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />)
-    await waitFor(() => screen.getByLabelText(/band fee/i))
-    expect(screen.getByLabelText(/band fee/i)).toBeInTheDocument()
+    await waitFor(() => screen.getByLabelText(/guaranteed fee/i))
+    expect(screen.getByLabelText(/guaranteed fee/i)).toBeInTheDocument()
   })
 
   it('renders notes field', async () => {

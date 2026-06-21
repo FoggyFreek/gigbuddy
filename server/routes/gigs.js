@@ -8,6 +8,7 @@ import {
   listGigs,
   searchGigs,
   getGig,
+  gigMerchSummary,
   importGigs,
   createGig,
   patchGig,
@@ -81,6 +82,16 @@ router.get('/:id', async (req, res) => {
   const result = await getGig(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
   res.json(result.gig)
+})
+
+// Merch-sold totals for this gig. Finance-ish: gated on planning.write so
+// readers (the only role without it on this page) get 403 — the same boundary
+// the UI mirrors by hiding the card.
+router.get('/:id/merch-summary', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await gigMerchSummary(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.summary)
 })
 
 // Bulk import gigs from Bandsintown CSV export

@@ -1,5 +1,5 @@
 import { request, requestForm } from './_client.ts'
-import type { Gig, Id } from '../types/entities.ts'
+import type { Gig, GigMerchSummary, Id } from '../types/entities.ts'
 
 interface GigTask {
   id?: Id
@@ -34,6 +34,8 @@ export const listGigs = () => api<Gig[]>('/')
 export const searchGigs = (q: string) =>
   api<Gig[]>(`/search?${new URLSearchParams({ q })}`)
 export const getGig = (id: Id, opts?: RequestInit) => api<Gig>(`/${id}`, opts)
+export const getGigMerchSummary = (id: Id, opts?: RequestInit) =>
+  api<GigMerchSummary>(`/${id}/merch-summary`, opts)
 export const createGig = (body: Partial<Gig>) =>
   api<Gig>('/', { method: 'POST', body: JSON.stringify(body) })
 export const updateGig = (id: Id, body: Partial<Gig>) =>

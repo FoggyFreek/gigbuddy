@@ -37,6 +37,10 @@ export interface Gig {
   open_task_count?: number
   venue_id?: Id | null
   festival_id?: Id | null
+  // Venue deal terms. NUMERIC(5,2) percentages arrive as strings over the wire
+  // but may be set as numbers in code; null = not agreed.
+  merchandise_cut?: number | string | null
+  percentage_of_sales?: number | string | null
 }
 
 export interface Member {
@@ -477,6 +481,14 @@ export interface MerchSalesSummaryRow {
   revenue_account_name: string | null
   total_qty: number
   total_amount_cents: number
+}
+
+// Merch-sold totals for a single gig (GET /api/gigs/:id/merch-summary):
+// recorded sales linked to that gig. netCents is Excl. VAT.
+export interface GigMerchSummary {
+  unitsSold: number
+  netCents: number
+  grossCents: number
 }
 
 // ---------- Shopify import ----------

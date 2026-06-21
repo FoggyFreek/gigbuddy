@@ -41,6 +41,7 @@ vi.mock('../api/gigs.ts', () => ({
     attachments: [],
     participants: [],
   }),
+  getGigMerchSummary: vi.fn().mockResolvedValue({ unitsSold: 0, netCents: 0, grossCents: 0 }),
   updateGig: vi.fn().mockResolvedValue({}),
   addGigParticipant: vi.fn().mockResolvedValue({}),
   removeGigParticipant: vi.fn().mockResolvedValue({}),
@@ -58,7 +59,7 @@ vi.mock('../api/venues.ts', async (importOriginal) => ({
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 
-import { getGig, updateGig } from '../api/gigs.ts'
+import { getGig, getGigMerchSummary, updateGig } from '../api/gigs.ts'
 
 const GIG_PAID = {
   id: 1,
@@ -128,12 +129,90 @@ describe('GigDetailContent — field rendering', () => {
     expect(screen.getByDisplayValue('https://tickets.example.com')).toBeInTheDocument()
   })
 
-  it('renders Band fee and Ticket link on the same row when admission=paid', async () => {
+  it('renders Guaranteed fee and Ticket link on the same row when admission=paid', async () => {
     getGig.mockResolvedValueOnce(GIG_PAID)
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/ticket link/i))
-    expect(screen.getByLabelText(/band fee/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/guaranteed fee/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/ticket link/i)).toBeInTheDocument()
+  })
+
+  it('renders the Terms section heading', async () => {
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    expect(screen.getByRole('heading', { name: /^terms$/i })).toBeInTheDocument()
+  })
+
+  it('renames Band fee to Guaranteed fee', async () => {
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/guaranteed fee/i))
+    expect(screen.queryByLabelText(/band fee/i)).not.toBeInTheDocument()
+  })
+
+  it('shows Merchandise cut regardless of admission', async () => {
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    expect(screen.getByLabelText(/merchandise cut/i)).toBeInTheDocument()
+  })
+
+  it('does not show Percentage of sales when admission is free', async () => {
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    expect(screen.queryByLabelText(/percentage of net sales/i)).not.toBeInTheDocument()
+  })
+
+  it('shows Percentage of sales when admission=paid', async () => {
+    getGig.mockResolvedValueOnce(GIG_PAID)
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/percentage of net sales/i))
+    expect(screen.getByLabelText(/percentage of net sales/i)).toBeInTheDocument()
+  })
+})
+
+describe('GigDetailContent — Terms field saving', () => {
+  beforeEach(() => {
+    getGig.mockClear()
+    updateGig.mockClear()
+  })
+
+  it('saves Merchandise cut as a number', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await user.type(screen.getByLabelText(/merchandise cut/i), '15')
+    await waitFor(
+      () => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 }),
+      { timeout: 2000 }
+    )
+  })
+
+  it('saves Percentage of sales as a number when admission=paid', async () => {
+    getGig.mockResolvedValueOnce(GIG_PAID)
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/percentage of net sales/i))
+    await user.type(screen.getByLabelText(/percentage of net sales/i), '20')
+    await waitFor(
+      () => expect(updateGig).toHaveBeenCalledWith(1, { percentage_of_sales: 20 }),
+      { timeout: 2000 }
+    )
+  })
+
+  it('clears Percentage of sales when admission switched to free', async () => {
+    getGig.mockResolvedValueOnce(GIG_PAID)
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByLabelText(/paid admission/i)).toBeChecked())
+    await user.click(screen.getByLabelText(/paid admission/i))
+    await waitFor(
+      () =>
+        expect(updateGig).toHaveBeenCalledWith(1, {
+          admission: 'free',
+          ticket_link: null,
+          percentage_of_sales: null,
+        }),
+      { timeout: 2000 }
+    )
   })
 })
 
@@ -148,7 +227,7 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
     await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
     expect(screen.getByLabelText(/event description/i)).toBeDisabled()
     expect(screen.getByLabelText(/paid admission/i)).toBeDisabled()
-    expect(screen.getByLabelText(/band fee/i)).toBeDisabled()
+    expect(screen.getByLabelText(/guaranteed fee/i)).toBeDisabled()
     expect(screen.getByLabelText(/notes/i)).toBeDisabled()
   })
 
@@ -166,6 +245,41 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
     await waitFor(() => screen.getByLabelText(/paid admission/i))
     await user.click(screen.getByLabelText(/paid admission/i))
     expect(updateGig).not.toHaveBeenCalled()
+  })
+})
+
+describe('GigDetailContent — merch sold summary', () => {
+  beforeEach(() => {
+    getGig.mockClear()
+    getGigMerchSummary.mockClear()
+    getGigMerchSummary.mockResolvedValue({ unitsSold: 0, netCents: 0, grossCents: 0 })
+  })
+
+  it('shows the card with units and excl-VAT total when there are sales', async () => {
+    getGigMerchSummary.mockResolvedValueOnce({ unitsSold: 37, netCents: 12345, grossCents: 14937 })
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText(/merchandise sold/i)).toBeInTheDocument())
+    expect(screen.getByText(/37 items · excl\. VAT/i)).toBeInTheDocument()
+    expect(screen.getByText(/123,45/)).toBeInTheDocument()
+  })
+
+  it('renders "1 item" (singular) for a single unit', async () => {
+    getGigMerchSummary.mockResolvedValueOnce({ unitsSold: 1, netCents: 1000, grossCents: 1210 })
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText(/1 item · excl\. VAT/i)).toBeInTheDocument())
+  })
+
+  it('hides the card when there are no sales', async () => {
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
+  })
+
+  it('does not render the card or fetch the summary for readers', async () => {
+    wrap(<GigDetailContent gigId={1} canWrite={false} />)
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
+    expect(getGigMerchSummary).not.toHaveBeenCalled()
   })
 })
 
@@ -211,7 +325,12 @@ describe('GigDetailContent — admission toggle', () => {
     await user.click(screen.getByLabelText(/paid admission/i))
     await user.click(screen.getByLabelText(/paid admission/i))
     await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { admission: 'free', ticket_link: null }),
+      () =>
+        expect(updateGig).toHaveBeenCalledWith(1, {
+          admission: 'free',
+          ticket_link: null,
+          percentage_of_sales: null,
+        }),
       { timeout: 2000 }
     )
   })

@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../api/gigs.ts', () => ({
   listGigs: vi.fn(),
   getGig: vi.fn(),
+  getGigMerchSummary: vi.fn().mockResolvedValue({ unitsSold: 0, netCents: 0, grossCents: 0 }),
   createGig: vi.fn(),
   updateGig: vi.fn(),
   deleteGig: vi.fn().mockResolvedValue({}),
@@ -30,6 +31,9 @@ vi.mock('../api/availability.ts', () => ({
 }))
 vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
+}))
+vi.mock('../api/profile.ts', () => ({
+  getProfile: vi.fn().mockResolvedValue({ banner_path: null }),
 }))
 
 import GigsPage from '../pages/GigsPage.tsx'
@@ -124,7 +128,7 @@ describe('GigsPage — split-view detail route', () => {
     const user = userEvent.setup()
     wrapWithRoutes({ initialEntries: ['/gigs/42'] })
 
-    await waitFor(() => expect(screen.getByText('Gig details')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^close$/i })).toBeInTheDocument())
     // list stays visible to the left in split view
     expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
     // in split-view mode the top-left back arrow is hidden
@@ -132,7 +136,7 @@ describe('GigsPage — split-view detail route', () => {
 
     await user.click(screen.getByRole('button', { name: /^close$/i }))
 
-    await waitFor(() => expect(screen.queryByText('Gig details')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^close$/i })).not.toBeInTheDocument())
     expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
   })
 
@@ -140,12 +144,45 @@ describe('GigsPage — split-view detail route', () => {
     const user = userEvent.setup()
     wrapWithRoutes({ initialEntries: ['/gigs/42'] })
 
-    await waitFor(() => expect(screen.getByText('Gig details')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^close$/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /^delete$/i }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^delete$/i }))
 
     await waitFor(() => expect(deleteGig).toHaveBeenCalledWith(42))
-    expect(screen.queryByText('Jazz Night')).not.toBeInTheDocument()
+    // The detail pane closes on delete (navigating back to /gigs unmounts it) and
+    // the still-mounted list drops the deleted gig. Both the detail title and the
+    // list row carry 'Jazz Night', so wait until every instance is gone.
+    await waitFor(() => expect(screen.queryByText('Jazz Night')).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^close$/i })).not.toBeInTheDocument()
     expect(screen.getByText(/no gigs yet/i)).toBeInTheDocument()
+  })
+
+  it('returns to the list after deleting in compact (mobile) view', async () => {
+    const user = userEvent.setup()
+    // Force compact layout: useMediaQuery(up('sm')) → false.
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = (query) => ({
+      matches: false, media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => true,
+    })
+    try {
+      wrapWithRoutes({ initialEntries: ['/gigs/42'] })
+
+      // Compact: detail is full-screen with a back arrow, no split-view close button.
+      await waitFor(() => expect(screen.getByRole('button', { name: /^back$/i })).toBeInTheDocument())
+      expect(screen.queryByRole('button', { name: /^close$/i })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /^delete$/i }))
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^delete$/i }))
+
+      await waitFor(() => expect(deleteGig).toHaveBeenCalledWith(42))
+      // Back to the list: detail unmounts (its back arrow disappears) and the list,
+      // hidden behind the detail in compact view, becomes visible again.
+      await waitFor(() => expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument())
+      expect(screen.queryByRole('button', { name: /^back$/i })).not.toBeInTheDocument()
+    } finally {
+      window.matchMedia = originalMatchMedia
+    }
   })
 })

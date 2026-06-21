@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import pool from '../db/index.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
+import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import { uploadObject, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
@@ -25,6 +26,7 @@ import {
   assertVenueInTenant,
   memberExistsInTenant,
   gigExistsInTenant,
+  summarizeGigMerchSalesByVatRate,
   searchGigs as searchGigRows,
   fetchGigWithRelations,
   loadParticipants,
@@ -191,6 +193,25 @@ export async function getGig(db, tenantId, gigId) {
   const attachments = await listGigAttachments(db, gigId, tenantId)
   const byGig = await loadParticipants(db, [gigId], tenantId)
   return { gig: { ...gig, tasks, participants: byGig.get(gigId) || [], attachments } }
+}
+
+// Total merch sold *at this gig*: units and the net (Excl. VAT) amount. Sales
+// are stored gross (Incl. VAT) per row with a per-row rate, so net is derived
+// per VAT-rate group and summed (HALF_UP via computePurchaseLineTotals). Returns
+// 404 for a missing/cross-tenant gig so existence isn't leaked.
+export async function gigMerchSummary(db, tenantId, gigId) {
+  if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
+
+  const groups = await summarizeGigMerchSalesByVatRate(db, tenantId, gigId)
+  let unitsSold = 0
+  let netCents = 0
+  let grossCents = 0
+  for (const g of groups) {
+    unitsSold += g.qty
+    grossCents += g.gross_cents
+    netCents += computePurchaseLineTotals({ amount_incl_cents: g.gross_cents, tax_rate: g.vat_rate }).netCents
+  }
+  return { summary: { unitsSold, netCents, grossCents } }
 }
 
 // ---------- writes ----------

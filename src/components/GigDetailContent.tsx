@@ -1,6 +1,6 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
+import Card from '@mui/material/Card'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import FormControlLabel from '@mui/material/FormControlLabel'
@@ -15,8 +15,11 @@ import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import { alpha } from '@mui/material/styles'
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import DeleteIcon from '@mui/icons-material/Delete'
+import ImageIcon from '@mui/icons-material/Image'
+import LocalMallIcon from '@mui/icons-material/LocalMall'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
@@ -41,12 +44,14 @@ interface VenuePickerProps {
 const VenuePicker = _VenuePickerRaw as React.ComponentType<VenuePickerProps>
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { useAuth } from '../contexts/authContext.ts'
-import { addGigParticipant, deleteGigBanner, getGig, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../api/gigs.ts'
+import { addGigParticipant, deleteGigBanner, getGig, getGigMerchSummary, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../api/gigs.ts'
+import { getProfile } from '../api/profile.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import { compressBanner } from '../utils/compressImage.ts'
 import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
-import type { Id, Gig, Participant, PurchaseAttachment, Member, Venue } from '../types/entities.ts'
+import { formatEur } from '../utils/invoiceTotals.ts'
+import type { Id, Gig, GigMerchSummary, Participant, PurchaseAttachment, Member, Venue } from '../types/entities.ts'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
 
@@ -89,6 +94,8 @@ interface GigForm {
   booking_fee: string
   admission: string
   ticket_link: string
+  merchandise_cut: string
+  percentage_of_sales: string
   notes: string
   has_pa_system: boolean
   has_drumkit: boolean
@@ -122,6 +129,21 @@ function feeToCents(str: string): number | null {
   return Math.round(n * 100)
 }
 
+// A percentage form field (merchandise cut / percentage of sales) → the value to
+// send. Empty/blank clears the field (null); otherwise the parsed number.
+function pctToValue(str: string): number | null {
+  if (str.trim() === '') return null
+  const n = Number.parseFloat(str)
+  return Number.isNaN(n) ? null : n
+}
+
+// Hide the native browser up/down spin buttons on type="number" inputs.
+const NO_NUMBER_SPINNER_SX = {
+  '& input[type=number]': { MozAppearance: 'textfield' },
+  '& input[type=number]::-webkit-outer-spin-button': { WebkitAppearance: 'none', margin: 0 },
+  '& input[type=number]::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 },
+}
+
 const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, canWrite = true }, ref) {
   const { user } = useAuth()
   const currentBandMemberId = user?.bandMemberId ?? null
@@ -137,6 +159,8 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     booking_fee: '',
     admission: 'free',
     ticket_link: '',
+    merchandise_cut: '',
+    percentage_of_sales: '',
     notes: '',
     has_pa_system: false,
     has_drumkit: false,
@@ -150,8 +174,10 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const [members, setMembers] = useState<Member[]>([])
   const [addMemberId, setAddMemberId] = useState<Id | ''>('')
   const [bannerPath, setBannerPath] = useState<string | null>(null)
+  const [bandBannerPath, setBandBannerPath] = useState<string | null>(null)
   const [bannerBusy, setBannerBusy] = useState(false)
   const [bannerError, setBannerError] = useState<string | null>(null)
+  const [merchSummary, setMerchSummary] = useState<GigMerchSummary | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
   const bannerInputRef = useRef<HTMLInputElement | null>(null)
@@ -186,6 +212,8 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       booking_fee: feeToDisplay(g.booking_fee_cents),
       admission: g.admission ?? 'free',
       ticket_link: g.ticket_link ?? '',
+      merchandise_cut: g.merchandise_cut == null ? '' : String(g.merchandise_cut),
+      percentage_of_sales: g.percentage_of_sales == null ? '' : String(g.percentage_of_sales),
       notes: g.notes || '',
       has_pa_system: !!g.has_pa_system,
       has_drumkit: !!g.has_drumkit,
@@ -203,12 +231,25 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     const ac = new AbortController()
     setLoading(true)
     listMembers().then(setMembers).catch(() => {})
+    getProfile().then((p) => setBandBannerPath(p.banner_path ?? null)).catch(() => {})
     getGig(gigId, { signal: ac.signal })
       .then(applyGig)
       .catch((err: Error) => { if (!ac.signal.aborted) console.error(err) })
       .finally(() => { if (!ac.signal.aborted) setLoading(false) })
     return () => ac.abort()
   }, [gigId, applyGig])
+
+  // Merch-sold summary. Reader gate: this is finance-ish data the server only
+  // serves to non-readers — and on this page `canWrite` is exactly
+  // planning.write — so readers skip the request entirely (no card for them).
+  useEffect(() => {
+    if (!canWrite) { setMerchSummary(null); return }
+    const ac = new AbortController()
+    getGigMerchSummary(gigId, { signal: ac.signal })
+      .then(setMerchSummary)
+      .catch((err: Error) => { if (!ac.signal.aborted) console.error(err) })
+    return () => ac.abort()
+  }, [gigId, canWrite])
 
   const participantIds = useMemo(
     () => new Set((gig?.participants ?? []).map((p) => p.band_member_id)),
@@ -236,9 +277,9 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   function handleChange(field: string, value: unknown) {
     if (!canWrite) return
     if (field === 'admission' && value === 'free') {
-      setForm((prev) => ({ ...prev, admission: 'free', ticket_link: '' }))
+      setForm((prev) => ({ ...prev, admission: 'free', ticket_link: '', percentage_of_sales: '' }))
       if (hasRequiredErrors(form, REQUIRED_FIELDS)) return
-      schedule({ admission: 'free', ticket_link: null })
+      schedule({ admission: 'free', ticket_link: null, percentage_of_sales: null })
       return
     }
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -247,6 +288,9 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     if (field === 'booking_fee') {
       patch.booking_fee_cents = feeToCents(value as string)
       delete patch.booking_fee
+    }
+    if (field === 'merchandise_cut' || field === 'percentage_of_sales') {
+      patch[field] = pctToValue(value as string)
     }
     schedule(patch)
   }
@@ -311,6 +355,162 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
   return (
     <>
+      {/* ── Header: band banner background + event banner centered ──────── */}
+      <Box
+        sx={(theme) => ({
+          position: 'relative',
+          height: { xs: 180, sm: 240 },
+          mb: 3,
+          borderRadius: 1,
+          overflow: 'hidden',
+          // Gradient fallback when no band banner is set.
+          ...(bandBannerPath
+            ? {}
+            : {
+                background:
+                  theme.palette.mode === 'dark'
+                    ? `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.55)}, ${alpha(theme.palette.primary.main, 0.35)})`
+                    : `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.82)}, ${alpha(theme.palette.primary.main, 0.65)})`,
+              }),
+        })}
+      >
+        {/* Band banner as a slightly blurred layer behind everything. The
+            negative inset hides the soft, semi-transparent edges the blur
+            would otherwise reveal inside the clipped box. */}
+        {bandBannerPath && (
+          <Box
+            aria-hidden
+            sx={{
+              position: 'absolute',
+              inset: -8,
+              backgroundImage: `url(/api/files/${bandBannerPath})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center top',
+              filter: 'blur(2px)',
+            }}
+          />
+        )}
+
+        {/* Bottom fade on the band banner: solid black at the very bottom,
+            transparent at the 25% mark, darkening the banner into the page below. */}
+        {bandBannerPath && (
+          <Box
+            sx={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: '55%',
+              pointerEvents: 'none',
+              background: 'linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)',
+            }}
+          />
+        )}
+
+        {/* Event banner centered, or placeholder when unset */}
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {bannerPath ? (
+            <Box
+              component="img"
+              src={`/api/files/${bannerPath}`}
+              alt="Event banner"
+              sx={{ maxWidth: '70%', maxHeight: '80%', objectFit: 'contain', display: 'block' }}
+            />
+          ) : (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 0.5,
+                px: 3,
+                py: 2,
+                borderRadius: 1,
+                border: '2px dashed',
+                borderColor: 'rgba(255,255,255,0.6)',
+                color: 'rgba(255,255,255,0.85)',
+                bgcolor: 'rgba(0,0,0,0.25)',
+              }}
+            >
+              <ImageIcon sx={{ fontSize: 36 }} />
+              <Typography variant="caption">No event banner</Typography>
+            </Box>
+          )}
+        </Box>
+
+        {bannerBusy && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'rgba(0,0,0,0.4)',
+            }}
+          >
+            <CircularProgress size={28} sx={{ color: '#fff' }} />
+          </Box>
+        )}
+
+        {/* Edit controls */}
+        {canWrite && (
+          <Stack direction="row" spacing={1} sx={{ position: 'absolute', top: 8, right: 8 }}>
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleBannerFileChange}
+            />
+            <Tooltip title={bannerPath ? 'Change event banner' : 'Add event banner'}>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={() => bannerInputRef.current?.click()}
+                  disabled={bannerBusy}
+                  sx={{
+                    bgcolor: 'rgba(0,0,0,0.5)',
+                    color: '#fff',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
+                    '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.5)' },
+                  }}
+                >
+                  <AddPhotoAlternateIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+            {bannerPath && (
+              <Tooltip title="Remove event banner">
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={handleBannerDelete}
+                    disabled={bannerBusy}
+                    sx={{
+                      bgcolor: 'rgba(0,0,0,0.5)',
+                      color: '#fff',
+                      '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
+                      '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.5)' },
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+          </Stack>
+        )}
+      </Box>
+
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 3 }}>
           <DateEntryField
@@ -422,6 +622,13 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             }}
           />
         </Grid>
+        {/* Terms */}
+        <Grid size={12}>
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            Terms
+          </Typography>
+        </Grid>
         <Grid size={{ xs: 12 }}>
           <FormControlLabel
             control={
@@ -438,7 +645,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
-            label="Band fee"
+            label="Guaranteed fee"
             fullWidth
             disabled={!canWrite}
             value={form.booking_fee}
@@ -451,6 +658,44 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             }}
           />
         </Grid>
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <TextField
+            label="Merchandise cut"
+            type="number"
+            fullWidth
+            disabled={!canWrite}
+            value={form.merchandise_cut}
+            onChange={(e) => handleChange('merchandise_cut', e.target.value)}
+            placeholder="0"
+            sx={NO_NUMBER_SPINNER_SX}
+            slotProps={{
+              htmlInput: { min: 0, max: 100, step: 0.5 },
+              input: {
+                endAdornment: <InputAdornment position="end">%</InputAdornment>,
+              },
+            }}
+          />
+        </Grid>
+        {form.admission === 'paid' && (
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              label="Percentage of net sales"
+              type="number"
+              fullWidth
+              disabled={!canWrite}
+              value={form.percentage_of_sales}
+              onChange={(e) => handleChange('percentage_of_sales', e.target.value)}
+              placeholder="0"
+              sx={NO_NUMBER_SPINNER_SX}
+              slotProps={{
+                htmlInput: { min: 0, max: 100, step: 0.5 },
+                input: {
+                  endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                },
+              }}
+            />
+          </Grid>
+        )}
         {form.admission === 'paid' && (
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
@@ -481,6 +726,29 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                 },
               }}
             />
+          </Grid>
+        )}
+
+        {/* Merch sold at this gig. Only rendered for non-readers (canWrite ==
+            planning.write here) and only when there were sales. */}
+        {canWrite && merchSummary && merchSummary.unitsSold > 0 && (
+          <Grid size={12}>
+            <Card variant="outlined" sx={{ p: 2 }}>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                <LocalMallIcon color="action" />
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, flexGrow: 1 }}>
+                  Merchandise sold
+                </Typography>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
+                    {formatEur(merchSummary.netCents)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {merchSummary.unitsSold} item{merchSummary.unitsSold === 1 ? '' : 's'} · excl. VAT
+                  </Typography>
+                </Box>
+              </Stack>
+            </Card>
           </Grid>
         )}
 
@@ -565,7 +833,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         <Grid size={12}>
           <Divider sx={{ my: 1 }} />
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Tasks
+            Todos
           </Typography>
           <GigTasks key={String(gigId)} gigId={gigId} initialTasks={initialTasks} members={members} canWrite={canWrite} currentBandMemberId={currentBandMemberId} />
         </Grid>
@@ -593,79 +861,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           />
         </Grid>
 
-        {/* Event Banner */}
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Event banner
-          </Typography>
-          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-            {bannerPath ? (
-              <Box
-                component="img"
-                src={`/api/files/${bannerPath}`}
-                alt="Event banner"
-                sx={{
-                  width: 120,
-                  height: 120,
-                  objectFit: 'contain',
-                  borderRadius: 1,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  bgcolor: 'grey.100',
-                }}
-              />
-            ) : (
-              <Box
-                sx={{
-                  width: 120,
-                  height: 120,
-                  borderRadius: 1,
-                  border: '2px dashed',
-                  borderColor: 'divider',
-                  bgcolor: 'action.hover',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'text.disabled',
-                }}
-              >
-                <Typography variant="caption">No banner</Typography>
-              </Box>
-            )}
-            {canWrite && (
-              <Stack spacing={1}>
-                <input
-                  ref={bannerInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  style={{ display: 'none' }}
-                  onChange={handleBannerFileChange}
-                />
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={bannerBusy ? <CircularProgress size={14} color="inherit" /> : <AddPhotoAlternateIcon />}
-                  disabled={bannerBusy}
-                  onClick={() => bannerInputRef.current?.click()}
-                >
-                  {bannerPath ? 'Replace' : 'Upload banner'}
-                </Button>
-                {bannerPath && (
-                  <Button
-                    size="small"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    disabled={bannerBusy}
-                    onClick={handleBannerDelete}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </Stack>
-            )}
-          </Stack>
-        </Grid>
       </Grid>
 
       <ImageCropDialog

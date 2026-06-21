@@ -7,9 +7,25 @@ export const VALID_VOTES = ['yes', 'no']
 export const GIG_PATCH_FIELDS = [
   'event_date', 'event_description', 'venue_id', 'festival_id', 'event_link',
   'start_time', 'end_time', 'status', 'booking_fee_cents', 'admission',
-  'ticket_link', 'notes',
+  'ticket_link', 'notes', 'merchandise_cut', 'percentage_of_sales',
   'has_pa_system', 'has_drumkit', 'has_stage_lights',
 ]
+
+// Percentage fields stored as NUMERIC(5,2). Accepted from the client as a number
+// or a numeric string, or null to clear. Range 0–100 (the DB also CHECKs this).
+export const GIG_PERCENT_FIELDS = ['merchandise_cut', 'percentage_of_sales']
+
+// Returns the normalized number for a percent field, or { error } when invalid.
+// Guards before Number() because Number('') / Number(' ') / Number(false) /
+// Number([]) all coerce to 0 — those must be rejected, not silently stored as 0.
+function normalizePercent(key, raw) {
+  if (raw === null) return { value: null }
+  if (typeof raw !== 'number' && typeof raw !== 'string') return { error: `Invalid ${key}` }
+  if (typeof raw === 'string' && raw.trim() === '') return { error: `Invalid ${key}` }
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0 || n > 100) return { error: `Invalid ${key}` }
+  return { value: n }
+}
 
 export const GIG_TASK_PATCH_FIELDS = ['title', 'done', 'due_date', 'assigned_to']
 
@@ -125,6 +141,13 @@ export function buildGigUpdateFields(body) {
     if (key in body) {
       if (key === 'status' && !VALID_STATUSES.includes(body[key])) {
         return { error: 'Invalid status value' }
+      }
+      if (GIG_PERCENT_FIELDS.includes(key)) {
+        const pct = normalizePercent(key, body[key])
+        if (pct.error) return { error: pct.error }
+        fields.push(`${key} = $${idx++}`)
+        values.push(pct.value)
+        continue
       }
       fields.push(`${key} = $${idx++}`)
       values.push(body[key])

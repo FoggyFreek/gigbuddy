@@ -61,6 +61,22 @@ export async function gigExistsInTenant(executor, gigId, tenantId) {
   return rowCount > 0
 }
 
+// Recorded merch sales linked to a gig, grouped by VAT rate so the service can
+// derive net (Excl. VAT) per rate. Gross uses the exact line total when present
+// (Shopify imports), else quantity × unit price. Voided sales are excluded.
+export async function summarizeGigMerchSalesByVatRate(executor, tenantId, gigId) {
+  const { rows } = await executor.query(
+    `SELECT s.vat_rate,
+            SUM(s.quantity)::int AS qty,
+            SUM(COALESCE(s.gross_incl_cents, s.quantity * s.unit_price_incl_cents))::int AS gross_cents
+       FROM merch_sales s
+      WHERE s.tenant_id = $1 AND s.gig_id = $2 AND s.status = 'recorded'
+      GROUP BY s.vat_rate`,
+    [tenantId, gigId],
+  )
+  return rows
+}
+
 export async function loadParticipants(executor, gigIds, tenantId) {
   if (!gigIds.length) return new Map()
   const { rows } = await executor.query(
