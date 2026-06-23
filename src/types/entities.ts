@@ -230,6 +230,16 @@ export interface SongFile {
   uploaded_at?: string
 }
 
+/** An editable ChordPro lead-sheet attached to a song. */
+export interface SongChart {
+  id?: Id
+  name?: string
+  /** raw ChordPro source */
+  source?: string
+  created_at?: string
+  updated_at?: string
+}
+
 export interface Song {
   id?: Id
   title?: string
@@ -243,6 +253,7 @@ export interface Song {
   links?: SongLink[]
   documents?: SongFile[]
   recordings?: SongFile[]
+  chordpro_charts?: SongChart[]
 }
 
 export interface SetlistItem {

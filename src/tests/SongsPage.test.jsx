@@ -104,6 +104,12 @@ describe('SongsPage — split-view detail', () => {
     expect(listSongs).toHaveBeenCalledTimes(1) // no full reload
   })
 
+  it('uses the song title as the detail heading', async () => {
+    wrapWithRoutes({ initialEntries: ['/songs/1'] })
+
+    expect(await screen.findByRole('heading', { name: 'Creep' })).toBeInTheDocument()
+  })
+
   it('adds a free-solo tag and calls setSongTags', async () => {
     setSongTags.mockResolvedValue([{ id: 5, name: 'Jazz' }])
     const user = userEvent.setup()

@@ -4,6 +4,7 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/songValidators.js'
+import { decodeUploadedText } from '../utils/decodeText.js'
 import {
   listSongs,
   searchSongs,
@@ -20,6 +21,9 @@ import {
   deleteSongDocument,
   createSongRecording,
   deleteSongRecording,
+  createSongChart,
+  patchSongChart,
+  deleteSongChart,
   importSongs,
 } from '../services/songService.js'
 
@@ -35,6 +39,14 @@ const RECORDING_ALLOWED_TYPES = new Set(['audio/mpeg'])
 const recordingUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
+})
+
+// ChordPro charts are plain text. Browsers send inconsistent mime types for
+// .cho/.pro files (often application/octet-stream), so the extension is the gate.
+const CHART_ALLOWED_EXTENSIONS = /\.(cho|pro|chopro|chordpro|crd|chord)$/i
+const chartUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 512 * 1024 },
 })
 
 function requireParam(req, res, name, label = name) {
@@ -165,6 +177,48 @@ router.delete('/:id/recordings/:recId', requirePermission(PERMISSIONS.PLANNING_W
   const id = requireParam(req, res, 'id'); if (id === null) return
   const recId = requireParam(req, res, 'recId'); if (recId === null) return
   const result = await deleteSongRecording(pool, req.tenantId, id, recId)
+  if (result.error) return sendError(res, result.error)
+  res.status(204).end()
+})
+
+// ---------- chordpro charts ----------
+
+router.post('/:id/charts', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await createSongChart(pool, req.tenantId, id, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.chart)
+})
+
+// Upload a .cho/.pro file: its text becomes the chart source, the filename
+// (without extension) its default name.
+router.post('/:id/charts/upload', requirePermission(PERMISSIONS.PLANNING_WRITE), chartUpload.single('file'), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (!CHART_ALLOWED_EXTENSIONS.test(req.file.originalname)) {
+    return res.status(400).json({ error: 'File type not allowed' })
+  }
+  const name = req.file.originalname.replace(/\.[^.]+$/, '')
+  const result = await createSongChart(pool, req.tenantId, id, {
+    name,
+    source: decodeUploadedText(req.file.buffer),
+  })
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.chart)
+})
+
+router.patch('/:id/charts/:chartId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const chartId = requireParam(req, res, 'chartId'); if (chartId === null) return
+  const result = await patchSongChart(pool, req.tenantId, id, chartId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.chart)
+})
+
+router.delete('/:id/charts/:chartId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const chartId = requireParam(req, res, 'chartId'); if (chartId === null) return
+  const result = await deleteSongChart(pool, req.tenantId, id, chartId)
   if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })

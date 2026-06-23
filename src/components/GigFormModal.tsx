@@ -6,11 +6,8 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import FormGroup from '@mui/material/FormGroup'
 import Grid from '@mui/material/Grid'
 import MenuItem from '@mui/material/MenuItem'
-import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
@@ -222,42 +219,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
                   <MenuItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
                 ))}
               </TextField>
-            </Grid>
-
-            <Grid size={12}>
-              <Divider sx={{ my: 1 }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                Available equipment on-site
-              </Typography>
-              <FormGroup row>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={form.has_pa_system}
-                      onChange={(e) => handleChange('has_pa_system', e.target.checked)}
-                    />
-                  }
-                  label="PA system"
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={form.has_drumkit}
-                      onChange={(e) => handleChange('has_drumkit', e.target.checked)}
-                    />
-                  }
-                  label="Drumkit"
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={form.has_stage_lights}
-                      onChange={(e) => handleChange('has_stage_lights', e.target.checked)}
-                    />
-                  }
-                  label="Stage light"
-                />
-              </FormGroup>
             </Grid>
 
             <Grid size={12}>

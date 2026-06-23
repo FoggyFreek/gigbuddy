@@ -57,11 +57,14 @@ describe('RehearsalsTable', () => {
     expect(screen.getByText(/No rehearsals yet/i)).toBeInTheDocument()
   })
 
-  it('renders rehearsal rows and shows status as a colour dot without a text label', () => {
+  it('renders rehearsal rows and shows status as an icon without a text label', () => {
     wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={() => {}} />)
     expect(screen.getByText('Studio A')).toBeInTheDocument()
     expect(screen.queryByText('planned')).not.toBeInTheDocument()
     expect(screen.queryByText('option')).not.toBeInTheDocument()
+    // Status is conveyed by the gig-style icon: planned → EventAvailable, option → LiveHelp.
+    expect(screen.getByTestId('EventAvailableIcon')).toBeInTheDocument()
+    expect(screen.getByTestId('LiveHelpIcon')).toBeInTheDocument()
   })
 
   it('renders a visual progress bar for each rehearsal with participants', () => {
@@ -94,10 +97,12 @@ describe('RehearsalsTable', () => {
       expect(screen.queryByText('Participants')).not.toBeInTheDocument()
     })
 
-    it('renders a card per rehearsal with status chip', () => {
+    it('renders a card per rehearsal with a status icon', () => {
       wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={() => {}} />)
-      expect(screen.getByText('planned')).toBeInTheDocument()
-      expect(screen.getByText('option')).toBeInTheDocument()
+      expect(screen.queryByText('planned')).not.toBeInTheDocument()
+      expect(screen.queryByText('option')).not.toBeInTheDocument()
+      expect(screen.getByTestId('EventAvailableIcon')).toBeInTheDocument()
+      expect(screen.getByTestId('LiveHelpIcon')).toBeInTheDocument()
     })
 
     it('shows empty state when no rehearsals', () => {

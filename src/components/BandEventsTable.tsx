@@ -128,6 +128,7 @@ function DesktopRow({ event, active, onClick, onShare }: BandEventRowProps) {
       sx={{
         cursor: 'pointer',
         boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
+        '& td': { py: 1.25 },
       }}
     >
       <TableCell>{formatDateRange(event.start_date, event.end_date)}</TableCell>

@@ -22,6 +22,7 @@ vi.mock('../api/bandMembers.ts', () => ({
 
 vi.mock('../api/profile.ts', () => ({
   getProfile: vi.fn().mockResolvedValue({ banner_path: null }),
+  getBannerPath: vi.fn().mockResolvedValue(null),
 }))
 
 function gigFixture(id) {

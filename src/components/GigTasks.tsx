@@ -322,7 +322,9 @@ export default function GigTasks({
                   sx={{ width: 150 }}
                 >
                   <MenuItem value="">
-                    <em>Unassigned</em>
+                    <Box component="span" sx={{ color: 'text.secondary' }}>
+                      Unassigned
+                    </Box>
                   </MenuItem>
                   {members.map((m) => (
                     <MenuItem key={String(m.id)} value={m.id}>
@@ -363,6 +365,7 @@ export default function GigTasks({
                 {/* Align with task checkboxes */}
                 <Box sx={{ width: 30, flexShrink: 0 }} />
                 <TextField
+                  label="Task"
                   placeholder="Task name…"
                   size="small"
                   autoFocus
@@ -389,7 +392,7 @@ export default function GigTasks({
                 </IconButton>
               </Stack>
               {/* Optional due date + assignee for new task */}
-              <Stack direction="row" spacing={0.5} sx={{ pl: 5.25, mt: 0.75, flexWrap: 'wrap' }}>
+              <Stack direction="row" spacing={0.5} sx={{ pl: 4.75, mt: 0.75, flexWrap: 'wrap' }}>
                 <TextField
                   type="date"
                   size="small"

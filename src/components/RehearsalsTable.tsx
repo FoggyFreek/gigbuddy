@@ -1,7 +1,6 @@
 import type { Rehearsal, Participant, Id } from '../types/entities.ts'
 import { type ReactNode, useState } from 'react'
 import Box from '@mui/material/Box'
-import Chip from '@mui/material/Chip'
 import Collapse from '@mui/material/Collapse'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
@@ -18,14 +17,7 @@ import Tooltip from '@mui/material/Tooltip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import VoteToggle from './VoteToggle.tsx'
-import StatusDot from './StatusDot.tsx'
-
-const STATUS_COLORS: Record<string, string> = {
-  option: 'default',
-  planned: 'primary',
-}
-
-const STATUS_LABELS: Record<string, string> = { option: 'Option', planned: 'Planned' }
+import RehearsalStatusIcon from './RehearsalStatusIcon.tsx'
 
 const COLUMN_COUNT = 6
 
@@ -104,45 +96,47 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVo
         '&:hover': { bgcolor: 'action.hover' },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-        <Typography variant="body2">
-          {formatDate(rehearsal.proposed_date)}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          ({formatTime((rehearsal as Record<string, unknown>).start_time as string)} – {formatTime((rehearsal as Record<string, unknown>).end_time as string)})
-        </Typography>
-        <IconButton
-          size="small"
-          aria-label="share rehearsal"
-          onClick={(e) => { e.stopPropagation(); onShare?.(rehearsal) }}
-          sx={{ ml: 'auto', mt: -0.5 }}
-        >
-          <ShareIcon fontSize="small" />
-        </IconButton>
-      </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-        {rehearsal.location || '—'}
-      </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-        <ParticipantProgress participants={rehearsal.participants} />
-        <Chip
-          label={rehearsal.status}
-          color={(STATUS_COLORS[rehearsal.status ?? ''] as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning') || 'default'}
-          size="small"
-        />
-      </Box>
-      {myParticipant && rehearsal.status !== 'planned' && (
-        <Box
-          sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75 }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Typography variant="caption" color="text.secondary">My vote:</Typography>
-          <VoteToggle
-            vote={myParticipant.vote}
-            onChange={(v) => onVote?.(rehearsal.id, bandMemberId ?? undefined, v)}
-          />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <RehearsalStatusIcon status={rehearsal.status} />
         </Box>
-      )}
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2">
+              {formatDate(rehearsal.proposed_date)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              ({formatTime((rehearsal as Record<string, unknown>).start_time as string)} – {formatTime((rehearsal as Record<string, unknown>).end_time as string)})
+            </Typography>
+            <IconButton
+              size="small"
+              aria-label="share rehearsal"
+              onClick={(e) => { e.stopPropagation(); onShare?.(rehearsal) }}
+              sx={{ ml: 'auto', mt: -0.5 }}
+            >
+              <ShareIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+            {rehearsal.location || '—'}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+            <ParticipantProgress participants={rehearsal.participants} />
+          </Box>
+          {myParticipant && rehearsal.status !== 'planned' && (
+            <Box
+              sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Typography variant="caption" color="text.secondary">My vote:</Typography>
+              <VoteToggle
+                vote={myParticipant.vote}
+                onChange={(v) => onVote?.(rehearsal.id, bandMemberId ?? undefined, v)}
+              />
+            </Box>
+          )}
+        </Box>
+      </Box>
     </Box>
   )
 }
@@ -162,10 +156,11 @@ function DesktopRow({ rehearsal, active, onClick, onShare }: DesktopRowProps) {
       sx={{
         cursor: 'pointer',
         boxShadow: active ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
+        '& td': { py: 1.25 },
       }}
     >
-      <TableCell padding="none" align="center" sx={{ pl: 1, width: 24 }}>
-        <StatusDot color={STATUS_COLORS[rehearsal.status ?? ''] || 'default'} label={STATUS_LABELS[rehearsal.status ?? ''] || rehearsal.status}/>
+      <TableCell padding="none" align="center" sx={{ pl: 1, width: 40 }}>
+        <RehearsalStatusIcon status={rehearsal.status} />
       </TableCell>
       <TableCell>{formatDate(rehearsal.proposed_date)}</TableCell>
       <TableCell>{formatTime((rehearsal as Record<string, unknown>).start_time as string)} – {formatTime((rehearsal as Record<string, unknown>).end_time as string)}</TableCell>
@@ -192,7 +187,7 @@ function DesktopHead() {
   return (
     <TableHead>
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-        <TableCell padding="none" sx={{ width: 24 }} />
+        <TableCell padding="none" sx={{ width: 40 }} />
         <TableCell>Date</TableCell>
         <TableCell>Time</TableCell>
         <TableCell>Location</TableCell>

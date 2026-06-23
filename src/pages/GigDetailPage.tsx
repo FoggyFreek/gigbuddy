@@ -13,6 +13,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import GigDetailContent from '../components/GigDetailContent.tsx'
 import GigShareMenu from '../components/GigShareMenu.tsx'
+import PastEventAlert from '../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { deleteGig } from '../api/gigs.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
@@ -65,6 +66,8 @@ export default function GigDetailPage() {
           </IconButton>
         )}
       </Box>
+
+      {gig?.id === gigId && <PastEventAlert date={gig.event_date} />}
 
       <GigDetailContent
         ref={contentRef}

@@ -36,6 +36,7 @@ import GigTasks from './GigTasks.tsx'
 import GigAvailabilityPanel from './GigAvailabilityPanel.tsx'
 import GigParticipantsSection from './GigParticipantsSection.tsx'
 import GigContactsSection from './GigContactsSection.tsx'
+import GigStatusIcon from './GigStatusIcon.tsx'
 import ImageCropDialog from './ImageCropDialog.tsx'
 import _VenuePickerRaw from './VenuePicker.tsx'
 interface VenuePickerProps {
@@ -375,6 +376,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   return (
     <>
       {/* ── Header: band banner background + event banner centered ──────── */}
+      <Box sx={{ position: 'relative' }}>
       <Box
         sx={(theme) => ({
           position: 'relative',
@@ -533,6 +535,12 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             )}
           </Stack>
         )}
+      </Box>
+
+      {/* Current status icon, just below the banner on the left. */}
+      <Box sx={{ position: 'absolute', left: 16, bottom: 0, transform: 'translateY(50%)', zIndex: 3 }}>
+        <GigStatusIcon status={form.status} size={36} />
+      </Box>
       </Box>
 
       {/* ── Floating tab pill: rounded box overlapping the banner by ~50% of

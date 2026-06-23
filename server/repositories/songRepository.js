@@ -280,6 +280,52 @@ export async function deleteSongRecording(executor, recId, songId, tenantId) {
   return rows[0]?.object_key ?? null
 }
 
+// ---------- chordpro charts ----------
+
+export async function loadSongCharts(executor, songId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id, name, source, created_at, updated_at
+       FROM song_chordpro_charts WHERE song_id = $1 AND tenant_id = $2
+      ORDER BY created_at ASC, id ASC`,
+    [songId, tenantId],
+  )
+  return rows
+}
+
+// Inserts a chart only when the parent song belongs to the tenant (the SELECT
+// guard). Returns the new chart row, or null when the song doesn't exist.
+export async function insertSongChart(executor, songId, tenantId, name, source) {
+  const { rows } = await executor.query(
+    `INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source)
+     SELECT s.id, s.tenant_id, $3, $4
+     FROM songs s WHERE s.id = $1 AND s.tenant_id = $2
+     RETURNING id, name, source, created_at, updated_at`,
+    [songId, tenantId, name, source],
+  )
+  return rows[0] || null
+}
+
+// Applies prebuilt SET fragments to a chart. Returns the updated row or null.
+export async function updateSongChartFields(executor, tenantId, songId, chartId, fields, values) {
+  const assignments = [...fields, 'updated_at = NOW()']
+  const whereIdx = values.length + 1
+  const { rows } = await executor.query(
+    `UPDATE song_chordpro_charts SET ${assignments.join(', ')}
+     WHERE id = $${whereIdx} AND song_id = $${whereIdx + 1} AND tenant_id = $${whereIdx + 2}
+     RETURNING id, name, source, created_at, updated_at`,
+    [...values, chartId, songId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function deleteSongChart(executor, chartId, songId, tenantId) {
+  const { rowCount } = await executor.query(
+    'DELETE FROM song_chordpro_charts WHERE id = $1 AND song_id = $2 AND tenant_id = $3',
+    [chartId, songId, tenantId],
+  )
+  return rowCount > 0
+}
+
 // ---------- import ----------
 
 // Lowercased (title, artist) keys of existing songs, used to dedupe an import.

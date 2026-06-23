@@ -183,6 +183,98 @@ describe('POST /api/songs/:id/recordings', () => {
   })
 })
 
+describe('ChordPro charts', () => {
+  const SAMPLE = '{title: Twinkle}\n{start_of_chorus}\n[C]Twinkle [F]little [C]star\n{end_of_chorus}\n'
+
+  it('creates a chart from a JSON body and returns it in getSong', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charts')
+    const res = await asUserA(
+      request(app).post(`/api/songs/${song.id}/charts`).send({ name: 'Guitar', source: SAMPLE }),
+    ).expect(201)
+    expect(res.body).toMatchObject({ name: 'Guitar', source: SAMPLE })
+    expect(res.body.id).toBeGreaterThan(0)
+
+    const got = await asUserA(request(app).get(`/api/songs/${song.id}`)).expect(200)
+    expect(got.body.chordpro_charts).toHaveLength(1)
+    expect(got.body.chordpro_charts[0].name).toBe('Guitar')
+  })
+
+  it('uploads a .cho file, deriving the name from the filename and folding CRLF', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charts')
+    const res = await asUserA(
+      request(app)
+        .post(`/api/songs/${song.id}/charts/upload`)
+        .attach('file', Buffer.from('[C]hi\r\n[G]there\r\n'), { filename: 'Piano (Bb).cho', contentType: 'text/plain' }),
+    ).expect(201)
+    expect(res.body.name).toBe('Piano (Bb)')
+    expect(res.body.source).toBe('[C]hi\n[G]there\n')
+  })
+
+  it('decodes a Latin-1 (ISO-8859-1) upload without corrupting accents', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charts')
+    const res = await asUserA(
+      request(app)
+        .post(`/api/songs/${song.id}/charts/upload`)
+        .attach('file', Buffer.from('[C]café', 'latin1'), { filename: 'x.cho', contentType: 'application/octet-stream' }),
+    ).expect(201)
+    expect(res.body.source).toContain('café')
+  })
+
+  it('rejects an upload with a disallowed extension (400)', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charts')
+    await asUserA(
+      request(app)
+        .post(`/api/songs/${song.id}/charts/upload`)
+        .attach('file', Buffer.from('[C]hi'), { filename: 'evil.exe', contentType: 'text/plain' }),
+    ).expect(400)
+  })
+
+  it('patches a chart name and source', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charts')
+    const created = await asUserA(
+      request(app).post(`/api/songs/${song.id}/charts`).send({ name: 'A', source: 'x' }),
+    ).expect(201)
+    const res = await asUserA(
+      request(app).patch(`/api/songs/${song.id}/charts/${created.body.id}`).send({ name: 'B', source: '[C]y' }),
+    ).expect(200)
+    expect(res.body).toMatchObject({ name: 'B', source: '[C]y' })
+  })
+
+  it('deletes a chart', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charts')
+    const created = await asUserA(
+      request(app).post(`/api/songs/${song.id}/charts`).send({ name: 'A', source: 'x' }),
+    ).expect(201)
+    await asUserA(request(app).delete(`/api/songs/${song.id}/charts/${created.body.id}`)).expect(204)
+    const got = await asUserA(request(app).get(`/api/songs/${song.id}`)).expect(200)
+    expect(got.body.chordpro_charts).toEqual([])
+  })
+
+  it('tenant isolation — A cannot create a chart on B song (404)', async () => {
+    const songB = await createSong(seed.tenantB.id, 'B song')
+    await asUserA(
+      request(app).post(`/api/songs/${songB.id}/charts`).send({ name: 'x', source: 'y' }),
+    ).expect(404)
+  })
+
+  it('tenant isolation — A cannot patch or delete B chart (404)', async () => {
+    const songB = await createSong(seed.tenantB.id, 'B song')
+    const { rows } = await pool.query(
+      `INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source)
+       VALUES ($1, $2, 'B chart', 'secret') RETURNING id`,
+      [songB.id, seed.tenantB.id],
+    )
+    const chartId = rows[0].id
+    await asUserA(
+      request(app).patch(`/api/songs/${songB.id}/charts/${chartId}`).send({ source: 'hacked' }),
+    ).expect(404)
+    await asUserA(request(app).delete(`/api/songs/${songB.id}/charts/${chartId}`)).expect(404)
+    // The row is untouched.
+    const check = await pool.query('SELECT source FROM song_chordpro_charts WHERE id = $1', [chartId])
+    expect(check.rows[0].source).toBe('secret')
+  })
+})
+
 describe('POST /api/songs/import', () => {
   it('imports new rows, dedupes by title+artist, and creates tags', async () => {
     await createSong(seed.tenantA.id, 'Existing', { artist: 'Band' })

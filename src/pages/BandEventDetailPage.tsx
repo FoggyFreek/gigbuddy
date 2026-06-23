@@ -19,6 +19,7 @@ import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import BandEventFields from '../components/BandEventFields.tsx'
+import PastEventAlert from '../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { usePermissions } from '../hooks/usePermissions.ts'
 
@@ -124,6 +125,8 @@ export default function BandEventDetailPage() {
           </>
         )}
       </Box>
+
+      {!loading && <PastEventAlert date={form.end_date || form.start_date} />}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

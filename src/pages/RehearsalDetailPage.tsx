@@ -21,6 +21,7 @@ import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts
 import { addParticipant, addSong, deleteRehearsal, getRehearsal, removeParticipant, removeSong, setVote, updateRehearsal } from '../api/rehearsals.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import RehearsalFields from '../components/RehearsalFields.tsx'
+import PastEventAlert from '../components/PastEventAlert.tsx'
 import RehearsalParticipantsSection from '../components/RehearsalParticipantsSection.tsx'
 import RehearsalSongsSection from '../components/RehearsalSongsSection.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
@@ -180,6 +181,8 @@ export default function RehearsalDetailPage() {
           </>
         )}
       </Box>
+
+      {!loading && <PastEventAlert date={rehearsal?.proposed_date} />}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

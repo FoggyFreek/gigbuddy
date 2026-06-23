@@ -1,8 +1,8 @@
 ﻿import React from 'react'
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTheme } from '@mui/material/styles'
+import { alpha, useTheme } from '@mui/material/styles'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
@@ -22,6 +22,9 @@ import DashboardCard from '../components/dashboard/DashboardCard.tsx'
 import GigMapTile from '../components/dashboard/GigMapTile.tsx'
 import { SOCIALS } from '../components/profile/profileForm.ts'
 import { useAuth } from '../contexts/authContext.ts'
+import { useSetWideContent } from '../contexts/contentWidthContext.ts'
+import { useThemeMode } from '../contexts/themeModeContext.ts'
+import type { ThemeMode } from '../contexts/themeModeContext.ts'
 import { listGigs } from '../api/gigs.ts'
 import { getNextRehearsal } from '../api/rehearsals.ts'
 import { listAllTasks } from '../api/tasks.ts'
@@ -33,6 +36,28 @@ import type { Gig, Rehearsal, BandEvent } from '../types/entities.ts'
 
 function logoSrc(logoPath: string | undefined | null) {
   return logoPath ? `/api/files/${logoPath}` : '/share/logo.png'
+}
+
+// Background images live in /public/backgrounds as bg_NN_<mode>.jpg, with a
+// separate set per theme mode. Bump the matching count when you add files.
+const BACKGROUND_COUNTS: Record<ThemeMode, number> = { light: 5, dark: 5 }
+
+// Matches AppShell's CONTENT_MAX_WIDTH: the background bleeds edge-to-edge but
+// the cards stay capped/centered at this width like every other page.
+const CONTENT_MAX_WIDTH = 1400
+
+// Pick a random background image (for the active theme mode) plus a random crop
+// position. `cover` scaling already adapts to the viewport (compact vs.
+// desktop); randomizing backgroundPosition picks a different slice when the
+// image overflows.
+function pickRandomBackground(mode: ThemeMode) {
+  const n = Math.floor(Math.random() * BACKGROUND_COUNTS[mode]) + 1
+  const x = Math.floor(Math.random() * 101)
+  const y = Math.floor(Math.random() * 101)
+  return {
+    image: `url(/backgrounds/bg_${String(n).padStart(2, '0')}_${mode}.jpg)`,
+    position: `${x}% ${y}%`,
+  }
 }
 
 const GIG_STATUS_COLOR: Record<string, 'success' | 'info' | 'default'> = {
@@ -183,6 +208,35 @@ export default function DashboardPage() {
   const [sections, setSections] = useState<Sections | null>(null)
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
+  // Chosen once per mount so it stays stable across re-renders, then re-picked
+  // (from the matching light/dark set) only when the theme mode actually flips.
+  const { mode } = useThemeMode()
+  const [background, setBackground] = useState(() => pickRandomBackground(mode))
+  const prevMode = useRef<ThemeMode>(mode)
+  useEffect(() => {
+    if (prevMode.current !== mode) {
+      prevMode.current = mode
+      setBackground(pickRandomBackground(mode))
+    }
+  }, [mode])
+  const setWideContent = useSetWideContent()
+
+  // Let the dashboard use the full viewport width, then bleed past the <main>
+  // padding (p:3 in AppShell) with negative margins so the background image
+  // stretches edge-to-edge instead of being boxed inside the content column.
+  useEffect(() => {
+    setWideContent(true)
+    return () => setWideContent(false)
+  }, [setWideContent])
+
+  const backgroundSx = {
+    backgroundImage: background.image,
+    backgroundSize: 'cover',
+    backgroundPosition: background.position,
+    backgroundRepeat: 'no-repeat',
+    m: -3,
+    minHeight: 'calc(100vh - 64px)',
+  } as const
 
   useEffect(() => {
     let cancelled = false
@@ -211,7 +265,7 @@ export default function DashboardPage() {
 
   if (loading || !sections) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+      <Box sx={{ ...backgroundSx, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <CircularProgress />
       </Box>
     )
@@ -221,7 +275,21 @@ export default function DashboardPage() {
   const activeSocials = SOCIALS.filter(({ field, prefix }) => prefix && profile?.[field])
 
   return (
-    <Box>
+    <Box sx={{ ...backgroundSx, p: 3, position: 'relative' }}>
+      {/* Theme-aware fade: the background image dissolves into the page colour
+          across the top 100px (20% transparent → fully transparent). */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 500,
+          pointerEvents: 'none',
+          background: `linear-gradient(to bottom, ${alpha(theme.palette.background.default, 1)}, ${alpha(theme.palette.background.default, 0)})`,
+        }}
+      />
+      <Box sx={{ maxWidth: CONTENT_MAX_WIDTH, mx: 'auto', position: 'relative' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         {profileLoading ? (
           <Skeleton variant="rectangular" width={80} height={40} sx={{ borderRadius: 1 }} />
@@ -519,6 +587,7 @@ export default function DashboardPage() {
         </Grid>
 
       </Grid>
+      </Box>
     </Box>
   )
 }

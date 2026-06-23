@@ -113,13 +113,14 @@ describe('GigsTable', () => {
       expect(screen.queryByText('Open tasks')).not.toBeInTheDocument()
     })
 
-    it('renders each gig as a card with description and status chip', () => {
+    it('renders each gig as a card with description and a status icon', () => {
       wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
       // Meta line combines description · venue · city in one span — use a regex.
       expect(screen.getByText(/Jazz Night/)).toBeInTheDocument()
       expect(screen.getByText(/Summer Festival/)).toBeInTheDocument()
-      expect(screen.getByText('confirmed')).toBeInTheDocument()
-      expect(screen.getByText('option')).toBeInTheDocument()
+      // Status is rendered as an icon (no text label): confirmed → EventAvailable, option → LiveHelp.
+      expect(screen.getByTestId('EventAvailableIcon')).toBeInTheDocument()
+      expect(screen.getByTestId('LiveHelpIcon')).toBeInTheDocument()
     })
 
     it('only shows the task-count badge when there are open tasks', () => {

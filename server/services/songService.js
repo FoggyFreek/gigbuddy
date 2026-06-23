@@ -23,6 +23,10 @@ import {
   buildSongUpdateFields,
   buildSongLinkUpdateFields,
   normalizeTagNames,
+  normalizeChartName,
+  normalizeChartSource,
+  buildSongChartUpdateFields,
+  CHART_SOURCE_MAX,
   normalizeImportRow,
 } from '../validators/songValidators.js'
 import {
@@ -51,6 +55,10 @@ import {
   loadSongRecordings,
   insertSongRecording,
   deleteSongRecording as deleteSongRecordingRow,
+  loadSongCharts,
+  insertSongChart,
+  updateSongChartFields,
+  deleteSongChart as deleteSongChartRow,
   loadExistingSongKeys,
   insertImportSong,
 } from '../repositories/songRepository.js'
@@ -84,13 +92,14 @@ export async function searchTags(db, tenantId, q) {
 export async function getSong(db, tenantId, songId) {
   const song = await fetchSong(db, songId, tenantId)
   if (!song) return NOT_FOUND
-  const [tags, links, documents, recordings] = await Promise.all([
+  const [tags, links, documents, recordings, chordpro_charts] = await Promise.all([
     loadSongTags(db, songId, tenantId),
     loadSongLinks(db, songId, tenantId),
     loadSongDocuments(db, songId, tenantId),
     loadSongRecordings(db, songId, tenantId),
+    loadSongCharts(db, songId, tenantId),
   ])
-  return { song: { ...song, tags, links, documents, recordings } }
+  return { song: { ...song, tags, links, documents, recordings, chordpro_charts } }
 }
 
 // ---------- writes ----------
@@ -249,6 +258,37 @@ export async function deleteSongRecording(db, tenantId, songId, recId) {
   if (!objectKey) return NOT_FOUND
   safeRemove(objectKey, 'Failed to delete song recording object:')
   return {}
+}
+
+// ---------- chordpro charts ----------
+
+// Create a chart from { name, source }. Both routes (JSON body and file upload)
+// funnel through here; the route derives a default name from the filename when
+// the upload omits one. insertSongChart's SELECT guard returns null (→ 404) when
+// the song isn't in the tenant, so no separate existence check is needed.
+export async function createSongChart(db, tenantId, songId, body) {
+  const name = normalizeChartName(body.name) || 'Chart'
+  const source = normalizeChartSource(body.source)
+  if (source.length > CHART_SOURCE_MAX) return badRequest('source is too large')
+
+  const chart = await insertSongChart(db, songId, tenantId, name, source)
+  if (!chart) return NOT_FOUND
+  return { chart }
+}
+
+export async function patchSongChart(db, tenantId, songId, chartId, body) {
+  const built = buildSongChartUpdateFields(body)
+  if (built.error) return badRequest(built.error)
+  if (!built.fields.length) return badRequest('No valid fields to update')
+
+  const chart = await updateSongChartFields(db, tenantId, songId, chartId, built.fields, built.values)
+  if (!chart) return NOT_FOUND
+  return { chart }
+}
+
+export async function deleteSongChart(db, tenantId, songId, chartId) {
+  const removed = await deleteSongChartRow(db, chartId, songId, tenantId)
+  return removed ? {} : NOT_FOUND
 }
 
 // ---------- import ----------

@@ -35,6 +35,7 @@ import RichTextEditor from '../components/RichTextEditor.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import SongLinks from '../components/SongLinks.tsx'
 import SongFileList from '../components/SongFileList.tsx'
+import ChordProChartsSection from '../components/ChordProChartsSection.tsx'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Song, SongTag, Id } from '../types/entities.ts'
 
@@ -164,6 +165,8 @@ export default function SongDetailPage() {
     closeView()
   }
 
+  const heading = form.title.trim() || song?.title || 'Song'
+
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -172,7 +175,7 @@ export default function SongDetailPage() {
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Song</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{heading}</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
@@ -267,6 +270,14 @@ export default function SongDetailPage() {
           <Divider sx={{ my: 3 }} />
           <SectionHeading>Links</SectionHeading>
           <SongLinks songId={songId} initialLinks={song.links || []} canWrite={canWritePlanning} />
+
+          <Divider sx={{ my: 3 }} />
+          <SectionHeading>Chords chart (ChordPro)</SectionHeading>
+          <ChordProChartsSection
+            songId={songId}
+            initialCharts={song.chordpro_charts || []}
+            canWrite={canWritePlanning}
+          />
 
           <Divider sx={{ my: 3 }} />
           <SectionHeading>Documents</SectionHeading>

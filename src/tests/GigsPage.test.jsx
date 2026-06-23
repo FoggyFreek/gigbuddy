@@ -34,6 +34,7 @@ vi.mock('../api/bandMembers.ts', () => ({
 }))
 vi.mock('../api/profile.ts', () => ({
   getProfile: vi.fn().mockResolvedValue({ banner_path: null }),
+  getBannerPath: vi.fn().mockResolvedValue(null),
 }))
 
 import GigsPage from '../pages/GigsPage.tsx'

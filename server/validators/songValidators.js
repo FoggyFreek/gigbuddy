@@ -72,6 +72,40 @@ export function normalizeTagNames(tags) {
   return [...new Set(tags.map((t) => String(t ?? '').trim()).filter(Boolean))]
 }
 
+// ChordPro source can legitimately be large (lyrics + chords + directives); cap
+// it to keep a single row sane. 256 KiB of UTF-8 text is far beyond any chart.
+export const CHART_SOURCE_MAX = 256 * 1024
+const CHART_NAME_MAX = 120
+
+// Coerce a chart name to a trimmed, length-capped string, or '' when blank.
+export function normalizeChartName(val) {
+  return String(val ?? '').trim().slice(0, CHART_NAME_MAX)
+}
+
+// Normalize ChordPro source: a string, with CRLF folded to LF so stored source
+// is consistent regardless of the uploading platform.
+export function normalizeChartSource(val) {
+  return String(val ?? '').replace(/\r\n?/g, '\n')
+}
+
+// Builds SET fragments for a chart PATCH. Returns { error } on invalid input.
+export function buildSongChartUpdateFields(body) {
+  const fields = []
+  const values = []
+  let idx = 1
+  if ('name' in body) {
+    const name = normalizeChartName(body.name)
+    if (!name) return { error: 'name cannot be empty' }
+    fields.push(`name = $${idx++}`); values.push(name)
+  }
+  if ('source' in body) {
+    const source = normalizeChartSource(body.source)
+    if (source.length > CHART_SOURCE_MAX) return { error: 'source is too large' }
+    fields.push(`source = $${idx++}`); values.push(source)
+  }
+  return { fields, values }
+}
+
 export function normalizeImportRow(row) {
   return {
     title: String(row.title ?? '').trim(),

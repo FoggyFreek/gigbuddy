@@ -1,5 +1,5 @@
 import { request, requestForm } from './_client.ts'
-import type { Song, SongTag, SongLink, SongFile, Id } from '../types/entities.ts'
+import type { Song, SongTag, SongLink, SongFile, SongChart, Id } from '../types/entities.ts'
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/songs${path}`, options)
@@ -44,3 +44,15 @@ export const uploadSongRecording = (id: Id, file: File) => {
 }
 export const deleteSongRecording = (id: Id, recId: Id) =>
   api<void>(`/${id}/recordings/${recId}`, { method: 'DELETE' })
+
+export const createSongChart = (id: Id, body: Partial<SongChart>) =>
+  api<SongChart>(`/${id}/charts`, { method: 'POST', body: JSON.stringify(body) })
+export const uploadSongChart = (id: Id, file: File) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return requestForm<SongChart>(`/api/songs/${id}/charts/upload`, fd)
+}
+export const updateSongChart = (id: Id, chartId: Id, body: Partial<SongChart>) =>
+  api<SongChart>(`/${id}/charts/${chartId}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const deleteSongChart = (id: Id, chartId: Id) =>
+  api<void>(`/${id}/charts/${chartId}`, { method: 'DELETE' })
