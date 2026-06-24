@@ -27,7 +27,7 @@ export default function ChordAnalyzerPanel({ fretCount = 15 }: ChordAnalyzerPane
 
   return (
     <Stack spacing={1.5}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+      <Box  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
         <Typography variant="subtitle2" color="text.secondary">
           Place fingers on the neck to identify the chord
         </Typography>

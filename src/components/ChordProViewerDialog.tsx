@@ -246,7 +246,7 @@ export default function ChordProViewerDialog({
       </AppBar>
 
       <Collapse in={showAnalyzer} unmountOnExit sx={{ flexShrink: 0 }}>
-        <Paper variant="outlined" square sx={{ p: { xs: 1.5, md: 2 }, borderWidth: '0 0 1px 0' }}>
+        <Paper variant="outlined" square sx={{ p: { xs: 1.5, md: 2 }, borderWidth: '0 0 1px 0'  }}>
           <ChordAnalyzerPanel fretCount={stacked ? 7 : 15} />
         </Paper>
       </Collapse>
