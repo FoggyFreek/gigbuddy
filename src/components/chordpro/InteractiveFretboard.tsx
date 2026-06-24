@@ -1,7 +1,7 @@
 ﻿import Box from '@mui/material/Box'
 import { useTheme, alpha } from '@mui/material/styles'
 import type { Theme } from '@mui/material/styles'
-import { formatNote, STANDARD_TUNING, type AbsoluteFret } from '../utils/chordIdentify.ts'
+import { formatNote, STANDARD_TUNING, type AbsoluteFret } from '../../utils/chordIdentify.ts'
 
 // A controlled, accessible guitar neck: each string is a row, each fret cell and
 // the nut zone is a real <button> (so focus, Tab order and Enter/Space come for

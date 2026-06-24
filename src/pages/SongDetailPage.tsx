@@ -35,7 +35,7 @@ import RichTextEditor from '../components/RichTextEditor.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import SongLinks from '../components/SongLinks.tsx'
 import SongFileList from '../components/SongFileList.tsx'
-import ChordProChartsSection from '../components/ChordProChartsSection.tsx'
+import ChordProChartsSection from '../components/chordpro/ChordProChartsSection.tsx'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Song, SongTag, Id } from '../types/entities.ts'
 

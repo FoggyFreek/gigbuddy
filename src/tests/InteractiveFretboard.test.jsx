@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import InteractiveFretboard from '../components/InteractiveFretboard.tsx'
+import InteractiveFretboard from '../components/chordpro/InteractiveFretboard.tsx'
 import theme from '../theme.ts'
 
 const MUTED = [-1, -1, -1, -1, -1, -1]

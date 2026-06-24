@@ -6,8 +6,8 @@ import Typography from '@mui/material/Typography'
 import AudioFileOutlinedIcon from '@mui/icons-material/AudioFileOutlined'
 import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined'
 import ChordProViewerDialog from './ChordProViewerDialog.tsx'
-import { createSongChart, deleteSongChart } from '../api/songs.ts'
-import type { SongChart, Id } from '../types/entities.ts'
+import { createSongChart, deleteSongChart } from '../../api/songs.ts'
+import type { SongChart, Id } from '../../types/entities.ts'
 
 const CARD_W = 70
 const CARD_H = 80

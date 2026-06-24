@@ -2,7 +2,7 @@ import { render } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it } from 'vitest'
 
-import ChordProView from '../components/ChordProView.tsx'
+import ChordProView from '../components/chordpro/ChordProView.tsx'
 import { CHORDPRO_PRINT_CSS } from '../utils/chordpro.ts'
 import theme from '../theme.ts'
 

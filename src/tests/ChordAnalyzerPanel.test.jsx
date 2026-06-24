@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it } from 'vitest'
-import ChordAnalyzerPanel from '../components/ChordAnalyzerPanel.tsx'
+import ChordAnalyzerPanel from '../components/chordpro/ChordAnalyzerPanel.tsx'
 import theme from '../theme.ts'
 
 function wrap(ui) {

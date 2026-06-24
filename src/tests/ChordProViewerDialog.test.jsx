@@ -11,7 +11,7 @@ vi.mock('@mui/material/useMediaQuery', () => ({
   default: () => mockStacked,
 }))
 
-vi.mock('../components/ChordProView.tsx', () => ({
+vi.mock('../components/chordpro/ChordProView.tsx', () => ({
   default: ({ source }) => <div>Rendered chart: {source}</div>,
 }))
 
@@ -26,7 +26,7 @@ vi.mock('../utils/chordpro.ts', async (importOriginal) => ({
   printChordPro: vi.fn(),
 }))
 
-import ChordProViewerDialog from '../components/ChordProViewerDialog.tsx'
+import ChordProViewerDialog from '../components/chordpro/ChordProViewerDialog.tsx'
 import theme from '../theme.ts'
 
 const CHART = {

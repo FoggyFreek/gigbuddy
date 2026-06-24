@@ -1,5 +1,6 @@
 import Box from '@mui/material/Box'
-import type { ChordShape } from '../utils/guitarChords.ts'
+import ChordName from './ChordName.tsx'
+import type { ChordShape } from '../../utils/guitarChords.ts'
 
 // A single guitar chord-diagram box drawn as inline SVG (no dependency). Uses
 // currentColor so it tracks the theme on screen, and because the SVG is inline
@@ -25,7 +26,7 @@ export default function ChordDiagram({ name, shape }: ChordDiagramProps) {
   if (!shape || shape.frets.length === 0) {
     return (
       <Box className="cp-diagram" sx={{ textAlign: 'center', fontSize: 12, minWidth: 56 }}>
-        <Box sx={{ fontWeight: 700, color: 'primary.main' }}>{name}</Box>
+        <Box sx={{ fontWeight: 700, color: 'primary.main' }}><ChordName name={name} /></Box>
       </Box>
     )
   }
@@ -39,7 +40,7 @@ export default function ChordDiagram({ name, shape }: ChordDiagramProps) {
 
   return (
     <Box className="cp-diagram" sx={{ textAlign: 'center', color: 'text.primary', '& svg': { display: 'block', mx: 'auto' } }}>
-      <Box sx={{ fontWeight: 700, fontSize: 12, color: 'primary.main', mb: 0.25 }}>{name}</Box>
+      <Box sx={{ fontWeight: 700, fontSize: 12, color: 'primary.main', mb: 0.25 }}><ChordName name={name} /></Box>
       <svg
         viewBox={`0 0 ${width} ${boardBottom + 6}`}
         width={width}

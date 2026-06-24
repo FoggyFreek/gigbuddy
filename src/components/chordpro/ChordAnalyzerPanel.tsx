@@ -6,7 +6,8 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import ClearIcon from '@mui/icons-material/Clear'
 import InteractiveFretboard from './InteractiveFretboard.tsx'
-import { identifyChords, type AbsoluteFret } from '../utils/chordIdentify.ts'
+import ChordName from './ChordName.tsx'
+import { identifyChords, type AbsoluteFret } from '../../utils/chordIdentify.ts'
 
 // Read-only chord *finder*: place fingers on the neck, see which chord name(s)
 // those notes spell (top guess + alternates, the sounding notes, and the
@@ -54,7 +55,7 @@ export default function ChordAnalyzerPanel({ fretCount = 15 }: ChordAnalyzerPane
           <Stack spacing={1}>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
               <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                {best.name}
+                <ChordName name={best.name} />
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {best.notes.join(' · ')}
@@ -73,7 +74,7 @@ export default function ChordAnalyzerPanel({ fretCount = 15 }: ChordAnalyzerPane
                   Also:
                 </Typography>
                 {alternates.map((c) => (
-                  <Chip key={c.name} label={c.name} size="small" />
+                  <Chip key={c.name} label={<ChordName name={c.name} />} size="small" />
                 ))}
               </Box>
             )}

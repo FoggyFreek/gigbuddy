@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it } from 'vitest'
-import ChordDiagram from '../components/ChordDiagram.tsx'
+import ChordDiagram from '../components/chordpro/ChordDiagram.tsx'
 import theme from '../theme.ts'
 
 function wrap(ui) {

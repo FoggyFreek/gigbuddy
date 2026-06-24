@@ -15,6 +15,13 @@ describe('renderChordProHtml', () => {
     expect(html).toContain('Twinkle')
   })
 
+  it('superscripts the chord quality, keeping the root (and minor m) on the baseline', () => {
+    expect(renderChordProHtml('[Bb7(b9)]x')).toContain('class="chord">Bb<sup>7(b9)</sup></div>')
+    expect(renderChordProHtml('[Cm7]x')).toContain('class="chord">Cm<sup>7</sup></div>')
+    // a bare root has nothing to raise
+    expect(renderChordProHtml('[C]x')).toContain('class="chord">C</div>')
+  })
+
   it('strips injected scripts/handlers (ChordSheetJS does not escape — DOMPurify must)', () => {
     const html = renderChordProHtml('[C]<img src=x onerror=alert(1)> hi\n{title: <script>alert(2)</script>}')
     expect(html).not.toContain('<script')
@@ -610,7 +617,8 @@ describe('{transpose}', () => {
   })
 
   it('follows the semitone examples from the ChordSwitch transpose guide', () => {
-    expect(renderChordProHtml('[Dm7]minor seven', 3)).toContain('class="chord">Fm7<')
+    // the quality is superscripted: Fm7 -> Fm<sup>7</sup>
+    expect(renderChordProHtml('[Dm7]minor seven', 3)).toContain('class="chord">Fm<sup>7</sup></div>')
     expect(renderChordProHtml('[G/B]slash chord', 2)).toContain('class="chord">A/C#<')
     expect(renderChordProHtml('[C]up seven', 7)).toContain('class="chord">G<')
     expect(renderChordProHtml('[C]down five', -5)).toContain('class="chord">G<')

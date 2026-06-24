@@ -14,6 +14,7 @@ import { ChordProParser, HtmlDivFormatter, Chord } from 'chordsheetjs'
 import DOMPurify from 'dompurify'
 import { lookupGuitarChord } from './guitarChords.ts'
 import type { ChordShape } from './guitarChords.ts'
+import { splitChordSymbol } from './chordSymbol.ts'
 
 export type TextAlign = 'left' | 'center' | 'right'
 
@@ -194,6 +195,27 @@ export function getTransposeAmount(source: string): number {
   return total
 }
 
+// Rewrite each `.chord` cell so its quality is superscripted (Bb7(b9) ->
+// Bb<sup>7(b9)</sup>), matching the React <ChordName> on the other surfaces. Runs
+// after sanitize on already-safe HTML, building nodes via the DOM API (never
+// innerHTML) so no untrusted text is reinterpreted as markup. The <sup> carries
+// to print via the browser's default styling plus CHORDPRO_PRINT_CSS.
+function superscriptChordCells(html: string): string {
+  if (typeof document === 'undefined') return html // no DOM (SSR) — leave as-is
+  const tpl = document.createElement('template')
+  tpl.innerHTML = html
+  for (const el of tpl.content.querySelectorAll('.chord')) {
+    const { base, sup, bass } = splitChordSymbol(el.textContent ?? '')
+    if (!sup) continue // nothing to raise (bare root, empty cell, non-chord)
+    el.textContent = base
+    const s = document.createElement('sup')
+    s.textContent = sup
+    el.appendChild(s)
+    if (bass !== null) el.appendChild(document.createTextNode(`/${bass}`))
+  }
+  return tpl.innerHTML
+}
+
 // Parse + format a chords-over-lyrics run + sanitize, applying `transpose`
 // semitones. Returns sanitized HTML, or null when the source can't be parsed so
 // callers can fall back to raw text.
@@ -202,7 +224,7 @@ export function renderChordProHtml(source: string, transpose = 0): string | null
     let song = new ChordProParser().parse(source ?? '')
     if (transpose) song = song.transpose(transpose)
     const html = new HtmlDivFormatter().format(song)
-    return DOMPurify.sanitize(html)
+    return superscriptChordCells(DOMPurify.sanitize(html))
   } catch {
     return null
   }
@@ -782,6 +804,7 @@ export const CHORDPRO_PRINT_CSS = `
   .cp-glabel { background: #e8e8e8; border-radius: 3px; padding: 1px 6px; font-weight: 600; font-size: 0.9em; white-space: nowrap; }
   .cp-gright { padding-left: 8px; color: #000; white-space: nowrap; }
   .cp-gchord { color: #000; font-weight: 700; }
+  .chord sup, .cp-gchord sup { font-size: 0.7em; line-height: 0; vertical-align: super; }
   .cp-gbar { color: #1565c0; font-weight: 700; }
   .cp-gbar-repeat { color: #6a1b9a; }
   .cp-warnings { border: 1px solid #b26a00; color: #b26a00; border-radius: 4px; padding: 6px 8px; margin: 0 0 1em; font-size: 10pt; }

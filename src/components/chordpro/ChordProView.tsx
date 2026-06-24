@@ -3,10 +3,11 @@ import Box from '@mui/material/Box'
 import Collapse from '@mui/material/Collapse'
 import ButtonBase from '@mui/material/ButtonBase'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import { parseChordProDocument, renderChordProHtml, analyzeChords, getTransposeAmount, extractMetadata, parseGridLine, parseGridShape, transposeGridChord, buildGridItems, voltaInfo, buildVoltaSpans, GRID_CELL_W, GRID_BAR_W, MONO_FONT } from '../utils/chordpro.ts'
-import type { DocBlock, GridCell, GridRenderItem, ParsedGridLine, ResolvedChord, SongMeta, VoltaSpan } from '../utils/chordpro.ts'
-import AbcBlock from './AbcBlock.tsx'
+import { parseChordProDocument, renderChordProHtml, analyzeChords, getTransposeAmount, extractMetadata, parseGridLine, parseGridShape, transposeGridChord, buildGridItems, voltaInfo, buildVoltaSpans, GRID_CELL_W, GRID_BAR_W, MONO_FONT } from '../../utils/chordpro.ts'
+import type { DocBlock, GridCell, GridRenderItem, ParsedGridLine, ResolvedChord, SongMeta, VoltaSpan } from '../../utils/chordpro.ts'
+import AbcBlock from '../AbcBlock.tsx'
 import ChordDiagram from './ChordDiagram.tsx'
+import ChordName from './ChordName.tsx'
 
 // Renders ChordPro source as a laid-out document: embedded ABC blocks engraved
 // as staves (AbcBlock), chords-over-lyrics runs via ChordSheetJS (sanitized and
@@ -39,6 +40,9 @@ const chordSheetSx = {
   '& .row': { display: 'flex', flexWrap: 'wrap' },
   '& .column': { display: 'flex', flexDirection: 'column' },
   '& .chord': { fontWeight: 700, color: 'primary.main', whiteSpace: 'pre', pr: '10px' },
+  // Quality/extension raised by superscriptChordCells (Bb⁷⁽ᵇ⁹⁾); line-height:0
+  // keeps it from stretching the chord line.
+  '& .chord sup': { fontSize: '0.7em', lineHeight: 0, verticalAlign: 'super' },
   '& .lyrics': { whiteSpace: 'pre' },
   // Keep empty chord/lyric cells a full line tall so chords stay above their
   // syllable and lyrics share one baseline (ChordSheetJS's own alignment trick).
@@ -164,7 +168,7 @@ function GridCellView({ cell, transpose }: { cell: GridCell; transpose: number }
     const parts = transposeGridChord(cell.text, transpose).split('~')
     return (
       <Box component="span" className="cp-gchord" style={gridCellStyle} sx={{ fontWeight: 700, color: 'text.primary' }}>
-        {parts.map((p, i) => <Box component="span" key={i} sx={i > 0 ? { ml: 0.5 } : undefined}>{p}</Box>)}
+        {parts.map((p, i) => <Box component="span" key={i} sx={i > 0 ? { ml: 0.5 } : undefined}><ChordName name={p} /></Box>)}
       </Box>
     )
   }

@@ -27,11 +27,11 @@ import MusicNoteIcon from '@mui/icons-material/MusicNote'
 import GraphicEqIcon from '@mui/icons-material/GraphicEq'
 import ChordProView from './ChordProView.tsx'
 import ChordAnalyzerPanel from './ChordAnalyzerPanel.tsx'
-import SaveStatusLabel from './SaveStatusLabel.tsx'
-import useDebouncedSave from '../hooks/useDebouncedSave.ts'
-import { printChordPro, MONO_FONT } from '../utils/chordpro.ts'
-import { updateSongChart } from '../api/songs.ts'
-import type { SongChart, Id } from '../types/entities.ts'
+import SaveStatusLabel from '../SaveStatusLabel.tsx'
+import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
+import { printChordPro, MONO_FONT } from '../../utils/chordpro.ts'
+import { updateSongChart } from '../../api/songs.ts'
+import type { SongChart, Id } from '../../types/entities.ts'
 
 // Fullscreen detail screen for one ChordPro chart: renders it (chords over
 // lyrics), prints/saves it as PDF via the browser print dialog, and — for users
@@ -113,31 +113,33 @@ export default function ChordProViewerDialog({
   }
 
   const editor = (
-    <TextField
-      label="ChordPro source"
-      value={source}
-      onChange={(e) => handleSource(e.target.value)}
-      multiline
-      fullWidth
-      slotProps={{ htmlInput: { spellCheck: false, style: { fontFamily: MONO_FONT, fontSize: 14, lineHeight: 1.5, resize: 'none', overflow: 'auto' } } }}
-      sx={{
-        height: '100%',
-        minHeight: 0,
-        '& .MuiInputBase-root': { height: '100%', minHeight: 0, alignItems: 'stretch', boxSizing: 'border-box' },
-        // The autosizing textarea grows past the box with overflow:hidden inline;
-        // pin it to the field height and let it scroll instead.
-        '& .MuiInputBase-inputMultiline, & textarea': {
-          height: '100% !important',
-          overflow: 'auto !important',
-          resize: 'none',
-          boxSizing: 'border-box',
-        },
-      }}
-    />
+    <Paper elevation={2} sx={{ p: 2, height: '100%', minHeight: 0 }}>
+      <TextField
+        label="ChordPro source"
+        value={source}
+        onChange={(e) => handleSource(e.target.value)}
+        multiline
+        fullWidth
+        slotProps={{ htmlInput: { spellCheck: false, style: { fontFamily: MONO_FONT, fontSize: 14, lineHeight: 1.5, resize: 'none', overflow: 'auto' } } }}
+        sx={{
+          height: '100%',
+          minHeight: 0,
+          '& .MuiInputBase-root': { height: '100%', minHeight: 0, alignItems: 'stretch', boxSizing: 'border-box' },
+          // The autosizing textarea grows past the box with overflow:hidden inline;
+          // pin it to the field height and let it scroll instead.
+          '& .MuiInputBase-inputMultiline, & textarea': {
+            height: '100% !important',
+            overflow: 'auto !important',
+            resize: 'none',
+            boxSizing: 'border-box',
+          },
+        }}
+      />
+    </Paper>
   )
 
   const preview = (
-    <Paper variant="outlined" sx={{ p: 3, height: '100%', overflow: 'auto' }}>
+    <Paper elevation={2} sx={{ p: 3, height: '100%', overflow: 'auto' }}>
       <Box ref={viewRef}>
         <ChordProView source={source} transposeOffset={transposeOffset} />
       </Box>
@@ -186,7 +188,7 @@ export default function ChordProViewerDialog({
   )
 
   return (
-    <Dialog fullScreen open={open} onClose={handleClose}>
+    <Dialog fullScreen open={open} onClose={handleClose} slotProps={{ paper: { elevation: 0 } }}>
       <AppBar position="sticky" color="default" elevation={1}>
         {/* Row 1: title + primary actions */}
         <Toolbar sx={{ gap: 1 }}>
@@ -271,7 +273,7 @@ export default function ChordProViewerDialog({
           )
         ) : (
           <Box sx={{ maxWidth: 800, mx: 'auto' }}>
-            <Paper variant="outlined" sx={{ p: { xs: 2, md: 4 } }}>
+            <Paper elevation={2} sx={{ p: { xs: 2, md: 4 } }}>
               <Box ref={viewRef}>
                 <ChordProView source={source} transposeOffset={transposeOffset} />
               </Box>

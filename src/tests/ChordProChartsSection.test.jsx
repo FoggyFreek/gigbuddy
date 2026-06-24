@@ -12,7 +12,7 @@ vi.mock('../api/songs.ts', () => ({
 // chart. Deletion is the viewer's responsibility now (it owns the confirm
 // dialog), so expose its onDelete callback as a plain button for the section
 // test to trigger.
-vi.mock('../components/ChordProViewerDialog.tsx', () => ({
+vi.mock('../components/chordpro/ChordProViewerDialog.tsx', () => ({
   default: ({ chart, startInEdit, onDelete }) => (
     <div data-testid="viewer">
       Viewer: {chart.name} {startInEdit ? '(edit)' : '(view)'}
@@ -21,7 +21,7 @@ vi.mock('../components/ChordProViewerDialog.tsx', () => ({
   ),
 }))
 
-import ChordProChartsSection from '../components/ChordProChartsSection.tsx'
+import ChordProChartsSection from '../components/chordpro/ChordProChartsSection.tsx'
 import { createSongChart, deleteSongChart } from '../api/songs.ts'
 import theme from '../theme.ts'
 
