@@ -180,6 +180,12 @@ async function runCategorySearch(key: string, query: string): Promise<SearchResu
 }
 // --------------------------------------------------------------------------
 
+// Curried so the settled-result merge isn't an extra arrow nested inside the
+// effect's `.then` callback (keeps function nesting shallow).
+const settleCategory = (key: string, items: SearchResultItem[]) =>
+  (prev: Record<string, CategoryState>): Record<string, CategoryState> =>
+    ({ ...prev, [key]: { loading: false, items } })
+
 export interface CategorySearch {
   results: Record<string, CategoryState>
   expanded: Record<string, boolean>
@@ -262,7 +268,7 @@ export function useCategorySearch(
       for (const key of keysToSearch) {
         runCategorySearch(key, q).then((items) => {
           if (cancelled) return
-          setResults((prev) => ({ ...prev, [key]: { loading: false, items } }))
+          setResults(settleCategory(key, items))
         })
       }
     }

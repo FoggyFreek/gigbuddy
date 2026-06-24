@@ -83,7 +83,7 @@ const CHART_NAME_MAX = 120
 // exe renamed .cho) rather than a chart. The .cho/.pro extension is the only
 // other gate, so this is what stops a renamed binary from being stored.
 // eslint-disable-next-line no-control-regex -- matching control chars is the intent
-const RE_NON_PLAINTEXT = /[\x00-\x08\x0B\x0C\x0E-\x1F�]/
+const RE_NON_PLAINTEXT = /[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFD]/
 
 // True when `source` is plain text safe to store as a ChordPro chart.
 export function isPlainTextChartSource(source) {

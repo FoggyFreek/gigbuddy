@@ -260,6 +260,153 @@ export function safeImageSrc(src: string): string | null {
   return /^https?:\/\//i.test(src.trim()) ? src.trim() : null
 }
 
+// A block environment ({start_of_*}…{end_of_*}) resolved to its emitted block,
+// the index of its terminator line (or EOF), any warnings, and the grid shape to
+// carry forward (unchanged for non-grid environments).
+interface EnvResult { block: DocBlock; end: number; warnings: string[]; shape: string | null }
+
+// Collect a block environment's body: the lines after `start` up to (but not
+// including) the first line matching `endRe`. `end` is the terminator's index, or
+// lines.length when the block runs to EOF; `closed` is false in that EOF case.
+function scanEnvBody(lines: string[], start: number, endRe: RegExp): { body: string[]; end: number; closed: boolean } {
+  const body: string[] = []
+  let i = start + 1
+  while (i < lines.length && !endRe.test(lines[i].trim())) { body.push(lines[i]); i++ }
+  return { body, end: i, closed: i < lines.length }
+}
+
+// Grid (Jazz Grille): laid out by shape in the component (fixed-width cells + bar
+// slots) so chords align vertically. Only a keyed label="…" is a label; the
+// legacy bare arg is the shape (`{sog: 4x4}`), captured as `shape`.
+function readGridBlock(lines: string[], start: number, arg: string, lastGridShape: string | null): EnvResult {
+  const warnings: string[] = []
+  const gridLabel = readAttr(arg, 'label')
+  // Legacy `{start_of_grid: …}` (colon) form can't carry key=value properties.
+  if (/^\s*:/.test(arg) && /=/.test(arg)) {
+    warnings.push('Legacy {start_of_grid: …} syntax cannot take properties; use the shape="…"/label="…" form.')
+  }
+  // An explicit shape="…" that we can't parse is surfaced, not silently dropped.
+  const rawShapeAttr = readAttr(arg, 'shape')
+  if (rawShapeAttr && !isValidGridShape(rawShapeAttr)) {
+    warnings.push(`Unrecognized grid shape "${rawShapeAttr}"; expected forms like 16, 4x4, or 1+4x4+1.`)
+  }
+  // Resolve the active shape: an explicit valid shape, else reuse the previous
+  // grid's shape (per spec); a null shape renders with the 1+4x4+1 default.
+  const candidate = readGridShape(arg)
+  const validShape = candidate && isValidGridShape(candidate) ? candidate : null
+  const shape = validShape ?? lastGridShape
+  const { body, end, closed } = scanEnvBody(lines, start, RE_GRID_END)
+  if (!closed) warnings.push('Grid block is missing its {end_of_grid}/{eog}.')
+  for (const gl of body) warnings.push(...gridLineWarnings(gl))
+  return { block: { kind: 'grid', lines: body, label: gridLabel, shape }, end, warnings, shape }
+}
+
+// Resolve a multi-line block environment starting at `trimmed`, or null when the
+// line doesn't open one (ABC, textblock, tab, grid). The tab environment is owned
+// so it renders as a real <pre>: fixed-width font, exact whitespace, no wrapping —
+// ChordSheetJS's flex .literal can't promise perfect column alignment.
+function readEnvironment(lines: string[], start: number, trimmed: string, lastGridShape: string | null): EnvResult | null {
+  if (RE_ABC_START.test(trimmed)) {
+    const { body, end } = scanEnvBody(lines, start, RE_ABC_END)
+    return { block: { kind: 'abc', abc: body.join('\n') }, end, warnings: [], shape: lastGridShape }
+  }
+  const mTb = trimmed.match(RE_TEXTBLOCK_START)
+  if (mTb) {
+    const { body, end } = scanEnvBody(lines, start, RE_TEXTBLOCK_END)
+    return { block: { kind: 'textblock', text: body.join('\n'), align: readAlign(mTb[1]) }, end, warnings: [], shape: lastGridShape }
+  }
+  const mTab = trimmed.match(RE_TAB_START)
+  if (mTab) {
+    const { body, end } = scanEnvBody(lines, start, RE_TAB_END)
+    return { block: { kind: 'tab', text: body.join('\n'), label: readLabel(mTab[1]) }, end, warnings: [], shape: lastGridShape }
+  }
+  const mGrid = trimmed.match(RE_GRID_START)
+  if (mGrid) return readGridBlock(lines, start, mGrid[1], lastGridShape)
+  return null
+}
+
+// Resolve a single-line directive that emits (or deliberately drops) one block:
+// {image}, the inline display-only {chord}, and styled {comment_*}. A non-null
+// outer result means the line was consumed even when `block` is null (e.g. an
+// image with a missing/non-http src is dropped, not pushed into a chordpro run).
+// {chord} is inline and display-only — it does NOT register a shape (that's
+// {define}); parseChordDefinition is hoisted (declared below).
+function readInlineDirective(trimmed: string): { block: DocBlock | null } | null {
+  const mImg = trimmed.match(RE_IMAGE)
+  if (mImg) {
+    const raw = readAttr(mImg[1], 'src')
+    const src = raw ? safeImageSrc(raw) : null
+    if (!src) return { block: null }
+    return { block: { kind: 'image', src, anchored: /anchor\s*=\s*["']?page/i.test(mImg[1]), scale: readAttr(mImg[1], 'scale') } }
+  }
+  const mChord = trimmed.match(RE_CHORD_INLINE)
+  if (mChord) {
+    const parsed = parseChordDefinition(mChord[1])
+    if (!parsed) return { block: null }
+    const nm = (parsed.display ?? parsed.name).replace(/^\[|\]$/g, '')
+    return { block: { kind: 'chorddef', name: nm, shape: parsed.shape ?? lookupGuitarChord(nm) } }
+  }
+  const mComment = trimmed.match(RE_COMMENT_STYLED)
+  if (mComment) {
+    const variant = /^(comment_box|cb)$/i.test(mComment[1]) ? 'box' : 'italic'
+    return { block: { kind: 'comment', text: mComment[2].trim(), variant } }
+  }
+  return null
+}
+
+// Mutable accumulator threaded through the per-line parse so each line handler
+// can append blocks/warnings and carry forward the column count, the last grid
+// shape (reused by a later grid that omits its shape), and the pending plain-line
+// buffer.
+interface ParseState {
+  blocks: DocBlock[]
+  warnings: string[]
+  columns: number
+  lastGridShape: string | null
+  buf: string[]
+}
+
+// Emit the buffered plain lines as one chordpro block (skipping a buffer that is
+// only blank lines) and reset the buffer.
+function flushBuf(state: ParseState): void {
+  if (state.buf.some((l) => l.trim() !== '')) state.blocks.push({ kind: 'chordpro', source: state.buf.join('\n') })
+  state.buf = []
+}
+
+// Process the line at `i`, mutating `state`, and return the index of the next
+// line to process (past a consumed block environment, or `i + 1`).
+function consumeLine(lines: string[], i: number, state: ParseState): number {
+  const trimmed = lines[i].trim()
+
+  const mCols = trimmed.match(RE_COLUMNS)
+  if (mCols) { state.columns = Math.max(1, Number(mCols[1] || 2)); return i + 1 }
+  if (RE_DIAGRAMS.test(trimmed)) return i + 1 // chord-diagram grid not rendered yet
+  if (RE_COLB.test(trimmed)) { flushBuf(state); state.blocks.push({ kind: 'colb' }); return i + 1 }
+
+  const env = readEnvironment(lines, i, trimmed, state.lastGridShape)
+  if (env) {
+    flushBuf(state)
+    state.blocks.push(env.block)
+    state.warnings.push(...env.warnings)
+    state.lastGridShape = env.shape
+    return env.end + 1
+  }
+
+  const inline = readInlineDirective(trimmed)
+  if (inline) {
+    flushBuf(state)
+    if (inline.block) state.blocks.push(inline.block)
+    return i + 1
+  }
+
+  // Hoist metadata directives to the header (rendered separately); dropping them
+  // here keeps ChordSheetJS from re-printing the title/subtitle.
+  if (parseMetaLine(trimmed)) return i + 1
+
+  state.buf.push(lines[i])
+  return i + 1
+}
+
 // Split a raw ChordPro file into ordered, renderable blocks. Consecutive plain
 // lines accumulate into a 'chordpro' block; the special directives interrupt and
 // emit their own block. The directives we render specially are stripped from the
@@ -267,137 +414,11 @@ export function safeImageSrc(src: string): string | null {
 // broken <img> and shows directive attributes as stray labels).
 export function parseChordProDocument(source: string): ChordProDocument {
   const lines = (source ?? '').replace(/\r\n?/g, '\n').split('\n')
-  const blocks: DocBlock[] = []
-  const warnings: string[] = []
-  let columns = 1
-  let lastGridShape: string | null = null // reused by a later grid that omits its shape
-  let buf: string[] = []
-
-  const flush = () => {
-    if (buf.some((l) => l.trim() !== '')) {
-      blocks.push({ kind: 'chordpro', source: buf.join('\n') })
-    }
-    buf = []
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim()
-
-    const mCols = trimmed.match(RE_COLUMNS)
-    if (mCols) { columns = Math.max(1, Number(mCols[1] || 2)); continue }
-    if (RE_DIAGRAMS.test(trimmed)) continue // chord-diagram grid not rendered yet
-    if (RE_COLB.test(trimmed)) { flush(); blocks.push({ kind: 'colb' }); continue }
-
-    if (RE_ABC_START.test(trimmed)) {
-      flush()
-      const abc: string[] = []
-      i++
-      while (i < lines.length && !RE_ABC_END.test(lines[i].trim())) { abc.push(lines[i]); i++ }
-      blocks.push({ kind: 'abc', abc: abc.join('\n') })
-      continue
-    }
-
-    const mTb = trimmed.match(RE_TEXTBLOCK_START)
-    if (mTb) {
-      flush()
-      const align = readAlign(mTb[1])
-      const text: string[] = []
-      i++
-      while (i < lines.length && !RE_TEXTBLOCK_END.test(lines[i].trim())) { text.push(lines[i]); i++ }
-      blocks.push({ kind: 'textblock', text: text.join('\n'), align })
-      continue
-    }
-
-    // Own the tab environment so it renders as a real <pre>: fixed-width font,
-    // exact whitespace, no wrapping — ChordSheetJS's flex .literal can't promise
-    // perfect column alignment.
-    const mTab = trimmed.match(RE_TAB_START)
-    if (mTab) {
-      flush()
-      const label = readLabel(mTab[1])
-      const tab: string[] = []
-      i++
-      while (i < lines.length && !RE_TAB_END.test(lines[i].trim())) { tab.push(lines[i]); i++ }
-      blocks.push({ kind: 'tab', text: tab.join('\n'), label })
-      continue
-    }
-
-    // Grid (Jazz Grille): laid out by shape in the component (fixed-width cells +
-    // bar slots) so chords align vertically. Only a keyed label="…" is a label;
-    // the legacy bare arg is the shape (`{sog: 4x4}`), captured as `shape`.
-    const mGrid = trimmed.match(RE_GRID_START)
-    if (mGrid) {
-      flush()
-      const arg = mGrid[1]
-      const gridLabel = readAttr(arg, 'label')
-      // Legacy `{start_of_grid: …}` (colon) form can't carry key=value properties.
-      if (/^\s*:/.test(arg) && /=/.test(arg)) {
-        warnings.push('Legacy {start_of_grid: …} syntax cannot take properties; use the shape="…"/label="…" form.')
-      }
-      // An explicit shape="…" that we can't parse is surfaced, not silently dropped.
-      const rawShapeAttr = readAttr(arg, 'shape')
-      if (rawShapeAttr && !isValidGridShape(rawShapeAttr)) {
-        warnings.push(`Unrecognized grid shape "${rawShapeAttr}"; expected forms like 16, 4x4, or 1+4x4+1.`)
-      }
-      // Resolve the active shape: an explicit valid shape, else reuse the previous
-      // grid's shape (per spec); a null shape renders with the 1+4x4+1 default.
-      const candidate = readGridShape(arg)
-      const validShape = candidate && isValidGridShape(candidate) ? candidate : null
-      if (validShape) lastGridShape = validShape
-      const shape = validShape ?? lastGridShape
-      const grid: string[] = []
-      i++
-      let closed = false
-      while (i < lines.length) {
-        if (RE_GRID_END.test(lines[i].trim())) { closed = true; break }
-        grid.push(lines[i]); i++
-      }
-      if (!closed) warnings.push('Grid block is missing its {end_of_grid}/{eog}.')
-      for (const gl of grid) warnings.push(...gridLineWarnings(gl))
-      blocks.push({ kind: 'grid', lines: grid, label: gridLabel, shape })
-      continue
-    }
-
-    const mImg = trimmed.match(RE_IMAGE)
-    if (mImg) {
-      flush()
-      const raw = readAttr(mImg[1], 'src')
-      const src = raw ? safeImageSrc(raw) : null
-      if (src) {
-        blocks.push({ kind: 'image', src, anchored: /anchor\s*=\s*["']?page/i.test(mImg[1]), scale: readAttr(mImg[1], 'scale') })
-      }
-      continue
-    }
-
-    // {chord: …} renders a diagram inline here; it does NOT register (that's
-    // {define}). parseChordDefinition is hoisted (declared below).
-    const mChord = trimmed.match(RE_CHORD_INLINE)
-    if (mChord) {
-      flush()
-      const parsed = parseChordDefinition(mChord[1])
-      if (parsed) {
-        const nm = (parsed.display ?? parsed.name).replace(/^\[|\]$/g, '')
-        blocks.push({ kind: 'chorddef', name: nm, shape: parsed.shape ?? lookupGuitarChord(nm) })
-      }
-      continue
-    }
-
-    const mComment = trimmed.match(RE_COMMENT_STYLED)
-    if (mComment) {
-      flush()
-      const variant = /^(comment_box|cb)$/i.test(mComment[1]) ? 'box' : 'italic'
-      blocks.push({ kind: 'comment', text: mComment[2].trim(), variant })
-      continue
-    }
-
-    // Hoist metadata directives to the header (rendered separately); dropping
-    // them here keeps ChordSheetJS from re-printing the title/subtitle.
-    if (parseMetaLine(trimmed)) continue
-
-    buf.push(lines[i])
-  }
-  flush()
-  return { columns, blocks, warnings }
+  const state: ParseState = { blocks: [], warnings: [], columns: 1, lastGridShape: null, buf: [] }
+  let i = 0
+  while (i < lines.length) i = consumeLine(lines, i, state)
+  flushBuf(state)
+  return { columns: state.columns, blocks: state.blocks, warnings: state.warnings }
 }
 
 // A grid line is a sequence of bar-line symbols and the cells between them.
@@ -676,18 +697,33 @@ export function parseChordDefinition(arg: string): { name: string; shape: ChordS
 // Collect the chord-diagram grid for a song: the {diagrams} placement, every
 // distinct chord used in [brackets] (first-appearance order), and each resolved
 // to a shape — a song's own {define}/{chord} overrides the built-in library.
-export function analyzeChords(source: string, transposeOffset = 0): ChordAnalysis {
-  const text = source ?? ''
-  const defs: Record<string, { shape: ChordShape; display: string | null }> = {}
-  let placement: DiagramsPlacement = 'bottom'
+type ChordDefs = Record<string, { shape: ChordShape; display: string | null }>
 
+// Scan a song for its {diagrams} placement directive and every {define}/{chord}
+// custom shape, which override the built-in library in the grid.
+function collectDefsAndPlacement(text: string): { defs: ChordDefs; placement: DiagramsPlacement } {
+  const defs: ChordDefs = {}
+  let placement: DiagramsPlacement = 'bottom'
   for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
     const trimmed = line.trim()
     const md = trimmed.match(RE_DIAGRAMS_VAL)
-    if (md) { const v = (md[1] || 'on').toLowerCase(); placement = v === 'off' ? 'off' : v === 'top' ? 'top' : 'bottom'; continue }
+    if (md) {
+      const v = (md[1] || 'on').toLowerCase()
+      placement = v === 'off' ? 'off' : v === 'top' ? 'top' : 'bottom'
+      continue
+    }
     const mDef = trimmed.match(RE_DEFINE)
-    if (mDef) { const parsed = parseChordDefinition(mDef[1]); if (parsed?.shape) defs[parsed.name] = { shape: parsed.shape, display: parsed.display ?? null } }
+    if (mDef) {
+      const parsed = parseChordDefinition(mDef[1])
+      if (parsed?.shape) defs[parsed.name] = { shape: parsed.shape, display: parsed.display ?? null }
+    }
   }
+  return { defs, placement }
+}
+
+export function analyzeChords(source: string, transposeOffset = 0): ChordAnalysis {
+  const text = source ?? ''
+  const { defs, placement } = collectDefsAndPlacement(text)
 
   // Transpose the grid's chord names by the same amount as the lyrics so the
   // diagrams match what's printed above the words.

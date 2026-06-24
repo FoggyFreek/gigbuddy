@@ -125,6 +125,46 @@ describe('parseChordProDocument', () => {
   })
 })
 
+describe('parseChordProDocument — block boundaries & edge cases', () => {
+  it('breaks a plain run wherever a special directive interrupts (ordered chordpro blocks)', () => {
+    const { blocks } = parseChordProDocument('[C]line one\n{comment_box: Hey}\n[G]line two')
+    expect(blocks.map((b) => b.kind)).toEqual(['chordpro', 'comment', 'chordpro'])
+    expect(blocks[0]).toMatchObject({ kind: 'chordpro', source: '[C]line one' })
+    expect(blocks[2]).toMatchObject({ kind: 'chordpro', source: '[G]line two' })
+  })
+
+  it('does not emit a chordpro block for a run that is only blank lines', () => {
+    const { blocks } = parseChordProDocument('{comment_box: A}\n\n\n{comment_box: B}')
+    expect(blocks.map((b) => b.kind)).toEqual(['comment', 'comment'])
+  })
+
+  it('captures an unclosed ABC block through end-of-file', () => {
+    const { blocks } = parseChordProDocument('{start_of_abc}\nX:1\nK:G')
+    expect(blocks).toEqual([{ kind: 'abc', abc: 'X:1\nK:G' }])
+  })
+
+  it('captures an unclosed textblock through end-of-file', () => {
+    const tb = parseChordProDocument('{start_of_textblock}\nlast words').blocks.find((b) => b.kind === 'textblock')
+    expect(tb).toEqual({ kind: 'textblock', text: 'last words', align: 'left' })
+  })
+
+  it('drops an {image} with no src and one with a non-http(s) src (no image block)', () => {
+    expect(parseChordProDocument('{image scale="80%"}').blocks.some((b) => b.kind === 'image')).toBe(false)
+    expect(parseChordProDocument('{image src="javascript:alert(1)"}').blocks.some((b) => b.kind === 'image')).toBe(false)
+  })
+
+  it('defaults a bare {columns} to 2 and reads {col N}', () => {
+    expect(parseChordProDocument('{columns}\n[C]x').columns).toBe(2)
+    expect(parseChordProDocument('{col 3}\n[C]x').columns).toBe(3)
+    expect(parseChordProDocument('[C]x').columns).toBe(1)
+  })
+
+  it('returns empty blocks and no warnings for an empty/whitespace source', () => {
+    expect(parseChordProDocument('')).toEqual({ columns: 1, blocks: [], warnings: [] })
+    expect(parseChordProDocument('   \n\n  ')).toEqual({ columns: 1, blocks: [], warnings: [] })
+  })
+})
+
 describe('parseChordDefinition', () => {
   // Verbatim examples from chordpro.org/chordpro/directives-define
   it('parses {define: Bes base-fret 1 frets 1 1 3 3 3 1 fingers 1 1 2 3 4 1}', () => {

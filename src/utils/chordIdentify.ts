@@ -173,33 +173,45 @@ export function identifyChords(frets: AbsoluteFret[], tuning: readonly number[] 
 
   const candidates: ChordCandidate[] = []
   for (const rootPc of presentPcs) {
-    const intervals = new Set(presentPcs.map((pc) => ((pc - rootPc + 12) % 12)))
-    for (const def of QUALITIES) {
-      const m = matchQuality(intervals, def)
-      if (!m) continue
-      // Suppress noisy interpretations with several non-chord tones.
-      if (m.unexplained > 1) continue
-      const rootInBass = bassPc === rootPc
-      candidates.push({
-        name: formatChordName(rootPc, def.symbol, rootInBass ? null : bassPc),
-        rootPc,
-        quality: def.symbol,
-        bassPc: rootInBass ? null : bassPc,
-        notes: notesLowToHigh.map((pc) => formatNote(pc, FLAT_ROOT_PCS.has(rootPc))),
-        intervals: formatIntervals([...intervals].sort((x, y) => x - y)),
-        score: {
-          fullMatch: m.unexplained === 0,
-          rootInBass,
-          explainedTones: m.explained,
-          unexplainedTones: m.unexplained,
-          qualityRank: def.rank,
-        },
-      })
-    }
+    candidates.push(...candidatesForRoot(rootPc, presentPcs, bassPc, notesLowToHigh))
   }
 
   candidates.sort(compareCandidates)
   return dedupeByName(candidates)
+}
+
+// Every chord quality that the notes spell when read against `rootPc` as the
+// root, skipping noisy matches with more than one non-chord tone.
+function candidatesForRoot(
+  rootPc: number,
+  presentPcs: number[],
+  bassPc: number,
+  notesLowToHigh: number[],
+): ChordCandidate[] {
+  const intervals = new Set(presentPcs.map((pc) => ((pc - rootPc + 12) % 12)))
+  const rootInBass = bassPc === rootPc
+  const out: ChordCandidate[] = []
+  for (const def of QUALITIES) {
+    const m = matchQuality(intervals, def)
+    // Suppress noisy interpretations with several non-chord tones.
+    if (!m || m.unexplained > 1) continue
+    out.push({
+      name: formatChordName(rootPc, def.symbol, rootInBass ? null : bassPc),
+      rootPc,
+      quality: def.symbol,
+      bassPc: rootInBass ? null : bassPc,
+      notes: notesLowToHigh.map((pc) => formatNote(pc, FLAT_ROOT_PCS.has(rootPc))),
+      intervals: formatIntervals([...intervals].sort((x, y) => x - y)),
+      score: {
+        fullMatch: m.unexplained === 0,
+        rootInBass,
+        explainedTones: m.explained,
+        unexplainedTones: m.unexplained,
+        qualityRank: def.rank,
+      },
+    })
+  }
+  return out
 }
 
 function dedupeNotes(pitches: number[]): number[] {
