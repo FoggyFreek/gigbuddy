@@ -52,8 +52,22 @@ function formatTimeRange(start: string | undefined, end: string | undefined) {
   return `${s} – ${e}`
 }
 
+function pastEventDateValue(event: BandEventWithTime): string | undefined {
+  return event.end_date || event.start_date
+}
+
+function pastEventDateTime(event: BandEventWithTime): number {
+  const val = pastEventDateValue(event)
+  if (!val) return 0
+  return new Date(val + 'T00:00:00').getTime()
+}
+
+function comparePastEventDateDesc(a: BandEventWithTime, b: BandEventWithTime): number {
+  return pastEventDateTime(b) - pastEventDateTime(a)
+}
+
 function isPastEvent(event: BandEventWithTime) {
-  const val = event.end_date || event.start_date
+  const val = pastEventDateValue(event)
   if (!val) return false
   const d = new Date(val + 'T00:00:00')
   const today = new Date()
@@ -197,7 +211,7 @@ export default function BandEventsTable({ events, onRowClick, onShare, selectedI
   const isCompact = useCompactLayout()
 
   const upcoming = events.filter((e) => !isPastEvent(e))
-  const past = events.filter((e) => isPastEvent(e))
+  const past = events.filter((e) => isPastEvent(e)).sort(comparePastEventDateDesc)
   const emptyAll = events.length === 0
 
   if (isCompact) {

@@ -77,6 +77,19 @@ export function normalizeTagNames(tags) {
 export const CHART_SOURCE_MAX = 256 * 1024
 const CHART_NAME_MAX = 120
 
+// Reject content that isn't plain-text ChordPro: NUL/C0 control bytes (tab \x09,
+// LF \x0A, CR \x0D are allowed) or U+FFFD, the replacement char a failed decode
+// leaves behind. Their presence means the upload is really binary (an image/PDF/
+// exe renamed .cho) rather than a chart. The .cho/.pro extension is the only
+// other gate, so this is what stops a renamed binary from being stored.
+// eslint-disable-next-line no-control-regex -- matching control chars is the intent
+const RE_NON_PLAINTEXT = /[\x00-\x08\x0B\x0C\x0E-\x1F�]/
+
+// True when `source` is plain text safe to store as a ChordPro chart.
+export function isPlainTextChartSource(source) {
+  return !RE_NON_PLAINTEXT.test(source)
+}
+
 // Coerce a chart name to a trimmed, length-capped string, or '' when blank.
 export function normalizeChartName(val) {
   return String(val ?? '').trim().slice(0, CHART_NAME_MAX)
@@ -101,6 +114,7 @@ export function buildSongChartUpdateFields(body) {
   if ('source' in body) {
     const source = normalizeChartSource(body.source)
     if (source.length > CHART_SOURCE_MAX) return { error: 'source is too large' }
+    if (!isPlainTextChartSource(source)) return { error: 'source is not valid ChordPro text' }
     fields.push(`source = $${idx++}`); values.push(source)
   }
   return { fields, values }

@@ -25,6 +25,7 @@ import {
   normalizeTagNames,
   normalizeChartName,
   normalizeChartSource,
+  isPlainTextChartSource,
   buildSongChartUpdateFields,
   CHART_SOURCE_MAX,
   normalizeImportRow,
@@ -270,6 +271,7 @@ export async function createSongChart(db, tenantId, songId, body) {
   const name = normalizeChartName(body.name) || 'Chart'
   const source = normalizeChartSource(body.source)
   if (source.length > CHART_SOURCE_MAX) return badRequest('source is too large')
+  if (!isPlainTextChartSource(source)) return badRequest('File is not a valid ChordPro text file')
 
   const chart = await insertSongChart(db, songId, tenantId, name, source)
   if (!chart) return NOT_FOUND

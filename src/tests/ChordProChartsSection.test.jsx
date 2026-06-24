@@ -8,10 +8,16 @@ vi.mock('../api/songs.ts', () => ({
   deleteSongChart: vi.fn(),
 }))
 
-// Stub the heavy fullscreen viewer; assert only that it opens for the right chart.
+// Stub the heavy fullscreen viewer; assert only that it opens for the right
+// chart. Deletion is the viewer's responsibility now (it owns the confirm
+// dialog), so expose its onDelete callback as a plain button for the section
+// test to trigger.
 vi.mock('../components/ChordProViewerDialog.tsx', () => ({
-  default: ({ chart, startInEdit }) => (
-    <div data-testid="viewer">Viewer: {chart.name} {startInEdit ? '(edit)' : '(view)'}</div>
+  default: ({ chart, startInEdit, onDelete }) => (
+    <div data-testid="viewer">
+      Viewer: {chart.name} {startInEdit ? '(edit)' : '(view)'}
+      {onDelete && <button onClick={onDelete}>delete chart</button>}
+    </div>
   ),
 }))
 
@@ -44,10 +50,10 @@ describe('ChordProChartsSection', () => {
     expect(screen.getByText('Piano')).toBeInTheDocument()
   })
 
-  it('opens a chart in the viewer when its name is clicked', async () => {
+  it('opens a chart in the viewer when its card is clicked', async () => {
     const user = userEvent.setup()
     wrap()
-    await user.click(screen.getByText('Guitar'))
+    await user.click(screen.getByRole('button', { name: 'Open Guitar' }))
     expect(screen.getByTestId('viewer')).toHaveTextContent('Viewer: Guitar (view)')
   })
 
@@ -74,23 +80,24 @@ describe('ChordProChartsSection', () => {
     expect(await screen.findByText('boom')).toBeInTheDocument()
   })
 
-  it('deletes a chart after confirmation', async () => {
+  it('deletes the open chart when the viewer requests deletion', async () => {
     const user = userEvent.setup()
     deleteSongChart.mockResolvedValue(undefined)
     wrap()
 
-    await user.click(screen.getAllByLabelText('delete chart')[0])
-    const dialog = screen.getByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: /^delete$/i }))
+    await user.click(screen.getByRole('button', { name: 'Open Guitar' }))
+    await user.click(within(screen.getByTestId('viewer')).getByRole('button', { name: /^delete chart$/i }))
 
     await waitFor(() => expect(deleteSongChart).toHaveBeenCalledWith(7, 1))
     await waitFor(() => expect(screen.queryByText('Guitar')).not.toBeInTheDocument())
     expect(screen.getByText('Piano')).toBeInTheDocument()
   })
 
-  it('hides the New chart button and delete actions when read-only', () => {
+  it('does not pass a delete action to the viewer when read-only', async () => {
+    const user = userEvent.setup()
     wrap({ canWrite: false })
     expect(screen.queryByRole('button', { name: /new chart/i })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('delete chart')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Open Guitar' }))
+    expect(within(screen.getByTestId('viewer')).queryByRole('button', { name: /^delete chart$/i })).not.toBeInTheDocument()
   })
 })

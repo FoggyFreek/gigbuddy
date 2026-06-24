@@ -2,7 +2,12 @@ import { useCallback, useRef, useState } from 'react'
 import AppBar from '@mui/material/AppBar'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Collapse from '@mui/material/Collapse'
 import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
 import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import Toolbar from '@mui/material/Toolbar'
@@ -12,13 +17,16 @@ import Tooltip from '@mui/material/Tooltip'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import CloseIcon from '@mui/icons-material/Close'
+import DeleteIcon from '@mui/icons-material/Delete'
 import PrintIcon from '@mui/icons-material/Print'
 import EditIcon from '@mui/icons-material/Edit'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import AddIcon from '@mui/icons-material/Add'
 import RemoveIcon from '@mui/icons-material/Remove'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
+import GraphicEqIcon from '@mui/icons-material/GraphicEq'
 import ChordProView from './ChordProView.tsx'
+import ChordAnalyzerPanel from './ChordAnalyzerPanel.tsx'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { printChordPro, MONO_FONT } from '../utils/chordpro.ts'
@@ -38,6 +46,7 @@ interface ChordProViewerDialogProps {
   startInEdit?: boolean
   onClose: () => void
   onChartChange: (chart: SongChart) => void
+  onDelete?: () => Promise<void>
 }
 
 type ChartPatch = { name?: string; source?: string }
@@ -50,6 +59,7 @@ export default function ChordProViewerDialog({
   startInEdit = false,
   onClose,
   onChartChange,
+  onDelete,
 }: ChordProViewerDialogProps) {
   const theme = useTheme()
   const stacked = useMediaQuery(theme.breakpoints.down('md'))
@@ -62,6 +72,9 @@ export default function ChordProViewerDialog({
   // source — view-only, never written back to the chart. Clamped to ±12.
   const [transposeOffset, setTransposeOffset] = useState(0)
   const bumpTranspose = (delta: number) => setTransposeOffset((n) => Math.max(-12, Math.min(12, n + delta)))
+  // Read-only chord finder (fingers -> chord name); never touches the source.
+  const [showAnalyzer, setShowAnalyzer] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   // Print clones the live rendered DOM (incl. abcjs SVGs) into the print window.
   const viewRef = useRef<HTMLDivElement | null>(null)
 
@@ -90,6 +103,12 @@ export default function ChordProViewerDialog({
 
   async function handleClose() {
     await flush()
+    onClose()
+  }
+
+  async function handleDeleteConfirm() {
+    setConfirmDelete(false)
+    await onDelete?.()
     onClose()
   }
 
@@ -152,9 +171,24 @@ export default function ChordProViewerDialog({
     </Box>
   )
 
+  const chordFinderButton = (
+    <Tooltip title="Chord finder">
+      <IconButton
+        size="small"
+        onClick={() => setShowAnalyzer((v) => !v)}
+        aria-label="toggle chord finder"
+        aria-pressed={showAnalyzer}
+        color={showAnalyzer ? 'primary' : 'default'}
+      >
+        <GraphicEqIcon fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  )
+
   return (
     <Dialog fullScreen open={open} onClose={handleClose}>
       <AppBar position="sticky" color="default" elevation={1}>
+        {/* Row 1: title + primary actions */}
         <Toolbar sx={{ gap: 1 }}>
           <IconButton edge="start" onClick={handleClose} aria-label="close">
             <CloseIcon />
@@ -174,7 +208,13 @@ export default function ChordProViewerDialog({
             </Typography>
           )}
           <Box sx={{ flexGrow: 1 }} />
-          {transposeControl}
+          {/* desktop only: transpose + chord finder stay in the single row */}
+          {!stacked && (
+            <>
+              {chordFinderButton}
+              {transposeControl}
+            </>
+          )}
           <SaveStatusLabel status={status} />
           {canWrite && (
             <Button
@@ -187,20 +227,42 @@ export default function ChordProViewerDialog({
           <Button variant="contained" startIcon={<PrintIcon />} onClick={handlePrint}>
             Print
           </Button>
+          {onDelete && (
+            <Tooltip title="Delete chart">
+              <IconButton color="error" onClick={() => setConfirmDelete(true)} aria-label="delete chart">
+                <DeleteIcon />
+              </IconButton>
+            </Tooltip>
+          )}
         </Toolbar>
+
+        {/* Row 2 (compact only): transpose + chord finder */}
+        {stacked && (
+          <Toolbar variant="dense" sx={{ gap: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+            {transposeControl}
+            {chordFinderButton}
+          </Toolbar>
+        )}
       </AppBar>
 
-      <Box sx={{ flexGrow: 1, p: { xs: 1.5, md: 3 }, overflow: 'auto' }}>
+      <Collapse in={showAnalyzer} unmountOnExit sx={{ flexShrink: 0 }}>
+        <Paper variant="outlined" square sx={{ p: { xs: 1.5, md: 2 }, borderWidth: '0 0 1px 0' }}>
+          <ChordAnalyzerPanel fretCount={stacked ? 7 : 15} />
+        </Paper>
+      </Collapse>
+
+      <Box sx={{ flexGrow: 1, minHeight: 0, p: { xs: 1.5, md: 3 }, overflow: 'auto' }}>
         {editing ? (
           stacked ? (
-            <Box sx={{ height: 'calc(100vh - 112px)', minHeight: 280 }}>{editor}</Box>
+            <Box sx={{ height: '100%', minHeight: 280 }}>{editor}</Box>
           ) : (
             <Box
               sx={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',
                 gap: 2,
-                height: 'calc(100vh - 112px)',
+                height: '100%',
+                minHeight: 280,
               }}
             >
               <Box sx={{ height: '100%', minHeight: 0 }}>{editor}</Box>
@@ -217,6 +279,17 @@ export default function ChordProViewerDialog({
           </Box>
         )}
       </Box>
+
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
+        <DialogTitle>Delete chart?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>"{name || 'This chart'}" will be permanently deleted.</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={handleDeleteConfirm}>Delete</Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   )
 }

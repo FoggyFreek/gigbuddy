@@ -137,7 +137,12 @@ describe('GigsPage — split-view detail route', () => {
 
     await user.click(screen.getByRole('button', { name: /^close$/i }))
 
-    await waitFor(() => expect(screen.queryByRole('button', { name: /^close$/i })).not.toBeInTheDocument())
+    // Close flushes (async) then navigates back to /gigs, unmounting the detail.
+    // Give the default 1s waitFor more headroom so full-suite load can't make it flake.
+    await waitFor(
+      () => expect(screen.queryByRole('button', { name: /^close$/i })).not.toBeInTheDocument(),
+      { timeout: 2000 }
+    )
     expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
   })
 

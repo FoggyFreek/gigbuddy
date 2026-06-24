@@ -15,6 +15,20 @@ function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
 }
 
+function futureDateISO(daysFromNow) {
+  const d = new Date()
+  d.setDate(d.getDate() + daysFromNow)
+  d.setUTCHours(0, 0, 0, 0)
+  return d.toISOString()
+}
+
+function pastDateISO(daysAgo) {
+  const d = new Date()
+  d.setDate(d.getDate() - daysAgo)
+  d.setUTCHours(0, 0, 0, 0)
+  return d.toISOString()
+}
+
 const REHEARSALS = [
   {
     id: 1,
@@ -85,6 +99,30 @@ describe('RehearsalsTable', () => {
     wrap(<RehearsalsTable rehearsals={REHEARSALS} onRowClick={onRowClick} />)
     await user.click(screen.getByText('Studio A'))
     expect(onRowClick).toHaveBeenCalledWith(REHEARSALS[0])
+  })
+
+  it('sorts only the past rehearsals table by date descending by default', async () => {
+    const user = userEvent.setup()
+    const rehearsals = [
+      { ...REHEARSALS[0], id: 10, proposed_date: pastDateISO(30), location: 'Old Past Rehearsal' },
+      { ...REHEARSALS[0], id: 11, proposed_date: pastDateISO(1), location: 'Most Recent Past Rehearsal' },
+      { ...REHEARSALS[0], id: 12, proposed_date: pastDateISO(10), location: 'Middle Past Rehearsal' },
+      { ...REHEARSALS[0], id: 13, proposed_date: futureDateISO(20), location: 'Later Upcoming Rehearsal' },
+      { ...REHEARSALS[0], id: 14, proposed_date: futureDateISO(5), location: 'Earlier Upcoming Rehearsal' },
+    ]
+
+    wrap(<RehearsalsTable rehearsals={rehearsals} onRowClick={() => {}} />)
+    await user.click(screen.getByText('Past rehearsals (3)'))
+
+    const recent = screen.getByText('Most Recent Past Rehearsal')
+    const middle = screen.getByText('Middle Past Rehearsal')
+    const old = screen.getByText('Old Past Rehearsal')
+    const laterUpcoming = screen.getByText('Later Upcoming Rehearsal')
+    const earlierUpcoming = screen.getByText('Earlier Upcoming Rehearsal')
+
+    expect(recent.compareDocumentPosition(middle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(middle.compareDocumentPosition(old) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(laterUpcoming.compareDocumentPosition(earlierUpcoming) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   describe('mobile', () => {

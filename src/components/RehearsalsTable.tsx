@@ -40,6 +40,15 @@ function isPastDate(val: string | undefined | null) {
   return d < today
 }
 
+function rehearsalDateTime(val: string | undefined | null): number {
+  if (!val) return 0
+  return new Date(val).getTime()
+}
+
+function compareRehearsalDateDesc(a: Rehearsal, b: Rehearsal): number {
+  return rehearsalDateTime(b.proposed_date) - rehearsalDateTime(a.proposed_date)
+}
+
 function tallyCounts(participants: Participant[] | undefined) {
   const total = participants?.length ?? 0
   const yes = participants?.filter((p) => p.vote === 'yes').length ?? 0
@@ -246,7 +255,7 @@ export default function RehearsalsTable({ rehearsals = [], bandMemberId, onVote,
   const isCompact = useCompactLayout()
 
   const upcoming = rehearsals.filter((r) => !isPastDate(r.proposed_date))
-  const past = rehearsals.filter((r) => isPastDate(r.proposed_date))
+  const past = rehearsals.filter((r) => isPastDate(r.proposed_date)).sort(compareRehearsalDateDesc)
   const emptyAll = rehearsals.length === 0
 
   if (isCompact) {

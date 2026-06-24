@@ -366,7 +366,11 @@ describe('GigDetailContent — ticket link field', () => {
     await waitFor(() => screen.getByLabelText(/paid admission/i))
     await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
-    await user.type(screen.getByLabelText(/ticket link/i), 'https://tickets.test')
+    // Paste the whole URL in one event rather than typing it character by
+    // character: each keystroke re-renders the (heavy) detail body, and ~20 of
+    // those under load is what made this test flake past the 5s budget.
+    await user.click(screen.getByLabelText(/ticket link/i))
+    await user.paste('https://tickets.test')
     await waitFor(
       () =>
         expect(updateGig).toHaveBeenCalledWith(

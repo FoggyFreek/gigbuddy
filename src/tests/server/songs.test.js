@@ -229,6 +229,34 @@ describe('ChordPro charts', () => {
     ).expect(400)
   })
 
+  it('rejects a binary file renamed to a valid extension (400)', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charts')
+    // A PNG header: control + NUL bytes, so it isn't plain-text ChordPro.
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00])
+    await asUserA(
+      request(app)
+        .post(`/api/songs/${song.id}/charts/upload`)
+        .attach('file', png, { filename: 'evil.cho', contentType: 'application/octet-stream' }),
+    ).expect(400)
+  })
+
+  it('rejects a JSON-body create whose source has control bytes (400)', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charts')
+    await asUserA(
+      request(app).post(`/api/songs/${song.id}/charts`).send({ name: 'x', source: '[C]hi\0' }),
+    ).expect(400)
+  })
+
+  it('rejects a chart PATCH whose source has control bytes (400)', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charts')
+    const created = await asUserA(
+      request(app).post(`/api/songs/${song.id}/charts`).send({ name: 'A', source: '[C]ok' }),
+    ).expect(201)
+    await asUserA(
+      request(app).patch(`/api/songs/${song.id}/charts/${created.body.id}`).send({ source: 'bad\0' }),
+    ).expect(400)
+  })
+
   it('patches a chart name and source', async () => {
     const song = await createSong(seed.tenantA.id, 'Charts')
     const created = await asUserA(

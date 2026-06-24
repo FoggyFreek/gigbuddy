@@ -12,7 +12,7 @@ import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
 import LibraryMusicIcon from '@mui/icons-material/LibraryMusic'
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
 import SongImportDialog from './SongImportDialog.tsx'
-import { createSong, uploadSongChart } from '../api/songs.ts'
+import { createSong, deleteSong, uploadSongChart } from '../api/songs.ts'
 import { lyricsHtmlFromChordPro, songFieldsFromChordPro } from '../utils/chordpro.ts'
 import type { Song, Id } from '../types/entities.ts'
 
@@ -64,7 +64,12 @@ export default function SongImportMenu({ onImported, onSongCreated }: SongImport
         tempo: fields.tempo,
         lyrics_html: lyricsHtmlFromChordPro(text),
       })
-      await uploadSongChart(song.id as Id, file)
+      try {
+        await uploadSongChart(song.id as Id, file)
+      } catch (err) {
+        await deleteSong(song.id as Id).catch(() => {}) // best-effort cleanup so a rejected file leaves no orphan song
+        throw err
+      }
       onImported()
       onSongCreated(song)
     } catch (err) {

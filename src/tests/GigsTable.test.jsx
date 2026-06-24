@@ -22,6 +22,13 @@ function futureDateISO(daysFromNow) {
   return d.toISOString()
 }
 
+function pastDateISO(daysAgo) {
+  const d = new Date()
+  d.setDate(d.getDate() - daysAgo)
+  d.setUTCHours(0, 0, 0, 0)
+  return d.toISOString()
+}
+
 const GIGS = [
   {
     id: 1,
@@ -100,6 +107,30 @@ describe('GigsTable', () => {
     const { container } = wrap(<GigsTable gigs={withBanner} onRowClick={() => {}} />)
     const banner = container.querySelector('img[src="/api/files/tenants/1/gig-banners/abc.jpg"]')
     expect(banner).toBeInTheDocument()
+  })
+
+  it('sorts only the past gigs table by date descending by default', async () => {
+    const user = userEvent.setup()
+    const gigs = [
+      { ...GIGS[0], id: 10, event_date: pastDateISO(30), event_description: 'Old Past Gig' },
+      { ...GIGS[0], id: 11, event_date: pastDateISO(1), event_description: 'Most Recent Past Gig' },
+      { ...GIGS[0], id: 12, event_date: pastDateISO(10), event_description: 'Middle Past Gig' },
+      { ...GIGS[0], id: 13, event_date: futureDateISO(20), event_description: 'Later Upcoming Gig' },
+      { ...GIGS[0], id: 14, event_date: futureDateISO(5), event_description: 'Earlier Upcoming Gig' },
+    ]
+
+    wrap(<GigsTable gigs={gigs} onRowClick={() => {}} />)
+    await user.click(screen.getByText('Past gigs (3)'))
+
+    const recent = screen.getByText('Most Recent Past Gig')
+    const middle = screen.getByText('Middle Past Gig')
+    const old = screen.getByText('Old Past Gig')
+    const laterUpcoming = screen.getByText('Later Upcoming Gig')
+    const earlierUpcoming = screen.getByText('Earlier Upcoming Gig')
+
+    expect(recent.compareDocumentPosition(middle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(middle.compareDocumentPosition(old) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(laterUpcoming.compareDocumentPosition(earlierUpcoming) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   describe('mobile (compact card layout)', () => {

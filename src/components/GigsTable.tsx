@@ -67,6 +67,15 @@ function isPastDate(val: string | Date | undefined): boolean {
   return d < today
 }
 
+function eventDateTime(val: string | Date | undefined): number {
+  if (!val) return 0
+  return new Date(val as string).getTime()
+}
+
+function compareEventDateDesc(a: GigWithExtras, b: GigWithExtras): number {
+  return eventDateTime(b.event_date) - eventDateTime(a.event_date)
+}
+
 function applySearch(list: GigWithExtras[], q: string): GigWithExtras[] {
   if (!q) return list
   const lower = q.toLowerCase()
@@ -267,7 +276,7 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
   if (!allStatusesSelected) filtered = filtered.filter((g) => selectedStatuses.has(g.status ?? ''))
 
   const upcoming = filtered.filter((g) => !isPastDate(g.event_date))
-  const past = filtered.filter((g) => isPastDate(g.event_date))
+  const past = filtered.filter((g) => isPastDate(g.event_date)).sort(compareEventDateDesc)
   const emptyAll = gigs.length === 0
 
   const controls = (
