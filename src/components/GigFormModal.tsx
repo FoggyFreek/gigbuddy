@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
@@ -36,7 +37,7 @@ import type { Id, Venue, Gig } from '../types/entities.ts'
 
 dayjs.extend(customParseFormat)
 
-const STATUSES = ['option', 'confirmed', 'announced']
+const STATUSES = ['option', 'confirmed', 'announced'] as const
 
 interface GigFormShape {
   event_date: string
@@ -74,6 +75,7 @@ interface GigFormModalProps {
 }
 
 export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigFormModalProps) {
+  const { t } = useTranslation(['gigs', 'common'])
   const contentRef = useRef<GigDetailHandle | null>(null)
   const { canWritePlanning: canWrite } = usePermissions()
 
@@ -124,8 +126,8 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
 
   async function handleCreate() {
     const errs: Record<string, string> = {}
-    if (!form.event_date) errs.event_date = 'Required'
-    if (!form.event_description.trim()) errs.event_description = 'Required'
+    if (!form.event_date) errs.event_date = t($ => $.form.required)
+    if (!form.event_description.trim()) errs.event_description = t($ => $.form.required)
     if (Object.keys(errs).length) { setErrors(errs); return }
 
     if (unavailableLeads.length > 0) {
@@ -142,7 +144,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
 
   return (
     <Dialog open fullWidth maxWidth="md" onClose={mode === 'edit' ? handleClose : undefined}>
-      <DialogTitle>{mode === 'create' ? 'New gig' : 'Gig details'}</DialogTitle>
+      <DialogTitle>{mode === 'create' ? t($ => $.form.newGig) : t($ => $.form.gigDetails)}</DialogTitle>
 
       <DialogContent>
         {mode === 'edit' ? (
@@ -151,7 +153,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 12, sm: 6 }}>
               <DateEntryField
-                label="Date"
+                label={t($ => $.form.date)}
                 fullWidth
                 value={form.event_date}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('event_date', e.target.value)}
@@ -161,7 +163,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label="Event description"
+                label={t($ => $.form.eventDescription)}
                 fullWidth
                 value={form.event_description}
                 onChange={(e) => handleChange('event_description', e.target.value)}
@@ -191,7 +193,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
               <TimePicker
-                label="Start time"
+                label={t($ => $.form.startTime)}
                 ampm={false}
                 value={timeStringToDayjs(form.start_time)}
                 onChange={(v) => handleChange('start_time', dayjsToTimeString(v))}
@@ -200,7 +202,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
               <TimePicker
-                label="End time"
+                label={t($ => $.form.endTime)}
                 ampm={false}
                 value={timeStringToDayjs(form.end_time)}
                 onChange={(v) => handleChange('end_time', dayjsToTimeString(v))}
@@ -210,13 +212,13 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
             <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 select
-                label="Status"
+                label={t($ => $.form.status)}
                 fullWidth
                 value={form.status}
                 onChange={(e) => handleChange('status', e.target.value)}
               >
                 {STATUSES.map((s) => (
-                  <MenuItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
+                  <MenuItem key={s} value={s}>{t($ => $.status[s])}</MenuItem>
                 ))}
               </TextField>
             </Grid>
@@ -224,7 +226,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
             <Grid size={12}>
               <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                Member availability
+                {t($ => $.form.memberAvailability)}
               </Typography>
               <GigAvailabilityPanel
                 eventDate={form.event_date}
@@ -242,27 +244,28 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigF
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {mode === 'create' ? (
           <>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button variant="contained" onClick={handleCreate}>Create</Button>
+            <Button onClick={onClose}>{t($ => $.common.actions.cancel)}</Button>
+            <Button variant="contained" onClick={handleCreate}>{t($ => $.form.create)}</Button>
           </>
         ) : (
-          <Button variant="contained" onClick={handleClose}>Close</Button>
+          <Button variant="contained" onClick={handleClose}>{t($ => $.common.actions.close)}</Button>
         )}
       </DialogActions>
 
       <Dialog open={confirmCreate} onClose={() => setConfirmCreate(false)}>
-        <DialogTitle>Member unavailable</DialogTitle>
+        <DialogTitle>{t($ => $.form.unavailableTitle)}</DialogTitle>
         <DialogContent>
           <Typography>
-            {unavailableLeads.map((m) => m.name).join(', ')}{' '}
-            {unavailableLeads.length === 1 ? 'is' : 'are'} marked unavailable on this date.
-            Are you sure you want to create this gig?
+            {t($ => $.form.unavailableBody, {
+              names: unavailableLeads.map((m) => m.name).join(', '),
+              count: unavailableLeads.length,
+            })}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmCreate(false)}>Go back</Button>
+          <Button onClick={() => setConfirmCreate(false)}>{t($ => $.form.goBack)}</Button>
           <Button variant="contained" color="warning" onClick={() => { setConfirmCreate(false); doCreate() }}>
-            Create anyway
+            {t($ => $.form.createAnyway)}
           </Button>
         </DialogActions>
       </Dialog>

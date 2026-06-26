@@ -1,5 +1,5 @@
 import type { Rehearsal, Member, Id } from '../types/entities.ts'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -11,6 +11,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import Stack from '@mui/material/Stack'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import {
   addParticipant,
@@ -20,6 +21,8 @@ import {
   setVote,
   updateRehearsal,
 } from '../api/rehearsals.ts'
+import { getAvailabilityOn } from '../api/availability.ts'
+import type { AvailabilityData } from './GigAvailabilityPanel.tsx'
 import { listMembers } from '../api/bandMembers.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
@@ -63,6 +66,9 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   const [members, setMembers] = useState<Member[]>([])
   const [extraMemberIds, setExtraMemberIds] = useState<Id[]>([])
   const [addMemberId, setAddMemberId] = useState<Id | ''>('')
+  const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null)
+  const [confirmCreate, setConfirmCreate] = useState(false)
+  const availTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const saveFn = useCallback(
     async (patch: Record<string, unknown>) => { await updateRehearsal(rehearsalId!, patch) },
@@ -73,6 +79,22 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   useEffect(() => {
     listMembers().then(setMembers).catch(() => {})
   }, [])
+
+  // Fetch member availability on the proposed date (create mode only), debounced.
+  // The render and create-guard both gate on form.proposed_date, so stale data
+  // when the date is cleared is harmless (matches GigAvailabilityPanel).
+  useEffect(() => {
+    if (mode !== 'create' || !form.proposed_date) return
+    clearTimeout(availTimerRef.current ?? undefined)
+    availTimerRef.current = setTimeout(() => {
+      getAvailabilityOn(form.proposed_date)
+        .then((d) => setAvailabilityData(d as unknown as AvailabilityData))
+        .catch(() => setAvailabilityData(null))
+    }, 300)
+    return () => {
+      if (availTimerRef.current) clearTimeout(availTimerRef.current)
+    }
+  }, [mode, form.proposed_date])
 
   const refresh = useCallback(async () => {
     if (mode !== 'edit') return
@@ -112,10 +134,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
     }
   }
 
-  async function handleCreate() {
-    const errs: Record<string, string> = {}
-    if (!form.proposed_date) errs.proposed_date = 'Required'
-    if (Object.keys(errs).length) { setErrors(errs); return }
+  async function doCreate() {
     await (createRehearsal as unknown as (body: Record<string, unknown>) => Promise<unknown>)({
       proposed_date: form.proposed_date,
       start_time: form.start_time || null,
@@ -125,6 +144,18 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       extra_member_ids: extraMemberIds,
     })
     onClose()
+  }
+
+  async function handleCreate() {
+    const errs: Record<string, string> = {}
+    if (!form.proposed_date) errs.proposed_date = 'Required'
+    if (Object.keys(errs).length) { setErrors(errs); return }
+
+    if (unavailableSelected.length > 0) {
+      setConfirmCreate(true)
+      return
+    }
+    await doCreate()
   }
 
   async function handleClose() {
@@ -165,6 +196,17 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   }
 
   const createExtras = members.filter((m) => m.position !== 'lead')
+
+  // Members that will participate in the rehearsal: leads (auto-included) + chosen extras.
+  const selectedMemberIds = new Set<Id>(
+    members
+      .filter((m) => m.position === 'lead' || (m.id !== undefined && extraMemberIds.includes(m.id)))
+      .map((m) => m.id)
+      .filter((id): id is Id => id !== undefined),
+  )
+  const unavailableSelected = (availabilityData?.members ?? []).filter(
+    (m) => m.status === 'unavailable' && m.member_id !== undefined && selectedMemberIds.has(m.member_id),
+  )
 
   return (
     <Dialog open fullWidth maxWidth="md" onClose={mode === 'edit' ? handleClose : undefined}>
@@ -212,6 +254,30 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               </Grid>
             )}
 
+            {mode === 'create' && form.proposed_date && unavailableSelected.length > 0 && (
+              <Grid size={12}>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  Member availability
+                </Typography>
+                <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', minWidth: 0 }}>
+                  {unavailableSelected.map((m) => {
+                    const label = m.reason ? `${m.name} — ${m.reason}` : m.name
+                    return (
+                      <Tooltip key={String(m.member_id)} title={label ?? ''}>
+                        <Chip
+                          label={label}
+                          color="error"
+                          size="small"
+                          sx={{ maxWidth: { xs: '100%', sm: 200 } }}
+                        />
+                      </Tooltip>
+                    )
+                  })}
+                </Stack>
+              </Grid>
+            )}
+
             {mode === 'edit' && rehearsal && (
               <RehearsalParticipantsSection
                 rehearsal={rehearsal}
@@ -243,6 +309,23 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
           <Button variant="contained" onClick={handleClose}>Close</Button>
         )}
       </DialogActions>
+
+      <Dialog open={confirmCreate} onClose={() => setConfirmCreate(false)}>
+        <DialogTitle>Member unavailable</DialogTitle>
+        <DialogContent>
+          <Typography>
+            {unavailableSelected.map((m) => m.name).join(', ')}{' '}
+            {unavailableSelected.length === 1 ? 'is' : 'are'} marked unavailable on this date.
+            Are you sure you want to propose this rehearsal?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmCreate(false)}>Go back</Button>
+          <Button variant="contained" color="warning" onClick={() => { setConfirmCreate(false); doCreate() }}>
+            Propose anyway
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   )
 }

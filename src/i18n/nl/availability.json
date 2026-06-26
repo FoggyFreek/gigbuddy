@@ -1,0 +1,41 @@
+{
+  "title": "Agenda",
+  "weekAbbrev": "Wk",
+  "nav": {
+    "prevMonth": "vorige maand",
+    "nextMonth": "volgende maand"
+  },
+  "subscribe": {
+    "tooltip": "Abonneren op agenda",
+    "aria": "abonneren op agenda"
+  },
+  "export": {
+    "tooltip": "Maand exporteren naar agenda (.ics)",
+    "aria": "exporteren naar agenda"
+  },
+  "addEventAria": "evenement toevoegen",
+  "addMenu": {
+    "availability": "Beschikbaarheid",
+    "gig": "Optreden",
+    "rehearsal": "Repetitie",
+    "bandEvent": "Bandevenement"
+  },
+  "events": {
+    "noEvents": "Geen evenementen.",
+    "band": "Band",
+    "bandWide": "Hele band",
+    "gigFallback": "Optreden",
+    "rehearsalTooltip": "Repetitie — {{status}}",
+    "rehearsalAbbrev": "Rep {{yes}}/{{total}}",
+    "votesYes": "{{yes}}/{{total}} ja"
+  },
+  "exportDialog": {
+    "title": "Agenda exporteren",
+    "intro": "Kies welke evenementen je wilt opnemen in de .ics-export voor {{month}}.",
+    "gigs": "Optredens",
+    "rehearsals": "Repetities",
+    "bandEvents": "Bandevenementen",
+    "note": "Alleen bevestigde en aangekondigde optredens en geplande repetities worden geëxporteerd. Opties worden uitgesloten.",
+    "export": "Exporteren"
+  }
+}

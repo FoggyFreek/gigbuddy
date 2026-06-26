@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Id } from '../../types/entities.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -32,6 +33,7 @@ interface ProfileLinkRowProps {
 }
 
 function ProfileLinkRow({ link, onChange, onDelete }: ProfileLinkRowProps) {
+  const { t } = useTranslation('profile')
   const [editing, setEditing] = useState(false)
   const saveFn = useCallback(
     async (patch: Partial<ProfileLink>) => { await updateLink(link.id!, patch) },
@@ -56,7 +58,7 @@ function ProfileLinkRow({ link, onChange, onDelete }: ProfileLinkRowProps) {
             {link.url || '—'}
           </Typography>
         </Box>
-        <Tooltip title="Open in new tab">
+        <Tooltip title={t($ => $.links.openInNewTab)}>
           <IconButton
             component="a"
             href={link.url}
@@ -70,12 +72,12 @@ function ProfileLinkRow({ link, onChange, onDelete }: ProfileLinkRowProps) {
             </Box>
           </IconButton>
         </Tooltip>
-        <Tooltip title="Edit link">
+        <Tooltip title={t($ => $.links.edit)}>
           <IconButton size="small" onClick={() => setEditing(true)}>
             <EditIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-        <Tooltip title="Delete link">
+        <Tooltip title={t($ => $.links.delete)}>
           <IconButton onClick={onDelete} color="error" size="small">
             <DeleteIcon fontSize="small" />
           </IconButton>
@@ -90,14 +92,14 @@ function ProfileLinkRow({ link, onChange, onDelete }: ProfileLinkRowProps) {
         <LinkIcon color="action" />
       </Box>
       <TextField
-        label="Label"
+        label={t($ => $.links.label)}
         size="small"
         value={link.label}
         onChange={(e) => handle('label', e.target.value)}
         sx={{ flex: 1 }}
       />
       <TextField
-        label="URL"
+        label={t($ => $.links.url)}
         size="small"
         value={link.url}
         onChange={(e) => handle('url', e.target.value)}
@@ -119,7 +121,7 @@ function ProfileLinkRow({ link, onChange, onDelete }: ProfileLinkRowProps) {
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip title="Done editing">
+      <Tooltip title={t($ => $.links.doneEditing)}>
         <IconButton size="small" onClick={() => setEditing(false)} color="primary">
           <CheckIcon fontSize="small" />
         </IconButton>
@@ -149,6 +151,7 @@ interface ProfileLinksTabProps {
 }
 
 export default function ProfileLinksTab({ links, newLink, setNewLink, adding, onAdd, onLinkChange, onDeleteLink }: ProfileLinksTabProps) {
+  const { t } = useTranslation('profile')
   return (
     <Box sx={{ p: 3 }}>
       <Stack spacing={2}>
@@ -163,7 +166,7 @@ export default function ProfileLinksTab({ links, newLink, setNewLink, adding, on
 
         {links.length === 0 && (
           <Typography variant="body2" color="text.secondary">
-            No links yet. Add one below — e.g. a Google Drive folder with your EPK.
+            {t($ => $.links.empty)}
           </Typography>
         )}
 
@@ -171,14 +174,14 @@ export default function ProfileLinksTab({ links, newLink, setNewLink, adding, on
 
         <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
           <TextField
-            label="Label"
+            label={t($ => $.links.label)}
             size="small"
             value={newLink.label}
             onChange={(e) => setNewLink((p) => ({ ...p, label: e.target.value }))}
             sx={{ flex: 1 }}
           />
           <TextField
-            label="URL"
+            label={t($ => $.links.url)}
             size="small"
             value={newLink.url}
             onChange={(e) => setNewLink((p) => ({ ...p, url: e.target.value }))}
@@ -192,7 +195,7 @@ export default function ProfileLinksTab({ links, newLink, setNewLink, adding, on
             disabled={!newLink.label.trim() || !newLink.url.trim() || adding}
             sx={{ height: 40, whiteSpace: 'nowrap' }}
           >
-            Add link
+            {t($ => $.links.add)}
           </Button>
         </Stack>
       </Stack>

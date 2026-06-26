@@ -1,0 +1,7 @@
+{
+  "title": "Journal",
+  "status": {
+    "draft": "Draft",
+    "approved": "Approved"
+  }
+}

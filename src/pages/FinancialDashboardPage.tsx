@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link as RouterLink } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -118,6 +119,7 @@ const compactEur = new Intl.NumberFormat('en-US', {
 const formatCompactChartValue = (value: number | null | undefined) => compactEur.format(value ?? 0)
 
 export default function FinancialDashboardPage() {
+  const { t } = useTranslation('financialDashboard')
   const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
@@ -163,7 +165,7 @@ export default function FinancialDashboardPage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flex: 1 }}>
-          Financial
+          {t($ => $.title)}
         </Typography>
         <PeriodPicker availableDates={availableDates} value={period} onChange={setPeriod} />
       </Box>
@@ -240,11 +242,11 @@ function HeadlineStat({ label, cents, color }: HeadlineStatProps) {
 }
 
 // Short month names; the year is appended when the period spans years.
-function monthLabels(months: MonthData[]) {
+function monthLabels(months: MonthData[], lng: string) {
   const multiYear = new Set(months.map((m) => m.year)).size > 1
   return months.map((m) => {
     const name = new Date(Date.UTC(m.year, m.month - 1, 1))
-      .toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+      .toLocaleDateString(lng, { month: 'short', timeZone: 'UTC' })
     return multiYear ? `${name} ${String(m.year).slice(2)}` : name
   })
 }
@@ -260,6 +262,7 @@ interface ResultChartCardProps {
 }
 
 function ResultChartCard({ currency, months, totals }: ResultChartCardProps) {
+  const { t, i18n } = useTranslation('financialDashboard')
   const theme = useTheme()
   // x-charts only sizes bars via the band's categoryGapRatio, so a fixed 30px
   // bar means measuring the rendered width and deriving the ratio from it.
@@ -281,28 +284,28 @@ function ResultChartCard({ currency, months, totals }: ResultChartCardProps) {
     <DashboardCard
       title={(
         <>
-          Result in {currency}{' '}
+          {t($ => $.resultCard.title, { currency })}{' '}
           <Typography component="span" variant="caption" color="text.secondary">
-            Excl. VAT
+            {t($ => $.resultCard.exclVat)}
           </Typography>
         </>
       )}
       action={(
         <Box sx={{ display: 'flex', gap: 2.5 }}>
-          <HeadlineStat label="Revenue" cents={totals.revenue_cents} color={theme.palette.success.main} />
-          <HeadlineStat label="Expenses" cents={-totals.expense_cents} color={theme.palette.error.main} />
-          <HeadlineStat label="Result" cents={totals.result_cents} color={theme.palette.success.main} />
+          <HeadlineStat label={t($ => $.resultCard.revenue)} cents={totals.revenue_cents} color={theme.palette.success.main} />
+          <HeadlineStat label={t($ => $.resultCard.expenses)} cents={-totals.expense_cents} color={theme.palette.error.main} />
+          <HeadlineStat label={t($ => $.resultCard.result)} cents={totals.result_cents} color={theme.palette.success.main} />
         </Box>
       )}
     >
       <Box ref={wrapperRef}>
       <ChartsContainer
         height={280}
-        xAxis={[{ id: 'months', data: monthLabels(months), scaleType: 'band', categoryGapRatio }]}
+        xAxis={[{ id: 'months', data: monthLabels(months, i18n.language), scaleType: 'band', categoryGapRatio }]}
         series={[
           {
             type: 'bar',
-            label: 'Revenue',
+            label: t($ => $.resultCard.revenue),
             data: months.map((m) => toEuros(m.revenue_cents)),
             color: theme.palette.success.main,
             // Shared stack id: one column per month, revenue above the zero
@@ -312,7 +315,7 @@ function ResultChartCard({ currency, months, totals }: ResultChartCardProps) {
           },
           {
             type: 'bar',
-            label: 'Expenses',
+            label: t($ => $.resultCard.expenses),
             data: months.map((m) => toEuros(-m.expense_cents)),
             color: theme.palette.error.main,
             stack: 'result',
@@ -320,7 +323,7 @@ function ResultChartCard({ currency, months, totals }: ResultChartCardProps) {
           },
           {
             type: 'line',
-            label: 'Result',
+            label: t($ => $.resultCard.result),
             data: months.map((m) => toEuros(m.result_cents)),
             color: theme.palette.text.disabled,
             curve: 'monotoneX',
@@ -381,6 +384,7 @@ interface OverviewCardProps {
 }
 
 function OverviewCard({ totals, bank }: OverviewCardProps) {
+  const { t } = useTranslation('financialDashboard')
   const theme = useTheme()
   const maxCents = Math.max(
     Math.abs(totals.revenue_cents),
@@ -388,11 +392,11 @@ function OverviewCard({ totals, bank }: OverviewCardProps) {
     Math.abs(totals.result_cents),
   )
   return (
-    <DashboardCard title="Overview">
+    <DashboardCard title={t($ => $.overview.title)}>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 0.5 }}>
-        <OverviewBar label="Income" cents={totals.revenue_cents} color={theme.palette.success.main} maxCents={maxCents} />
-        <OverviewBar label="Expenses" cents={totals.expense_cents} color={theme.palette.error.main} maxCents={maxCents} />
-        <OverviewBar label="Profit" cents={totals.result_cents} color={theme.palette.success.main} maxCents={maxCents} />
+        <OverviewBar label={t($ => $.overview.income)} cents={totals.revenue_cents} color={theme.palette.success.main} maxCents={maxCents} />
+        <OverviewBar label={t($ => $.overview.expenses)} cents={totals.expense_cents} color={theme.palette.error.main} maxCents={maxCents} />
+        <OverviewBar label={t($ => $.overview.profit)} cents={totals.result_cents} color={theme.palette.success.main} maxCents={maxCents} />
       </Box>
       <Box
         sx={{
@@ -405,7 +409,7 @@ function OverviewCard({ totals, bank }: OverviewCardProps) {
           borderColor: 'divider',
         }}
       >
-        <Typography variant="body2" color="text.secondary">Bank balance</Typography>
+        <Typography variant="body2" color="text.secondary">{t($ => $.overview.bankBalance)}</Typography>
         <Typography variant="body1" sx={{ fontWeight: 600 }}>{formatEur(bank.balance_cents)}</Typography>
       </Box>
     </DashboardCard>
@@ -420,6 +424,7 @@ interface ResultsTrendCardProps {
 }
 
 function ResultsTrendCard({ currency, annualResults }: ResultsTrendCardProps) {
+  const { t } = useTranslation('financialDashboard')
   const theme = useTheme()
   const latestResult = annualResults[annualResults.length - 1]?.result_cents ?? 0
   const lineColor = latestResult >= 0 ? theme.palette.success.main : theme.palette.error.main
@@ -440,9 +445,9 @@ function ResultsTrendCard({ currency, annualResults }: ResultsTrendCardProps) {
     <DashboardCard
       title={(
         <>
-          Result trend{' '}
+          {t($ => $.resultTrend.title)}{' '}
           <Typography component="span" variant="caption" color="text.secondary">
-            Last {annualResults.length} yrs · {currency}
+            {t($ => $.resultTrend.subtitle, { count: annualResults.length, currency })}
           </Typography>
         </>
       )}
@@ -479,6 +484,7 @@ interface InvoiceBucketProps {
 }
 
 function InvoiceBucket({ label, bucket, dotColor }: InvoiceBucketProps) {
+  const { t } = useTranslation('financialDashboard')
   return (
     <Box sx={{ flex: 1, minWidth: 110 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -489,7 +495,7 @@ function InvoiceBucket({ label, bucket, dotColor }: InvoiceBucketProps) {
         {formatEur(bucket.total_cents)}
       </Typography>
       <Typography variant="caption" color="text.secondary">
-        {bucket.count} {bucket.count === 1 ? 'invoice' : 'invoices'}
+        {t($ => $.invoices.count, { count: bucket.count })}
       </Typography>
     </Box>
   )
@@ -500,9 +506,10 @@ interface InvoicesCardProps {
 }
 
 function InvoicesCard({ invoices }: InvoicesCardProps) {
+  const { t } = useTranslation('financialDashboard')
   return (
     <DashboardCard
-      title="Invoices"
+      title={t($ => $.invoices.title)}
       action={(
         <Button
           component={RouterLink}
@@ -511,14 +518,14 @@ function InvoicesCard({ invoices }: InvoicesCardProps) {
           variant="outlined"
           startIcon={<AddOutlined />}
         >
-          Create invoice
+          {t($ => $.invoices.create)}
         </Button>
       )}
     >
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-        <InvoiceBucket label="Overdue" bucket={invoices.overdue} dotColor="error.main" />
-        <InvoiceBucket label="Unpaid" bucket={invoices.unpaid} dotColor="warning.main" />
-        <InvoiceBucket label="Draft" bucket={invoices.draft} dotColor="info.main" />
+        <InvoiceBucket label={t($ => $.invoices.overdue)} bucket={invoices.overdue} dotColor="error.main" />
+        <InvoiceBucket label={t($ => $.invoices.unpaid)} bucket={invoices.unpaid} dotColor="warning.main" />
+        <InvoiceBucket label={t($ => $.invoices.draft)} bucket={invoices.draft} dotColor="info.main" />
       </Box>
     </DashboardCard>
   )
@@ -533,6 +540,7 @@ interface MerchCardProps {
 }
 
 function MerchCard({ merch, totals }: MerchCardProps) {
+  const { t } = useTranslation('financialDashboard')
   const marginPct = merch.revenue_cents > 0
     ? Math.round((merch.gross_profit_cents / merch.revenue_cents) * 100)
     : null
@@ -542,34 +550,42 @@ function MerchCard({ merch, totals }: MerchCardProps) {
 
   return (
     <DashboardCard
-      title="Merchandise"
+      title={t($ => $.merch.title)}
       action={(
         <Button component={RouterLink} to="/merch" size="small" variant="outlined">
-          Manage merch
+          {t($ => $.merch.manage)}
         </Button>
       )}
     >
       <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
         <Box sx={{ flex: 1, minWidth: 140 }}>
-          <Typography variant="caption" color="text.secondary">Gross profit</Typography>
+          <Typography variant="caption" color="text.secondary">{t($ => $.merch.grossProfit)}</Typography>
           <Typography variant="h4" sx={{ fontWeight: 600, my: 0.5, color: 'success.main' }}>
             {formatEur(merch.gross_profit_cents)}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {marginPct === null ? 'No merch sales in this period' : `${marginPct}% margin on sales`}
+            {marginPct === null ? t($ => $.merch.noSales) : t($ => $.merch.margin, { pct: marginPct })}
           </Typography>
         </Box>
         <Box sx={{ flex: 1, minWidth: 140 }}>
-          <Typography variant="caption" color="text.secondary">Inventory value</Typography>
+          <Typography variant="caption" color="text.secondary">{t($ => $.merch.inventoryValue)}</Typography>
           <Typography variant="h4" sx={{ fontWeight: 600, my: 0.5 }}>
             {formatEur(merch.inventory_value_cents)}
           </Typography>
-          <Typography variant="body2" color="text.secondary">Stock on hand, at cost</Typography>
+          <Typography variant="body2" color="text.secondary">{t($ => $.merch.stockOnHand)}</Typography>
         </Box>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
-        Sales {formatEur(merch.revenue_cents)} − cost of goods {formatEur(merch.cogs_cents)}
-        {sharePct !== null && ` — ${sharePct}% of total revenue`}
+        {sharePct === null
+          ? t($ => $.merch.breakdown, {
+              sales: formatEur(merch.revenue_cents),
+              cogs: formatEur(merch.cogs_cents),
+            })
+          : t($ => $.merch.breakdownWithShare, {
+              sales: formatEur(merch.revenue_cents),
+              cogs: formatEur(merch.cogs_cents),
+              pct: sharePct,
+            })}
       </Typography>
     </DashboardCard>
   )
@@ -582,41 +598,40 @@ interface UpcomingFeesCardProps {
   fees: UpcomingFeesData
 }
 
-const FEE_STATUS_META: { key: keyof UpcomingFeesData['by_status']; label: string; dotColor: string }[] = [
-  { key: 'confirmed', label: 'Confirmed', dotColor: 'success.main' },
-  { key: 'announced', label: 'Announced', dotColor: 'info.main' },
-  { key: 'option', label: 'Option', dotColor: 'warning.main' },
+const FEE_STATUS_META: { key: keyof UpcomingFeesData['by_status']; dotColor: string }[] = [
+  { key: 'confirmed', dotColor: 'success.main' },
+  { key: 'announced', dotColor: 'info.main' },
+  { key: 'option', dotColor: 'warning.main' },
 ]
 
 function UpcomingFeesCard({ fees }: UpcomingFeesCardProps) {
+  const { t } = useTranslation('financialDashboard')
   return (
     <DashboardCard
-      title="Upcoming fees"
+      title={t($ => $.upcomingFees.title)}
       action={(
         <Button component={RouterLink} to="/gigs" size="small" variant="outlined">
-          View gigs
+          {t($ => $.upcomingFees.viewGigs)}
         </Button>
       )}
     >
       <Box>
-        <Typography variant="caption" color="text.secondary">Gross band fees</Typography>
+        <Typography variant="caption" color="text.secondary">{t($ => $.upcomingFees.grossBandFees)}</Typography>
         <Typography variant="h4" sx={{ fontWeight: 600, my: 0.5, color: 'success.main' }}>
           {formatEur(fees.total_cents)}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {(() => {
-            if (fees.gig_count === 0) return 'No upcoming gigs with a fee'
-            const gigWord = fees.gig_count === 1 ? 'gig' : 'gigs'
-            return `Across ${fees.gig_count} upcoming ${gigWord}`
-          })()}
+          {fees.gig_count === 0
+            ? t($ => $.upcomingFees.noGigs)
+            : t($ => $.upcomingFees.across, { count: fees.gig_count })}
         </Typography>
       </Box>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 2 }}>
-        {FEE_STATUS_META.map(({ key, label, dotColor }) => (
+        {FEE_STATUS_META.map(({ key, dotColor }) => (
           <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
             <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: dotColor }} />
             <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-              {label} ({fees.by_status[key].count})
+              {t($ => $.upcomingFees[key])} ({fees.by_status[key].count})
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {formatEur(fees.by_status[key].total_cents)}
@@ -633,19 +648,21 @@ interface VatCardProps {
 }
 
 function VatCard({ vat }: VatCardProps) {
+  const { t, i18n } = useTranslation('financialDashboard')
   // Snapshot the clock once on mount so render stays idempotent.
   const [now] = useState(() => Date.now())
   const owes = vat.net_cents >= 0
   const due = new Date(`${vat.due_date}T00:00:00`)
   const daysUntilDue = Math.max(0, Math.ceil((due.getTime() - now) / 86400000))
-  const dueLabel = due.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  const dueLabel = due.toLocaleDateString(i18n.language, { month: 'long', day: 'numeric', year: 'numeric' })
+  const breakdownValues = { output: formatEur(vat.output_cents), input: formatEur(vat.input_cents) }
 
   return (
-    <DashboardCard title="VAT">
+    <DashboardCard title={t($ => $.vat.title)}>
       <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
         <Box sx={{ flex: 1, minWidth: 160 }}>
           <Typography variant="caption" color="text.secondary">
-            Balance with the Tax Administration
+            {t($ => $.vat.balanceWithTax)}
           </Typography>
           <Typography
             variant="h4"
@@ -654,15 +671,15 @@ function VatCard({ vat }: VatCardProps) {
             {formatEur(Math.abs(vat.net_cents))}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            For period: Q{vat.quarter} {vat.year}
+            {t($ => $.vat.forPeriod, { quarter: vat.quarter, year: vat.year })}
           </Typography>
         </Box>
         <Box sx={{ flex: 1, minWidth: 160 }}>
           <Typography variant="caption" color="text.secondary">
-            Due date
+            {t($ => $.vat.dueDate)}
           </Typography>
           <Typography variant="h4" sx={{ fontWeight: 600, my: 0.5 }}>
-            {daysUntilDue} days
+            {t($ => $.vat.days, { count: daysUntilDue })}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {dueLabel}
@@ -670,8 +687,9 @@ function VatCard({ vat }: VatCardProps) {
         </Box>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
-        {owes ? 'You owe tax' : 'You get money back'}: VAT on sales {formatEur(vat.output_cents)},
-        on purchases {formatEur(vat.input_cents)}
+        {owes
+          ? t($ => $.vat.oweBreakdown, breakdownValues)
+          : t($ => $.vat.getBackBreakdown, breakdownValues)}
       </Typography>
     </DashboardCard>
   )

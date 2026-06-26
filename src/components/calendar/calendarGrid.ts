@@ -3,11 +3,20 @@
 import { toIsoDate } from '../../utils/availabilityUtils.ts'
 import type { Slot, Gig, Rehearsal, BandEvent, CalendarCell } from '../../types/entities.ts'
 
-export const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+// Day/month names are formatted via Intl for the active locale rather than
+// hardcoded English. 2024-01-01 is a Monday, so the 7-day walk yields the
+// Monday-first short weekday headers the grid expects.
+export function getDayHeaders(locale: string): string[] {
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(2024, 0, 1 + i).toLocaleDateString(locale, { weekday: 'short' }),
+  )
+}
 
-export const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>
-  new Date(2000, i, 1).toLocaleString('en', { month: 'long' }),
-)
+export function getMonthNames(locale: string): string[] {
+  return Array.from({ length: 12 }, (_, i) =>
+    new Date(2000, i, 1).toLocaleString(locale, { month: 'long' }),
+  )
+}
 
 export function getISOWeek(date: Date): number {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import ButtonBase from '@mui/material/ButtonBase'
@@ -40,6 +41,7 @@ const BACKGROUND_COLORS = [
 ]
 
 export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerMosaicDialogProps) {
+  const { t } = useTranslation(['gigs', 'common'])
   const [format, setFormat] = useState('square')
   const [selectedYear, setSelectedYear] = useState<number | 'all'>('all')
   const [backgroundId, setBackgroundId] = useState(BACKGROUND_COLORS[0].id)
@@ -85,10 +87,10 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerM
     setBusy(true)
     try {
       const blob = await snapshot()
-      if (!blob) throw new Error('Snapshot failed')
+      if (!blob) throw new Error(t($ => $.share.snapshotFailed))
       downloadBlob(blob, buildBannerMosaicFilename(String(selectedYear), format))
     } catch (e) {
-      setSnackbar({ msg: (e as Error).message || 'Download failed' })
+      setSnackbar({ msg: (e as Error).message || t($ => $.share.downloadFailed) })
     } finally {
       setBusy(false)
     }
@@ -98,11 +100,11 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerM
     setBusy(true)
     try {
       const blob = await snapshot()
-      if (!blob) throw new Error('Snapshot failed')
+      if (!blob) throw new Error(t($ => $.share.snapshotFailed))
       await copyBlobToClipboard(blob)
-      setSnackbar({ msg: 'Image copied to clipboard' })
+      setSnackbar({ msg: t($ => $.share.imageCopied) })
     } catch (e) {
-      setSnackbar({ msg: (e as Error).message || 'Copy failed' })
+      setSnackbar({ msg: (e as Error).message || t($ => $.share.copyFailed) })
     } finally {
       setBusy(false)
     }
@@ -116,7 +118,7 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerM
         maxWidth="md"
         onClick={(e) => e.stopPropagation()}
       >
-        <DialogTitle>Banner Mosaic</DialogTitle>
+        <DialogTitle>{t($ => $.bannerMosaic.title)}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ alignItems: 'center' }}>
 
@@ -127,8 +129,8 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerM
               size="small"
               onChange={(_, v) => v && setFormat(v)}
             >
-              <ToggleButton value="square">Square 1:1</ToggleButton>
-              <ToggleButton value="story">Story 9:16</ToggleButton>
+              <ToggleButton value="square">{t($ => $.share.square)}</ToggleButton>
+              <ToggleButton value="story">{t($ => $.share.story)}</ToggleButton>
             </ToggleButtonGroup>
 
             {/* Year */}
@@ -138,7 +140,7 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerM
               size="small"
               onChange={handleYearChange}
             >
-              <ToggleButton value="all">All time</ToggleButton>
+              <ToggleButton value="all">{t($ => $.bannerMosaic.allTime)}</ToggleButton>
               {availableYears.map((y) => (
                 <ToggleButton key={y} value={y}>{y}</ToggleButton>
               ))}
@@ -152,7 +154,7 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerM
                   <Tooltip key={c.id} title={c.label}>
                     <ButtonBase
                       onClick={() => setBackgroundId(c.id)}
-                      aria-label={`Background color ${c.label}`}
+                      aria-label={t($ => $.bannerMosaic.backgroundColorAria, { label: c.label })}
                       aria-pressed={selected}
                       sx={{
                         width: 32,
@@ -215,27 +217,27 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerM
                   }}
                 >
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-                    No gig banners for this period.
+                    {t($ => $.bannerMosaic.noBanners)}
                   </Typography>
                 </Box>
               )}
             </Box>
 
             <Typography variant="caption" color="text.secondary">
-              {filteredGigs.length} banner{filteredGigs.length === 1 ? '' : 's'}
+              {t($ => $.bannerMosaic.bannerCount, { count: filteredGigs.length })}
             </Typography>
 
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} disabled={busy}>Close</Button>
+          <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.close)}</Button>
           {canCopy && (
             <Button
               onClick={handleCopy}
               disabled={busy || filteredGigs.length === 0}
               startIcon={busy ? <CircularProgress size={16} /> : <ContentCopyIcon />}
             >
-              Copy
+              {t($ => $.common.actions.copy)}
             </Button>
           )}
           <Button
@@ -244,7 +246,7 @@ export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerM
             disabled={busy || filteredGigs.length === 0}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />}
           >
-            Download PNG
+            {t($ => $.share.downloadPng)}
           </Button>
         </DialogActions>
       </Dialog>

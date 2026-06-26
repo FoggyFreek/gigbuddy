@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import Grid from '@mui/material/Grid'
@@ -34,6 +35,7 @@ interface ProfileLink {
 }
 
 export default function ProfilePage() {
+  const { t } = useTranslation('profile')
   const { user } = useAuth()
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
@@ -151,7 +153,7 @@ export default function ProfilePage() {
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>Profile</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>{t($ => $.title)}</Typography>
         <SaveStatusLabel status={saveStatus} />
       </Box>
 
@@ -190,9 +192,9 @@ export default function ProfilePage() {
               textColor="primary"
               indicatorColor="primary"
             >
-              <Tab value="socials" label="Social profiles" />
-              <Tab value="links" label="Links" />
-              <Tab value="financials" label="Financial details" />
+              <Tab value="socials" label={t($ => $.tabs.socials)} />
+              <Tab value="links" label={t($ => $.tabs.links)} />
+              <Tab value="financials" label={t($ => $.tabs.financials)} />
             </Tabs>
 
             {activeTab === 'socials' && (
@@ -243,21 +245,21 @@ export default function ProfilePage() {
       <ImageCropDialog
         open={logoCrop.cropOpen}
         imageSrc={logoCrop.cropSrc}
-        title="Crop band logo"
+        title={t($ => $.crop.logo)}
         onConfirm={logoCrop.handleCropConfirm}
         onCancel={logoCrop.handleCropCancel}
       />
       <ImageCropDialog
         open={logoDarkCrop.cropOpen}
         imageSrc={logoDarkCrop.cropSrc}
-        title="Crop dark logo"
+        title={t($ => $.crop.logoDark)}
         onConfirm={logoDarkCrop.handleCropConfirm}
         onCancel={logoDarkCrop.handleCropCancel}
       />
       <ImageCropDialog
         open={bannerCrop.cropOpen}
         imageSrc={bannerCrop.cropSrc}
-        title="Crop profile banner"
+        title={t($ => $.crop.banner)}
         aspect={820 / 360}
         onConfirm={bannerCrop.handleCropConfirm}
         onCancel={bannerCrop.handleCropCancel}
@@ -265,7 +267,7 @@ export default function ProfilePage() {
       <ImageCropDialog
         open={avatarCrop.cropOpen}
         imageSrc={avatarCrop.cropSrc}
-        title="Crop profile picture"
+        title={t($ => $.crop.avatar)}
         aspect={1}
         onConfirm={avatarCrop.handleCropConfirm}
         onCancel={avatarCrop.handleCropCancel}

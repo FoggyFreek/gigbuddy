@@ -1,0 +1,62 @@
+{
+  "title": "Financial",
+  "resultCard": {
+    "title": "Result in {{currency}}",
+    "exclVat": "Excl. VAT",
+    "revenue": "Revenue",
+    "expenses": "Expenses",
+    "result": "Result"
+  },
+  "overview": {
+    "title": "Overview",
+    "income": "Income",
+    "expenses": "Expenses",
+    "profit": "Profit",
+    "bankBalance": "Bank balance"
+  },
+  "resultTrend": {
+    "title": "Result trend",
+    "subtitle": "Last {{count}} yrs · {{currency}}"
+  },
+  "invoices": {
+    "title": "Invoices",
+    "create": "Create invoice",
+    "overdue": "Overdue",
+    "unpaid": "Unpaid",
+    "draft": "Draft",
+    "count_one": "{{count}} invoice",
+    "count_other": "{{count}} invoices"
+  },
+  "merch": {
+    "title": "Merchandise",
+    "manage": "Manage merch",
+    "grossProfit": "Gross profit",
+    "noSales": "No merch sales in this period",
+    "margin": "{{pct}}% margin on sales",
+    "inventoryValue": "Inventory value",
+    "stockOnHand": "Stock on hand, at cost",
+    "breakdown": "Sales {{sales}} − cost of goods {{cogs}}",
+    "breakdownWithShare": "Sales {{sales}} − cost of goods {{cogs}} — {{pct}}% of total revenue"
+  },
+  "upcomingFees": {
+    "title": "Upcoming fees",
+    "viewGigs": "View gigs",
+    "grossBandFees": "Gross band fees",
+    "noGigs": "No upcoming gigs with a fee",
+    "across_one": "Across {{count}} upcoming gig",
+    "across_other": "Across {{count}} upcoming gigs",
+    "confirmed": "Confirmed",
+    "announced": "Announced",
+    "option": "Option"
+  },
+  "vat": {
+    "title": "VAT",
+    "balanceWithTax": "Balance with the Tax Administration",
+    "forPeriod": "For period: Q{{quarter}} {{year}}",
+    "dueDate": "Due date",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "oweBreakdown": "You owe tax: VAT on sales {{output}}, on purchases {{input}}",
+    "getBackBreakdown": "You get money back: VAT on sales {{output}}, on purchases {{input}}"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "appearance": {
+    "switchToLight": "Schakel naar lichte modus",
+    "switchToDark": "Schakel naar donkere modus"
+  },
+  "language": {
+    "switchToDutch": "Nederlands",
+    "switchToEnglish": "English"
+  },
+  "actions": {
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "add": "Toevoegen",
+    "edit": "Bewerken",
+    "done": "Klaar",
+    "delete": "Verwijderen",
+    "close": "Sluiten",
+    "copy": "Kopiëren",
+    "confirm": "Bevestigen",
+    "back": "Terug",
+    "search": "Zoeken"
+  },
+  "state": {
+    "loading": "Laden…",
+    "none": "Geen"
+  },
+  "answer": {
+    "yes": "Ja",
+    "no": "Nee"
+  }
+}

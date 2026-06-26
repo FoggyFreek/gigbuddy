@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { SxProps } from '@mui/material/styles'
 import type { SocialEntry, ProfileForm } from './profileForm.ts'
 import Box from '@mui/material/Box'
@@ -22,15 +23,16 @@ interface CopyButtonProps {
 }
 
 function CopyButton({ copied, label, onCopy, small }: CopyButtonProps) {
+  const { t } = useTranslation('profile')
   const iconSx: SxProps | undefined = small ? { fontSize: 14 } : undefined
   const fontSize = small ? undefined : ('small' as const)
   return (
-    <Tooltip title={copied ? 'Copied' : 'Copy URL'}>
+    <Tooltip title={copied ? t($ => $.socials.copied) : t($ => $.socials.copy)}>
       <IconButton
         size="small"
         onClick={onCopy}
         sx={small ? { color: 'inherit', p: 0.25 } : undefined}
-        aria-label={`Copy ${label} URL`}
+        aria-label={t($ => $.socials.copyAria, { label })}
       >
         {copied
           ? <CheckIcon sx={iconSx} fontSize={fontSize} />
@@ -74,6 +76,7 @@ interface SocialEditFieldProps {
 }
 
 function SocialEditField({ social, handle, copied, onChange, onCopy }: SocialEditFieldProps) {
+  const { t } = useTranslation('profile')
   const { Icon } = social
   return (
     <TextField
@@ -81,7 +84,7 @@ function SocialEditField({ social, handle, copied, onChange, onCopy }: SocialEdi
       fullWidth
       value={handle}
       onChange={(e) => onChange(social.field, e.target.value)}
-      placeholder="yourhandle"
+      placeholder={t($ => $.socials.handlePlaceholder)}
       slotProps={{
         input: {
           startAdornment: (
@@ -113,6 +116,7 @@ interface ProfileSocialsTabProps {
 }
 
 export default function ProfileSocialsTab({ form, editing, onToggleEditing, onChange, copiedField, onCopy }: ProfileSocialsTabProps) {
+  const { t } = useTranslation('common')
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
@@ -122,7 +126,7 @@ export default function ProfileSocialsTab({ form, editing, onToggleEditing, onCh
           onClick={onToggleEditing}
           variant={editing ? 'contained' : 'outlined'}
         >
-          {editing ? 'Done' : 'Edit'}
+          {editing ? t($ => $.actions.done) : t($ => $.actions.edit)}
         </Button>
       </Box>
 

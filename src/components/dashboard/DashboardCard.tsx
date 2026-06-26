@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link as RouterLink } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -35,24 +36,25 @@ export default function DashboardCard({
   count,
   action,
   viewAllTo,
-  viewAllLabel = 'View all',
+  viewAllLabel,
   status = 'ok',
   isEmpty = false,
-  emptyText = 'Nothing to show',
+  emptyText,
   sx,
   children,
 }: DashboardCardProps) {
+  const { t } = useTranslation('dashboard')
   let body = children
   if (status === 'error') {
     body = (
       <Typography variant="body2" sx={{ py: 2, color: 'error.main' }}>
-        ⚠ Couldn&apos;t load
+        {t($ => $.card.loadError)}
       </Typography>
     )
   } else if (isEmpty) {
     body = (
       <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-        {emptyText}
+        {emptyText ?? t($ => $.card.empty)}
       </Typography>
     )
   }
@@ -95,7 +97,7 @@ export default function DashboardCard({
               endIcon={<ChevronRightIcon />}
               sx={{ textTransform: 'none' }}
             >
-              {viewAllLabel}
+              {viewAllLabel ?? t($ => $.card.viewAll)}
             </Button>
           )}
         </Box>

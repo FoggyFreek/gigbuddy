@@ -1,5 +1,6 @@
 import type { Gig, Id } from '../types/entities.ts'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import ButtonBase from '@mui/material/ButtonBase'
@@ -63,6 +64,7 @@ interface TourShareDialogProps {
 }
 
 export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareDialogProps) {
+  const { t } = useTranslation(['gigs', 'common'])
   const { user } = useContext(AuthContext)
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
@@ -175,10 +177,10 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
     setBusy(true)
     try {
       const blob = await snapshot()
-      if (!blob) throw new Error('Snapshot failed')
+      if (!blob) throw new Error(t($ => $.share.snapshotFailed))
       downloadBlob(blob, buildTourShareFilename(selectedYear, format))
     } catch (e) {
-      setSnackbar({ msg: (e as Error).message || 'Download failed' })
+      setSnackbar({ msg: (e as Error).message || t($ => $.share.downloadFailed) })
     } finally {
       setBusy(false)
     }
@@ -188,11 +190,11 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
     setBusy(true)
     try {
       const blob = await snapshot()
-      if (!blob) throw new Error('Snapshot failed')
+      if (!blob) throw new Error(t($ => $.share.snapshotFailed))
       await copyBlobToClipboard(blob)
-      setSnackbar({ msg: 'Image copied to clipboard' })
+      setSnackbar({ msg: t($ => $.share.imageCopied) })
     } catch (e) {
-      setSnackbar({ msg: (e as Error).message || 'Copy failed' })
+      setSnackbar({ msg: (e as Error).message || t($ => $.share.copyFailed) })
     } finally {
       setBusy(false)
     }
@@ -209,7 +211,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
       setPhotos((prev) => [...prev, newPhoto])
       setPhotoId(newPhoto.id ?? null)
     } catch (err) {
-      setSnackbar({ msg: (err as Error).message || 'Upload failed' })
+      setSnackbar({ msg: (err as Error).message || t($ => $.tourShare.uploadFailed) })
     } finally {
       setBusy(false)
     }
@@ -228,15 +230,15 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
         return next
       })
     } catch (err) {
-      setSnackbar({ msg: (err as Error).message || 'Delete failed' })
+      setSnackbar({ msg: (err as Error).message || t($ => $.tourShare.deleteFailed) })
     }
   }
 
   const monthsOptions = [
-    { value: 'all' as const, label: 'All' },
+    { value: 'all' as const, label: t($ => $.tourShare.monthsAll) },
     ...Array.from({ length: maxMonths }, (_, i) => ({
       value: i + 1,
-      label: `${i + 1} month${i + 1 > 1 ? 's' : ''}`,
+      label: t($ => $.tourShare.monthsAhead, { count: i + 1 }),
     })),
   ]
 
@@ -248,7 +250,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
         maxWidth="md"
         onClick={(e) => e.stopPropagation()}
       >
-        <DialogTitle>Share tour dates</DialogTitle>
+        <DialogTitle>{t($ => $.tourShare.title)}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ alignItems: 'center' }}>
 
@@ -259,8 +261,8 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
               size="small"
               onChange={(_, v) => v && setFormat(v)}
             >
-              <ToggleButton value="square">Square 1:1</ToggleButton>
-              <ToggleButton value="story">Story 9:16</ToggleButton>
+              <ToggleButton value="square">{t($ => $.share.square)}</ToggleButton>
+              <ToggleButton value="story">{t($ => $.share.story)}</ToggleButton>
             </ToggleButtonGroup>
 
             {/* Accent colors */}
@@ -271,7 +273,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                   <Tooltip key={c.id} title={c.label}>
                     <ButtonBase
                       onClick={() => setAccentId(c.id)}
-                      aria-label={`Accent color ${c.label}`}
+                      aria-label={t($ => $.tourShare.accentColorAria, { label: c.label })}
                       sx={{
                         width: 32,
                         height: 32,
@@ -324,7 +326,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                     size="small"
                   />
                 }
-                label={<Typography variant="caption">Include past gigs</Typography>}
+                label={<Typography variant="caption">{t($ => $.tourShare.includePastGigs)}</Typography>}
               />
               {visibleGigs.some((g) => g.banner_path) && (
                 <FormControlLabel
@@ -335,7 +337,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                       size="small"
                     />
                   }
-                  label={<Typography variant="caption">Show banners</Typography>}
+                  label={<Typography variant="caption">{t($ => $.tourShare.showBanners)}</Typography>}
                 />
               )}
               {logoDarkSrc && (
@@ -347,7 +349,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                       size="small"
                     />
                   }
-                  label={<Typography variant="caption">Dark logo</Typography>}
+                  label={<Typography variant="caption">{t($ => $.tourShare.darkLogo)}</Typography>}
                 />
               )}
             </Stack>
@@ -395,7 +397,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
             {/* Photo controls */}
             <Box sx={{ width: previewMaxWidth, px: 1 }}>
               <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block' }}>
-                Photo opacity
+                {t($ => $.tourShare.photoOpacity)}
               </Typography>
               <Slider
                 value={photoOpacity}
@@ -404,17 +406,17 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                 max={100}
                 step={1}
                 size="small"
-                aria-label="Photo opacity"
+                aria-label={t($ => $.tourShare.photoOpacity)}
                 marks={[
-                  { value: 0, label: 'None' },
-                  { value: 50, label: 'Half' },
-                  { value: 100, label: 'Full' },
+                  { value: 0, label: t($ => $.tourShare.markNone) },
+                  { value: 50, label: t($ => $.tourShare.markHalf) },
+                  { value: 100, label: t($ => $.tourShare.markFull) },
                 ]}
               />
               {format === 'story' && (
                 <>
                   <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block', mt: 1 }}>
-                    Zoom
+                    {t($ => $.tourShare.zoom)}
                   </Typography>
                   <Slider
                     value={zoom}
@@ -423,16 +425,16 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                     max={100}
                     step={1}
                     size="small"
-                    aria-label="Photo zoom"
+                    aria-label={t($ => $.tourShare.photoZoom)}
                     marks={[
-                      { value: 0, label: 'Width' },
-                      { value: 100, label: 'Height' },
+                      { value: 0, label: t($ => $.tourShare.markWidth) },
+                      { value: 100, label: t($ => $.tourShare.markHeight) },
                     ]}
                   />
                 </>
               )}
               <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block', mt: 1 }}>
-                Pan
+                {t($ => $.tourShare.pan)}
               </Typography>
               <Slider
                 value={pan}
@@ -441,7 +443,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                 max={100}
                 step={1}
                 size="small"
-                aria-label="Photo pan"
+                aria-label={t($ => $.tourShare.photoPan)}
                 marks={[
                   { value: -100, label: '◀' },
                   { value: 0, label: '·' },
@@ -486,7 +488,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                       {isAdmin && (
                         <IconButton
                           size="small"
-                          aria-label={`Delete ${p.label}`}
+                          aria-label={t($ => $.tourShare.deletePhotoAria, { label: p.label })}
                           onClick={() => handlePhotoDelete(p)}
                           sx={{ color: 'error.main', p: 0.25 }}
                         >
@@ -507,7 +509,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                       onChange={handlePhotoUpload}
                     />
                     <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <Tooltip title="Upload photo">
+                      <Tooltip title={t($ => $.tourShare.uploadPhoto)}>
                         <ButtonBase
                           onClick={() => photoInputRef.current?.click()}
                           disabled={busy}
@@ -538,20 +540,20 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
 
             {visibleGigs.length === 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-                No gigs to display for this selection.
+                {t($ => $.tourShare.noGigsForSelection)}
               </Typography>
             )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} disabled={busy}>Close</Button>
+          <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.close)}</Button>
           {canCopy && (
             <Button
               onClick={handleCopy}
               disabled={busy || visibleGigs.length === 0}
               startIcon={busy ? <CircularProgress size={16} /> : <ContentCopyIcon />}
             >
-              Copy
+              {t($ => $.common.actions.copy)}
             </Button>
           )}
           <Button
@@ -560,7 +562,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
             disabled={busy || visibleGigs.length === 0}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />}
           >
-            Download PNG
+            {t($ => $.share.downloadPng)}
           </Button>
         </DialogActions>
       </Dialog>

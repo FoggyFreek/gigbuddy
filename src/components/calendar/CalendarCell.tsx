@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
@@ -120,10 +121,11 @@ interface GigBarProps {
 }
 
 function GigBar({ gig, theme, onGigClick }: GigBarProps) {
+  const { t } = useTranslation('availability')
   const paletteColor = GIG_STATUS_COLORS[gig.status ?? ''] || 'grey.500'
   const resolvedColor = resolvePaletteColor(theme, paletteColor)
   const timeRange = formatTimeRange(gig.start_time, gig.end_time)
-  const title = gig.event_description || venueHeadline(gig.venue ?? gig.festival) || 'Gig'
+  const title = gig.event_description || venueHeadline(gig.venue ?? gig.festival) || t($ => $.events.gigFallback)
   return (
     <Tooltip title={[gig.event_description, venueHeadline(gig.venue ?? gig.festival), gig.status].filter(Boolean).join(' — ')}>
       <Box
@@ -160,6 +162,7 @@ interface RehearsalBarProps {
 }
 
 function RehearsalBar({ reh, theme, onRehearsalClick }: RehearsalBarProps) {
+  const { t } = useTranslation('availability')
   const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
   const total = reh.participants?.length ?? 0
   const isOption = reh.status === 'option'
@@ -167,7 +170,7 @@ function RehearsalBar({ reh, theme, onRehearsalClick }: RehearsalBarProps) {
   const resolvedColor = resolvePaletteColor(theme, paletteColor)
   const timeRange = formatTimeRange(reh.start_time, reh.end_time)
   return (
-    <Tooltip title={[`Rehearsal — ${reh.status}`, reh.location, `${yes}/${total} yes`].filter(Boolean).join(' — ')}>
+    <Tooltip title={[t($ => $.events.rehearsalTooltip, { status: reh.status }), reh.location, t($ => $.events.votesYes, { yes, total })].filter(Boolean).join(' — ')}>
       <Box
         data-rehearsal-id={reh.id}
         onClick={(e) => { e.stopPropagation(); onRehearsalClick?.(reh) }}
@@ -188,7 +191,7 @@ function RehearsalBar({ reh, theme, onRehearsalClick }: RehearsalBarProps) {
           </Box>
         )}
         <Box sx={{ fontSize: '0.7rem', lineHeight: 1.3, color: 'text.primary', fontWeight: 500, wordBreak: 'break-word' }}>
-          {`Reh ${yes}/${total}`}
+          {t($ => $.events.rehearsalAbbrev, { yes, total })}
         </Box>
       </Box>
     </Tooltip>
@@ -235,13 +238,14 @@ interface SlotBarProps {
 }
 
 function SlotBar({ slot, members, theme, onSlotClick }: SlotBarProps) {
+  const { t } = useTranslation('availability')
   const color = getMemberColor(slot, members)
   const isUnavailable = slot.status === 'unavailable'
   const memberName = slot.band_member_id === null
-    ? 'Band'
+    ? t($ => $.events.band)
     : members.find((m) => m.id === slot.band_member_id)?.name || ''
   return (
-    <Tooltip title={[slot.band_member_id === null ? 'Band-wide' : memberName, slot.status, slot.reason].filter(Boolean).join(' — ')}>
+    <Tooltip title={[slot.band_member_id === null ? t($ => $.events.bandWide) : memberName, slot.status, slot.reason].filter(Boolean).join(' — ')}>
       <Box
         data-slot-id={slot.id}
         onClick={(e) => { e.stopPropagation(); onSlotClick(slot) }}

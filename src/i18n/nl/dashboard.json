@@ -1,0 +1,37 @@
+{
+  "title": "Dashboard",
+  "bandLogoAlt": "Bandlogo",
+  "card": {
+    "viewAll": "Alles bekijken",
+    "viewDetails": "Details bekijken",
+    "loadError": "⚠ Laden mislukt",
+    "empty": "Niets te tonen"
+  },
+  "nextGig": {
+    "title": "Volgend optreden",
+    "empty": "Geen aankomende optredens"
+  },
+  "nextRehearsal": {
+    "title": "Volgende repetitie",
+    "empty": "Geen geplande repetities",
+    "fallbackLocation": "Repetitie"
+  },
+  "nextBandEvent": {
+    "title": "Volgend bandevenement",
+    "empty": "Geen aankomende bandevenementen"
+  },
+  "upcomingShows": {
+    "title": "Aankomende optredens",
+    "empty": "Geen aankomende optredens"
+  },
+  "myTasks": {
+    "title": "Mijn taken",
+    "empty": "Geen openstaande taken"
+  },
+  "map": {
+    "title": "Hier gespeeld",
+    "viewMap": "Kaart bekijken",
+    "empty": "Nog geen eerdere optredens",
+    "openAria": "Open de wereldkaart met optredens"
+  }
+}

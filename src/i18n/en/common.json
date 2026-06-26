@@ -1,0 +1,31 @@
+{
+  "appearance": {
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode"
+  },
+  "language": {
+    "switchToDutch": "Nederlands",
+    "switchToEnglish": "English"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "add": "Add",
+    "edit": "Edit",
+    "done": "Done",
+    "delete": "Delete",
+    "close": "Close",
+    "copy": "Copy",
+    "confirm": "Confirm",
+    "back": "Back",
+    "search": "Search"
+  },
+  "state": {
+    "loading": "Loading…",
+    "none": "None"
+  },
+  "answer": {
+    "yes": "Yes",
+    "no": "No"
+  }
+}

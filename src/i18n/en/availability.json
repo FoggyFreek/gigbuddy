@@ -1,0 +1,41 @@
+{
+  "title": "Calendar",
+  "weekAbbrev": "Wk",
+  "nav": {
+    "prevMonth": "previous month",
+    "nextMonth": "next month"
+  },
+  "subscribe": {
+    "tooltip": "Subscribe to calendar",
+    "aria": "subscribe to calendar"
+  },
+  "export": {
+    "tooltip": "Export month to calendar (.ics)",
+    "aria": "export to calendar"
+  },
+  "addEventAria": "add event",
+  "addMenu": {
+    "availability": "Availability",
+    "gig": "Gig",
+    "rehearsal": "Rehearsal",
+    "bandEvent": "Band Event"
+  },
+  "events": {
+    "noEvents": "No events.",
+    "band": "Band",
+    "bandWide": "Band-wide",
+    "gigFallback": "Gig",
+    "rehearsalTooltip": "Rehearsal — {{status}}",
+    "rehearsalAbbrev": "Reh {{yes}}/{{total}}",
+    "votesYes": "{{yes}}/{{total}} yes"
+  },
+  "exportDialog": {
+    "title": "Export calendar",
+    "intro": "Choose which events to include in the .ics export for {{month}}.",
+    "gigs": "Gigs",
+    "rehearsals": "Rehearsals",
+    "bandEvents": "Band events",
+    "note": "Only confirmed and announced gigs and planned rehearsals are exported. Options are excluded.",
+    "export": "Export"
+  }
+}

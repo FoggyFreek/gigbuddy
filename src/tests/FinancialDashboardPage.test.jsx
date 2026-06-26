@@ -52,6 +52,7 @@ vi.mock('../components/financial/ResultChartTooltip.tsx', () => ({ default: () =
 
 import { getLedgerOverview, listLedgerPeriods } from '../api/ledger.ts'
 import FinancialDashboardPage from '../pages/FinancialDashboardPage.tsx'
+import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
@@ -117,9 +118,11 @@ beforeEach(() => {
   listLedgerPeriods.mockResolvedValue(['2026-06-09', '2025-03-01'])
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
   vi.clearAllMocks()
+  // Restore the suite-wide English pin (setup.js) after any per-test switch.
+  await i18n.changeLanguage('en')
 })
 
 describe('FinancialDashboardPage', () => {
@@ -356,5 +359,19 @@ describe('FinancialDashboardPage', () => {
     getLedgerOverview.mockRejectedValue(new Error('boom'))
     wrap(<FinancialDashboardPage />)
     expect(await screen.findByText(/boom/)).toBeInTheDocument()
+  })
+
+  it('renders the Dutch translations when the language is nl', async () => {
+    await i18n.changeLanguage('nl')
+    wrap(<FinancialDashboardPage />)
+
+    expect(screen.getByRole('heading', { name: /financieel/i })).toBeInTheDocument()
+    expect(await screen.findByText(/resultaat in eur/i)).toBeInTheDocument()
+    expect(screen.getByText(/^overzicht$/i)).toBeInTheDocument()
+    expect(screen.getByText(/banksaldo/i)).toBeInTheDocument()
+    expect(screen.getByText(/^facturen$/i)).toBeInTheDocument()
+    // Plural picked from count (3 → _other).
+    expect(screen.getByText(/verdeeld over 3 aankomende optredens/i)).toBeInTheDocument()
+    expect(screen.getByText(/je moet btw betalen/i)).toBeInTheDocument()
   })
 })

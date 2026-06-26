@@ -1,0 +1,60 @@
+{
+  "groups": {
+    "overview": "Overzicht",
+    "planning": "Planning",
+    "repertoire": "Repertoire",
+    "network": "Netwerk",
+    "financial": "Financieel",
+    "accounting": "Boekhouding"
+  },
+  "items": {
+    "dashboard": "Dashboard",
+    "financial": "Financieel",
+    "profile": "Profiel",
+    "availability": "Kalender",
+    "gigs": "Optredens",
+    "rehearsals": "Repetities",
+    "bandEvents": "Bandevenementen",
+    "tasks": "Taken",
+    "songs": "Nummers",
+    "setlists": "Setlijsten",
+    "contacts": "Contacten",
+    "suppliers": "Leveranciers",
+    "venues": "Locaties",
+    "emailTemplates": "E-mailsjablonen",
+    "invoices": "Facturen",
+    "purchases": "Inkopen",
+    "merch": "Merchandise",
+    "reimbursements": "Onkostenvergoedingen",
+    "journal": "Dagboek",
+    "ledger": "Grootboek",
+    "ledgerEntries": "Grootboekposten",
+    "vatReturns": "Btw-aangiften",
+    "reports": "Rapporten"
+  },
+  "admin": {
+    "tenants": "Organisaties",
+    "allUsers": "Alle gebruikers",
+    "members": "Leden",
+    "bandSettings": "Bandinstellingen"
+  },
+  "headers": {
+    "tenantAdmin": "Tenantbeheerder",
+    "superAdmin": "Superbeheerder"
+  },
+  "shell": {
+    "expandNav": "Navigatie uitklappen",
+    "collapseNav": "Navigatie inklappen",
+    "expandNavAria": "navigatie uitklappen",
+    "collapseNavAria": "navigatie inklappen",
+    "openNav": "navigatie openen",
+    "openSearch": "zoeken openen",
+    "openSettings": "instellingenmenu openen",
+    "openUserMenu": "gebruikersmenu openen",
+    "search": "Zoeken",
+    "searchPlaceholder": "Zoek naar contacten, optredens of bestanden…",
+    "searchPlaceholderShort": "Zoeken…",
+    "settings": "Instellingen",
+    "groupAria": "{{name}} groep"
+  }
+}

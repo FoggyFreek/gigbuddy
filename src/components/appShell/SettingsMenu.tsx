@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
 import Divider from '@mui/material/Divider'
 import ListItemIcon from '@mui/material/ListItemIcon'
@@ -7,6 +8,7 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import LightModeIcon from '@mui/icons-material/LightMode'
+import TranslateIcon from '@mui/icons-material/Translate'
 import ApartmentIcon from '@mui/icons-material/Apartment'
 import GroupIcon from '@mui/icons-material/Group'
 import SettingsIcon from '@mui/icons-material/Settings'
@@ -18,11 +20,6 @@ interface NavMenuItemDef {
   label: string
   icon: SvgIconComponent
 }
-
-const SUPER_ADMIN_NAV_ITEMS: NavMenuItemDef[] = [
-  { to: '/admin/tenants', label: 'Tenants', icon: ApartmentIcon },
-  { to: '/admin/users', label: 'All Users', icon: PeopleAltIcon },
-]
 
 function renderNavItem(item: NavMenuItemDef, onClose: () => void) {
   const Icon = item.icon
@@ -48,11 +45,21 @@ interface SettingsMenuProps {
 }
 
 export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, canManageMembers, canManageTenant, isSuperAdmin }: SettingsMenuProps) {
+  const { t, i18n } = useTranslation(['common', 'navigation'])
+  const isDutch = i18n.resolvedLanguage === 'nl'
+  const toggleLanguage = () => {
+    void i18n.changeLanguage(isDutch ? 'en' : 'nl')
+    onClose()
+  }
+  const superAdminNavItems: NavMenuItemDef[] = [
+    { to: '/admin/tenants', label: t($ => $.admin.tenants, { ns: 'navigation' }), icon: ApartmentIcon },
+    { to: '/admin/users', label: t($ => $.admin.allUsers, { ns: 'navigation' }), icon: PeopleAltIcon },
+  ]
   // Each item is gated on its own capability, not on the tenant_admin role, so
   // the permission matrix stays the single source of truth (see auth/permissions).
   const adminNavItems: NavMenuItemDef[] = [
-    canManageMembers && { to: '/members', label: 'Members', icon: GroupIcon },
-    canManageTenant && { to: '/settings', label: 'Band Settings', icon: SettingsIcon },
+    canManageMembers && { to: '/members', label: t($ => $.admin.members, { ns: 'navigation' }), icon: GroupIcon },
+    canManageTenant && { to: '/settings', label: t($ => $.admin.bandSettings, { ns: 'navigation' }), icon: SettingsIcon },
   ].filter((item): item is NavMenuItemDef => Boolean(item))
 
   return (
@@ -67,21 +74,27 @@ export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTh
         <ListItemIcon>
           {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
         </ListItemIcon>
-        <ListItemText primary={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} />
+        <ListItemText primary={mode === 'dark' ? t($ => $.appearance.switchToLight) : t($ => $.appearance.switchToDark)} />
+      </MenuItem>
+      <MenuItem onClick={toggleLanguage}>
+        <ListItemIcon>
+          <TranslateIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary={isDutch ? t($ => $.language.switchToEnglish) : t($ => $.language.switchToDutch)} />
       </MenuItem>
       {adminNavItems.length > 0 && [
         <Divider key="tenant-admin-divider" />,
         <ListSubheader key="tenant-admin-header" component="div" disableSticky>
-          Tenant admin
+          {t($ => $.headers.tenantAdmin, { ns: 'navigation' })}
         </ListSubheader>,
         ...adminNavItems.map((item) => renderNavItem(item, onClose)),
       ]}
       {isSuperAdmin && [
         <Divider key="super-admin-divider" />,
         <ListSubheader key="super-admin-header" component="div" disableSticky>
-          Super admin
+          {t($ => $.headers.superAdmin, { ns: 'navigation' })}
         </ListSubheader>,
-        ...SUPER_ADMIN_NAV_ITEMS.map((item) => renderNavItem(item, onClose)),
+        ...superAdminNavItems.map((item) => renderNavItem(item, onClose)),
       ]}
     </Menu>
   )

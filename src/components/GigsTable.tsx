@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import Collapse from '@mui/material/Collapse'
@@ -26,10 +27,12 @@ import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
 import MemberAvatarStack from './MemberAvatarStack.tsx'
 import GigStatusIcon from './GigStatusIcon.tsx'
-import { ALL_STATUSES, STATUS_LABELS } from '../utils/gigStatus.ts'
+import { ALL_STATUSES } from '../utils/gigStatus.ts'
 import type { Gig, Member, Id } from '../types/entities.ts'
 
 const COLUMN_COUNT = 7
+
+type GigStatusKey = 'option' | 'confirmed' | 'announced'
 
 type GigWithExtras = Gig & {
   members_availability?: Member[]
@@ -198,16 +201,17 @@ function DesktopRow({ gig, active, onClick }: GigCardProps) {
 }
 
 function DesktopHead() {
+  const { t } = useTranslation('gigs')
   return (
     <TableHead>
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
         <TableCell padding="none" sx={{ width: 40 }} />
-        <TableCell>Date</TableCell>
-        <TableCell>Event</TableCell>
-        <TableCell>Venue / City</TableCell>
-        <TableCell>Time</TableCell>
-        <TableCell>Band</TableCell>
-        <TableCell align="center">Open tasks</TableCell>
+        <TableCell>{t($ => $.table.colDate)}</TableCell>
+        <TableCell>{t($ => $.table.colEvent)}</TableCell>
+        <TableCell>{t($ => $.table.colVenueCity)}</TableCell>
+        <TableCell>{t($ => $.table.colTime)}</TableCell>
+        <TableCell>{t($ => $.table.colBand)}</TableCell>
+        <TableCell align="center">{t($ => $.table.colOpenTasks)}</TableCell>
       </TableRow>
     </TableHead>
   )
@@ -220,6 +224,7 @@ interface PastGigsHeaderProps {
 }
 
 function PastGigsHeader({ open, count, onToggle }: PastGigsHeaderProps) {
+  const { t } = useTranslation('gigs')
   return (
     <Box
       onClick={onToggle}
@@ -241,13 +246,14 @@ function PastGigsHeader({ open, count, onToggle }: PastGigsHeaderProps) {
         }}
       />
       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-        Past gigs ({count})
+        {t($ => $.table.pastGigs, { count })}
       </Typography>
     </Box>
   )
 }
 
 export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: GigsTableProps) {
+  const { t } = useTranslation('gigs')
   const [pastOpen, setPastOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set(ALL_STATUSES))
@@ -283,7 +289,7 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
     <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
       <TextField
         size="small"
-        placeholder="Search gigs…"
+        placeholder={t($ => $.table.searchPlaceholder)}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         sx={{ flex: '1 1 200px', minWidth: 160 }}
@@ -303,7 +309,9 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
         startIcon={<FilterListIcon />}
         onClick={(e) => setFilterAnchor(e.currentTarget)}
       >
-        {someStatusesSelected ? `Filter (${selectedStatuses.size})` : 'Filter'}
+        {someStatusesSelected
+          ? t($ => $.table.filterWithCount, { count: selectedStatuses.size })
+          : t($ => $.table.filter)}
       </Button>
       <Menu
         anchorEl={filterAnchor}
@@ -316,13 +324,13 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
             checked={allStatusesSelected}
             indeterminate={someStatusesSelected}
           />
-          <ListItemText primary="All statuses" />
+          <ListItemText primary={t($ => $.table.allStatuses)} />
         </MenuItem>
         <Divider />
         {ALL_STATUSES.map((s) => (
           <MenuItem key={s} dense onClick={() => toggleStatus(s)}>
             <Checkbox size="small" checked={selectedStatuses.has(s)} />
-            <ListItemText primary={STATUS_LABELS[s]} />
+            <ListItemText primary={t($ => $.status[s as GigStatusKey])} />
           </MenuItem>
         ))}
       </Menu>
@@ -334,13 +342,13 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
     if (emptyAll) {
       upcomingContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No gigs yet — add one to get started.
+          {t($ => $.table.emptyAll)}
         </Box>
       )
     } else if (upcoming.length === 0) {
       upcomingContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No upcoming gigs.
+          {t($ => $.table.emptyUpcoming)}
         </Box>
       )
     } else {
@@ -385,14 +393,14 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
             {emptyAll && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  No gigs yet — add one to get started.
+                  {t($ => $.table.emptyAll)}
                 </TableCell>
               </TableRow>
             )}
             {!emptyAll && upcoming.length === 0 && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  No upcoming gigs.
+                  {t($ => $.table.emptyUpcoming)}
                 </TableCell>
               </TableRow>
             )}

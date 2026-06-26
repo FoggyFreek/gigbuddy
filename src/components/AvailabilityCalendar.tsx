@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import IconButton from '@mui/material/IconButton'
@@ -11,7 +12,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import CloudSyncIcon from '@mui/icons-material/CloudSync'
 import { normalizeIsoDate, toIsoDate } from '../utils/availabilityUtils.ts'
 import {
-  DAY_HEADERS,
+  getDayHeaders,
   buildCalendarCells,
   buildCalendarCellViewModel,
   indexByDate,
@@ -66,6 +67,8 @@ export default function AvailabilityCalendar({
   onExport,
   onSubscribe,
 }: AvailabilityCalendarProps) {
+  const { t, i18n } = useTranslation('availability')
+  const dayHeaders = useMemo(() => getDayHeaders(i18n.resolvedLanguage ?? 'en'), [i18n.resolvedLanguage])
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const [gridHeight, setGridHeight] = useState<number>()
@@ -140,10 +143,10 @@ export default function AvailabilityCalendar({
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
       <Stack direction="row" sx={{ mb: 1, width: '100%', alignItems: 'center' }}>
-        <IconButton size="small" onClick={onPrev} aria-label="previous month">
+        <IconButton size="small" onClick={onPrev} aria-label={t($ => $.nav.prevMonth)}>
           <ChevronLeftIcon />
         </IconButton>
-          <IconButton size="small" onClick={onNext} aria-label="next month">
+          <IconButton size="small" onClick={onNext} aria-label={t($ => $.nav.nextMonth)}>
           <ChevronRightIcon />
         </IconButton>
         <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
@@ -151,15 +154,15 @@ export default function AvailabilityCalendar({
         </Box>
 
         {onSubscribe && (
-          <Tooltip title="Subscribe to calendar">
-            <IconButton size="small" onClick={onSubscribe} aria-label="subscribe to calendar">
+          <Tooltip title={t($ => $.subscribe.tooltip)}>
+            <IconButton size="small" onClick={onSubscribe} aria-label={t($ => $.subscribe.aria)}>
               <CloudSyncIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
         {onExport && (
-          <Tooltip title="Export month to calendar (.ics)">
-            <IconButton size="small" onClick={onExport} aria-label="export to calendar">
+          <Tooltip title={t($ => $.export.tooltip)}>
+            <IconButton size="small" onClick={onExport} aria-label={t($ => $.export.aria)}>
               <FileDownloadIcon fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -174,9 +177,9 @@ export default function AvailabilityCalendar({
           sx={{ display: 'grid', gridTemplateColumns: '28px repeat(7, 1fr)', gap: 0 }}
         >
           <Typography variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
-            Wk
+            {t($ => $.weekAbbrev)}
           </Typography>
-          {DAY_HEADERS.map((d) => (
+          {dayHeaders.map((d) => (
             <Typography key={d} variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
               {d}
             </Typography>
@@ -214,9 +217,9 @@ export default function AvailabilityCalendar({
             }}
           >
             <Typography variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
-              Wk
+              {t($ => $.weekAbbrev)}
             </Typography>
-            {DAY_HEADERS.map((d) => (
+            {dayHeaders.map((d) => (
               <Typography key={d} variant="caption" align="center" color="text.secondary" sx={{ py: 0.5 }}>
                 {d}
               </Typography>

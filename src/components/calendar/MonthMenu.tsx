@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import '@material/web/menu/menu.js'
 import '@material/web/menu/menu-item.js'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
-import { MONTH_NAMES } from './calendarGrid.ts'
+import { getMonthNames } from './calendarGrid.ts'
 
 // Declare the Material Web components used here so TSX doesn't complain about
 // unknown JSX element names. We use module augmentation on ReactDOM instead of
@@ -37,6 +38,8 @@ export default function MonthMenu({ year, month, onMonthJump }: MonthMenuProps) 
   const menuRef = useRef<HTMLElement | null>(null)
   const [open, setOpen] = useState(false)
   const theme = useTheme()
+  const { i18n } = useTranslation()
+  const monthNames = useMemo(() => getMonthNames(i18n.resolvedLanguage ?? 'en'), [i18n.resolvedLanguage])
   const uid = useId().replaceAll(':', '')
 
   const toggle = useCallback(() => setOpen((v) => !v), [])
@@ -81,7 +84,7 @@ export default function MonthMenu({ year, month, onMonthJump }: MonthMenuProps) 
           color: theme.palette.text.primary,
         }}
       >
-        {MONTH_NAMES[month - 1]} {year}
+        {monthNames[month - 1]} {year}
       </button>
       <md-menu
         ref={menuRef}
@@ -89,7 +92,7 @@ export default function MonthMenu({ year, month, onMonthJump }: MonthMenuProps) 
         positioning="absolute"
         quick
       >
-        {MONTH_NAMES.map((name, i) => (
+        {monthNames.map((name, i) => (
           <md-menu-item
             key={name}
             data-idx={i}
