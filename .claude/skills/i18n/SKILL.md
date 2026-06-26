@@ -7,13 +7,13 @@ description: i18next / react-i18next localization for this app — the v26 TypeS
 
 Translations use **i18next 26.3.2** with **react-i18next v17** (the TypeScript selector API). This file is the entry point and the rules that bite; [i18n_reference.md](./i18n_reference.md) has the full tables and worked examples — read it before any non-trivial change. Treat i18next.com as authoritative over memory; if a directive or option is unclear, fetch the specific docs page rather than guessing.
 
-> **i18n is wired in** (bootstrapped 2026-06-25; full namespace scaffold added the same day). Deps: `i18next`/`react-i18next`/`i18next-browser-languagedetector`. `src/i18n/` holds the config (`index.ts`), `en/`+`nl/` resources, and `i18next.d.ts` (selector-type augmentation, `enableSelector: true`). The side-effect `import './i18n/index.ts'` lives in `main.tsx` **and** in `src/tests/setup.js` (which also pins `changeLanguage('en')` so component suites resolve real strings instead of raw keys). Detection persists to localStorage key `gigbuddy_lang`.
+> Deps: `i18next`/`react-i18next`/`i18next-browser-languagedetector`. `src/i18n/` holds the config (`index.ts`), `en/`+`nl/` resources, and `i18next.d.ts` (selector-type augmentation, `enableSelector: true`). The side-effect `import './i18n/index.ts'` lives in `main.tsx` **and** in `src/tests/setup.js` (which also pins `changeLanguage('en')` so component suites resolve real strings instead of raw keys). Detection persists to localStorage key `gigbuddy_lang`.
 >
-> **28 namespaces already exist** (derived from the AppShell nav groups/items + the domain views), but **only the app shell is actually wired** so far — `AppShell.tsx`, `appShell/NavGroup.tsx`, `appShell/SettingsMenu.tsx`. Cross-cutting: `common`, `navigation` (all shell chrome — nav labels, tooltips, aria, search placeholders), `glossary` (plural domain nouns), `validation`. The per-view namespaces are **seeded with `title` only** (their bodies are still hardcoded English): `dashboard, financialDashboard, profile, availability, gigs, rehearsals, bandEvents, tasks, songs, setlists, contacts, suppliers, venues, emailTemplates, invoices, purchases, merch, reimbursements, journal, ledger, vatReturns, reports, settings, auth`. **Don't create a new namespace per view — the home already exists; extract that view's strings into it.** Verify against the live tree (Grep for `useTranslation`) before trusting specifics.
+> **28 namespaces exist** (derived from the AppShell nav groups/items + the domain views). Cross-cutting: `common`, `navigation` (all shell chrome — nav labels, tooltips, aria, search placeholders), `glossary` (plural domain nouns), `validation`. The per-view namespaces are: `dashboard, financialDashboard, profile, availability, gigs, rehearsals, bandEvents, tasks, songs, setlists, contacts, suppliers, venues, emailTemplates, invoices, purchases, merch, reimbursements, journal, ledger, vatReturns, reports, settings, auth`. **Don't create a new namespace per view — the home already exists; extract that view's strings into it.** Verify against the live tree (Grep for `useTranslation`) before trusting specifics. Consolidate when possible and when context is shared.
 
-## The selector API — the one thing to get right
+## The selector API
 
-This stack uses the **TypeScript selector form**, not bare string keys. Pass a selector function, not a string:
+This stack uses the **TypeScript selector form**. Pass a selector function, not a string:
 
 ```ts
 const { t } = useTranslation('common');
@@ -91,9 +91,10 @@ t($ => $.status[journalStatusKey[status]]);
 
 - **Don't** map enum → dotted string and pass it to `t(string)` (the pattern you'll see in other apps). That's the legacy string form — it compiles but is **not** checked against the resource JSON, so a typo or renamed key fails silently at runtime. Loses the entire reason this stack uses the selector API.
 - **No `switch`** to pick a label per status — the map (or direct index) replaces it.
+- Assert where a specific component or control is used before deciding a namespace target. If a status is used in multiple views, put it in a shared namespace (e.g. `common` or `glossary`) rather than duplicating it in each view's namespace.
 - **Guard optionals first.** Most of these fields are declared `status?: '…'` in `src/types/entities.ts`, so the value can be `undefined`; narrow it (`status && t($ => $.status[status])`) before indexing.
 
-## Translatability — the rules that actually save you
+## Translatability
 
 These are the highest-value parts of the reference; violating them produces strings that *cannot* be translated correctly:
 

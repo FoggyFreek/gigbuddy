@@ -1,3 +1,44 @@
 {
-  "title": "Bandevenementen"
+  "title": "Bandevenementen",
+  "add": "Toevoegen",
+  "table": {
+    "colDate": "Datum",
+    "colTitle": "Titel",
+    "colTime": "Tijd",
+    "colLocation": "Locatie",
+    "shareEvent": "evenement delen",
+    "shareWhatsApp": "Delen via WhatsApp",
+    "emptyAll": "Nog geen evenementen — voeg er een toe om te beginnen.",
+    "emptyUpcoming": "Geen aankomende evenementen.",
+    "pastEvents": "Afgelopen evenementen ({{count}})"
+  },
+  "form": {
+    "addTitle": "Bandevenement toevoegen",
+    "detailsTitle": "Bandevenement",
+    "title": "Titel",
+    "titlePlaceholder": "bijv. Studiosessie, Fotoshoot, Bandvergadering",
+    "startDate": "Begindatum",
+    "endDate": "Einddatum",
+    "endDateHint": "Laat leeg voor één dag",
+    "openStartPicker": "begindatumkiezer openen",
+    "openEndPicker": "einddatumkiezer openen",
+    "location": "Locatie",
+    "startTime": "Begintijd",
+    "endTime": "Eindtijd",
+    "notes": "Notities",
+    "required": "Verplicht",
+    "endDateError": "Moet op of na de begindatum liggen",
+    "cancel": "Annuleren",
+    "addEvent": "Evenement toevoegen",
+    "close": "Sluiten"
+  },
+  "page": {
+    "title": "Bandevenementdetails",
+    "back": "terug",
+    "close": "sluiten",
+    "delete": "Verwijderen",
+    "deleteConfirmTitle": "Bandevenement verwijderen?",
+    "deleteConfirmBody": "Dit kan niet ongedaan worden gemaakt.",
+    "cancel": "Annuleren"
+  }
 }

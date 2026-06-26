@@ -1,4 +1,5 @@
 import type { SetlistSet as SetlistSetType, SetlistItem } from '../../types/entities.ts'
+import { useTranslation } from 'react-i18next'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import Box from '@mui/material/Box'
@@ -69,6 +70,7 @@ export default function SetlistSet({
   editing = true,
   songOrderStart = 0,
 }: SetlistSetProps) {
+  const { t } = useTranslation('setlists')
   const { setNodeRef, isOver } = useDroppable({ id: setDomId(set.id!) })
   const itemIds = (set.items ?? []).map((it) => itemDomId(it.id!))
   const setSeconds = (set.items ?? []).reduce((acc, it) => acc + (it.duration_seconds || 0), 0)
@@ -104,7 +106,7 @@ export default function SetlistSet({
             }}
             slotProps={{
               input: { disableUnderline: true, sx: { color: 'inherit', fontWeight: 700 } },
-              htmlInput: { 'aria-label': 'set name' },
+              htmlInput: { 'aria-label': t($ => $.set.nameAria) },
             }}
             sx={{ flexGrow: 1 }}
           />
@@ -119,33 +121,33 @@ export default function SetlistSet({
         </Box>
         {editing && (
           <>
-            <Tooltip title="Include in total time">
+            <Tooltip title={t($ => $.set.includeInTotal)}>
               <IconButton
                 size="small"
                 color="inherit"
                 onClick={() => onToggleTotal(!set.include_in_total)}
-                aria-label="include in total time"
+                aria-label={t($ => $.set.includeInTotalAria)}
                 sx={{ mx: 1, opacity: set.include_in_total ? 0.9 : 0.3 }}
               >
                 <MoreTimeIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Move set up">
+            <Tooltip title={t($ => $.set.moveUp)}>
               <span>
-                <IconButton size="small" color="inherit" disabled={index === 0} onClick={onMoveUp} aria-label="move set up">
+                <IconButton size="small" color="inherit" disabled={index === 0} onClick={onMoveUp} aria-label={t($ => $.set.moveUpAria)}>
                   <ArrowUpwardIcon fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
-            <Tooltip title="Move set down">
+            <Tooltip title={t($ => $.set.moveDown)}>
               <span>
-                <IconButton size="small" color="inherit" disabled={index === setCount - 1} onClick={onMoveDown} aria-label="move set down">
+                <IconButton size="small" color="inherit" disabled={index === setCount - 1} onClick={onMoveDown} aria-label={t($ => $.set.moveDownAria)}>
                   <ArrowDownwardIcon fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
-            <Tooltip title="Delete set">
-              <IconButton size="small" color="inherit" onClick={onDelete} aria-label="delete set">
+            <Tooltip title={t($ => $.set.delete)}>
+              <IconButton size="small" color="inherit" onClick={onDelete} aria-label={t($ => $.set.deleteAria)}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -157,7 +159,7 @@ export default function SetlistSet({
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
           {(set.items ?? []).length === 0 && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', py: 1, textAlign: 'center' }}>
-              {editing ? 'Empty — add songs, pauses or breaks, or drag items here.' : 'Empty'}
+              {editing ? t($ => $.set.emptyEditing) : t($ => $.set.empty)}
             </Typography>
           )}
           {(set.items ?? []).map((it, i) => {
@@ -190,13 +192,13 @@ export default function SetlistSet({
         {editing && (
           <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
             <Button size="small" startIcon={<LibraryMusicIcon />} onClick={onAddSong}>
-              Add song
+              {t($ => $.set.addSong)}
             </Button>
             <Button size="small" startIcon={<PauseCircleOutlineIcon />} onClick={onAddPause}>
-              Add pause
+              {t($ => $.set.addPause)}
             </Button>
             <Button size="small" startIcon={<FreeBreakfastIcon />} onClick={onAddBreak}>
-              Add break
+              {t($ => $.set.addBreak)}
             </Button>
           </Box>
         )}

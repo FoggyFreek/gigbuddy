@@ -1,5 +1,6 @@
 import type { SongLink } from '../types/entities.ts'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
@@ -19,6 +20,7 @@ interface SongLinksProps {
 }
 
 export default function SongLinks({ songId, initialLinks = [], canWrite = true }: SongLinksProps) {
+  const { t } = useTranslation(['songs', 'common'])
   const [links, setLinks] = useState<SongLink[]>(initialLinks)
   const [label, setLabel] = useState('')
   const [url, setUrl] = useState('')
@@ -34,7 +36,7 @@ export default function SongLinks({ songId, initialLinks = [], canWrite = true }
       setLabel('')
       setUrl('')
     } catch (err) {
-      setError((err as Error).message || 'Could not add link.')
+      setError((err as Error).message || t($ => $.links.addError))
     }
   }
 
@@ -78,7 +80,7 @@ export default function SongLinks({ songId, initialLinks = [], canWrite = true }
             )}
           </Box>
           {canWrite && (
-            <IconButton size="small" color="error" onClick={() => handleDelete(l.id)} aria-label="delete link">
+            <IconButton size="small" color="error" onClick={() => handleDelete(l.id)} aria-label={t($ => $.links.deleteAria)}>
               <DeleteIcon fontSize="small" />
             </IconButton>
           )}
@@ -89,15 +91,15 @@ export default function SongLinks({ songId, initialLinks = [], canWrite = true }
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <TextField
             size="small"
-            label="Label"
+            label={t($ => $.links.label)}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             sx={{ flex: '0 0 30%' }}
           />
           <TextField
             size="small"
-            label="URL"
-            placeholder="https://…"
+            label={t($ => $.links.url)}
+            placeholder={t($ => $.links.urlPlaceholder)}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
@@ -106,7 +108,7 @@ export default function SongLinks({ songId, initialLinks = [], canWrite = true }
             helperText={error || ''}
           />
           <Button variant="outlined" startIcon={<AddIcon />} onClick={handleAdd} disabled={!url.trim()}>
-            Add
+            {t($ => $.common.actions.add)}
           </Button>
         </Stack>
       )}

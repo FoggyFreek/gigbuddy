@@ -143,7 +143,7 @@ function VenueCard({ venue, selected, active, onToggle, onClick }: VenueCardProp
       >
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
           <Box>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            <Typography variant="body2">
               {displayName(venue)}
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -152,16 +152,11 @@ function VenueCard({ venue, selected, active, onToggle, onClick }: VenueCardProp
           </Box>
           <CategoryChip category={venue.category} />
         </Box>
-        {(contactName(venue) || (venue.years ?? []).length > 0) && (
+        {((venue.years ?? []).length > 0) && (
           <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-            {contactName(venue) ? (
-              <Typography variant="caption" color="text.secondary">
-                {contactName(venue)}
-              </Typography>
-            ) : <Box />}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end' }}>
               {(venue.years ?? []).map((yr) => (
-                <Chip key={yr} label={yr} size="small" variant="outlined" />
+                <Chip key={yr} label={yr} size="small" sx={{ bgcolor: 'secondary.main', color: 'secondary.contrastText' }} />
               ))}
             </Box>
           </Box>

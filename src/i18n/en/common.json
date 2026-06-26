@@ -27,5 +27,58 @@
   "answer": {
     "yes": "Yes",
     "no": "No"
+  },
+  "picker": {
+    "typeMinChars_one": "Type at least {{count}} character…",
+    "typeMinChars_other": "Type at least {{count}} characters…",
+    "searching": "Searching…",
+    "noMatches": "No matches"
+  },
+  "periodPicker": {
+    "modes": {
+      "month": "Month",
+      "quarter": "Quarter",
+      "fiscal_year": "Fiscal Year",
+      "all_time": "All Time"
+    },
+    "months": {
+      "jan": "Jan",
+      "feb": "Feb",
+      "mar": "Mar",
+      "apr": "Apr",
+      "may": "May",
+      "jun": "Jun",
+      "jul": "Jul",
+      "aug": "Aug",
+      "sep": "Sep",
+      "oct": "Oct",
+      "nov": "Nov",
+      "dec": "Dec"
+    },
+    "previous": "previous",
+    "next": "next",
+    "selectFiscalYear": "Select fiscal year",
+    "selectMonth": "Select month",
+    "selectQuarter": "Select quarter",
+    "customRange": "Custom Range",
+    "from": "From",
+    "to": "To",
+    "rangeSeparator": "to",
+    "openFromPicker": "open from picker",
+    "openToPicker": "open to picker",
+    "apply": "Apply"
+  },
+  "contactPicker": {
+    "label": "Add contact",
+    "createContact": "+ Create contact '{{name}}'"
+  },
+  "venuePicker": {
+    "labelVenue": "Venue / physical location",
+    "labelFestival": "Festival / event organisation",
+    "createVenue": "+ Create venue '{{name}}'",
+    "createFestival": "+ Create festival '{{name}}'",
+    "openVenue": "Open venue",
+    "categoryVenue": "(venue)",
+    "categoryFestival": "(festival)"
   }
 }

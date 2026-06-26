@@ -1,3 +1,68 @@
 {
-  "title": "Rehearsals"
+  "title": "Rehearsals",
+  "add": "Add",
+  "status": {
+    "option": "Option",
+    "planned": "Planned"
+  },
+  "table": {
+    "colDate": "Date",
+    "colTime": "Time",
+    "colLocation": "Location",
+    "colVotes": "Votes",
+    "shareRehearsal": "share rehearsal",
+    "shareWhatsApp": "Share via WhatsApp",
+    "noRequiredParticipants": "no required participants",
+    "myVote": "My vote:",
+    "emptyAll": "No rehearsals yet — propose one to get started.",
+    "emptyUpcoming": "No upcoming rehearsals.",
+    "pastRehearsals": "Past rehearsals ({{count}})"
+  },
+  "form": {
+    "proposeTitle": "Propose rehearsal",
+    "detailsTitle": "Rehearsal details",
+    "date": "Date",
+    "location": "Location",
+    "startTime": "Start time",
+    "endTime": "End time",
+    "alsoInclude": "Also include",
+    "alsoIncludeHint": "Lead members are added automatically. Pick optionals or subs you also need.",
+    "memberAvailability": "Member availability",
+    "required": "Required",
+    "cancel": "Cancel",
+    "propose": "Propose",
+    "close": "Close",
+    "unavailableTitle": "Member unavailable",
+    "unavailableBody_one": "{{names}} is marked unavailable on this date. Are you sure you want to propose this rehearsal?",
+    "unavailableBody_other": "{{names}} are marked unavailable on this date. Are you sure you want to propose this rehearsal?",
+    "goBack": "Go back",
+    "proposeAnyway": "Propose anyway",
+    "notes": "Notes"
+  },
+  "songs": {
+    "title": "Songs",
+    "openSong": "Open song",
+    "openSongAria": "open {{title}}",
+    "detachSong": "detach {{title}}"
+  },
+  "participants": {
+    "status": "Status",
+    "planThisRehearsal": "Plan this rehearsal",
+    "revertToOption": "Revert to option",
+    "planHint": "Every required participant must vote yes before this can be planned.",
+    "requiredParticipants": "Required participants",
+    "noParticipants": "No participants yet — add at least one below.",
+    "addParticipant": "Add participant",
+    "add": "Add",
+    "removeParticipant": "remove {{name}}"
+  },
+  "page": {
+    "title": "Rehearsal details",
+    "back": "back",
+    "close": "close",
+    "delete": "Delete",
+    "deleteConfirmTitle": "Delete rehearsal?",
+    "deleteConfirmBody": "This cannot be undone.",
+    "cancel": "Cancel"
+  }
 }

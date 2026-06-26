@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import AppBar from '@mui/material/AppBar'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -61,6 +62,7 @@ export default function ChordProViewerDialog({
   onChartChange,
   onDelete,
 }: ChordProViewerDialogProps) {
+  const { t } = useTranslation(['songs', 'common'])
   const theme = useTheme()
   const stacked = useMediaQuery(theme.breakpoints.down('md'))
   const chartId = chart.id as Id
@@ -115,7 +117,7 @@ export default function ChordProViewerDialog({
   const editor = (
     <Paper elevation={2} sx={{ p: 2, height: '100%', minHeight: 0 }}>
       <TextField
-        label="ChordPro source"
+        label={t($ => $.viewer.source)}
         value={source}
         onChange={(e) => handleSource(e.target.value)}
         multiline
@@ -148,25 +150,25 @@ export default function ChordProViewerDialog({
 
   const transposeControl = (
     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-      <Tooltip title="Transpose down a semitone">
-        <IconButton size="small" onClick={() => bumpTranspose(-1)} aria-label="transpose down">
+      <Tooltip title={t($ => $.viewer.transposeDown)}>
+        <IconButton size="small" onClick={() => bumpTranspose(-1)} aria-label={t($ => $.viewer.transposeDownAria)}>
           <RemoveIcon fontSize="small" />
         </IconButton>
       </Tooltip>
-      <Tooltip title={transposeOffset === 0 ? 'Transpose' : 'Reset transpose'}>
+      <Tooltip title={transposeOffset === 0 ? t($ => $.viewer.transpose) : t($ => $.viewer.resetTranspose)}>
         <Button
           size="small"
           color="inherit"
           onClick={() => setTransposeOffset(0)}
           startIcon={<MusicNoteIcon fontSize="small" />}
           sx={{ minWidth: 56, fontVariantNumeric: 'tabular-nums' }}
-          aria-label={`transpose ${transposeOffset} semitones, reset`}
+          aria-label={t($ => $.viewer.transposeResetAria, { n: transposeOffset })}
         >
           {transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}
         </Button>
       </Tooltip>
-      <Tooltip title="Transpose up a semitone">
-        <IconButton size="small" onClick={() => bumpTranspose(1)} aria-label="transpose up">
+      <Tooltip title={t($ => $.viewer.transposeUp)}>
+        <IconButton size="small" onClick={() => bumpTranspose(1)} aria-label={t($ => $.viewer.transposeUpAria)}>
           <AddIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -174,11 +176,11 @@ export default function ChordProViewerDialog({
   )
 
   const chordFinderButton = (
-    <Tooltip title="Chord finder">
+    <Tooltip title={t($ => $.viewer.chordFinder)}>
       <IconButton
         size="small"
         onClick={() => setShowAnalyzer((v) => !v)}
-        aria-label="toggle chord finder"
+        aria-label={t($ => $.viewer.toggleChordFinder)}
         aria-pressed={showAnalyzer}
         color={showAnalyzer ? 'primary' : 'default'}
       >
@@ -192,7 +194,7 @@ export default function ChordProViewerDialog({
       <AppBar position="sticky" color="default" elevation={1}>
         {/* Row 1: title + primary actions */}
         <Toolbar sx={{ gap: 1 }}>
-          <IconButton edge="start" onClick={handleClose} aria-label="close">
+          <IconButton edge="start" onClick={handleClose} aria-label={t($ => $.common.actions.close)}>
             <CloseIcon />
           </IconButton>
           {editing ? (
@@ -201,12 +203,12 @@ export default function ChordProViewerDialog({
               variant="standard"
               value={name}
               onChange={(e) => handleName(e.target.value)}
-              placeholder="Chart name"
+              placeholder={t($ => $.viewer.chartNamePlaceholder)}
               sx={{ flexGrow: 1, maxWidth: 360 }}
             />
           ) : (
             <Typography variant="h6" sx={{ flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {name || 'Chart'}
+              {name || t($ => $.charts.chartFallback)}
             </Typography>
           )}
           <Box sx={{ flexGrow: 1 }} />
@@ -223,15 +225,15 @@ export default function ChordProViewerDialog({
               startIcon={editing ? <VisibilityIcon /> : <EditIcon />}
               onClick={() => setEditing((v) => !v)}
             >
-              {editing ? 'Preview' : 'Edit'}
+              {editing ? t($ => $.preview) : t($ => $.common.actions.edit)}
             </Button>
           )}
           <Button variant="contained" startIcon={<PrintIcon />} onClick={handlePrint}>
-            Print
+            {t($ => $.viewer.print)}
           </Button>
           {onDelete && (
-            <Tooltip title="Delete chart">
-              <IconButton color="error" onClick={() => setConfirmDelete(true)} aria-label="delete chart">
+            <Tooltip title={t($ => $.viewer.deleteChart)}>
+              <IconButton color="error" onClick={() => setConfirmDelete(true)} aria-label={t($ => $.viewer.deleteChart)}>
                 <DeleteIcon />
               </IconButton>
             </Tooltip>
@@ -283,13 +285,13 @@ export default function ChordProViewerDialog({
       </Box>
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>Delete chart?</DialogTitle>
+        <DialogTitle>{t($ => $.viewer.deleteTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>"{name || 'This chart'}" will be permanently deleted.</DialogContentText>
+          <DialogContentText>{t($ => $.viewer.deleteBody, { name: name || t($ => $.viewer.deleteThisChart) })}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={handleDeleteConfirm}>Delete</Button>
+          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
+          <Button color="error" variant="contained" onClick={handleDeleteConfirm}>{t($ => $.common.actions.delete)}</Button>
         </DialogActions>
       </Dialog>
     </Dialog>

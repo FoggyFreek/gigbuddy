@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
@@ -25,6 +26,7 @@ interface SetlistTransitionProps {
 // It's a sibling of the cards (never inside the sortable node), so drag transforms
 // don't move it.
 export default function SetlistTransition({ linked = false, note = null, onUpdate, editing = true }: SetlistTransitionProps) {
+  const { t } = useTranslation('setlists')
   // Read-only: a linked pair shows a static segue strip; an unlinked pair shows
   // nothing (the add-link affordance is editing-only).
   if (!editing) {
@@ -63,12 +65,12 @@ export default function SetlistTransition({ linked = false, note = null, onUpdat
           '&:hover .add-link-btn': { opacity: 1 },
         }}
       >
-        <Tooltip title="Link as transition">
+        <Tooltip title={t($ => $.transition.link)}>
           <IconButton
             size="small"
             className="add-link-btn"
             onClick={() => onUpdate({ linked_to_next: true })}
-            aria-label="link songs as transition"
+            aria-label={t($ => $.transition.linkAria)}
             sx={{
               position: 'absolute',
               top: '50%',
@@ -108,7 +110,7 @@ export default function SetlistTransition({ linked = false, note = null, onUpdat
       <TextField
         variant="standard"
         size="small"
-        placeholder="segue…"
+        placeholder={t($ => $.transition.notePlaceholder)}
         defaultValue={note || ''}
         onBlur={(e) => {
           const value = e.target.value.trim()
@@ -116,16 +118,16 @@ export default function SetlistTransition({ linked = false, note = null, onUpdat
         }}
         slotProps={{
           input: { disableUnderline: true, sx: { fontSize: '0.8rem' } },
-          htmlInput: { 'aria-label': 'transition note' },
+          htmlInput: { 'aria-label': t($ => $.transition.noteAria) },
         }}
         sx={{ flexGrow: 1 }}
       />
-      <Tooltip title="Remove transition">
+      <Tooltip title={t($ => $.transition.remove)}>
         <IconButton
           size="small"
           className="unlink-btn"
           onClick={() => onUpdate({ linked_to_next: false, transition_note: null })}
-          aria-label="remove transition"
+          aria-label={t($ => $.transition.removeAria)}
           sx={{ p: 0.25, opacity: 0, transition: 'opacity 120ms' }}
         >
           <LinkOffIcon fontSize="small" />

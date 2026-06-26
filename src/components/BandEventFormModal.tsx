@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -37,6 +38,7 @@ const EMPTY_FORM = {
 }
 
 export default function BandEventFormModal({ mode, bandEventId, onClose, initialDate }: BandEventFormModalProps) {
+  const { t } = useTranslation('bandEvents')
   const [form, setForm] = useState(() =>
     mode === 'create' && initialDate
       ? { ...EMPTY_FORM, start_date: initialDate, end_date: initialDate }
@@ -80,9 +82,9 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
 
   async function handleCreate() {
     const errs: Record<string, string> = {}
-    if (!form.title.trim()) errs.title = 'Required'
-    if (!form.start_date) errs.start_date = 'Required'
-    if (form.end_date && form.end_date < form.start_date) errs.end_date = 'Must be on or after start date'
+    if (!form.title.trim()) errs.title = t($ => $.form.required)
+    if (!form.start_date) errs.start_date = t($ => $.form.required)
+    if (form.end_date && form.end_date < form.start_date) errs.end_date = t($ => $.form.endDateError)
     if (Object.keys(errs).length) { setErrors(errs); return }
     await createBandEvent({
       title: form.title.trim(),
@@ -100,7 +102,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
 
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={mode === 'edit' ? handleClose : undefined}>
-      <DialogTitle>{mode === 'create' ? 'Add band event' : 'Band event'}</DialogTitle>
+      <DialogTitle>{mode === 'create' ? t($ => $.form.addTitle) : t($ => $.form.detailsTitle)}</DialogTitle>
 
       {loading ? (
         <DialogContent sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -125,11 +127,11 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {mode === 'create' ? (
           <>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button variant="contained" onClick={handleCreate}>Add event</Button>
+            <Button onClick={onClose}>{t($ => $.form.cancel)}</Button>
+            <Button variant="contained" onClick={handleCreate}>{t($ => $.form.addEvent)}</Button>
           </>
         ) : (
-          <Button variant="contained" onClick={handleClose}>Close</Button>
+          <Button variant="contained" onClick={handleClose}>{t($ => $.form.close)}</Button>
         )}
       </DialogActions>
     </Dialog>

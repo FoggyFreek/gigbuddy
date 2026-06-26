@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import Grid from '@mui/material/Grid'
 import TextField from '@mui/material/TextField'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
@@ -23,48 +24,49 @@ interface BandEventFieldsProps {
 }
 
 export default function BandEventFields({ form, onChange, errors = {} }: BandEventFieldsProps) {
+  const { t } = useTranslation('bandEvents')
   return (
     <>
       <Grid size={12}>
         <TextField
-          label="Title"
+          label={t($ => $.form.title)}
           fullWidth
           required
           value={form.title}
           onChange={(e) => onChange('title', e.target.value)}
           error={!!errors.title}
           helperText={errors.title}
-          placeholder="e.g. Studio session, Photo shoot, Band meeting"
+          placeholder={t($ => $.form.titlePlaceholder)}
         />
       </Grid>
       <Grid size={{ xs: 12, sm: 6 }}>
         <DateEntryField
-          label="Start date"
+          label={t($ => $.form.startDate)}
           fullWidth
           required
           value={form.start_date}
           onChange={(e) => onChange('start_date', e.target.value)}
           error={!!errors.start_date}
           helperText={errors.start_date}
-          openPickerLabel="open start picker"
+          openPickerLabel={t($ => $.form.openStartPicker)}
           sx={{}}
         />
       </Grid>
       <Grid size={{ xs: 12, sm: 6 }}>
         <DateEntryField
-          label="End date"
+          label={t($ => $.form.endDate)}
           fullWidth
           value={form.end_date}
           onChange={(e) => onChange('end_date', e.target.value)}
           error={!!errors.end_date}
-          helperText={errors.end_date || 'Leave blank for single day'}
-          openPickerLabel="open end picker"
+          helperText={errors.end_date || t($ => $.form.endDateHint)}
+          openPickerLabel={t($ => $.form.openEndPicker)}
           sx={{}}
         />
       </Grid>
       <Grid size={12}>
         <TextField
-          label="Location"
+          label={t($ => $.form.location)}
           fullWidth
           value={form.location}
           onChange={(e) => onChange('location', e.target.value)}
@@ -72,7 +74,7 @@ export default function BandEventFields({ form, onChange, errors = {} }: BandEve
       </Grid>
       <Grid size={{ xs: 6 }}>
         <TimePicker
-          label="Start time"
+          label={t($ => $.form.startTime)}
           ampm={false}
           value={timeStringToDayjs(form.start_time)}
           onChange={(v) => onChange('start_time', dayjsToTimeString(v))}
@@ -81,7 +83,7 @@ export default function BandEventFields({ form, onChange, errors = {} }: BandEve
       </Grid>
       <Grid size={{ xs: 6 }}>
         <TimePicker
-          label="End time"
+          label={t($ => $.form.endTime)}
           ampm={false}
           value={timeStringToDayjs(form.end_time)}
           onChange={(v) => onChange('end_time', dayjsToTimeString(v))}
@@ -90,7 +92,7 @@ export default function BandEventFields({ form, onChange, errors = {} }: BandEve
       </Grid>
       <Grid size={12}>
         <TextField
-          label="Notes"
+          label={t($ => $.form.notes)}
           fullWidth
           multiline
           minRows={3}

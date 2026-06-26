@@ -116,25 +116,11 @@ function ContactCard({ contact, selected, active, onToggle, onClick }: ContactCa
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.25 }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          <Typography variant="body2">
             {contact.name}
           </Typography>
           <CategoryChip category={contact.category} />
         </Box>
-        {(contact.email || contact.phone) && (
-          <Box sx={{ display: 'flex', gap: 1.5 }}>
-            {contact.email && (
-              <Typography variant="caption" color="text.secondary">
-                {contact.email}
-              </Typography>
-            )}
-            {contact.phone && (
-              <Typography variant="caption" color="text.secondary">
-                {contact.phone}
-              </Typography>
-            )}
-          </Box>
-        )}
       </Box>
     </Box>
   )

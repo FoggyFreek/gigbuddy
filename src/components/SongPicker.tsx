@@ -1,5 +1,6 @@
 import type { Song, Id } from '../types/entities.ts'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
@@ -19,7 +20,8 @@ interface SongPickerProps {
   label?: string
 }
 
-export default function SongPicker({ onSelect, excludeIds = [], label = 'Add song' }: SongPickerProps) {
+export default function SongPicker({ onSelect, excludeIds = [], label }: SongPickerProps) {
+  const { t } = useTranslation(['songs', 'common'])
   const [input, setInput] = useState('')   // what the field displays
   const [query, setQuery] = useState('')   // what we actually search on
   const [options, setOptions] = useState<Song[]>([])
@@ -82,9 +84,9 @@ export default function SongPicker({ onSelect, excludeIds = [], label = 'Add son
     setOptions([])
   }
 
-  let noOptionsText = 'No matches'
-  if (tooShort) noOptionsText = `Type at least ${MIN_CHARS} characters…`
-  else if (loading) noOptionsText = 'Searching…'
+  let noOptionsText = t($ => $.common.picker.noMatches)
+  if (tooShort) noOptionsText = t($ => $.common.picker.typeMinChars, { count: MIN_CHARS })
+  else if (loading) noOptionsText = t($ => $.common.picker.searching)
 
   return (
     <Autocomplete
@@ -112,7 +114,7 @@ export default function SongPicker({ onSelect, excludeIds = [], label = 'Add son
           </Box>
         </li>
       )}
-      renderInput={(params) => <TextField {...params} label={label} size="small" />}
+      renderInput={(params) => <TextField {...params} label={label ?? t($ => $.addSong)} size="small" />}
     />
   )
 }

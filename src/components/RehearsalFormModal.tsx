@@ -1,5 +1,6 @@
 import type { Rehearsal, Member, Id } from '../types/entities.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -57,6 +58,7 @@ interface RehearsalFormModalProps {
 }
 
 export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }: RehearsalFormModalProps) {
+  const { t } = useTranslation('rehearsals')
   const [form, setForm] = useState<RehearsalForm>(() =>
     mode === 'create' && initialDate ? { ...EMPTY_FORM, proposed_date: initialDate } : EMPTY_FORM,
   )
@@ -148,7 +150,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
 
   async function handleCreate() {
     const errs: Record<string, string> = {}
-    if (!form.proposed_date) errs.proposed_date = 'Required'
+    if (!form.proposed_date) errs.proposed_date = t($ => $.form.required)
     if (Object.keys(errs).length) { setErrors(errs); return }
 
     if (unavailableSelected.length > 0) {
@@ -211,7 +213,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   return (
     <Dialog open fullWidth maxWidth="md" onClose={mode === 'edit' ? handleClose : undefined}>
       <DialogTitle>
-        {mode === 'create' ? 'Propose rehearsal' : 'Rehearsal details'}
+        {mode === 'create' ? t($ => $.form.proposeTitle) : t($ => $.form.detailsTitle)}
       </DialogTitle>
 
       {loading ? (
@@ -231,10 +233,10 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Also include
+                  {t($ => $.form.alsoInclude)}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                  Lead members are added automatically. Pick optionals or subs you also need.
+                  {t($ => $.form.alsoIncludeHint)}
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
                   {createExtras.map((m) => {
@@ -258,7 +260,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Member availability
+                  {t($ => $.form.memberAvailability)}
                 </Typography>
                 <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', minWidth: 0 }}>
                   {unavailableSelected.map((m) => {
@@ -302,27 +304,28 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {mode === 'create' ? (
           <>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button variant="contained" onClick={handleCreate}>Propose</Button>
+            <Button onClick={onClose}>{t($ => $.form.cancel)}</Button>
+            <Button variant="contained" onClick={handleCreate}>{t($ => $.form.propose)}</Button>
           </>
         ) : (
-          <Button variant="contained" onClick={handleClose}>Close</Button>
+          <Button variant="contained" onClick={handleClose}>{t($ => $.form.close)}</Button>
         )}
       </DialogActions>
 
       <Dialog open={confirmCreate} onClose={() => setConfirmCreate(false)}>
-        <DialogTitle>Member unavailable</DialogTitle>
+        <DialogTitle>{t($ => $.form.unavailableTitle)}</DialogTitle>
         <DialogContent>
           <Typography>
-            {unavailableSelected.map((m) => m.name).join(', ')}{' '}
-            {unavailableSelected.length === 1 ? 'is' : 'are'} marked unavailable on this date.
-            Are you sure you want to propose this rehearsal?
+            {t($ => $.form.unavailableBody, {
+              count: unavailableSelected.length,
+              names: unavailableSelected.map((m) => m.name).join(', '),
+            })}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmCreate(false)}>Go back</Button>
+          <Button onClick={() => setConfirmCreate(false)}>{t($ => $.form.goBack)}</Button>
           <Button variant="contained" color="warning" onClick={() => { setConfirmCreate(false); doCreate() }}>
-            Propose anyway
+            {t($ => $.form.proposeAnyway)}
           </Button>
         </DialogActions>
       </Dialog>

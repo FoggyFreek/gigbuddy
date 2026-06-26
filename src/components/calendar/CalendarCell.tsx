@@ -121,13 +121,16 @@ interface GigBarProps {
 }
 
 function GigBar({ gig, theme, onGigClick }: GigBarProps) {
-  const { t } = useTranslation('availability')
+  const { t } = useTranslation(['availability', 'gigs'])
   const paletteColor = GIG_STATUS_COLORS[gig.status ?? ''] || 'grey.500'
   const resolvedColor = resolvePaletteColor(theme, paletteColor)
   const timeRange = formatTimeRange(gig.start_time, gig.end_time)
   const title = gig.event_description || venueHeadline(gig.venue ?? gig.festival) || t($ => $.events.gigFallback)
+  const statusLabel = gig.status
+    ? t($ => $.status[gig.status as 'option' | 'confirmed' | 'announced'], { ns: 'gigs' })
+    : null
   return (
-    <Tooltip title={[gig.event_description, venueHeadline(gig.venue ?? gig.festival), gig.status].filter(Boolean).join(' — ')}>
+    <Tooltip title={[gig.event_description, venueHeadline(gig.venue ?? gig.festival), statusLabel].filter(Boolean).join(' — ')}>
       <Box
         data-gig-id={gig.id}
         onClick={(e) => { e.stopPropagation(); onGigClick?.(gig) }}
@@ -162,15 +165,18 @@ interface RehearsalBarProps {
 }
 
 function RehearsalBar({ reh, theme, onRehearsalClick }: RehearsalBarProps) {
-  const { t } = useTranslation('availability')
+  const { t } = useTranslation(['availability', 'rehearsals'])
   const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
   const total = reh.participants?.length ?? 0
   const isOption = reh.status === 'option'
   const paletteColor = REHEARSAL_STATUS_COLORS[reh.status ?? ''] || 'grey.400'
   const resolvedColor = resolvePaletteColor(theme, paletteColor)
   const timeRange = formatTimeRange(reh.start_time, reh.end_time)
+  const statusLabel = reh.status
+    ? t($ => $.status[reh.status as 'option' | 'planned'], { ns: 'rehearsals' })
+    : ''
   return (
-    <Tooltip title={[t($ => $.events.rehearsalTooltip, { status: reh.status }), reh.location, t($ => $.events.votesYes, { yes, total })].filter(Boolean).join(' — ')}>
+    <Tooltip title={[t($ => $.events.rehearsalTooltip, { status: statusLabel }), reh.location, t($ => $.events.votesYes, { yes, total })].filter(Boolean).join(' — ')}>
       <Box
         data-rehearsal-id={reh.id}
         onClick={(e) => { e.stopPropagation(); onRehearsalClick?.(reh) }}
@@ -244,8 +250,11 @@ function SlotBar({ slot, members, theme, onSlotClick }: SlotBarProps) {
   const memberName = slot.band_member_id === null
     ? t($ => $.events.band)
     : members.find((m) => m.id === slot.band_member_id)?.name || ''
+  const statusLabel = slot.status
+    ? t($ => $.status[slot.status as 'available' | 'unavailable'])
+    : null
   return (
-    <Tooltip title={[slot.band_member_id === null ? t($ => $.events.bandWide) : memberName, slot.status, slot.reason].filter(Boolean).join(' — ')}>
+    <Tooltip title={[slot.band_member_id === null ? t($ => $.events.bandWide) : memberName, statusLabel, slot.reason].filter(Boolean).join(' — ')}>
       <Box
         data-slot-id={slot.id}
         onClick={(e) => { e.stopPropagation(); onSlotClick(slot) }}

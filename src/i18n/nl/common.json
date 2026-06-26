@@ -27,5 +27,58 @@
   "answer": {
     "yes": "Ja",
     "no": "Nee"
+  },
+  "picker": {
+    "typeMinChars_one": "Typ minstens {{count}} teken…",
+    "typeMinChars_other": "Typ minstens {{count}} tekens…",
+    "searching": "Zoeken…",
+    "noMatches": "Geen overeenkomsten"
+  },
+  "periodPicker": {
+    "modes": {
+      "month": "Maand",
+      "quarter": "Kwartaal",
+      "fiscal_year": "Boekjaar",
+      "all_time": "Alles"
+    },
+    "months": {
+      "jan": "jan",
+      "feb": "feb",
+      "mar": "mrt",
+      "apr": "apr",
+      "may": "mei",
+      "jun": "jun",
+      "jul": "jul",
+      "aug": "aug",
+      "sep": "sep",
+      "oct": "okt",
+      "nov": "nov",
+      "dec": "dec"
+    },
+    "previous": "vorige",
+    "next": "volgende",
+    "selectFiscalYear": "Selecteer boekjaar",
+    "selectMonth": "Selecteer maand",
+    "selectQuarter": "Selecteer kwartaal",
+    "customRange": "Aangepaste periode",
+    "from": "Van",
+    "to": "Tot",
+    "rangeSeparator": "tot",
+    "openFromPicker": "vanaf-datumkiezer openen",
+    "openToPicker": "tot-datumkiezer openen",
+    "apply": "Toepassen"
+  },
+  "contactPicker": {
+    "label": "Contact toevoegen",
+    "createContact": "+ Contact '{{name}}' aanmaken"
+  },
+  "venuePicker": {
+    "labelVenue": "Locatie / fysieke locatie",
+    "labelFestival": "Festival / evenementorganisatie",
+    "createVenue": "+ Locatie '{{name}}' aanmaken",
+    "createFestival": "+ Festival '{{name}}' aanmaken",
+    "openVenue": "Locatie openen",
+    "categoryVenue": "(locatie)",
+    "categoryFestival": "(festival)"
   }
 }

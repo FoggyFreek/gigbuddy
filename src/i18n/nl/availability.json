@@ -20,6 +20,10 @@
     "rehearsal": "Repetitie",
     "bandEvent": "Bandevenement"
   },
+  "status": {
+    "available": "Beschikbaar",
+    "unavailable": "Niet beschikbaar"
+  },
   "events": {
     "noEvents": "Geen evenementen.",
     "band": "Band",

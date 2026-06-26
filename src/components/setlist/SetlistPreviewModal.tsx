@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { SetlistSet, SetlistItem } from '../../types/entities.ts'
 import { Fragment, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import ReactDOM from 'react-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -58,11 +59,6 @@ const A4_WIDTH_PX = (210 * 96) / 25.4
 const A4_HEIGHT_PX = (297 * 96) / 25.4
 const A4_PADDING_PX = (20 * 96) / 25.4
 
-function rowTitle(item: SetlistItem): string {
-  if (item.item_type === 'song') return item.title?.toUpperCase() || '(unknown song)'
-  return item.label || (item.item_type === 'pause' ? 'Pause' : 'Break')
-}
-
 interface PageContentProps {
   page: Page
   showKey: boolean
@@ -73,7 +69,12 @@ interface PageContentProps {
 // The page body, shared by the on-screen preview and the hidden print portal so
 // both stay in sync. Plain elements + inline styles keep it print-friendly.
 function PageContent({ page, showKey, showBpm, showNotes }: PageContentProps) {
+  const { t } = useTranslation('setlists')
   const { set, rows } = page
+  const rowTitle = (item: SetlistItem): string => {
+    if (item.item_type === 'song') return item.title?.toUpperCase() || t($ => $.item.unknownSong)
+    return item.label || (item.item_type === 'pause' ? t($ => $.item.pause) : t($ => $.item.break))
+  }
   return (
     <>
       <div style={{ fontWeight: 700, fontSize: '1.4em', marginBottom: '0.6em' }}>
@@ -81,7 +82,7 @@ function PageContent({ page, showKey, showBpm, showNotes }: PageContentProps) {
       </div>
 
       {rows.length === 0 ? (
-        <div style={{ fontStyle: 'italic', opacity: 0.6 }}>(No songs)</div>
+        <div style={{ fontStyle: 'italic', opacity: 0.6 }}>{t($ => $.preview.noSongs)}</div>
       ) : (
         rows.map(({ item, order }) => {
           const isSong = item.item_type === 'song'
@@ -98,7 +99,7 @@ function PageContent({ page, showKey, showBpm, showNotes }: PageContentProps) {
                   <span style={{ minWidth: '3em', textAlign: 'right' }}>{item.song_key}</span>
                 ) : null}
                 {isSong && showBpm && item.tempo ? (
-                  <span style={{ minWidth: '4.5em', textAlign: 'right' }}>{item.tempo} BPM</span>
+                  <span style={{ minWidth: '4.5em', textAlign: 'right' }}>{t($ => $.item.bpm, { tempo: item.tempo })}</span>
                 ) : null}
                 {!isSong && formatDuration(item.duration_seconds) ? (
                   <span style={{ minWidth: '4.5em', textAlign: 'right' }}>{formatDuration(item.duration_seconds)}</span>
@@ -106,7 +107,7 @@ function PageContent({ page, showKey, showBpm, showNotes }: PageContentProps) {
               </div>
               {isSong && item.linked_to_next ? (
                 <div style={{ marginLeft: '2.35em', fontStyle: 'italic', opacity: 0.7, fontSize: '0.85em' }}>
-                  ↳ {item.transition_note || 'segue'}
+                  ↳ {item.transition_note || t($ => $.preview.segueFallback)}
                 </div>
               ) : null}
               {isSong && showNotes && item.my_note ? (
@@ -130,6 +131,7 @@ interface SetlistPreviewModalProps {
 }
 
 export default function SetlistPreviewModal({ open, onClose, setlistName = '', sets = [] }: SetlistPreviewModalProps) {
+  const { t } = useTranslation(['setlists', 'common'])
   const [showKey, setShowKey] = useState(true)
   const [showBpm, setShowBpm] = useState(true)
   const [showNotes, setShowNotes] = useState(false)
@@ -153,7 +155,7 @@ export default function SetlistPreviewModal({ open, onClose, setlistName = '', s
   return (
     <>
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>{setlistName || 'Setlist'}</DialogTitle>
+      <DialogTitle>{setlistName || t($ => $.preview.fallbackTitle)}</DialogTitle>
 
       <DialogContent dividers sx={{ bgcolor: 'grey.200', overflowX: 'hidden' }}>
         <Box sx={{ width: '100%', minWidth: 0 }}>
@@ -215,31 +217,31 @@ export default function SetlistPreviewModal({ open, onClose, setlistName = '', s
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <FormControlLabel
                 control={<Switch checked={showKey} onChange={(e) => setShowKey(e.target.checked)} />}
-                label="Show Key"
+                label={t($ => $.preview.showKey)}
               />
               <FormControlLabel
                 control={<Switch checked={showBpm} onChange={(e) => setShowBpm(e.target.checked)} />}
-                label="Show BPM"
+                label={t($ => $.preview.showBpm)}
               />
               <FormControlLabel
                 control={<Switch checked={showNotes} onChange={(e) => setShowNotes(e.target.checked)} />}
-                label="Show notes"
+                label={t($ => $.preview.showNotes)}
               />
             </Box>
             <FormControlLabel
               control={<Switch checked={showPauseAndBreaks} onChange={(e) => setShowPauseAndBreaks(e.target.checked)} />}
-              label="Show Pauses & Breaks"
+              label={t($ => $.preview.showPausesBreaks)}
             />
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button onClick={onClose} sx={{ flexGrow: { xs: 1, sm: 0 } }}>Close</Button>
+            <Button onClick={onClose} sx={{ flexGrow: { xs: 1, sm: 0 } }}>{t($ => $.common.actions.close)}</Button>
             <Button
               variant="contained"
               startIcon={<PrintIcon />}
               onClick={() => globalThis.print()}
               sx={{ flexGrow: { xs: 1, sm: 0 } }}
             >
-              Print
+              {t($ => $.preview.print)}
             </Button>
           </Box>
         </Box>

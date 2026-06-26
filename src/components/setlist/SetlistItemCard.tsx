@@ -1,5 +1,6 @@
 import type { RefObject } from 'react'
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { SetlistItem } from '../../types/entities.ts'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -26,6 +27,7 @@ interface SongNoteButtonProps {
 }
 
 function SongNoteButton({ note, onUpdateNote }: SongNoteButtonProps) {
+  const { t } = useTranslation('setlists')
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const inputRef: RefObject<HTMLInputElement | null> = useRef(null)
   const hasNote = Boolean(note?.trim())
@@ -38,12 +40,12 @@ function SongNoteButton({ note, onUpdateNote }: SongNoteButtonProps) {
 
   return (
     <>
-      <Tooltip title="My note">
+      <Tooltip title={t($ => $.item.myNote)}>
         <IconButton
           size="small"
           color={hasNote ? 'primary' : 'default'}
           onClick={(e) => setAnchorEl(e.currentTarget)}
-          aria-label="song note"
+          aria-label={t($ => $.item.noteAria)}
         >
           {hasNote ? <StickyNote2Icon fontSize="small" /> : <StickyNote2OutlinedIcon fontSize="small" />}
         </IconButton>
@@ -61,9 +63,9 @@ function SongNoteButton({ note, onUpdateNote }: SongNoteButtonProps) {
           multiline
           minRows={3}
           autoFocus
-          placeholder="Your note for this song…"
+          placeholder={t($ => $.item.notePlaceholder)}
           sx={{ m: 1.5, width: 260 }}
-          slotProps={{ htmlInput: { 'aria-label': 'song note text', maxLength: 280 } }}
+          slotProps={{ htmlInput: { 'aria-label': t($ => $.item.noteTextAria), maxLength: 280 } }}
         />
       </Popover>
     </>
@@ -75,16 +77,17 @@ interface SongBodyProps {
 }
 
 function SongBody({ item }: SongBodyProps) {
+  const { t } = useTranslation('setlists')
   const meta = [
     item.tag,
     item.song_key,
-    item.tempo ? `${item.tempo} BPM` : null,
+    item.tempo ? t($ => $.item.bpm, { tempo: item.tempo }) : null,
     formatDuration(item.duration_seconds),
   ].filter(Boolean).join(' · ')
   return (
     <Box sx={{ minWidth: 0 }}>
       <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-        {item.title || '(unknown song)'}
+        {item.title || t($ => $.item.unknownSong)}
       </Typography>
       {meta && (
         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
@@ -107,12 +110,13 @@ interface BreakBodyProps {
 }
 
 function BreakBody({ item, onUpdate, editing = true }: BreakBodyProps) {
+  const { t } = useTranslation('setlists')
   const isPause = item.item_type === 'pause'
   if (!editing) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1, minWidth: 0 }}>
         <Chip
-          label={isPause ? 'Pause' : 'Break'}
+          label={isPause ? t($ => $.item.pause) : t($ => $.item.break)}
           size="small"
           color={isPause ? 'default' : 'secondary'}
         />
@@ -130,7 +134,7 @@ function BreakBody({ item, onUpdate, editing = true }: BreakBodyProps) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1, minWidth: 0 }}>
       <Chip
-        label={isPause ? 'Pause' : 'Break'}
+        label={isPause ? t($ => $.item.pause) : t($ => $.item.break)}
         size="small"
         color={isPause ? 'default' : 'secondary'}
       />
@@ -143,12 +147,12 @@ function BreakBody({ item, onUpdate, editing = true }: BreakBodyProps) {
           if (secs !== null && secs !== item.duration_seconds) onUpdate({ duration_seconds: secs })
         }}
         sx={{ width: 70 }}
-        slotProps={{ htmlInput: { 'aria-label': 'duration', style: { textAlign: 'center' } } }}
+        slotProps={{ htmlInput: { 'aria-label': t($ => $.item.durationAria), style: { textAlign: 'center' } } }}
       />
       <TextField
         size="small"
         variant="standard"
-        placeholder="Label (optional)"
+        placeholder={t($ => $.item.labelPlaceholder)}
         defaultValue={item.label || ''}
         onBlur={(e) => {
           const label = e.target.value.trim()
@@ -171,6 +175,7 @@ interface SetlistItemCardProps {
 }
 
 export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote = () => {}, dragOverlay = false, songOrder = null, editing = true }: SetlistItemCardProps) {
+  const { t } = useTranslation('setlists')
   const sortable = useSortable({ id: itemDomId(item.id!), disabled: !editing })
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable
   const isSong = item.item_type === 'song'
@@ -200,14 +205,14 @@ export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote
           {...attributes}
           {...listeners}
           sx={{ cursor: 'grab', touchAction: 'none' }}
-          aria-label="drag"
+          aria-label={t($ => $.item.dragAria)}
         >
           <DragIndicatorIcon fontSize="small" />
         </IconButton>
       )}
       {isSong && songOrder !== null && (
         <Box
-          aria-label={`song order ${songOrder}`}
+          aria-label={t($ => $.item.songOrderAria, { order: songOrder })}
           sx={{
             mx: 0.5,
             width: 24,
@@ -232,7 +237,7 @@ export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote
         <SongNoteButton note={item.my_note} onUpdateNote={onUpdateNote} />
       )}
       {editing && (
-        <IconButton size="small" color="error" onClick={onDelete} aria-label="delete item">
+        <IconButton size="small" color="error" onClick={onDelete} aria-label={t($ => $.item.deleteAria)}>
           <DeleteIcon fontSize="small" />
         </IconButton>
       )}

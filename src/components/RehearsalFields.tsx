@@ -1,5 +1,6 @@
 import Grid from '@mui/material/Grid'
 import TextField from '@mui/material/TextField'
+import { useTranslation } from 'react-i18next'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
@@ -22,11 +23,12 @@ interface RehearsalFieldsProps {
 }
 
 export default function RehearsalFields({ form, onChange, errors = {} }: RehearsalFieldsProps) {
+  const { t } = useTranslation('rehearsals')
   return (
     <>
       <Grid size={{ xs: 12, sm: 6 }}>
         <DateEntryField
-          label="Date"
+          label={t($ => $.form.date)}
           fullWidth
           required
           value={form.proposed_date}
@@ -37,7 +39,7 @@ export default function RehearsalFields({ form, onChange, errors = {} }: Rehears
       </Grid>
       <Grid size={{ xs: 12, sm: 6 }}>
         <TextField
-          label="Location"
+          label={t($ => $.form.location)}
           fullWidth
           value={form.location}
           onChange={(e) => onChange('location', e.target.value)}
@@ -45,7 +47,7 @@ export default function RehearsalFields({ form, onChange, errors = {} }: Rehears
       </Grid>
       <Grid size={{ xs: 6, sm: 4 }}>
         <TimePicker
-          label="Start time"
+          label={t($ => $.form.startTime)}
           ampm={false}
           value={timeStringToDayjs(form.start_time)}
           onChange={(v) => onChange('start_time', dayjsToTimeString(v))}
@@ -54,7 +56,7 @@ export default function RehearsalFields({ form, onChange, errors = {} }: Rehears
       </Grid>
       <Grid size={{ xs: 6, sm: 4 }}>
         <TimePicker
-          label="End time"
+          label={t($ => $.form.endTime)}
           ampm={false}
           value={timeStringToDayjs(form.end_time)}
           onChange={(v) => onChange('end_time', dayjsToTimeString(v))}

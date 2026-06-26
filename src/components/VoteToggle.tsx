@@ -1,5 +1,6 @@
 import Button from '@mui/material/Button'
 import ButtonGroup from '@mui/material/ButtonGroup'
+import { useTranslation } from 'react-i18next'
 
 interface VoteToggleProps {
   vote?: string | null
@@ -8,6 +9,7 @@ interface VoteToggleProps {
 }
 
 export default function VoteToggle({ vote, onChange, disabled = false }: VoteToggleProps) {
+  const { t } = useTranslation('common')
   return (
     <ButtonGroup size="small" variant="outlined">
       <Button
@@ -16,7 +18,7 @@ export default function VoteToggle({ vote, onChange, disabled = false }: VoteTog
         disabled={disabled}
         onClick={() => onChange(vote === 'yes' ? null : 'yes')}
       >
-        Yes
+        {t($ => $.answer.yes)}
       </Button>
       <Button
         variant={vote === 'no' ? 'contained' : 'outlined'}
@@ -24,7 +26,7 @@ export default function VoteToggle({ vote, onChange, disabled = false }: VoteTog
         disabled={disabled}
         onClick={() => onChange(vote === 'no' ? null : 'no')}
       >
-        No
+        {t($ => $.answer.no)}
       </Button>
     </ButtonGroup>
   )

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -28,6 +29,7 @@ interface GigAttachmentsProps {
 }
 
 export default function GigAttachments({ gigId, initialAttachments = [], canWrite = true }: GigAttachmentsProps) {
+  const { t } = useTranslation('gigs')
   const [attachments, setAttachments] = useState<PurchaseAttachment[]>(initialAttachments)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +44,7 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
     e.target.value = ''
 
     if (file.size > MAX_BYTES) {
-      setError('File exceeds the 1 MB limit.')
+      setError(t($ => $.attachments.fileTooLarge))
       return
     }
 
@@ -52,7 +54,7 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
       const attachment = await uploadGigAttachment(gigId, file)
       setAttachments((prev) => [...prev, attachment])
     } catch (err) {
-      setError((err as Error).message || 'Upload failed.')
+      setError((err as Error).message || t($ => $.attachments.uploadFailed))
     } finally {
       setUploading(false)
     }
@@ -67,7 +69,7 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
       await deleteGigAttachment(gigId, id)
       setAttachments((prev) => prev.filter((a) => a.id !== id))
     } catch (err) {
-      setError((err as Error).message || 'Delete failed.')
+      setError((err as Error).message || t($ => $.attachments.deleteFailed))
     }
   }
 
@@ -132,22 +134,22 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
             disabled={uploading}
             onClick={() => inputRef.current?.click()}
           >
-            {uploading ? 'Uploading…' : 'Add'}
+            {uploading ? t($ => $.attachments.uploading) : t($ => $.attachments.add)}
           </Button>
         </Box>
       )}
 
       <Dialog open={confirmId !== null} onClose={() => setConfirmId(null)}>
-        <DialogTitle>Delete attachment?</DialogTitle>
+        <DialogTitle>{t($ => $.attachments.deleteTitle)}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {confirmTarget?.original_filename} will be permanently deleted.
+            {t($ => $.attachments.deleteBody, { filename: confirmTarget?.original_filename ?? '' })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmId(null)}>Cancel</Button>
+          <Button onClick={() => setConfirmId(null)}>{t($ => $.attachments.cancel)}</Button>
           <Button color="error" variant="contained" onClick={handleConfirmDelete}>
-            Delete
+            {t($ => $.attachments.delete)}
           </Button>
         </DialogActions>
       </Dialog>

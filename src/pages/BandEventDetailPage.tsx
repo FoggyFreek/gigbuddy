@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -43,6 +44,7 @@ interface BandEventForm {
 }
 
 export default function BandEventDetailPage() {
+  const { t } = useTranslation('bandEvents')
   const { id } = useParams()
   const bandEventId = Number(id)
   const { canWritePlanning } = usePermissions()
@@ -111,15 +113,15 @@ export default function BandEventDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={handleBack} aria-label="back">
+          <IconButton onClick={handleBack} aria-label={t($ => $.page.back)}>
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Band event details</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.page.title)}</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={handleBack} aria-label="close">
+            <IconButton onClick={handleBack} aria-label={t($ => $.page.close)}>
               <CloseIcon />
             </IconButton>
           </>
@@ -149,18 +151,18 @@ export default function BandEventDetailPage() {
       {canWritePlanning && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
-            Delete
+            {t($ => $.page.delete)}
           </Button>
         </Box>
       )}
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>Delete band event?</DialogTitle>
+        <DialogTitle>{t($ => $.page.deleteConfirmTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>This cannot be undone.</DialogContentText>
+          <DialogContentText>{t($ => $.page.deleteConfirmBody)}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.page.cancel)}</Button>
           <Button
             color="error"
             variant="contained"
@@ -172,7 +174,7 @@ export default function BandEventDetailPage() {
               else navigate(-1)
             }}
           >
-            Delete
+            {t($ => $.page.delete)}
           </Button>
         </DialogActions>
       </Dialog>

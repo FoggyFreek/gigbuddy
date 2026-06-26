@@ -1,5 +1,6 @@
 import type { Song } from '../types/entities.ts'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
@@ -18,6 +19,7 @@ interface SongFormModalProps {
 }
 
 export default function SongFormModal({ onClose, onCreated }: SongFormModalProps) {
+  const { t } = useTranslation(['songs', 'common'])
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
 
@@ -28,7 +30,7 @@ export default function SongFormModal({ onClose, onCreated }: SongFormModalProps
 
   async function handleCreate() {
     if (!form.title.trim()) {
-      setErrors({ title: 'Required' })
+      setErrors({ title: t($ => $.fields.required) })
       return
     }
     const song = await createSong({
@@ -44,12 +46,12 @@ export default function SongFormModal({ onClose, onCreated }: SongFormModalProps
 
   return (
     <Dialog open fullWidth maxWidth="sm">
-      <DialogTitle>Add song</DialogTitle>
+      <DialogTitle>{t($ => $.addSong)}</DialogTitle>
       <DialogContent>
         <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid size={12}>
             <TextField
-              label="Title"
+              label={t($ => $.fields.title)}
               fullWidth
               required
               autoFocus
@@ -61,7 +63,7 @@ export default function SongFormModal({ onClose, onCreated }: SongFormModalProps
           </Grid>
           <Grid size={12}>
             <TextField
-              label="Artist"
+              label={t($ => $.fields.artist)}
               fullWidth
               value={form.artist}
               onChange={(e) => handleChange('artist', e.target.value)}
@@ -69,7 +71,7 @@ export default function SongFormModal({ onClose, onCreated }: SongFormModalProps
           </Grid>
           <Grid size={{ xs: 4 }}>
             <TextField
-              label="Key"
+              label={t($ => $.fields.key)}
               fullWidth
               value={form.song_key}
               onChange={(e) => handleChange('song_key', e.target.value)}
@@ -77,7 +79,7 @@ export default function SongFormModal({ onClose, onCreated }: SongFormModalProps
           </Grid>
           <Grid size={{ xs: 4 }}>
             <TextField
-              label="Tempo (BPM)"
+              label={t($ => $.fields.tempoBpm)}
               fullWidth
               type="number"
               value={form.tempo}
@@ -86,9 +88,9 @@ export default function SongFormModal({ onClose, onCreated }: SongFormModalProps
           </Grid>
           <Grid size={{ xs: 4 }}>
             <TextField
-              label="Duration (mm:ss)"
+              label={t($ => $.fields.durationMmss)}
               fullWidth
-              placeholder="3:45"
+              placeholder={t($ => $.fields.durationPlaceholder)}
               value={form.duration}
               onChange={(e) => handleChange('duration', e.target.value)}
             />
@@ -96,8 +98,8 @@ export default function SongFormModal({ onClose, onCreated }: SongFormModalProps
         </Grid>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={handleCreate}>Add song</Button>
+        <Button onClick={onClose}>{t($ => $.common.actions.cancel)}</Button>
+        <Button variant="contained" onClick={handleCreate}>{t($ => $.addSong)}</Button>
       </DialogActions>
     </Dialog>
   )

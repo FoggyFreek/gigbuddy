@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
@@ -49,15 +50,17 @@ function toDateInputValue(val: string | null | undefined): string {
   return String(val).slice(0, 10)
 }
 
-function formatDueDate(val: string | null | undefined): string | undefined {
+function formatDueDate(val: string | null | undefined, locale: string): string | undefined {
   if (!val) return undefined
   const parts = val.split('-')
   if (parts.length < 3) return undefined
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const year = Number.parseInt(parts[0], 10)
   const monthIdx = Number.parseInt(parts[1], 10) - 1
   const day = Number.parseInt(parts[2], 10)
   if (monthIdx < 0 || monthIdx > 11) return undefined
-  return `${months[monthIdx]} ${day}`
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(
+    new Date(year, monthIdx, day),
+  )
 }
 
 function isDueOverdue(due_date: string | null | undefined): boolean {
@@ -92,6 +95,7 @@ export default function GigTasks({
   canWrite = true,
   currentBandMemberId = null,
 }: GigTasksProps) {
+  const { t, i18n } = useTranslation('gigs')
   const [tasks, setTasks] = useState<LocalGigTask[]>(initialTasks)
 
   // add-task form
@@ -182,7 +186,7 @@ export default function GigTasks({
     const canToggleDone =
       canWrite || (task.assigned_to != null && task.assigned_to === currentBandMemberId)
     const isExpanded = expandedId === task.id
-    const dueLabel = formatDueDate(task.due_date)
+    const dueLabel = formatDueDate(task.due_date, i18n.language)
     const assigneeName = getMemberName(task.assigned_to)
     const overdue = isDueOverdue(task.due_date) && !task.done
 
@@ -263,7 +267,7 @@ export default function GigTasks({
           {canWrite && (
             <IconButton
               size="small"
-              aria-label={`Delete task ${task.title}`}
+              aria-label={t($ => $.tasks.deleteTask, { title: task.title })}
               onClick={(e) => {
                 e.stopPropagation()
                 handleDelete(task.id!)
@@ -293,12 +297,12 @@ export default function GigTasks({
                 slotProps={{
                   htmlInput: {
                     ref: setTaskDueInputRef(task.id!),
-                    'aria-label': `Due date for ${task.title}`,
+                    'aria-label': t($ => $.tasks.dueDateFor, { title: task.title }),
                   },
                   input: {
                     endAdornment: (
                       <DueDateAdornment
-                        label={`open due date picker for ${task.title}`}
+                        label={t($ => $.tasks.openDuePickerFor, { title: task.title })}
                         onClick={openTaskDuePicker(task.id!)}
                       />
                     ),
@@ -318,12 +322,12 @@ export default function GigTasks({
                   value={task.assigned_to ?? ''}
                   onChange={(e) => handleAssign(task, e.target.value as string)}
                   displayEmpty
-                  inputProps={{ 'aria-label': `Assign ${task.title}` }}
+                  inputProps={{ 'aria-label': t($ => $.tasks.assignTask, { title: task.title }) }}
                   sx={{ width: 150 }}
                 >
                   <MenuItem value="">
                     <Box component="span" sx={{ color: 'text.secondary' }}>
-                      Unassigned
+                      {t($ => $.tasks.unassigned)}
                     </Box>
                   </MenuItem>
                   {members.map((m) => (
@@ -333,7 +337,7 @@ export default function GigTasks({
                   ))}
                 </Select>
               )}
-              <IconButton size="small" onClick={() => setExpandedId(null)} aria-label="Done editing">
+              <IconButton size="small" onClick={() => setExpandedId(null)} aria-label={t($ => $.tasks.doneEditing)}>
                 <CheckIcon fontSize="small" />
               </IconButton>
             </Stack>
@@ -351,7 +355,7 @@ export default function GigTasks({
       {/* Open tasks */}
       {openTasks.length === 0 && doneTasks.length === 0 && !canWrite && (
         <Typography variant="body2" sx={{ color: 'text.secondary', py: 1 }}>
-          No tasks yet.
+          {t($ => $.tasks.empty)}
         </Typography>
       )}
       {openTasks.map((task) => renderTaskRow(task))}
@@ -365,8 +369,8 @@ export default function GigTasks({
                 {/* Align with task checkboxes */}
                 <Box sx={{ width: 30, flexShrink: 0 }} />
                 <TextField
-                  label="Task"
-                  placeholder="Task name…"
+                  label={t($ => $.tasks.taskLabel)}
+                  placeholder={t($ => $.tasks.taskPlaceholder)}
                   size="small"
                   autoFocus
                   value={newTitle}
@@ -383,11 +387,11 @@ export default function GigTasks({
                   color="primary"
                   onClick={handleAdd}
                   disabled={!newTitle.trim()}
-                  aria-label="Add task"
+                  aria-label={t($ => $.tasks.addTask)}
                 >
                   <CheckIcon fontSize="small" />
                 </IconButton>
-                <IconButton size="small" onClick={cancelAdd} aria-label="Cancel">
+                <IconButton size="small" onClick={cancelAdd} aria-label={t($ => $.tasks.cancel)}>
                   <CloseIcon fontSize="small" />
                 </IconButton>
               </Stack>
@@ -404,12 +408,12 @@ export default function GigTasks({
                     htmlInput: { ref: newDueInputRef },
                     input: {
                       endAdornment: (
-                        <DueDateAdornment label="open due date picker" onClick={openNewDuePicker} />
+                        <DueDateAdornment label={t($ => $.tasks.openDuePicker)} onClick={openNewDuePicker} />
                       ),
                     },
                     inputLabel: { shrink: newDueFocused || !!newDue },
                   }}
-                  label="Due"
+                  label={t($ => $.tasks.due)}
                   sx={{
                     width: 150,
                     '& input::-webkit-datetime-edit': {
@@ -427,7 +431,7 @@ export default function GigTasks({
                     sx={{ width: 150 }}
                   >
                     <MenuItem value="">
-                      <em>Unassigned</em>
+                      <em>{t($ => $.tasks.unassigned)}</em>
                     </MenuItem>
                     {members.map((m) => (
                       <MenuItem key={String(m.id)} value={m.id}>
@@ -459,7 +463,7 @@ export default function GigTasks({
             >
               <AddIcon fontSize="small" />
               <Typography variant="body2" sx={{ color: 'inherit' }}>
-                Add task
+                {t($ => $.tasks.addTask)}
               </Typography>
             </Box>
           )}
@@ -493,7 +497,7 @@ export default function GigTasks({
               }}
             />
             <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 500 }}>
-              Completed ({doneTasks.length})
+              {t($ => $.tasks.completed, { count: doneTasks.length })}
             </Typography>
           </Box>
           <Collapse in={showCompleted}>

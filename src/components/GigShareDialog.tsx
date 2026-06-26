@@ -25,6 +25,7 @@ import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DownloadIcon from '@mui/icons-material/Download'
+import { useTranslation } from 'react-i18next'
 import GigShareCard from './share/GigShareCard.tsx'
 import { STICKER_CONFIGS } from './share/stickerConfigs.ts'
 import { SHARE_VARIATIONS, SHARE_VARIATION_MAP } from './share/variations/index.ts'
@@ -58,6 +59,7 @@ interface GigShareDialogProps {
 }
 
 export default function GigShareDialog({ open, onClose, gig }: GigShareDialogProps) {
+  const { t } = useTranslation('gigs')
   const { user } = useContext(AuthContext)
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
@@ -156,10 +158,10 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
     setBusy(true)
     try {
       const blob = await snapshot()
-      if (!blob) throw new Error('Snapshot failed')
+      if (!blob) throw new Error(t($ => $.gigShare.snapshotFailed))
       downloadBlob(blob, buildShareFilename(gig, format))
     } catch (e) {
-      setSnackbar({ msg: (e as Error).message || 'Download failed' })
+      setSnackbar({ msg: (e as Error).message || t($ => $.gigShare.downloadFailed) })
     } finally {
       setBusy(false)
     }
@@ -168,14 +170,14 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
   async function handleDownloadPdf() {
     setBusy(true)
     try {
-      if (!cardRef.current) throw new Error('Card not ready')
+      if (!cardRef.current) throw new Error(t($ => $.gigShare.cardNotReady))
       const pdf = await renderLayeredPdf(cardRef.current, {
         width: formatDef.width,
         height: formatDef.height,
       })
       downloadPdf(pdf, buildSharePdfFilename(gig, format))
     } catch (e) {
-      setSnackbar({ msg: (e as Error).message || 'PDF export failed' })
+      setSnackbar({ msg: (e as Error).message || t($ => $.gigShare.pdfExportFailed) })
     } finally {
       setBusy(false)
     }
@@ -201,7 +203,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
       setPhotos((prev) => [...prev, newPhoto as LocalSharePhoto])
       setPhotoId(newPhoto.id ?? null)
     } catch (err) {
-      setSnackbar({ msg: (err as Error).message || 'Upload failed' })
+      setSnackbar({ msg: (err as Error).message || t($ => $.gigShare.uploadFailed) })
     } finally {
       setBusy(false)
     }
@@ -219,7 +221,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
         return next
       })
     } catch (err) {
-      setSnackbar({ msg: (err as Error).message || 'Delete failed' })
+      setSnackbar({ msg: (err as Error).message || t($ => $.gigShare.deleteFailed) })
     }
   }
 
@@ -232,7 +234,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
         fullWidth
         onClick={(e) => e.stopPropagation()}
       >
-        <DialogTitle>Share gig as image</DialogTitle>
+        <DialogTitle>{t($ => $.gigShare.title)}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ alignItems: 'center' }}>
             <ToggleButtonGroup
@@ -241,8 +243,8 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
               size="small"
               onChange={(_, v) => v && setFormat(v)}
             >
-              <ToggleButton value="square">Square 1:1</ToggleButton>
-              <ToggleButton value="story">Story 9:16</ToggleButton>
+              <ToggleButton value="square">{t($ => $.share.square)}</ToggleButton>
+              <ToggleButton value="story">{t($ => $.share.story)}</ToggleButton>
             </ToggleButtonGroup>
 
             <ToggleButtonGroup
@@ -250,7 +252,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
               exclusive
               size="small"
               onChange={(_, v) => v && setVariation(v)}
-              aria-label="Card variation"
+              aria-label={t($ => $.gigShare.cardVariation)}
             >
               {SHARE_VARIATIONS.map((v) => (
                 <ToggleButton key={v.id} value={v.id}>{v.label}</ToggleButton>
@@ -265,7 +267,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                     <Tooltip key={c.id} title={c.label}>
                       <ButtonBase
                         onClick={() => setAccentId(c.id)}
-                        aria-label={`Accent color ${c.label}`}
+                        aria-label={t($ => $.gigShare.accentColorAria, { label: c.label })}
                         sx={{
                           width: 32,
                           height: 32,
@@ -295,7 +297,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                     size="small"
                   />
                 }
-                label="Show event banner"
+                label={t($ => $.gigShare.showEventBanner)}
               />
             )}
 
@@ -308,7 +310,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                     size="small"
                   />
                 }
-                label="Show logo"
+                label={t($ => $.gigShare.showLogo)}
               />
             )}
 
@@ -321,7 +323,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                     size="small"
                   />
                 }
-                label="Dark logo"
+                label={t($ => $.gigShare.darkLogo)}
               />
             )}
 
@@ -336,7 +338,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                     size="small"
                   />
                 }
-                label="Show event banner"
+                label={t($ => $.gigShare.showEventBanner)}
               />
             )}
 
@@ -344,13 +346,13 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
             {supports.sticker && (
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
                 <FormControl size="small" sx={{ minWidth: 160 }}>
-                  <InputLabel>Overlay</InputLabel>
+                  <InputLabel>{t($ => $.gigShare.overlay)}</InputLabel>
                   <Select
                     value={sticker ?? ''}
-                    label="Overlay"
+                    label={t($ => $.gigShare.overlay)}
                     onChange={(e) => setSticker(e.target.value || null)}
                   >
-                    <MenuItem value="">None</MenuItem>
+                    <MenuItem value="">{t($ => $.gigShare.none)}</MenuItem>
                     {Object.keys(STICKER_CONFIGS).map((id) => (
                       <MenuItem key={id} value={id}>
                         {id.replaceAll('-', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
@@ -364,7 +366,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                     exclusive
                     size="small"
                     onChange={(_, v) => v && setStickerPos(v)}
-                    aria-label="Overlay position"
+                    aria-label={t($ => $.gigShare.overlayPosition)}
                   >
                     {SHARE_STICKER_POSITIONS.map((p) => (
                       <ToggleButton key={p.id} value={p.id}>{p.label}</ToggleButton>
@@ -426,10 +428,10 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                   max={100}
                   step={1}
                   size="small"
-                  aria-label="Photo zoom"
+                  aria-label={t($ => $.gigShare.photoZoom)}
                   marks={[
-                    { value: 0, label: 'Width' },
-                    { value: 100, label: 'Height' },
+                    { value: 0, label: t($ => $.gigShare.markWidth) },
+                    { value: 100, label: t($ => $.gigShare.markHeight) },
                   ]}
                 />
               )}
@@ -441,7 +443,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                   max={100}
                   step={1}
                   size="small"
-                  aria-label="Photo pan"
+                  aria-label={t($ => $.gigShare.photoPan)}
                   marks={[
                     { value: -100, label: '◀' },
                     { value: 0, label: '·' },
@@ -487,7 +489,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                       {isAdmin && (
                         <IconButton
                           size="small"
-                          aria-label={`Delete ${p.label}`}
+                          aria-label={t($ => $.gigShare.deletePhotoAria, { label: p.label })}
                           onClick={() => handlePhotoDelete(p)}
                           sx={{ color: 'error.main', p: 0.25 }}
                         >
@@ -508,7 +510,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                       onChange={handlePhotoUpload}
                     />
                     <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <Tooltip title="Upload photo">
+                      <Tooltip title={t($ => $.gigShare.uploadPhoto)}>
                         <ButtonBase
                           onClick={() => photoInputRef.current?.click()}
                           disabled={busy}
@@ -539,7 +541,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} disabled={busy}>Close</Button>
+          <Button onClick={onClose} disabled={busy}>{t($ => $.gigShare.close)}</Button>
           <Button
             id="gig-share-download-button"
             variant="contained"
@@ -551,7 +553,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
             aria-haspopup="menu"
             aria-expanded={downloadMenuAnchor ? 'true' : undefined}
           >
-            Download
+            {t($ => $.gigShare.download)}
           </Button>
           <Menu
             id="gig-share-download-menu"
@@ -560,8 +562,8 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
             onClose={handleDownloadMenuClose}
             slotProps={{ list: { 'aria-labelledby': 'gig-share-download-button' } }}
           >
-            <MenuItem onClick={() => handleDownloadOption(handleDownload)}>png</MenuItem>
-            <MenuItem onClick={() => handleDownloadOption(handleDownloadPdf)}>pdf</MenuItem>
+            <MenuItem onClick={() => handleDownloadOption(handleDownload)}>{t($ => $.gigShare.formatPng)}</MenuItem>
+            <MenuItem onClick={() => handleDownloadOption(handleDownloadPdf)}>{t($ => $.gigShare.formatPdf)}</MenuItem>
           </Menu>
         </DialogActions>
       </Dialog>

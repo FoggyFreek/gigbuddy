@@ -1,3 +1,124 @@
 {
-  "title": "Songs"
+  "title": "Songs",
+  "addSong": "Add song",
+  "searchSongs": "Search songs…",
+  "songFallback": "Song",
+  "noSongsFound": "No songs found.",
+  "preview": "Preview",
+  "fields": {
+    "title": "Title",
+    "artist": "Artist",
+    "key": "Key",
+    "tempo": "Tempo",
+    "tempoBpm": "Tempo (BPM)",
+    "duration": "Duration",
+    "durationMmss": "Duration (mm:ss)",
+    "durationPlaceholder": "3:45",
+    "tags": "Tags",
+    "tagsPlaceholder": "Search or add…",
+    "required": "Required"
+  },
+  "sections": {
+    "lyrics": "Lyrics",
+    "links": "Links",
+    "chords": "Chords chart (ChordPro)",
+    "documents": "Documents",
+    "recordings": "Recordings",
+    "notes": "Notes"
+  },
+  "notesPlaceholder": "Song notes…",
+  "addPdf": "Add PDF",
+  "addMp3": "Add mp3",
+  "deleteDialog": {
+    "title": "Delete song?",
+    "body": "This cannot be undone."
+  },
+  "table": {
+    "empty": "No songs yet — add one or import from CSV.",
+    "noResults": "No results."
+  },
+  "links": {
+    "label": "Label",
+    "url": "URL",
+    "urlPlaceholder": "https://…",
+    "deleteAria": "delete link",
+    "addError": "Could not add link."
+  },
+  "files": {
+    "uploading": "Uploading…",
+    "deleteAria": "delete file",
+    "sizeLimit": "File exceeds the {{size}} limit.",
+    "uploadFailed": "Upload failed.",
+    "deleteFailed": "Delete failed.",
+    "deleteTitle": "Delete file?",
+    "deleteBody": "{{name}} will be permanently deleted."
+  },
+  "import": {
+    "menuTooltip": "Import",
+    "fromCsv": "From CSV…",
+    "fromChordPro": "From ChordPro file (.pro)…",
+    "sizeLimit": "File exceeds the 512 KB limit.",
+    "failed": "Import failed.",
+    "csvTitle": "Import songs from CSV",
+    "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: title, artist, key, tempo, duration (mm:ss or seconds), tags (comma-separated).",
+    "chooseFile": "Choose CSV file",
+    "mapHelp": "Map your CSV columns to song fields. {{count}} rows detected.",
+    "notMapped": "(not mapped)",
+    "titleColumnRequired": "Title column is required",
+    "showing": "Showing first {{shown}} of {{total}} rows.",
+    "willImport_one": "{{count}} row will be imported.",
+    "willImport_other": "{{count}} rows will be imported.",
+    "importError": "Import failed",
+    "result_one": "Imported {{count}} song.",
+    "result_other": "Imported {{count}} songs.",
+    "resultSkipped_one": "Imported {{count}} song ({{skipped}} skipped as duplicates).",
+    "resultSkipped_other": "Imported {{count}} songs ({{skipped}} skipped as duplicates).",
+    "importButton_one": "Import {{count}} row",
+    "importButton_other": "Import {{count}} rows"
+  },
+  "charts": {
+    "create": "Create",
+    "createAria": "Create new chart",
+    "openAria": "Open {{name}}",
+    "chartFallbackLower": "chart",
+    "chartFallback": "Chart",
+    "newChartName": "New chart",
+    "createError": "Could not create chart."
+  },
+  "viewer": {
+    "source": "ChordPro source",
+    "chartNamePlaceholder": "Chart name",
+    "print": "Print",
+    "deleteChart": "Delete chart",
+    "deleteTitle": "Delete chart?",
+    "deleteBody": "\"{{name}}\" will be permanently deleted.",
+    "deleteThisChart": "This chart",
+    "transposeDown": "Transpose down a semitone",
+    "transposeUp": "Transpose up a semitone",
+    "transposeDownAria": "transpose down",
+    "transposeUpAria": "transpose up",
+    "transpose": "Transpose",
+    "resetTranspose": "Reset transpose",
+    "transposeResetAria": "transpose {{n}} semitones, reset",
+    "chordFinder": "Chord finder",
+    "toggleChordFinder": "toggle chord finder"
+  },
+  "view": {
+    "chordsHeading": "Chords ({{n}})"
+  },
+  "analyzer": {
+    "prompt": "Place fingers on the neck to identify the chord",
+    "clear": "Clear",
+    "noChord": "No recognized chord.",
+    "noNotes": "No notes selected.",
+    "also": "Also:"
+  },
+  "fretboard": {
+    "label": "Guitar fretboard",
+    "nutAria": "Toggle {{label}} string open or muted, currently {{state}}",
+    "fretAria": "Set {{label}} string to fret {{fret}}",
+    "stateOpen": "open",
+    "stateMuted": "muted",
+    "stateFret": "fret {{n}}"
+  }
 }

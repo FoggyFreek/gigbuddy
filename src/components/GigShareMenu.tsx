@@ -8,6 +8,7 @@ import Tooltip from '@mui/material/Tooltip'
 import ShareIcon from '@mui/icons-material/Share'
 import WhatsAppIcon from '@mui/icons-material/WhatsApp'
 import ImageIcon from '@mui/icons-material/Image'
+import { useTranslation } from 'react-i18next'
 import GigShareDialog from './GigShareDialog.tsx'
 import { gigShareUrl } from '../utils/shareUtils.ts'
 import type { Gig } from '../types/entities.ts'
@@ -17,6 +18,7 @@ interface GigShareMenuProps {
 }
 
 export default function GigShareMenu({ gig }: GigShareMenuProps) {
+  const { t } = useTranslation('gigs')
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -43,8 +45,8 @@ export default function GigShareMenu({ gig }: GigShareMenuProps) {
 
   return (
     <>
-      <Tooltip title="Share">
-        <IconButton size="small" aria-label="share gig" onClick={handleOpen}>
+      <Tooltip title={t($ => $.shareMenu.share)}>
+        <IconButton size="small" aria-label={t($ => $.shareMenu.shareGigAria)} onClick={handleOpen}>
           <ShareIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -57,11 +59,11 @@ export default function GigShareMenu({ gig }: GigShareMenuProps) {
       >
         <MenuItem onClick={handleWhatsApp}>
           <ListItemIcon><WhatsAppIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Share via WhatsApp</ListItemText>
+          <ListItemText>{t($ => $.shareMenu.whatsApp)}</ListItemText>
         </MenuItem>
         <MenuItem onClick={handleImageCard}>
           <ListItemIcon><ImageIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Generate image card</ListItemText>
+          <ListItemText>{t($ => $.shareMenu.imageCard)}</ListItemText>
         </MenuItem>
       </Menu>
       <GigShareDialog

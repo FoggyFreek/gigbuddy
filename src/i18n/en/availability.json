@@ -20,6 +20,10 @@
     "rehearsal": "Rehearsal",
     "bandEvent": "Band Event"
   },
+  "status": {
+    "available": "Available",
+    "unavailable": "Unavailable"
+  },
   "events": {
     "noEvents": "No events.",
     "band": "Band",

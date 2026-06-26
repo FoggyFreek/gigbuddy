@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import Autocomplete from '@mui/material/Autocomplete'
@@ -69,6 +70,7 @@ function SectionHeading({ children }: { children: ReactNode }) {
 }
 
 export default function SongDetailPage() {
+  const { t } = useTranslation(['songs', 'common'])
   const { id } = useParams()
   const songId = Number(id)
   const { canWritePlanning } = usePermissions()
@@ -165,13 +167,13 @@ export default function SongDetailPage() {
     closeView()
   }
 
-  const heading = form.title.trim() || song?.title || 'Song'
+  const heading = form.title.trim() || song?.title || t($ => $.songFallback)
 
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={handleBack} aria-label="back">
+          <IconButton onClick={handleBack} aria-label={t($ => $.common.actions.back)}>
             <ArrowBackIcon />
           </IconButton>
         )}
@@ -179,7 +181,7 @@ export default function SongDetailPage() {
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={handleBack} aria-label="close">
+            <IconButton onClick={handleBack} aria-label={t($ => $.common.actions.close)}>
               <CloseIcon />
             </IconButton>
           </>
@@ -195,18 +197,18 @@ export default function SongDetailPage() {
           <Grid container spacing={2}>
             <Grid size={12}>
               <TextField
-                label="Title"
+                label={t($ => $.fields.title)}
                 fullWidth
                 required
                 value={form.title}
                 onChange={(e) => handleField('title', e.target.value)}
                 error={!form.title.trim()}
-                helperText={form.title.trim() ? '' : 'Required'}
+                helperText={form.title.trim() ? '' : t($ => $.fields.required)}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label="Artist"
+                label={t($ => $.fields.artist)}
                 fullWidth
                 value={form.artist}
                 onChange={(e) => handleField('artist', e.target.value)}
@@ -214,7 +216,7 @@ export default function SongDetailPage() {
             </Grid>
             <Grid size={{ xs: 4, sm: 2 }}>
               <TextField
-                label="Key"
+                label={t($ => $.fields.key)}
                 fullWidth
                 value={form.song_key}
                 onChange={(e) => handleField('song_key', e.target.value)}
@@ -222,7 +224,7 @@ export default function SongDetailPage() {
             </Grid>
             <Grid size={{ xs: 4, sm: 2 }}>
               <TextField
-                label="Tempo"
+                label={t($ => $.fields.tempo)}
                 fullWidth
                 type="number"
                 value={form.tempo}
@@ -231,9 +233,9 @@ export default function SongDetailPage() {
             </Grid>
             <Grid size={{ xs: 4, sm: 2 }}>
               <TextField
-                label="Duration"
+                label={t($ => $.fields.duration)}
                 fullWidth
-                placeholder="3:45"
+                placeholder={t($ => $.fields.durationPlaceholder)}
                 value={form.duration}
                 onChange={(e) => handleField('duration', e.target.value)}
               />
@@ -253,14 +255,14 @@ export default function SongDetailPage() {
                   })
                 }
                 renderInput={(params) => (
-                  <TextField {...params} label="Tags" placeholder="Search or add…" />
+                  <TextField {...params} label={t($ => $.fields.tags)} placeholder={t($ => $.fields.tagsPlaceholder)} />
                 )}
               />
             </Grid>
           </Grid>
 
           <Divider sx={{ my: 3 }} />
-          <SectionHeading>Lyrics</SectionHeading>
+          <SectionHeading>{t($ => $.sections.lyrics)}</SectionHeading>
           <RichTextEditor
             initialHtml={song.lyrics_html || ''}
             onChange={(html) => schedule({ lyrics_html: html } as Partial<Song>)}
@@ -268,11 +270,11 @@ export default function SongDetailPage() {
           />
 
           <Divider sx={{ my: 3 }} />
-          <SectionHeading>Links</SectionHeading>
+          <SectionHeading>{t($ => $.sections.links)}</SectionHeading>
           <SongLinks songId={songId} initialLinks={song.links || []} canWrite={canWritePlanning} />
 
           <Divider sx={{ my: 3 }} />
-          <SectionHeading>Chords chart (ChordPro)</SectionHeading>
+          <SectionHeading>{t($ => $.sections.chords)}</SectionHeading>
           <ChordProChartsSection
             songId={songId}
             initialCharts={song.chordpro_charts || []}
@@ -280,7 +282,7 @@ export default function SongDetailPage() {
           />
 
           <Divider sx={{ my: 3 }} />
-          <SectionHeading>Documents</SectionHeading>
+          <SectionHeading>{t($ => $.sections.documents)}</SectionHeading>
           <SongFileList
             songId={songId}
             initialFiles={song.documents || []}
@@ -288,12 +290,12 @@ export default function SongDetailPage() {
             maxBytes={DOCUMENT_MAX}
             uploadFn={uploadSongDocument}
             deleteFn={(id, fileId) => fileId !== undefined ? deleteSongDocument(id, fileId) : Promise.resolve()}
-            addLabel="Add PDF"
+            addLabel={t($ => $.addPdf)}
             canWrite={canWritePlanning}
           />
 
           <Divider sx={{ my: 3 }} />
-          <SectionHeading>Recordings</SectionHeading>
+          <SectionHeading>{t($ => $.sections.recordings)}</SectionHeading>
           <SongFileList
             songId={songId}
             initialFiles={song.recordings || []}
@@ -302,17 +304,17 @@ export default function SongDetailPage() {
             uploadFn={uploadSongRecording}
             deleteFn={(id, fileId) => fileId !== undefined ? deleteSongRecording(id, fileId) : Promise.resolve()}
             isAudio
-            addLabel="Add mp3"
+            addLabel={t($ => $.addMp3)}
             canWrite={canWritePlanning}
           />
 
           <Divider sx={{ my: 3 }} />
-          <SectionHeading>Notes</SectionHeading>
+          <SectionHeading>{t($ => $.sections.notes)}</SectionHeading>
           <TextField
             fullWidth
             multiline
             minRows={3}
-            placeholder="Song notes…"
+            placeholder={t($ => $.notesPlaceholder)}
             value={form.notes}
             onChange={(e) => handleField('notes', e.target.value)}
           />
@@ -326,19 +328,19 @@ export default function SongDetailPage() {
       {!loading && song && canWritePlanning && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
-            Delete
+            {t($ => $.common.actions.delete)}
           </Button>
         </Box>
       )}
 
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
-        <DialogTitle>Delete song?</DialogTitle>
+        <DialogTitle>{t($ => $.deleteDialog.title)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>This cannot be undone.</DialogContentText>
+          <DialogContentText>{t($ => $.deleteDialog.body)}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={handleDelete}>Delete</Button>
+          <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
+          <Button color="error" variant="contained" onClick={handleDelete}>{t($ => $.common.actions.delete)}</Button>
         </DialogActions>
       </Dialog>
     </Box>

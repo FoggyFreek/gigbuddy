@@ -1,5 +1,6 @@
 import type { Venue, Id } from '../types/entities.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
@@ -49,6 +50,7 @@ interface VenuePickerProps {
 }
 
 export default function VenuePicker({ value, onChange, onSelect, excludeIds = [], disabled, label, categoryFilter }: VenuePickerProps) {
+  const { t } = useTranslation('common')
   const navigate = useNavigate()
   const [input, setInput] = useState('')   // what the field displays
   const [query, setQuery] = useState('')   // what we actually search on
@@ -64,7 +66,9 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
   // is a fresh array each render.
   const excludeKey = excludeIds.join(',')
 
-  const defaultLabel = categoryFilter === 'festival' ? 'Festival / event organisation' : 'Venue / physical location'
+  const defaultLabel = categoryFilter === 'festival'
+    ? t($ => $.venuePicker.labelFestival)
+    : t($ => $.venuePicker.labelVenue)
   const resolvedLabel = label ?? defaultLabel
 
   const trimmed = query.trim()
@@ -112,17 +116,12 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
     if (tooShort || loading) return options
     if (options.length > 0) return options
     if (effectiveValue) return options
-    if (categoryFilter === 'festival') {
-      return [{ __action: 'create-festival', __label: `+ Create festival '${trimmed}'` }]
-    }
-    if (categoryFilter === 'venue') {
-      return [{ __action: 'create-venue', __label: `+ Create venue '${trimmed}'` }]
-    }
-    return [
-      { __action: 'create-venue', __label: `+ Create venue '${trimmed}'` },
-      { __action: 'create-festival', __label: `+ Create festival '${trimmed}'` },
-    ]
-  }, [options, tooShort, loading, trimmed, effectiveValue, categoryFilter])
+    const createVenue = { __action: 'create-venue', __label: t($ => $.venuePicker.createVenue, { name: trimmed }) }
+    const createFestival = { __action: 'create-festival', __label: t($ => $.venuePicker.createFestival, { name: trimmed }) }
+    if (categoryFilter === 'festival') return [createFestival]
+    if (categoryFilter === 'venue') return [createVenue]
+    return [createVenue, createFestival]
+  }, [options, tooShort, loading, trimmed, effectiveValue, categoryFilter, t])
 
   function report(venue: Venue) {
     if (addMode) {
@@ -162,11 +161,11 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
 
   let noOptionsText: string
   if (tooShort) {
-    noOptionsText = `Type at least ${MIN_CHARS} characters…`
+    noOptionsText = t($ => $.picker.typeMinChars, { count: MIN_CHARS })
   } else if (loading) {
-    noOptionsText = 'Searching…'
+    noOptionsText = t($ => $.picker.searching)
   } else {
-    noOptionsText = 'No matches'
+    noOptionsText = t($ => $.picker.noMatches)
   }
 
   return (
@@ -210,7 +209,7 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
                 )}
               </Box>
               <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                {option.category === 'festival' ? '(festival)' : '(venue)'}
+                {option.category === 'festival' ? t($ => $.venuePicker.categoryFestival) : t($ => $.venuePicker.categoryVenue)}
               </Typography>
             </li>
           )
@@ -218,7 +217,7 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
         renderInput={(params) => {
           const extra = effectiveValue?.id ? (
             <InputAdornment position="end" sx={{ m: 0, mr: -1 }}>
-              <Tooltip title="Open venue">
+              <Tooltip title={t($ => $.venuePicker.openVenue)}>
                 <IconButton
                   size="small"
                   onMouseDown={(e) => e.stopPropagation()}

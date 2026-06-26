@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Divider from '@mui/material/Divider'
@@ -15,8 +16,9 @@ import { periodLabel } from '../../utils/invoicePeriod.ts'
 import type { Period } from '../../types/entities.ts'
 
 const MODES = ['month', 'quarter', 'fiscal_year', 'all_time'] as const
-const MODE_LABELS: Record<string, string> = { month: 'Month', quarter: 'Quarter', fiscal_year: 'Fiscal Year', all_time: 'All Time' }
-const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTH_KEYS = [
+  'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+] as const
 
 interface GridCellProps {
   label: string
@@ -86,6 +88,7 @@ interface PeriodPickerProps {
 }
 
 export default function PeriodPicker({ availableDates, value, onChange }: PeriodPickerProps) {
+  const { t } = useTranslation('common')
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [pickerMode, setPickerMode] = useState<string>(
     value.mode === 'custom' ? 'fiscal_year' : value.mode,
@@ -186,7 +189,7 @@ export default function PeriodPicker({ availableDates, value, onChange }: Period
                 value={mode}
                 sx={{ flex: 1, fontSize: '0.72rem', py: 0.5, px: 0.25, lineHeight: 1.4 }}
               >
-                {MODE_LABELS[mode]}
+                {t($ => $.periodPicker.modes[mode])}
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
@@ -194,13 +197,13 @@ export default function PeriodPicker({ availableDates, value, onChange }: Period
           {showGrid && (
             <>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <IconButton size="small" onClick={handleNavPrev} aria-label="previous">
+                <IconButton size="small" onClick={handleNavPrev} aria-label={t($ => $.periodPicker.previous)}>
                   <ChevronLeftIcon fontSize="small" />
                 </IconButton>
                 <Typography variant="body2" sx={{ flex: 1, textAlign: 'center', fontWeight: 600 }}>
                   {navigatorLabel}
                 </Typography>
-                <IconButton size="small" onClick={handleNavNext} aria-label="next">
+                <IconButton size="small" onClick={handleNavNext} aria-label={t($ => $.periodPicker.next)}>
                   <ChevronRightIcon fontSize="small" />
                 </IconButton>
               </Box>
@@ -208,7 +211,7 @@ export default function PeriodPicker({ availableDates, value, onChange }: Period
               {pickerMode === 'fiscal_year' && (
                 <Box
                   role="listbox"
-                  aria-label="Select fiscal year"
+                  aria-label={t($ => $.periodPicker.selectFiscalYear)}
                   sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0.5, mb: 1.5 }}
                 >
                   {decadeYears.map((year) => (
@@ -226,13 +229,13 @@ export default function PeriodPicker({ availableDates, value, onChange }: Period
               {pickerMode === 'month' && (
                 <Box
                   role="listbox"
-                  aria-label="Select month"
+                  aria-label={t($ => $.periodPicker.selectMonth)}
                   sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0.5, mb: 1.5 }}
                 >
-                  {MONTH_LABELS.map((label, idx) => (
+                  {MONTH_KEYS.map((monthKey, idx) => (
                     <GridCell
-                      key={label}
-                      label={label}
+                      key={monthKey}
+                      label={t($ => $.periodPicker.months[monthKey])}
                       hasData={monthsByYear.get(viewYear)?.has(idx) ?? false}
                       isSelected={
                         value.mode === 'month' && value.year === viewYear && value.month === idx
@@ -246,7 +249,7 @@ export default function PeriodPicker({ availableDates, value, onChange }: Period
               {pickerMode === 'quarter' && (
                 <Box
                   role="listbox"
-                  aria-label="Select quarter"
+                  aria-label={t($ => $.periodPicker.selectQuarter)}
                   sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 0.5, mb: 1.5 }}
                 >
                   {[1, 2, 3, 4].map((q) => (
@@ -268,28 +271,28 @@ export default function PeriodPicker({ availableDates, value, onChange }: Period
           <Divider sx={{ mb: 1.5 }} />
 
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            Custom Range
+            {t($ => $.periodPicker.customRange)}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
             <DateEntryField
               size="small"
-              label="From"
+              label={t($ => $.periodPicker.from)}
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              openPickerLabel="open from picker"
+              openPickerLabel={t($ => $.periodPicker.openFromPicker)}
               sx={{ flex: 1 }}
               slotProps={{
                 htmlInput: { max: customTo || undefined },
                 inputLabel: { shrink: true },
               }}
             />
-            <Typography variant="body2" color="text.secondary">to</Typography>
+            <Typography variant="body2" color="text.secondary">{t($ => $.periodPicker.rangeSeparator)}</Typography>
             <DateEntryField
               size="small"
-              label="To"
+              label={t($ => $.periodPicker.to)}
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              openPickerLabel="open to picker"
+              openPickerLabel={t($ => $.periodPicker.openToPicker)}
               sx={{ flex: 1 }}
               slotProps={{
                 htmlInput: { min: customFrom || undefined },
@@ -304,7 +307,7 @@ export default function PeriodPicker({ availableDates, value, onChange }: Period
             disabled={!customFrom || !customTo}
             onClick={handleCustomApply}
           >
-            Apply
+            {t($ => $.periodPicker.apply)}
           </Button>
         </Box>
       </Popover>

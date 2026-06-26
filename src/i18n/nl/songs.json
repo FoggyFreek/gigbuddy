@@ -1,3 +1,124 @@
 {
-  "title": "Nummers"
+  "title": "Songs",
+  "addSong": "Song toevoegen",
+  "searchSongs": "Songs zoeken…",
+  "songFallback": "Song",
+  "noSongsFound": "Geen songs gevonden.",
+  "preview": "Voorbeeld",
+  "fields": {
+    "title": "Titel",
+    "artist": "Artiest",
+    "key": "Toonsoort",
+    "tempo": "Tempo",
+    "tempoBpm": "Tempo (BPM)",
+    "duration": "Duur",
+    "durationMmss": "Duur (mm:ss)",
+    "durationPlaceholder": "3:45",
+    "tags": "Tags",
+    "tagsPlaceholder": "Zoeken of toevoegen…",
+    "required": "Verplicht"
+  },
+  "sections": {
+    "lyrics": "Songtekst",
+    "links": "Links",
+    "chords": "Akkoordenschema (ChordPro)",
+    "documents": "Documenten",
+    "recordings": "Opnames",
+    "notes": "Notities"
+  },
+  "notesPlaceholder": "Songnotities…",
+  "addPdf": "Pdf toevoegen",
+  "addMp3": "Mp3 toevoegen",
+  "deleteDialog": {
+    "title": "Song verwijderen?",
+    "body": "Dit kan niet ongedaan worden gemaakt."
+  },
+  "table": {
+    "empty": "Nog geen songs — voeg er een toe of importeer uit CSV.",
+    "noResults": "Geen resultaten."
+  },
+  "links": {
+    "label": "Label",
+    "url": "URL",
+    "urlPlaceholder": "https://…",
+    "deleteAria": "link verwijderen",
+    "addError": "Kan link niet toevoegen."
+  },
+  "files": {
+    "uploading": "Uploaden…",
+    "deleteAria": "bestand verwijderen",
+    "sizeLimit": "Bestand overschrijdt de limiet van {{size}}.",
+    "uploadFailed": "Uploaden mislukt.",
+    "deleteFailed": "Verwijderen mislukt.",
+    "deleteTitle": "Bestand verwijderen?",
+    "deleteBody": "{{name}} wordt permanent verwijderd."
+  },
+  "import": {
+    "menuTooltip": "Importeren",
+    "fromCsv": "Uit CSV…",
+    "fromChordPro": "Uit ChordPro-bestand (.pro)…",
+    "sizeLimit": "Bestand overschrijdt de limiet van 512 KB.",
+    "failed": "Importeren mislukt.",
+    "csvTitle": "Songs importeren uit CSV",
+    "uploadHelp": "Upload een UTF-8 CSV-bestand met kolomkoppen. Ondersteunde velden: titel, artiest, toonsoort, tempo, duur (mm:ss of seconden), tags (door komma's gescheiden).",
+    "chooseFile": "CSV-bestand kiezen",
+    "mapHelp": "Koppel je CSV-kolommen aan songvelden. {{count}} rijen gevonden.",
+    "notMapped": "(niet gekoppeld)",
+    "titleColumnRequired": "Titelkolom is verplicht",
+    "showing": "Eerste {{shown}} van {{total}} rijen worden getoond.",
+    "willImport_one": "{{count}} rij wordt geïmporteerd.",
+    "willImport_other": "{{count}} rijen worden geïmporteerd.",
+    "importError": "Importeren mislukt",
+    "result_one": "{{count}} song geïmporteerd.",
+    "result_other": "{{count}} songs geïmporteerd.",
+    "resultSkipped_one": "{{count}} song geïmporteerd ({{skipped}} overgeslagen als duplicaten).",
+    "resultSkipped_other": "{{count}} songs geïmporteerd ({{skipped}} overgeslagen als duplicaten).",
+    "importButton_one": "{{count}} rij importeren",
+    "importButton_other": "{{count}} rijen importeren"
+  },
+  "charts": {
+    "create": "Maken",
+    "createAria": "Nieuw schema maken",
+    "openAria": "{{name}} openen",
+    "chartFallbackLower": "schema",
+    "chartFallback": "Schema",
+    "newChartName": "Nieuw schema",
+    "createError": "Kan schema niet maken."
+  },
+  "viewer": {
+    "source": "ChordPro-bron",
+    "chartNamePlaceholder": "Schemanaam",
+    "print": "Afdrukken",
+    "deleteChart": "Schema verwijderen",
+    "deleteTitle": "Schema verwijderen?",
+    "deleteBody": "\"{{name}}\" wordt permanent verwijderd.",
+    "deleteThisChart": "Dit schema",
+    "transposeDown": "Een halve toon omlaag transponeren",
+    "transposeUp": "Een halve toon omhoog transponeren",
+    "transposeDownAria": "omlaag transponeren",
+    "transposeUpAria": "omhoog transponeren",
+    "transpose": "Transponeren",
+    "resetTranspose": "Transponeren resetten",
+    "transposeResetAria": "transponeer {{n}} halve tonen, resetten",
+    "chordFinder": "Akkoordzoeker",
+    "toggleChordFinder": "akkoordzoeker schakelen"
+  },
+  "view": {
+    "chordsHeading": "Akkoorden ({{n}})"
+  },
+  "analyzer": {
+    "prompt": "Plaats vingers op de hals om het akkoord te bepalen",
+    "clear": "Wissen",
+    "noChord": "Geen herkend akkoord.",
+    "noNotes": "Geen noten geselecteerd.",
+    "also": "Ook:"
+  },
+  "fretboard": {
+    "label": "Gitaarhals",
+    "nutAria": "Schakel {{label}}-snaar open of gedempt, momenteel {{state}}",
+    "fretAria": "Zet {{label}}-snaar op fret {{fret}}",
+    "stateOpen": "open",
+    "stateMuted": "gedempt",
+    "stateFret": "fret {{n}}"
+  }
 }

@@ -1,5 +1,6 @@
 import type { Id } from '../types/entities.ts'
 import { type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
@@ -44,6 +45,7 @@ interface MobileTaskCardProps {
 }
 
 function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps) {
+  const { t } = useTranslation('tasks')
   const overdue = isOverdue(task)
   let dueDateNode: ReactNode
   if (!task.due_date) {
@@ -94,7 +96,7 @@ function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps)
           }}
         >
           <Typography variant="caption" color="text.secondary">
-            Assigned to
+            {t($ => $.table.colAssignedTo)}
           </Typography>
           <Typography variant="body2">
             {task.assigned_to_name ?? '—'}
@@ -128,7 +130,7 @@ function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps)
           }}
         >
           <Typography variant="caption" color="text.secondary">
-            Due date
+            {t($ => $.table.colDueDate)}
           </Typography>
           <Box>
             {dueDateNode}
@@ -146,6 +148,7 @@ interface TasksTableProps {
 }
 
 export default function TasksTable({ tasks, onRowClick, onToggleDone }: TasksTableProps) {
+  const { t } = useTranslation('tasks')
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
 
@@ -154,7 +157,7 @@ export default function TasksTable({ tasks, onRowClick, onToggleDone }: TasksTab
       <Box>
         {tasks.length === 0 && (
           <Box sx={{ textAlign: 'center', color: 'text.secondary', py: 4 }}>
-            <Typography>No tasks yet.</Typography>
+            <Typography>{t($ => $.table.empty)}</Typography>
           </Box>
         )}
         {tasks.map((task) => (
@@ -174,18 +177,18 @@ export default function TasksTable({ tasks, onRowClick, onToggleDone }: TasksTab
       <Table size="small">
         <TableHead>
           <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-            <TableCell padding="checkbox">Done</TableCell>
-            <TableCell>Title</TableCell>
-            <TableCell>Gig</TableCell>
-            <TableCell>Assigned to</TableCell>
-            <TableCell>Due date</TableCell>
+            <TableCell padding="checkbox">{t($ => $.table.colDone)}</TableCell>
+            <TableCell>{t($ => $.table.colTitle)}</TableCell>
+            <TableCell>{t($ => $.table.colGig)}</TableCell>
+            <TableCell>{t($ => $.table.colAssignedTo)}</TableCell>
+            <TableCell>{t($ => $.table.colDueDate)}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {tasks.length === 0 && (
             <TableRow>
               <TableCell colSpan={5} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                No tasks yet.
+                {t($ => $.table.empty)}
               </TableCell>
             </TableRow>
           )}

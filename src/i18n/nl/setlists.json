@@ -1,3 +1,91 @@
 {
-  "title": "Setlijsten"
+  "title": "Setlijsten",
+  "list": {
+    "empty": "Nog geen setlijsten — maak er een om te beginnen.",
+    "setCount_one": "{{count}} set",
+    "setCount_other": "{{count}} sets",
+    "songCount_one": "{{count}} song",
+    "songCount_other": "{{count}} songs"
+  },
+  "create": {
+    "title": "Nieuwe setlijst",
+    "nameLabel": "Naam",
+    "submit": "Aanmaken"
+  },
+  "editor": {
+    "untitled": "Naamloze setlijst",
+    "total": "Totaal {{duration}}",
+    "preview": "Voorbeeld",
+    "addSet": "Set toevoegen",
+    "deleteSetlist": "Setlijst verwijderen",
+    "back": "terug",
+    "nameAria": "setlijstnaam",
+    "deleteTitle": "Setlijst verwijderen?",
+    "deleteConfirm": "Dit kan niet ongedaan worden gemaakt."
+  },
+  "set": {
+    "nameAria": "setnaam",
+    "includeInTotal": "Meetellen in totale tijd",
+    "includeInTotalAria": "meetellen in totale tijd",
+    "moveUp": "Set omhoog",
+    "moveUpAria": "set omhoog",
+    "moveDown": "Set omlaag",
+    "moveDownAria": "set omlaag",
+    "delete": "Set verwijderen",
+    "deleteAria": "set verwijderen",
+    "emptyEditing": "Leeg — voeg songs, pauzes of breaks toe, of sleep items hierheen.",
+    "empty": "Leeg",
+    "addSong": "Song toevoegen",
+    "addPause": "Pauze toevoegen",
+    "addBreak": "Break toevoegen"
+  },
+  "item": {
+    "unknownSong": "(onbekende song)",
+    "bpm": "{{tempo}} BPM",
+    "pause": "Pauze",
+    "break": "Break",
+    "durationAria": "duur",
+    "labelPlaceholder": "Label (optioneel)",
+    "dragAria": "slepen",
+    "songOrderAria": "songvolgorde {{order}}",
+    "deleteAria": "item verwijderen",
+    "myNote": "Mijn notitie",
+    "noteAria": "songnotitie",
+    "notePlaceholder": "Jouw notitie voor deze song…",
+    "noteTextAria": "songnotitietekst"
+  },
+  "transition": {
+    "link": "Koppelen als overgang",
+    "linkAria": "songs koppelen als overgang",
+    "notePlaceholder": "overgang…",
+    "noteAria": "overgangsnotitie",
+    "remove": "Overgang verwijderen",
+    "removeAria": "overgang verwijderen"
+  },
+  "preview": {
+    "fallbackTitle": "Setlijst",
+    "noSongs": "(Geen songs)",
+    "segueFallback": "overgang",
+    "showKey": "Toonsoort tonen",
+    "showBpm": "BPM tonen",
+    "showNotes": "Notities tonen",
+    "showPausesBreaks": "Pauzes & breaks tonen",
+    "print": "Afdrukken"
+  },
+  "toast": {
+    "generic": "Er is iets misgegaan",
+    "saveName": "Opslaan van de setlijstnaam mislukt",
+    "reorderItems": "Items herordenen mislukt",
+    "deleteSetlist": "Setlijst verwijderen mislukt",
+    "addSet": "Set toevoegen mislukt",
+    "renameSet": "Set hernoemen mislukt",
+    "updateSet": "Set bijwerken mislukt",
+    "deleteSet": "Set verwijderen mislukt",
+    "reorderSets": "Sets herordenen mislukt",
+    "addSong": "Song toevoegen mislukt",
+    "addItem": "Item toevoegen mislukt",
+    "deleteItem": "Item verwijderen mislukt",
+    "saveChanges": "Wijzigingen opslaan mislukt",
+    "saveNote": "Notitie opslaan mislukt"
+  }
 }

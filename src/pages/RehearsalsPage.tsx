@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -25,6 +26,7 @@ function applyVoteToRehearsals(rehearsals: Rehearsal[], rehearsalId: Id, memberI
 }
 
 export default function RehearsalsPage() {
+  const { t } = useTranslation('rehearsals')
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
@@ -79,7 +81,7 @@ export default function RehearsalsPage() {
     >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
-          Rehearsals
+          {t($ => $.title)}
         </Typography>
         {canWritePlanning && (
           <Button
@@ -87,7 +89,7 @@ export default function RehearsalsPage() {
             startIcon={<AddIcon />}
             onClick={() => setModal({ mode: 'create' })}
           >
-            Add
+            {t($ => $.add)}
           </Button>
         )}
       </Box>

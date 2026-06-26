@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
@@ -68,6 +69,7 @@ interface GigContactsSectionProps {
 // a source chip; email/phone are copyable; no link/unlink (it belongs to the
 // venue/festival, edited there).
 function InheritedRow({ contact, source, onOpen }: InheritedRowProps) {
+  const { t } = useTranslation('gigs')
   return (
     <Box sx={rowSx}>
       <Chip label={source} size="small" color="default" sx={{ alignSelf: 'center' }} />
@@ -77,19 +79,19 @@ function InheritedRow({ contact, source, onOpen }: InheritedRowProps) {
           {contact.email && (
             <>
               <Typography variant="caption" color="text.secondary" noWrap>{contact.email}</Typography>
-              <CopyIconButton value={contact.email} ariaLabel="copy email" />
+              <CopyIconButton value={contact.email} ariaLabel={t($ => $.contacts.copyEmail)} />
             </>
           )}
           {contact.phone && (
             <>
               <Typography variant="caption" color="text.secondary" noWrap>{contact.phone}</Typography>
-              <CopyIconButton value={contact.phone} ariaLabel="copy phone" />
+              <CopyIconButton value={contact.phone} ariaLabel={t($ => $.contacts.copyPhone)} />
             </>
           )}
         </Box>
       </Box>
-      <Tooltip title="Open contact">
-        <IconButton size="small" onClick={() => onOpen(contact.id)} aria-label="open contact">
+      <Tooltip title={t($ => $.contacts.openContact)}>
+        <IconButton size="small" onClick={() => onOpen(contact.id)} aria-label={t($ => $.contacts.openContactAria)}>
           <OpenInNewIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -98,6 +100,7 @@ function InheritedRow({ contact, source, onOpen }: InheritedRowProps) {
 }
 
 export default function GigContactsSection({ gigId, venueId, festivalId, flush, canWrite = true }: GigContactsSectionProps) {
+  const { t } = useTranslation('gigs')
   const navigate = useNavigate()
   const [linked, setLinked] = useState<LinkedContact[]>([])
   const [venueContacts, setVenueContacts] = useState<InheritedContact[]>([])
@@ -160,10 +163,10 @@ export default function GigContactsSection({ gigId, venueId, festivalId, flush, 
       {hasInherited && (
         <Box sx={{ mb: 1 }}>
           {venueContacts.map((c) => (
-            <InheritedRow key={`v-${c.id}`} contact={c} source="Venue" onOpen={openContact} />
+            <InheritedRow key={`v-${c.id}`} contact={c} source={t($ => $.contacts.sourceVenue)} onOpen={openContact} />
           ))}
           {festivalContacts.map((c) => (
-            <InheritedRow key={`f-${c.id}`} contact={c} source="Festival" onOpen={openContact} />
+            <InheritedRow key={`f-${c.id}`} contact={c} source={t($ => $.contacts.sourceFestival)} onOpen={openContact} />
           ))}
         </Box>
       )}
@@ -180,24 +183,24 @@ export default function GigContactsSection({ gigId, venueId, festivalId, flush, 
             </Typography>
           </Box>
           {canWrite && (
-            <Tooltip title={c.is_primary ? 'Primary contact — click to unset' : 'Mark as primary'}>
+            <Tooltip title={c.is_primary ? t($ => $.contacts.primarySet) : t($ => $.contacts.primaryUnset)}>
               <IconButton
                 size="small"
                 color={c.is_primary ? 'warning' : 'default'}
                 onClick={() => handleSetPrimary(c.id!, !c.is_primary)}
-                aria-label={c.is_primary ? 'unset primary' : 'set primary'}
+                aria-label={c.is_primary ? t($ => $.contacts.unsetPrimaryAria) : t($ => $.contacts.setPrimaryAria)}
               >
                 {c.is_primary ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
               </IconButton>
             </Tooltip>
           )}
-          <Tooltip title="Open contact">
-            <IconButton size="small" onClick={() => openContact(c.id!)} aria-label="open contact">
+          <Tooltip title={t($ => $.contacts.openContact)}>
+            <IconButton size="small" onClick={() => openContact(c.id!)} aria-label={t($ => $.contacts.openContactAria)}>
               <OpenInNewIcon fontSize="small" />
             </IconButton>
           </Tooltip>
           {canWrite && (
-            <IconButton size="small" onClick={() => handleRemoveContact(c.id!)} aria-label="remove contact">
+            <IconButton size="small" onClick={() => handleRemoveContact(c.id!)} aria-label={t($ => $.contacts.removeContact)}>
               <DeleteIcon fontSize="small" />
             </IconButton>
           )}
