@@ -1,3 +1,47 @@
 {
-  "title": "Reports"
+  "title": "Reports",
+  "actions": {
+    "exportExcel": "Export Excel",
+    "exportPdf": "Export PDF",
+    "exporting": "Exporting…"
+  },
+  "profitLoss": {
+    "title": "Profit & Loss",
+    "subtitle": "Period movement on result accounts, excl. VAT",
+    "revenue": "Revenue",
+    "totalRevenue": "Total revenue",
+    "costOfGoodsSold": "Cost of goods sold",
+    "grossProfit": "Gross profit",
+    "expenses": "Expenses",
+    "totalExpenses": "Total expenses",
+    "result": "Result"
+  },
+  "balanceSheet": {
+    "title": "Balance Sheet",
+    "subtitle": "Closing balances as of {{date}}",
+    "assets": "Assets",
+    "totalAssets": "Total assets",
+    "liabilities": "Liabilities",
+    "totalLiabilities": "Total liabilities",
+    "equity": "Equity",
+    "unallocatedResult": "Unallocated result",
+    "totalEquity": "Total equity",
+    "totalLiabilitiesAndEquity": "Total liabilities + equity"
+  },
+  "vat": {
+    "title": "VAT position",
+    "subtitle": "VAT movement within the selected period",
+    "salesOutput": "VAT on sales (output)",
+    "purchasesInput": "VAT on purchases (input)",
+    "netPayable": "Net VAT position (payable)",
+    "netReceivable": "Net VAT position (receivable)"
+  },
+  "trialBalance": {
+    "title": "Trial Balance",
+    "subtitle": "Period debit/credit totals per account",
+    "account": "Account",
+    "debit": "Debit",
+    "credit": "Credit",
+    "total": "Total"
+  }
 }

@@ -1,3 +1,47 @@
 {
-  "title": "Rapporten"
+  "title": "Rapporten",
+  "actions": {
+    "exportExcel": "Excel exporteren",
+    "exportPdf": "PDF exporteren",
+    "exporting": "Exporteren…"
+  },
+  "profitLoss": {
+    "title": "Winst-en-verliesrekening",
+    "subtitle": "Mutaties op resultaatrekeningen binnen de periode, excl. btw",
+    "revenue": "Opbrengsten",
+    "totalRevenue": "Totale opbrengsten",
+    "costOfGoodsSold": "Kostprijs van de omzet",
+    "grossProfit": "Brutowinst",
+    "expenses": "Kosten",
+    "totalExpenses": "Totale kosten",
+    "result": "Resultaat"
+  },
+  "balanceSheet": {
+    "title": "Balans",
+    "subtitle": "Eindsaldi per {{date}}",
+    "assets": "Activa",
+    "totalAssets": "Totale activa",
+    "liabilities": "Schulden",
+    "totalLiabilities": "Totale schulden",
+    "equity": "Eigen vermogen",
+    "unallocatedResult": "Niet-toegewezen resultaat",
+    "totalEquity": "Totaal eigen vermogen",
+    "totalLiabilitiesAndEquity": "Totaal schulden + eigen vermogen"
+  },
+  "vat": {
+    "title": "Btw-positie",
+    "subtitle": "Btw-mutaties binnen de geselecteerde periode",
+    "salesOutput": "Btw over verkopen (verschuldigd)",
+    "purchasesInput": "Btw over inkopen (voorbelasting)",
+    "netPayable": "Netto-btw-positie (te betalen)",
+    "netReceivable": "Netto-btw-positie (te ontvangen)"
+  },
+  "trialBalance": {
+    "title": "Proefbalans",
+    "subtitle": "Debet-/credittotalen per rekening binnen de periode",
+    "account": "Rekening",
+    "debit": "Debet",
+    "credit": "Credit",
+    "total": "Totaal"
+  }
 }

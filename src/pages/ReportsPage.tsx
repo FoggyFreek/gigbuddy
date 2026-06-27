@@ -1,5 +1,6 @@
 ﻿import { Fragment, useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -126,7 +127,7 @@ function ReportCard({ title, subtitle, children }: { title: string; subtitle?: s
     <Paper variant="outlined" sx={{ p: isCompact ? 1.5 : 2.5 }}>
       <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{title}</Typography>
       {subtitle && (
-        <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{subtitle}</Typography>
       )}
       {children}
     </Paper>
@@ -149,24 +150,35 @@ interface ProfitLossData {
 }
 
 function ProfitLossCard({ profitLoss }: { profitLoss: ProfitLossData }) {
+  const { t } = useTranslation('reports')
   const { totals } = profitLoss
   const showCogs = profitLoss.cost_of_goods_sold.length > 0 || totals.cogs_cents !== 0
   return (
-    <ReportCard title="Profit & Loss" subtitle="Period movement on result accounts, excl. VAT">
+    <ReportCard title={t($ => $.profitLoss.title)} subtitle={t($ => $.profitLoss.subtitle)}>
       <Table size="small">
         <TableBody>
-          <AccountSection label="Revenue" rows={profitLoss.revenue} totalLabel="Total revenue" totalCents={totals.revenue_cents} />
+          <AccountSection
+            label={t($ => $.profitLoss.revenue)}
+            rows={profitLoss.revenue}
+            totalLabel={t($ => $.profitLoss.totalRevenue)}
+            totalCents={totals.revenue_cents}
+          />
           {showCogs && (
             <AccountSection
-              label="Cost of goods sold"
+              label={t($ => $.profitLoss.costOfGoodsSold)}
               rows={profitLoss.cost_of_goods_sold}
-              totalLabel="Gross profit"
+              totalLabel={t($ => $.profitLoss.grossProfit)}
               totalCents={totals.gross_profit_cents}
             />
           )}
-          <AccountSection label="Expenses" rows={profitLoss.expenses} totalLabel="Total expenses" totalCents={totals.expense_cents} />
+          <AccountSection
+            label={t($ => $.profitLoss.expenses)}
+            rows={profitLoss.expenses}
+            totalLabel={t($ => $.profitLoss.totalExpenses)}
+            totalCents={totals.expense_cents}
+          />
           <TableRow>
-            <TableCell sx={{ fontWeight: 700, borderBottom: 'none' }}>Result</TableCell>
+            <TableCell sx={{ fontWeight: 700, borderBottom: 'none' }}>{t($ => $.profitLoss.result)}</TableCell>
             <TableCell
               align="right"
               sx={{ fontWeight: 700, borderBottom: 'none', color: totals.result_cents >= 0 ? 'success.main' : 'error.main' }}
@@ -195,22 +207,41 @@ interface BalanceSheetData {
 }
 
 function BalanceSheetCard({ balanceSheet }: { balanceSheet: BalanceSheetData }) {
+  const { t } = useTranslation('reports')
   const { totals } = balanceSheet
   return (
-    <ReportCard title="Balance Sheet" subtitle={`Closing balances as of ${balanceSheet.as_of}`}>
+    <ReportCard
+      title={t($ => $.balanceSheet.title)}
+      subtitle={t($ => $.balanceSheet.subtitle, { date: balanceSheet.as_of })}
+    >
       <Table size="small">
         <TableBody>
-          <AccountSection label="Assets" rows={balanceSheet.assets} totalLabel="Total assets" totalCents={totals.assets_cents} />
-          <AccountSection label="Liabilities" rows={balanceSheet.liabilities} totalLabel="Total liabilities" totalCents={totals.liabilities_cents} />
           <AccountSection
-            label="Equity"
+            label={t($ => $.balanceSheet.assets)}
+            rows={balanceSheet.assets}
+            totalLabel={t($ => $.balanceSheet.totalAssets)}
+            totalCents={totals.assets_cents}
+          />
+          <AccountSection
+            label={t($ => $.balanceSheet.liabilities)}
+            rows={balanceSheet.liabilities}
+            totalLabel={t($ => $.balanceSheet.totalLiabilities)}
+            totalCents={totals.liabilities_cents}
+          />
+          <AccountSection
+            label={t($ => $.balanceSheet.equity)}
             rows={balanceSheet.equity}
-            extraRows={[{ label: 'Unallocated result', amount_cents: balanceSheet.unallocated_result_cents }]}
-            totalLabel="Total equity"
+            extraRows={[{
+              label: t($ => $.balanceSheet.unallocatedResult),
+              amount_cents: balanceSheet.unallocated_result_cents,
+            }]}
+            totalLabel={t($ => $.balanceSheet.totalEquity)}
             totalCents={totals.equity_cents}
           />
           <TableRow>
-            <TableCell sx={{ fontWeight: 700, borderBottom: 'none' }}>Total liabilities + equity</TableCell>
+            <TableCell sx={{ fontWeight: 700, borderBottom: 'none' }}>
+              {t($ => $.balanceSheet.totalLiabilitiesAndEquity)}
+            </TableCell>
             <TableCell align="right" sx={{ fontWeight: 700, borderBottom: 'none' }}>
               <Money cents={totals.liabilities_and_equity_cents} />
             </TableCell>
@@ -228,21 +259,22 @@ interface VatData {
 }
 
 function VatCard({ vat }: { vat: VatData }) {
+  const { t } = useTranslation('reports')
   return (
-    <ReportCard title="VAT position" subtitle="VAT movement within the selected period">
+    <ReportCard title={t($ => $.vat.title)} subtitle={t($ => $.vat.subtitle)}>
       <Table size="small">
         <TableBody>
           <TableRow>
-            <TableCell sx={{ borderBottom: 'none' }}>VAT on sales (output)</TableCell>
+            <TableCell sx={{ borderBottom: 'none' }}>{t($ => $.vat.salesOutput)}</TableCell>
             <TableCell align="right" sx={{ borderBottom: 'none' }}><Money cents={vat.output_cents} /></TableCell>
           </TableRow>
           <TableRow>
-            <TableCell sx={{ borderBottom: 'none' }}>VAT on purchases (input)</TableCell>
+            <TableCell sx={{ borderBottom: 'none' }}>{t($ => $.vat.purchasesInput)}</TableCell>
             <TableCell align="right" sx={{ borderBottom: 'none' }}><Money cents={vat.input_cents} /></TableCell>
           </TableRow>
           <TableRow>
             <TableCell sx={TOTAL_CELL_SX}>
-              Net VAT position {vat.net_cents >= 0 ? '(payable)' : '(receivable)'}
+              {vat.net_cents >= 0 ? t($ => $.vat.netPayable) : t($ => $.vat.netReceivable)}
             </TableCell>
             <TableCell align="right" sx={TOTAL_CELL_SX}><Money cents={vat.net_cents} /></TableCell>
           </TableRow>
@@ -268,18 +300,19 @@ interface TrialBalanceData {
 }
 
 function TrialBalanceCard({ trialBalance }: { trialBalance: TrialBalanceData }) {
+  const { t } = useTranslation('reports')
   const isCompact = useCompactLayout()
 
   if (isCompact) {
     // Two rows per account: the account on its own line, debit/credit beneath,
     // so the amounts keep room on narrow screens.
     return (
-      <ReportCard title="Trial Balance" subtitle="Period debit/credit totals per account">
+      <ReportCard title={t($ => $.trialBalance.title)} subtitle={t($ => $.trialBalance.subtitle)}>
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell align="right" sx={{ width: '50%' }}>Debit</TableCell>
-              <TableCell align="right" sx={{ width: '50%' }}>Credit</TableCell>
+              <TableCell align="right" sx={{ width: '50%' }}>{t($ => $.trialBalance.debit)}</TableCell>
+              <TableCell align="right" sx={{ width: '50%' }}>{t($ => $.trialBalance.credit)}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -297,7 +330,7 @@ function TrialBalanceCard({ trialBalance }: { trialBalance: TrialBalanceData }) 
               </Fragment>
             ))}
             <TableRow>
-              <TableCell colSpan={2} sx={{ ...TOTAL_CELL_SX, pb: 0 }}>Total</TableCell>
+              <TableCell colSpan={2} sx={{ ...TOTAL_CELL_SX, pb: 0 }}>{t($ => $.trialBalance.total)}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell align="right" sx={{ fontWeight: 600, borderBottom: 'none', pt: 0.25 }}><Money cents={trialBalance.totals.debit_cents} fullWidth /></TableCell>
@@ -310,15 +343,15 @@ function TrialBalanceCard({ trialBalance }: { trialBalance: TrialBalanceData }) 
   }
 
   return (
-    <ReportCard title="Trial Balance" subtitle="Period debit/credit totals per account">
+    <ReportCard title={t($ => $.trialBalance.title)} subtitle={t($ => $.trialBalance.subtitle)}>
       <Table size="small">
         <TableHead>
           <TableRow>
-            <TableCell>Account</TableCell>
+            <TableCell>{t($ => $.trialBalance.account)}</TableCell>
             {/* Identical fixed widths keep the debit/credit columns symmetric;
                 the full-width Money blocks align the € to each column edge. */}
-            <TableCell align="right" sx={{ width: 140 }}>Debit</TableCell>
-            <TableCell align="right" sx={{ width: 140 }}>Credit</TableCell>
+            <TableCell align="right" sx={{ width: 140 }}>{t($ => $.trialBalance.debit)}</TableCell>
+            <TableCell align="right" sx={{ width: 140 }}>{t($ => $.trialBalance.credit)}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -330,7 +363,7 @@ function TrialBalanceCard({ trialBalance }: { trialBalance: TrialBalanceData }) 
             </TableRow>
           ))}
           <TableRow>
-            <TableCell sx={TOTAL_CELL_SX}>Total</TableCell>
+            <TableCell sx={TOTAL_CELL_SX}>{t($ => $.trialBalance.total)}</TableCell>
             <TableCell align="right" sx={TOTAL_CELL_SX}><Money cents={trialBalance.totals.debit_cents} fullWidth /></TableCell>
             <TableCell align="right" sx={TOTAL_CELL_SX}><Money cents={trialBalance.totals.credit_cents} fullWidth /></TableCell>
           </TableRow>
@@ -348,6 +381,7 @@ interface FinancialReportData {
 }
 
 export default function ReportsPage() {
+  const { t } = useTranslation('reports')
   const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
@@ -408,7 +442,7 @@ export default function ReportsPage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: isCompact ? 1.5 : 2, flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ fontWeight: 600,  flex: 1  }}>
-          Reports
+          {t($ => $.title)}
         </Typography>
         <Button
           size="small"
@@ -417,7 +451,7 @@ export default function ReportsPage() {
           disabled={exporting !== null || loading}
           onClick={() => handleExport('xlsx')}
         >
-          {exporting === 'xlsx' ? 'Exporting…' : 'Export Excel'}
+          {exporting === 'xlsx' ? t($ => $.actions.exporting) : t($ => $.actions.exportExcel)}
         </Button>
         <Button
           size="small"
@@ -426,7 +460,7 @@ export default function ReportsPage() {
           disabled={exporting !== null || loading}
           onClick={() => handleExport('pdf')}
         >
-          {exporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
+          {exporting === 'pdf' ? t($ => $.actions.exporting) : t($ => $.actions.exportPdf)}
         </Button>
         <PeriodPicker availableDates={availableDates} value={period} onChange={setPeriod} />
       </Box>
@@ -437,7 +471,7 @@ export default function ReportsPage() {
         </Box>
       )}
       {error && (
-        <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>
+        <Typography sx={{ color: 'error.main', mb: 2 }}>{error}</Typography>
       )}
 
       {!loading && !error && report && (
