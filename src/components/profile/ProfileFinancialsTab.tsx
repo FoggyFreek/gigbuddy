@@ -222,6 +222,12 @@ export default function ProfileFinancialsTab({ form, isAdmin, editing, onToggleE
   const editable = editing && isAdmin
   return (
     <Box sx={{ p: 3 }}>
+
+
+      {editable
+        ? <FinancialsEditForm form={form} onChange={onChange} onFormChange={onFormChange} schedule={schedule} />
+        : <FinancialsView form={form} />}
+
       {isAdmin && (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
           <Button
@@ -235,10 +241,6 @@ export default function ProfileFinancialsTab({ form, isAdmin, editing, onToggleE
           </Button>
         </Box>
       )}
-
-      {editable
-        ? <FinancialsEditForm form={form} onChange={onChange} onFormChange={onFormChange} schedule={schedule} />
-        : <FinancialsView form={form} />}
     </Box>
   )
 }

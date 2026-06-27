@@ -1,9 +1,9 @@
 {
   "title": "Profile",
   "tabs": {
-    "socials": "Social profiles",
+    "socials": "Socials",
     "links": "Links",
-    "financials": "Financial details"
+    "financials": "Financials"
   },
   "crop": {
     "logo": "Crop band logo",

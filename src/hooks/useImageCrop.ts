@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { ChangeEvent } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import type { ChangeEvent, RefObject } from 'react'
 
 export interface ImageCropControls {
   uploading: boolean
@@ -63,4 +63,65 @@ export function useImageCrop(
   }
 
   return { uploading, cropOpen, cropSrc, handleFileChange, handleCropConfirm, handleCropCancel }
+}
+
+export interface ImageUploadConfig {
+  compress: (file: File) => Promise<File>
+  /** Uploads the cropped/compressed file and returns the new stored path. */
+  upload: (file: File) => Promise<string | null>
+  onError: (msg: string) => void
+  allowedTypes: Set<string>
+  /** `accept` attribute for the hidden file input. */
+  accept: string
+  /** Crop-dialog title. */
+  title: string
+  /** Crop aspect ratio; omit for a free crop. */
+  aspect?: number
+  /** Whether the current user may upload (gates the picker affordance). */
+  canEdit?: boolean
+}
+
+export interface ImageUploadSlot extends ImageCropControls {
+  path: string | null
+  setPath: (path: string | null) => void
+  inputRef: RefObject<HTMLInputElement | null>
+  accept: string
+  title: string
+  aspect?: number
+  openPicker: () => void
+  /** Props for an `ImageSlot` consumer (e.g. ProfileIdentityCard). */
+  cardProps: { path: string | null; uploading: boolean; onUploadClick?: () => void }
+}
+
+/**
+ * Bundles the full per-slot image-upload concern: the hidden file input ref,
+ * the stored path state, the crop-dialog lifecycle (via {@link useImageCrop}),
+ * and the picker opener — so a page with several upload slots renders them by
+ * mapping over the returned slots instead of repeating the wiring each time.
+ */
+export function useImageUpload(cfg: ImageUploadConfig): ImageUploadSlot {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [path, setPath] = useState<string | null>(null)
+  const crop = useImageCrop(
+    cfg.compress,
+    async (file) => { setPath(await cfg.upload(file)) },
+    cfg.onError,
+    cfg.allowedTypes,
+  )
+  const openPicker = useCallback(() => inputRef.current?.click(), [])
+  return {
+    ...crop,
+    path,
+    setPath,
+    inputRef,
+    accept: cfg.accept,
+    title: cfg.title,
+    aspect: cfg.aspect,
+    openPicker,
+    cardProps: {
+      path,
+      uploading: crop.uploading,
+      onUploadClick: cfg.canEdit ? openPicker : undefined,
+    },
+  }
 }

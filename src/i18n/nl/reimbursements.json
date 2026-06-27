@@ -17,14 +17,14 @@
   },
   "actions": {
     "register": "Registreren",
-    "markReimbursed": "Markeren als vergoed"
+    "markReimbursed": "Markeren als terugbetaald"
   },
   "dialog": {
-    "title": "{{name}} vergoeden",
+    "title": "{{name}} terugbetalen",
     "purchasesToSettle": "Te verrekenen aankopen",
     "total": "Totaal",
     "paidOn": "Betaald op",
     "memo": "Memo",
-    "submit": "Onkostenvergoeding registreren"
+    "submit": "Terugbetaling registreren"
   }
 }

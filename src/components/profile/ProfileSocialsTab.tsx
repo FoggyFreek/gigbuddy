@@ -119,16 +119,7 @@ export default function ProfileSocialsTab({ form, editing, onToggleEditing, onCh
   const { t } = useTranslation('common')
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-        <Button
-          size="small"
-          startIcon={editing ? <CheckIcon /> : <EditIcon />}
-          onClick={onToggleEditing}
-          variant={editing ? 'contained' : 'outlined'}
-        >
-          {editing ? t($ => $.actions.done) : t($ => $.actions.edit)}
-        </Button>
-      </Box>
+      
 
       <Grid container spacing={2}>
         {SOCIALS.map((social) => {
@@ -144,6 +135,16 @@ export default function ProfileSocialsTab({ form, editing, onToggleEditing, onCh
           )
         })}
       </Grid>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <Button
+          size="small"
+          startIcon={editing ? <CheckIcon /> : <EditIcon />}
+          onClick={onToggleEditing}
+          variant={editing ? 'contained' : 'outlined'}
+        >
+          {editing ? t($ => $.actions.done) : t($ => $.actions.edit)}
+        </Button>
+      </Box>
     </Box>
   )
 }

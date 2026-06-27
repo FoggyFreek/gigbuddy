@@ -174,7 +174,7 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
 
     // Switch to Financial details tab, then click its Edit button (unique aria-label)
-    await user.click(screen.getByRole('tab', { name: /financial details/i }))
+    await user.click(screen.getByRole('tab', { name: /financials/i }))
     const editBtn = await screen.findByRole('button', { name: /edit financial details/i })
     await user.click(editBtn)
 
@@ -195,7 +195,7 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
 
     // Switch to Financial details tab (visible to everyone)
-    await user.click(screen.getByRole('tab', { name: /financial details/i }))
+    await user.click(screen.getByRole('tab', { name: /financials/i }))
 
     // No Edit button inside the Financial panel for members
     expect(screen.queryByRole('button', { name: /edit financial details/i })).toBeNull()

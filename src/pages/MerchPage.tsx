@@ -126,7 +126,19 @@ export default function MerchPage() {
 
   return (
     <SplitView basePath="/merch" outletContext={{ onReload: handleSalesChanged, period }}>
-      <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>{t($ => $.title)}</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.title)}</Typography>
+        {!loading && (
+          <Button
+            variant="contained"
+            startIcon={<PointOfSaleOutlinedIcon />}
+            disabled={!products!.some((p) => !p.archived_at)}
+            onClick={() => setSaleDialogOpen(true)}
+          >
+            {t($ => $.products.recordSale)}
+          </Button>
+        )}
+      </Box>
 
       {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
       {loading && (
@@ -137,19 +149,9 @@ export default function MerchPage() {
         <>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant="h6">{t($ => $.products.heading)}</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button startIcon={<AddIcon />} onClick={() => setProductDialog('new')}>
-                {t($ => $.products.new)}
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<PointOfSaleOutlinedIcon />}
-                disabled={!products!.some((p) => !p.archived_at)}
-                onClick={() => setSaleDialogOpen(true)}
-              >
-                {t($ => $.products.recordSale)}
-              </Button>
-            </Box>
+            <Button startIcon={<AddIcon />} onClick={() => setProductDialog('new')}>
+              {t($ => $.products.new)}
+            </Button>
           </Box>
 
           {!products!.length && (
@@ -172,7 +174,6 @@ export default function MerchPage() {
               <Chip size="small" label={summary.length} />
             </Box>
             <Button
-              size="small"
               startIcon={<CloudDownloadOutlinedIcon />}
               onClick={() => setShopifyOpen(true)}
             >

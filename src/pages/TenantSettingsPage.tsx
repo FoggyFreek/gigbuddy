@@ -1,4 +1,5 @@
 ﻿import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -19,6 +20,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import { useAuth } from '../contexts/authContext.ts'
 import { useProfile } from '../contexts/profileContext.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
+import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { VARIANT_TOKENS } from '../theme.ts'
 import type { ThemeVariant } from '../theme.ts'
 import { clearMollieKey, getMollieKey, setMollieKey, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain, updateProfile } from '../api/profile.ts'
@@ -27,29 +29,39 @@ import { formatBytes } from '../utils/formatBytes.ts'
 import ChartOfAccountsSection from '../components/settings/ChartOfAccountsSection.tsx'
 import AccountingSettingsSection from '../components/settings/AccountingSettingsSection.tsx'
 
+// `label` keys the i18n preset names under settings.accentColor.presets.
 const PRESET_COLORS = [
-  { hex: '#6750A4', label: 'Purple (default)' },
-  { hex: '#1565C0', label: 'Blue' },
-  { hex: '#0277BD', label: 'Light Blue' },
-  { hex: '#00838F', label: 'Teal' },
-  { hex: '#2E7D32', label: 'Green' },
-  { hex: '#558B2F', label: 'Olive' },
-  { hex: '#F57F17', label: 'Amber' },
-  { hex: '#E65100', label: 'Deep Orange' },
-  { hex: '#C62828', label: 'Red' },
-  { hex: '#AD1457', label: 'Pink' },
-  { hex: '#6A1B9A', label: 'Deep Purple' },
-  { hex: '#4527A0', label: 'Indigo' },
-]
+  { hex: '#6750A4', label: 'purple' },
+  { hex: '#1565C0', label: 'blue' },
+  { hex: '#0277BD', label: 'lightBlue' },
+  { hex: '#00838F', label: 'teal' },
+  { hex: '#2E7D32', label: 'green' },
+  { hex: '#558B2F', label: 'olive' },
+  { hex: '#F57F17', label: 'amber' },
+  { hex: '#E65100', label: 'deepOrange' },
+  { hex: '#C62828', label: 'red' },
+  { hex: '#AD1457', label: 'pink' },
+  { hex: '#6A1B9A', label: 'deepPurple' },
+  { hex: '#4527A0', label: 'indigo' },
+] as const
 
 const DEFAULT_COLOR = '#6750A4'
 
+// Shopify client ids aren't secret but are long; collapse the middle so the
+// display value doesn't eat the card's horizontal space.
+function shortenClientId(value: string): string {
+  if (value.length <= 14) return value
+  return `${value.slice(0, 6)}…${value.slice(-4)}`
+}
+
 export default function TenantSettingsPage() {
+  const { t } = useTranslation('settings')
   const { user } = useAuth()
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
   const { accentColor, setAccentColor } = useProfile()
   const [saving, setSaving] = useState(false)
   const colorInputRef = useRef<HTMLInputElement>(null)
+  const compact = useCompactLayout()
 
   const current = accentColor || DEFAULT_COLOR
 
@@ -65,26 +77,26 @@ export default function TenantSettingsPage() {
   }
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', p: 3 }}>
+    <Box sx={{ maxWidth: 800, mx: 'auto', p: compact ? 0.5 : 1 }}>
       <Typography variant="h5" gutterBottom>
-        Settings
+        {t($ => $.title)}
       </Typography>
 
       <ThemeVariantSection />
 
-      <Paper variant="outlined" sx={{ p: 3, mt: 2 }}>
+      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt: 2 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }} gutterBottom>
-          Accent color
+          {t($ => $.accentColor.title)}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Choose the primary color used throughout the app for this band.
+          {t($ => $.accentColor.description)}
         </Typography>
 
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 2 }}>
           {PRESET_COLORS.map(({ hex, label }) => {
             const isActive = current.toLowerCase() === hex.toLowerCase()
             return (
-              <Tooltip key={hex} title={label} placement="top">
+              <Tooltip key={hex} title={t($ => $.accentColor.presets[label])} placement="top">
                 <Box
                   component="button"
                   onClick={() => applyColor(hex)}
@@ -115,7 +127,7 @@ export default function TenantSettingsPage() {
             )
           })}
 
-          <Tooltip title="Custom color" placement="top">
+          <Tooltip title={t($ => $.accentColor.custom)} placement="top">
             <Box
               component="button"
               onClick={() => colorInputRef.current?.click()}
@@ -159,7 +171,7 @@ export default function TenantSettingsPage() {
             onClick={() => applyColor(DEFAULT_COLOR)}
             disabled={saving}
           >
-            Reset to default
+            {t($ => $.accentColor.reset)}
           </Button>
         )}
       </Paper>
@@ -168,7 +180,7 @@ export default function TenantSettingsPage() {
       {isAdmin && (
         <>
           <Typography variant="h6" sx={{ mt: 4, mb: 0 }}>
-            Integrations
+            {t($ => $.integrations.title)}
           </Typography>
           <MollieKeySection />
           <ShopifyKeySection />
@@ -180,27 +192,25 @@ export default function TenantSettingsPage() {
   )
 }
 
-const THEME_VARIANT_OPTIONS: Array<{ id: ThemeVariant; label: string; description: string }> = [
-  { id: 'default', label: 'Default',  description: 'Material 3 violet' },
-  { id: 'warm',    label: 'Warm',     description: 'Sand & earth tones' },
-  { id: 'slate',   label: 'Slate',    description: 'Cool blue-grey' },
-]
+const THEME_VARIANT_IDS: ThemeVariant[] = ['default', 'warm', 'slate']
 
 function ThemeVariantSection() {
+  const { t } = useTranslation('settings')
   const { mode, variant, setVariant } = useThemeMode()
   const { accentColor } = useProfile()
   const primary = accentColor || '#6750A4'
+  const compact = useCompactLayout()
 
   return (
-    <Paper variant="outlined" sx={{ p: 3, mt: 2 }}>
+    <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt: 2 }}>
       <Typography variant="subtitle1" sx={{ fontWeight: 600 }} gutterBottom>
-        Theme
+        {t($ => $.theme.title)}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Choose the surface style for this device. Your accent color still applies within each theme.
+        {t($ => $.theme.description)}
       </Typography>
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        {THEME_VARIANT_OPTIONS.map(({ id, label, description }) => {
+      <Box sx={{ display: 'flex', gap: compact ? 1 : 2, flexWrap: 'wrap' }}>
+        {THEME_VARIANT_IDS.map((id) => {
           const tokens = VARIANT_TOKENS[id][mode === 'dark' ? 'dark' : 'light']
           const isActive = variant === id
           return (
@@ -209,10 +219,10 @@ function ThemeVariantSection() {
               component="button"
               onClick={() => setVariant(id)}
               sx={{
-                width: 132,
+                width: compact ? 92 : 132,
                 border: '2px solid',
                 borderColor: isActive ? primary : 'divider',
-                borderRadius: 2,
+                borderRadius: compact ? 1:2,
                 overflow: 'hidden',
                 cursor: 'pointer',
                 p: 0,
@@ -222,7 +232,7 @@ function ThemeVariantSection() {
                 '&:hover': { transform: 'scale(1.03)' },
               }}
             >
-              <Box sx={{ height: 80, bgcolor: tokens.bg, position: 'relative', p: 1.25 }}>
+              <Box sx={{ height: compact ? 56 : 80, bgcolor: tokens.bg, position: 'relative', p: compact ? 0.75 : 1.25 }}>
                 <Box
                   sx={{
                     bgcolor: tokens.paper,
@@ -258,12 +268,12 @@ function ThemeVariantSection() {
                   </Box>
                 )}
               </Box>
-              <Box sx={{ px: 1.5, py: 1, bgcolor: tokens.paper }}>
+              <Box sx={{ px: compact ? 1 : 1.5, py: compact ? 0.5 : 1, bgcolor: tokens.paper }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary',fontWeight: 600, display: 'block' }}>
-                  {label}
+                  {t($ => $.theme.variants[id].label)}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                  {description}
+                  {t($ => $.theme.variants[id].description)}
                 </Typography>
               </Box>
             </Box>
@@ -280,8 +290,10 @@ interface StorageStats {
 }
 
 function StorageUsageSection() {
+  const { t } = useTranslation('settings')
   const [stats, setStats] = useState<StorageStats | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const compact = useCompactLayout()
 
   useEffect(() => {
     getMyStorageStats().then((s) => setStats(s as unknown as StorageStats)).catch(() => {})
@@ -299,19 +311,19 @@ function StorageUsageSection() {
   }
 
   return (
-    <Paper variant="outlined" sx={{ p: 3, mt: 3 }}>
+    <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt: 3 }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
         <StorageIcon fontSize="small" color="primary" />
         <Typography variant="subtitle1" sx={{ fontWeight: 600,  flexGrow: 1  }}>
-          Storage used
+          {t($ => $.storage.title)}
         </Typography>
-        <Tooltip title="Recompute now">
+        <Tooltip title={t($ => $.storage.recompute)}>
           <span>
             <IconButton
               size="small"
               onClick={handleRefresh}
               disabled={refreshing}
-              aria-label="recompute storage usage"
+              aria-label={t($ => $.storage.recomputeAria)}
             >
               {refreshing ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
             </IconButton>
@@ -319,7 +331,7 @@ function StorageUsageSection() {
         </Tooltip>
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Total size of this band&apos;s uploaded files (banners, attachments, photos, logos, invoices).
+        {t($ => $.storage.description)}
       </Typography>
       {stats === null ? (
         <CircularProgress size={18} />
@@ -327,7 +339,7 @@ function StorageUsageSection() {
         <Typography variant="body1" sx={{ fontWeight: 600 }}>
           {formatBytes(stats.storage_bytes ?? 0)}
           <Typography component="span" variant="body2" color="text.secondary">
-            {' · '}{stats.object_count} {stats.object_count === 1 ? 'file' : 'files'}
+            {' · '}{t($ => $.storage.fileCount, { count: stats.object_count ?? 0 })}
           </Typography>
         </Typography>
       )}
@@ -350,7 +362,9 @@ interface IntegrationCardProps {
 }
 
 function IntegrationCard({ logoLight, logoDark, alt, title, description, configured, mt = 2, children }: IntegrationCardProps) {
+  const { t } = useTranslation('settings')
   const { mode } = useThemeMode()
+  const compact = useCompactLayout()
   const [manuallyExpanded, setManuallyExpanded] = useState(false)
   // Expanded when already configured, or once the user opts in via the button.
   const expanded = manuallyExpanded || configured
@@ -366,11 +380,11 @@ function IntegrationCard({ logoLight, logoDark, alt, title, description, configu
 
   if (!expanded) {
     return (
-      <Paper variant="outlined" sx={{ p: 3, mt }}>
+      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box sx={{ flex: 1, display: 'flex' }}>{logo}</Box>
           <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setManuallyExpanded(true)}>
-            Add integration
+            {t($ => $.integrations.add)}
           </Button>
         </Stack>
       </Paper>
@@ -378,7 +392,7 @@ function IntegrationCard({ logoLight, logoDark, alt, title, description, configu
   }
 
   return (
-    <Paper variant="outlined" sx={{ p: 3, mt }}>
+    <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt }}>
       <Stack direction="column" spacing={0.5} sx={{ mb: 0.5 }}>
         <Box sx={{ alignSelf: 'flex-start', display: 'flex' }}>{logo}</Box>
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{title}</Typography>
@@ -389,19 +403,13 @@ function IntegrationCard({ logoLight, logoDark, alt, title, description, configu
   )
 }
 
-function shopifyKeyErrorMessage(err: unknown): string {
-  if (err instanceof Error && err.message === 'invalid_shopify_client_secret') {
-    return 'Invalid secret format. The app secret starts with "shpss_" followed by 32 hexadecimal characters.'
-  }
-  return 'Failed to save the app secret. Please try again.'
-}
-
 interface ShopifyKeyStatus {
   isSet?: boolean
   preview?: string
 }
 
 function ShopifyKeySection() {
+  const { t } = useTranslation(['settings', 'common'])
   const [status, setStatus] = useState<ShopifyKeyStatus | null>(null)
   const [editing, setEditing] = useState(false)
   const [inputKey, setInputKey] = useState('')
@@ -442,7 +450,7 @@ function ShopifyKeySection() {
       setSavedDomain(result.domain ?? null)
       setDomainInput(result.domain ?? '')
     } catch {
-      setDomainError('Invalid domain. Use the form yourband.myshopify.com.')
+      setDomainError(t($ => $.shopify.domain.error))
     } finally {
       setDomainSaving(false)
     }
@@ -471,7 +479,7 @@ function ShopifyKeySection() {
       setClientIdInput('')
       setClientIdEditing(false)
     } catch {
-      setClientIdError('Invalid Client ID. It is at least 32 hexadecimal characters.')
+      setClientIdError(t($ => $.shopify.clientId.error))
     } finally {
       setClientIdSaving(false)
     }
@@ -512,7 +520,9 @@ function ShopifyKeySection() {
       setEditing(false)
       setInputKey('')
     } catch (err: unknown) {
-      setError(shopifyKeyErrorMessage(err))
+      setError(err instanceof Error && err.message === 'invalid_shopify_client_secret'
+        ? t($ => $.shopify.secret.invalidFormat)
+        : t($ => $.shopify.secret.saveFailed))
     } finally {
       setSaving(false)
     }
@@ -541,7 +551,7 @@ function ShopifyKeySection() {
       </Typography>
     )
   } else {
-    secretStatusNode = <Typography variant="body2" color="text.disabled">Not configured</Typography>
+    secretStatusNode = <Typography variant="body2" color="text.disabled">{t($ => $.integrations.notConfigured)}</Typography>
   }
 
   return (
@@ -549,25 +559,25 @@ function ShopifyKeySection() {
       logoLight="/share/shopify/shopify_logo_black.png"
       logoDark="/share/shopify/shopify_logo_white.png"
       alt="Shopify"
-      title="Shopify app credentials"
-      description="Connect your Shopify store to read orders and import them to merchandise. Enter your app's Client ID and secret (from the Shopify Dev Dashboard) and your store domain — a short-lived access token is fetched automatically when importing. The secret is stored securely and never shown in full after saving."
+      title={t($ => $.shopify.title)}
+      description={t($ => $.shopify.description)}
       configured={configured}
       mt={2}
     >
       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-        Client ID
+        {t($ => $.shopify.clientId.label)}
       </Typography>
       {clientIdEditing ? (
         <Stack spacing={1.5} sx={{ mb: 3 }}>
           <TextField
-            label="Client ID"
+            label={t($ => $.shopify.clientId.label)}
             fullWidth
             size="small"
             value={clientId}
             onChange={(e) => { setClientIdInput(e.target.value); setClientIdError(null) }}
-            placeholder="32-character app Client ID"
+            placeholder={t($ => $.shopify.clientId.placeholder)}
             error={!!clientIdError}
-            helperText={clientIdError || 'Your app\'s Client ID from the Shopify Dev Dashboard.'}
+            helperText={clientIdError || t($ => $.shopify.clientId.helper)}
             autoComplete="off"
             slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'none' } }}
           />
@@ -579,10 +589,10 @@ function ShopifyKeySection() {
               disabled={!clientId.trim() || clientIdSaving}
               startIcon={clientIdSaving ? <CircularProgress size={14} color="inherit" /> : null}
             >
-              Save
+              {t($ => $.actions.save, { ns: 'common' })}
             </Button>
             <Button size="small" onClick={cancelEditingClientId} disabled={clientIdSaving}>
-              Cancel
+              {t($ => $.actions.cancel, { ns: 'common' })}
             </Button>
           </Stack>
         </Stack>
@@ -590,18 +600,20 @@ function ShopifyKeySection() {
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 3 }}>
           <Box sx={{ flex: 1 }}>
             {savedClientId ? (
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                {savedClientId}
-              </Typography>
+              <Tooltip title={savedClientId}>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                  {shortenClientId(savedClientId)}
+                </Typography>
+              </Tooltip>
             ) : (
-              <Typography variant="body2" color="text.disabled">Not configured</Typography>
+              <Typography variant="body2" color="text.disabled">{t($ => $.integrations.notConfigured)}</Typography>
             )}
           </Box>
           <Button size="small" variant="outlined" onClick={startEditingClientId} disabled={clientIdSaving}>
-            {savedClientId ? 'Replace ID' : 'Configure'}
+            {savedClientId ? t($ => $.shopify.clientId.replace) : t($ => $.integrations.configure)}
           </Button>
           {savedClientId && (
-            <Tooltip title="Remove Client ID">
+            <Tooltip title={t($ => $.shopify.clientId.remove)}>
               <span>
                 <IconButton size="small" color="error" onClick={handleClearClientId} disabled={clientIdSaving}>
                   <DeleteOutlineIcon fontSize="small" />
@@ -613,20 +625,20 @@ function ShopifyKeySection() {
       )}
 
       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-        App secret
+        {t($ => $.shopify.secret.label)}
       </Typography>
       {editing ? (
         <Stack spacing={1.5}>
           <TextField
-            label="App secret"
+            label={t($ => $.shopify.secret.label)}
             fullWidth
             size="small"
             value={inputKey}
             onChange={(e) => { setInputKey(e.target.value); setError(null) }}
             type={showKey ? 'text' : 'password'}
-            placeholder="shpss_…"
+            placeholder={t($ => $.shopify.secret.placeholder)}
             error={!!error}
-            helperText={error || 'Paste your app\'s client secret from the Shopify Dev Dashboard.'}
+            helperText={error || t($ => $.shopify.secret.helper)}
             autoComplete="off"
             slotProps={{
               htmlInput: { spellCheck: false },
@@ -637,7 +649,7 @@ function ShopifyKeySection() {
                       size="small"
                       onClick={() => setShowKey((v) => !v)}
                       edge="end"
-                      aria-label={showKey ? 'Hide key' : 'Show key'}
+                      aria-label={showKey ? t($ => $.integrations.hideKey) : t($ => $.integrations.showKey)}
                     >
                       {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
                     </IconButton>
@@ -654,10 +666,10 @@ function ShopifyKeySection() {
               disabled={!inputKey.trim() || saving}
               startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
             >
-              Save
+              {t($ => $.actions.save, { ns: 'common' })}
             </Button>
             <Button size="small" onClick={cancelEditing} disabled={saving}>
-              Cancel
+              {t($ => $.actions.cancel, { ns: 'common' })}
             </Button>
           </Stack>
         </Stack>
@@ -667,10 +679,10 @@ function ShopifyKeySection() {
             {secretStatusNode}
           </Box>
           <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
-            {status?.isSet ? 'Replace secret' : 'Configure'}
+            {status?.isSet ? t($ => $.shopify.secret.replace) : t($ => $.integrations.configure)}
           </Button>
           {status?.isSet && (
-            <Tooltip title="Remove secret">
+            <Tooltip title={t($ => $.shopify.secret.remove)}>
               <span>
                 <IconButton size="small" color="error" onClick={handleClear} disabled={saving}>
                   <DeleteOutlineIcon fontSize="small" />
@@ -683,10 +695,10 @@ function ShopifyKeySection() {
 
       <Box sx={{ mt: 3 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-          Store domain
+          {t($ => $.shopify.domain.label)}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Your myshopify.com domain — required to read orders for import.
+          {t($ => $.shopify.domain.description)}
         </Typography>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
           <TextField
@@ -694,7 +706,7 @@ function ShopifyKeySection() {
             fullWidth
             value={domain}
             onChange={(e) => { setDomainInput(e.target.value); setDomainError(null) }}
-            placeholder="yourband.myshopify.com"
+            placeholder={t($ => $.shopify.domain.placeholder)}
             error={!!domainError}
             helperText={domainError || undefined}
             autoComplete="off"
@@ -707,19 +719,12 @@ function ShopifyKeySection() {
             disabled={domainSaving || !domain.trim() || domain.trim() === savedDomain}
             startIcon={domainSaving ? <CircularProgress size={14} color="inherit" /> : null}
           >
-            Save
+            {t($ => $.actions.save, { ns: 'common' })}
           </Button>
         </Stack>
       </Box>
     </IntegrationCard>
   )
-}
-
-function mollieKeyErrorMessage(err: unknown): string {
-  if (err instanceof Error && err.message === 'invalid_mollie_key') {
-    return 'Invalid key format. Keys must start with live_ or test_ followed by at least 25 alphanumeric characters.'
-  }
-  return 'Failed to save key. Please try again.'
 }
 
 interface MollieKeyStatus {
@@ -728,6 +733,7 @@ interface MollieKeyStatus {
 }
 
 function MollieKeyStatusDisplay({ status }: { status: MollieKeyStatus | null }) {
+  const { t } = useTranslation('settings')
   if (status === null) return <CircularProgress size={18} />
   if (status.isSet) {
     return (
@@ -736,7 +742,7 @@ function MollieKeyStatusDisplay({ status }: { status: MollieKeyStatus | null }) 
       </Typography>
     )
   }
-  return <Typography variant="body2" color="text.disabled">Not configured</Typography>
+  return <Typography variant="body2" color="text.disabled">{t($ => $.integrations.notConfigured)}</Typography>
 }
 
 interface MollieKeyEditorProps {
@@ -751,18 +757,19 @@ interface MollieKeyEditorProps {
 }
 
 function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, error, saving, onSave, onCancel }: MollieKeyEditorProps) {
+  const { t } = useTranslation(['settings', 'common'])
   return (
     <Stack spacing={1.5}>
       <TextField
-        label="Mollie API key"
+        label={t($ => $.mollie.label)}
         fullWidth
         size="small"
         value={inputKey}
         onChange={onInputChange}
         type={showKey ? 'text' : 'password'}
-        placeholder="live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        placeholder={t($ => $.mollie.placeholder)}
         error={!!error}
-        helperText={error || 'Paste your live or test key from the Mollie dashboard.'}
+        helperText={error || t($ => $.mollie.helper)}
         autoComplete="off"
         slotProps={{
           htmlInput: { spellCheck: false },
@@ -773,7 +780,7 @@ function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, er
                   size="small"
                   onClick={onToggleShowKey}
                   edge="end"
-                  aria-label={showKey ? 'Hide key' : 'Show key'}
+                  aria-label={showKey ? t($ => $.integrations.hideKey) : t($ => $.integrations.showKey)}
                 >
                   {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
                 </IconButton>
@@ -790,10 +797,10 @@ function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, er
           disabled={!inputKey.trim() || saving}
           startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
         >
-          Save
+          {t($ => $.actions.save, { ns: 'common' })}
         </Button>
         <Button size="small" onClick={onCancel} disabled={saving}>
-          Cancel
+          {t($ => $.actions.cancel, { ns: 'common' })}
         </Button>
       </Stack>
     </Stack>
@@ -801,6 +808,7 @@ function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, er
 }
 
 function MollieKeySection() {
+  const { t } = useTranslation('settings')
   const [status, setStatus] = useState<MollieKeyStatus | null>(null)
   const [editing, setEditing] = useState(false)
   const [inputKey, setInputKey] = useState('')
@@ -835,7 +843,9 @@ function MollieKeySection() {
       setEditing(false)
       setInputKey('')
     } catch (err: unknown) {
-      setError(mollieKeyErrorMessage(err))
+      setError(err instanceof Error && err.message === 'invalid_mollie_key'
+        ? t($ => $.mollie.invalidFormat)
+        : t($ => $.mollie.saveFailed))
     } finally {
       setSaving(false)
     }
@@ -857,8 +867,8 @@ function MollieKeySection() {
       logoLight="/share/mollie/Mollie-Logo-Black-2023.png"
       logoDark="/share/mollie/Mollie-Logo-White-2023.png"
       alt="Mollie"
-      title="Mollie API key"
-      description="Used to create payment links via Mollie. The key is stored securely and never shown in full after saving."
+      title={t($ => $.mollie.title)}
+      description={t($ => $.mollie.description)}
       configured={!!status?.isSet}
       mt={3}
     >
@@ -879,10 +889,10 @@ function MollieKeySection() {
             <MollieKeyStatusDisplay status={status} />
           </Box>
           <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
-            {status?.isSet ? 'Replace key' : 'Configure'}
+            {status?.isSet ? t($ => $.mollie.replace) : t($ => $.integrations.configure)}
           </Button>
           {status?.isSet && (
-            <Tooltip title="Remove key">
+            <Tooltip title={t($ => $.mollie.remove)}>
               <span>
                 <IconButton size="small" color="error" onClick={handleClear} disabled={saving}>
                   <DeleteOutlineIcon fontSize="small" />

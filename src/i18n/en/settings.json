@@ -1,3 +1,149 @@
 {
-  "title": "Settings"
+  "title": "Settings",
+  "theme": {
+    "title": "Theme",
+    "description": "Choose the surface style for this device. Your accent color still applies within each theme.",
+    "variants": {
+      "default": { "label": "Default", "description": "Material 3 violet" },
+      "warm": { "label": "Warm", "description": "Sand & earth tones" },
+      "slate": { "label": "Slate", "description": "Cool blue-grey" }
+    }
+  },
+  "accentColor": {
+    "title": "Accent color",
+    "description": "Choose the primary color used throughout the app for this band.",
+    "custom": "Custom color",
+    "reset": "Reset to default",
+    "presets": {
+      "purple": "Purple (default)",
+      "blue": "Blue",
+      "lightBlue": "Light Blue",
+      "teal": "Teal",
+      "green": "Green",
+      "olive": "Olive",
+      "amber": "Amber",
+      "deepOrange": "Deep Orange",
+      "red": "Red",
+      "pink": "Pink",
+      "deepPurple": "Deep Purple",
+      "indigo": "Indigo"
+    }
+  },
+  "storage": {
+    "title": "Storage used",
+    "recompute": "Recompute now",
+    "recomputeAria": "recompute storage usage",
+    "description": "Total size of this band's uploaded files (banners, attachments, photos, logos, invoices).",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files"
+  },
+  "integrations": {
+    "title": "Integrations",
+    "add": "Add integration",
+    "notConfigured": "Not configured",
+    "showKey": "Show key",
+    "hideKey": "Hide key",
+    "configure": "Configure"
+  },
+  "shopify": {
+    "title": "Shopify app credentials",
+    "description": "Connect your Shopify store to read orders and import them to merchandise. Enter your app's Client ID and secret (from the Shopify Dev Dashboard) and your store domain — a short-lived access token is fetched automatically when importing. The secret is stored securely and never shown in full after saving.",
+    "clientId": {
+      "label": "Client ID",
+      "placeholder": "32-character app Client ID",
+      "helper": "Your app's Client ID from the Shopify Dev Dashboard.",
+      "error": "Invalid Client ID. It is at least 32 hexadecimal characters.",
+      "replace": "Replace ID",
+      "remove": "Remove Client ID"
+    },
+    "secret": {
+      "label": "App secret",
+      "placeholder": "shpss_…",
+      "helper": "Paste your app's client secret from the Shopify Dev Dashboard.",
+      "invalidFormat": "Invalid secret format. The app secret starts with \"shpss_\" followed by 32 hexadecimal characters.",
+      "saveFailed": "Failed to save the app secret. Please try again.",
+      "replace": "Replace secret",
+      "remove": "Remove secret"
+    },
+    "domain": {
+      "label": "Store domain",
+      "description": "Your myshopify.com domain — required to read orders for import.",
+      "placeholder": "yourband.myshopify.com",
+      "error": "Invalid domain. Use the form yourband.myshopify.com."
+    }
+  },
+  "mollie": {
+    "title": "Mollie API key",
+    "description": "Used to create payment links via Mollie. The key is stored securely and never shown in full after saving.",
+    "label": "Mollie API key",
+    "placeholder": "live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "helper": "Paste your live or test key from the Mollie dashboard.",
+    "invalidFormat": "Invalid key format. Keys must start with live_ or test_ followed by at least 25 alphanumeric characters.",
+    "saveFailed": "Failed to save key. Please try again.",
+    "replace": "Replace key",
+    "remove": "Remove key"
+  },
+  "accounting": {
+    "title": "Accounting Settings",
+    "description": "Default accounts used when creating invoices and purchases.",
+    "currency": "Currency",
+    "fields": {
+      "receivable_account_code": "Receivable account",
+      "primary_checking_account_code": "Primary checking account",
+      "cash_account_code": "Cash account",
+      "default_revenue_account_code": "Default revenue account",
+      "payable_account_code": "Accounts payable",
+      "default_reimbursement_account_code": "Default reimbursement account",
+      "default_expense_account_code": "Default expense account",
+      "output_vat_account_code": "Output VAT account (sales)",
+      "input_vat_account_code": "Input VAT account (purchases)",
+      "merch_revenue_account_code": "Merchandise revenue account"
+    },
+    "booksClosedThrough": "Books closed through",
+    "booksClosedThroughHelper": "Nothing can be posted on or before this date. Leave empty to keep the books open.",
+    "errors": {
+      "account_has_open_balance": "This account still carries an open balance (unpaid bills, unsettled member debt or unpaid invoices). Settle them before changing the account.",
+      "invalid_books_closed_through": "Enter a valid date (YYYY-MM-DD) or clear the field.",
+      "unknown": "Unknown error"
+    }
+  },
+  "chartOfAccounts": {
+    "title": "Chart of Accounts",
+    "description": "The accounts used to categorize financial transactions. Add sub-accounts or deactivate accounts you don't need.",
+    "types": {
+      "asset": "Assets",
+      "liability": "Liabilities",
+      "equity": "Equity",
+      "revenue": "Revenue",
+      "cost_of_goods_sold": "Cost of Goods Sold",
+      "expense": "Expenses"
+    },
+    "inactive": "Inactive",
+    "capitalizable": "Capitalizable",
+    "setCapitalizable": "Allow capitalizing purchases to this asset account",
+    "unsetCapitalizable": "Stop offering this asset account on purchases",
+    "addSubAccount": "Add sub-account",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "inUse": "Account is in use and cannot be modified.",
+    "aria": {
+      "setCapitalizable": "set capitalizable",
+      "unsetCapitalizable": "unset capitalizable",
+      "addSubAccount": "add sub-account",
+      "activate": "activate",
+      "deactivate": "deactivate",
+      "delete": "delete"
+    },
+    "addDialog": {
+      "title": "Add sub-account under {{code}}",
+      "codeLabel": "Account code",
+      "nameLabel": "Account name",
+      "typeHelper": "Type: {{type}}",
+      "createFailed": "Failed to create account"
+    },
+    "deleteDialog": {
+      "title": "Delete account?",
+      "confirm": "Delete <strong>{{label}}</strong>? This cannot be undone."
+    }
+  }
 }
