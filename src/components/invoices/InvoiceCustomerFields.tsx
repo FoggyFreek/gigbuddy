@@ -1,5 +1,6 @@
-import type { Invoice } from '../../types/entities.ts'
+import type { Invoice, InvoiceStatus } from '../../types/entities.ts'
 import type { InvoiceForm } from './invoiceFormHelpers.ts'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import FormControl from '@mui/material/FormControl'
@@ -11,26 +12,16 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import DateEntryField from '../DateEntryField.tsx'
 
-const PAYMENT_TERMS = [
-  { value: 7, label: '7 days' },
-  { value: 14, label: '14 days' },
-  { value: 30, label: '30 days' },
-  { value: 60, label: '60 days' },
-]
+const PAYMENT_TERMS = [7, 14, 30, 60]
 
-const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'sent', label: 'Sent' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'void', label: 'Void' },
-]
+const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'void'] as const satisfies readonly InvoiceStatus[]
 
 interface InvoiceCustomerFieldsProps {
   form: InvoiceForm
   patchForm: (patch: Partial<InvoiceForm>) => void
   readOnly: boolean
   invoice?: Invoice
-  onStatusChange: (status: string) => void
+  onStatusChange: (status: InvoiceStatus) => void
   memoOpen: boolean
   setMemoOpen: (open: boolean) => void
 }
@@ -38,11 +29,13 @@ interface InvoiceCustomerFieldsProps {
 export default function InvoiceCustomerFields({
   form, patchForm, readOnly, invoice, onStatusChange, memoOpen, setMemoOpen,
 }: InvoiceCustomerFieldsProps) {
+  const { t } = useTranslation('invoices')
   return (
     <>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2, mb: 2 }}>
         <DateEntryField
-          label="Issue date"
+          label={t($ => $.customerFields.issueDate)}
+          openPickerLabel={t($ => $.customerFields.openIssueDatePicker)}
           size="small"
           fullWidth
           value={form.issue_date || ''}
@@ -51,37 +44,37 @@ export default function InvoiceCustomerFields({
           sx={{}}
         />
         <FormControl size="small" disabled={readOnly}>
-          <InputLabel>Payment term</InputLabel>
+          <InputLabel>{t($ => $.customerFields.paymentTerm)}</InputLabel>
           <Select
-            label="Payment term"
+            label={t($ => $.customerFields.paymentTerm)}
             value={form.payment_term_days}
             onChange={(e) => patchForm({ payment_term_days: Number(e.target.value) })}
           >
-            {PAYMENT_TERMS.map((p) => (
-              <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
+            {PAYMENT_TERMS.map((days) => (
+              <MenuItem key={days} value={days}>{t($ => $.customerFields.paymentTermDays, { count: days })}</MenuItem>
             ))}
           </Select>
         </FormControl>
         <FormControl size="small">
-          <InputLabel id="invoice-status-label">Status</InputLabel>
+          <InputLabel id="invoice-status-label">{t($ => $.customerFields.status)}</InputLabel>
           <Select
             labelId="invoice-status-label"
             id="invoice-status-select"
-            label="Status"
+            label={t($ => $.customerFields.status)}
             value={invoice?.status || 'draft'}
-            onChange={(e) => onStatusChange(e.target.value)}
+            onChange={(e) => onStatusChange(e.target.value as InvoiceStatus)}
           >
-            {STATUS_OPTIONS.map((s) => (
-              <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
+            {STATUS_OPTIONS.map((status) => (
+              <MenuItem key={status} value={status}>{t($ => $.state[status])}</MenuItem>
             ))}
           </Select>
         </FormControl>
       </Box>
 
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>Customer</Typography>
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>{t($ => $.labels.customer)}</Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
         <TextField
-          label="Organisation name"
+          label={t($ => $.customerFields.organisationName)}
           size="small"
           required
           value={form.customer_name}
@@ -89,7 +82,7 @@ export default function InvoiceCustomerFields({
           disabled={readOnly}
         />
         <TextField
-          label="Email"
+          label={t($ => $.customerFields.email)}
           size="small"
           value={form.customer_email || ''}
           onChange={(e) => patchForm({ customer_email: e.target.value })}
@@ -97,16 +90,16 @@ export default function InvoiceCustomerFields({
         />
         <Box sx={{ display: 'flex', gap: 1 }}>
           <TextField
-            label="Title"
+            label={t($ => $.customerFields.title)}
             size="small"
             sx={{ width: 100 }}
             value={form.customer_contact_title || ''}
             onChange={(e) => patchForm({ customer_contact_title: e.target.value })}
             disabled={readOnly}
-            placeholder="e.g. Dhr."
+            placeholder={t($ => $.customerFields.titlePlaceholder)}
           />
           <TextField
-            label="Given name"
+            label={t($ => $.customerFields.givenName)}
             size="small"
             sx={{ flexGrow: 1 }}
             value={form.customer_contact_given_name || ''}
@@ -114,7 +107,7 @@ export default function InvoiceCustomerFields({
             disabled={readOnly}
           />
           <TextField
-            label="Family name"
+            label={t($ => $.customerFields.familyName)}
             size="small"
             sx={{ flexGrow: 1 }}
             value={form.customer_contact_family_name || ''}
@@ -123,7 +116,7 @@ export default function InvoiceCustomerFields({
           />
         </Box>
         <TextField
-          label="Street and number"
+          label={t($ => $.customerFields.streetAndNumber)}
           size="small"
           value={form.customer_address_street || ''}
           onChange={(e) => patchForm({ customer_address_street: e.target.value })}
@@ -131,7 +124,7 @@ export default function InvoiceCustomerFields({
         />
         <Box sx={{ display: 'flex', gap: 1 }}>
           <TextField
-            label="Postal code"
+            label={t($ => $.customerFields.postalCode)}
             size="small"
             sx={{ width: 140 }}
             value={form.customer_address_postal_code || ''}
@@ -139,7 +132,7 @@ export default function InvoiceCustomerFields({
             disabled={readOnly}
           />
           <TextField
-            label="City"
+            label={t($ => $.customerFields.city)}
             size="small"
             sx={{ flexGrow: 1 }}
             value={form.customer_address_city || ''}
@@ -148,14 +141,14 @@ export default function InvoiceCustomerFields({
           />
         </Box>
         <TextField
-          label="Country"
+          label={t($ => $.customerFields.country)}
           size="small"
           value={form.customer_address_country || ''}
           onChange={(e) => patchForm({ customer_address_country: e.target.value })}
           disabled={readOnly}
         />
         <TextField
-          label="Customer KVK (optional)"
+          label={t($ => $.customerFields.customerKvk)}
           size="small"
           value={form.customer_kvk || ''}
           onChange={(e) => patchForm({ customer_kvk: e.target.value })}
@@ -165,11 +158,11 @@ export default function InvoiceCustomerFields({
 
       {!memoOpen ? (
         <Button size="small" startIcon={<AddIcon />} disabled={readOnly} onClick={() => setMemoOpen(true)}>
-          Add memo
+          {t($ => $.customerFields.addMemo)}
         </Button>
       ) : (
         <TextField
-          label="Memo"
+          label={t($ => $.customerFields.memo)}
           multiline
           minRows={2}
           fullWidth

@@ -1,4 +1,5 @@
 import Alert from '@mui/material/Alert'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -23,9 +24,10 @@ interface InvoiceEmlDialogProps {
 export default function InvoiceEmlDialog({
   open, loading, busy, error, message, onMessageChange, onClose, onDownload,
 }: InvoiceEmlDialogProps) {
+  const { t } = useTranslation(['invoices', 'common'])
   return (
     <Dialog open={open} onClose={() => !busy && onClose()} fullWidth maxWidth="sm">
-      <DialogTitle>Pas het persoonlijk bericht aan</DialogTitle>
+      <DialogTitle>{t($ => $.emailDialog.title)}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         {loading
@@ -40,19 +42,19 @@ export default function InvoiceEmlDialog({
               onChange={(e) => onMessageChange(e.target.value)}
               disabled={busy}
               sx={{ mt: 1 }}
-              helperText="Dit is de persoonlijke begeleidende tekst in het e-mailbericht."
+              helperText={t($ => $.emailDialog.helperText)}
             />
           )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>Annuleren</Button>
+        <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.cancel)}</Button>
         <Button
           variant="contained"
           startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <EmailIcon />}
           onClick={onDownload}
           disabled={loading || busy}
         >
-          Download email
+          {t($ => $.detail.downloadEmail)}
         </Button>
       </DialogActions>
     </Dialog>

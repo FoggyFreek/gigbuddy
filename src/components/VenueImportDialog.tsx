@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Papa from 'papaparse'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -24,29 +25,34 @@ import { importVenues } from '../api/venues.ts'
 
 type ImportStep = 'upload' | 'map' | 'preview' | 'importing' | 'done'
 
+type VenueFieldLabelKey =
+  | 'venueName' | 'category' | 'title' | 'givenName' | 'familyName' | 'organizationName'
+  | 'streetAndNumber' | 'streetAdditional' | 'postalCode' | 'city' | 'region' | 'country'
+  | 'website' | 'phone' | 'email'
+
 interface VenueField {
   key: string
-  label: string
+  labelKey: VenueFieldLabelKey
   required: boolean
   aliases: string[]
 }
 
 const VENUE_FIELDS: VenueField[] = [
-  { key: 'name',              label: 'Venue name',        required: true,  aliases: ['name', 'venue', 'venue name'] },
-  { key: 'category',          label: 'Category',          required: false, aliases: ['category', 'type', 'venue type'] },
-  { key: 'title',             label: 'Title',             required: false, aliases: ['title', 'salutation'] },
-  { key: 'given_name',        label: 'Given name',        required: false, aliases: ['given_name', 'given name', 'givenname', 'first name', 'firstname', 'contact_person', 'contact person', 'contact', 'booking contact'] },
-  { key: 'family_name',       label: 'Family name',       required: false, aliases: ['family_name', 'family name', 'familyname', 'last name', 'lastname', 'surname'] },
-  { key: 'organization_name', label: 'Organization name', required: false, aliases: ['organization_name', 'organization name', 'organizationname', 'organisation', 'organisation name', 'organization', 'company', 'company name'] },
-  { key: 'street_and_number', label: 'Street and number', required: false, aliases: ['street_and_number', 'street and number', 'streetandnumber', 'address', 'street', 'address line 1'] },
-  { key: 'street_additional', label: 'Street additional', required: false, aliases: ['street_additional', 'street additional', 'streetadditional', 'address line 2', 'address2'] },
-  { key: 'postal_code',       label: 'Postal code',       required: false, aliases: ['postal_code', 'postal code', 'postalcode', 'postcode', 'zip', 'zip code', 'zipcode'] },
-  { key: 'city',              label: 'City',              required: false, aliases: ['city'] },
-  { key: 'region',            label: 'Region',            required: false, aliases: ['region', 'province', 'state'] },
-  { key: 'country',           label: 'Country',           required: false, aliases: ['country'] },
-  { key: 'website',           label: 'Website',           required: false, aliases: ['website', 'url', 'web'] },
-  { key: 'phone',             label: 'Phone',             required: false, aliases: ['phone', 'tel', 'telephone', 'phone number'] },
-  { key: 'email',             label: 'Email',             required: false, aliases: ['email', 'e-mail', 'email address'] },
+  { key: 'name',              labelKey: 'venueName',        required: true,  aliases: ['name', 'venue', 'venue name'] },
+  { key: 'category',          labelKey: 'category',         required: false, aliases: ['category', 'type', 'venue type'] },
+  { key: 'title',             labelKey: 'title',            required: false, aliases: ['title', 'salutation'] },
+  { key: 'given_name',        labelKey: 'givenName',        required: false, aliases: ['given_name', 'given name', 'givenname', 'first name', 'firstname', 'contact_person', 'contact person', 'contact', 'booking contact'] },
+  { key: 'family_name',       labelKey: 'familyName',       required: false, aliases: ['family_name', 'family name', 'familyname', 'last name', 'lastname', 'surname'] },
+  { key: 'organization_name', labelKey: 'organizationName', required: false, aliases: ['organization_name', 'organization name', 'organizationname', 'organisation', 'organisation name', 'organization', 'company', 'company name'] },
+  { key: 'street_and_number', labelKey: 'streetAndNumber',  required: false, aliases: ['street_and_number', 'street and number', 'streetandnumber', 'address', 'street', 'address line 1'] },
+  { key: 'street_additional', labelKey: 'streetAdditional', required: false, aliases: ['street_additional', 'street additional', 'streetadditional', 'address line 2', 'address2'] },
+  { key: 'postal_code',       labelKey: 'postalCode',       required: false, aliases: ['postal_code', 'postal code', 'postalcode', 'postcode', 'zip', 'zip code', 'zipcode'] },
+  { key: 'city',              labelKey: 'city',             required: false, aliases: ['city'] },
+  { key: 'region',            labelKey: 'region',           required: false, aliases: ['region', 'province', 'state'] },
+  { key: 'country',           labelKey: 'country',          required: false, aliases: ['country'] },
+  { key: 'website',           labelKey: 'website',          required: false, aliases: ['website', 'url', 'web'] },
+  { key: 'phone',             labelKey: 'phone',            required: false, aliases: ['phone', 'tel', 'telephone', 'phone number'] },
+  { key: 'email',             labelKey: 'email',            required: false, aliases: ['email', 'e-mail', 'email address'] },
 ]
 
 function autoMap(headers: string[]): Record<string, string> {
@@ -74,6 +80,7 @@ interface VenueImportDialogProps {
 }
 
 export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
+  const { t } = useTranslation(['venues', 'common'])
   const [step, setStep] = useState<ImportStep>('upload')
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
   const [csvRows, setCsvRows] = useState<Record<string, unknown>[]>([])
@@ -106,7 +113,7 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
 
   function handlePreview() {
     const errs: Record<string, string> = {}
-    if (!mapping.name) errs.name = 'Name column is required'
+    if (!mapping.name) errs.name = t($ => $.import.nameColumnRequired)
     if (Object.keys(errs).length) { setMapErrors(errs); return }
     setStep('preview')
   }
@@ -128,7 +135,7 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
       setResult(res as unknown as { imported: number; skipped: number })
       setStep('done')
     } catch (err) {
-      setImportError((err as Error).message || 'Import failed')
+      setImportError((err as Error).message || t($ => $.import.importError))
       setStep('preview')
     }
   }
@@ -137,19 +144,16 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
 
   return (
     <Dialog open fullWidth maxWidth="md">
-      <DialogTitle>Import Venues from CSV</DialogTitle>
+      <DialogTitle>{t($ => $.import.title)}</DialogTitle>
 
       <DialogContent>
         {step === 'upload' && (
           <Box sx={{ py: 2 }}>
             <Typography variant="body2" sx={{ mb: 2 }}>
-              Upload a UTF-8 CSV file with column headers. Supported fields: name,
-              category, title, given name, family name, organization name, street
-              and number, street additional, postal code, city, region, country, website, phone,
-              email.
+              {t($ => $.import.uploadHelp)}
             </Typography>
             <Button component="label">
-              {'Choose CSV file'}
+              {t($ => $.import.chooseFile)}
               <input
                 ref={fileRef}
                 type="file"
@@ -164,21 +168,21 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
         {step === 'map' && (
           <Box sx={{ py: 1 }}>
             <Typography variant="body2" sx={{ mb: 2 }}>
-              Map your CSV columns to venue fields. {csvRows.length} rows detected.
+              {t($ => $.import.mapHelp, { count: csvRows.length })}
             </Typography>
             <Grid container spacing={2}>
-              {VENUE_FIELDS.map((field) => (
+              {VENUE_FIELDS.map((field) => {
+                const label = t($ => $.fields[field.labelKey]) + (field.required ? ' *' : '')
+                return (
                 <Grid size={{ xs: 12, sm: 6 }} key={field.key}>
                   <FormControl fullWidth size="small" error={!!mapErrors[field.key]}>
-                    <InputLabel>
-                      {field.label}{field.required ? ' *' : ''}
-                    </InputLabel>
+                    <InputLabel>{label}</InputLabel>
                     <Select
-                      label={field.label + (field.required ? ' *' : '')}
+                      label={label}
                       value={mapping[field.key] || ''}
                       onChange={(e) => handleMappingChange(field.key, e.target.value)}
                     >
-                      <MenuItem value="">(not mapped)</MenuItem>
+                      <MenuItem value="">{t($ => $.import.notMapped)}</MenuItem>
                       {csvHeaders.map((h) => (
                         <MenuItem key={h} value={h}>{h}</MenuItem>
                       ))}
@@ -188,7 +192,8 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
                     )}
                   </FormControl>
                 </Grid>
-              ))}
+                )
+              })}
             </Grid>
           </Box>
         )}
@@ -196,8 +201,8 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
         {step === 'preview' && (
           <Box sx={{ py: 1 }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              Showing first {Math.min(5, csvRows.length)} of {csvRows.length} rows.
-              {importableCount} row{importableCount !== 1 ? 's' : ''} will be imported.
+              {t($ => $.import.showing, { shown: Math.min(5, csvRows.length), total: csvRows.length })}
+              {' '}{t($ => $.import.willImport, { count: importableCount })}
             </Typography>
             {importError && (
               <Alert severity="error" sx={{ mb: 2 }}>{importError}</Alert>
@@ -205,11 +210,11 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-                  <TableCell>Category</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>City</TableCell>
-                  <TableCell>Country</TableCell>
-                  <TableCell>Contact</TableCell>
+                  <TableCell>{t($ => $.import.columns.category)}</TableCell>
+                  <TableCell>{t($ => $.import.columns.name)}</TableCell>
+                  <TableCell>{t($ => $.import.columns.city)}</TableCell>
+                  <TableCell>{t($ => $.import.columns.country)}</TableCell>
+                  <TableCell>{t($ => $.import.columns.contact)}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -238,24 +243,25 @@ export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
 
         {result && (
           <Alert severity="success" sx={{ mt: 2 }}>
-            Imported {result.imported} venue{result.imported !== 1 ? 's' : ''}
-            {result.skipped > 0 ? ` (${result.skipped} skipped as duplicates)` : ''}.
+            {result.skipped > 0
+              ? t($ => $.import.resultSkipped, { count: result.imported, skipped: result.skipped })
+              : t($ => $.import.result, { count: result.imported })}
           </Alert>
         )}
       </DialogContent>
 
       <DialogActions>
         <Button onClick={() => onClose(!!result)}>
-          {result ? 'Close' : 'Cancel'}
+          {result ? t($ => $.common.actions.close) : t($ => $.common.actions.cancel)}
         </Button>
         {step === 'map' && (
           <Button variant="outlined" onClick={handlePreview}>
-            Preview
+            {t($ => $.import.preview)}
           </Button>
         )}
         {step === 'preview' && !result && (
           <Button variant="contained" onClick={handleImport} disabled={importableCount === 0}>
-            Import {importableCount} row{importableCount !== 1 ? 's' : ''}
+            {t($ => $.import.importButton, { count: importableCount })}
           </Button>
         )}
       </DialogActions>

@@ -18,7 +18,8 @@
     "copy": "Copy",
     "confirm": "Confirm",
     "back": "Back",
-    "search": "Search"
+    "search": "Search",
+    "ok": "OK"
   },
   "state": {
     "loading": "Loading…",

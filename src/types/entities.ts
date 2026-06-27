@@ -135,10 +135,12 @@ export interface InvoiceLine {
   position?: number
 }
 
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'void'
+
 export interface Invoice {
   id?: Id
   invoice_number?: string
-  status?: string
+  status?: InvoiceStatus
   finalized_at?: string
   issue_date?: string
   due_date?: string
@@ -177,10 +179,13 @@ export interface PurchaseAttachment {
   uploaded_at?: string
 }
 
+export type PurchaseStatus = 'draft' | 'approved' | 'paid'
+export type PurchasePaymentMethod = 'bank' | 'member'
+
 export interface Purchase {
   id?: Id
   receipt_number?: number
-  status?: string
+  status?: PurchaseStatus
   finalized_at?: string
   receipt_date?: string
   due_date?: string | null
@@ -193,7 +198,7 @@ export interface Purchase {
   tax_cents?: number
   total_cents?: number
   paid_at?: string
-  payment_method?: string
+  payment_method?: PurchasePaymentMethod
   paid_by_band_member_id?: Id
   lines?: PurchaseLine[]
   attachments?: PurchaseAttachment[]

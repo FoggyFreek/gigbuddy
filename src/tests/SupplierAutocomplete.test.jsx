@@ -81,4 +81,5 @@ describe('SupplierAutocomplete', () => {
 
     await waitFor(() => expect(onPick).toHaveBeenCalledWith({ supplier_name: 'mi5 Studios', supplier_contact_id: 3 }))
   })
+
 })

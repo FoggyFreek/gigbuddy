@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   deleteInvoice,
   getInvoice,
   updateInvoice,
 } from '../../api/invoices.ts'
 import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
-import type { Invoice, Tenant, Id } from '../../types/entities.ts'
+import type { Invoice, InvoiceStatus, Tenant, Id } from '../../types/entities.ts'
 import {
   addDays,
   buildInvoicePayload,
@@ -47,7 +48,7 @@ export interface UseInvoiceFormStateResult {
   addLine: () => void
   removeLine: (index: number) => void
   handleSave: () => Promise<void>
-  handleStatusChange: (newStatus: string) => void | Promise<void>
+  handleStatusChange: (newStatus: InvoiceStatus) => void | Promise<void>
   handleDelete: () => void
   confirmDelete: () => Promise<void>
 }
@@ -56,6 +57,7 @@ export interface UseInvoiceFormStateResult {
 // mutations, and the save/delete/status lifecycle. Logo and EML side effects
 // live in their own hooks (see useInvoiceDetailsState).
 export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: UseInvoiceFormStateArgs): UseInvoiceFormStateResult {
+  const { t } = useTranslation('invoices')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -142,11 +144,11 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
 
   async function handleSave() {
     if (!form.customer_name?.trim()) {
-      setError('Customer name is required')
+      setError(t($ => $.validation.customerRequired))
       return
     }
     if (!form.lines.length || !form.lines.some((l) => l.description?.trim())) {
-      setError('At least one line with a description is required')
+      setError(t($ => $.validation.lineRequired))
       return
     }
     try {
@@ -161,7 +163,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     }
   }
 
-  async function applyStatusChange(newStatus: string) {
+  async function applyStatusChange(newStatus: InvoiceStatus) {
     try {
       setSaving(true)
       setError(null)
@@ -177,7 +179,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
 
   // Voiding is irreversible and has side effects (ledger reversal, payment-link
   // removal), so it goes through a confirmation dialog first.
-  function handleStatusChange(newStatus: string) {
+  function handleStatusChange(newStatus: InvoiceStatus) {
     if (newStatus === 'void' && invoice?.status !== 'void') {
       setVoidDialogOpen(true)
       return

@@ -25,6 +25,7 @@ vi.mock('../components/shared/periodPicker.tsx', () => ({
 }))
 
 import { listInvoicePeriods, listInvoices } from '../api/invoices.ts'
+import i18n from '../i18n/index.ts'
 import InvoicesPage from '../pages/InvoicesPage.tsx'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
 import theme from '../theme.ts'
@@ -60,7 +61,8 @@ function wrap(ui, { compact = false } = {}) {
   )
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
   // Fake only the Date constructor; setTimeout/setInterval stay real so waitFor works.
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(FIXED_NOW)
@@ -86,25 +88,40 @@ describe('InvoicesPage', () => {
     wrap(<InvoicesPage />)
     // "All invoices" appears twice: once in the card, once as the active-filter label.
     await waitFor(() => expect(screen.getAllByText('All invoices').length).toBeGreaterThanOrEqual(1))
+    // "Unpaid" appears twice (summary card + active-filter label, since unpaid is the default).
     for (const label of ['Draft', 'Overdue', 'Unpaid', 'Paid']) {
-      expect(screen.getByText(label)).toBeInTheDocument()
+      expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(1)
     }
   })
 
-  it('summary counts: 4 non-void invoices under "All", 1 each in draft/overdue/unpaid/paid', async () => {
+  it('defaults to the unpaid filter, showing unpaid + overdue but not draft or paid', async () => {
+    wrap(<InvoicesPage />)
+    // #2026-0003 is the not-yet-due sent invoice (unpaid); #2026-0002 is past-due (overdue).
+    await waitFor(() => expect(screen.getByText('#2026-0003')).toBeInTheDocument())
+    expect(screen.getByText('#2026-0002')).toBeInTheDocument()
+    // Draft, paid and void are all excluded from the default unpaid view.
+    expect(screen.queryByText('#2026-0001')).not.toBeInTheDocument()
+    expect(screen.queryByText('#2026-0004')).not.toBeInTheDocument()
+    expect(screen.queryByText('Void BV')).not.toBeInTheDocument()
+  })
+
+  it('summary counts: 4 non-void under "All", unpaid folds in overdue (2), 1 each draft/overdue/paid', async () => {
     wrap(<InvoicesPage />)
     await waitFor(() => expect(screen.getAllByText('All invoices').length).toBeGreaterThanOrEqual(1))
 
-    // The summary card circles contain plain digit text nodes.
+    // The summary card circles contain plain digit text nodes. The visible-count
+    // chip also reads "2" (the default unpaid view shows overdue #0002 + unpaid #0003).
     const counts = screen.getAllByText(/^\d+$/).map((el) => el.textContent)
     expect(counts.filter((n) => n === '4')).toHaveLength(1) // "All invoices" circle
-    expect(counts.filter((n) => n === '1')).toHaveLength(4) // draft / overdue / unpaid / paid
+    expect(counts.filter((n) => n === '1')).toHaveLength(3) // draft / overdue / paid circles
+    expect(counts.filter((n) => n === '2')).toHaveLength(2) // unpaid circle (unpaid+overdue) + visible-count chip
   })
 
   it('clicking the "Draft" card shows only draft invoices', async () => {
     const user = userEvent.setup()
     wrap(<InvoicesPage />)
-    await waitFor(() => expect(screen.getByText('#2026-0001')).toBeInTheDocument())
+    // #2026-0001 (draft) is hidden under the default unpaid filter; wait for a visible row.
+    await waitFor(() => expect(screen.getByText('#2026-0003')).toBeInTheDocument())
 
     await user.click(screen.getByText('Draft'))
 
@@ -116,7 +133,7 @@ describe('InvoicesPage', () => {
 
   it('renders invoice state as dot-only in the table view', async () => {
     wrap(<InvoicesPage />)
-    await waitFor(() => expect(screen.getByText('#2026-0001')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('#2026-0003')).toBeInTheDocument())
 
     expect(screen.queryByText('Status')).not.toBeInTheDocument()
     expect(screen.queryByText('sent')).not.toBeInTheDocument()
@@ -125,7 +142,7 @@ describe('InvoicesPage', () => {
 
   it('renders invoice state as dot-only in the compact card view', async () => {
     wrap(<InvoicesPage />, { compact: true })
-    await waitFor(() => expect(screen.getByText('#2026-0001')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('#2026-0003')).toBeInTheDocument())
 
     expect(screen.getByText('Beta Corp')).toBeInTheDocument()
     expect(screen.queryByText('sent')).not.toBeInTheDocument()
@@ -144,15 +161,20 @@ describe('InvoicesPage', () => {
     expect(screen.queryByText('#2026-0003')).not.toBeInTheDocument()
   })
 
-  it('clicking the "Unpaid" card shows only the not-yet-due sent invoice', async () => {
+  it('the "Unpaid" card shows both not-yet-due and overdue sent invoices (overdue is a subset of unpaid)', async () => {
     const user = userEvent.setup()
     wrap(<InvoicesPage />)
     await waitFor(() => expect(screen.getByText('#2026-0003')).toBeInTheDocument())
 
-    await user.click(screen.getByText('Unpaid'))
+    // "Unpaid" renders twice (card + active-filter label); the card is first in the DOM.
+    await user.click(screen.getAllByText('Unpaid')[0])
 
+    // Unpaid = everything not yet paid: the not-yet-due #0003 and the past-due #0002.
     expect(screen.getByText('#2026-0003')).toBeInTheDocument()
-    expect(screen.queryByText('#2026-0002')).not.toBeInTheDocument()
+    expect(screen.getByText('#2026-0002')).toBeInTheDocument()
+    // But never draft or paid.
+    expect(screen.queryByText('#2026-0001')).not.toBeInTheDocument()
+    expect(screen.queryByText('#2026-0004')).not.toBeInTheDocument()
   })
 
   it('void invoices appear in the "All" table view but are excluded from summary stat counts', async () => {
@@ -160,7 +182,8 @@ describe('InvoicesPage', () => {
     wrap(<InvoicesPage />)
     await waitFor(() => expect(screen.getAllByText('All invoices').length).toBeGreaterThanOrEqual(1))
 
-    // Void invoice is visible under the default "All" filter.
+    // Void invoice is hidden under the default unpaid filter; switch to "All" to see it.
+    await user.click(screen.getByText('All invoices'))
     expect(screen.getByText('Void BV')).toBeInTheDocument()
 
     // But void invoices do not count in any summary bucket — clicking "Paid"
@@ -172,11 +195,12 @@ describe('InvoicesPage', () => {
   it('search filters by invoice number', async () => {
     const user = userEvent.setup()
     wrap(<InvoicesPage />)
-    await waitFor(() => expect(screen.getByText('#2026-0001')).toBeInTheDocument())
+    // #2026-0002 (overdue) is visible under the default unpaid filter.
+    await waitFor(() => expect(screen.getByText('#2026-0003')).toBeInTheDocument())
 
     await user.type(screen.getByPlaceholderText('Search'), '0002')
 
-    expect(screen.queryByText('#2026-0001')).not.toBeInTheDocument()
+    expect(screen.queryByText('#2026-0003')).not.toBeInTheDocument()
     expect(screen.getByText('#2026-0002')).toBeInTheDocument()
   })
 
@@ -208,8 +232,9 @@ describe('InvoicesPage', () => {
 
   it('fiscal year auto-switches to the most recent past year when no invoices exist for the current year', async () => {
     listInvoicePeriods.mockResolvedValue(['2025-06-01'])
+    // 'sent' + long-past due → overdue → visible under the default unpaid filter.
     listInvoices.mockResolvedValue([
-      { id: 10, invoice_number: '2025-0001', status: 'paid', issue_date: '2025-06-01', payment_term_days: 14, customer_name: 'Old Client', total_cents: 50000 },
+      { id: 10, invoice_number: '2025-0001', status: 'sent', issue_date: '2025-06-01', payment_term_days: 14, customer_name: 'Old Client', total_cents: 50000 },
     ])
     wrap(<InvoicesPage />)
 
@@ -226,12 +251,13 @@ describe('InvoicesPage', () => {
 
   it('paginates the table at 25 rows per page', async () => {
     const user = userEvent.setup()
+    // 'sent' + far-future due → unpaid → visible under the default unpaid filter.
     const many = Array.from({ length: 30 }, (_, i) => ({
       id: 100 + i,
       invoice_number: `2026-${String(100 + i)}`,
-      status: 'paid',
-      issue_date: '2026-03-01',
-      payment_term_days: 14,
+      status: 'sent',
+      issue_date: '2026-06-08',
+      payment_term_days: 99999,
       customer_name: `Client ${100 + i}`,
       total_cents: 1000,
     }))
@@ -252,18 +278,19 @@ describe('InvoicesPage', () => {
 
   it('hides pagination controls when invoices fit on one page', async () => {
     wrap(<InvoicesPage />)
-    await waitFor(() => expect(screen.getByText('#2026-0001')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('#2026-0003')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /next page/i })).not.toBeInTheDocument()
   })
 
   it('resets to a valid page when a filter shrinks the list', async () => {
     const user = userEvent.setup()
+    // One overdue invoice (#0100) plus 29 not-yet-due — all in the default unpaid view.
     const many = Array.from({ length: 30 }, (_, i) => ({
       id: 100 + i,
       invoice_number: `2026-${String(100 + i)}`,
-      status: i === 0 ? 'draft' : 'paid',
-      issue_date: '2026-03-01',
-      payment_term_days: 14,
+      status: 'sent',
+      issue_date: i === 0 ? '2026-01-01' : '2026-06-08',
+      payment_term_days: i === 0 ? 1 : 99999,
       customer_name: `Client ${100 + i}`,
       total_cents: 1000,
     }))
@@ -274,16 +301,16 @@ describe('InvoicesPage', () => {
     await user.click(screen.getByRole('button', { name: /next page/i }))
     expect(screen.getByText('#2026-125')).toBeInTheDocument()
 
-    // Only one draft invoice → the previous page index is out of range.
-    await user.click(screen.getByText('Draft'))
+    // Only one overdue invoice → the previous page index is out of range.
+    await user.click(screen.getByText('Overdue'))
     expect(screen.getByText('#2026-100')).toBeInTheDocument()
   })
 
   it('shows "No invoices found" when the active summary filter matches nothing', async () => {
     const user = userEvent.setup()
-    // Only paid invoices; clicking "Draft" yields an empty list.
+    // Only an unpaid (not-yet-due) invoice, visible by default; clicking "Draft" yields an empty list.
     listInvoices.mockResolvedValue([
-      { id: 4, invoice_number: '2026-0004', status: 'paid', issue_date: '2026-03-01', payment_term_days: 14, customer_name: 'Delta Inc', total_cents: 40000 },
+      { id: 4, invoice_number: '2026-0004', status: 'sent', issue_date: '2026-06-08', payment_term_days: 99999, customer_name: 'Delta Inc', total_cents: 40000 },
     ])
     wrap(<InvoicesPage />)
     await waitFor(() => expect(screen.getByText('#2026-0004')).toBeInTheDocument())
@@ -291,5 +318,17 @@ describe('InvoicesPage', () => {
     await user.click(screen.getByText('Draft'))
 
     expect(screen.getByText('No invoices found')).toBeInTheDocument()
+  })
+
+  it('renders the invoice list in Dutch', async () => {
+    await i18n.changeLanguage('nl')
+    wrap(<InvoicesPage />)
+
+    expect(screen.getByRole('heading', { name: 'Facturen' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Factuur aanmaken' })).toBeInTheDocument()
+    expect((await screen.findAllByText('Alle facturen')).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Achterstallig')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Zoeken')).toBeInTheDocument()
+    expect(screen.getByText('Klant')).toBeInTheDocument()
   })
 })

@@ -1,4 +1,5 @@
 import type { RefObject } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Invoice, Tenant } from '../../types/entities.ts'
 import type { InvoiceForm } from './invoiceFormHelpers.ts'
 import Box from '@mui/material/Box'
@@ -27,6 +28,7 @@ export default function InvoiceLogoHeader({
   readOnly, logoKey, invoice, tenant, bandHeading,
   logoBusy, logoInputRef, onLogoFile, onLogoRemove, form, patchForm,
 }: InvoiceLogoHeaderProps) {
+  const { t } = useTranslation('invoices')
   const hasCustomLogo = Boolean(invoice?.custom_logo_path)
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 3 }}>
@@ -43,17 +45,17 @@ export default function InvoiceLogoHeader({
             <Box
               component="img"
               src={`/api/files/${logoKey}`}
-              alt="Invoice logo"
+              alt={t($ => $.logo.alt)}
               sx={{ maxHeight: 64, maxWidth: 160, objectFit: 'contain', borderRadius: 1, border: '1px solid', borderColor: 'divider', p: 0.5, bgcolor: '#ffffff' }}
             />
             {!readOnly && (
               <Stack direction="row" spacing={0.5}>
                 <Button size="small" disabled={logoBusy} onClick={() => logoInputRef.current?.click()}>
-                  Replace
+                  {t($ => $.logo.replace)}
                 </Button>
                 {hasCustomLogo && (
                   <Button size="small" disabled={logoBusy} onClick={onLogoRemove}>
-                    Remove
+                    {t($ => $.logo.remove)}
                   </Button>
                 )}
               </Stack>
@@ -66,7 +68,7 @@ export default function InvoiceLogoHeader({
             onClick={() => logoInputRef.current?.click()}
             variant="outlined"
           >
-            Add logo
+            {t($ => $.logo.add)}
           </Button>
         )}
         {tenant?.logo_dark_path && (
@@ -80,7 +82,7 @@ export default function InvoiceLogoHeader({
                 disabled={readOnly}
               />
             }
-            label={<Typography variant="caption">Use dark logo</Typography>}
+            label={<Typography variant="caption">{t($ => $.logo.useDark)}</Typography>}
           />
         )}
       </Box>

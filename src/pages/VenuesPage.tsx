@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -16,6 +17,7 @@ import { listVenues } from '../api/venues.ts'
 import type { Venue, Id } from '../types/entities.ts'
 
 export default function VenuesPage() {
+  const { t } = useTranslation(['venues', 'common'])
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -60,9 +62,9 @@ export default function VenuesPage() {
     >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
-          Venues
+          {t($ => $.title)}
         </Typography>
-        <Tooltip title="Import">
+        <Tooltip title={t($ => $.importTooltip)}>
           <IconButton onClick={() => setImportOpen(true)}>
             <FileUploadOutlinedIcon />
           </IconButton>
@@ -72,7 +74,7 @@ export default function VenuesPage() {
           startIcon={<AddIcon />}
           onClick={() => setModal({ mode: 'create' })}
         >
-          Add
+          {t($ => $.common.actions.add)}
         </Button>
       </Box>
 

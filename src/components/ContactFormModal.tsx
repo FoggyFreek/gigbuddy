@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -49,6 +50,7 @@ export default function ContactFormModal({
   title,
   submitLabel,
 }: ContactFormModalProps) {
+  const { t } = useTranslation(['contacts', 'common'])
   const [form, setForm] = useState(() => ({
     name:     initial?.name ?? EMPTY_FORM.name,
     email:    initial?.email ?? EMPTY_FORM.email,
@@ -115,7 +117,7 @@ export default function ContactFormModal({
 
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={mode === 'edit' ? handleClose : undefined}>
-      <DialogTitle>{title ?? (mode === 'create' ? 'Add contact' : 'Contact')}</DialogTitle>
+      <DialogTitle>{title ?? (mode === 'create' ? t($ => $.addContact) : t($ => $.detailTitle))}</DialogTitle>
 
       {loading ? (
         <DialogContent sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -144,8 +146,8 @@ export default function ContactFormModal({
           if (mode === 'create') {
             return (
               <>
-                <Button onClick={onClose}>Cancel</Button>
-                <Button variant="contained" onClick={handleCreate}>{submitLabel ?? 'Add contact'}</Button>
+                <Button onClick={onClose}>{t($ => $.common.actions.cancel)}</Button>
+                <Button variant="contained" onClick={handleCreate}>{submitLabel ?? t($ => $.addContact)}</Button>
               </>
             )
           }
@@ -153,18 +155,18 @@ export default function ContactFormModal({
             return (
               <>
                 <Typography variant="body2" sx={{ flexGrow: 1, color: 'text.secondary' }}>
-                  Delete this contact?
+                  {t($ => $.modal.confirmDelete)}
                 </Typography>
-                <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
-                <Button color="error" variant="contained" onClick={onDelete}>Delete</Button>
+                <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
+                <Button color="error" variant="contained" onClick={onDelete}>{t($ => $.common.actions.delete)}</Button>
               </>
             )
           }
           return (
             <>
-              {canWrite && <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>}
+              {canWrite && <Button color="error" onClick={() => setConfirmingDelete(true)}>{t($ => $.common.actions.delete)}</Button>}
               <Box sx={{ flexGrow: 1 }} />
-              <Button variant="contained" onClick={handleClose}>Close</Button>
+              <Button variant="contained" onClick={handleClose}>{t($ => $.common.actions.close)}</Button>
             </>
           )
         })()}

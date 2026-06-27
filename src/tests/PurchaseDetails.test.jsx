@@ -369,4 +369,5 @@ describe('PurchaseDetails', () => {
     expect(await screen.findByText(/configure a default expense account/i)).toBeInTheDocument()
     expect(screen.getAllByText(/choose an expense account/i).length).toBeGreaterThan(0)
   })
+
 })

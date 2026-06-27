@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import FormControl from '@mui/material/FormControl'
 import Grid from '@mui/material/Grid'
 import InputLabel from '@mui/material/InputLabel'
@@ -5,7 +6,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import CopyAdornment from './CopyAdornment.tsx'
-import { ALL_CONTACT_CATEGORIES, contactCategoryLabel } from '../utils/contactCategories.ts'
+import { ALL_CONTACT_CATEGORIES, useContactCategoryLabel } from '../utils/contactCategories.ts'
 
 interface ContactFieldsProps {
   form: { name: string; email: string; phone: string; category: string }
@@ -16,26 +17,28 @@ interface ContactFieldsProps {
 }
 
 export default function ContactFields({ form, onChange, errors = {}, categories = ALL_CONTACT_CATEGORIES, disabled = false }: ContactFieldsProps) {
+  const { t } = useTranslation('contacts')
+  const categoryLabel = useContactCategoryLabel()
   return (
     <>
       <Grid size={4}>
         <FormControl fullWidth>
-          <InputLabel>Category</InputLabel>
+          <InputLabel>{t($ => $.fields.category)}</InputLabel>
           <Select
-            label="Category"
+            label={t($ => $.fields.category)}
             value={form.category}
             onChange={(e) => onChange('category', e.target.value)}
             disabled={disabled}
           >
             {categories.map((cat) => (
-              <MenuItem key={cat} value={cat}>{contactCategoryLabel(cat)}</MenuItem>
+              <MenuItem key={cat} value={cat}>{categoryLabel(cat)}</MenuItem>
             ))}
           </Select>
         </FormControl>
       </Grid>
       <Grid size={8}>
         <TextField
-          label="Name"
+          label={t($ => $.fields.name)}
           fullWidth
           required
           value={form.name}
@@ -47,7 +50,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
       </Grid>
       <Grid size={6}>
         <TextField
-          label="Email"
+          label={t($ => $.fields.email)}
           fullWidth
           type="email"
           value={form.email}
@@ -58,7 +61,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
       </Grid>
       <Grid size={6}>
         <TextField
-          label="Phone"
+          label={t($ => $.fields.phone)}
           fullWidth
           value={form.phone}
           onChange={(e) => onChange('phone', e.target.value)}

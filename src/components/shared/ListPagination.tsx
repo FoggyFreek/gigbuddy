@@ -2,7 +2,8 @@ import TablePagination, { type TablePaginationProps } from '@mui/material/TableP
 
 type ListPaginationProps = Pick<
   TablePaginationProps,
-  'count' | 'page' | 'rowsPerPage' | 'onPageChange' | 'onRowsPerPageChange' | 'rowsPerPageOptions' | 'labelRowsPerPage'
+  'count' | 'page' | 'rowsPerPage' | 'onPageChange' | 'onRowsPerPageChange' | 'rowsPerPageOptions' |
+  'labelRowsPerPage' | 'labelDisplayedRows' | 'getItemAriaLabel'
 >
 
 // The standard `component="div"` list pagination, docked to the bottom of its

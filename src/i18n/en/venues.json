@@ -1,3 +1,110 @@
 {
-  "title": "Venues"
+  "title": "Venues",
+  "detailTitle": "Venue",
+  "importTooltip": "Import",
+  "empty": "No venues yet — add one or import from CSV.",
+  "category": {
+    "venue": "Venue",
+    "festival": "Festival",
+    "venuePlural": "Venues",
+    "festivalPlural": "Festivals"
+  },
+  "fields": {
+    "category": "Category",
+    "venueName": "Venue name",
+    "festivalName": "Festival / event name",
+    "title": "Title",
+    "givenName": "Given name",
+    "familyName": "Family name",
+    "organizationName": "Organization name",
+    "streetAndNumber": "Street and number",
+    "streetAdditional": "Street additional",
+    "postalCode": "Postal code",
+    "city": "City",
+    "region": "Region",
+    "country": "Country",
+    "website": "Website",
+    "phone": "Phone",
+    "email": "Email"
+  },
+  "placeholders": {
+    "title": "Mr.",
+    "postalCode": "1234AB",
+    "streetAdditional": "Apt. 1",
+    "region": "Noord-Holland",
+    "country": "NL",
+    "website": "https://"
+  },
+  "openInNewTab": "Open in new tab",
+  "table": {
+    "columns": {
+      "category": "Category",
+      "name": "Name",
+      "cityCountry": "City / Country",
+      "contact": "Contact",
+      "performed": "Performed"
+    },
+    "searchPlaceholder": "Search venues…",
+    "filter": "Filter",
+    "filterCount": "Filter ({{count}})",
+    "allCategories": "All categories",
+    "noResults": "No results.",
+    "selected_one": "{{count}} venue selected",
+    "selected_other": "{{count}} venues selected",
+    "copyEmails": "Copy email addresses (semicolon-separated)"
+  },
+  "detail": {
+    "contactsHeading": "Contacts",
+    "primarySet": "Primary contact — click to unset",
+    "primaryMark": "Mark as primary",
+    "setPrimaryAria": "set primary",
+    "unsetPrimaryAria": "unset primary",
+    "openContact": "Open contact",
+    "openContactAria": "open contact",
+    "removeContactAria": "remove contact",
+    "backAria": "back",
+    "closeAria": "close",
+    "deleteTitle": "Delete venue?",
+    "deleteBody": "This cannot be undone."
+  },
+  "modal": {
+    "addTitle": "Add venue",
+    "confirmDelete": "Delete this venue?"
+  },
+  "categoryChange": {
+    "title_one": "Category change affects {{count}} gig",
+    "title_other": "Category change affects {{count}} gigs",
+    "body_one": "The following gig links to this record as a <strong>{{prevCategory}}</strong>. Changing to a <strong>{{newCategory}}</strong> requires each gig's link to be updated.",
+    "body_other": "The following gigs link to this record as a <strong>{{prevCategory}}</strong>. Changing to a <strong>{{newCategory}}</strong> requires each gig's link to be updated.",
+    "untitled": "(untitled)",
+    "actions": "<strong>Move links</strong> — keep each gig linked to this record, moved to the {{category}} slot.<br/><strong>Remove links</strong> — unlink each gig from this record entirely.",
+    "removeButton": "Remove links",
+    "moveButton": "Move links"
+  },
+  "import": {
+    "title": "Import Venues from CSV",
+    "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: name, category, title, given name, family name, organization name, street and number, street additional, postal code, city, region, country, website, phone, email.",
+    "chooseFile": "Choose CSV file",
+    "mapHelp": "Map your CSV columns to venue fields. {{count}} rows detected.",
+    "notMapped": "(not mapped)",
+    "nameColumnRequired": "Name column is required",
+    "preview": "Preview",
+    "showing": "Showing first {{shown}} of {{total}} rows.",
+    "willImport_one": "{{count}} row will be imported.",
+    "willImport_other": "{{count}} rows will be imported.",
+    "importError": "Import failed",
+    "columns": {
+      "category": "Category",
+      "name": "Name",
+      "city": "City",
+      "country": "Country",
+      "contact": "Contact"
+    },
+    "result_one": "Imported {{count}} venue.",
+    "result_other": "Imported {{count}} venues.",
+    "resultSkipped_one": "Imported {{count}} venue ({{skipped}} skipped as duplicates).",
+    "resultSkipped_other": "Imported {{count}} venues ({{skipped}} skipped as duplicates).",
+    "importButton_one": "Import {{count}} row",
+    "importButton_other": "Import {{count}} rows"
+  }
 }

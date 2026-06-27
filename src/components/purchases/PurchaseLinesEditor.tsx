@@ -1,4 +1,5 @@
 import type { Account, Product } from '../../types/entities.ts'
+import { useTranslation } from 'react-i18next'
 import type { PurchaseForm, PurchaseFormLine } from './purchaseFormHelpers.ts'
 import { computePurchaseTotals } from '../../utils/purchaseTotals.ts'
 import Autocomplete from '@mui/material/Autocomplete'
@@ -17,14 +18,11 @@ import MoneyInput from '../invoices/MoneyInput.tsx'
 import { centsToEditableEuro } from '../invoices/invoiceFormHelpers.ts'
 import { TAX_RATES } from './purchaseFormHelpers.ts'
 
-const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  asset: 'Fixed Assets (capitalize)',
-  cost_of_goods_sold: 'Cost of Goods Sold',
-  expense: 'Expenses',
-}
+type AccountGroupKey = 'asset' | 'cost_of_goods_sold' | 'expense'
 
-// Group header shown above each block of options in the account combobox.
-const accountGroup = (account: AccountOption) => ACCOUNT_TYPE_LABELS[account.type ?? ''] || 'Expenses'
+function isAccountGroupKey(value: string | undefined): value is AccountGroupKey {
+  return value === 'asset' || value === 'cost_of_goods_sold' || value === 'expense'
+}
 
 // A stale account extension — same pattern as AccountAutocomplete.tsx.
 type AccountOption = Account & { __stale?: boolean }
@@ -48,11 +46,16 @@ interface PurchaseLineRowProps {
 }
 
 function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, errors = {}, readOnly, canRemove, patchLine, removeLine }: PurchaseLineRowProps) {
+  const { t } = useTranslation('purchases')
+  const accountGroup = (account: AccountOption) => {
+    const type = isAccountGroupKey(account.type) ? account.type : 'expense'
+    return t($ => $.lines.accountGroups[type])
+  }
   // A saved line can reference an account that is no longer active/expense-typed.
   // Surface it as a disabled option so the field doesn't silently drop it.
   const knownAccount = accounts.find((a) => a.code === line.account_code) || null
   const selectedAccount: AccountOption | null = line.account_code
-    ? (knownAccount || { code: line.account_code, name: 'Inactive/unknown account', __stale: true })
+    ? (knownAccount || { code: line.account_code, name: t($ => $.lines.inactiveAccount), __stale: true })
     : null
   // groupBy needs options pre-sorted by group so each header appears once.
   const accountOptions: AccountOption[] = (selectedAccount?.__stale ? [selectedAccount, ...accounts] : accounts)
@@ -66,10 +69,10 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
     <Box sx={{ mb: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1 }}>
-          Line #{idx + 1}
+          {t($ => $.lines.lineNumber, { number: idx + 1 })}
         </Typography>
         {canRemove && (
-          <IconButton size="small" onClick={() => removeLine(idx)} disabled={readOnly} aria-label="remove line">
+          <IconButton size="small" onClick={() => removeLine(idx)} disabled={readOnly} aria-label={t($ => $.lines.removeLine)}>
             <DeleteIcon fontSize="small" />
           </IconButton>
         )}
@@ -77,10 +80,10 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
 
       <Box sx={{ mb: 2 }}>
         <TextField
-          label="Description"
+          label={t($ => $.labels.description)}
           size="small"
           fullWidth
-          placeholder="What you have bought?"
+          placeholder={t($ => $.lines.descriptionPlaceholder)}
           value={line.description}
           onChange={(e) => patchLine(idx, { description: e.target.value })}
           disabled={readOnly}
@@ -105,13 +108,13 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Stock product (optional)"
-                placeholder="No product — regular expense"
+                label={t($ => $.lines.stockProduct)}
+                placeholder={t($ => $.lines.noProduct)}
               />
             )}
           />
           <TextField
-            label="Quantity"
+            label={t($ => $.lines.quantity)}
             size="small"
             type="number"
             disabled={readOnly || !stocksProduct}
@@ -156,8 +159,8 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
           renderInput={(params) => (
             <TextField
               {...params}
-              label="Expense / asset account"
-              placeholder={stocksProduct ? 'Books to inventory' : 'Default expense account'}
+              label={t($ => $.lines.expenseAccount)}
+              placeholder={stocksProduct ? t($ => $.lines.booksToInventory) : t($ => $.lines.defaultExpenseAccount)}
               error={Boolean(errors.account_code)}
               helperText={errors.account_code}
             />
@@ -168,12 +171,12 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 2, alignItems: 'end' }}>
         <Box>
           <FormControl size="small" fullWidth disabled={readOnly}>
-            <InputLabel>Tax rate</InputLabel>
+            <InputLabel>{t($ => $.lines.taxRate)}</InputLabel>
             <Select
-              label="Tax rate"
+              label={t($ => $.lines.taxRate)}
               value={TAX_RATES.includes(Number(line.tax_rate)) ? Number(line.tax_rate) : -1}
               onChange={(e) => patchLine(idx, { tax_rate: Number(e.target.value) })}
-              renderValue={(v) => (v === -1 ? 'Select…' : `${v}%`)}
+              renderValue={(v) => (v === -1 ? t($ => $.lines.select) : `${v}%`)}
             >
               {TAX_RATES.map((rate) => (
                 <MenuItem key={rate} value={rate}>{rate}%</MenuItem>
@@ -183,7 +186,7 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
         </Box>
         <Box>
           <TextField
-            label="VAT - amount"
+            label={t($ => $.labels.vatAmount)}
             size="small"
             fullWidth
             value={centsToEditableEuro(vatCents)}
@@ -193,7 +196,7 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
         </Box>
         <Box>
           <MoneyInput
-            label="Incl. VAT"
+            label={t($ => $.labels.inclVat)}
             cents={line.amount_incl_cents}
             onChange={(c) => patchLine(idx, { amount_incl_cents: c })}
             disabled={readOnly}
@@ -220,6 +223,7 @@ interface PurchaseLinesEditorProps {
 }
 
 export default function PurchaseLinesEditor({ form, totals, accounts = [], products = [], lineErrors = [], readOnly, patchLine, addLine, removeLine }: PurchaseLinesEditorProps) {
+  const { t } = useTranslation('purchases')
   return (
     <>
       {form.lines.map((line, idx) => (
@@ -238,7 +242,7 @@ export default function PurchaseLinesEditor({ form, totals, accounts = [], produ
         />
       ))}
       <Button size="small" startIcon={<AddIcon />} disabled={readOnly} onClick={addLine}>
-        Add line
+        {t($ => $.lines.addLine)}
       </Button>
     </>
   )

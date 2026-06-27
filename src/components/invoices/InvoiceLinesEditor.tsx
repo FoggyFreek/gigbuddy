@@ -1,4 +1,5 @@
 import type { SxProps, Theme } from '@mui/material/styles'
+import { useTranslation } from 'react-i18next'
 import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
 import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
 import Box from '@mui/material/Box'
@@ -31,12 +32,13 @@ interface InvoiceLineRowProps {
 }
 
 function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readOnly, canRemove, patchLine, removeLine }: InvoiceLineRowProps) {
+  const { t } = useTranslation('invoices')
   const displayCents = taxInclusive ? lineTotals.grossCents : lineTotals.netCents
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 1, alignItems: 'center', mb: 1 }}>
       <TextField
         size="small"
-        placeholder="Start typing…"
+        placeholder={t($ => $.lines.descriptionPlaceholder)}
         value={line.description}
         onChange={(e) => patchLine(idx, { description: e.target.value })}
         disabled={readOnly}
@@ -74,7 +76,7 @@ function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readO
         size="small"
         onClick={() => removeLine(idx)}
         disabled={readOnly || !canRemove}
-        aria-label="remove line"
+        aria-label={t($ => $.lines.removeLine)}
       >
         <DeleteIcon fontSize="small" />
       </IconButton>
@@ -94,10 +96,11 @@ interface InvoiceLinesEditorProps {
 }
 
 export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly, patchForm, patchLine, addLine, removeLine }: InvoiceLinesEditorProps) {
+  const { t } = useTranslation('invoices')
   return (
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>Items</Typography>
+        <Typography variant="h6" sx={{ flexGrow: 1 }}>{t($ => $.lines.title)}</Typography>
         {!appliesKor && (
           <ToggleButtonGroup
             value={form.tax_inclusive ? 'inclusive' : 'exclusive'}
@@ -106,20 +109,20 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
             onChange={(_e, v) => v && patchForm({ tax_inclusive: v === 'inclusive' })}
             disabled={readOnly}
           >
-            <ToggleButton value="inclusive">Inclusive VAT</ToggleButton>
-            <ToggleButton value="exclusive">Exclusive VAT</ToggleButton>
+            <ToggleButton value="inclusive">{t($ => $.lines.inclusiveVat)}</ToggleButton>
+            <ToggleButton value="exclusive">{t($ => $.lines.exclusiveVat)}</ToggleButton>
           </ToggleButtonGroup>
         )}
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 1, alignItems: 'center', mb: 0.5 }}>
-        <Typography variant="caption" color="text.secondary">Description</Typography>
-        <Typography variant="caption" color="text.secondary" align="right">Qty</Typography>
-        <Typography variant="caption" color="text.secondary" align="right">Price</Typography>
+        <Typography variant="caption" color="text.secondary">{t($ => $.lines.description)}</Typography>
+        <Typography variant="caption" color="text.secondary" align="right">{t($ => $.lines.quantity)}</Typography>
+        <Typography variant="caption" color="text.secondary" align="right">{t($ => $.lines.price)}</Typography>
         {!appliesKor
-          ? <Typography variant="caption" color="text.secondary" align="right">VAT %</Typography>
+          ? <Typography variant="caption" color="text.secondary" align="right">{t($ => $.lines.vatPercentage)}</Typography>
           : <span />}
-        <Typography variant="caption" color="text.secondary" align="right">Total</Typography>
+        <Typography variant="caption" color="text.secondary" align="right">{t($ => $.labels.total)}</Typography>
         <span />
       </Box>
 
@@ -139,7 +142,7 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
       ))}
 
       <Button size="small" startIcon={<AddIcon />} disabled={readOnly} onClick={addLine}>
-        Add item
+        {t($ => $.lines.addItem)}
       </Button>
     </>
   )

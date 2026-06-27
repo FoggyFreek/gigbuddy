@@ -1,4 +1,5 @@
 import type { Invoice } from '../types/entities.ts'
+import { useTranslation } from 'react-i18next'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import DownloadIcon from '@mui/icons-material/Download'
@@ -10,9 +11,10 @@ interface InvoicePdfActionProps {
 }
 
 export default function InvoicePdfAction({ invoice, onRetryRender }: InvoicePdfActionProps) {
+  const { t } = useTranslation('invoices')
   if (invoice.pdf_path) {
     return (
-      <Tooltip title="Download PDF">
+      <Tooltip title={t($ => $.pdf.download)}>
         <IconButton
           size="small"
           component="a"
@@ -27,7 +29,7 @@ export default function InvoicePdfAction({ invoice, onRetryRender }: InvoicePdfA
   }
 
   return (
-    <Tooltip title="PDF render failed - click to retry">
+    <Tooltip title={t($ => $.pdf.retry)}>
       <IconButton size="small" onClick={() => onRetryRender(invoice)}>
         <RefreshIcon fontSize="small" />
       </IconButton>

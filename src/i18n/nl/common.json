@@ -18,7 +18,8 @@
     "copy": "Kopiëren",
     "confirm": "Bevestigen",
     "back": "Terug",
-    "search": "Zoeken"
+    "search": "Zoeken",
+    "ok": "OK"
   },
   "state": {
     "loading": "Laden…",

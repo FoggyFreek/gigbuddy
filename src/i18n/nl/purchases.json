@@ -1,3 +1,134 @@
 {
-  "title": "Inkopen"
+  "title": "Inkoopfacturen",
+  "singularTitle": "Inkoopfactuur",
+  "createPurchase": "Inkoopfactuur aanmaken",
+  "summary": {
+    "draft": "Concept",
+    "overdue": "Achterstallig",
+    "unpaid": "Onbetaald",
+    "paid": "Betaald"
+  },
+  "rawStatus": {
+    "draft": "concept",
+    "approved": "goedgekeurd",
+    "paid": "betaald"
+  },
+  "searchPlaceholder": "Zoeken",
+  "empty": "Geen inkopen gevonden",
+  "labels": {
+    "supplier": "Leverancier",
+    "receiptDate": "Datum inkoopfactuur",
+    "dueDate": "Vervaldatum",
+    "currency": "Valuta",
+    "description": "Omschrijving",
+    "vatAmount": "Btw-bedrag",
+    "inclVat": "Incl. btw",
+    "exclVat": "Excl. btw",
+    "total": "Totaal"
+  },
+  "table": {
+    "receiptNumber": "inkoopfactuurnummer",
+    "date": "Datum"
+  },
+  "pagination": {
+    "rowsPerPage": "Rijen per pagina:",
+    "displayedRows": "{{from}}–{{to}} van {{count}}",
+    "first": "Ga naar de eerste pagina",
+    "last": "Ga naar de laatste pagina",
+    "next": "Ga naar de volgende pagina",
+    "previous": "Ga naar de vorige pagina"
+  },
+  "newDialog": {
+    "title": "Nieuwe inkoopfactuur",
+    "description": "Kies een leverancier en de datum van de inkoopfactuur om te beginnen. Daarna kun je de regels invullen.",
+    "continue": "Doorgaan"
+  },
+  "detail": {
+    "heading": "Inkoop {{number}}",
+    "editReceiptNumber": "inkoopfactuurnummer bewerken",
+    "saveAsDraft": "Opslaan als concept",
+    "approve": "Goedkeuren",
+    "registerPayment": "Betaling registreren"
+  },
+  "supplierFields": {
+    "addDueDate": "Vervaldatum",
+    "openReceiptDatePicker": "datumkiezer openen",
+    "openDueDatePicker": "datumkiezer openen"
+  },
+  "supplierPicker": {
+    "placeholder": "Zoek of typ contactnaam…",
+    "create": "+ '{{name}}' toevoegen als leverancier",
+    "createFailed": "Leverancier toevoegen mislukt",
+    "clear": "Wissen",
+    "open": "Openen",
+    "loading": "Laden…",
+    "noOptions": "Geen opties"
+  },
+  "lines": {
+    "lineNumber": "Regel #{{number}}",
+    "removeLine": "regel verwijderen",
+    "descriptionPlaceholder": "Wat heb je gekocht?",
+    "stockProduct": "Voorraadproduct (optioneel)",
+    "noProduct": "Geen product — gewone uitgave",
+    "quantity": "Aantal",
+    "expenseAccount": "Kosten- / activarekening",
+    "booksToInventory": "Wordt als voorraad geboekt",
+    "defaultExpenseAccount": "Standaardkostenrekening",
+    "taxRate": "Btw-tarief",
+    "select": "Selecteer…",
+    "addLine": "Regel toevoegen",
+    "inactiveAccount": "Inactieve/onbekende rekening",
+    "accountGroups": {
+      "asset": "Vaste activa (activeren)",
+      "cost_of_goods_sold": "Kostprijs van de omzet",
+      "expense": "Kosten"
+    }
+  },
+  "totals": {
+    "heading": "Totaal ({{currency}})"
+  },
+  "payment": {
+    "dialogTitle": "Betaling vastleggen",
+    "paidOn": "Betaald op",
+    "openPaidOnPicker": "datumkiezer openen",
+    "method": "Betaalmethode",
+    "bank": "Bank",
+    "bandMember": "Bandlid",
+    "noBandMembers": "Voeg een bandlid toe voordat je een door een lid betaalde inkoop registreert.",
+    "paidBy": "Betaald door",
+    "paidFrom": "Betaald vanaf",
+    "register": "Registreren",
+    "bankAccount": "Bankrekening",
+    "bandMemberNumber": "Bandlid #{{number}}"
+  },
+  "deleteDialog": {
+    "title": "Inkoop verwijderen?",
+    "body": "Hiermee wordt de conceptinkoopfactuur definitief verwijderd. Dit kan niet ongedaan worden gemaakt."
+  },
+  "attachments": {
+    "drop": "Sleep inkoopfacturen hierheen",
+    "upload": "Bestand uploaden",
+    "formats": "PDF, PNG of JPG",
+    "previous": "vorige bijlage",
+    "next": "volgende bijlage",
+    "zoomOut": "uitzoomen",
+    "zoomIn": "inzoomen",
+    "rotate": "Draaien",
+    "rotateAria": "draaien",
+    "options": "bijlageopties",
+    "pdfLoadError": "Deze pdf kon niet worden geladen",
+    "add": "Bijlage toevoegen",
+    "download": "Downloaden"
+  },
+  "validation": {
+    "description": "Voer een omschrijving in",
+    "expenseAccount": "Kies een kostenrekening",
+    "positiveAmount": "Voer een bedrag groter dan nul in",
+    "approvalIncomplete": "Vul de gemarkeerde velden van de inkoopregels in voordat je goedkeurt.",
+    "accountingSetup": "Kies voor elke regel een kostenrekening of stel een standaardkostenrekening in bij Boekhoudinstellingen.",
+    "required": "Verplicht",
+    "supplierRequired": "Leverancier is verplicht",
+    "inactiveAccount": "Vervang de inactieve rekening op regel {{number}}",
+    "bandMemberRequired": "Kies het bandlid dat deze inkoop heeft betaald"
+  }
 }

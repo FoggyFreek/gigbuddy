@@ -1,4 +1,4 @@
-import type { PurchaseLine, Id } from '../../types/entities.ts'
+import type { PurchaseLine, PurchaseStatus, Id } from '../../types/entities.ts'
 
 export const TAX_RATES: number[] = [21, 9, 0]
 
@@ -75,7 +75,7 @@ export function purchaseToForm(data: Record<string, unknown> & { lines?: Purchas
 }
 
 /** Builds the API payload from the current form state. */
-export function buildPurchasePayload(form: PurchaseForm, status?: string): Record<string, unknown> {
+export function buildPurchasePayload(form: PurchaseForm, status?: Exclude<PurchaseStatus, 'paid'>): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     supplier_name: form.supplier_name?.trim() || '',
     supplier_contact_id: form.supplier_contact_id ?? null,

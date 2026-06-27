@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -63,6 +64,7 @@ interface LinkedVenue extends Venue {
 }
 
 export default function ContactDetailPage() {
+  const { t } = useTranslation(['contacts', 'common'])
   const { id } = useParams()
   const contactId = Number(id)
   const navigate = useNavigate()
@@ -189,15 +191,15 @@ export default function ContactDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={handleBack} aria-label="back">
+          <IconButton onClick={handleBack} aria-label={t($ => $.detail.backAria)}>
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Contact</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.detailTitle)}</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={handleBack} aria-label="close">
+            <IconButton onClick={handleBack} aria-label={t($ => $.detail.closeAria)}>
               <CloseIcon />
             </IconButton>
           </>
@@ -222,7 +224,7 @@ export default function ContactDetailPage() {
           <Divider sx={{ my: 3 }} />
 
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-            Venues &amp; festivals
+            {t($ => $.detail.venuesHeading)}
           </Typography>
 
           {venues.map((v) => {
@@ -243,33 +245,33 @@ export default function ContactDetailPage() {
                 }}
               >
                 <Chip
-                  label={v.category === 'festival' ? 'festival' : 'venue'}
+                  label={v.category === 'festival' ? t($ => $.detail.festivalChip) : t($ => $.detail.venueChip)}
                   size="small"
                   variant="outlined"
                   sx={{ alignSelf: 'center' }}
                 />
                 <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                   <Typography variant="body2" noWrap>
-                    {venueHeadline(v) || '(unnamed)'}
+                    {venueHeadline(v) || t($ => $.detail.unnamed)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {location || ' '}
                   </Typography>
                 </Box>
                 {v.is_primary && (
-                  <Tooltip title="This contact is the primary for this venue">
+                  <Tooltip title={t($ => $.detail.primaryStar)}>
                     <StarIcon
                       color="warning"
                       fontSize="small"
-                      titleAccess="primary contact for this venue"
+                      titleAccess={t($ => $.detail.primaryStarAria)}
                     />
                   </Tooltip>
                 )}
-                <Tooltip title="Open venue">
+                <Tooltip title={t($ => $.detail.openVenue)}>
                   <IconButton
                     size="small"
                     onClick={async () => { await flush(); navigate(`/venues/${v.id}`) }}
-                    aria-label="open venue"
+                    aria-label={t($ => $.detail.openVenueAria)}
                   >
                     <OpenInNewIcon fontSize="small" />
                   </IconButton>
@@ -278,7 +280,7 @@ export default function ContactDetailPage() {
                   <IconButton
                     size="small"
                     onClick={() => v.id != null && handleRemoveVenue(v.id)}
-                    aria-label="remove venue"
+                    aria-label={t($ => $.detail.removeVenueAria)}
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
@@ -292,7 +294,7 @@ export default function ContactDetailPage() {
               <VenuePicker
                 onSelect={handleAddVenue}
                 excludeIds={venues.map((v) => v.id).filter((id): id is Id => id != null)}
-                label="Add venue / festival"
+                label={t($ => $.detail.addVenue)}
               />
             </Box>
           )}
@@ -300,7 +302,7 @@ export default function ContactDetailPage() {
           <Divider sx={{ my: 3 }} />
 
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-            Notes
+            {t($ => $.detail.notesHeading)}
           </Typography>
 
           {canWrite && (
@@ -309,18 +311,18 @@ export default function ContactDetailPage() {
                 fullWidth
                 multiline
                 minRows={2}
-                placeholder="Add a note…"
+                placeholder={t($ => $.detail.addNotePlaceholder)}
                 value={newNote}
                 onChange={(e) => setNewNote(e.target.value)}
               />
               <Button
                 variant="contained"
-                aria-label="Add note"
+                aria-label={t($ => $.detail.addNoteAria)}
                 disabled={!newNote.trim()}
                 onClick={handleAddNote}
                 sx={{ alignSelf: 'flex-end' }}
               >
-                Add
+                {t($ => $.common.actions.add)}
               </Button>
             </Box>
           )}
@@ -348,7 +350,7 @@ export default function ContactDetailPage() {
                 </Typography>
               </Box>
               {canWrite && (
-                <IconButton size="small" onClick={() => n.id != null && handleDeleteNote(n.id)} aria-label="delete note">
+                <IconButton size="small" onClick={() => n.id != null && handleDeleteNote(n.id)} aria-label={t($ => $.detail.deleteNoteAria)}>
                   <DeleteIcon fontSize="small" />
                 </IconButton>
               )}
@@ -370,29 +372,29 @@ export default function ContactDetailPage() {
       {canWrite && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
-            Delete
+            {t($ => $.common.actions.delete)}
           </Button>
         </Box>
       )}
 
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
-        <DialogTitle>Delete contact?</DialogTitle>
+        <DialogTitle>{t($ => $.detail.deleteTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>This cannot be undone.</DialogContentText>
+          <DialogContentText>{t($ => $.detail.deleteBody)}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={handleDelete}>Delete</Button>
+          <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
+          <Button color="error" variant="contained" onClick={handleDelete}>{t($ => $.common.actions.delete)}</Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={deleteError !== null} onClose={() => setDeleteError(null)}>
-        <DialogTitle>Cannot delete contact</DialogTitle>
+        <DialogTitle>{t($ => $.detail.deleteErrorTitle)}</DialogTitle>
         <DialogContent>
           <DialogContentText>{deleteError}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteError(null)}>OK</Button>
+          <Button onClick={() => setDeleteError(null)}>{t($ => $.common.actions.ok)}</Button>
         </DialogActions>
       </Dialog>
     </Box>

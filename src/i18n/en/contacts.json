@@ -1,3 +1,77 @@
 {
-  "title": "Contacts"
+  "title": "Contacts",
+  "detailTitle": "Contact",
+  "addContact": "Add contact",
+  "empty": "No contacts yet - add one or import from CSV.",
+  "importTitle": "Import Contacts from CSV",
+  "importTooltip": "Import",
+  "categories": {
+    "press": "Press",
+    "radio & tv": "Radio & TV",
+    "booker": "Booker",
+    "promotion": "Promotion",
+    "network": "Network",
+    "supplier": "Supplier"
+  },
+  "fields": {
+    "category": "Category",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone"
+  },
+  "table": {
+    "searchPlaceholder": "Search contacts…",
+    "filter": "Filter",
+    "filterCount": "Filter ({{count}})",
+    "allCategories": "All categories",
+    "noResults": "No results.",
+    "selected_one": "{{count}} contact selected",
+    "selected_other": "{{count}} contacts selected",
+    "copyEmails": "Copy email addresses (semicolon-separated)"
+  },
+  "detail": {
+    "venuesHeading": "Venues & festivals",
+    "venueChip": "venue",
+    "festivalChip": "festival",
+    "unnamed": "(unnamed)",
+    "primaryStar": "This contact is the primary for this venue",
+    "primaryStarAria": "primary contact for this venue",
+    "openVenue": "Open venue",
+    "openVenueAria": "open venue",
+    "removeVenueAria": "remove venue",
+    "addVenue": "Add venue / festival",
+    "notesHeading": "Notes",
+    "addNotePlaceholder": "Add a note…",
+    "addNoteAria": "Add note",
+    "deleteNoteAria": "delete note",
+    "deleteTitle": "Delete contact?",
+    "deleteBody": "This cannot be undone.",
+    "deleteErrorTitle": "Cannot delete contact",
+    "backAria": "back",
+    "closeAria": "close",
+    "purchasesHeading": "Purchases"
+  },
+  "modal": {
+    "confirmDelete": "Delete this contact?"
+  },
+  "import": {
+    "title": "Import Contacts from CSV",
+    "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: name, email, phone, category. Category values: press, radio & tv, booker, promotion, network (defaults to press if unrecognised).",
+    "uploadHelpFixed": "Upload a UTF-8 CSV file with column headers. Supported fields: name, email, phone. Every imported row is added with the category '{{category}}'.",
+    "chooseFile": "Choose CSV file",
+    "mapHelp": "Map your CSV columns to contact fields. {{count}} rows detected.",
+    "notMapped": "(not mapped)",
+    "nameColumnRequired": "Name column is required",
+    "preview": "Preview",
+    "showing": "Showing first {{shown}} of {{total}} rows.",
+    "willImport_one": "{{count}} row will be imported.",
+    "willImport_other": "{{count}} rows will be imported.",
+    "importError": "Import failed",
+    "result_one": "Imported {{count}} contact.",
+    "result_other": "Imported {{count}} contacts.",
+    "resultSkipped_one": "Imported {{count}} contact ({{skipped}} skipped as duplicates).",
+    "resultSkipped_other": "Imported {{count}} contacts ({{skipped}} skipped as duplicates).",
+    "importButton_one": "Import {{count}} row",
+    "importButton_other": "Import {{count}} rows"
+  }
 }

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Papa from 'papaparse'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -21,21 +22,25 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import { importContacts } from '../api/contacts.ts'
-import type { Contact } from '../types/entities.ts'
+import { useContactCategoryLabel } from '../utils/contactCategories.ts'
 
 interface ContactImportDialogProps {
   onClose: (created: boolean) => void
+  /** When set, every imported row is forced to this category and the category
+   *  mapping/preview column is hidden (e.g. the suppliers directory). */
+  fixedCategory?: string
+  title?: string
 }
 
 const VALID_CATEGORIES = new Set(['press', 'radio & tv', 'booker', 'promotion', 'network'])
 
-interface ContactField { key: string; label: string; required: boolean; aliases: string[] }
+interface ContactField { key: string; labelKey: 'name' | 'email' | 'phone' | 'category'; required: boolean; aliases: string[] }
 
 const CONTACT_FIELDS: ContactField[] = [
-  { key: 'name',     label: 'Name',     required: true,  aliases: ['name', 'contact name', 'full name'] },
-  { key: 'email',    label: 'Email',    required: false, aliases: ['email', 'e-mail', 'email address'] },
-  { key: 'phone',    label: 'Phone',    required: false, aliases: ['phone', 'tel', 'phone number', 'telephone'] },
-  { key: 'category', label: 'Category', required: false, aliases: ['category', 'type', 'contact type'] },
+  { key: 'name',     labelKey: 'name',     required: true,  aliases: ['name', 'contact name', 'full name'] },
+  { key: 'email',    labelKey: 'email',    required: false, aliases: ['email', 'e-mail', 'email address'] },
+  { key: 'phone',    labelKey: 'phone',    required: false, aliases: ['phone', 'tel', 'phone number', 'telephone'] },
+  { key: 'category', labelKey: 'category', required: false, aliases: ['category', 'type', 'contact type'] },
 ]
 
 function coerceCategory(raw: string): string {
@@ -60,17 +65,25 @@ function autoMap(headers: string[]): Record<string, string> {
   return mapping
 }
 
-function applyMapping(row: Record<string, string>, mapping: Record<string, string>): Record<string, string> {
+function applyMapping(
+  row: Record<string, string>,
+  mapping: Record<string, string>,
+  fixedCategory?: string,
+): Record<string, string> {
   const obj: Record<string, string> = {}
   for (const { key } of CONTACT_FIELDS) {
     const col = mapping[key]
     obj[key] = col ? (row[col] ?? '').toString().trim() : ''
   }
-  obj.category = coerceCategory(obj.category)
+  obj.category = fixedCategory ?? coerceCategory(obj.category)
   return obj
 }
 
-export default function ContactImportDialog({ onClose }: ContactImportDialogProps) {
+export default function ContactImportDialog({ onClose, fixedCategory, title }: ContactImportDialogProps) {
+  const { t } = useTranslation(['contacts', 'common'])
+  const categoryLabel = useContactCategoryLabel()
+  // In fixed-category mode the category column is neither mapped nor previewed.
+  const fields = fixedCategory ? CONTACT_FIELDS.filter((f) => f.key !== 'category') : CONTACT_FIELDS
   const [step, setStep] = useState('upload') // 'upload' | 'map' | 'preview' | 'importing'
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
   const [csvRows, setCsvRows] = useState<Array<Record<string, string>>>([])
@@ -103,7 +116,7 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
 
   function handlePreview() {
     const errs: Record<string, string> = {}
-    if (!mapping.name) errs.name = 'Name column is required'
+    if (!mapping.name) errs.name = t($ => $.import.nameColumnRequired)
     if (Object.keys(errs).length) { setMapErrors(errs); return }
     setStep('preview')
   }
@@ -114,18 +127,18 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
     setImportError(null)
     try {
       const rows = csvRows
-        .map((r) => applyMapping(r, mapping))
+        .map((r) => applyMapping(r, mapping, fixedCategory))
         .filter((r) => r.name)
       const res = await importContacts(rows) as unknown as { imported: number; skipped: number }
       setResult(res)
       setStep('done')
     } catch (err) {
-      setImportError((err as Error).message || 'Import failed')
+      setImportError((err as Error).message || t($ => $.import.importError))
       setStep('preview')
     }
   }
 
-  const previewRows = csvRows.slice(0, 5).map((r) => applyMapping(r, mapping))
+  const previewRows = csvRows.slice(0, 5).map((r) => applyMapping(r, mapping, fixedCategory))
   const importableCount = csvRows.filter((r) => {
     const col = mapping.name
     return col && (r[col] ?? '').toString().trim()
@@ -133,17 +146,18 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
 
   return (
     <Dialog open fullWidth maxWidth="md">
-      <DialogTitle>Import Contacts from CSV</DialogTitle>
+      <DialogTitle>{title ?? t($ => $.import.title)}</DialogTitle>
 
       <DialogContent>
         {step === 'upload' && (
           <Box sx={{ py: 2 }}>
             <Typography variant="body2" sx={{ mb: 2 }}>
-              Upload a UTF-8 CSV file with column headers. Supported fields: name, email, phone, category.
-              Category values: press, radio &amp; tv, booker, promotion, network (defaults to press if unrecognised).
+              {fixedCategory
+                ? t($ => $.import.uploadHelpFixed, { category: categoryLabel(fixedCategory) })
+                : t($ => $.import.uploadHelp)}
             </Typography>
             <Button component="label">
-              {'Choose CSV file'}
+              {t($ => $.import.chooseFile)}
               <input
                 ref={fileRef}
                 type="file"
@@ -158,21 +172,21 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
         {step === 'map' && (
           <Box sx={{ py: 1 }}>
             <Typography variant="body2" sx={{ mb: 2 }}>
-              Map your CSV columns to contact fields. {csvRows.length} rows detected.
+              {t($ => $.import.mapHelp, { count: csvRows.length })}
             </Typography>
             <Grid container spacing={2}>
-              {CONTACT_FIELDS.map((field) => (
+              {fields.map((field) => {
+                const label = t($ => $.fields[field.labelKey]) + (field.required ? ' *' : '')
+                return (
                 <Grid size={{ xs: 12, sm: 6 }} key={field.key}>
                   <FormControl fullWidth size="small" error={!!mapErrors[field.key]}>
-                    <InputLabel>
-                      {field.label}{field.required ? ' *' : ''}
-                    </InputLabel>
+                    <InputLabel>{label}</InputLabel>
                     <Select
-                      label={field.label + (field.required ? ' *' : '')}
+                      label={label}
                       value={mapping[field.key] || ''}
                       onChange={(e) => handleMappingChange(field.key, e.target.value)}
                     >
-                      <MenuItem value="">(not mapped)</MenuItem>
+                      <MenuItem value="">{t($ => $.import.notMapped)}</MenuItem>
                       {csvHeaders.map((h) => (
                         <MenuItem key={h} value={h}>{h}</MenuItem>
                       ))}
@@ -182,7 +196,8 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
                     )}
                   </FormControl>
                 </Grid>
-              ))}
+                )
+              })}
             </Grid>
           </Box>
         )}
@@ -190,8 +205,8 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
         {step === 'preview' && (
           <Box sx={{ py: 1 }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              Showing first {Math.min(5, csvRows.length)} of {csvRows.length} rows.
-              {importableCount} row{importableCount !== 1 ? 's' : ''} will be imported.
+              {t($ => $.import.showing, { shown: Math.min(5, csvRows.length), total: csvRows.length })}
+              {' '}{t($ => $.import.willImport, { count: importableCount })}
             </Typography>
             {importError && (
               <Alert severity="error" sx={{ mb: 2 }}>{importError}</Alert>
@@ -199,16 +214,16 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-                  <TableCell>Category</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Phone</TableCell>
+                  {!fixedCategory && <TableCell>{t($ => $.fields.category)}</TableCell>}
+                  <TableCell>{t($ => $.fields.name)}</TableCell>
+                  <TableCell>{t($ => $.fields.email)}</TableCell>
+                  <TableCell>{t($ => $.fields.phone)}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {previewRows.map((row, i) => (
                   <TableRow key={`${i}-${row.name}`}>
-                    <TableCell>{row.category || '—'}</TableCell>
+                    {!fixedCategory && <TableCell>{row.category || '—'}</TableCell>}
                     <TableCell><strong>{row.name || '—'}</strong></TableCell>
                     <TableCell>{row.email || '—'}</TableCell>
                     <TableCell>{row.phone || '—'}</TableCell>
@@ -227,24 +242,25 @@ export default function ContactImportDialog({ onClose }: ContactImportDialogProp
 
         {result && (
           <Alert severity="success" sx={{ mt: 2 }}>
-            Imported {result.imported} contact{result.imported !== 1 ? 's' : ''}
-            {result.skipped > 0 ? ` (${result.skipped} skipped as duplicates)` : ''}.
+            {result.skipped > 0
+              ? t($ => $.import.resultSkipped, { count: result.imported, skipped: result.skipped })
+              : t($ => $.import.result, { count: result.imported })}
           </Alert>
         )}
       </DialogContent>
 
       <DialogActions>
         <Button onClick={() => onClose(!!result)}>
-          {result ? 'Close' : 'Cancel'}
+          {result ? t($ => $.common.actions.close) : t($ => $.common.actions.cancel)}
         </Button>
         {step === 'map' && (
           <Button variant="outlined" onClick={handlePreview}>
-            Preview
+            {t($ => $.import.preview)}
           </Button>
         )}
         {step === 'preview' && !result && (
           <Button variant="contained" onClick={handleImport} disabled={importableCount === 0}>
-            Import {importableCount} row{importableCount !== 1 ? 's' : ''}
+            {t($ => $.import.importButton, { count: importableCount })}
           </Button>
         )}
       </DialogActions>

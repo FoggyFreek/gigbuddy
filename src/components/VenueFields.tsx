@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import FormControl from '@mui/material/FormControl'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
@@ -38,28 +39,29 @@ interface VenueFieldsProps {
 }
 
 export default function VenueFields({ form, onChange, errors = {}, lockedCategory, disabled = false }: VenueFieldsProps) {
+  const { t } = useTranslation('venues')
   const isFestival = form.category === 'festival'
   return (
     <>
       {!lockedCategory && (
         <Grid size={4}>
           <FormControl fullWidth>
-            <InputLabel>Category</InputLabel>
+            <InputLabel>{t($ => $.fields.category)}</InputLabel>
             <Select
-              label="Category"
+              label={t($ => $.fields.category)}
               value={form.category}
               onChange={(e) => onChange('category', e.target.value)}
               disabled={disabled}
             >
-              <MenuItem value="venue">Venue</MenuItem>
-              <MenuItem value="festival">Festival</MenuItem>
+              <MenuItem value="venue">{t($ => $.category.venue)}</MenuItem>
+              <MenuItem value="festival">{t($ => $.category.festival)}</MenuItem>
             </Select>
           </FormControl>
         </Grid>
       )}
       <Grid size={8}>
         <TextField
-          label={isFestival ? 'Festival / event name' : 'Venue name'}
+          label={isFestival ? t($ => $.fields.festivalName) : t($ => $.fields.venueName)}
           fullWidth
           required
           value={form.name}
@@ -72,17 +74,17 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
 
       <Grid size={3}>
         <TextField
-          label="Title"
+          label={t($ => $.fields.title)}
           fullWidth
           value={form.title}
           onChange={(e) => onChange('title', e.target.value)}
-          placeholder="Mr."
+          placeholder={t($ => $.placeholders.title)}
           disabled={disabled}
         />
       </Grid>
       <Grid size={4}>
         <TextField
-          label="Given name"
+          label={t($ => $.fields.givenName)}
           fullWidth
           value={form.given_name}
           onChange={(e) => onChange('given_name', e.target.value)}
@@ -91,7 +93,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
       </Grid>
       <Grid size={5}>
         <TextField
-          label="Family name"
+          label={t($ => $.fields.familyName)}
           fullWidth
           value={form.family_name}
           onChange={(e) => onChange('family_name', e.target.value)}
@@ -101,7 +103,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
 
       <Grid size={12}>
         <TextField
-          label="Organization name"
+          label={t($ => $.fields.organizationName)}
           fullWidth
           value={form.organization_name}
           onChange={(e) => onChange('organization_name', e.target.value)}
@@ -111,7 +113,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
 
       <Grid size={8}>
         <TextField
-          label="Street and number"
+          label={t($ => $.fields.streetAndNumber)}
           fullWidth
           value={form.street_and_number}
           onChange={(e) => onChange('street_and_number', e.target.value)}
@@ -120,28 +122,28 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
       </Grid>
       <Grid size={4}>
         <TextField
-          label="Postal code"
+          label={t($ => $.fields.postalCode)}
           fullWidth
           value={form.postal_code}
           onChange={(e) => onChange('postal_code', e.target.value)}
-          placeholder="1234AB"
+          placeholder={t($ => $.placeholders.postalCode)}
           disabled={disabled}
         />
       </Grid>
       <Grid size={12}>
         <TextField
-          label="Street additional"
+          label={t($ => $.fields.streetAdditional)}
           fullWidth
           value={form.street_additional}
           onChange={(e) => onChange('street_additional', e.target.value)}
-          placeholder="Apt. 1"
+          placeholder={t($ => $.placeholders.streetAdditional)}
           disabled={disabled}
         />
       </Grid>
 
       <Grid size={5}>
         <TextField
-          label="City"
+          label={t($ => $.fields.city)}
           fullWidth
           value={form.city}
           onChange={(e) => onChange('city', e.target.value)}
@@ -150,39 +152,39 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
       </Grid>
       <Grid size={4}>
         <TextField
-          label="Region"
+          label={t($ => $.fields.region)}
           fullWidth
           value={form.region}
           onChange={(e) => onChange('region', e.target.value)}
-          placeholder="Noord-Holland"
+          placeholder={t($ => $.placeholders.region)}
           disabled={disabled}
         />
       </Grid>
       <Grid size={3}>
         <TextField
-          label="Country"
+          label={t($ => $.fields.country)}
           fullWidth
           value={form.country}
           onChange={(e) => onChange('country', e.target.value.slice(0, 2).toUpperCase())}
           slotProps={{ htmlInput: { maxLength: 2 } }}
-          placeholder="NL"
+          placeholder={t($ => $.placeholders.country)}
           disabled={disabled}
         />
       </Grid>
 
       <Grid size={12}>
         <TextField
-          label="Website"
+          label={t($ => $.fields.website)}
           fullWidth
           value={form.website}
           onChange={(e) => onChange('website', e.target.value)}
-          placeholder="https://"
+          placeholder={t($ => $.placeholders.website)}
           disabled={disabled}
           slotProps={{
             input: {
               endAdornment: form.website ? (
                 <InputAdornment position="end">
-                  <Tooltip title="Open in new tab">
+                  <Tooltip title={t($ => $.openInNewTab)}>
                     <IconButton
                       size="small"
                       edge="end"
@@ -203,7 +205,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
       </Grid>
       <Grid size={6}>
         <TextField
-          label="Phone"
+          label={t($ => $.fields.phone)}
           fullWidth
           value={form.phone}
           onChange={(e) => onChange('phone', e.target.value)}
@@ -213,7 +215,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
       </Grid>
       <Grid size={6}>
         <TextField
-          label="Email"
+          label={t($ => $.fields.email)}
           fullWidth
           type="email"
           value={form.email}

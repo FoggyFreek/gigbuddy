@@ -1,5 +1,6 @@
 import type { Gig, Id } from '../types/entities.ts'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
@@ -39,6 +40,7 @@ interface NewInvoiceDialogProps {
 }
 
 export default function NewInvoiceDialog({ onClose, onCreated }: NewInvoiceDialogProps) {
+  const { t } = useTranslation(['invoices', 'common'])
   const [gig, setGig] = useState<Gig | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -120,25 +122,25 @@ export default function NewInvoiceDialog({ onClose, onCreated }: NewInvoiceDialo
   if (billingTargets) {
     return (
       <Dialog open onClose={onClose} fullWidth maxWidth="sm">
-        <DialogTitle>Select billing target</DialogTitle>
+        <DialogTitle>{t($ => $.newDialog.selectBillingTarget)}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            This gig has both a festival and a venue. Choose which organisation to bill.
+            {t($ => $.newDialog.billingTargetDescription)}
           </Typography>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <RadioGroup value={selectedTarget} onChange={(e) => setSelectedTarget(e.target.value)}>
-            {billingTargets.map((t) => (
+            {billingTargets.map((target) => (
               <FormControlLabel
-                key={t.type}
-                value={t.type}
+                key={target.type}
+                value={target.type}
                 control={<Radio />}
                 label={
                   <>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {t.type === 'festival' ? 'Festival / event organisation' : 'Venue / physical location'}
+                      {target.type === 'festival' ? t($ => $.newDialog.festivalTarget) : t($ => $.newDialog.venueTarget)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {[t.name, t.address_city].filter(Boolean).join(' · ')}
+                      {[target.name, target.address_city].filter(Boolean).join(' · ')}
                     </Typography>
                   </>
                 }
@@ -147,9 +149,9 @@ export default function NewInvoiceDialog({ onClose, onCreated }: NewInvoiceDialo
           </RadioGroup>
         </DialogContent>
         <DialogActions>
-          <Button disabled={busy} onClick={() => { setBillingTargets(null); setPendingPayload(null) }}>Back</Button>
+          <Button disabled={busy} onClick={() => { setBillingTargets(null); setPendingPayload(null) }}>{t($ => $.common.actions.back)}</Button>
           <Button variant="contained" disabled={!selectedTarget || busy} onClick={handleTargetConfirm}>
-            Continue
+            {t($ => $.newDialog.continue)}
           </Button>
         </DialogActions>
       </Dialog>
@@ -158,18 +160,18 @@ export default function NewInvoiceDialog({ onClose, onCreated }: NewInvoiceDialo
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>New invoice</DialogTitle>
+      <DialogTitle>{t($ => $.newDialog.title)}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Pick a gig to draft the invoice from. The band fee, venue address, and a default line description will be filled in.
+          {t($ => $.newDialog.description)}
         </Typography>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <GigPicker value={gig} onChange={setGig} autoFocus />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.cancel)}</Button>
         <Button variant="contained" disabled={!gig || busy} onClick={handleContinue}>
-          Continue
+          {t($ => $.newDialog.continue)}
         </Button>
       </DialogActions>
     </Dialog>

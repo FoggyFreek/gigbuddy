@@ -1,3 +1,6 @@
 {
-  "title": "Suppliers"
+  "title": "Suppliers",
+  "addSupplier": "Add supplier",
+  "empty": "No suppliers yet - add one or import from CSV.",
+  "importTitle": "Import Suppliers from CSV"
 }

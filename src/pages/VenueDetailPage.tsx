@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -55,6 +56,9 @@ interface CategoryChange {
 const REQUIRED_FIELDS = ['name']
 
 export default function VenueDetailPage() {
+  const { t } = useTranslation(['venues', 'common'])
+  const categoryLabel = (category: string) =>
+    category === 'festival' ? t($ => $.category.festival) : t($ => $.category.venue)
   const { id } = useParams()
   const venueId = Number(id)
   const navigate = useNavigate()
@@ -214,15 +218,15 @@ export default function VenueDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={handleBack} aria-label="back">
+          <IconButton onClick={handleBack} aria-label={t($ => $.detail.backAria)}>
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Venue</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.detailTitle)}</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={handleBack} aria-label="close">
+            <IconButton onClick={handleBack} aria-label={t($ => $.detail.closeAria)}>
               <CloseIcon />
             </IconButton>
           </>
@@ -247,7 +251,7 @@ export default function VenueDetailPage() {
           <Divider sx={{ my: 3 }} />
 
           <Typography variant="subtitle2" sx={{ fontWeight: 600,  mb: 2  }}>
-            Contacts
+            {t($ => $.detail.contactsHeading)}
           </Typography>
 
           {contacts.map((c) => (
@@ -275,22 +279,22 @@ export default function VenueDetailPage() {
                 </Typography>
               </Box>
               {canWrite && (
-                <Tooltip title={c.is_primary ? 'Primary contact — click to unset' : 'Mark as primary'}>
+                <Tooltip title={c.is_primary ? t($ => $.detail.primarySet) : t($ => $.detail.primaryMark)}>
                   <IconButton
                     size="small"
                     color={c.is_primary ? 'warning' : 'default'}
                     onClick={() => handleSetPrimary(c.id!, !c.is_primary)}
-                    aria-label={c.is_primary ? 'unset primary' : 'set primary'}
+                    aria-label={c.is_primary ? t($ => $.detail.unsetPrimaryAria) : t($ => $.detail.setPrimaryAria)}
                   >
                     {c.is_primary ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
                   </IconButton>
                 </Tooltip>
               )}
-              <Tooltip title="Open contact">
+              <Tooltip title={t($ => $.detail.openContact)}>
                 <IconButton
                   size="small"
                   onClick={async () => { await flush(); navigate(`/contacts/${c.id}`) }}
-                  aria-label="open contact"
+                  aria-label={t($ => $.detail.openContactAria)}
                 >
                   <OpenInNewIcon fontSize="small" />
                 </IconButton>
@@ -299,7 +303,7 @@ export default function VenueDetailPage() {
                 <IconButton
                   size="small"
                   onClick={() => handleRemoveContact(c.id!)}
-                  aria-label="remove contact"
+                  aria-label={t($ => $.detail.removeContactAria)}
                 >
                   <DeleteIcon fontSize="small" />
                 </IconButton>
@@ -327,19 +331,19 @@ export default function VenueDetailPage() {
       {canWrite && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
-            Delete
+            {t($ => $.common.actions.delete)}
           </Button>
         </Box>
       )}
 
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
-        <DialogTitle>Delete venue?</DialogTitle>
+        <DialogTitle>{t($ => $.detail.deleteTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>This cannot be undone.</DialogContentText>
+          <DialogContentText>{t($ => $.detail.deleteBody)}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={handleDelete}>Delete</Button>
+          <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
+          <Button color="error" variant="contained" onClick={handleDelete}>{t($ => $.common.actions.delete)}</Button>
         </DialogActions>
       </Dialog>
     </Box>
@@ -347,35 +351,44 @@ export default function VenueDetailPage() {
     {categoryChange && (
       <Dialog open onClose={handleCategoryCancel} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Category change affects {categoryChange.affectedGigs.length} gig{categoryChange.affectedGigs.length !== 1 ? 's' : ''}
+          {t($ => $.categoryChange.title, { count: categoryChange.affectedGigs.length })}
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" gutterBottom>
-            The following {categoryChange.affectedGigs.length === 1 ? 'gig links' : 'gigs link'} to this record
-            as a <strong>{categoryChange.prevCategory}</strong>. Changing to
-            a <strong>{categoryChange.newCategory}</strong> requires each gig's link to be updated.
+            <Trans
+              t={t}
+              i18nKey={$ => $.categoryChange.body}
+              count={categoryChange.affectedGigs.length}
+              values={{
+                prevCategory: categoryLabel(categoryChange.prevCategory),
+                newCategory: categoryLabel(categoryChange.newCategory),
+              }}
+              components={{ strong: <strong /> }}
+            />
           </Typography>
           <Box component="ul" sx={{ pl: 2, mt: 1, mb: 2 }}>
             {categoryChange.affectedGigs.map((g) => (
               <li key={String(g.id)}>
                 <Typography variant="body2">
-                  {g.event_description || '(untitled)'} — {String(g.event_date).slice(0, 10)}
+                  {g.event_description || t($ => $.categoryChange.untitled)} — {String(g.event_date).slice(0, 10)}
                 </Typography>
               </li>
             ))}
           </Box>
           <Typography variant="body2" color="text.secondary">
-            <strong>Move links</strong> — keep each gig linked to this record, moved to
-            the {categoryChange.newCategory} slot.
-            <br />
-            <strong>Remove links</strong> — unlink each gig from this record entirely.
+            <Trans
+              t={t}
+              i18nKey={$ => $.categoryChange.actions}
+              values={{ category: categoryLabel(categoryChange.newCategory) }}
+              components={{ strong: <strong />, br: <br /> }}
+            />
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCategoryCancel}>Cancel</Button>
-          <Button onClick={() => handleCategoryConfirm('remove')}>Remove links</Button>
+          <Button onClick={handleCategoryCancel}>{t($ => $.common.actions.cancel)}</Button>
+          <Button onClick={() => handleCategoryConfirm('remove')}>{t($ => $.categoryChange.removeButton)}</Button>
           <Button variant="contained" onClick={() => handleCategoryConfirm('migrate')}>
-            Move links
+            {t($ => $.categoryChange.moveButton)}
           </Button>
         </DialogActions>
       </Dialog>

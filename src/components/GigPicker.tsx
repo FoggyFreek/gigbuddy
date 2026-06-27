@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
@@ -18,7 +19,8 @@ interface GigPickerProps {
   autoFocus?: boolean
 }
 
-export default function GigPicker({ value, onChange, disabled, label = 'Gig', autoFocus }: GigPickerProps) {
+export default function GigPicker({ value, onChange, disabled, label, autoFocus }: GigPickerProps) {
+  const { t, i18n } = useTranslation('invoices')
   const [gigs, setGigs] = useState<GigOption[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -44,7 +46,7 @@ export default function GigPicker({ value, onChange, disabled, label = 'Gig', au
       autoHighlight
       isOptionEqualToValue={(a, b) => a?.id != null && a.id === b?.id}
       getOptionLabel={(o: GigOption) =>
-        `${formatShortDate(o.event_date)} - ${o.event_description || '(untitled)'}`
+        `${formatShortDate(o.event_date, i18n.resolvedLanguage)} - ${o.event_description || t($ => $.gigPicker.untitled)}`
       }
       renderOption={(props, option: GigOption) => {
         const displayVenue = option.venue ?? option.festival
@@ -53,7 +55,7 @@ export default function GigPicker({ value, onChange, disabled, label = 'Gig', au
           <li {...props} key={String(option.id)}>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
               <Typography variant="body2">
-                {formatShortDate(option.event_date)} - {option.event_description || '(untitled)'}
+                {formatShortDate(option.event_date, i18n.resolvedLanguage)} - {option.event_description || t($ => $.gigPicker.untitled)}
               </Typography>
               {venueName && (
                 <Typography variant="caption" color="text.secondary">
@@ -67,9 +69,9 @@ export default function GigPicker({ value, onChange, disabled, label = 'Gig', au
       renderInput={(params) => (
         <TextField
           {...params}
-          label={label}
+          label={label ?? t($ => $.gigPicker.label)}
           autoFocus={autoFocus}
-          helperText={!loading && !gigs.length ? 'No gigs yet - create one first' : ' '}
+          helperText={!loading && !gigs.length ? t($ => $.gigPicker.empty) : ' '}
         />
       )}
     />

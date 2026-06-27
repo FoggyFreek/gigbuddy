@@ -1,3 +1,134 @@
 {
-  "title": "Purchases"
+  "title": "Purchases",
+  "singularTitle": "Purchase",
+  "createPurchase": "Create purchase",
+  "summary": {
+    "draft": "Draft",
+    "overdue": "Overdue",
+    "unpaid": "Unpaid",
+    "paid": "Paid"
+  },
+  "rawStatus": {
+    "draft": "draft",
+    "approved": "approved",
+    "paid": "paid"
+  },
+  "searchPlaceholder": "Search",
+  "empty": "No purchases found",
+  "labels": {
+    "supplier": "Supplier",
+    "receiptDate": "Receipt date",
+    "dueDate": "Due date",
+    "currency": "Currency",
+    "description": "Description",
+    "vatAmount": "VAT - amount",
+    "inclVat": "Incl. VAT",
+    "exclVat": "Excl. VAT",
+    "total": "Total"
+  },
+  "table": {
+    "receiptNumber": "Receipt #",
+    "date": "Date"
+  },
+  "pagination": {
+    "rowsPerPage": "Rows per page:",
+    "displayedRows": "{{from}}–{{to}} of {{count}}",
+    "first": "Go to first page",
+    "last": "Go to last page",
+    "next": "Go to next page",
+    "previous": "Go to previous page"
+  },
+  "newDialog": {
+    "title": "New purchase",
+    "description": "Pick a supplier and the receipt date to start. You can fill in the lines next.",
+    "continue": "Continue"
+  },
+  "detail": {
+    "heading": "Purchase {{number}}",
+    "editReceiptNumber": "edit receipt number",
+    "saveAsDraft": "Save as draft",
+    "approve": "Approve",
+    "registerPayment": "Register Payment"
+  },
+  "supplierFields": {
+    "addDueDate": "Due",
+    "openReceiptDatePicker": "open receipt date picker",
+    "openDueDatePicker": "open due date picker"
+  },
+  "supplierPicker": {
+    "placeholder": "Search or type contact name…",
+    "create": "+ Add '{{name}}' as supplier",
+    "createFailed": "Could not add supplier",
+    "clear": "Clear",
+    "open": "Open",
+    "loading": "Loading…",
+    "noOptions": "No options"
+  },
+  "lines": {
+    "lineNumber": "Line #{{number}}",
+    "removeLine": "remove line",
+    "descriptionPlaceholder": "What you have bought?",
+    "stockProduct": "Stock product (optional)",
+    "noProduct": "No product — regular expense",
+    "quantity": "Quantity",
+    "expenseAccount": "Expense / asset account",
+    "booksToInventory": "Books to inventory",
+    "defaultExpenseAccount": "Default expense account",
+    "taxRate": "Tax rate",
+    "select": "Select…",
+    "addLine": "Add line",
+    "inactiveAccount": "Inactive/unknown account",
+    "accountGroups": {
+      "asset": "Fixed Assets (capitalize)",
+      "cost_of_goods_sold": "Cost of Goods Sold",
+      "expense": "Expenses"
+    }
+  },
+  "totals": {
+    "heading": "Total ({{currency}})"
+  },
+  "payment": {
+    "dialogTitle": "Register payment",
+    "paidOn": "Paid on",
+    "openPaidOnPicker": "open paid-on date picker",
+    "method": "Payment method",
+    "bank": "Bank",
+    "bandMember": "Band member",
+    "noBandMembers": "Add a band member before registering a member-paid purchase.",
+    "paidBy": "Paid by",
+    "paidFrom": "Paid from",
+    "register": "Register",
+    "bankAccount": "Bank account",
+    "bandMemberNumber": "Band member #{{number}}"
+  },
+  "deleteDialog": {
+    "title": "Delete purchase?",
+    "body": "This permanently deletes the draft purchase. This cannot be undone."
+  },
+  "attachments": {
+    "drop": "Drag and drop receipts here",
+    "upload": "Upload file",
+    "formats": "PDF, PNG or JPG",
+    "previous": "previous attachment",
+    "next": "next attachment",
+    "zoomOut": "zoom out",
+    "zoomIn": "zoom in",
+    "rotate": "Rotate",
+    "rotateAria": "rotate",
+    "options": "attachment options",
+    "pdfLoadError": "Could not load this PDF",
+    "add": "Add attachment",
+    "download": "Download"
+  },
+  "validation": {
+    "description": "Enter a description",
+    "expenseAccount": "Choose an expense account",
+    "positiveAmount": "Enter an amount greater than zero",
+    "approvalIncomplete": "Complete the highlighted purchase line fields before approving.",
+    "accountingSetup": "Choose an expense account for each line, or configure a default expense account in Accounting Settings.",
+    "required": "Required",
+    "supplierRequired": "Supplier is required",
+    "inactiveAccount": "Replace the inactive account on line {{number}}",
+    "bandMemberRequired": "Choose the band member who paid for this purchase"
+  }
 }

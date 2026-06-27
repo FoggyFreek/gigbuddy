@@ -36,6 +36,7 @@ vi.mock('../api/accounts.ts', () => ({
 }))
 
 import * as purchasesApi from '../api/purchases.ts'
+import i18n, { resources } from '../i18n/index.ts'
 import PurchaseDetailPage from '../pages/PurchaseDetailPage.tsx'
 import PurchasesPage from '../pages/PurchasesPage.tsx'
 import theme from '../theme.ts'
@@ -82,11 +83,66 @@ const PURCHASES = [
     supplier_name: 'mi5 Studios',
     receipt_date: '2026-06-03',
     due_date: null,
-    status: 'draft',
+    status: 'approved',
     subtotal_cents: 123967,
     tax_cents: 26033,
     total_cents: 150000,
     description: 'Studio recording day',
+  },
+]
+
+// A mix spanning every summary bucket, used to assert the default "unpaid"
+// filter shows unpaid + overdue (but never draft or paid).
+const FAR_FUTURE = '2999-01-01'
+const FAR_PAST = '2000-01-01'
+const MIXED_PURCHASES = [
+  {
+    id: 11,
+    receipt_number: 11,
+    supplier_name: 'Unpaid Supplier',
+    receipt_date: '2026-06-03',
+    due_date: FAR_FUTURE,
+    status: 'approved',
+    subtotal_cents: 1000,
+    tax_cents: 0,
+    total_cents: 1000,
+    description: '',
+  },
+  {
+    id: 12,
+    receipt_number: 12,
+    supplier_name: 'Overdue Supplier',
+    receipt_date: '2026-06-03',
+    due_date: FAR_PAST,
+    status: 'approved',
+    subtotal_cents: 2000,
+    tax_cents: 0,
+    total_cents: 2000,
+    description: '',
+  },
+  {
+    id: 13,
+    receipt_number: 13,
+    supplier_name: 'Paid Supplier',
+    receipt_date: '2026-06-03',
+    due_date: FAR_PAST,
+    status: 'paid',
+    subtotal_cents: 3000,
+    tax_cents: 0,
+    total_cents: 3000,
+    description: '',
+  },
+  {
+    id: 14,
+    receipt_number: 14,
+    supplier_name: 'Draft Supplier',
+    receipt_date: '2026-06-03',
+    due_date: null,
+    status: 'draft',
+    subtotal_cents: 4000,
+    tax_cents: 0,
+    total_cents: 4000,
+    description: '',
   },
 ]
 
@@ -107,7 +163,8 @@ const CREATED_PURCHASE = {
   lines: [{ description: '', expense_category: '', tax_rate: 21, amount_incl_cents: 0, position: 0 }],
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
   vi.clearAllMocks()
   purchasesApi.listPurchases.mockResolvedValue(PURCHASES)
   purchasesApi.listPurchasePeriods.mockResolvedValue(PURCHASES.map((p) => p.receipt_date))
@@ -125,6 +182,31 @@ describe('PurchasesPage', () => {
     expect(purchasesApi.listPurchases).toHaveBeenCalledWith(expect.objectContaining({ mode: 'fiscal_year' }))
   })
 
+  it('defaults to the unpaid filter, showing unpaid + overdue but not draft or paid', async () => {
+    purchasesApi.listPurchases.mockResolvedValue(MIXED_PURCHASES)
+    purchasesApi.listPurchasePeriods.mockResolvedValue(MIXED_PURCHASES.map((p) => p.receipt_date))
+    wrap(<PurchasesPage />)
+
+    expect(await screen.findByText('Unpaid Supplier')).toBeInTheDocument()
+    expect(screen.getByText('Overdue Supplier')).toBeInTheDocument()
+    expect(screen.queryByText('Paid Supplier')).not.toBeInTheDocument()
+    expect(screen.queryByText('Draft Supplier')).not.toBeInTheDocument()
+  })
+
+  it('switches to the paid filter to show only paid purchases', async () => {
+    const user = userEvent.setup()
+    purchasesApi.listPurchases.mockResolvedValue(MIXED_PURCHASES)
+    purchasesApi.listPurchasePeriods.mockResolvedValue(MIXED_PURCHASES.map((p) => p.receipt_date))
+    wrap(<PurchasesPage />)
+    await screen.findByText('Unpaid Supplier')
+
+    await user.click(screen.getByText(resources.en.purchases.summary.paid))
+
+    expect(await screen.findByText('Paid Supplier')).toBeInTheDocument()
+    expect(screen.queryByText('Unpaid Supplier')).not.toBeInTheDocument()
+    expect(screen.queryByText('Overdue Supplier')).not.toBeInTheDocument()
+  })
+
   it('paginates the table at 25 rows per page', async () => {
     const user = userEvent.setup()
     const many = Array.from({ length: 30 }, (_, i) => ({
@@ -133,7 +215,7 @@ describe('PurchasesPage', () => {
       supplier_name: `Supplier ${100 + i}`,
       receipt_date: '2026-06-03',
       due_date: null,
-      status: 'paid',
+      status: 'approved',
       subtotal_cents: 1000,
       tax_cents: 210,
       total_cents: 1210,
@@ -170,12 +252,14 @@ describe('PurchasesPage', () => {
 
   it('creates a purchase and opens it in the nested detail view', async () => {
     const user = userEvent.setup()
+    await i18n.changeLanguage('nl')
+    const copy = resources.nl.purchases
     wrapWithRoutes()
 
     await screen.findByText('mi5 Studios')
-    await user.click(screen.getByRole('button', { name: /create purchase/i }))
-    await user.type(screen.getByPlaceholderText(/Search or type contact name/), 'New Supplier BV')
-    await user.click(screen.getByRole('button', { name: /continue/i }))
+    await user.click(screen.getByRole('button', { name: copy.createPurchase }))
+    await user.type(screen.getByPlaceholderText(copy.supplierPicker.placeholder), 'New Supplier BV')
+    await user.click(screen.getByRole('button', { name: copy.newDialog.continue }))
 
     await waitFor(() => expect(purchasesApi.createPurchase).toHaveBeenCalledTimes(1))
     expect(purchasesApi.createPurchase).toHaveBeenCalledWith(expect.objectContaining({
@@ -184,8 +268,9 @@ describe('PurchasesPage', () => {
     }))
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/purchases/99'))
     expect(purchasesApi.getPurchase).toHaveBeenCalledWith(99)
-    expect(await screen.findByRole('heading', { name: 'Purchase' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: copy.singularTitle })).toBeInTheDocument()
     expect(await screen.findByDisplayValue('New Supplier BV')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
+
 })

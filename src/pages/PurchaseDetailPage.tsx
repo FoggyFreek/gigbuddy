@@ -1,5 +1,6 @@
 ﻿import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
+import { useTranslation } from 'react-i18next'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
@@ -15,6 +16,7 @@ interface PurchaseDetailOutletContext {
 }
 
 export default function PurchaseDetailPage() {
+  const { t } = useTranslation(['purchases', 'common'])
   const { id } = useParams()
   const purchaseId = Number(id)
   const navigate = useNavigate()
@@ -31,15 +33,15 @@ export default function PurchaseDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 1200, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={() => closeView(false)} aria-label="back">
+          <IconButton onClick={() => closeView(false)} aria-label={t($ => $.common.actions.back)}>
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Purchase</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.singularTitle)}</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={() => closeView(false)} aria-label="close">
+            <IconButton onClick={() => closeView(false)} aria-label={t($ => $.common.actions.close)}>
               <CloseIcon />
             </IconButton>
           </>

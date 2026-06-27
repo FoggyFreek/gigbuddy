@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Id, PurchaseAttachment } from '../../types/entities.ts'
 import { Document, Page, pdfjs } from 'react-pdf'
 import Alert from '@mui/material/Alert'
@@ -94,6 +95,7 @@ interface PurchaseAttachmentsViewerProps {
 // attachment in sequence (PDF pages expand in place once their document loads).
 // Zoom/rotate re-render PDF pages via pdf.js; images use CSS transforms.
 export default function PurchaseAttachmentsViewer({ attachments, busy, error, onUpload, onDelete }: PurchaseAttachmentsViewerProps) {
+  const { t } = useTranslation(['purchases', 'common'])
   const [index, setIndex] = useState(0)
   const [page, setPage] = useState(1)
   const [zoomStep, setZoomStep] = useState(2) // index into ZOOM_STEPS → 100%
@@ -208,7 +210,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
         {error && <Alert severity="error" sx={{ alignSelf: 'stretch' }}>{error}</Alert>}
         <CloudUploadOutlinedIcon sx={{ fontSize: 44, color: 'text.secondary' }} />
         <Typography variant="body1" sx={{ textAlign: 'center' }}>
-          Drag and drop receipts here
+          {t($ => $.attachments.drop)}
         </Typography>
         <Button
           variant="outlined"
@@ -218,10 +220,10 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
           onClick={() => fileInputRef.current?.click()}
           sx={{ borderRadius: 99, px: 3, textTransform: 'none', fontWeight: 600 }}
         >
-          Upload file
+          {t($ => $.attachments.upload)}
         </Button>
         <Typography variant="caption" color="text.secondary">
-          PDF, PNG or JPG
+          {t($ => $.attachments.formats)}
         </Typography>
       </Paper>
     )
@@ -249,7 +251,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
     >
       <IconButton
         size="small"
-        aria-label="previous attachment"
+        aria-label={t($ => $.attachments.previous)}
         disabled={currentStep <= 1}
         onClick={goPrev}
       >
@@ -260,7 +262,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
       </Typography>
       <IconButton
         size="small"
-        aria-label="next attachment"
+        aria-label={t($ => $.attachments.next)}
         disabled={currentStep >= totalSteps}
         onClick={goNext}
       >
@@ -269,7 +271,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
       <IconButton
         size="small"
-        aria-label="zoom out"
+        aria-label={t($ => $.attachments.zoomOut)}
         disabled={zoomStep === 0}
         onClick={() => setZoomStep((z) => Math.max(z - 1, 0))}
       >
@@ -280,19 +282,19 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
       </Typography>
       <IconButton
         size="small"
-        aria-label="zoom in"
+        aria-label={t($ => $.attachments.zoomIn)}
         disabled={zoomStep === ZOOM_STEPS.length - 1}
         onClick={() => setZoomStep((z) => Math.min(z + 1, ZOOM_STEPS.length - 1))}
       >
         <ZoomInIcon fontSize="small" />
       </IconButton>
-      <Tooltip title="Rotate">
-        <IconButton size="small" aria-label="rotate" onClick={() => setRotation((r) => (r + 90) % 360)}>
+      <Tooltip title={t($ => $.attachments.rotate)}>
+        <IconButton size="small" aria-label={t($ => $.attachments.rotateAria)} onClick={() => setRotation((r) => (r + 90) % 360)}>
           <RotateRightIcon fontSize="small" />
         </IconButton>
       </Tooltip>
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-      <IconButton size="small" aria-label="attachment options" onClick={(e) => setMenuAnchor(e.currentTarget)}>
+      <IconButton size="small" aria-label={t($ => $.attachments.options)} onClick={(e) => setMenuAnchor(e.currentTarget)}>
         <MoreVertIcon fontSize="small" />
       </IconButton>
     </Paper>
@@ -334,7 +336,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
               key={String(current.id)}
               file={src}
               loading={pdfLoadingSpinner}
-              error={<Alert severity="error">Could not load this PDF</Alert>}
+              error={<Alert severity="error">{t($ => $.attachments.pdfLoadError)}</Alert>}
               onLoadSuccess={({ numPages }) => {
                 setNumPagesById((prev) => ({ ...prev, [String(current.id)]: numPages }))
               }}
@@ -384,7 +386,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
           }}
         >
           <ListItemIcon><AddIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Add attachment</ListItemText>
+          <ListItemText>{t($ => $.attachments.add)}</ListItemText>
         </MenuItem>
         <MenuItem
           component="a"
@@ -393,7 +395,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
           onClick={closeMenu}
         >
           <ListItemIcon><FileDownloadOutlinedIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Download</ListItemText>
+          <ListItemText>{t($ => $.attachments.download)}</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -402,7 +404,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
           }}
         >
           <ListItemIcon><DeleteOutlineIcon fontSize="small" color="error" /></ListItemIcon>
-          <ListItemText slotProps={{ primary: { color: 'error' } }}>Delete</ListItemText>
+          <ListItemText slotProps={{ primary: { color: 'error' } }}>{t($ => $.common.actions.delete)}</ListItemText>
         </MenuItem>
       </Menu>
     </Box>

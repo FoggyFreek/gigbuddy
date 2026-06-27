@@ -1,4 +1,5 @@
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
@@ -8,6 +9,7 @@ import InvoiceDetails from '../components/InvoiceDetails.tsx'
 import type { Id, Invoice } from '../types/entities.ts'
 
 export default function InvoiceDetailPage() {
+  const { t } = useTranslation(['invoices', 'common'])
   const { id } = useParams()
   const invoiceId = Number(id)
   const navigate = useNavigate()
@@ -24,15 +26,15 @@ export default function InvoiceDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={() => closeView(false)} aria-label="back">
+          <IconButton onClick={() => closeView(false)} aria-label={t($ => $.common.actions.back)}>
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Invoice</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.singularTitle)}</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={() => closeView(false)} aria-label="close">
+            <IconButton onClick={() => closeView(false)} aria-label={t($ => $.common.actions.close)}>
               <CloseIcon />
             </IconButton>
           </>
