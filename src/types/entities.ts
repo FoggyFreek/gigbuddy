@@ -421,11 +421,22 @@ export interface VatReturnPayment {
   paid_on?: string
 }
 
+export type VatReturnStatus =
+  | 'paid'
+  | 'received'
+  | 'settled'
+  | 'partially_paid'
+  | 'partially_received'
+  | 'unpaid'
+  | 'not_received'
+
+export type VatQuarter = 1 | 2 | 3 | 4
+
 /** A filed VAT declaration (GET /api/vat-returns). */
 export interface VatReturn {
   id?: Id
   year?: number
-  quarter?: number
+  quarter?: VatQuarter
   period_from?: string
   period_to?: string
   input_vat_cents?: number
@@ -435,7 +446,7 @@ export interface VatReturn {
   settlement_account_code?: string
   due_date?: string
   notes?: string
-  status?: string
+  status?: VatReturnStatus
   paid_cents?: number
   payments?: VatReturnPayment[]
   ledger_transaction_id?: Id
@@ -444,7 +455,7 @@ export interface VatReturn {
 /** The quarter preview returned by GET /api/vat-returns/preview. */
 export interface VatReturnPreview {
   year?: number
-  quarter?: number
+  quarter?: VatQuarter
   period_from?: string
   period_to?: string
   due_date?: string

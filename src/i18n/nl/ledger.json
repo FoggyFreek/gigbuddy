@@ -1,3 +1,87 @@
 {
-  "title": "Grootboektransacties"
+  "title": "Transacties",
+  "searchPlaceholder": "Zoeken...",
+  "showVoided": "Toon gestorneerd",
+  "perPage": "per pagina",
+  "emptyEntries": "Geen grootboekposten gevonden",
+  "columns": {
+    "file": "Bestand",
+    "receipt": "Boekstuk",
+    "date": "Datum",
+    "type": "Type",
+    "description": "Omschrijving",
+    "amount": "Bedrag",
+    "account": "Rekening",
+    "memo": "Memo",
+    "debit": "Debet",
+    "credit": "Credit"
+  },
+  "typeFilter": {
+    "button": "Types: {{selection}}",
+    "all": "Alle"
+  },
+  "typeGroups": {
+    "purchases": "Inkopen",
+    "invoices": "Facturen",
+    "payments": "Betalingen",
+    "journals": "Journaal"
+  },
+  "accountFilter": {
+    "button": "Rekeningen: {{selection}}",
+    "selected": "{{count}} geselecteerd",
+    "clear": "Selectie wissen"
+  },
+  "search": {
+    "title": "Grootboekposten",
+    "searchPlaceholder": "Memo zoeken...",
+    "selectAccountsPrompt": "Selecteer een of meer rekeningen om hun posten te doorzoeken.",
+    "openTransaction": "Transactie openen",
+    "openTransactionAria": "transactie openen",
+    "totals": "Totalen ({{count}})"
+  },
+  "detail": {
+    "heading": "Grootboektransactie: {{name}}",
+    "backAria": "terug",
+    "notice": {
+      "voided": "Deze grootboektransactie is gestorneerd door een andere grootboektransactie.",
+      "reversed": "Deze grootboektransactie is teruggeboekt door een andere grootboektransactie.",
+      "correctionVoid": "Deze grootboektransactie is aangemaakt om een andere grootboektransactie te storneren.",
+      "correctionReverse": "Deze grootboektransactie is aangemaakt om een andere grootboektransactie terug te boeken.",
+      "viewEntry": "Transactie #{{id}} bekijken"
+    },
+    "voidDialog": {
+      "title": "Grootboektransactie storneren?",
+      "body": "Wil je deze grootboektransactie storneren? Hierdoor wordt een nieuwe grootboektransactie aangemaakt die deze tegenboekt.",
+      "confirm": "Transactie storneren"
+    },
+    "reverseDialog": {
+      "title": "Grootboektransactie terugboeken?",
+      "body": "Deze transactie valt in een afgesloten boekingsperiode. Terugboeken plaatst een nieuwe, zichtbare grootboektransactie in de huidige open periode die deze tegenboekt; de oorspronkelijke transactie blijft ongewijzigd.",
+      "confirm": "Transactie terugboeken"
+    },
+    "actions": {
+      "void": "Storneren",
+      "reverse": "Terugboeken"
+    },
+    "meta": {
+      "number": "Grootboektransactienummer",
+      "receipt": "Boekstuk",
+      "date": "Datum",
+      "created": "Aangemaakt",
+      "createdBy": "Aangemaakt door",
+      "origin": "Herkomst"
+    },
+    "lines": {
+      "number": "Nummer",
+      "name": "Naam",
+      "description": "Omschrijving",
+      "inEur": "In EUR",
+      "debit": "Debet",
+      "credit": "Credit",
+      "total": "Totaal",
+      "totalEur": "Totaal EUR:",
+      "totalDebit": "{{amount}} debet",
+      "totalCredit": "{{amount}} credit"
+    }
+  }
 }

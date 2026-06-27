@@ -3,6 +3,11 @@
   "totalOwed": "Totaal verschuldigd aan bandleden",
   "nothingOutstanding": "Niets openstaand",
   "noOutstandingPurchases": "Geen openstaande aankopen",
+  "empty": {
+    "title": "Geen openstaande terugbetalingen?",
+    "subtitle": "Dat is geen rock-‘n-roll",
+    "createPurchase": "Inkoopfactuur aanmaken"
+  },
   "purchaseCount_one": "{{count}} aankoop",
   "purchaseCount_other": "{{count}} aankopen",
   "table": {

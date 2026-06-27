@@ -1,8 +1,11 @@
 ﻿import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Paper from '@mui/material/Paper'
+import AddIcon from '@mui/icons-material/Add'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
@@ -21,6 +24,7 @@ import type { MemberOutstanding } from '../types/entities.ts'
 
 export default function ReimbursementsPage() {
   const { t } = useTranslation('reimbursements')
+  const navigate = useNavigate()
   const isCompact = useCompactLayout()
   const {
     outstanding, loading, error, expandedId, purchasesByMember,
@@ -56,15 +60,40 @@ export default function ReimbursementsPage() {
 
       {!loading && (
         <>
-          <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'inline-block', minWidth: 160 }}>
-            <Typography variant="body2" color="text.secondary">{t($ => $.totalOwed)}</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(totalOwed)}</Typography>
-          </Paper>
+          {Boolean(outstanding.length) && (
+            <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'inline-block', minWidth: 160 }}>
+              <Typography variant="body2" color="text.secondary">{t($ => $.totalOwed)}</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(totalOwed)}</Typography>
+            </Paper>
+          )}
 
           {!outstanding.length && (
-            <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-              {t($ => $.nothingOutstanding)}
-            </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                gap: 2,
+                py: 8,
+              }}
+            >
+              <Box
+                component="img"
+                src="/images/reimbursements.png"
+                alt=""
+                sx={{ width: 250, maxWidth: '60%', height: 'auto', mb: 1 }}
+              />
+              <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.empty.title)}</Typography>
+              <Typography variant="subtitle1" color="text.secondary">{t($ => $.empty.subtitle)}</Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => navigate('/purchases', { state: { openNewPurchase: true } })}
+              >
+                {t($ => $.empty.createPurchase)}
+              </Button>
+            </Box>
           )}
 
           {Boolean(outstanding.length) && isCompact && (

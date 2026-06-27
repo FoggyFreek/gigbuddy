@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Alert from '@mui/material/Alert'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -13,7 +14,7 @@ import Typography from '@mui/material/Typography'
 import DateEntryField from '../DateEntryField.tsx'
 import { listAccounts, getAccountingSettings } from '../../api/accounts.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
-import { quarterLabel, outstandingCents } from '../../utils/vatReturns.ts'
+import { quarterKey, outstandingCents } from '../../utils/vatReturns.ts'
 import type { VatReturn, Account } from '../../types/entities.ts'
 
 interface PaymentBody {
@@ -33,8 +34,10 @@ interface RecordVatPaymentDialogProps {
 // a filed declaration. The bank account picker lists the tenant's active asset
 // accounts and defaults to the primary checking account from settings.
 export default function RecordVatPaymentDialog({ vatReturn, onSubmit, onClose }: RecordVatPaymentDialogProps) {
+  const { t } = useTranslation(['vatReturns', 'common'])
   const isRefund = vatReturn.direction === 'receivable'
   const outstanding = outstandingCents(vatReturn)
+  const period = t($ => $.quarters[quarterKey(vatReturn.quarter ?? 1)], { year: vatReturn.year ?? 0 })
   const [amount, setAmount] = useState(() => (outstanding / 100).toFixed(2))
   const [paidOn, setPaidOn] = useState(() => new Date().toISOString().slice(0, 10))
   const [accounts, setAccounts] = useState<Account[] | null>(null)
@@ -83,7 +86,9 @@ export default function RecordVatPaymentDialog({ vatReturn, onSubmit, onClose }:
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>
-        {isRefund ? 'Record refund' : 'Record payment'} · {quarterLabel(vatReturn.year ?? 0, vatReturn.quarter ?? 0)}
+        {isRefund
+          ? t($ => $.paymentDialog.recordRefundTitle, { period })
+          : t($ => $.paymentDialog.recordPaymentTitle, { period })}
       </DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -97,11 +102,11 @@ export default function RecordVatPaymentDialog({ vatReturn, onSubmit, onClose }:
         {accounts && (
           <>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 2 }}>
-              <Typography variant="subtitle2">Outstanding</Typography>
+              <Typography variant="subtitle2">{t($ => $.fields.outstanding)}</Typography>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(outstanding)}</Typography>
             </Box>
             <TextField
-              label="Amount (€)"
+              label={t($ => $.fields.amount)}
               size="small"
               fullWidth
               type="number"
@@ -112,7 +117,7 @@ export default function RecordVatPaymentDialog({ vatReturn, onSubmit, onClose }:
             />
             <Box sx={{ mb: 2 }}>
               <DateEntryField
-                label={isRefund ? 'Received on' : 'Paid on'}
+                label={isRefund ? t($ => $.fields.receivedOn) : t($ => $.fields.paidOn)}
                 size="small"
                 fullWidth
                 value={paidOn}
@@ -121,7 +126,8 @@ export default function RecordVatPaymentDialog({ vatReturn, onSubmit, onClose }:
               />
             </Box>
             <TextField
-              label={isRefund ? 'To account' : 'From account'}
+              data-testid="vat-bank-account"
+              label={isRefund ? t($ => $.fields.toAccount) : t($ => $.fields.fromAccount)}
               size="small"
               fullWidth
               select
@@ -138,9 +144,9 @@ export default function RecordVatPaymentDialog({ vatReturn, onSubmit, onClose }:
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>Cancel</Button>
-        <Button variant="contained" disabled={!canSubmit} onClick={handleSubmit}>
-          {isRefund ? 'Record refund' : 'Record payment'}
+        <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.cancel)}</Button>
+        <Button data-testid="submit-vat-settlement" variant="contained" disabled={!canSubmit} onClick={handleSubmit}>
+          {isRefund ? t($ => $.actions.recordRefund) : t($ => $.actions.recordPayment)}
         </Button>
       </DialogActions>
     </Dialog>

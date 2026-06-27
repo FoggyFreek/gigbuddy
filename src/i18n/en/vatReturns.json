@@ -1,3 +1,75 @@
 {
-  "title": "VAT declarations"
+  "title": "VAT declarations",
+  "declaration": "VAT declaration",
+  "newDeclaration": "New declaration",
+  "empty": "No VAT declarations filed yet",
+  "summary": {
+    "all": "All declarations",
+    "open": "Ready to pay / receive",
+    "overdue": "Overdue",
+    "settled": "Settled"
+  },
+  "quarters": {
+    "first": "1st quarter {{year}}",
+    "second": "2nd quarter {{year}}",
+    "third": "3rd quarter {{year}}",
+    "fourth": "4th quarter {{year}}"
+  },
+  "status": {
+    "paid": "Paid",
+    "received": "Received",
+    "settled": "Settled",
+    "partially_paid": "Partially paid",
+    "partially_received": "Partially received",
+    "overdue": "Overdue",
+    "ready_to_pay": "Ready to pay",
+    "to_receive": "To receive"
+  },
+  "direction": {
+    "payable": "To pay",
+    "receivable": "To receive",
+    "nil": "Nothing due"
+  },
+  "actions": {
+    "viewBreakdown": "View breakdown",
+    "recordRefund": "Record refund",
+    "recordPayment": "Record payment",
+    "settleQuarter": "Settle quarter",
+    "viewLedgerEntry": "View settlement ledger entry",
+    "returnActions": "actions for {{period}}"
+  },
+  "fields": {
+    "year": "Year",
+    "quarter": "Quarter",
+    "period": "Period",
+    "dueDate": "Due date",
+    "filed": "Filed",
+    "outputVat": "Output VAT (sales)",
+    "inputVat": "Input VAT (purchases)",
+    "outstanding": "Outstanding",
+    "amount": "Amount (€)",
+    "receivedOn": "Received on",
+    "paidOn": "Paid on",
+    "toAccount": "To account",
+    "fromAccount": "From account"
+  },
+  "paymentHistory": {
+    "refundsReceived": "Refunds received",
+    "payments": "Payments"
+  },
+  "newDialog": {
+    "title": "New VAT declaration",
+    "previewDue": "{{period}} · due {{date}}",
+    "quarterNotEnded": "This quarter has not ended yet — it can be filed from {{date}}.",
+    "nothingAccumulated": "No VAT was accumulated in this period.",
+    "filingWarning": "Filing settles the VAT accounts and closes the books through {{date}}."
+  },
+  "paymentDialog": {
+    "recordRefundTitle": "Record refund · {{period}}",
+    "recordPaymentTitle": "Record payment · {{period}}"
+  },
+  "aria": {
+    "back": "back",
+    "close": "close"
+  }
 }

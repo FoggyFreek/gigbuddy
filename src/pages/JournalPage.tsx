@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -18,6 +19,7 @@ import JournalApproveErrorDialog from '../components/journal/JournalApproveError
 import { useJournalListState } from '../components/journal/useJournalListState.ts'
 
 export default function JournalPage() {
+  const { t } = useTranslation('journal')
   const compact = useCompactLayout()
   const setWideContent = useSetWideContent()
   useEffect(() => {
@@ -42,7 +44,7 @@ export default function JournalPage() {
   if (compact) {
     return (
       <Box>
-        <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>Journal</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>{t($ => $.title)}</Typography>
         {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -51,13 +53,12 @@ export default function JournalPage() {
         ) : (
           <Box sx={{ textAlign: 'center', py: 6, px: 2 }}>
             <DesktopWindowsOutlinedIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-            <Typography variant="h6" sx={{ mb: 1 }}>Open on a desktop to edit</Typography>
+            <Typography variant="h6" sx={{ mb: 1 }}>{t($ => $.compact.title)}</Typography>
             <Typography color="text.secondary" sx={{ mb: 3 }}>
-              Journal entries use a wide, multi-column layout. Switch to a larger
-              screen to add or edit entries.
+              {t($ => $.compact.body)}
             </Typography>
             <Typography variant="body1" sx={{ fontWeight: 600 }}>
-              {journals.length} ledger {journals.length === 1 ? 'entry' : 'entries'}
+              {t($ => $.ledgerEntries, { count: journals.length })}
             </Typography>
           </Box>
         )}
@@ -73,7 +74,7 @@ export default function JournalPage() {
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, flexGrow: 1 }}>Journal</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 700, flexGrow: 1 }}>{t($ => $.title)}</Typography>
       </Box>
 
       <Box data-testid="journal-toolbar" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
@@ -83,28 +84,28 @@ export default function JournalPage() {
           indeterminate={someSelected}
           disabled={!draftIds.length}
           onChange={(e) => selectAll(e.target.checked)}
-          slotProps={{ input: { 'aria-label': 'select all draft entries' } }}
+          slotProps={{ input: { 'aria-label': t($ => $.toolbar.selectAll) } }}
         />
 
         {hasSelection ? (
           <>
-            <Typography variant="body2" color="text.secondary">{selectionCount} selected</Typography>
+            <Typography variant="body2" color="text.secondary">{t($ => $.toolbar.selected, { count: selectionCount })}</Typography>
             <Button
               variant="contained"
               size="small"
               onClick={approveSelected}
               sx={{ bgcolor: 'text.primary', color: 'background.paper', '&:hover': { bgcolor: 'text.primary', opacity: 0.9 } }}
             >
-              Approve selected
+              {t($ => $.toolbar.approveSelected)}
             </Button>
             <Button variant="contained" size="small" color="error" onClick={() => setConfirmDelete(true)}>
-              Delete selected
+              {t($ => $.toolbar.deleteSelected)}
             </Button>
           </>
         ) : (
           <>
             <Typography variant="body2" color="text.secondary">
-              {journals.length} ledger {journals.length === 1 ? 'entry' : 'entries'}
+              {t($ => $.ledgerEntries, { count: journals.length })}
             </Typography>
             <Button
               variant="contained"
@@ -113,15 +114,15 @@ export default function JournalPage() {
               onClick={approveAll}
               sx={{ bgcolor: 'text.primary', color: 'background.paper', '&:hover': { bgcolor: 'text.primary', opacity: 0.9 } }}
             >
-              Approve all
+              {t($ => $.toolbar.approveAll)}
             </Button>
           </>
         )}
 
         <Box sx={{ flexGrow: 1 }} />
-        {saveStatus === 'saving' && <Typography variant="caption" color="text.secondary">Saving…</Typography>}
-        {saveStatus === 'error' && <Typography variant="caption" color="error">Save failed</Typography>}
-        <Button startIcon={<AddIcon />} onClick={addEntry}>Add journal entry</Button>
+        {saveStatus === 'saving' && <Typography variant="caption" color="text.secondary">{t($ => $.toolbar.saving)}</Typography>}
+        {saveStatus === 'error' && <Typography variant="caption" color="error">{t($ => $.toolbar.saveFailed)}</Typography>}
+        <Button startIcon={<AddIcon />} onClick={addEntry}>{t($ => $.toolbar.addEntry)}</Button>
       </Box>
 
       {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
@@ -151,18 +152,18 @@ export default function JournalPage() {
       />
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>Delete selected entries?</DialogTitle>
+        <DialogTitle>{t($ => $.deleteDialog.title)}</DialogTitle>
         <DialogContent>
-          Delete {selectionCount} draft {selectionCount === 1 ? 'entry' : 'entries'}? This cannot be undone.
+          {t($ => $.deleteDialog.body, { count: selectionCount })}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.deleteDialog.cancel)}</Button>
           <Button
             color="error"
             variant="contained"
             onClick={() => { setConfirmDelete(false); deleteSelected() }}
           >
-            Delete
+            {t($ => $.deleteDialog.delete)}
           </Button>
         </DialogActions>
       </Dialog>

@@ -28,7 +28,7 @@
     "total": "Totaal"
   },
   "table": {
-    "receiptNumber": "inkoopfactuurnummer",
+    "receiptNumber": "Inkoopfactuur #",
     "date": "Datum"
   },
   "pagination": {
@@ -46,7 +46,7 @@
   },
   "detail": {
     "heading": "Inkoop {{number}}",
-    "editReceiptNumber": "inkoopfactuurnummer bewerken",
+    "editReceiptNumber": "Inkoopfactuur # bewerken",
     "saveAsDraft": "Opslaan als concept",
     "approve": "Goedkeuren",
     "registerPayment": "Betaling registreren"

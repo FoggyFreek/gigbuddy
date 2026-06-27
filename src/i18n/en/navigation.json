@@ -56,5 +56,27 @@
     "searchPlaceholderShort": "Search…",
     "settings": "Settings",
     "groupAria": "{{name}} group"
+  },
+  "search": {
+    "recent": "Recent",
+    "clear": "Clear",
+    "searchingFor": "Searching for",
+    "addNew": "+ Add new",
+    "showAll": "Show all",
+    "noResults": "No results",
+    "removeRecentAria": "remove recent search",
+    "addCategoryAria": "add search category",
+    "categories": {
+      "contacts": "Contacts",
+      "gigs": "Gigs",
+      "files": "Files",
+      "invoices": "Invoices",
+      "purchases": "Purchases",
+      "songs": "Songs",
+      "setlists": "Setlists",
+      "suppliers": "Suppliers",
+      "venues": "Venues",
+      "transaction": "Transaction"
+    }
   }
 }

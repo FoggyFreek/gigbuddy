@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -14,16 +15,16 @@ import { alpha } from '@mui/material/styles'
 import SplitView from '../components/SplitView.tsx'
 import { listVatReturns } from '../api/vatReturns.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
-import { quarterLabel, statusMeta, outstandingCents } from '../utils/vatReturns.ts'
+import { quarterKey, statusMeta, outstandingCents } from '../utils/vatReturns.ts'
 import NewVatReturnDialog from '../components/vatReturns/NewVatReturnDialog.tsx'
 import type { VatReturn, Id } from '../types/entities.ts'
 
 const SUMMARY_CARDS = [
-  { key: 'all', label: 'All declarations', chipColor: 'primary' },
-  { key: 'open', label: 'Ready to pay / receive', chipColor: 'warning' },
-  { key: 'overdue', label: 'Overdue', chipColor: 'error' },
-  { key: 'settled', label: 'Settled', chipColor: 'success' },
-]
+  { key: 'all', chipColor: 'primary' },
+  { key: 'open', chipColor: 'warning' },
+  { key: 'overdue', chipColor: 'error' },
+  { key: 'settled', chipColor: 'success' },
+] as const
 
 type ReturnState = 'open' | 'overdue' | 'settled'
 type SummaryKey = 'all' | ReturnState
@@ -55,6 +56,7 @@ interface MenuState {
 // Selecting a declaration opens its breakdown in the SplitView detail pane
 // (/vat-returns/:id); filing a new one stays a dialog.
 export default function VatReturnsPage() {
+  const { t } = useTranslation('vatReturns')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -110,16 +112,16 @@ export default function VatReturnsPage() {
   return (
     <SplitView basePath="/vat-returns" outletContext={{ onChanged: load }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          VAT declarations
+        <Typography variant="h5" data-testid="vat-returns-heading" sx={{ fontWeight: 600 }}>
+          {t($ => $.title)}
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>
-          New declaration
+        <Button data-testid="new-vat-return" variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>
+          {t($ => $.newDeclaration)}
         </Button>
       </Box>
 
-      {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
+      {error && <Typography sx={{ mb: 2, color: 'error.main' }}>{error}</Typography>}
 
       {!returns && !error && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -136,6 +138,8 @@ export default function VatReturnsPage() {
               return (
                 <Paper
                   key={card.key}
+                  data-testid={`vat-summary-${card.key}`}
+                  data-count={stats.count}
                   variant="outlined"
                   onClick={() => setSummaryFilter(card.key as SummaryKey)}
                   sx={{
@@ -171,7 +175,7 @@ export default function VatReturnsPage() {
                       {stats.count}
                     </Box>
                     <Typography variant="body2" sx={{ fontWeight: 500, color: `${card.chipColor}.main` }}>
-                      {card.label}
+                      {t($ => $.summary[card.key])}
                     </Typography>
                   </Box>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -184,8 +188,8 @@ export default function VatReturnsPage() {
 
           <Paper variant="outlined">
             {!visibleReturns?.length && (
-              <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-                No VAT declarations filed yet
+              <Typography data-testid="vat-returns-empty" sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
+                {t($ => $.empty)}
               </Typography>
             )}
             {visibleReturns?.map((ret) => (
@@ -208,12 +212,14 @@ export default function VatReturnsPage() {
       >
         {menu && (
           <MenuItem onClick={() => openDetail(menu.ret.id!)}>
-            View breakdown
+            {t($ => $.actions.viewBreakdown)}
           </MenuItem>
         )}
         {menu && menu.ret.direction !== 'nil' && outstandingCents(menu.ret) > 0 && (
           <MenuItem onClick={() => openDetail(menu.ret.id!)}>
-            {menu.ret.direction === 'receivable' ? 'Record refund' : 'Record payment'}
+            {menu.ret.direction === 'receivable'
+              ? t($ => $.actions.recordRefund)
+              : t($ => $.actions.recordPayment)}
           </MenuItem>
         )}
       </Menu>
@@ -233,9 +239,14 @@ interface VatReturnRowProps {
 }
 
 function VatReturnRow({ vatReturn, selected, onClick, onMenu }: VatReturnRowProps) {
+  const { t } = useTranslation('vatReturns')
   const meta = statusMeta(vatReturn)
+  const period = t($ => $.quarters[quarterKey(vatReturn.quarter ?? 1)], { year: vatReturn.year ?? 0 })
   return (
     <Box
+      data-testid={`vat-return-row-${vatReturn.id}`}
+      data-status={meta.statusKey}
+      data-net-cents={vatReturn.net_cents ?? 0}
       onClick={onClick}
       sx={{
         display: 'flex',
@@ -253,8 +264,8 @@ function VatReturnRow({ vatReturn, selected, onClick, onMenu }: VatReturnRowProp
     >
       <StatusDot color={meta.color} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="body1">{quarterLabel(vatReturn.year!, vatReturn.quarter!)}</Typography>
-        <Typography variant="caption" color="text.secondary">{meta.label}</Typography>
+        <Typography variant="body1">{period}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t($ => $.status[meta.statusKey])}</Typography>
       </Box>
       {vatReturn.direction !== 'nil' && (
         <Typography variant="body1" sx={{ fontWeight: 500,  flexShrink: 0  }}>
@@ -263,7 +274,7 @@ function VatReturnRow({ vatReturn, selected, onClick, onMenu }: VatReturnRowProp
       )}
       <IconButton
         size="small"
-        aria-label={`actions for ${quarterLabel(vatReturn.year!, vatReturn.quarter!)}`}
+        aria-label={t($ => $.actions.returnActions, { period })}
         onClick={(e) => onMenu(e, vatReturn)}
       >
         <MoreHorizIcon fontSize="small" />

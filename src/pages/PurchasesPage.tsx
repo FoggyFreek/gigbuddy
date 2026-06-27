@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -53,6 +53,7 @@ function matchesSummaryFilter(p: Purchase, filter: SummaryKey): boolean {
 export default function PurchasesPage() {
   const { t } = useTranslation('purchases')
   const navigate = useNavigate()
+  const location = useLocation()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [purchases, setPurchases] = useState<Purchase[]>([])
@@ -85,6 +86,16 @@ export default function PurchasesPage() {
   useEffect(() => {
     refreshPeriods({ signalLoaded: true })
   }, [refreshPeriods])
+
+  // Other pages (e.g. Reimbursements) can deep-link here asking to create a
+  // purchase straight away; open the dialog, then clear the flag so a refresh
+  // or back-navigation doesn't re-open it.
+  useEffect(() => {
+    if ((location.state as { openNewPurchase?: boolean } | null)?.openNewPurchase) {
+      setNewDialog(true)
+      navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location.state, location.pathname, navigate])
 
   const summaryStats = useMemo(() => {
     const stats: Record<SummaryKey, { count: number; total: number }> = {

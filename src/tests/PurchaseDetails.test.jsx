@@ -175,13 +175,13 @@ describe('PurchaseDetails', () => {
     )
   })
 
-  it('does not register payment on a draft purchase', async () => {
+  it('hides the register payment button on a draft purchase', async () => {
     purchasesApi.getPurchase.mockResolvedValue(purchase({ status: 'draft', finalized_at: null }))
 
     wrap(<PurchaseDetails mode="edit" purchaseId={5} onClose={() => {}} embedded />)
 
     await screen.findByText('Purchase 5')
-    expect(screen.getByRole('button', { name: /register payment/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /register payment/i })).not.toBeInTheDocument()
   })
 
   it('shows the checking account for an already-paid bank purchase', async () => {
@@ -306,11 +306,11 @@ describe('PurchaseDetails', () => {
     )
 
     await screen.findByText('Purchase 5')
-    expect(screen.getByRole('button', { name: /register payment/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /register payment/i })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^approve$/i }))
 
-    // Register Payment becomes enabled in place; the view does not close.
+    // Register Payment appears in place once approved; the view does not close.
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /register payment/i })).toBeEnabled(),
     )

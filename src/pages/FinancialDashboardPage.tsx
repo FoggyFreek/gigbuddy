@@ -255,6 +255,12 @@ function monthLabels(months: MonthData[], lng: string) {
 const Y_AXIS_MARGIN_PX = 60
 const BAR_WIDTH_PX = 30
 
+// SVG gradient ids for the result bars (one per sign so each bar fades from
+// transparent at the zero line to its solid colour at the far end — upward for
+// revenue, downward for expenses — letting the card background show through).
+const REVENUE_BAR_GRADIENT = 'fd-result-revenue-bar'
+const EXPENSE_BAR_GRADIENT = 'fd-result-expense-bar'
+
 interface ResultChartCardProps {
   currency: string
   months: MonthData[]
@@ -305,6 +311,7 @@ function ResultChartCard({ currency, months, totals }: ResultChartCardProps) {
         series={[
           {
             type: 'bar',
+            id: 'revenue',
             label: t($ => $.resultCard.revenue),
             data: months.map((m) => toEuros(m.revenue_cents)),
             color: theme.palette.success.main,
@@ -315,6 +322,7 @@ function ResultChartCard({ currency, months, totals }: ResultChartCardProps) {
           },
           {
             type: 'bar',
+            id: 'expenses',
             label: t($ => $.resultCard.expenses),
             data: months.map((m) => toEuros(-m.expense_cents)),
             color: theme.palette.error.main,
@@ -339,8 +347,31 @@ function ResultChartCard({ currency, months, totals }: ResultChartCardProps) {
           },
         }}
       >
+        <defs>
+          {/* Revenue bars sit above the zero line: 80% transparent at the
+              bottom (the line), reaching solid green 60% of the way up and
+              staying solid to the top. */}
+          <linearGradient id={REVENUE_BAR_GRADIENT} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="40%" stopColor={theme.palette.success.main} />
+            <stop offset="100%" stopColor={theme.palette.success.main} stopOpacity={0.4} />
+          </linearGradient>
+          {/* Expense bars hang below the line: 80% transparent at the top (the
+              line), reaching solid red 60% of the way down and staying solid to
+              the bottom. */}
+          <linearGradient id={EXPENSE_BAR_GRADIENT} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={theme.palette.error.main} stopOpacity={0.4} />
+            <stop offset="60%" stopColor={theme.palette.error.main} />
+          </linearGradient>
+        </defs>
         <ChartsGrid horizontal />
-        <BarPlot borderRadius={4} />
+        <BarPlot
+          borderRadius={4}
+          slotProps={{
+            bar: (ownerState) => ({
+              fill: `url(#${ownerState.seriesId === 'expenses' ? EXPENSE_BAR_GRADIENT : REVENUE_BAR_GRADIENT})`,
+            }),
+          }}
+        />
         <LinePlot />
         <ChartsXAxis axisId="months" disableLine disableTicks />
         <ChartsYAxis disableLine disableTicks />
@@ -363,6 +394,9 @@ interface OverviewBarProps {
 
 function OverviewBar({ label, cents, color, maxCents }: OverviewBarProps) {
   const pct = maxCents > 0 ? Math.min(100, (Math.abs(cents) / maxCents) * 100) : 0
+  // Same treatment as the result chart, laid out horizontally: 80% transparent
+  // at the line (left edge), reaching the solid colour 60% across and holding.
+  const fill = `linear-gradient(to right, color-mix(in srgb, ${color} 20%, transparent) 0%, ${color} 60%)`
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.5 }}>
@@ -372,7 +406,7 @@ function OverviewBar({ label, cents, color, maxCents }: OverviewBarProps) {
         </Typography>
       </Box>
       <Box sx={{ height: 10, borderRadius: 5, bgcolor: 'action.hover', overflow: 'hidden' }}>
-        <Box sx={{ width: `${pct}%`, height: '100%', borderRadius: 5, bgcolor: color }} />
+        <Box sx={{ width: `${pct}%`, height: '100%', borderRadius: 5, background: fill }} />
       </Box>
     </Box>
   )

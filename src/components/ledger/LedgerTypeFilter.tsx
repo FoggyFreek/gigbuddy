@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import Divider from '@mui/material/Divider'
@@ -16,12 +17,14 @@ interface LedgerTypeFilterProps {
 // "Types: All ▾" dropdown of checkbox menu items. Emits the active Set of
 // group keys upward; "All" toggles every group on/off at once.
 export default function LedgerTypeFilter({ value, onChange }: LedgerTypeFilterProps) {
+  const { t } = useTranslation(['ledger', 'common'])
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
 
   const allSelected = ALL_LEDGER_GROUPS.every((key) => value.has(key))
-  const label = allSelected
-    ? 'All'
-    : LEDGER_TYPE_GROUPS.filter((g) => value.has(g.key)).map((g) => g.label).join(', ') || 'None'
+  const selection = allSelected
+    ? t($ => $.typeFilter.all)
+    : LEDGER_TYPE_GROUPS.filter((g) => value.has(g.key)).map((g) => t($ => $.typeGroups[g.key])).join(', ')
+      || t($ => $.state.none, { ns: 'common' })
 
   function toggleAll() {
     onChange(new Set(allSelected ? [] : ALL_LEDGER_GROUPS))
@@ -44,18 +47,18 @@ export default function LedgerTypeFilter({ value, onChange }: LedgerTypeFilterPr
         aria-haspopup="true"
         aria-expanded={Boolean(anchor)}
       >
-        Types: {label}
+        {t($ => $.typeFilter.button, { selection })}
       </Button>
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
         <MenuItem onClick={toggleAll}>
           <Checkbox size="small" checked={allSelected} sx={{ py: 0, pl: 0 }} />
-          <ListItemText primary="All" />
+          <ListItemText primary={t($ => $.typeFilter.all)} />
         </MenuItem>
         <Divider />
         {LEDGER_TYPE_GROUPS.map((group) => (
           <MenuItem key={group.key} onClick={() => toggleGroup(group.key)}>
             <Checkbox size="small" checked={value.has(group.key)} sx={{ py: 0, pl: 0 }} />
-            <ListItemText primary={group.label} />
+            <ListItemText primary={t($ => $.typeGroups[group.key])} />
           </MenuItem>
         ))}
       </Menu>

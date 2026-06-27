@@ -262,6 +262,17 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
     </Box>
   )
 
+  const registerPaymentButton = !s.isPaid && canRegister && (
+    <Button
+      variant="outlined"
+      startIcon={<VolunteerActivismOutlinedIcon />}
+      onClick={s.openPaymentDialog}
+      disabled={s.saving}
+    >
+      {t($ => $.detail.registerPayment)}
+    </Button>
+  )
+
   const saveActions = !s.readOnly && (
     <>
       <Button
@@ -306,22 +317,12 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
             removeLine={s.removeLine}
           />
         )}
-        {s.isPaid && s.purchase ? (
+        {s.isPaid && s.purchase && (
           <PaidPaymentSummary
             purchase={s.purchase}
             bandMembers={s.bandMembers}
             paymentAccount={s.paymentAccount}
           />
-        ) : (
-          <Button
-            fullWidth
-            startIcon={<VolunteerActivismOutlinedIcon />}
-            onClick={s.openPaymentDialog}
-            disabled={!canRegister || s.saving}
-            sx={{ mt: 2, py: 1.25, bgcolor: 'action.hover', borderRadius: 99, color: 'text.primary' }}
-          >
-            {t($ => $.detail.registerPayment)}
-          </Button>
         )}
       </Box>
 
@@ -381,14 +382,17 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
           </Box>
           <Box sx={{ flex: isCompact ? '0 0 auto' : '1 1 55%', minWidth: 0, width: isCompact ? '100%' : 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, mb: 2 }}>
-              {!s.readOnly && (
-                <Button color="error" startIcon={<DeleteIcon />} onClick={s.handleDelete} sx={{ mr: 'auto' }}>
-                  {t($ => $.common.actions.delete)}
-                </Button>
-              )}
+              {registerPaymentButton}
               {saveActions}
             </Box>
             {bodyCards}
+            {!s.readOnly && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-start', mt: 2 }}>
+                <Button color="error" startIcon={<DeleteIcon />} onClick={s.handleDelete}>
+                  {t($ => $.common.actions.delete)}
+                </Button>
+              </Box>
+            )}
           </Box>
         </Box>
         {deleteDialog}

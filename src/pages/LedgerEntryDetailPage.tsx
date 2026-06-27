@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -52,6 +53,7 @@ interface LedgerEntry {
 }
 
 export default function LedgerEntryDetailPage() {
+  const { t } = useTranslation(['ledger', 'common'])
   const navigate = useNavigate()
   const { id } = useParams()
   const [entry, setEntry] = useState<LedgerEntry | null>(null)
@@ -149,33 +151,36 @@ export default function LedgerEntryDetailPage() {
   const actionable = !isVoidedOriginal && !isReversedOriginal && !isCorrection
   let correctionNotice: { text: string; linkId?: Id } | null = null
   if (isVoidedOriginal) {
-    correctionNotice = { text: 'This ledger entry has been voided by another ledger entry.', linkId: entry.voided_by_transaction_id ?? undefined }
+    correctionNotice = { text: t($ => $.detail.notice.voided), linkId: entry.voided_by_transaction_id ?? undefined }
   } else if (isReversedOriginal) {
-    correctionNotice = { text: 'This ledger entry has been reversed by another ledger entry.', linkId: entry.reversed_by_transaction_id ?? undefined }
+    correctionNotice = { text: t($ => $.detail.notice.reversed), linkId: entry.reversed_by_transaction_id ?? undefined }
   } else if (isCorrection) {
-    correctionNotice = { text: `This ledger entry was created to ${entry.voided ? 'void' : 'reverse'} another ledger entry.`, linkId: entry.corrects_transaction_id ?? undefined }
+    correctionNotice = {
+      text: entry.voided ? t($ => $.detail.notice.correctionVoid) : t($ => $.detail.notice.correctionReverse),
+      linkId: entry.corrects_transaction_id ?? undefined,
+    }
   }
 
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <IconButton aria-label="back" onClick={() => navigate('/ledger')}>
+        <IconButton aria-label={t($ => $.detail.backAria)} onClick={() => navigate('/ledger')}>
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h5" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }}>
-          Ledger entry: {entry.description || `#${entry.id}`}
+          {t($ => $.detail.heading, { name: entry.description || `#${entry.id}` })}
         </Typography>
         <Button variant="outlined" onClick={copyToJournal} disabled={busy}>
-          Copy
+          {t($ => $.actions.copy, { ns: 'common' })}
         </Button>
         {actionable && entry.period_open && (
           <Button variant="contained" color="error" onClick={() => setVoidOpen(true)} disabled={busy}>
-            Void
+            {t($ => $.detail.actions.void)}
           </Button>
         )}
         {actionable && !entry.period_open && (
           <Button variant="contained" color="warning" onClick={() => setReverseOpen(true)} disabled={busy}>
-            Reverse
+            {t($ => $.detail.actions.reverse)}
           </Button>
         )}
       </Box>
@@ -189,7 +194,7 @@ export default function LedgerEntryDetailPage() {
             <>
               {' '}
               <Link component={RouterLink} to={`/ledger/${correctionNotice.linkId}`}>
-                View entry #{correctionNotice.linkId}
+                {t($ => $.detail.notice.viewEntry, { id: correctionNotice.linkId })}
               </Link>
             </>
           )}
@@ -197,33 +202,31 @@ export default function LedgerEntryDetailPage() {
       )}
 
       <Dialog open={voidOpen} onClose={() => setVoidOpen(false)}>
-        <DialogTitle>Void ledger entry?</DialogTitle>
+        <DialogTitle>{t($ => $.detail.voidDialog.title)}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Do you want to void this ledger entry? Doing so will create a new ledger entry that
-            cancels out this one.
+            {t($ => $.detail.voidDialog.body)}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setVoidOpen(false)} disabled={busy}>Cancel</Button>
+          <Button onClick={() => setVoidOpen(false)} disabled={busy}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
           <Button variant="contained" color="error" onClick={confirmVoid} disabled={busy}>
-            Void entry
+            {t($ => $.detail.voidDialog.confirm)}
           </Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={reverseOpen} onClose={() => setReverseOpen(false)}>
-        <DialogTitle>Reverse ledger entry?</DialogTitle>
+        <DialogTitle>{t($ => $.detail.reverseDialog.title)}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            This entry falls in a closed booking period. Reversing posts a new, visible ledger entry
-            in the current open period that cancels it out; the original entry is kept unchanged.
+            {t($ => $.detail.reverseDialog.body)}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReverseOpen(false)} disabled={busy}>Cancel</Button>
+          <Button onClick={() => setReverseOpen(false)} disabled={busy}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
           <Button variant="contained" color="warning" onClick={confirmReverse} disabled={busy}>
-            Reverse entry
+            {t($ => $.detail.reverseDialog.confirm)}
           </Button>
         </DialogActions>
       </Dialog>
@@ -231,17 +234,17 @@ export default function LedgerEntryDetailPage() {
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <LedgerLinesTable lines={entry.lines ?? []} />
         <Paper variant="outlined" sx={{ p: 2, width: { xs: '100%', sm: 280 }, flexShrink: 0 }}>
-          <MetaField label="Ledger entry number" value={String(entry.id)} />
-          {entry.receipt != null && <MetaField label="Receipt" value={String(entry.receipt)} />}
-          <MetaField label="Date" value={formatShortDate(entry.entry_date)} />
+          <MetaField label={t($ => $.detail.meta.number)} value={String(entry.id)} />
+          {entry.receipt != null && <MetaField label={t($ => $.detail.meta.receipt)} value={String(entry.receipt)} />}
+          <MetaField label={t($ => $.detail.meta.date)} value={formatShortDate(entry.entry_date)} />
           <MetaField
-            label="Created"
+            label={t($ => $.detail.meta.created)}
             value={entry.created_at
               ? new Date(entry.created_at).toLocaleString('nl-NL', { dateStyle: 'medium', timeStyle: 'short' })
               : '-'}
           />
-          <MetaField label="Created by" value={entry.created_by_name || '-'} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Origin</Typography>
+          <MetaField label={t($ => $.detail.meta.createdBy)} value={entry.created_by_name || '-'} />
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{t($ => $.detail.meta.origin)}</Typography>
           {entry.origin?.path ? (
             <Link component={RouterLink} to={entry.origin.path} variant="body2">
               {entry.origin.label}
@@ -294,6 +297,7 @@ interface LedgerLinesTableProps {
 }
 
 function LedgerLinesTable({ lines }: LedgerLinesTableProps) {
+  const { t } = useTranslation('ledger')
   const isCompact = useCompactLayout()
   const totalDebit = lines.reduce((s, l) => s + (l.debit_cents ?? 0), 0)
   const totalCredit = lines.reduce((s, l) => s + (l.credit_cents ?? 0), 0)
@@ -333,19 +337,19 @@ function LedgerLinesTable({ lines }: LedgerLinesTableProps) {
                 {formatSigned(line)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {(line.debit_cents ?? 0) > 0 ? 'Debit' : 'Credit'}
+                {(line.debit_cents ?? 0) > 0 ? t($ => $.detail.lines.debit) : t($ => $.detail.lines.credit)}
               </Typography>
             </Box>
           </Box>
         ))}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', p: 1.5 }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>Total</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>{t($ => $.detail.lines.total)}</Typography>
           <Box sx={{ textAlign: 'right' }}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {formatEur(totalDebit)} debit
+              {t($ => $.detail.lines.totalDebit, { amount: formatEur(totalDebit) })}
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {formatEur(totalCredit)} credit
+              {t($ => $.detail.lines.totalCredit, { amount: formatEur(totalCredit) })}
             </Typography>
           </Box>
         </Box>
@@ -359,12 +363,12 @@ function LedgerLinesTable({ lines }: LedgerLinesTableProps) {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Number</TableCell>
-              <TableCell>Name</TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell align="right">In EUR</TableCell>
-              <MoneyHeaderCells label="Debit" />
-              <MoneyHeaderCells label="Credit" />
+              <TableCell>{t($ => $.detail.lines.number)}</TableCell>
+              <TableCell>{t($ => $.detail.lines.name)}</TableCell>
+              <TableCell>{t($ => $.detail.lines.description)}</TableCell>
+              <TableCell align="right">{t($ => $.detail.lines.inEur)}</TableCell>
+              <MoneyHeaderCells label={t($ => $.detail.lines.debit)} />
+              <MoneyHeaderCells label={t($ => $.detail.lines.credit)} />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -381,7 +385,7 @@ function LedgerLinesTable({ lines }: LedgerLinesTableProps) {
             <TableRow>
               <TableCell colSpan={3} />
               <TableCell align="right">
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>Total EUR:</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{t($ => $.detail.lines.totalEur)}</Typography>
               </TableCell>
               <MoneyCells cents={totalDebit} bold />
               <MoneyCells cents={totalCredit} bold />

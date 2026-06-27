@@ -1,7 +1,79 @@
 {
-  "title": "Dagboek",
+  "title": "Journaal",
   "status": {
     "draft": "Concept",
     "approved": "Goedgekeurd"
+  },
+  "ledgerEntries_one": "{{count}} boeking",
+  "ledgerEntries_other": "{{count}} boekingen",
+  "compact": {
+    "title": "Open op een desktop om te bewerken",
+    "body": "Journaalboekingen gebruiken een brede lay-out met meerdere kolommen. Schakel over naar een groter scherm om boekingen toe te voegen of te bewerken."
+  },
+  "toolbar": {
+    "selectAll": "selecteer alle conceptboekingen",
+    "selected": "{{count}} geselecteerd",
+    "approveSelected": "Selectie goedkeuren",
+    "deleteSelected": "Selectie verwijderen",
+    "approveAll": "Alles goedkeuren",
+    "saving": "Opslaan…",
+    "saveFailed": "Opslaan mislukt",
+    "addEntry": "Journaalboeking toevoegen"
+  },
+  "deleteDialog": {
+    "title": "Geselecteerde boekingen verwijderen?",
+    "body_one": "{{count}} conceptboeking verwijderen? Dit kan niet ongedaan worden gemaakt.",
+    "body_other": "{{count}} conceptboekingen verwijderen? Dit kan niet ongedaan worden gemaakt.",
+    "cancel": "Annuleren",
+    "delete": "Verwijderen"
+  },
+  "entry": {
+    "selectAria": "selecteer journaal {{number}}",
+    "date": "Datum"
+  },
+  "line": {
+    "description": "Omschrijving",
+    "account": "Rekening",
+    "vatRate": "Btw-tarief",
+    "debit": "Debet",
+    "credit": "Credit",
+    "balancingAccount": "Tegenrekening",
+    "actions": "regelacties",
+    "duplicate": "Regel dupliceren",
+    "duplicateAria": "regel dupliceren",
+    "delete": "Regel verwijderen",
+    "deleteAria": "regel verwijderen",
+    "add": "Regel toevoegen",
+    "addAria": "regel toevoegen"
+  },
+  "accountTypes": {
+    "asset": "Activa",
+    "liability": "Passiva",
+    "equity": "Eigen vermogen",
+    "revenue": "Omzet",
+    "cost_of_goods_sold": "Kostprijs van de omzet",
+    "expense": "Kosten",
+    "other": "Overig"
+  },
+  "staleAccount": "Inactieve/onbekende rekening",
+  "approveErrors": {
+    "title": "Sommige boekingen konden niet worden goedgekeurd",
+    "summary_one": "{{count}} boeking is als concept blijven staan. Los de onderstaande problemen op en probeer het opnieuw.",
+    "summary_other": "{{count}} boekingen zijn als concept blijven staan. Los de onderstaande problemen op en probeer het opnieuw.",
+    "ok": "OK",
+    "entryLabel": "Boeking J{{number}}",
+    "entryLabelFallback": "Boeking #{{id}}",
+    "linePrefix": "Regel {{line}}: {{message}}",
+    "fallback": "Kon niet worden goedgekeurd.",
+    "codes": {
+      "unbalanced_journal": "Debet en credit zijn niet in balans.",
+      "invalid_account_code": "Een regel mist een geldige rekening.",
+      "missing_side": "Een regel heeft een debet- of creditbedrag nodig.",
+      "invalid_amount": "Een regelbedrag moet groter dan nul zijn.",
+      "invalid_balancing_account": "Een tegenrekening is inactief.",
+      "accounting_not_configured": "Vereiste grootboekrekeningen zijn niet geconfigureerd (controleer Instellingen).",
+      "no_lines": "De boeking heeft geen regels.",
+      "already_approved": "De boeking is al goedgekeurd."
+    }
   }
 }

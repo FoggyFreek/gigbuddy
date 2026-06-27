@@ -3,6 +3,11 @@
   "totalOwed": "Total owed to members",
   "nothingOutstanding": "Nothing outstanding",
   "noOutstandingPurchases": "No outstanding purchases",
+  "empty": {
+    "title": "No unpaid reimbursements?",
+    "subtitle": "That’s not rock ’n’ roll",
+    "createPurchase": "Create purchase"
+  },
   "purchaseCount_one": "{{count}} purchase",
   "purchaseCount_other": "{{count}} purchases",
   "table": {

@@ -1,24 +1,14 @@
 import type { SxProps, Theme } from '@mui/material/styles'
+import { useTranslation } from 'react-i18next'
 import Autocomplete from '@mui/material/Autocomplete'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import type { Account } from '../../types/entities.ts'
 
-const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  asset: 'Assets',
-  liability: 'Liabilities',
-  equity: 'Equity',
-  revenue: 'Revenue',
-  cost_of_goods_sold: 'Cost of Goods Sold',
-  expense: 'Expenses',
-}
-
 // A saved code no longer in the active chart is surfaced as a disabled "stale"
 // option, so the field never silently drops it. We model that with a local type
 // that extends Account rather than mutating the shared shape.
 type AccountOption = Account & { __stale?: boolean }
-
-const accountGroup = (account: AccountOption) => ACCOUNT_TYPE_LABELS[account.type ?? ''] || 'Other'
 
 interface AccountAutocompleteProps {
   value?: string
@@ -34,9 +24,20 @@ interface AccountAutocompleteProps {
 // that is no longer active/known is surfaced as a disabled "stale" option so the
 // field never silently drops it — mirrors PurchaseLinesEditor's __stale handling.
 export default function AccountAutocomplete({ value, accounts = [], placeholder, label, disabled, onChange, sx }: AccountAutocompleteProps) {
+  const { t } = useTranslation('journal')
+  const typeLabels: Record<string, string> = {
+    asset: t($ => $.accountTypes.asset),
+    liability: t($ => $.accountTypes.liability),
+    equity: t($ => $.accountTypes.equity),
+    revenue: t($ => $.accountTypes.revenue),
+    cost_of_goods_sold: t($ => $.accountTypes.cost_of_goods_sold),
+    expense: t($ => $.accountTypes.expense),
+  }
+  const accountGroup = (account: AccountOption) => typeLabels[account.type ?? ''] || t($ => $.accountTypes.other)
+
   const known = accounts.find((a) => a.code === value) || null
   const selected: AccountOption | null = value
-    ? (known || { code: value, name: 'Inactive/unknown account', type: 'asset', __stale: true })
+    ? (known || { code: value, name: t($ => $.staleAccount), type: 'asset', __stale: true })
     : null
   const options: AccountOption[] = (selected?.__stale ? [selected, ...accounts] : accounts)
     .slice()
