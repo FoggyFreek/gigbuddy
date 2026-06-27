@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -23,15 +24,16 @@ interface MemberReimbursementCardProps {
 // Mobile-friendly card equivalent of MemberReimbursementRow: stacks the member,
 // balance, and actions vertically, with the same expand-to-see-purchases panel.
 export default function MemberReimbursementCard({ member, expanded, purchases, onToggle, onRegister, onMarkReimbursed }: MemberReimbursementCardProps) {
+  const { t } = useTranslation(['reimbursements', 'common'])
   return (
     <Paper variant="outlined" sx={{ p: 1.5 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <IconButton size="small" aria-label={expanded ? 'collapse' : 'expand'} onClick={onToggle}>
+        <IconButton size="small" aria-label={expanded ? t($ => $.aria.collapse) : t($ => $.aria.expand)} onClick={onToggle}>
           {expanded ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
         </IconButton>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="body1" sx={{ fontWeight: 600 }} noWrap>{member.band_member_name}</Typography>
-          <Chip size="small" label={`${member.outstanding_count} purchase${member.outstanding_count === 1 ? '' : 's'}`} sx={{ mt: 0.25 }} />
+          <Chip size="small" label={t($ => $.purchaseCount, { count: member.outstanding_count ?? 0 })} sx={{ mt: 0.25 }} />
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(member.outstanding_cents)}</Typography>
       </Box>
@@ -39,10 +41,10 @@ export default function MemberReimbursementCard({ member, expanded, purchases, o
       <Collapse in={expanded} unmountOnExit>
         <Box sx={{ pl: 4, py: 1 }}>
           {purchases === undefined && (
-            <Typography variant="body2" color="text.secondary">Loading…</Typography>
+            <Typography variant="body2" color="text.secondary">{t($ => $.common.state.loading)}</Typography>
           )}
           {purchases?.length === 0 && (
-            <Typography variant="body2" color="text.secondary">No outstanding purchases</Typography>
+            <Typography variant="body2" color="text.secondary">{t($ => $.noOutstandingPurchases)}</Typography>
           )}
           {purchases?.map((p) => (
             <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', py: 0.25 }}>
@@ -56,8 +58,8 @@ export default function MemberReimbursementCard({ member, expanded, purchases, o
       </Collapse>
 
       <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-        <Button size="small" fullWidth onClick={onRegister}>Register</Button>
-        <Button size="small" fullWidth variant="contained" onClick={onMarkReimbursed}>Mark reimbursed</Button>
+        <Button size="small" fullWidth onClick={onRegister}>{t($ => $.actions.register)}</Button>
+        <Button size="small" fullWidth variant="contained" onClick={onMarkReimbursed}>{t($ => $.actions.markReimbursed)}</Button>
       </Box>
     </Paper>
   )

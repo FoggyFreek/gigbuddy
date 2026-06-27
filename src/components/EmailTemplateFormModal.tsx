@@ -22,6 +22,7 @@ import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered'
 import FormatUnderlinedIcon from '@mui/icons-material/FormatUnderlined'
 import InsertLinkIcon from '@mui/icons-material/InsertLink'
+import { useTranslation } from 'react-i18next'
 import { useEditor, EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -85,11 +86,12 @@ interface EditorToolbarProps {
 }
 
 function EditorToolbar({ editor }: EditorToolbarProps) {
+  const { t } = useTranslation('emailTemplates')
   if (!editor) return null
 
   function handleLink() {
     const prev = editor!.getAttributes('link').href || ''
-    const url = window.prompt('URL', prev)
+    const url = window.prompt(t($ => $.form.linkPrompt), prev)
     if (url === null) return
     if (url === '') {
       editor!.chain().focus().unsetLink().run()
@@ -110,31 +112,31 @@ function EditorToolbar({ editor }: EditorToolbarProps) {
         bgcolor: 'background.default',
       }}
     >
-      <ToolbarButton title="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
+      <ToolbarButton title={t($ => $.toolbar.bold)} active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
         <FormatBoldIcon fontSize="small" />
       </ToolbarButton>
-      <ToolbarButton title="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
+      <ToolbarButton title={t($ => $.toolbar.italic)} active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
         <FormatItalicIcon fontSize="small" />
       </ToolbarButton>
-      <ToolbarButton title="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+      <ToolbarButton title={t($ => $.toolbar.underline)} active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
         <FormatUnderlinedIcon fontSize="small" />
       </ToolbarButton>
       <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
-      <ToolbarButton title="Heading 2" active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+      <ToolbarButton title={t($ => $.toolbar.heading2)} active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
         <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1, px: 0.25 }}>H2</Typography>
       </ToolbarButton>
-      <ToolbarButton title="Heading 3" active={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+      <ToolbarButton title={t($ => $.toolbar.heading3)} active={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
         <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1, px: 0.25 }}>H3</Typography>
       </ToolbarButton>
       <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
-      <ToolbarButton title="Bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+      <ToolbarButton title={t($ => $.toolbar.bulletList)} active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
         <FormatListBulletedIcon fontSize="small" />
       </ToolbarButton>
-      <ToolbarButton title="Numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+      <ToolbarButton title={t($ => $.toolbar.numberedList)} active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
         <FormatListNumberedIcon fontSize="small" />
       </ToolbarButton>
       <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
-      <ToolbarButton title="Link" active={editor.isActive('link')} onClick={handleLink}>
+      <ToolbarButton title={t($ => $.toolbar.link)} active={editor.isActive('link')} onClick={handleLink}>
         <InsertLinkIcon fontSize="small" />
       </ToolbarButton>
     </Box>
@@ -142,6 +144,7 @@ function EditorToolbar({ editor }: EditorToolbarProps) {
 }
 
 export default function EmailTemplateFormModal({ mode, templateId, onClose }: EmailTemplateFormModalProps) {
+  const { t } = useTranslation(['emailTemplates', 'common'])
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(mode === 'edit')
@@ -191,7 +194,7 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }: Em
 
   async function handleCreate() {
     const errs: Record<string, string> = {}
-    if (!form.name.trim()) errs.name = 'Required'
+    if (!form.name.trim()) errs.name = t($ => $.form.required)
     if (Object.keys(errs).length) { setErrors(errs); return }
     await createEmailTemplate({
       name: form.name.trim(),
@@ -209,7 +212,7 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }: Em
   return (
     <Dialog open fullWidth maxWidth="md" onClose={mode === 'edit' ? handleClose : undefined}>
       <DialogTitle>
-        {mode === 'create' ? 'New email template' : 'Edit email template'}
+        {mode === 'create' ? t($ => $.form.createTitle) : t($ => $.form.editTitle)}
       </DialogTitle>
 
       {loading ? (
@@ -221,28 +224,28 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }: Em
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid size={12}>
               <TextField
-                label="Template name"
+                label={t($ => $.form.nameLabel)}
                 fullWidth
                 required
                 value={form.name}
                 onChange={(e) => handleChange('name', e.target.value)}
                 error={!!errors.name || (mode === 'edit' && !form.name.trim())}
-                helperText={errors.name || (mode === 'edit' && !form.name.trim() ? 'Required' : '')}
-                placeholder="e.g. Gig announcement, Rehearsal notice"
+                helperText={errors.name || (mode === 'edit' && !form.name.trim() ? t($ => $.form.required) : '')}
+                placeholder={t($ => $.form.namePlaceholder)}
               />
             </Grid>
             <Grid size={12}>
               <TextField
-                label="Subject"
+                label={t($ => $.form.subjectLabel)}
                 fullWidth
                 value={form.subject}
                 onChange={(e) => handleChange('subject', e.target.value)}
-                placeholder="e.g. We're playing at The Venue on Friday!"
+                placeholder={t($ => $.form.subjectPlaceholder)}
               />
             </Grid>
             <Grid size={12}>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                Body
+                {t($ => $.form.body)}
               </Typography>
               <Paper
                 variant="outlined"
@@ -283,8 +286,8 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }: Em
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {mode === 'create' ? (
           <>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button variant="contained" onClick={handleCreate}>Save template</Button>
+            <Button onClick={onClose}>{t($ => $.common.actions.cancel)}</Button>
+            <Button variant="contained" onClick={handleCreate}>{t($ => $.form.saveTemplate)}</Button>
           </>
         ) : (
           <>
@@ -292,24 +295,24 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }: Em
               startIcon={<DownloadIcon />}
               onClick={() => downloadEml(form.name, form.subject, editor ? editor.getHTML() : '')}
             >
-              Download .eml
+              {t($ => $.form.downloadEml)}
             </Button>
             <Box sx={{ flexGrow: 1 }} />
             <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
-              Delete
+              {t($ => $.common.actions.delete)}
             </Button>
-            <Button variant="contained" onClick={handleClose}>Close</Button>
+            <Button variant="contained" onClick={handleClose}>{t($ => $.common.actions.close)}</Button>
           </>
         )}
       </DialogActions>
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>Delete template?</DialogTitle>
+        <DialogTitle>{t($ => $.form.deleteTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>This cannot be undone.</DialogContentText>
+          <DialogContentText>{t($ => $.form.deleteConfirm)}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
           <Button
             color="error"
             variant="contained"
@@ -318,7 +321,7 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }: Em
               onClose()
             }}
           >
-            Delete
+            {t($ => $.common.actions.delete)}
           </Button>
         </DialogActions>
       </Dialog>

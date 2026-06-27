@@ -1,3 +1,30 @@
 {
-  "title": "Reimbursements"
+  "title": "Reimbursements",
+  "totalOwed": "Total owed to members",
+  "nothingOutstanding": "Nothing outstanding",
+  "noOutstandingPurchases": "No outstanding purchases",
+  "purchaseCount_one": "{{count}} purchase",
+  "purchaseCount_other": "{{count}} purchases",
+  "table": {
+    "member": "Member",
+    "purchases": "Purchases",
+    "outstanding": "Outstanding",
+    "actions": "Actions"
+  },
+  "aria": {
+    "expand": "expand",
+    "collapse": "collapse"
+  },
+  "actions": {
+    "register": "Register",
+    "markReimbursed": "Mark reimbursed"
+  },
+  "dialog": {
+    "title": "Reimburse {{name}}",
+    "purchasesToSettle": "Purchases to settle",
+    "total": "Total",
+    "paidOn": "Paid on",
+    "memo": "Memo",
+    "submit": "Register reimbursement"
+  }
 }

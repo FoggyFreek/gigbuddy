@@ -3,5 +3,154 @@
   "status": {
     "recorded": "Recorded",
     "voided": "Voided"
+  },
+  "products": {
+    "heading": "Products",
+    "new": "New product",
+    "recordSale": "Record sale",
+    "empty": "No products yet — create one to start tracking inventory.",
+    "archived": "Archived",
+    "priceLine": "{{price}} incl. {{rate}}% VAT · cost {{cost}}",
+    "onHand": "{{qty}} on hand",
+    "edit": "Edit",
+    "archive": "Archive",
+    "table": {
+      "name": "Name",
+      "unitCost": "Unit cost",
+      "price": "Price (incl. VAT)",
+      "vat": "VAT",
+      "onHand": "On hand",
+      "actions": "Actions"
+    }
+  },
+  "summary": {
+    "heading": "Sales by product",
+    "importShopify": "Import from Shopify",
+    "empty": "No sales in this period.",
+    "table": {
+      "product": "Product",
+      "account": "Account",
+      "qty": "Qty",
+      "total": "Total"
+    }
+  },
+  "details": {
+    "title": "Product sales",
+    "back": "back",
+    "close": "close",
+    "empty": "No sales in this period.",
+    "voidSale": "Void sale",
+    "table": {
+      "date": "Date",
+      "qty": "Qty",
+      "unitPrice": "Unit price",
+      "total": "Total",
+      "paidInto": "Paid into",
+      "actions": "Actions"
+    }
+  },
+  "payment": {
+    "cash": "Cash on hand",
+    "bank": "Bank"
+  },
+  "productDialog": {
+    "editTitle": "Edit product",
+    "newTitle": "New product",
+    "name": "Name",
+    "unitCost": "Unit cost (excl. VAT)",
+    "startingUnitCost": "Starting unit cost (excl. VAT)",
+    "movingAverageHelp": "Moving average — updated automatically by purchases",
+    "sellingPrice": "Selling price (incl. VAT)",
+    "vatRate": "VAT rate",
+    "revenueAccount": "Revenue account",
+    "revenueAccountHelp": "Where this product's sales revenue is booked",
+    "revenueAccountDefault": "Default (band merch revenue)",
+    "create": "Create"
+  },
+  "saleDialog": {
+    "title": "Record merch sale",
+    "product": "Product",
+    "productOption": "{{name}} ({{qty}} on hand)",
+    "quantity": "Quantity",
+    "unitPrice": "Unit price (incl. VAT)",
+    "vatRate": "VAT rate",
+    "saleDate": "Sale date",
+    "paidInto": "Paid into",
+    "bankAccount": "Bank account",
+    "cashOnHand": "Cash on hand",
+    "gigOptional": "Gig (optional)",
+    "customerPays": "Customer pays {{amount}}",
+    "submit": "Record sale"
+  },
+  "void": {
+    "title": "Void this sale?",
+    "body": "A reversing entry is posted to the ledger, undoing the recorded revenue and cost, and {{qty}} × {{name}} goes back in stock. Voiding is permanent.",
+    "confirm": "Void sale"
+  },
+  "shopify": {
+    "title": "Import orders from Shopify",
+    "notConnected": "Shopify isn't connected yet. Add your API key and store domain in <settingsLink>Settings → Integrations</settingsLink> first.",
+    "next": "Next ({{count}})",
+    "importLines_one": "Import {{count}} line",
+    "importLines_other": "Import {{count}} lines",
+    "noOrders": "No recent orders found.",
+    "loadMore": "Load older orders",
+    "imported": "Imported",
+    "refunded": "Refunded",
+    "skip": "Skip",
+    "productsGroup": "Products",
+    "revenueAccountsGroup": "Revenue accounts",
+    "vat": "VAT",
+    "lineCount_one": "{{count}} line",
+    "lineCount_other": "{{count}} lines",
+    "mapIntro": "Map each line to a product (revenue uses the product's account and adjusts stock) or to a revenue account, or skip it. Already-imported and refunded lines are locked.",
+    "table": {
+      "order": "Order",
+      "date": "Date",
+      "status": "Status",
+      "lines": "Lines",
+      "total": "Total"
+    },
+    "mapTable": {
+      "item": "Item",
+      "qty": "Qty",
+      "mapTo": "Map to"
+    },
+    "done": {
+      "importedOnly_one": "Imported {{count}} line.",
+      "importedOnly_other": "Imported {{count}} lines.",
+      "importedWithSkipped_one": "Imported {{count}} line, skipped {{skipped}}.",
+      "importedWithSkipped_other": "Imported {{count}} lines, skipped {{skipped}}.",
+      "line": "Line",
+      "reason": "Reason"
+    },
+    "errors": {
+      "appNotInstalled": "This app isn't installed on your Shopify store yet. Open your Shopify admin and install the app, then try again.",
+      "invalidClient": "Shopify rejected your app credentials. Check the Client ID and app secret in Settings → Integrations.",
+      "rateLimited": "Shopify is rate-limiting requests. Please wait a moment and try again.",
+      "loadOrders": "Failed to load orders",
+      "loadMoreOrders": "Failed to load more orders",
+      "importFailed": "Import failed"
+    },
+    "lineStatus": {
+      "imported": "Imported",
+      "skipped": "Skipped",
+      "skipped_duplicate": "Already imported",
+      "skipped_insufficient_stock": "Not enough stock",
+      "skipped_refunded_line": "Refunded",
+      "skipped_invalid_mapping": "Invalid mapping",
+      "skipped_invalid_account": "Invalid account",
+      "skipped_closed_period": "Period closed",
+      "skipped_cancelled": "Order cancelled",
+      "skipped_unsupported_currency": "Unsupported currency",
+      "skipped_unpaid": "Order unpaid",
+      "skipped_not_found": "Order not found",
+      "skipped_accounting_not_configured": "Accounting not configured"
+    },
+    "orderSkip": {
+      "skipped_cancelled": "Cancelled",
+      "skipped_unsupported_currency": "Not EUR",
+      "skipped_unpaid": "Unpaid"
+    }
   }
 }

@@ -1,3 +1,30 @@
 {
-  "title": "Onkostenvergoedingen"
+  "title": "Terugbetalingen",
+  "totalOwed": "Totaal verschuldigd aan bandleden",
+  "nothingOutstanding": "Niets openstaand",
+  "noOutstandingPurchases": "Geen openstaande aankopen",
+  "purchaseCount_one": "{{count}} aankoop",
+  "purchaseCount_other": "{{count}} aankopen",
+  "table": {
+    "member": "Lid",
+    "purchases": "Aankopen",
+    "outstanding": "Openstaand",
+    "actions": "Acties"
+  },
+  "aria": {
+    "expand": "uitklappen",
+    "collapse": "inklappen"
+  },
+  "actions": {
+    "register": "Registreren",
+    "markReimbursed": "Markeren als vergoed"
+  },
+  "dialog": {
+    "title": "{{name}} vergoeden",
+    "purchasesToSettle": "Te verrekenen aankopen",
+    "total": "Totaal",
+    "paidOn": "Betaald op",
+    "memo": "Memo",
+    "submit": "Onkostenvergoeding registreren"
+  }
 }

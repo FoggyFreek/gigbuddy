@@ -1,4 +1,5 @@
 import { Fragment } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -26,11 +27,12 @@ interface MemberReimbursementRowProps {
 // One band member's outstanding row, expandable to a display-only list of the
 // member-paid purchases that make up the balance.
 export default function MemberReimbursementRow({ member, expanded, purchases, onToggle, onRegister, onMarkReimbursed }: MemberReimbursementRowProps) {
+  const { t } = useTranslation(['reimbursements', 'common'])
   return (
     <Fragment>
       <TableRow hover>
         <TableCell sx={{ width: '1%', px: 1 }}>
-          <IconButton size="small" aria-label={expanded ? 'collapse' : 'expand'} onClick={onToggle}>
+          <IconButton size="small" aria-label={expanded ? t($ => $.aria.collapse) : t($ => $.aria.expand)} onClick={onToggle}>
             {expanded ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
           </IconButton>
         </TableCell>
@@ -38,8 +40,8 @@ export default function MemberReimbursementRow({ member, expanded, purchases, on
         <TableCell align="center"><Chip size="small" label={member.outstanding_count} /></TableCell>
         <MoneyCells cents={member.outstanding_cents} bold />
         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-          <Button size="small" onClick={onRegister} sx={{ mr: 1 }}>Register</Button>
-          <Button size="small" variant="contained" onClick={onMarkReimbursed}>Mark reimbursed</Button>
+          <Button size="small" onClick={onRegister} sx={{ mr: 1 }}>{t($ => $.actions.register)}</Button>
+          <Button size="small" variant="contained" onClick={onMarkReimbursed}>{t($ => $.actions.markReimbursed)}</Button>
         </TableCell>
       </TableRow>
       <TableRow>
@@ -47,10 +49,10 @@ export default function MemberReimbursementRow({ member, expanded, purchases, on
           <Collapse in={expanded} unmountOnExit>
             <Box sx={{ py: 1.5, pl: 4 }}>
               {purchases === undefined && (
-                <Typography variant="body2" color="text.secondary">Loading…</Typography>
+                <Typography variant="body2" color="text.secondary">{t($ => $.common.state.loading)}</Typography>
               )}
               {purchases?.length === 0 && (
-                <Typography variant="body2" color="text.secondary">No outstanding purchases</Typography>
+                <Typography variant="body2" color="text.secondary">{t($ => $.noOutstandingPurchases)}</Typography>
               )}
               {purchases && purchases.length > 0 && (
                 <Box

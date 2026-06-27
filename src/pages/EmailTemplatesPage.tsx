@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -20,6 +21,7 @@ interface EmailTemplate {
 type ModalState = { mode: 'create' } | { mode: 'edit'; templateId: Id } | null
 
 export default function EmailTemplatesPage() {
+  const { t } = useTranslation(['emailTemplates', 'common'])
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -49,14 +51,14 @@ export default function EmailTemplatesPage() {
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>
-          Email Templates
+          {t($ => $.title)}
         </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setModal({ mode: 'create' })}
         >
-          Add
+          {t($ => $.common.actions.add)}
         </Button>
       </Box>
 

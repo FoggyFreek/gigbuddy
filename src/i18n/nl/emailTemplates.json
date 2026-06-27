@@ -1,3 +1,35 @@
 {
-  "title": "E-mailsjablonen"
+  "title": "E-mailsjablonen",
+  "table": {
+    "name": "Naam",
+    "subject": "Onderwerp",
+    "noSubject": "(geen onderwerp)",
+    "created": "Aangemaakt {{date}}",
+    "empty": "Nog geen sjablonen — maak er een om te beginnen."
+  },
+  "form": {
+    "createTitle": "Nieuw e-mailsjabloon",
+    "editTitle": "E-mailsjabloon bewerken",
+    "nameLabel": "Sjabloonnaam",
+    "namePlaceholder": "bijv. Optredenaankondiging, Repetitiebericht",
+    "subjectLabel": "Onderwerp",
+    "subjectPlaceholder": "bijv. We spelen vrijdag in The Venue!",
+    "body": "Inhoud",
+    "required": "Verplicht",
+    "saveTemplate": "Sjabloon opslaan",
+    "downloadEml": ".eml downloaden",
+    "deleteTitle": "Sjabloon verwijderen?",
+    "deleteConfirm": "Dit kan niet ongedaan worden gemaakt.",
+    "linkPrompt": "URL"
+  },
+  "toolbar": {
+    "bold": "Vet",
+    "italic": "Cursief",
+    "underline": "Onderstrepen",
+    "heading2": "Kop 2",
+    "heading3": "Kop 3",
+    "bulletList": "Opsommingslijst",
+    "numberedList": "Genummerde lijst",
+    "link": "Link"
+  }
 }

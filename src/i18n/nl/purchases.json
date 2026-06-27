@@ -2,7 +2,8 @@
   "title": "Inkoopfacturen",
   "singularTitle": "Inkoopfactuur",
   "createPurchase": "Inkoopfactuur aanmaken",
-  "summary": {
+  "state": {
+    "all": "Alle inkoopfacturen",
     "draft": "Concept",
     "overdue": "Achterstallig",
     "unpaid": "Onbetaald",

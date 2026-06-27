@@ -2,7 +2,8 @@
   "title": "Purchases",
   "singularTitle": "Purchase",
   "createPurchase": "Create purchase",
-  "summary": {
+  "state": {
+    "all": "All purchases",
     "draft": "Draft",
     "overdue": "Overdue",
     "unpaid": "Unpaid",

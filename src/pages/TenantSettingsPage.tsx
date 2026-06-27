@@ -259,7 +259,7 @@ function ThemeVariantSection() {
                 )}
               </Box>
               <Box sx={{ px: 1.5, py: 1, bgcolor: tokens.paper }}>
-                <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary',fontWeight: 600, display: 'block' }}>
                   {label}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>

@@ -157,7 +157,7 @@ export default function PurchasesPage() {
     setPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
   }, [])
 
-  const activeSummaryLabel = summaryFilter === 'all' ? t($ => $.title) : t($ => $.summary[summaryFilter])
+  const activeSummaryLabel = t($ => $.state[summaryFilter])
 
   return (
     <SplitView basePath="/purchases" outletContext={{ onReload: load, onPurchaseUpdate: handlePurchaseUpdate }}>
@@ -221,7 +221,7 @@ export default function PurchasesPage() {
                       {stats.count}
                     </Box>
                     <Typography variant="body2" sx={{ fontWeight: 500, color: `${card.chipColor}.main` }}>
-                      {card.key === 'all' ? t($ => $.title) : t($ => $.summary[card.key])}
+                      {t($ => $.state[card.key])}
                     </Typography>
                   </Box>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(stats.total)}</Typography>

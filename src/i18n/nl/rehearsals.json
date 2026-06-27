@@ -16,7 +16,7 @@
     "myVote": "Mijn stem:",
     "emptyAll": "Nog geen repetities — stel er een voor om te beginnen.",
     "emptyUpcoming": "Geen aankomende repetities.",
-    "pastRehearsals": "Afgelopen repetities ({{count}})"
+    "pastRehearsals": "Eerdere repetities ({{count}})"
   },
   "form": {
     "proposeTitle": "Repetitie voorstellen",

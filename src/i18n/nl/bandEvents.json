@@ -10,7 +10,7 @@
     "shareWhatsApp": "Delen via WhatsApp",
     "emptyAll": "Nog geen evenementen — voeg er een toe om te beginnen.",
     "emptyUpcoming": "Geen aankomende evenementen.",
-    "pastEvents": "Afgelopen evenementen ({{count}})"
+    "pastEvents": "Eerdere evenementen ({{count}})"
   },
   "form": {
     "addTitle": "Bandevenement toevoegen",

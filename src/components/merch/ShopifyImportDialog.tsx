@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -35,28 +36,16 @@ type Step = 'select' | 'map' | 'importing' | 'done'
 
 const VAT_RATES = [21, 9, 0]
 
-// Human labels for the per-line import statuses the backend returns.
-const STATUS_LABELS: Record<string, string> = {
-  imported: 'Imported',
-  skipped: 'Skipped',
-  skipped_duplicate: 'Already imported',
-  skipped_insufficient_stock: 'Not enough stock',
-  skipped_refunded_line: 'Refunded',
-  skipped_invalid_mapping: 'Invalid mapping',
-  skipped_invalid_account: 'Invalid account',
-  skipped_closed_period: 'Period closed',
-  skipped_cancelled: 'Order cancelled',
-  skipped_unsupported_currency: 'Unsupported currency',
-  skipped_unpaid: 'Order unpaid',
-  skipped_not_found: 'Order not found',
-  skipped_accounting_not_configured: 'Accounting not configured',
-}
+// The per-line import status keys the backend returns; their human labels live
+// under shopify.lineStatus in the merch namespace.
+const LINE_STATUS_KEYS = [
+  'imported', 'skipped', 'skipped_duplicate', 'skipped_insufficient_stock',
+  'skipped_refunded_line', 'skipped_invalid_mapping', 'skipped_invalid_account',
+  'skipped_closed_period', 'skipped_cancelled', 'skipped_unsupported_currency',
+  'skipped_unpaid', 'skipped_not_found', 'skipped_accounting_not_configured',
+] as const
 
-const ORDER_SKIP_LABELS: Record<string, string> = {
-  skipped_cancelled: 'Cancelled',
-  skipped_unsupported_currency: 'Not EUR',
-  skipped_unpaid: 'Unpaid',
-}
+const ORDER_SKIP_KEYS = ['skipped_cancelled', 'skipped_unsupported_currency', 'skipped_unpaid'] as const
 
 // Multi-row card shell for the compact (mobile) layout, matching the merch list cards.
 const cardSx = {
@@ -73,30 +62,57 @@ function lineMappable(line: ShopifyLineItem): boolean {
   return !line.skip_reason && !line.already_imported
 }
 
-// The status pill shown for an order in both the table and the compact card.
-function OrderStatusChip({ order }: { order: ShopifyOrder }) {
-  if (order.skip_reason) {
-    return <Chip size="small" color="default" label={ORDER_SKIP_LABELS[order.skip_reason] ?? order.skip_reason} />
+// Maps a backend per-line status code to its localized label, falling back to
+// the raw code for anything not in the known set.
+function useLineStatusLabel(): (status: string) => string {
+  const { t } = useTranslation('merch')
+  return (status) => {
+    const key = (LINE_STATUS_KEYS as readonly string[]).includes(status)
+      ? (status as typeof LINE_STATUS_KEYS[number])
+      : null
+    return key ? t($ => $.shopify.lineStatus[key]) : status
   }
-  if (order.fully_imported) return <Chip size="small" color="success" label="Imported" />
-  return <Chip size="small" variant="outlined" label={order.financial_status} />
 }
 
-// Turns a Shopify API failure into an actionable message. The backend forwards
-// Shopify's own error code/description (e.g. app_not_installed) in the body.
-function shopifyErrorMessage(err: unknown, fallback: string): string {
-  const body = (err as { body?: { error?: string; code?: string; message?: string } }).body
-  switch (body?.code) {
-    case 'app_not_installed':
-      return "This app isn't installed on your Shopify store yet. Open your Shopify admin and install the app, then try again."
-    case 'invalid_client':
-      return 'Shopify rejected your app credentials. Check the Client ID and app secret in Settings → Integrations.'
-    default:
-      break
+function useOrderSkipLabel(): (reason: string) => string {
+  const { t } = useTranslation('merch')
+  return (reason) => {
+    const key = (ORDER_SKIP_KEYS as readonly string[]).includes(reason)
+      ? (reason as typeof ORDER_SKIP_KEYS[number])
+      : null
+    return key ? t($ => $.shopify.orderSkip[key]) : reason
   }
-  if (body?.message) return body.message
-  if (body?.error === 'shopify_rate_limited') return 'Shopify is rate-limiting requests. Please wait a moment and try again.'
-  return err instanceof Error && err.message ? err.message : fallback
+}
+
+// Turns a Shopify API failure into an actionable, localized message. The backend
+// forwards Shopify's own error code/description (e.g. app_not_installed) in the body.
+function useShopifyErrorMessage(): (err: unknown, fallback: string) => string {
+  const { t } = useTranslation('merch')
+  return (err, fallback) => {
+    const body = (err as { body?: { error?: string; code?: string; message?: string } }).body
+    switch (body?.code) {
+      case 'app_not_installed':
+        return t($ => $.shopify.errors.appNotInstalled)
+      case 'invalid_client':
+        return t($ => $.shopify.errors.invalidClient)
+      default:
+        break
+    }
+    if (body?.message) return body.message
+    if (body?.error === 'shopify_rate_limited') return t($ => $.shopify.errors.rateLimited)
+    return err instanceof Error && err.message ? err.message : fallback
+  }
+}
+
+// The status pill shown for an order in both the table and the compact card.
+function OrderStatusChip({ order }: { order: ShopifyOrder }) {
+  const { t } = useTranslation('merch')
+  const orderSkipLabel = useOrderSkipLabel()
+  if (order.skip_reason) {
+    return <Chip size="small" color="default" label={orderSkipLabel(order.skip_reason)} />
+  }
+  if (order.fully_imported) return <Chip size="small" color="success" label={t($ => $.shopify.imported)} />
+  return <Chip size="small" variant="outlined" label={order.financial_status} />
 }
 
 // Default each mappable line to a product with a matching name, else skip.
@@ -113,6 +129,8 @@ interface ShopifyImportDialogProps {
 }
 
 export default function ShopifyImportDialog({ products, onClose }: ShopifyImportDialogProps) {
+  const { t } = useTranslation(['merch', 'common'])
+  const shopifyErrorMessage = useShopifyErrorMessage()
   const [step, setStep] = useState<Step>('select')
   const [orders, setOrders] = useState<ShopifyOrder[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -138,11 +156,11 @@ export default function ShopifyImportDialog({ products, onClose }: ShopifyImport
         if (!active) return
         const body = (err as { body?: { error?: string } }).body
         if (body?.error === 'shopify_not_configured') setNotConfigured(true)
-        else setError(shopifyErrorMessage(err, 'Failed to load orders'))
+        else setError(shopifyErrorMessage(err, t($ => $.shopify.errors.loadOrders)))
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadMore() {
     if (!nextCursor) return
@@ -152,7 +170,7 @@ export default function ShopifyImportDialog({ products, onClose }: ShopifyImport
       setOrders((prev) => [...prev, ...page.orders])
       setNextCursor(page.nextCursor)
     } catch (err) {
-      setError(shopifyErrorMessage(err, 'Failed to load more orders'))
+      setError(shopifyErrorMessage(err, t($ => $.shopify.errors.loadMoreOrders)))
     } finally {
       setLoadingMore(false)
     }
@@ -235,14 +253,14 @@ export default function ShopifyImportDialog({ products, onClose }: ShopifyImport
       setResult(await importShopifyOrders(body))
       setStep('done')
     } catch (err) {
-      setError(shopifyErrorMessage(err, 'Import failed'))
+      setError(shopifyErrorMessage(err, t($ => $.shopify.errors.importFailed)))
       setStep('map')
     }
   }
 
   return (
     <Dialog open fullWidth maxWidth="md">
-      <DialogTitle>Import orders from Shopify</DialogTitle>
+      <DialogTitle>{t($ => $.shopify.title)}</DialogTitle>
       <DialogContent dividers>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -252,8 +270,11 @@ export default function ShopifyImportDialog({ products, onClose }: ShopifyImport
 
         {!loading && notConfigured && (
           <Alert severity="info">
-            Shopify isn&apos;t connected yet. Add your API key and store domain in{' '}
-            <Link component={RouterLink} to="/settings">Settings → Integrations</Link> first.
+            <Trans
+              t={t}
+              i18nKey={$ => $.shopify.notConnected}
+              components={{ settingsLink: <Link component={RouterLink} to="/settings" /> }}
+            />
           </Alert>
         )}
 
@@ -288,17 +309,19 @@ export default function ShopifyImportDialog({ products, onClose }: ShopifyImport
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={() => onClose(!!result)}>{result ? 'Close' : 'Cancel'}</Button>
+        <Button onClick={() => onClose(!!result)}>
+          {result ? t($ => $.common.actions.close) : t($ => $.common.actions.cancel)}
+        </Button>
         {step === 'select' && !notConfigured && (
           <Button variant="contained" disabled={!selected.size} onClick={goToMap}>
-            Next ({selected.size})
+            {t($ => $.shopify.next, { count: selected.size })}
           </Button>
         )}
         {step === 'map' && (
           <>
-            <Button onClick={() => setStep('select')}>Back</Button>
+            <Button onClick={() => setStep('select')}>{t($ => $.common.actions.back)}</Button>
             <Button variant="contained" disabled={!importable.length} onClick={runImport}>
-              Import {importable.length} line{importable.length === 1 ? '' : 's'}
+              {t($ => $.shopify.importLines, { count: importable.length })}
             </Button>
           </>
         )}
@@ -317,16 +340,17 @@ interface SelectStepProps {
 }
 
 function SelectStep({ orders, selected, onToggle, nextCursor, loadingMore, onLoadMore }: SelectStepProps) {
+  const { t } = useTranslation(['merch', 'common'])
   const isCompact = useCompactLayout()
 
   if (!orders.length) {
-    return <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>No recent orders found.</Typography>
+    return <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>{t($ => $.shopify.noOrders)}</Typography>
   }
 
   const loadMore = nextCursor && (
     <Box sx={{ textAlign: 'center', mt: 2 }}>
       <Button onClick={onLoadMore} disabled={loadingMore}>
-        {loadingMore ? 'Loading…' : 'Load older orders'}
+        {loadingMore ? t($ => $.common.state.loading) : t($ => $.shopify.loadMore)}
       </Button>
     </Box>
   )
@@ -354,7 +378,7 @@ function SelectStep({ orders, selected, onToggle, nextCursor, loadingMore, onLoa
                     <OrderStatusChip order={o} />
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    {o.created_at?.slice(0, 10)} · {lines} line{lines === 1 ? '' : 's'} · {formatEur(o.total_incl_cents)}
+                    {o.created_at?.slice(0, 10)} · {t($ => $.shopify.lineCount, { count: lines })} · {formatEur(o.total_incl_cents)}
                   </Typography>
                 </Box>
               </Box>
@@ -372,11 +396,11 @@ function SelectStep({ orders, selected, onToggle, nextCursor, loadingMore, onLoa
         <TableHead>
           <TableRow sx={{ '& th': { fontWeight: 600 } }}>
             <TableCell padding="checkbox" />
-            <TableCell>Order</TableCell>
-            <TableCell>Date</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell align="right">Lines</TableCell>
-            <TableCell align="right">Total</TableCell>
+            <TableCell>{t($ => $.shopify.table.order)}</TableCell>
+            <TableCell>{t($ => $.shopify.table.date)}</TableCell>
+            <TableCell>{t($ => $.shopify.table.status)}</TableCell>
+            <TableCell align="right">{t($ => $.shopify.table.lines)}</TableCell>
+            <TableCell align="right">{t($ => $.shopify.table.total)}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -432,11 +456,12 @@ interface LineMapControlProps {
 function LineMapControl({
   line, mapping, activeProducts, revenueAccounts, mappingValue, onMappingSelect, onVatChange, compact = false,
 }: LineMapControlProps) {
+  const { t } = useTranslation('merch')
   if (!lineMappable(line)) {
     return (
       <Chip
         size="small"
-        label={line.already_imported ? 'Imported' : 'Refunded'}
+        label={line.already_imported ? t($ => $.shopify.imported) : t($ => $.shopify.refunded)}
         color={line.already_imported ? 'success' : 'default'}
       />
     )
@@ -448,12 +473,12 @@ function LineMapControl({
           value={mappingValue(mapping)}
           onChange={(e) => onMappingSelect(line, e.target.value)}
         >
-          <MenuItem value="skip">Skip</MenuItem>
-          {activeProducts.length > 0 && <ListSubheader>Products</ListSubheader>}
+          <MenuItem value="skip">{t($ => $.shopify.skip)}</MenuItem>
+          {activeProducts.length > 0 && <ListSubheader>{t($ => $.shopify.productsGroup)}</ListSubheader>}
           {activeProducts.map((p) => (
             <MenuItem key={String(p.id)} value={`product:${p.id}`}>{p.name}</MenuItem>
           ))}
-          {revenueAccounts.length > 0 && <ListSubheader>Revenue accounts</ListSubheader>}
+          {revenueAccounts.length > 0 && <ListSubheader>{t($ => $.shopify.revenueAccountsGroup)}</ListSubheader>}
           {revenueAccounts.map((a) => (
             <MenuItem key={String(a.code)} value={`revenue:${a.code}`}>
               {a.code} — {a.name}
@@ -463,9 +488,9 @@ function LineMapControl({
       </FormControl>
       {mapping?.type === 'revenue' && (
         <FormControl size="small" sx={compact ? { alignSelf: 'flex-start', minWidth: 120 } : { minWidth: 90 }}>
-          <InputLabel>VAT</InputLabel>
+          <InputLabel>{t($ => $.shopify.vat)}</InputLabel>
           <Select
-            label="VAT"
+            label={t($ => $.shopify.vat)}
             value={mapping.vat_rate}
             onChange={(e) => onVatChange(line.id, mapping.account_code, Number(e.target.value))}
           >
@@ -478,6 +503,7 @@ function LineMapControl({
 }
 
 function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, onMappingSelect, onVatChange }: MapStepProps) {
+  const { t } = useTranslation('merch')
   const isCompact = useCompactLayout()
   const activeProducts = products.filter((p) => !p.archived_at)
 
@@ -486,8 +512,7 @@ function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, on
   return (
     <>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Map each line to a product (revenue uses the product&apos;s account and adjusts stock) or to a
-        revenue account, or skip it. Already-imported and refunded lines are locked.
+        {t($ => $.shopify.mapIntro)}
       </Typography>
       {orders.map((order) => (
         <Box key={order.id} sx={{ mb: 3 }}>
@@ -513,9 +538,9 @@ function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, on
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-                    <TableCell>Item</TableCell>
-                    <TableCell align="right">Qty</TableCell>
-                    <TableCell>Map to</TableCell>
+                    <TableCell>{t($ => $.shopify.mapTable.item)}</TableCell>
+                    <TableCell align="right">{t($ => $.shopify.mapTable.qty)}</TableCell>
+                    <TableCell>{t($ => $.shopify.mapTable.mapTo)}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -544,13 +569,16 @@ function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, on
 }
 
 function DoneStep({ result }: { result: ShopifyImportResult }) {
+  const { t } = useTranslation('merch')
+  const lineStatusLabel = useLineStatusLabel()
   const isCompact = useCompactLayout()
   const skippedReasons = result.results.filter((r) => r.status !== 'imported')
   return (
     <>
       <Alert severity="success" sx={{ mb: 2 }}>
-        Imported {result.imported} line{result.imported === 1 ? '' : 's'}
-        {result.skipped > 0 ? `, skipped ${result.skipped}` : ''}.
+        {result.skipped > 0
+          ? t($ => $.shopify.done.importedWithSkipped, { count: result.imported, skipped: result.skipped })
+          : t($ => $.shopify.done.importedOnly, { count: result.imported })}
       </Alert>
       {skippedReasons.length > 0 && (
         isCompact ? (
@@ -560,7 +588,7 @@ function DoneStep({ result }: { result: ShopifyImportResult }) {
                 <Typography variant="body2" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {r.shopify_line_id}
                 </Typography>
-                <Chip size="small" variant="outlined" label={STATUS_LABELS[r.status] ?? r.status} sx={{ flexShrink: 0 }} />
+                <Chip size="small" variant="outlined" label={lineStatusLabel(r.status)} sx={{ flexShrink: 0 }} />
               </Box>
             ))}
           </Paper>
@@ -568,15 +596,15 @@ function DoneStep({ result }: { result: ShopifyImportResult }) {
           <Table size="small">
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-                <TableCell>Line</TableCell>
-                <TableCell>Reason</TableCell>
+                <TableCell>{t($ => $.shopify.done.line)}</TableCell>
+                <TableCell>{t($ => $.shopify.done.reason)}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {skippedReasons.map((r) => (
                 <TableRow key={r.shopify_line_id}>
                   <TableCell>{r.shopify_line_id}</TableCell>
-                  <TableCell>{STATUS_LABELS[r.status] ?? r.status}</TableCell>
+                  <TableCell>{lineStatusLabel(r.status)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

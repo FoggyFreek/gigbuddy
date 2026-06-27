@@ -1,3 +1,35 @@
 {
-  "title": "Email Templates"
+  "title": "Email Templates",
+  "table": {
+    "name": "Name",
+    "subject": "Subject",
+    "noSubject": "(no subject)",
+    "created": "Created {{date}}",
+    "empty": "No templates yet — create one to get started."
+  },
+  "form": {
+    "createTitle": "New email template",
+    "editTitle": "Edit email template",
+    "nameLabel": "Template name",
+    "namePlaceholder": "e.g. Gig announcement, Rehearsal notice",
+    "subjectLabel": "Subject",
+    "subjectPlaceholder": "e.g. We're playing at The Venue on Friday!",
+    "body": "Body",
+    "required": "Required",
+    "saveTemplate": "Save template",
+    "downloadEml": "Download .eml",
+    "deleteTitle": "Delete template?",
+    "deleteConfirm": "This cannot be undone.",
+    "linkPrompt": "URL"
+  },
+  "toolbar": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "heading2": "Heading 2",
+    "heading3": "Heading 3",
+    "bulletList": "Bullet list",
+    "numberedList": "Numbered list",
+    "link": "Link"
+  }
 }

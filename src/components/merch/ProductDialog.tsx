@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -31,6 +32,7 @@ interface ProductDialogProps {
 // purchase stock-ins, so it is only enterable at creation (as the starting
 // cost for stock added before any purchase) and read-only afterwards.
 export default function ProductDialog({ product, revenueAccounts = [], onSubmit, onClose }: ProductDialogProps) {
+  const { t } = useTranslation(['merch', 'common'])
   const [name, setName] = useState(product?.name ?? '')
   const [unitCostCents, setUnitCostCents] = useState(product?.unit_cost_cents ?? 0)
   const [priceInclCents, setPriceInclCents] = useState(product?.default_price_incl_cents ?? 0)
@@ -65,12 +67,12 @@ export default function ProductDialog({ product, revenueAccounts = [], onSubmit,
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>{product ? 'Edit product' : 'New product'}</DialogTitle>
+      <DialogTitle>{product ? t($ => $.productDialog.editTitle) : t($ => $.productDialog.newTitle)}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <TextField
-            label="Name"
+            label={t($ => $.productDialog.name)}
             size="small"
             fullWidth
             autoFocus
@@ -78,22 +80,22 @@ export default function ProductDialog({ product, revenueAccounts = [], onSubmit,
             onChange={(e) => setName(e.target.value)}
           />
           <MoneyInput
-            label={product ? 'Unit cost (excl. VAT)' : 'Starting unit cost (excl. VAT)'}
+            label={product ? t($ => $.productDialog.unitCost) : t($ => $.productDialog.startingUnitCost)}
             cents={unitCostCents}
             onChange={setUnitCostCents}
             disabled={Boolean(product)}
-            helperText={product ? 'Moving average — updated automatically by purchases' : undefined}
+            helperText={product ? t($ => $.productDialog.movingAverageHelp) : undefined}
             sx={undefined}
           />
           <MoneyInput
-            label="Selling price (incl. VAT)"
+            label={t($ => $.productDialog.sellingPrice)}
             cents={priceInclCents}
             onChange={setPriceInclCents}
             helperText={undefined}
             sx={undefined}
           />
           <TextField
-            label="VAT rate"
+            label={t($ => $.productDialog.vatRate)}
             size="small"
             select
             value={vatRate}
@@ -105,14 +107,14 @@ export default function ProductDialog({ product, revenueAccounts = [], onSubmit,
           </TextField>
           {revenueAccounts.length > 0 && (
             <TextField
-              label="Revenue account"
+              label={t($ => $.productDialog.revenueAccount)}
               size="small"
               select
               value={revenueAccountCode}
               onChange={(e) => setRevenueAccountCode(e.target.value)}
-              helperText="Where this product's sales revenue is booked"
+              helperText={t($ => $.productDialog.revenueAccountHelp)}
             >
-              <MenuItem value=""><em>Default (band merch revenue)</em></MenuItem>
+              <MenuItem value=""><em>{t($ => $.productDialog.revenueAccountDefault)}</em></MenuItem>
               {revenueAccounts.map((a) => (
                 <MenuItem key={a.code} value={a.code}>{a.code} — {a.name}</MenuItem>
               ))}
@@ -121,9 +123,9 @@ export default function ProductDialog({ product, revenueAccounts = [], onSubmit,
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.cancel)}</Button>
         <Button variant="contained" disabled={!canSubmit} onClick={handleSubmit}>
-          {product ? 'Save' : 'Create'}
+          {product ? t($ => $.common.actions.save) : t($ => $.productDialog.create)}
         </Button>
       </DialogActions>
     </Dialog>

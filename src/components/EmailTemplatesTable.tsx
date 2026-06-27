@@ -10,6 +10,7 @@ import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
+import { useTranslation } from 'react-i18next'
 import type { Id } from '../types/entities.ts'
 
 interface EmailTemplate {
@@ -46,6 +47,7 @@ function formatDate(val?: string): string {
 }
 
 function TemplateCard({ template, onClick }: TemplateCardProps) {
+  const { t } = useTranslation('emailTemplates')
   return (
     <Box
       onClick={onClick}
@@ -64,10 +66,10 @@ function TemplateCard({ template, onClick }: TemplateCardProps) {
             {template.name}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {template.subject || '(no subject)'}
+            {template.subject || t($ => $.table.noSubject)}
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            Created {formatDate(template.created_at)}
+            {t($ => $.table.created, { date: formatDate(template.created_at) })}
           </Typography>
         </Box>
       </Box>
@@ -89,6 +91,7 @@ function DesktopRow({ template, onClick }: DesktopRowProps) {
 }
 
 export default function EmailTemplatesTable({ templates, onRowClick }: EmailTemplatesTableProps) {
+  const { t } = useTranslation('emailTemplates')
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
 
@@ -97,7 +100,7 @@ export default function EmailTemplatesTable({ templates, onRowClick }: EmailTemp
       <Paper variant="outlined">
         {templates.length === 0 ? (
           <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-            No templates yet — create one to get started.
+            {t($ => $.table.empty)}
           </Box>
         ) : (
           templates.map((t) => (
@@ -114,8 +117,8 @@ export default function EmailTemplatesTable({ templates, onRowClick }: EmailTemp
         <Table size="small">
           <TableHead>
             <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-              <TableCell>Name</TableCell>
-              <TableCell>Subject</TableCell>
+              <TableCell>{t($ => $.table.name)}</TableCell>
+              <TableCell>{t($ => $.table.subject)}</TableCell>
               <TableCell />
             </TableRow>
           </TableHead>
@@ -123,7 +126,7 @@ export default function EmailTemplatesTable({ templates, onRowClick }: EmailTemp
             {templates.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  No templates yet — create one to get started.
+                  {t($ => $.table.empty)}
                 </TableCell>
               </TableRow>
             ) : (

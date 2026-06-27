@@ -3,8 +3,8 @@
   "bandLogoAlt": "Bandlogo",
   "card": {
     "viewAll": "Alles bekijken",
-    "viewDetails": "Details bekijken",
-    "loadError": "⚠ Laden mislukt",
+    "viewDetails": "Details",
+    "loadError": "Laden mislukt",
     "empty": "Niets te tonen"
   },
   "nextGig": {
@@ -21,7 +21,7 @@
     "empty": "Geen aankomende bandevenementen"
   },
   "upcomingShows": {
-    "title": "Aankomende optredens",
+    "title": "Optredens",
     "empty": "Geen aankomende optredens"
   },
   "myTasks": {

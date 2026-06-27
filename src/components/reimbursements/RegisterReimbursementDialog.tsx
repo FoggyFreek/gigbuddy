@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -35,6 +36,7 @@ interface RegisterReimbursementDialogProps {
 // from the selection — never free-entered — so it always matches the cleared
 // liability.
 export default function RegisterReimbursementDialog({ member, onSubmit, onClose }: RegisterReimbursementDialogProps) {
+  const { t } = useTranslation(['reimbursements', 'common'])
   const [purchases, setPurchases] = useState<Purchase[] | null>(null)
   const [selected, setSelected] = useState<Set<Id>>(() => new Set())
   const [paidOn, setPaidOn] = useState(() => new Date().toISOString().slice(0, 10))
@@ -91,7 +93,7 @@ export default function RegisterReimbursementDialog({ member, onSubmit, onClose 
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Reimburse {member.band_member_name}</DialogTitle>
+      <DialogTitle>{t($ => $.dialog.title, { name: member.band_member_name })}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -104,7 +106,7 @@ export default function RegisterReimbursementDialog({ member, onSubmit, onClose 
         {purchases && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Purchases to settle
+              {t($ => $.dialog.purchasesToSettle)}
             </Typography>
             {purchases.map((p) => (
               <FormControlLabel
@@ -124,13 +126,13 @@ export default function RegisterReimbursementDialog({ member, onSubmit, onClose 
             ))}
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mt: 1, mb: 2 }}>
-              <Typography variant="subtitle2">Total</Typography>
+              <Typography variant="subtitle2">{t($ => $.dialog.total)}</Typography>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(total)}</Typography>
             </Box>
 
             <Box sx={{ mb: 2 }}>
               <DateEntryField
-                label="Paid on"
+                label={t($ => $.dialog.paidOn)}
                 size="small"
                 fullWidth
                 value={paidOn}
@@ -139,7 +141,7 @@ export default function RegisterReimbursementDialog({ member, onSubmit, onClose 
               />
             </Box>
             <TextField
-              label="Memo"
+              label={t($ => $.dialog.memo)}
               size="small"
               fullWidth
               value={memo}
@@ -149,9 +151,9 @@ export default function RegisterReimbursementDialog({ member, onSubmit, onClose 
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.cancel)}</Button>
         <Button variant="contained" disabled={!canSubmit} onClick={handleSubmit}>
-          Register reimbursement
+          {t($ => $.dialog.submit)}
         </Button>
       </DialogActions>
     </Dialog>

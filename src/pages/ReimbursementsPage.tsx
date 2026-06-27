@@ -1,4 +1,5 @@
 ﻿import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import Paper from '@mui/material/Paper'
@@ -19,6 +20,7 @@ import { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
 import type { MemberOutstanding } from '../types/entities.ts'
 
 export default function ReimbursementsPage() {
+  const { t } = useTranslation('reimbursements')
   const isCompact = useCompactLayout()
   const {
     outstanding, loading, error, expandedId, purchasesByMember,
@@ -44,7 +46,7 @@ export default function ReimbursementsPage() {
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ fontWeight: 600,  mb: 2  }}>Reimbursements</Typography>
+      <Typography variant="h5" sx={{ fontWeight: 600,  mb: 2  }}>{t($ => $.title)}</Typography>
 
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
@@ -55,13 +57,13 @@ export default function ReimbursementsPage() {
       {!loading && (
         <>
           <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'inline-block', minWidth: 160 }}>
-            <Typography variant="body2" color="text.secondary">Total owed to members</Typography>
+            <Typography variant="body2" color="text.secondary">{t($ => $.totalOwed)}</Typography>
             <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(totalOwed)}</Typography>
           </Paper>
 
           {!outstanding.length && (
             <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-              Nothing outstanding
+              {t($ => $.nothingOutstanding)}
             </Typography>
           )}
 
@@ -88,10 +90,10 @@ export default function ReimbursementsPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell sx={{ width: '1%' }} />
-                      <TableCell>Member</TableCell>
-                      <TableCell align="center">Purchases</TableCell>
-                      <MoneyHeaderCells label="Outstanding" />
-                      <TableCell align="right">Actions</TableCell>
+                      <TableCell>{t($ => $.table.member)}</TableCell>
+                      <TableCell align="center">{t($ => $.table.purchases)}</TableCell>
+                      <MoneyHeaderCells label={t($ => $.table.outstanding)} />
+                      <TableCell align="right">{t($ => $.table.actions)}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>

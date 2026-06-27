@@ -28,7 +28,7 @@
     "colOpenTasks": "Open taken",
     "emptyAll": "Nog geen optredens — voeg er een toe om te beginnen.",
     "emptyUpcoming": "Geen aankomende optredens.",
-    "pastGigs": "Afgelopen optredens ({{count}})"
+    "pastGigs": "Eerdere optredens ({{count}})"
   },
   "form": {
     "newGig": "Nieuw optreden",
@@ -38,7 +38,7 @@
     "startTime": "Begintijd",
     "endTime": "Eindtijd",
     "status": "Status",
-    "memberAvailability": "Beschikbaarheid leden",
+    "memberAvailability": "Beschikbaarheid",
     "create": "Aanmaken",
     "required": "Verplicht",
     "unavailableTitle": "Lid niet beschikbaar",
@@ -95,7 +95,7 @@
     "monthsAll": "Alle",
     "monthsAhead_one": "{{count}} maand",
     "monthsAhead_other": "{{count}} maanden",
-    "includePastGigs": "Afgelopen optredens meenemen",
+    "includePastGigs": "Eerdere optredens meenemen",
     "showBanners": "Banners tonen",
     "darkLogo": "Donker logo",
     "photoOpacity": "Fotodekking",
@@ -191,7 +191,7 @@
     "paSystem": "PA-systeem",
     "drumkit": "Drumstel",
     "stageLight": "Podiumverlichting",
-    "memberAvailability": "Beschikbaarheid leden",
+    "memberAvailability": "Beschikbaarheid",
     "contacts": "Contacten",
     "tasks": "Taken",
     "attachments": "Bijlagen",
