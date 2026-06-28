@@ -75,6 +75,12 @@
     "sharp": "^0.34.5",
     "web-push": "^3.6.7"
   },
+  "overrides": {
+    "uuid": "^9.0.0",
+    "archiver": "^8.0.0",
+    "unzipper": "^0.12.5",
+    "fast-csv": "^5.0.7"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@testing-library/jest-dom": "^6.9.1",

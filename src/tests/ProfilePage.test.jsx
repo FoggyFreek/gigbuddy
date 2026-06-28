@@ -152,7 +152,7 @@ describe('ProfilePage', () => {
     const user = userEvent.setup()
     wrap(<ProfilePage />)
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
-    await user.click(screen.getByRole('tab', { name: /links/i }))
+    await user.click(await screen.findByRole('tab', { name: /links/i }))
     await waitFor(() => screen.getByText('EPK'))
 
     const deleteBtn = screen.getByRole('button', { name: /delete link/i })
