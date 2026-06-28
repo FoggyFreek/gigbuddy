@@ -23,9 +23,7 @@
   "deleteDialog": {
     "title": "Geselecteerde boekingen verwijderen?",
     "body_one": "{{count}} conceptboeking verwijderen? Dit kan niet ongedaan worden gemaakt.",
-    "body_other": "{{count}} conceptboekingen verwijderen? Dit kan niet ongedaan worden gemaakt.",
-    "cancel": "Annuleren",
-    "delete": "Verwijderen"
+    "body_other": "{{count}} conceptboekingen verwijderen? Dit kan niet ongedaan worden gemaakt."
   },
   "entry": {
     "selectAria": "selecteer journaal {{number}}",
@@ -60,7 +58,6 @@
     "title": "Sommige boekingen konden niet worden goedgekeurd",
     "summary_one": "{{count}} boeking is als concept blijven staan. Los de onderstaande problemen op en probeer het opnieuw.",
     "summary_other": "{{count}} boekingen zijn als concept blijven staan. Los de onderstaande problemen op en probeer het opnieuw.",
-    "ok": "OK",
     "entryLabel": "Boeking J{{number}}",
     "entryLabelFallback": "Boeking #{{id}}",
     "linePrefix": "Regel {{line}}: {{message}}",

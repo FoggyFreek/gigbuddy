@@ -164,7 +164,7 @@ export default function LedgerEntryDetailPage() {
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <IconButton aria-label={t($ => $.detail.backAria)} onClick={() => navigate('/ledger')}>
+        <IconButton aria-label={t($ => $.aria.back, { ns: 'common' })} onClick={() => navigate('/ledger')}>
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h5" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }}>

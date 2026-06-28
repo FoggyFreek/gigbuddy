@@ -25,6 +25,25 @@
     "loading": "Laden…",
     "none": "Geen"
   },
+  "aria": {
+    "back": "terug",
+    "close": "sluiten"
+  },
+  "confirmation": {
+    "cannotUndo": "Dit kan niet ongedaan worden gemaakt."
+  },
+  "csvImport": {
+    "chooseFile": "Kies CSV-bestand",
+    "notMapped": "(niet gekoppeld)",
+    "nameColumnRequired": "Naamkolom is verplicht",
+    "preview": "Voorbeeld",
+    "showing": "Eerste {{shown}} van {{total}} rijen worden getoond.",
+    "willImport_one": "{{count}} rij wordt geïmporteerd.",
+    "willImport_other": "{{count}} rijen worden geïmporteerd.",
+    "importError": "Importeren mislukt",
+    "importButton_one": "{{count}} rij importeren",
+    "importButton_other": "{{count}} rijen importeren"
+  },
   "answer": {
     "yes": "Ja",
     "no": "Nee"

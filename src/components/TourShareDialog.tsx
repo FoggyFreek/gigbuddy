@@ -211,7 +211,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
       setPhotos((prev) => [...prev, newPhoto])
       setPhotoId(newPhoto.id ?? null)
     } catch (err) {
-      setSnackbar({ msg: (err as Error).message || t($ => $.tourShare.uploadFailed) })
+      setSnackbar({ msg: (err as Error).message || t($ => $.shareEditor.uploadFailed) })
     } finally {
       setBusy(false)
     }
@@ -230,7 +230,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
         return next
       })
     } catch (err) {
-      setSnackbar({ msg: (err as Error).message || t($ => $.tourShare.deleteFailed) })
+      setSnackbar({ msg: (err as Error).message || t($ => $.shareEditor.deleteFailed) })
     }
   }
 
@@ -273,7 +273,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                   <Tooltip key={c.id} title={c.label}>
                     <ButtonBase
                       onClick={() => setAccentId(c.id)}
-                      aria-label={t($ => $.tourShare.accentColorAria, { label: c.label })}
+                      aria-label={t($ => $.shareEditor.accentColorAria, { label: c.label })}
                       sx={{
                         width: 32,
                         height: 32,
@@ -349,7 +349,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                       size="small"
                     />
                   }
-                  label={<Typography variant="caption">{t($ => $.tourShare.darkLogo)}</Typography>}
+                  label={<Typography variant="caption">{t($ => $.shareEditor.darkLogo)}</Typography>}
                 />
               )}
             </Stack>
@@ -408,7 +408,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                 size="small"
                 aria-label={t($ => $.tourShare.photoOpacity)}
                 marks={[
-                  { value: 0, label: t($ => $.tourShare.markNone) },
+                  { value: 0, label: t($ => $.state.none, { ns: 'common' }) },
                   { value: 50, label: t($ => $.tourShare.markHalf) },
                   { value: 100, label: t($ => $.tourShare.markFull) },
                 ]}
@@ -425,10 +425,10 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                     max={100}
                     step={1}
                     size="small"
-                    aria-label={t($ => $.tourShare.photoZoom)}
+                    aria-label={t($ => $.shareEditor.photoZoom)}
                     marks={[
-                      { value: 0, label: t($ => $.tourShare.markWidth) },
-                      { value: 100, label: t($ => $.tourShare.markHeight) },
+                      { value: 0, label: t($ => $.shareEditor.markWidth) },
+                      { value: 100, label: t($ => $.shareEditor.markHeight) },
                     ]}
                   />
                 </>
@@ -443,7 +443,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                 max={100}
                 step={1}
                 size="small"
-                aria-label={t($ => $.tourShare.photoPan)}
+                aria-label={t($ => $.shareEditor.photoPan)}
                 marks={[
                   { value: -100, label: '◀' },
                   { value: 0, label: '·' },
@@ -488,7 +488,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                       {isAdmin && (
                         <IconButton
                           size="small"
-                          aria-label={t($ => $.tourShare.deletePhotoAria, { label: p.label })}
+                          aria-label={t($ => $.shareEditor.deletePhotoAria, { label: p.label })}
                           onClick={() => handlePhotoDelete(p)}
                           sx={{ color: 'error.main', p: 0.25 }}
                         >
@@ -509,7 +509,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareD
                       onChange={handlePhotoUpload}
                     />
                     <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <Tooltip title={t($ => $.tourShare.uploadPhoto)}>
+                      <Tooltip title={t($ => $.shareEditor.uploadPhoto)}>
                         <ButtonBase
                           onClick={() => photoInputRef.current?.click()}
                           disabled={busy}

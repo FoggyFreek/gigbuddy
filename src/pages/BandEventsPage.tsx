@@ -14,7 +14,7 @@ import { bandEventShareUrl } from '../utils/shareUtils.ts'
 import type { BandEvent } from '../types/entities.ts'
 
 export default function BandEventsPage() {
-  const { t } = useTranslation('bandEvents')
+  const { t } = useTranslation(['bandEvents', 'common'])
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -68,7 +68,7 @@ export default function BandEventsPage() {
           startIcon={<AddIcon />}
           onClick={() => setModal({ mode: 'create' })}
         >
-          {t($ => $.add)}
+          {t($ => $.actions.add, { ns: 'common' })}
         </Button>
       </Box>
 

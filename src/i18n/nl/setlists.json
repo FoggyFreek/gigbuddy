@@ -18,10 +18,8 @@
     "preview": "Voorbeeld",
     "addSet": "Set toevoegen",
     "deleteSetlist": "Setlijst verwijderen",
-    "back": "terug",
     "nameAria": "setlijstnaam",
-    "deleteTitle": "Setlijst verwijderen?",
-    "deleteConfirm": "Dit kan niet ongedaan worden gemaakt."
+    "deleteTitle": "Setlijst verwijderen?"
   },
   "set": {
     "nameAria": "setnaam",

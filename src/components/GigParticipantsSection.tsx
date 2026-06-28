@@ -36,7 +36,7 @@ export default function GigParticipantsSection({
   onVote,
   canWrite = true,
 }: GigParticipantsSectionProps) {
-  const { t } = useTranslation('gigs')
+  const { t } = useTranslation(['gigs', 'common'])
   return (
     <Stack spacing={1}>
       {participants.length === 0 && (
@@ -108,7 +108,7 @@ export default function GigParticipantsSection({
             disabled={!addMemberId}
             onClick={onAddParticipant}
           >
-            {t($ => $.participants.add)}
+            {t($ => $.actions.add, { ns: 'common' })}
           </Button>
         </Box>
       )}

@@ -19,7 +19,6 @@
     "saveTemplate": "Sjabloon opslaan",
     "downloadEml": ".eml downloaden",
     "deleteTitle": "Sjabloon verwijderen?",
-    "deleteConfirm": "Dit kan niet ongedaan worden gemaakt.",
     "linkPrompt": "URL"
   },
   "toolbar": {

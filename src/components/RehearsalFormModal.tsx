@@ -58,7 +58,7 @@ interface RehearsalFormModalProps {
 }
 
 export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }: RehearsalFormModalProps) {
-  const { t } = useTranslation('rehearsals')
+  const { t } = useTranslation(['rehearsals', 'common'])
   const [form, setForm] = useState<RehearsalForm>(() =>
     mode === 'create' && initialDate ? { ...EMPTY_FORM, proposed_date: initialDate } : EMPTY_FORM,
   )
@@ -304,11 +304,11 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {mode === 'create' ? (
           <>
-            <Button onClick={onClose}>{t($ => $.form.cancel)}</Button>
+            <Button onClick={onClose}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
             <Button variant="contained" onClick={handleCreate}>{t($ => $.form.propose)}</Button>
           </>
         ) : (
-          <Button variant="contained" onClick={handleClose}>{t($ => $.form.close)}</Button>
+          <Button variant="contained" onClick={handleClose}>{t($ => $.actions.close, { ns: 'common' })}</Button>
         )}
       </DialogActions>
 

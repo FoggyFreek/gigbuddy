@@ -49,11 +49,19 @@ export async function fetchContactWithNotes(executor, contactId, tenantId) {
   const { rows } = await executor.query(
     `SELECT c.*,
        COALESCE(
-         json_agg(n ORDER BY n.created_at DESC) FILTER (WHERE n.id IS NOT NULL),
+         json_agg(
+           json_build_object(
+             'id', n.id,
+             'note', n.note,
+             'created_at', n.created_at,
+             'created_by', u.name
+           ) ORDER BY n.created_at DESC
+         ) FILTER (WHERE n.id IS NOT NULL),
          '[]'
        ) AS notes
      FROM contacts c
      LEFT JOIN contact_notes n ON n.contact_id = c.id AND n.tenant_id = c.tenant_id
+     LEFT JOIN users u ON u.id = n.created_by_user_id
      WHERE c.id = $1 AND c.tenant_id = $2
      GROUP BY c.id`,
     [contactId, tenantId],
@@ -102,14 +110,14 @@ export async function deleteContact(executor, contactId, tenantId) {
 
 // Inserts a note only when the parent contact belongs to the tenant (SELECT
 // guard). Returns the new note row, or null when the contact doesn't exist.
-export async function insertContactNote(executor, contactId, tenantId, note) {
+export async function insertContactNote(executor, contactId, tenantId, note, userId) {
   const { rows } = await executor.query(
-    `INSERT INTO contact_notes (contact_id, tenant_id, note)
-     SELECT c.id, c.tenant_id, $3
+    `INSERT INTO contact_notes (contact_id, tenant_id, note, created_by_user_id)
+     SELECT c.id, c.tenant_id, $3, $4
      FROM contacts c
      WHERE c.id = $1 AND c.tenant_id = $2
      RETURNING *`,
-    [contactId, tenantId, note],
+    [contactId, tenantId, note, userId ?? null],
   )
   return rows[0] || null
 }

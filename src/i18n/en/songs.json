@@ -30,8 +30,7 @@
   "addPdf": "Add PDF",
   "addMp3": "Add mp3",
   "deleteDialog": {
-    "title": "Delete song?",
-    "body": "This cannot be undone."
+    "title": "Delete song?"
   },
   "table": {
     "empty": "No songs yet — add one or import from CSV.",
@@ -61,20 +60,12 @@
     "failed": "Import failed.",
     "csvTitle": "Import songs from CSV",
     "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: title, artist, key, tempo, duration (mm:ss or seconds), tags (comma-separated).",
-    "chooseFile": "Choose CSV file",
     "mapHelp": "Map your CSV columns to song fields. {{count}} rows detected.",
-    "notMapped": "(not mapped)",
     "titleColumnRequired": "Title column is required",
-    "showing": "Showing first {{shown}} of {{total}} rows.",
-    "willImport_one": "{{count}} row will be imported.",
-    "willImport_other": "{{count}} rows will be imported.",
-    "importError": "Import failed",
     "result_one": "Imported {{count}} song.",
     "result_other": "Imported {{count}} songs.",
     "resultSkipped_one": "Imported {{count}} song ({{skipped}} skipped as duplicates).",
-    "resultSkipped_other": "Imported {{count}} songs ({{skipped}} skipped as duplicates).",
-    "importButton_one": "Import {{count}} row",
-    "importButton_other": "Import {{count}} rows"
+    "resultSkipped_other": "Imported {{count}} songs ({{skipped}} skipped as duplicates)."
   },
   "charts": {
     "create": "Create",

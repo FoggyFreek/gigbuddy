@@ -18,10 +18,8 @@
     "preview": "Preview",
     "addSet": "Add set",
     "deleteSetlist": "Delete setlist",
-    "back": "back",
     "nameAria": "setlist name",
-    "deleteTitle": "Delete setlist?",
-    "deleteConfirm": "This cannot be undone."
+    "deleteTitle": "Delete setlist?"
   },
   "set": {
     "nameAria": "set name",

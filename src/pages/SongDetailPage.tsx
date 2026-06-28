@@ -336,7 +336,7 @@ export default function SongDetailPage() {
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
         <DialogTitle>{t($ => $.deleteDialog.title)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>{t($ => $.deleteDialog.body)}</DialogContentText>
+          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>

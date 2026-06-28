@@ -389,7 +389,7 @@ export default function SetlistEditorPage() {
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-        <IconButton onClick={handleBack} aria-label={t($ => $.editor.back)}>
+        <IconButton onClick={handleBack} aria-label={t($ => $.aria.back, { ns: 'common' })}>
           <ArrowBackIcon />
         </IconButton>
         <Box sx={{ flexGrow: 1 }}>
@@ -511,7 +511,7 @@ export default function SetlistEditorPage() {
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
         <DialogTitle>{t($ => $.editor.deleteTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>{t($ => $.editor.deleteConfirm)}</DialogContentText>
+          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>

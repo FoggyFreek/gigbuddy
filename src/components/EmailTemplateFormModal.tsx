@@ -309,7 +309,7 @@ export default function EmailTemplateFormModal({ mode, templateId, onClose }: Em
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <DialogTitle>{t($ => $.form.deleteTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>{t($ => $.form.deleteConfirm)}</DialogContentText>
+          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(false)}>{t($ => $.common.actions.cancel)}</Button>

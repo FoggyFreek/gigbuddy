@@ -45,10 +45,7 @@
     "addNoteAria": "Notitie toevoegen",
     "deleteNoteAria": "notitie verwijderen",
     "deleteTitle": "Contact verwijderen?",
-    "deleteBody": "Dit kan niet ongedaan worden gemaakt.",
     "deleteErrorTitle": "Kan contact niet verwijderen",
-    "backAria": "terug",
-    "closeAria": "sluiten",
     "purchasesHeading": "Inkopen"
   },
   "modal": {
@@ -58,20 +55,10 @@
     "title": "Contacten importeren uit CSV",
     "uploadHelp": "Upload een UTF-8 CSV-bestand met kolomkoppen. Ondersteunde velden: naam, e-mail, telefoon, categorie. Categoriewaarden: press, radio & tv, booker, promotion, network (standaard press indien niet herkend).",
     "uploadHelpFixed": "Upload een UTF-8 CSV-bestand met kolomkoppen. Ondersteunde velden: naam, e-mail, telefoon. Elke geïmporteerde rij krijgt de categorie '{{category}}'.",
-    "chooseFile": "Kies CSV-bestand",
     "mapHelp": "Koppel je CSV-kolommen aan contactvelden. {{count}} rijen gevonden.",
-    "notMapped": "(niet gekoppeld)",
-    "nameColumnRequired": "Naamkolom is verplicht",
-    "preview": "Voorbeeld",
-    "showing": "Eerste {{shown}} van {{total}} rijen worden getoond.",
-    "willImport_one": "{{count}} rij wordt geïmporteerd.",
-    "willImport_other": "{{count}} rijen worden geïmporteerd.",
-    "importError": "Importeren mislukt",
     "result_one": "{{count}} contact geïmporteerd.",
     "result_other": "{{count}} contacten geïmporteerd.",
     "resultSkipped_one": "{{count}} contact geïmporteerd ({{skipped}} overgeslagen als duplicaten).",
-    "resultSkipped_other": "{{count}} contacten geïmporteerd ({{skipped}} overgeslagen als duplicaten).",
-    "importButton_one": "{{count}} rij importeren",
-    "importButton_other": "{{count}} rijen importeren"
+    "resultSkipped_other": "{{count}} contacten geïmporteerd ({{skipped}} overgeslagen als duplicaten)."
   }
 }

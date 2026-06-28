@@ -12,7 +12,6 @@
     "archived": "Gearchiveerd",
     "priceLine": "{{price}} incl. {{rate}}% btw · inkoop {{cost}}",
     "onHand": "{{qty}} op voorraad",
-    "edit": "Bewerken",
     "archive": "Archiveren",
     "table": {
       "name": "Naam",
@@ -36,8 +35,6 @@
   },
   "details": {
     "title": "Productverkopen",
-    "back": "terug",
-    "close": "sluiten",
     "empty": "Geen verkopen in deze periode.",
     "voidSale": "Verkoop annuleren",
     "table": {

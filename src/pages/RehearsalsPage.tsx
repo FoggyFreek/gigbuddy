@@ -26,7 +26,7 @@ function applyVoteToRehearsals(rehearsals: Rehearsal[], rehearsalId: Id, memberI
 }
 
 export default function RehearsalsPage() {
-  const { t } = useTranslation('rehearsals')
+  const { t } = useTranslation(['rehearsals', 'common'])
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
@@ -89,7 +89,7 @@ export default function RehearsalsPage() {
             startIcon={<AddIcon />}
             onClick={() => setModal({ mode: 'create' })}
           >
-            {t($ => $.add)}
+            {t($ => $.actions.add, { ns: 'common' })}
           </Button>
         )}
       </Box>

@@ -218,7 +218,7 @@ export default function VenueDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={handleBack} aria-label={t($ => $.detail.backAria)}>
+          <IconButton onClick={handleBack} aria-label={t($ => $.aria.back, { ns: 'common' })}>
             <ArrowBackIcon />
           </IconButton>
         )}
@@ -226,7 +226,7 @@ export default function VenueDetailPage() {
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={handleBack} aria-label={t($ => $.detail.closeAria)}>
+            <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
               <CloseIcon />
             </IconButton>
           </>
@@ -339,7 +339,7 @@ export default function VenueDetailPage() {
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
         <DialogTitle>{t($ => $.detail.deleteTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>{t($ => $.detail.deleteBody)}</DialogContentText>
+          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>

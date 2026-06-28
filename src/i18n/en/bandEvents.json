@@ -1,6 +1,5 @@
 {
   "title": "Band Events",
-  "add": "Add",
   "table": {
     "colDate": "Date",
     "colTitle": "Title",
@@ -28,17 +27,10 @@
     "notes": "Notes",
     "required": "Required",
     "endDateError": "Must be on or after start date",
-    "cancel": "Cancel",
-    "addEvent": "Add event",
-    "close": "Close"
+    "addEvent": "Add event"
   },
   "page": {
     "title": "Band event details",
-    "back": "back",
-    "close": "close",
-    "delete": "Delete",
-    "deleteConfirmTitle": "Delete band event?",
-    "deleteConfirmBody": "This cannot be undone.",
-    "cancel": "Cancel"
+    "deleteConfirmTitle": "Delete band event?"
   }
 }

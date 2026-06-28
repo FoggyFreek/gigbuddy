@@ -74,7 +74,7 @@ router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req,
 
 router.post('/:id/notes', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
-  const result = await createNote(pool, req.tenantId, id, req.body)
+  const result = await createNote(pool, req.tenantId, id, req.body, req.user.id)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.note)
 })

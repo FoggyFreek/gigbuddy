@@ -67,9 +67,5 @@
   "paymentDialog": {
     "recordRefundTitle": "Record refund · {{period}}",
     "recordPaymentTitle": "Record payment · {{period}}"
-  },
-  "aria": {
-    "back": "back",
-    "close": "close"
   }
 }

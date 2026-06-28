@@ -1,6 +1,5 @@
 {
   "title": "Repetities",
-  "add": "Toevoegen",
   "status": {
     "option": "Optie",
     "planned": "Gepland"
@@ -29,9 +28,7 @@
     "alsoIncludeHint": "Leadleden worden automatisch toegevoegd. Kies optionele leden of invallers die je ook nodig hebt.",
     "memberAvailability": "Beschikbaarheid leden",
     "required": "Verplicht",
-    "cancel": "Annuleren",
     "propose": "Voorstellen",
-    "close": "Sluiten",
     "unavailableTitle": "Lid niet beschikbaar",
     "unavailableBody_one": "{{names}} is op deze datum als niet beschikbaar gemarkeerd. Weet je zeker dat je deze repetitie wilt voorstellen?",
     "unavailableBody_other": "{{names}} zijn op deze datum als niet beschikbaar gemarkeerd. Weet je zeker dat je deze repetitie wilt voorstellen?",
@@ -53,16 +50,10 @@
     "requiredParticipants": "Verplichte deelnemers",
     "noParticipants": "Nog geen deelnemers — voeg er hieronder minstens één toe.",
     "addParticipant": "Deelnemer toevoegen",
-    "add": "Toevoegen",
     "removeParticipant": "{{name}} verwijderen"
   },
   "page": {
     "title": "Repetitiedetails",
-    "back": "terug",
-    "close": "sluiten",
-    "delete": "Verwijderen",
-    "deleteConfirmTitle": "Repetitie verwijderen?",
-    "deleteConfirmBody": "Dit kan niet ongedaan worden gemaakt.",
-    "cancel": "Annuleren"
+    "deleteConfirmTitle": "Repetitie verwijderen?"
   }
 }

@@ -19,7 +19,7 @@ import JournalApproveErrorDialog from '../components/journal/JournalApproveError
 import { useJournalListState } from '../components/journal/useJournalListState.ts'
 
 export default function JournalPage() {
-  const { t } = useTranslation('journal')
+  const { t } = useTranslation(['journal', 'common'])
   const compact = useCompactLayout()
   const setWideContent = useSetWideContent()
   useEffect(() => {
@@ -157,13 +157,13 @@ export default function JournalPage() {
           {t($ => $.deleteDialog.body, { count: selectionCount })}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.deleteDialog.cancel)}</Button>
+          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
           <Button
             color="error"
             variant="contained"
             onClick={() => { setConfirmDelete(false); deleteSelected() }}
           >
-            {t($ => $.deleteDialog.delete)}
+            {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </DialogActions>
       </Dialog>

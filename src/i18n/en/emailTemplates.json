@@ -19,7 +19,6 @@
     "saveTemplate": "Save template",
     "downloadEml": "Download .eml",
     "deleteTitle": "Delete template?",
-    "deleteConfirm": "This cannot be undone.",
     "linkPrompt": "URL"
   },
   "toolbar": {

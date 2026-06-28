@@ -41,7 +41,6 @@
   },
   "detail": {
     "heading": "Grootboektransactie: {{name}}",
-    "backAria": "terug",
     "notice": {
       "voided": "Deze grootboektransactie is gestorneerd door een andere grootboektransactie.",
       "reversed": "Deze grootboektransactie is teruggeboekt door een andere grootboektransactie.",

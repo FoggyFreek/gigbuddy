@@ -1,6 +1,5 @@
 {
   "title": "Bandevenementen",
-  "add": "Toevoegen",
   "table": {
     "colDate": "Datum",
     "colTitle": "Titel",
@@ -28,17 +27,10 @@
     "notes": "Notities",
     "required": "Verplicht",
     "endDateError": "Moet op of na de begindatum liggen",
-    "cancel": "Annuleren",
-    "addEvent": "Evenement toevoegen",
-    "close": "Sluiten"
+    "addEvent": "Evenement toevoegen"
   },
   "page": {
     "title": "Bandevenementdetails",
-    "back": "terug",
-    "close": "sluiten",
-    "delete": "Verwijderen",
-    "deleteConfirmTitle": "Bandevenement verwijderen?",
-    "deleteConfirmBody": "Dit kan niet ongedaan worden gemaakt.",
-    "cancel": "Annuleren"
+    "deleteConfirmTitle": "Bandevenement verwijderen?"
   }
 }

@@ -95,7 +95,7 @@ export default function GigTasks({
   canWrite = true,
   currentBandMemberId = null,
 }: GigTasksProps) {
-  const { t, i18n } = useTranslation('gigs')
+  const { t, i18n } = useTranslation(['gigs', 'common'])
   const [tasks, setTasks] = useState<LocalGigTask[]>(initialTasks)
 
   // add-task form
@@ -391,7 +391,7 @@ export default function GigTasks({
                 >
                   <CheckIcon fontSize="small" />
                 </IconButton>
-                <IconButton size="small" onClick={cancelAdd} aria-label={t($ => $.tasks.cancel)}>
+                <IconButton size="small" onClick={cancelAdd} aria-label={t($ => $.actions.cancel, { ns: 'common' })}>
                   <CloseIcon fontSize="small" />
                 </IconButton>
               </Stack>

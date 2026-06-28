@@ -100,6 +100,25 @@ describe('GET /api/contacts/:id — includes notes array', () => {
     expect(res.body.notes).toEqual([])
   })
 
+  it('note created via API includes created_by name', async () => {
+    const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id
+    await asUserA(
+      request(app).post(`/api/contacts/${contactId}/notes`).send({ note: 'check author' }),
+    ).expect(201)
+    const res = await asUserA(request(app).get(`/api/contacts/${contactId}`)).expect(200)
+    expect(res.body.notes[0].created_by).toBe('Alpha User')
+  })
+
+  it('note without author has created_by null', async () => {
+    const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id
+    await pool.query(
+      `INSERT INTO contact_notes (contact_id, tenant_id, note) VALUES ($1, $2, 'legacy note')`,
+      [contactId, seed.tenantA.id],
+    )
+    const res = await asUserA(request(app).get(`/api/contacts/${contactId}`)).expect(200)
+    expect(res.body.notes[0].created_by).toBeNull()
+  })
+
   it('returns notes ordered newest first', async () => {
     const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id
     await pool.query(
@@ -138,6 +157,18 @@ describe('POST /api/contacts/:id/notes', () => {
       request(app).post('/api/contacts/99999/notes').send({ note: 'x' }),
     ).expect(404)
     expect(res.status).toBe(404)
+  })
+
+  it('stores created_by_user_id on the note row', async () => {
+    const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id
+    await asUserA(
+      request(app).post(`/api/contacts/${contactId}/notes`).send({ note: 'authored note' }),
+    ).expect(201)
+    const { rows } = await pool.query(
+      'SELECT created_by_user_id FROM contact_notes WHERE contact_id = $1',
+      [contactId],
+    )
+    expect(rows[0].created_by_user_id).toBe(seed.userA.id)
   })
 
   it('tenant isolation — user A cannot add notes to tenant B contact', async () => {

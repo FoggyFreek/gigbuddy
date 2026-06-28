@@ -200,7 +200,7 @@ describe('PurchasesPage', () => {
     wrap(<PurchasesPage />)
     await screen.findByText('Unpaid Supplier')
 
-    await user.click(screen.getByText(resources.en.purchases.summary.paid))
+    await user.click(screen.getByText(resources.en.purchases.state.paid))
 
     expect(await screen.findByText('Paid Supplier')).toBeInTheDocument()
     expect(screen.queryByText('Unpaid Supplier')).not.toBeInTheDocument()

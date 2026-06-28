@@ -40,7 +40,7 @@ function Row({ label, value }: { label: string; value?: ReactNode }) {
 // the stored breakdown, the settlement ledger entry link, payments so far and
 // the outstanding balance with a record-payment/refund action.
 export default function VatReturnDetailPage() {
-  const { t, i18n } = useTranslation('vatReturns')
+  const { t, i18n } = useTranslation(['vatReturns', 'common'])
   const { id } = useParams()
   const vatReturnId = Number(id)
   const navigate = useNavigate()
@@ -83,7 +83,7 @@ export default function VatReturnDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 600, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={closeView} aria-label={t($ => $.aria.back)}>
+          <IconButton onClick={closeView} aria-label={t($ => $.aria.back, { ns: 'common' })}>
             <ArrowBackIcon />
           </IconButton>
         )}
@@ -98,7 +98,7 @@ export default function VatReturnDetailPage() {
           </Button>
         )}
         {insideSplitView && (
-          <IconButton onClick={closeView} aria-label={t($ => $.aria.close)}>
+          <IconButton onClick={closeView} aria-label={t($ => $.aria.close, { ns: 'common' })}>
             <CloseIcon />
           </IconButton>
         )}

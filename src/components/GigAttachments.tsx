@@ -29,7 +29,7 @@ interface GigAttachmentsProps {
 }
 
 export default function GigAttachments({ gigId, initialAttachments = [], canWrite = true }: GigAttachmentsProps) {
-  const { t } = useTranslation('gigs')
+  const { t } = useTranslation(['gigs', 'common'])
   const [attachments, setAttachments] = useState<PurchaseAttachment[]>(initialAttachments)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -134,7 +134,7 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
             disabled={uploading}
             onClick={() => inputRef.current?.click()}
           >
-            {uploading ? t($ => $.attachments.uploading) : t($ => $.attachments.add)}
+            {uploading ? t($ => $.attachments.uploading) : t($ => $.actions.add, { ns: 'common' })}
           </Button>
         </Box>
       )}
@@ -147,9 +147,9 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmId(null)}>{t($ => $.attachments.cancel)}</Button>
+          <Button onClick={() => setConfirmId(null)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
           <Button color="error" variant="contained" onClick={handleConfirmDelete}>
-            {t($ => $.attachments.delete)}
+            {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </DialogActions>
       </Dialog>

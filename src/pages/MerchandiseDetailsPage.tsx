@@ -16,7 +16,7 @@ interface MerchDetailOutletContext {
 }
 
 export default function MerchandiseDetailsPage() {
-  const { t } = useTranslation('merch')
+  const { t } = useTranslation(['merch', 'common'])
   const { id } = useParams()
   const productId = Number(id)
   const navigate = useNavigate()
@@ -32,7 +32,7 @@ export default function MerchandiseDetailsPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 1200, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={closeView} aria-label={t($ => $.details.back)}>
+          <IconButton onClick={closeView} aria-label={t($ => $.aria.back, { ns: 'common' })}>
             <ArrowBackIcon />
           </IconButton>
         )}
@@ -40,7 +40,7 @@ export default function MerchandiseDetailsPage() {
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={closeView} aria-label={t($ => $.details.close)}>
+            <IconButton onClick={closeView} aria-label={t($ => $.aria.close, { ns: 'common' })}>
               <CloseIcon />
             </IconButton>
           </>

@@ -25,6 +25,25 @@
     "loading": "Loading…",
     "none": "None"
   },
+  "aria": {
+    "back": "back",
+    "close": "close"
+  },
+  "confirmation": {
+    "cannotUndo": "This cannot be undone."
+  },
+  "csvImport": {
+    "chooseFile": "Choose CSV file",
+    "notMapped": "(not mapped)",
+    "nameColumnRequired": "Name column is required",
+    "preview": "Preview",
+    "showing": "Showing first {{shown}} of {{total}} rows.",
+    "willImport_one": "{{count}} row will be imported.",
+    "willImport_other": "{{count}} rows will be imported.",
+    "importError": "Import failed",
+    "importButton_one": "Import {{count}} row",
+    "importButton_other": "Import {{count}} rows"
+  },
   "answer": {
     "yes": "Yes",
     "no": "No"

@@ -122,10 +122,10 @@ export async function deleteContact(db, tenantId, contactId) {
 
 // ---------- notes ----------
 
-export async function createNote(db, tenantId, contactId, body) {
+export async function createNote(db, tenantId, contactId, body, userId) {
   const note = body?.note
   if (!note || !String(note).trim()) return badRequest('note is required')
-  const created = await insertContactNote(db, contactId, tenantId, String(note).trim())
+  const created = await insertContactNote(db, contactId, tenantId, String(note).trim(), userId)
   if (!created) return NOT_FOUND
   return { note: created }
 }

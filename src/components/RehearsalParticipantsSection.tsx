@@ -45,7 +45,7 @@ export default function RehearsalParticipantsSection({
   canWrite = true,
   currentMemberId = null,
 }: RehearsalParticipantsSectionProps) {
-  const { t } = useTranslation('rehearsals')
+  const { t } = useTranslation(['rehearsals', 'common'])
   const participantIds = useMemo(
     () => new Set((rehearsal.participants ?? []).map((p) => p.band_member_id)),
     [rehearsal],
@@ -170,7 +170,7 @@ export default function RehearsalParticipantsSection({
                 </Select>
               </FormControl>
               <Button variant="outlined" disabled={!addMemberId} onClick={onAddParticipant}>
-                {t($ => $.participants.add)}
+                {t($ => $.actions.add, { ns: 'common' })}
               </Button>
             </Box>
           )}

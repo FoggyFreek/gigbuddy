@@ -23,9 +23,7 @@
   "deleteDialog": {
     "title": "Delete selected entries?",
     "body_one": "Delete {{count}} draft entry? This cannot be undone.",
-    "body_other": "Delete {{count}} draft entries? This cannot be undone.",
-    "cancel": "Cancel",
-    "delete": "Delete"
+    "body_other": "Delete {{count}} draft entries? This cannot be undone."
   },
   "entry": {
     "selectAria": "select journal {{number}}",
@@ -60,7 +58,6 @@
     "title": "Some entries could not be approved",
     "summary_one": "{{count}} entry was left as a draft. Fix the issues below and try again.",
     "summary_other": "{{count}} entries were left as a draft. Fix the issues below and try again.",
-    "ok": "OK",
     "entryLabel": "Entry J{{number}}",
     "entryLabelFallback": "Entry #{{id}}",
     "linePrefix": "Line {{line}}: {{message}}",

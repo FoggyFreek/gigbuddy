@@ -21,7 +21,7 @@ import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Gig, Id } from '../types/entities.ts'
 
 export default function GigDetailPage() {
-  const { t } = useTranslation('gigs')
+  const { t } = useTranslation(['gigs', 'common'])
   const { id } = useParams()
   const gigId = Number(id)
   const { canWritePlanning } = usePermissions()
@@ -55,7 +55,7 @@ export default function GigDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={handleBack} aria-label={t($ => $.page.back)}>
+          <IconButton onClick={handleBack} aria-label={t($ => $.aria.back, { ns: 'common' })}>
             <ArrowBackIcon />
           </IconButton>
         )}
@@ -67,7 +67,7 @@ export default function GigDetailPage() {
             changes, so only share once it matches the current id. */}
         {gig?.id === gigId && <GigShareMenu gig={gig} />}
         {insideSplitView && (
-          <IconButton onClick={handleBack} aria-label={t($ => $.page.close)}>
+          <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
             <CloseIcon />
           </IconButton>
         )}
@@ -91,7 +91,7 @@ export default function GigDetailPage() {
       {canWritePlanning && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
-            {t($ => $.page.delete)}
+            {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </Box>
       )}
@@ -99,10 +99,10 @@ export default function GigDetailPage() {
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <DialogTitle>{t($ => $.page.deleteConfirmTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>{t($ => $.page.deleteConfirmBody)}</DialogContentText>
+          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.page.cancel)}</Button>
+          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
           <Button
             color="error"
             variant="contained"
@@ -114,7 +114,7 @@ export default function GigDetailPage() {
               else navigate(-1)
             }}
           >
-            {t($ => $.page.delete)}
+            {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </DialogActions>
       </Dialog>

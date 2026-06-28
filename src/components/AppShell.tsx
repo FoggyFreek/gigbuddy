@@ -93,7 +93,7 @@ interface NavGroupEntry {
   children: NavChildEntry[]
 }
 
-const DRAWER_WIDTH = 220
+const DRAWER_WIDTH = 240
 const COLLAPSED_DRAWER_WIDTH = 72
 // Caps page content width on large screens so it stays centered instead of stretching edge-to-edge.
 const CONTENT_MAX_WIDTH = 1400

@@ -12,7 +12,6 @@
     "archived": "Archived",
     "priceLine": "{{price}} incl. {{rate}}% VAT · cost {{cost}}",
     "onHand": "{{qty}} on hand",
-    "edit": "Edit",
     "archive": "Archive",
     "table": {
       "name": "Name",
@@ -36,8 +35,6 @@
   },
   "details": {
     "title": "Product sales",
-    "back": "back",
-    "close": "close",
     "empty": "No sales in this period.",
     "voidSale": "Void sale",
     "table": {

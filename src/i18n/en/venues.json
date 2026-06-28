@@ -62,10 +62,7 @@
     "openContact": "Open contact",
     "openContactAria": "open contact",
     "removeContactAria": "remove contact",
-    "backAria": "back",
-    "closeAria": "close",
-    "deleteTitle": "Delete venue?",
-    "deleteBody": "This cannot be undone."
+    "deleteTitle": "Delete venue?"
   },
   "modal": {
     "addTitle": "Add venue",
@@ -84,15 +81,7 @@
   "import": {
     "title": "Import Venues from CSV",
     "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: name, category, title, given name, family name, organization name, street and number, street additional, postal code, city, region, country, website, phone, email.",
-    "chooseFile": "Choose CSV file",
     "mapHelp": "Map your CSV columns to venue fields. {{count}} rows detected.",
-    "notMapped": "(not mapped)",
-    "nameColumnRequired": "Name column is required",
-    "preview": "Preview",
-    "showing": "Showing first {{shown}} of {{total}} rows.",
-    "willImport_one": "{{count}} row will be imported.",
-    "willImport_other": "{{count}} rows will be imported.",
-    "importError": "Import failed",
     "columns": {
       "category": "Category",
       "name": "Name",
@@ -103,8 +92,6 @@
     "result_one": "Imported {{count}} venue.",
     "result_other": "Imported {{count}} venues.",
     "resultSkipped_one": "Imported {{count}} venue ({{skipped}} skipped as duplicates).",
-    "resultSkipped_other": "Imported {{count}} venues ({{skipped}} skipped as duplicates).",
-    "importButton_one": "Import {{count}} row",
-    "importButton_other": "Import {{count}} rows"
+    "resultSkipped_other": "Imported {{count}} venues ({{skipped}} skipped as duplicates)."
   }
 }

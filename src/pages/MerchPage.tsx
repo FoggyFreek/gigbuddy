@@ -239,10 +239,10 @@ interface ProductActionsProps {
 }
 
 function ProductActions({ product, onEdit, onArchive }: ProductActionsProps) {
-  const { t } = useTranslation('merch')
+  const { t } = useTranslation(['merch', 'common'])
   return (
     <>
-      <Tooltip title={t($ => $.products.edit)}>
+      <Tooltip title={t($ => $.actions.edit, { ns: 'common' })}>
         <IconButton size="small" onClick={() => onEdit(product)}>
           <EditOutlinedIcon fontSize="small" />
         </IconButton>

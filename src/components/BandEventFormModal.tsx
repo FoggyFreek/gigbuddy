@@ -38,7 +38,7 @@ const EMPTY_FORM = {
 }
 
 export default function BandEventFormModal({ mode, bandEventId, onClose, initialDate }: BandEventFormModalProps) {
-  const { t } = useTranslation('bandEvents')
+  const { t } = useTranslation(['bandEvents', 'common'])
   const [form, setForm] = useState(() =>
     mode === 'create' && initialDate
       ? { ...EMPTY_FORM, start_date: initialDate, end_date: initialDate }
@@ -127,11 +127,11 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {mode === 'create' ? (
           <>
-            <Button onClick={onClose}>{t($ => $.form.cancel)}</Button>
+            <Button onClick={onClose}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
             <Button variant="contained" onClick={handleCreate}>{t($ => $.form.addEvent)}</Button>
           </>
         ) : (
-          <Button variant="contained" onClick={handleClose}>{t($ => $.form.close)}</Button>
+          <Button variant="contained" onClick={handleClose}>{t($ => $.actions.close, { ns: 'common' })}</Button>
         )}
       </DialogActions>
     </Dialog>

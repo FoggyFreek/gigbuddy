@@ -57,6 +57,7 @@ interface ContactNote {
   id?: Id
   note?: string
   created_at?: string
+  created_by?: string
 }
 
 interface LinkedVenue extends Venue {
@@ -191,7 +192,7 @@ export default function ContactDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={handleBack} aria-label={t($ => $.detail.backAria)}>
+          <IconButton onClick={handleBack} aria-label={t($ => $.aria.back, { ns: 'common' })}>
             <ArrowBackIcon />
           </IconButton>
         )}
@@ -199,7 +200,7 @@ export default function ContactDetailPage() {
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={handleBack} aria-label={t($ => $.detail.closeAria)}>
+            <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
               <CloseIcon />
             </IconButton>
           </>
@@ -343,7 +344,7 @@ export default function ContactDetailPage() {
             >
               <Box sx={{ flexGrow: 1 }}>
                 <Typography variant="caption" color="text.secondary">
-                  {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                  {n.created_by ? `${n.created_by} · ` : ''}{n.created_at ? new Date(n.created_at).toLocaleString() : ''}
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
                   {n.note}
@@ -380,7 +381,7 @@ export default function ContactDetailPage() {
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
         <DialogTitle>{t($ => $.detail.deleteTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>{t($ => $.detail.deleteBody)}</DialogContentText>
+          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>

@@ -59,7 +59,7 @@ interface GigShareDialogProps {
 }
 
 export default function GigShareDialog({ open, onClose, gig }: GigShareDialogProps) {
-  const { t } = useTranslation('gigs')
+  const { t } = useTranslation(['gigs', 'common'])
   const { user } = useContext(AuthContext)
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
@@ -158,10 +158,10 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
     setBusy(true)
     try {
       const blob = await snapshot()
-      if (!blob) throw new Error(t($ => $.gigShare.snapshotFailed))
+      if (!blob) throw new Error(t($ => $.share.snapshotFailed))
       downloadBlob(blob, buildShareFilename(gig, format))
     } catch (e) {
-      setSnackbar({ msg: (e as Error).message || t($ => $.gigShare.downloadFailed) })
+      setSnackbar({ msg: (e as Error).message || t($ => $.share.downloadFailed) })
     } finally {
       setBusy(false)
     }
@@ -203,7 +203,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
       setPhotos((prev) => [...prev, newPhoto as LocalSharePhoto])
       setPhotoId(newPhoto.id ?? null)
     } catch (err) {
-      setSnackbar({ msg: (err as Error).message || t($ => $.gigShare.uploadFailed) })
+      setSnackbar({ msg: (err as Error).message || t($ => $.shareEditor.uploadFailed) })
     } finally {
       setBusy(false)
     }
@@ -221,7 +221,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
         return next
       })
     } catch (err) {
-      setSnackbar({ msg: (err as Error).message || t($ => $.gigShare.deleteFailed) })
+      setSnackbar({ msg: (err as Error).message || t($ => $.shareEditor.deleteFailed) })
     }
   }
 
@@ -267,7 +267,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                     <Tooltip key={c.id} title={c.label}>
                       <ButtonBase
                         onClick={() => setAccentId(c.id)}
-                        aria-label={t($ => $.gigShare.accentColorAria, { label: c.label })}
+                        aria-label={t($ => $.shareEditor.accentColorAria, { label: c.label })}
                         sx={{
                           width: 32,
                           height: 32,
@@ -323,7 +323,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                     size="small"
                   />
                 }
-                label={t($ => $.gigShare.darkLogo)}
+                label={t($ => $.shareEditor.darkLogo)}
               />
             )}
 
@@ -352,7 +352,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                     label={t($ => $.gigShare.overlay)}
                     onChange={(e) => setSticker(e.target.value || null)}
                   >
-                    <MenuItem value="">{t($ => $.gigShare.none)}</MenuItem>
+                    <MenuItem value="">{t($ => $.state.none, { ns: 'common' })}</MenuItem>
                     {Object.keys(STICKER_CONFIGS).map((id) => (
                       <MenuItem key={id} value={id}>
                         {id.replaceAll('-', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
@@ -428,10 +428,10 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                   max={100}
                   step={1}
                   size="small"
-                  aria-label={t($ => $.gigShare.photoZoom)}
+                  aria-label={t($ => $.shareEditor.photoZoom)}
                   marks={[
-                    { value: 0, label: t($ => $.gigShare.markWidth) },
-                    { value: 100, label: t($ => $.gigShare.markHeight) },
+                    { value: 0, label: t($ => $.shareEditor.markWidth) },
+                    { value: 100, label: t($ => $.shareEditor.markHeight) },
                   ]}
                 />
               )}
@@ -443,7 +443,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                   max={100}
                   step={1}
                   size="small"
-                  aria-label={t($ => $.gigShare.photoPan)}
+                  aria-label={t($ => $.shareEditor.photoPan)}
                   marks={[
                     { value: -100, label: '◀' },
                     { value: 0, label: '·' },
@@ -489,7 +489,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                       {isAdmin && (
                         <IconButton
                           size="small"
-                          aria-label={t($ => $.gigShare.deletePhotoAria, { label: p.label })}
+                          aria-label={t($ => $.shareEditor.deletePhotoAria, { label: p.label })}
                           onClick={() => handlePhotoDelete(p)}
                           sx={{ color: 'error.main', p: 0.25 }}
                         >
@@ -510,7 +510,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
                       onChange={handlePhotoUpload}
                     />
                     <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <Tooltip title={t($ => $.gigShare.uploadPhoto)}>
+                      <Tooltip title={t($ => $.shareEditor.uploadPhoto)}>
                         <ButtonBase
                           onClick={() => photoInputRef.current?.click()}
                           disabled={busy}
@@ -541,7 +541,7 @@ export default function GigShareDialog({ open, onClose, gig }: GigShareDialogPro
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} disabled={busy}>{t($ => $.gigShare.close)}</Button>
+          <Button onClick={onClose} disabled={busy}>{t($ => $.actions.close, { ns: 'common' })}</Button>
           <Button
             id="gig-share-download-button"
             variant="contained"

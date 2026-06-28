@@ -62,10 +62,7 @@
     "openContact": "Contact openen",
     "openContactAria": "open contact",
     "removeContactAria": "remove contact",
-    "backAria": "terug",
-    "closeAria": "sluiten",
-    "deleteTitle": "Locatie verwijderen?",
-    "deleteBody": "Dit kan niet ongedaan worden gemaakt."
+    "deleteTitle": "Locatie verwijderen?"
   },
   "modal": {
     "addTitle": "Locatie toevoegen",
@@ -84,15 +81,7 @@
   "import": {
     "title": "Locaties importeren uit CSV",
     "uploadHelp": "Upload een UTF-8 CSV-bestand met kolomkoppen. Ondersteunde velden: naam, categorie, aanhef, voornaam, achternaam, organisatienaam, straat en huisnummer, adres aanvullend, postcode, plaats, regio, land, website, telefoon, e-mail.",
-    "chooseFile": "Kies CSV-bestand",
     "mapHelp": "Koppel je CSV-kolommen aan locatievelden. {{count}} rijen gevonden.",
-    "notMapped": "(niet gekoppeld)",
-    "nameColumnRequired": "Naamkolom is verplicht",
-    "preview": "Voorbeeld",
-    "showing": "Eerste {{shown}} van {{total}} rijen worden getoond.",
-    "willImport_one": "{{count}} rij wordt geïmporteerd.",
-    "willImport_other": "{{count}} rijen worden geïmporteerd.",
-    "importError": "Importeren mislukt",
     "columns": {
       "category": "Categorie",
       "name": "Naam",
@@ -103,8 +92,6 @@
     "result_one": "{{count}} locatie geïmporteerd.",
     "result_other": "{{count}} locaties geïmporteerd.",
     "resultSkipped_one": "{{count}} locatie geïmporteerd ({{skipped}} overgeslagen als duplicaten).",
-    "resultSkipped_other": "{{count}} locaties geïmporteerd ({{skipped}} overgeslagen als duplicaten).",
-    "importButton_one": "{{count}} rij importeren",
-    "importButton_other": "{{count}} rijen importeren"
+    "resultSkipped_other": "{{count}} locaties geïmporteerd ({{skipped}} overgeslagen als duplicaten)."
   }
 }

@@ -67,9 +67,5 @@
   "paymentDialog": {
     "recordRefundTitle": "Terugbetaling registreren · {{period}}",
     "recordPaymentTitle": "Betaling registreren · {{period}}"
-  },
-  "aria": {
-    "back": "terug",
-    "close": "sluiten"
   }
 }

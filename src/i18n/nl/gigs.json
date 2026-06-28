@@ -56,6 +56,18 @@
     "copyFailed": "Kopiëren mislukt",
     "snapshotFailed": "Momentopname mislukt"
   },
+  "shareEditor": {
+    "accentColorAria": "Accentkleur {{label}}",
+    "darkLogo": "Donker logo",
+    "photoZoom": "Foto zoomen",
+    "photoPan": "Foto verschuiven",
+    "markWidth": "Breedte",
+    "markHeight": "Hoogte",
+    "uploadPhoto": "Foto uploaden",
+    "deletePhotoAria": "{{label}} verwijderen",
+    "uploadFailed": "Uploaden mislukt",
+    "deleteFailed": "Verwijderen mislukt"
+  },
   "shareMenu": {
     "share": "Delen",
     "shareGigAria": "gig delen",
@@ -65,54 +77,29 @@
   "gigShare": {
     "title": "Gig delen als afbeelding",
     "cardVariation": "Kaartvariant",
-    "accentColorAria": "Accentkleur {{label}}",
     "showEventBanner": "Evenementbanner tonen",
     "showLogo": "Logo tonen",
-    "darkLogo": "Donker logo",
     "overlay": "Overlay",
-    "none": "Geen",
     "overlayPosition": "Overlaypositie",
-    "photoZoom": "Foto zoomen",
-    "photoPan": "Foto verschuiven",
-    "markWidth": "Breedte",
-    "markHeight": "Hoogte",
-    "uploadPhoto": "Foto uploaden",
-    "deletePhotoAria": "{{label}} verwijderen",
-    "close": "Sluiten",
     "download": "Downloaden",
     "formatPng": "png",
     "formatPdf": "pdf",
     "cardNotReady": "Kaart niet gereed",
-    "snapshotFailed": "Momentopname mislukt",
-    "downloadFailed": "Downloaden mislukt",
-    "pdfExportFailed": "PDF-export mislukt",
-    "uploadFailed": "Uploaden mislukt",
-    "deleteFailed": "Verwijderen mislukt"
+    "pdfExportFailed": "PDF-export mislukt"
   },
   "tourShare": {
     "title": "Tourdata delen",
-    "accentColorAria": "Accentkleur {{label}}",
     "monthsAll": "Alle",
     "monthsAhead_one": "{{count}} maand",
     "monthsAhead_other": "{{count}} maanden",
     "includePastGigs": "Eerdere optredens meenemen",
     "showBanners": "Banners tonen",
-    "darkLogo": "Donker logo",
     "photoOpacity": "Fotodekking",
     "zoom": "Zoom",
     "pan": "Verschuiven",
-    "photoZoom": "Foto zoomen",
-    "photoPan": "Foto verschuiven",
-    "markNone": "Geen",
     "markHalf": "Half",
     "markFull": "Vol",
-    "markWidth": "Breedte",
-    "markHeight": "Hoogte",
-    "uploadPhoto": "Foto uploaden",
-    "deletePhotoAria": "{{label}} verwijderen",
-    "noGigsForSelection": "Geen optredens om weer te geven voor deze selectie.",
-    "uploadFailed": "Uploaden mislukt",
-    "deleteFailed": "Verwijderen mislukt"
+    "noGigsForSelection": "Geen optredens om weer te geven voor deze selectie."
   },
   "bannerMosaic": {
     "title": "Bannermozaïek",
@@ -199,23 +186,15 @@
   },
   "page": {
     "titleFallback": "Optredengegevens",
-    "back": "terug",
-    "close": "sluiten",
-    "delete": "Verwijderen",
-    "deleteConfirmTitle": "Optreden verwijderen?",
-    "deleteConfirmBody": "Dit kan niet ongedaan worden gemaakt.",
-    "cancel": "Annuleren"
+    "deleteConfirmTitle": "Optreden verwijderen?"
   },
   "attachments": {
     "fileTooLarge": "Bestand overschrijdt de limiet van 1 MB.",
     "uploadFailed": "Uploaden mislukt.",
     "deleteFailed": "Verwijderen mislukt.",
     "uploading": "Uploaden…",
-    "add": "Toevoegen",
     "deleteTitle": "Bijlage verwijderen?",
-    "deleteBody": "{{filename}} wordt permanent verwijderd.",
-    "cancel": "Annuleren",
-    "delete": "Verwijderen"
+    "deleteBody": "{{filename}} wordt permanent verwijderd."
   },
   "tasks": {
     "empty": "Nog geen taken.",
@@ -228,7 +207,6 @@
     "taskLabel": "Taak",
     "taskPlaceholder": "Taaknaam…",
     "addTask": "Taak toevoegen",
-    "cancel": "Annuleren",
     "openDuePicker": "vervaldatumkiezer openen",
     "due": "Vervaldatum",
     "completed": "Voltooid ({{count}})"
@@ -249,7 +227,6 @@
   "participants": {
     "noParticipants": "Nog geen deelnemers — voeg er hieronder een toe.",
     "removeParticipant": "{{name}} verwijderen",
-    "addParticipant": "Deelnemer toevoegen",
-    "add": "Toevoegen"
+    "addParticipant": "Deelnemer toevoegen"
   }
 }

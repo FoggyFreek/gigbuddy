@@ -45,10 +45,7 @@
     "addNoteAria": "Add note",
     "deleteNoteAria": "delete note",
     "deleteTitle": "Delete contact?",
-    "deleteBody": "This cannot be undone.",
     "deleteErrorTitle": "Cannot delete contact",
-    "backAria": "back",
-    "closeAria": "close",
     "purchasesHeading": "Purchases"
   },
   "modal": {
@@ -58,20 +55,10 @@
     "title": "Import Contacts from CSV",
     "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: name, email, phone, category. Category values: press, radio & tv, booker, promotion, network (defaults to press if unrecognised).",
     "uploadHelpFixed": "Upload a UTF-8 CSV file with column headers. Supported fields: name, email, phone. Every imported row is added with the category '{{category}}'.",
-    "chooseFile": "Choose CSV file",
     "mapHelp": "Map your CSV columns to contact fields. {{count}} rows detected.",
-    "notMapped": "(not mapped)",
-    "nameColumnRequired": "Name column is required",
-    "preview": "Preview",
-    "showing": "Showing first {{shown}} of {{total}} rows.",
-    "willImport_one": "{{count}} row will be imported.",
-    "willImport_other": "{{count}} rows will be imported.",
-    "importError": "Import failed",
     "result_one": "Imported {{count}} contact.",
     "result_other": "Imported {{count}} contacts.",
     "resultSkipped_one": "Imported {{count}} contact ({{skipped}} skipped as duplicates).",
-    "resultSkipped_other": "Imported {{count}} contacts ({{skipped}} skipped as duplicates).",
-    "importButton_one": "Import {{count}} row",
-    "importButton_other": "Import {{count}} rows"
+    "resultSkipped_other": "Imported {{count}} contacts ({{skipped}} skipped as duplicates)."
   }
 }

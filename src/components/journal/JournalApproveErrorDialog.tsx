@@ -26,7 +26,7 @@ interface JournalApproveErrorDialogProps {
 }
 
 export default function JournalApproveErrorDialog({ errors, journals, onClose }: JournalApproveErrorDialogProps) {
-  const { t } = useTranslation('journal')
+  const { t } = useTranslation(['journal', 'common'])
 
   // Friendly explanation per backend error code; falls back to the server message.
   const codeMessages: Record<string, string> = {
@@ -69,7 +69,7 @@ export default function JournalApproveErrorDialog({ errors, journals, onClose }:
         </List>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="contained">{t($ => $.approveErrors.ok)}</Button>
+        <Button onClick={onClose} variant="contained">{t($ => $.actions.ok, { ns: 'common' })}</Button>
       </DialogActions>
     </Dialog>
   )

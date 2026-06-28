@@ -131,7 +131,7 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
       setResult(res as unknown as { imported: number; skipped: number })
       setStep('done')
     } catch (err) {
-      setImportError((err as Error).message || t($ => $.import.importError))
+      setImportError((err as Error).message || t($ => $.csvImport.importError, { ns: 'common' }))
       setStep('preview')
     }
   }
@@ -149,7 +149,7 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
               {t($ => $.import.uploadHelp)}
             </Typography>
             <Button component="label">
-              {t($ => $.import.chooseFile)}
+              {t($ => $.csvImport.chooseFile, { ns: 'common' })}
               {' '}
               <input ref={fileRef} type="file" accept=".csv" hidden onChange={handleFile} />
             </Button>
@@ -173,7 +173,7 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
                       value={mapping[field.key] || ''}
                       onChange={(e) => handleMappingChange(field.key, e.target.value)}
                     >
-                      <MenuItem value="">{t($ => $.import.notMapped)}</MenuItem>
+                      <MenuItem value="">{t($ => $.csvImport.notMapped, { ns: 'common' })}</MenuItem>
                       {csvHeaders.map((h) => (
                         <MenuItem key={h} value={h}>{h}</MenuItem>
                       ))}
@@ -190,8 +190,8 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
         {step === 'preview' && (
           <Box sx={{ py: 1 }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              {t($ => $.import.showing, { shown: Math.min(5, csvRows.length), total: csvRows.length })}
-              {' '}{t($ => $.import.willImport, { count: importableCount })}
+              {t($ => $.csvImport.showing, { ns: 'common', shown: Math.min(5, csvRows.length), total: csvRows.length })}
+              {' '}{t($ => $.csvImport.willImport, { ns: 'common', count: importableCount })}
             </Typography>
             {importError && <Alert severity="error" sx={{ mb: 2 }}>{importError}</Alert>}
             <Table size="small">
@@ -239,7 +239,7 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
         {step === 'map' && <Button variant="outlined" onClick={handlePreview}>{t($ => $.preview)}</Button>}
         {step === 'preview' && !result && (
           <Button variant="contained" onClick={handleImport} disabled={importableCount === 0}>
-            {t($ => $.import.importButton, { count: importableCount })}
+            {t($ => $.csvImport.importButton, { ns: 'common', count: importableCount })}
           </Button>
         )}
       </DialogActions>

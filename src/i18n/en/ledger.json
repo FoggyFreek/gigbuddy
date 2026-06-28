@@ -41,7 +41,6 @@
   },
   "detail": {
     "heading": "Ledger entry: {{name}}",
-    "backAria": "back",
     "notice": {
       "voided": "This ledger entry has been voided by another ledger entry.",
       "reversed": "This ledger entry has been reversed by another ledger entry.",
