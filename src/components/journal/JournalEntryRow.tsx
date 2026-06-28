@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Account, Journal, Id } from '../../types/entities.ts'
 import type { SaveStatus } from '../../hooks/useDebouncedSave.ts'
 import type { JournalForm, JournalFormLine } from './journalFormHelpers.ts'
@@ -26,6 +27,7 @@ interface JournalEntryRowProps {
 export default function JournalEntryRow({
   journal, accounts, selected, onToggleSelect, registerFlush, onSaveStatus,
 }: JournalEntryRowProps) {
+  const { t } = useTranslation('journal')
   const [form, setForm] = useState<JournalForm>(() => journalToForm(journal))
   const readOnly = form.status === 'approved'
 
@@ -72,6 +74,8 @@ export default function JournalEntryRow({
   }
 
   const lines = form.lines.length ? form.lines : [emptyLine(0)]
+  const { status } = form
+  const statusLabel = status ? t($ => $.status[status]) : undefined
 
   return (
     <Box
@@ -90,15 +94,15 @@ export default function JournalEntryRow({
           checked={selected}
           disabled={readOnly}
           onChange={(e) => onToggleSelect(journal.id!, e.target.checked)}
-          slotProps={{ input: { 'aria-label': `select journal ${form.entry_number}` } }}
+          slotProps={{ input: { 'aria-label': t($ => $.entry.selectAria, { number: form.entry_number }) } }}
         />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <Typography variant="body2" sx={{ fontWeight: 700 }} color="text.secondary">J</Typography>
           <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 20 }}>{form.entry_number}</Typography>
         </Box>
-        <StatusDot color={STATUS_COLOR[form.status ?? ''] || 'default'} label={form.status} />
+        <StatusDot color={STATUS_COLOR[form.status ?? ''] || 'default'} label={statusLabel} />
         <DateEntryField
-          label="Date"
+          label={t($ => $.entry.date)}
           value={form.entry_date}
           disabled={readOnly}
           onChange={(e) => patchForm({ entry_date: e.target.value })}

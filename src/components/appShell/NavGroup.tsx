@@ -74,6 +74,9 @@ function CollapsedFlyout({ group, pathname, onNavClick }: CollapsedFlyoutProps) 
 
 interface NavGroupProps {
   group: NavGroupDef
+  // Pre-translated accessible name for the header button (e.g. "Planning group").
+  // Built by the caller so this component stays free of i18n wiring.
+  ariaLabel: string
   pathname: string
   isNavCollapsed?: boolean
   expanded?: boolean
@@ -81,7 +84,7 @@ interface NavGroupProps {
   onNavClick?: () => void
 }
 
-export default function NavGroup({ group, pathname, isNavCollapsed, expanded, onToggle, onNavClick }: NavGroupProps) {
+export default function NavGroup({ group, ariaLabel, pathname, isNavCollapsed, expanded, onToggle, onNavClick }: NavGroupProps) {
   const GroupIcon = group.icon
   const groupSelected = group.children.some((c) => isItemSelected(c.to, pathname))
 
@@ -89,7 +92,7 @@ export default function NavGroup({ group, pathname, isNavCollapsed, expanded, on
     <ListItemButton
       onClick={() => onToggle(group.key)}
       selected={groupSelected}
-      aria-label={`${group.label} group`}
+      aria-label={ariaLabel}
       aria-expanded={isNavCollapsed ? undefined : expanded}
       sx={{
         position: 'relative',

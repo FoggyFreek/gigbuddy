@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { ChipProps } from '@mui/material/Chip'
 import type { Contact } from '../types/entities.ts'
 
@@ -39,6 +40,16 @@ export function contactCategoryLabel(category: string | null | undefined): strin
 /** MUI Chip color for a (possibly unknown/legacy) category string. */
 export function contactCategoryColor(category: string | null | undefined): ChipColor {
   return isContactCategory(category) ? CONTACT_CATEGORY_COLORS[category] : 'default'
+}
+
+/**
+ * Returns a translated display-label resolver for contact categories. Unknown /
+ * legacy category strings fall back to the raw value (mirrors
+ * {@link contactCategoryLabel}).
+ */
+export function useContactCategoryLabel(): (category: string | null | undefined) => string {
+  const { t } = useTranslation('contacts')
+  return (category) => (isContactCategory(category) ? t($ => $.categories[category]) : category ?? '')
 }
 
 interface CategoryFilter {

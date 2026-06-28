@@ -9,6 +9,7 @@ import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
+import { useTranslation } from 'react-i18next'
 import VoteToggle from './VoteToggle.tsx'
 import type { Participant, Member, Id } from '../types/entities.ts'
 
@@ -35,11 +36,12 @@ export default function GigParticipantsSection({
   onVote,
   canWrite = true,
 }: GigParticipantsSectionProps) {
+  const { t } = useTranslation(['gigs', 'common'])
   return (
     <Stack spacing={1}>
       {participants.length === 0 && (
         <Typography variant="body2" color="text.secondary">
-          No participants yet - add one below.
+          {t($ => $.participants.noParticipants)}
         </Typography>
       )}
       {participants.map((p) => (
@@ -76,7 +78,7 @@ export default function GigParticipantsSection({
           {canWrite && (
             <IconButton
               size="small"
-              aria-label={`remove ${p.name}`}
+              aria-label={t($ => $.participants.removeParticipant, { name: p.name })}
               onClick={() => onRemoveParticipant(p.band_member_id!)}
             >
               <DeleteIcon fontSize="small" />
@@ -87,10 +89,10 @@ export default function GigParticipantsSection({
       {canWrite && candidateMembers.length > 0 && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
           <FormControl size="small" sx={{ minWidth: 220 }}>
-            <InputLabel id="add-gig-participant-label">Add participant</InputLabel>
+            <InputLabel id="add-gig-participant-label">{t($ => $.participants.addParticipant)}</InputLabel>
             <Select
               labelId="add-gig-participant-label"
-              label="Add participant"
+              label={t($ => $.participants.addParticipant)}
               value={addMemberId}
               onChange={(e) => onAddMemberChange(e.target.value as Id | '')}
             >
@@ -106,7 +108,7 @@ export default function GigParticipantsSection({
             disabled={!addMemberId}
             onClick={onAddParticipant}
           >
-            Add
+            {t($ => $.actions.add, { ns: 'common' })}
           </Button>
         </Box>
       )}

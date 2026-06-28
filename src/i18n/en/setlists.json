@@ -1,0 +1,89 @@
+{
+  "title": "Setlists",
+  "list": {
+    "empty": "No setlists yet — create one to start building.",
+    "setCount_one": "{{count}} set",
+    "setCount_other": "{{count}} sets",
+    "songCount_one": "{{count}} song",
+    "songCount_other": "{{count}} songs"
+  },
+  "create": {
+    "title": "New setlist",
+    "nameLabel": "Name",
+    "submit": "Create"
+  },
+  "editor": {
+    "untitled": "Untitled setlist",
+    "total": "Total {{duration}}",
+    "preview": "Preview",
+    "addSet": "Add set",
+    "deleteSetlist": "Delete setlist",
+    "nameAria": "setlist name",
+    "deleteTitle": "Delete setlist?"
+  },
+  "set": {
+    "nameAria": "set name",
+    "includeInTotal": "Include in total time",
+    "includeInTotalAria": "include in total time",
+    "moveUp": "Move set up",
+    "moveUpAria": "move set up",
+    "moveDown": "Move set down",
+    "moveDownAria": "move set down",
+    "delete": "Delete set",
+    "deleteAria": "delete set",
+    "emptyEditing": "Empty — add songs, pauses or breaks, or drag items here.",
+    "empty": "Empty",
+    "addSong": "Add song",
+    "addPause": "Add pause",
+    "addBreak": "Add break"
+  },
+  "item": {
+    "unknownSong": "(unknown song)",
+    "bpm": "{{tempo}} BPM",
+    "pause": "Pause",
+    "break": "Break",
+    "durationAria": "duration",
+    "labelPlaceholder": "Label (optional)",
+    "dragAria": "drag",
+    "songOrderAria": "song order {{order}}",
+    "deleteAria": "delete item",
+    "myNote": "My note",
+    "noteAria": "song note",
+    "notePlaceholder": "Your note for this song…",
+    "noteTextAria": "song note text"
+  },
+  "transition": {
+    "link": "Link as transition",
+    "linkAria": "link songs as transition",
+    "notePlaceholder": "segue…",
+    "noteAria": "transition note",
+    "remove": "Remove transition",
+    "removeAria": "remove transition"
+  },
+  "preview": {
+    "fallbackTitle": "Setlist",
+    "noSongs": "(No songs)",
+    "segueFallback": "segue",
+    "showKey": "Show Key",
+    "showBpm": "Show BPM",
+    "showNotes": "Show notes",
+    "showPausesBreaks": "Show Pauses & Breaks",
+    "print": "Print"
+  },
+  "toast": {
+    "generic": "Something went wrong",
+    "saveName": "Failed to save the setlist name",
+    "reorderItems": "Failed to reorder items",
+    "deleteSetlist": "Failed to delete the setlist",
+    "addSet": "Failed to add set",
+    "renameSet": "Failed to rename set",
+    "updateSet": "Failed to update set",
+    "deleteSet": "Failed to delete set",
+    "reorderSets": "Failed to reorder sets",
+    "addSong": "Failed to add song",
+    "addItem": "Failed to add item",
+    "deleteItem": "Failed to delete item",
+    "saveChanges": "Failed to save changes",
+    "saveNote": "Failed to save note"
+  }
+}

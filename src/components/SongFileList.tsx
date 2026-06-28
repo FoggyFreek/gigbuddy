@@ -1,5 +1,6 @@
 import type { SongFile, Id } from '../types/entities.ts'
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -40,9 +41,10 @@ export default function SongFileList({
   uploadFn,
   deleteFn,
   isAudio = false,
-  addLabel = 'Add',
+  addLabel,
   canWrite = true,
 }: SongFileListProps) {
+  const { t } = useTranslation(['songs', 'common'])
   const [files, setFiles] = useState<SongFile[]>(initialFiles)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +58,7 @@ export default function SongFileList({
     if (!file) return
     e.target.value = ''
     if (file.size > maxBytes) {
-      setError(`File exceeds the ${formatBytes(maxBytes)} limit.`)
+      setError(t($ => $.files.sizeLimit, { size: formatBytes(maxBytes) }))
       return
     }
     setError(null)
@@ -65,7 +67,7 @@ export default function SongFileList({
       const uploaded = await uploadFn(songId, file)
       setFiles((prev) => [...prev, uploaded])
     } catch (err) {
-      setError((err as Error).message || 'Upload failed.')
+      setError((err as Error).message || t($ => $.files.uploadFailed))
     } finally {
       setUploading(false)
     }
@@ -79,7 +81,7 @@ export default function SongFileList({
       await deleteFn(songId, id ?? undefined)
       setFiles((prev) => prev.filter((f) => f.id !== id))
     } catch (err) {
-      setError((err as Error).message || 'Delete failed.')
+      setError((err as Error).message || t($ => $.files.deleteFailed))
     }
   }
 
@@ -119,7 +121,7 @@ export default function SongFileList({
               </Typography>
             </Box>
             {canWrite && (
-              <IconButton size="small" color="error" onClick={() => setConfirmId(f.id ?? null)} aria-label="delete file">
+              <IconButton size="small" color="error" onClick={() => setConfirmId(f.id ?? null)} aria-label={t($ => $.files.deleteAria)}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
             )}
@@ -152,22 +154,22 @@ export default function SongFileList({
             disabled={uploading}
             onClick={() => inputRef.current?.click()}
           >
-            {uploading ? 'Uploading…' : addLabel}
+            {uploading ? t($ => $.files.uploading) : (addLabel ?? t($ => $.common.actions.add))}
           </Button>
         </Box>
       )}
 
       <Dialog open={confirmId !== null} onClose={() => setConfirmId(null)}>
-        <DialogTitle>Delete file?</DialogTitle>
+        <DialogTitle>{t($ => $.files.deleteTitle)}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {confirmTarget?.original_filename} will be permanently deleted.
+            {t($ => $.files.deleteBody, { name: confirmTarget?.original_filename ?? '' })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmId(null)}>Cancel</Button>
+          <Button onClick={() => setConfirmId(null)}>{t($ => $.common.actions.cancel)}</Button>
           <Button color="error" variant="contained" onClick={handleConfirmDelete}>
-            Delete
+            {t($ => $.common.actions.delete)}
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,0 +1,35 @@
+{
+  "title": "Terugbetalingen",
+  "totalOwed": "Totaal verschuldigd aan bandleden",
+  "nothingOutstanding": "Niets openstaand",
+  "noOutstandingPurchases": "Geen openstaande aankopen",
+  "empty": {
+    "title": "Geen openstaande terugbetalingen?",
+    "subtitle": "Dat is geen rock-‘n-roll",
+    "createPurchase": "Inkoopfactuur aanmaken"
+  },
+  "purchaseCount_one": "{{count}} aankoop",
+  "purchaseCount_other": "{{count}} aankopen",
+  "table": {
+    "member": "Lid",
+    "purchases": "Aankopen",
+    "outstanding": "Openstaand",
+    "actions": "Acties"
+  },
+  "aria": {
+    "expand": "uitklappen",
+    "collapse": "inklappen"
+  },
+  "actions": {
+    "register": "Registreren",
+    "markReimbursed": "Markeren als terugbetaald"
+  },
+  "dialog": {
+    "title": "{{name}} terugbetalen",
+    "purchasesToSettle": "Te verrekenen aankopen",
+    "total": "Totaal",
+    "paidOn": "Betaald op",
+    "memo": "Memo",
+    "submit": "Terugbetaling registreren"
+  }
+}

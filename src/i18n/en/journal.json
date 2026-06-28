@@ -1,0 +1,76 @@
+{
+  "title": "Journal",
+  "status": {
+    "draft": "Draft",
+    "approved": "Approved"
+  },
+  "ledgerEntries_one": "{{count}} ledger entry",
+  "ledgerEntries_other": "{{count}} ledger entries",
+  "compact": {
+    "title": "Open on a desktop to edit",
+    "body": "Journal entries use a wide, multi-column layout. Switch to a larger screen to add or edit entries."
+  },
+  "toolbar": {
+    "selectAll": "select all draft entries",
+    "selected": "{{count}} selected",
+    "approveSelected": "Approve selected",
+    "deleteSelected": "Delete selected",
+    "approveAll": "Approve all",
+    "saving": "Saving…",
+    "saveFailed": "Save failed",
+    "addEntry": "Add journal entry"
+  },
+  "deleteDialog": {
+    "title": "Delete selected entries?",
+    "body_one": "Delete {{count}} draft entry? This cannot be undone.",
+    "body_other": "Delete {{count}} draft entries? This cannot be undone."
+  },
+  "entry": {
+    "selectAria": "select journal {{number}}",
+    "date": "Date"
+  },
+  "line": {
+    "description": "Description",
+    "account": "Account",
+    "vatRate": "VAT rate",
+    "debit": "Debit",
+    "credit": "Credit",
+    "balancingAccount": "Balancing account",
+    "actions": "line actions",
+    "duplicate": "Duplicate line",
+    "duplicateAria": "duplicate line",
+    "delete": "Delete line",
+    "deleteAria": "delete line",
+    "add": "Add line",
+    "addAria": "add line"
+  },
+  "accountTypes": {
+    "asset": "Assets",
+    "liability": "Liabilities",
+    "equity": "Equity",
+    "revenue": "Revenue",
+    "cost_of_goods_sold": "Cost of Goods Sold",
+    "expense": "Expenses",
+    "other": "Other"
+  },
+  "staleAccount": "Inactive/unknown account",
+  "approveErrors": {
+    "title": "Some entries could not be approved",
+    "summary_one": "{{count}} entry was left as a draft. Fix the issues below and try again.",
+    "summary_other": "{{count}} entries were left as a draft. Fix the issues below and try again.",
+    "entryLabel": "Entry J{{number}}",
+    "entryLabelFallback": "Entry #{{id}}",
+    "linePrefix": "Line {{line}}: {{message}}",
+    "fallback": "Could not be approved.",
+    "codes": {
+      "unbalanced_journal": "Debits and credits do not balance.",
+      "invalid_account_code": "A line is missing a valid account.",
+      "missing_side": "A line needs a debit or credit amount.",
+      "invalid_amount": "A line amount must be greater than zero.",
+      "invalid_balancing_account": "A balancing account is inactive.",
+      "accounting_not_configured": "Required accounting accounts are not configured (check Settings).",
+      "no_lines": "The entry has no lines.",
+      "already_approved": "The entry was already approved."
+    }
+  }
+}

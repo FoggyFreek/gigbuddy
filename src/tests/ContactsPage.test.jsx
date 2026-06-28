@@ -113,23 +113,26 @@ describe('ContactsPage — split-view list refresh', () => {
     })
   })
 
-  it('updates the list row immediately after the detail email field is saved', async () => {
+  it('updates the list row after the detail email field is saved, without a full reload', async () => {
     const user = userEvent.setup()
     wrapWithRoutes({ initialEntries: ['/contacts/1'] })
 
     // Wait for the detail form to load
     await waitFor(() => expect(screen.getByDisplayValue('Alice')).toBeInTheDocument())
 
-    // Type into the Email field in the detail pane
+    // Type into the Email field in the detail pane and let the debounce fire
     await user.type(screen.getByLabelText('Email'), 'alice@test.com')
-
-    // After the debounce fires and the save completes, the list (left pane)
-    // should reflect the new email without a full reload
     await waitFor(
-      () => expect(screen.getByText('alice@test.com')).toBeInTheDocument(),
+      () => expect(updateContact).toHaveBeenCalledWith(1, { email: 'alice@test.com' }),
       { timeout: 2000 }
     )
-    expect(updateContact).toHaveBeenCalledWith(1, { email: 'alice@test.com' })
+
+    // While the detail is open the list shows the compact card (name + category
+    // only). Close it to reveal the full table — the row should already reflect
+    // the optimistic update without a full reload.
+    await user.click(screen.getByRole('button', { name: /close/i }))
+    await waitFor(() => expect(screen.getByText('alice@test.com')).toBeInTheDocument())
+
     // listContacts should NOT have been called again — no full reload
     expect(listContacts).toHaveBeenCalledTimes(1)
   })

@@ -1,0 +1,82 @@
+{
+  "groups": {
+    "overview": "Overview",
+    "planning": "Planning",
+    "repertoire": "Repertoire",
+    "network": "Network",
+    "financial": "Financial",
+    "accounting": "Accounting"
+  },
+  "items": {
+    "dashboard": "Dashboard",
+    "financial": "Financial",
+    "profile": "Profile",
+    "availability": "Calendar",
+    "gigs": "Gigs",
+    "rehearsals": "Rehearsals",
+    "bandEvents": "Band Events",
+    "tasks": "Tasks",
+    "songs": "Songs",
+    "setlists": "Setlists",
+    "contacts": "Contacts",
+    "suppliers": "Suppliers",
+    "venues": "Venues",
+    "emailTemplates": "Email Templates",
+    "invoices": "Invoices",
+    "purchases": "Purchases",
+    "merch": "Merchandise",
+    "reimbursements": "Reimbursements",
+    "journal": "Journal",
+    "ledger": "Ledger",
+    "ledgerEntries": "Ledger entries",
+    "vatReturns": "VAT declarations",
+    "reports": "Reports"
+  },
+  "admin": {
+    "tenants": "Tenants",
+    "allUsers": "All Users",
+    "members": "Members",
+    "bandSettings": "Band Settings"
+  },
+  "headers": {
+    "tenantAdmin": "Tenant admin",
+    "superAdmin": "Super admin"
+  },
+  "shell": {
+    "expandNav": "Expand navigation",
+    "collapseNav": "Collapse navigation",
+    "expandNavAria": "expand navigation",
+    "collapseNavAria": "collapse navigation",
+    "openNav": "open navigation",
+    "openSearch": "open search",
+    "openSettings": "open settings menu",
+    "openUserMenu": "open user menu",
+    "search": "Search",
+    "searchPlaceholder": "Search for contacts, gigs or files…",
+    "searchPlaceholderShort": "Search…",
+    "settings": "Settings",
+    "groupAria": "{{name}} group"
+  },
+  "search": {
+    "recent": "Recent",
+    "clear": "Clear",
+    "searchingFor": "Searching for",
+    "addNew": "+ Add new",
+    "showAll": "Show all",
+    "noResults": "No results",
+    "removeRecentAria": "remove recent search",
+    "addCategoryAria": "add search category",
+    "categories": {
+      "contacts": "Contacts",
+      "gigs": "Gigs",
+      "files": "Files",
+      "invoices": "Invoices",
+      "purchases": "Purchases",
+      "songs": "Songs",
+      "setlists": "Setlists",
+      "suppliers": "Suppliers",
+      "venues": "Venues",
+      "transaction": "Transaction"
+    }
+  }
+}

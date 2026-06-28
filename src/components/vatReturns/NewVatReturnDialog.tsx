@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -14,20 +15,14 @@ import Typography from '@mui/material/Typography'
 import { previewVatReturn, createVatReturn } from '../../api/vatReturns.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
-import { previousQuarter, quarterLabel } from '../../utils/vatReturns.ts'
-import type { VatReturn, VatReturnPreview } from '../../types/entities.ts'
+import { previousQuarter, quarterKey } from '../../utils/vatReturns.ts'
+import type { VatQuarter, VatReturn, VatReturnPreview } from '../../types/entities.ts'
 
-const QUARTERS = [1, 2, 3, 4]
+const QUARTERS = [1, 2, 3, 4] as const
 
 function yearOptions() {
   const current = new Date().getFullYear()
   return [current - 2, current - 1, current]
-}
-
-function netLabel(direction: string | undefined) {
-  if (direction === 'payable') return 'To pay'
-  if (direction === 'receivable') return 'To receive'
-  return 'Nothing due'
 }
 
 interface NewVatReturnDialogProps {
@@ -39,7 +34,9 @@ interface NewVatReturnDialogProps {
 // files the declaration: the backend posts the settlement journal and closes
 // the books through the period end.
 export default function NewVatReturnDialog({ onFiled, onClose }: NewVatReturnDialogProps) {
-  const [{ year, quarter }, setPeriod] = useState<{ year: number; quarter: number }>(() => previousQuarter())
+  const { t, i18n } = useTranslation(['vatReturns', 'common'])
+  const [{ year, quarter }, setPeriod] = useState<{ year: number; quarter: VatQuarter }>(() => previousQuarter())
+  const [years] = useState(() => yearOptions())
   const [lastPreview, setLastPreview] = useState<VatReturnPreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -66,6 +63,9 @@ export default function NewVatReturnDialog({ onFiled, onClose }: NewVatReturnDia
 
   const nothingToSettle = preview?.output_vat_cents === 0 && preview?.input_vat_cents === 0
   const canFile = Boolean(preview) && preview!.period_ended && !nothingToSettle && !busy
+  const direction = preview?.direction ?? 'nil'
+  const periodLabel = t($ => $.quarters[quarterKey(quarter)], { year })
+  const locale = i18n.resolvedLanguage
 
   async function handleFile() {
     if (!canFile) return
@@ -82,28 +82,28 @@ export default function NewVatReturnDialog({ onFiled, onClose }: NewVatReturnDia
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>New VAT declaration</DialogTitle>
+      <DialogTitle>{t($ => $.newDialog.title)}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         <Box sx={{ display: 'flex', gap: 1, mt: 1, mb: 2 }}>
           <TextField
-            label="Year"
+            label={t($ => $.fields.year)}
             size="small"
             select
             fullWidth
             value={year}
             onChange={(e) => setPeriod((p) => ({ ...p, year: Number(e.target.value) }))}
           >
-            {yearOptions().map((y) => <MenuItem key={y} value={y}>{y}</MenuItem>)}
+            {years.map((y) => <MenuItem key={y} value={y}>{y}</MenuItem>)}
           </TextField>
           <TextField
-            label="Quarter"
+            label={t($ => $.fields.quarter)}
             size="small"
             select
             fullWidth
             value={quarter}
-            onChange={(e) => setPeriod((p) => ({ ...p, quarter: Number(e.target.value) }))}
+            onChange={(e) => setPeriod((p) => ({ ...p, quarter: Number(e.target.value) as VatQuarter }))}
           >
             {QUARTERS.map((q) => <MenuItem key={q} value={q}>Q{q}</MenuItem>)}
           </TextField>
@@ -117,45 +117,48 @@ export default function NewVatReturnDialog({ onFiled, onClose }: NewVatReturnDia
 
         {preview && (
           <>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              {quarterLabel(year, quarter)} · due {formatShortDate(preview.due_date)}
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
+              {t($ => $.newDialog.previewDue, {
+                period: periodLabel,
+                date: formatShortDate(preview.due_date, locale),
+              })}
             </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-              <Typography variant="body2">Output VAT (sales)</Typography>
+            <Box data-testid="vat-preview-output" data-cents={preview.output_vat_cents ?? 0} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="body2">{t($ => $.fields.outputVat)}</Typography>
               <Typography variant="body2">{formatEur(preview.output_vat_cents)}</Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2">Input VAT (purchases)</Typography>
+            <Box data-testid="vat-preview-input" data-cents={preview.input_vat_cents ?? 0} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="body2">{t($ => $.fields.inputVat)}</Typography>
               <Typography variant="body2">− {formatEur(preview.input_vat_cents)}</Typography>
             </Box>
             <Divider sx={{ mb: 1 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 2 }}>
-              <Typography variant="subtitle2">{netLabel(preview.direction)}</Typography>
+            <Box data-testid="vat-preview-net" data-cents={preview.net_cents ?? 0} data-direction={direction} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 2 }}>
+              <Typography variant="subtitle2">{t($ => $.direction[direction])}</Typography>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 {formatEur(Math.abs(preview.net_cents ?? 0))}
               </Typography>
             </Box>
 
             {!preview.period_ended && (
-              <Alert severity="info" sx={{ mb: 1 }}>
-                This quarter has not ended yet — it can be filed from {formatShortDate(preview.period_to)}.
+              <Alert data-testid="vat-quarter-not-ended" severity="info" sx={{ mb: 1 }}>
+                {t($ => $.newDialog.quarterNotEnded, { date: formatShortDate(preview.period_to, locale) })}
               </Alert>
             )}
             {preview.period_ended && nothingToSettle && (
-              <Alert severity="info" sx={{ mb: 1 }}>No VAT was accumulated in this period.</Alert>
+              <Alert severity="info" sx={{ mb: 1 }}>{t($ => $.newDialog.nothingAccumulated)}</Alert>
             )}
             {canFile && (
               <Alert severity="warning">
-                Filing settles the VAT accounts and closes the books through {formatShortDate(preview.period_to)}.
+                {t($ => $.newDialog.filingWarning, { date: formatShortDate(preview.period_to, locale) })}
               </Alert>
             )}
           </>
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>Cancel</Button>
-        <Button variant="contained" disabled={!canFile} onClick={handleFile}>
-          Settle quarter
+        <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.cancel)}</Button>
+        <Button data-testid="settle-vat-quarter" variant="contained" disabled={!canFile} onClick={handleFile}>
+          {t($ => $.actions.settleQuarter)}
         </Button>
       </DialogActions>
     </Dialog>

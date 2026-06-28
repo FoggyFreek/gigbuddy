@@ -1,4 +1,5 @@
-import type { Id, Invoice } from '../types/entities.ts'
+import type { Id, Invoice, InvoiceStatus } from '../types/entities.ts'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -26,6 +27,7 @@ interface InvoiceDetailsProps {
 }
 
 export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: InvoiceDetailsProps) {
+  const { t } = useTranslation(['invoices', 'common'])
   const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate })
 
   if (s.loading) {
@@ -75,10 +77,10 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: 
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <Box sx={{ flexGrow: 1 }}>
-            Invoice {s.invoice?.invoice_number || ''}
+            {t($ => $.detail.heading, { number: s.invoice?.invoice_number || '' })}
           </Box>
           {s.invoice && (
-            <Chip size="small" color={invoiceStatusColor(s.invoice.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} label={s.invoice.status} />
+            <Chip size="small" color={invoiceStatusColor(s.invoice.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} label={s.invoice.status ? t($ => $.rawStatus[s.invoice!.status as InvoiceStatus]) : ''} />
           )}
         </Box>
         <Divider sx={{ mb: 2 }} />
@@ -86,7 +88,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: 
         <Box>
           {s.finalized && (
             <Alert severity="info" sx={{ mb: 2 }}>
-              This invoice is finalized. Voiding and re-issuing is required to make corrections.
+              {t($ => $.detail.finalizedNotice)}
             </Alert>
           )}
           {s.error && <Alert severity="error" sx={{ mb: 2 }}>{s.error}</Alert>}
@@ -156,7 +158,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: 
           <Box>
             {!s.finalized && (
               <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
-                Delete
+                {t($ => $.common.actions.delete)}
               </Button>
             )}
           </Box>
@@ -169,18 +171,18 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: 
                 rel="noopener noreferrer"
                 startIcon={<DownloadIcon />}
               >
-                Download PDF
+                {t($ => $.pdf.download)}
               </Button>
             )}
             {s.invoice && (
               <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>
-                Download email
+                {t($ => $.detail.downloadEmail)}
               </Button>
             )}
-            <Button onClick={() => onClose(false)}>Close</Button>
+            <Button onClick={() => onClose(false)}>{t($ => $.common.actions.close)}</Button>
             {!s.readOnly && (
               <Button variant="contained" onClick={s.handleSave} disabled={s.saving}>
-                {s.saving ? 'Saving...' : 'Save changes'}
+                {s.saving ? t($ => $.detail.saving) : t($ => $.detail.saveChanges)}
               </Button>
             )}
           </Box>

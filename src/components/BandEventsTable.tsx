@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 
 import Collapse from '@mui/material/Collapse'
@@ -96,6 +97,7 @@ interface BandEventsTableProps {
 }
 
 function EventCard({ event, active, onClick, onShare }: BandEventRowProps) {
+  const { t } = useTranslation('bandEvents')
   return (
     <Box
       onClick={onClick}
@@ -120,7 +122,7 @@ function EventCard({ event, active, onClick, onShare }: BandEventRowProps) {
         )}
         <IconButton
           size="small"
-          aria-label="share event"
+          aria-label={t($ => $.table.shareEvent)}
           onClick={(e) => { e.stopPropagation(); onShare?.(event) }}
           sx={{ ml: 'auto', mt: -0.5 }}
         >
@@ -135,6 +137,7 @@ function EventCard({ event, active, onClick, onShare }: BandEventRowProps) {
 }
 
 function DesktopRow({ event, active, onClick, onShare }: BandEventRowProps) {
+  const { t } = useTranslation('bandEvents')
   return (
     <TableRow
       hover
@@ -150,10 +153,10 @@ function DesktopRow({ event, active, onClick, onShare }: BandEventRowProps) {
       <TableCell>{formatTimeRange(event.start_time, event.end_time)}</TableCell>
       <TableCell>{event.location || '—'}</TableCell>
       <TableCell align="right" padding="none" sx={{ pr: 1 }}>
-        <Tooltip title="Share via WhatsApp">
+        <Tooltip title={t($ => $.table.shareWhatsApp)}>
           <IconButton
             size="small"
-            aria-label="share event"
+            aria-label={t($ => $.table.shareEvent)}
             onClick={(e) => { e.stopPropagation(); onShare?.(event) }}
           >
             <ShareIcon fontSize="small" />
@@ -165,13 +168,14 @@ function DesktopRow({ event, active, onClick, onShare }: BandEventRowProps) {
 }
 
 function DesktopHead() {
+  const { t } = useTranslation('bandEvents')
   return (
     <TableHead>
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-        <TableCell>Date</TableCell>
-        <TableCell>Title</TableCell>
-        <TableCell>Time</TableCell>
-        <TableCell>Location</TableCell>
+        <TableCell>{t($ => $.table.colDate)}</TableCell>
+        <TableCell>{t($ => $.table.colTitle)}</TableCell>
+        <TableCell>{t($ => $.table.colTime)}</TableCell>
+        <TableCell>{t($ => $.table.colLocation)}</TableCell>
         <TableCell />
       </TableRow>
     </TableHead>
@@ -179,6 +183,7 @@ function DesktopHead() {
 }
 
 function PastHeader({ open, count, onToggle }: PastHeaderProps) {
+  const { t } = useTranslation('bandEvents')
   return (
     <Box
       onClick={onToggle}
@@ -200,13 +205,14 @@ function PastHeader({ open, count, onToggle }: PastHeaderProps) {
         }}
       />
       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-        Past events ({count})
+        {t($ => $.table.pastEvents, { count })}
       </Typography>
     </Box>
   )
 }
 
 export default function BandEventsTable({ events, onRowClick, onShare, selectedId = undefined }: BandEventsTableProps) {
+  const { t } = useTranslation('bandEvents')
   const [pastOpen, setPastOpen] = useState(false)
   const isCompact = useCompactLayout()
 
@@ -219,13 +225,13 @@ export default function BandEventsTable({ events, onRowClick, onShare, selectedI
     if (emptyAll) {
       upcomingContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No events yet — add one to get started.
+          {t($ => $.table.emptyAll)}
         </Box>
       )
     } else if (upcoming.length === 0) {
       upcomingContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No upcoming events.
+          {t($ => $.table.emptyUpcoming)}
         </Box>
       )
     } else {
@@ -264,14 +270,14 @@ export default function BandEventsTable({ events, onRowClick, onShare, selectedI
             {emptyAll && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  No events yet — add one to get started.
+                  {t($ => $.table.emptyAll)}
                 </TableCell>
               </TableRow>
             )}
             {!emptyAll && upcoming.length === 0 && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  No upcoming events.
+                  {t($ => $.table.emptyUpcoming)}
                 </TableCell>
               </TableRow>
             )}

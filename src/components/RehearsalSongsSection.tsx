@@ -1,5 +1,6 @@
 import type { RehearsalSong, Song, Id } from '../types/entities.ts'
 import { Link as RouterLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
@@ -21,11 +22,12 @@ interface RehearsalSongsSectionProps {
 }
 
 export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong, canWrite = true }: RehearsalSongsSectionProps) {
+  const { t } = useTranslation('rehearsals')
   return (
     <Grid size={12}>
       <Divider sx={{ my: 1 }} />
       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-        Songs
+        {t($ => $.songs.title)}
       </Typography>
       {canWrite && (
         <Box sx={{ maxWidth: 400, mb: songs.length ? 2 : 0 }}>
@@ -61,12 +63,12 @@ export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong, 
                   </Typography>
                 )}
               </Box>
-              <Tooltip title="Open song">
+              <Tooltip title={t($ => $.songs.openSong)}>
                 <IconButton
                   size="small"
                   component={RouterLink}
                   to={`/songs/${s.song_id}`}
-                  aria-label={`open ${s.title}`}
+                  aria-label={t($ => $.songs.openSongAria, { title: s.title })}
                 >
                   <OpenInNewIcon fontSize="small" />
                 </IconButton>
@@ -74,7 +76,7 @@ export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong, 
               {canWrite && (
                 <IconButton
                   size="small"
-                  aria-label={`detach ${s.title}`}
+                  aria-label={t($ => $.songs.detachSong, { title: s.title })}
                   onClick={() => onRemoveSong(s.song_id)}
                 >
                   <CloseIcon fontSize="small" />

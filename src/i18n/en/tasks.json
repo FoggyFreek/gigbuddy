@@ -1,0 +1,13 @@
+{
+  "title": "Tasks with gigs",
+  "myTasks": "Assigned to me",
+  "showFinished": "Finished",
+  "table": {
+    "colDone": "Done",
+    "colTitle": "Title",
+    "colGig": "Gig",
+    "colAssignedTo": "Assigned to",
+    "colDueDate": "Due date",
+    "empty": "No tasks yet."
+  }
+}

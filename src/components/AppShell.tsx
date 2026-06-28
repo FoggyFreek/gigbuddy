@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
 import AppBar from '@mui/material/AppBar'
 import Avatar from '@mui/material/Avatar'
@@ -67,24 +68,32 @@ import SettingsMenu from './appShell/SettingsMenu.tsx'
 import UserMenu from './appShell/UserMenu.tsx'
 import type { Id } from '../types/entities.ts'
 
-// Local type for NAV_GROUPS that mirrors the NavGroupDef shape NavGroup.tsx expects
-// but also allows an optional permission gate on child entries. Items with a
-// `permission` are hidden unless the active tenant role grants it.
+// Local type for NAV_GROUPS. Group/item display labels come from the `navigation`
+// i18n namespace, keyed by `key` (groups) and `i18nKey` (items). The typed unions
+// keep the dynamic selector index (`t($ => $.items[i18nKey])`) compile-checked —
+// an out-of-set key is a TS error, not a silent miss. Items with a `permission`
+// are hidden unless the active tenant role grants it.
+type NavGroupKey = 'overview' | 'planning' | 'repertoire' | 'network' | 'financial' | 'accounting'
+type NavItemKey =
+  | 'dashboard' | 'financial' | 'profile' | 'availability' | 'gigs' | 'rehearsals'
+  | 'bandEvents' | 'tasks' | 'songs' | 'setlists' | 'contacts' | 'suppliers'
+  | 'venues' | 'emailTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
+  | 'journal' | 'ledger' | 'ledgerEntries' | 'vatReturns' | 'reports'
+
 interface NavChildEntry {
   to: string
-  label: string
+  i18nKey: NavItemKey
   icon: SvgIconComponent
   permission?: Permission
 }
 
 interface NavGroupEntry {
-  key: string
-  label: string
+  key: NavGroupKey
   icon: SvgIconComponent
   children: NavChildEntry[]
 }
 
-const DRAWER_WIDTH = 220
+const DRAWER_WIDTH = 240
 const COLLAPSED_DRAWER_WIDTH = 72
 // Caps page content width on large screens so it stays centered instead of stretching edge-to-edge.
 const CONTENT_MAX_WIDTH = 1400
@@ -92,73 +101,68 @@ const CONTENT_MAX_WIDTH = 1400
 const NAV_GROUPS: NavGroupEntry[] = [
   {
     key: 'overview',
-    label: 'Overview',
     icon: SpaceDashboardTwoTone,
     children: [
-      { to: '/', label: 'Dashboard', icon: DashboardOutlined },
-      { to: '/financial', label: 'Financial', icon: QueryStatsOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/profile', label: 'Profile', icon: PersonOutlined },
+      { to: '/', i18nKey: 'dashboard', icon: DashboardOutlined },
+      { to: '/financial', i18nKey: 'financial', icon: QueryStatsOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/profile', i18nKey: 'profile', icon: PersonOutlined },
     ],
   },
   {
     key: 'planning',
-    label: 'Planning',
     icon: EventNoteTwoTone,
     children: [
-      { to: '/availability', label: 'Calendar', icon: CalendarMonthOutlined },
-      { to: '/gigs', label: 'Gigs', icon: EventOutlined },
-      { to: '/rehearsals', label: 'Rehearsals', icon: MusicNoteOutlined },
-      { to: '/events', label: 'Band Events', icon: EventNoteOutlined },
-      { to: '/tasks', label: 'Tasks', icon: ChecklistOutlined },
+      { to: '/availability', i18nKey: 'availability', icon: CalendarMonthOutlined },
+      { to: '/gigs', i18nKey: 'gigs', icon: EventOutlined },
+      { to: '/rehearsals', i18nKey: 'rehearsals', icon: MusicNoteOutlined },
+      { to: '/events', i18nKey: 'bandEvents', icon: EventNoteOutlined },
+      { to: '/tasks', i18nKey: 'tasks', icon: ChecklistOutlined },
     ],
   },
   {
     key: 'repertoire',
-    label: 'Repertoire',
     icon: LibraryMusicTwoTone,
     children: [
-      { to: '/songs', label: 'Songs', icon: LibraryMusicOutlined },
-      { to: '/setlists', label: 'Setlists', icon: QueueMusicOutlined },
+      { to: '/songs', i18nKey: 'songs', icon: LibraryMusicOutlined },
+      { to: '/setlists', i18nKey: 'setlists', icon: QueueMusicOutlined },
     ],
   },
   {
     key: 'network',
-    label: 'Network',
     icon: HubTwoTone,
     children: [
-      { to: '/contacts', label: 'Contacts', icon: ContactsOutlined },
-      { to: '/suppliers', label: 'Suppliers', icon: StorefrontOutlined },
-      { to: '/venues', label: 'Venues', icon: LocationOnOutlined },
-      { to: '/email-templates', label: 'Email Templates', icon: EmailOutlined },
+      { to: '/contacts', i18nKey: 'contacts', icon: ContactsOutlined },
+      { to: '/suppliers', i18nKey: 'suppliers', icon: StorefrontOutlined },
+      { to: '/venues', i18nKey: 'venues', icon: LocationOnOutlined },
+      { to: '/email-templates', i18nKey: 'emailTemplates', icon: EmailOutlined },
     ],
   },
   {
     key: 'financial',
-    label: 'Financial',
     icon: PaymentsTwoTone,
     children: [
-      { to: '/invoices', label: 'Invoices', icon: ReceiptLongOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/purchases', label: 'Purchases', icon: ShoppingCartOutlined, permission: PERMISSIONS.PURCHASE_CREATE },
-      { to: '/merch', label: 'Merchandise', icon: SellOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/reimbursements', label: 'Reimbursements', icon: VolunteerActivismOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/invoices', i18nKey: 'invoices', icon: ReceiptLongOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/purchases', i18nKey: 'purchases', icon: ShoppingCartOutlined, permission: PERMISSIONS.PURCHASE_CREATE },
+      { to: '/merch', i18nKey: 'merch', icon: SellOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/reimbursements', i18nKey: 'reimbursements', icon: VolunteerActivismOutlined, permission: PERMISSIONS.FINANCE_VIEW },
     ],
   },
   {
     key: 'accounting',
-    label: 'Accounting',
     icon: AccountBalanceTwoTone,
     children: [
-      { to: '/journal', label: 'Journal', icon: MenuBookOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/ledger', label: 'Ledger', icon: ListAltOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/ledger-entries', label: 'Ledger entries', icon: ManageSearchOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/vat-returns', label: 'VAT declarations', icon: AccountBalanceOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/reports', label: 'Reports', icon: AssessmentOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/journal', i18nKey: 'journal', icon: MenuBookOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/ledger', i18nKey: 'ledger', icon: ListAltOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/ledger-entries', i18nKey: 'ledgerEntries', icon: ManageSearchOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/vat-returns', i18nKey: 'vatReturns', icon: AccountBalanceOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/reports', i18nKey: 'reports', icon: AssessmentOutlined, permission: PERMISSIONS.FINANCE_VIEW },
     ],
   },
 
 ]
 
 export default function AppShell() {
+  const { t } = useTranslation('navigation')
   const { pathname } = useLocation()
   const { bandName } = useProfile()
   const { user, logout, switchTenant } = useAuth()
@@ -192,9 +196,16 @@ export default function AppShell() {
   const visibleGroups = useMemo(
     () =>
       NAV_GROUPS
-        .map((g) => ({ ...g, children: g.children.filter((c) => !c.permission || can(c.permission)) }))
+        .map((g) => ({
+          key: g.key,
+          icon: g.icon,
+          label: t($ => $.groups[g.key]),
+          children: g.children
+            .filter((c) => !c.permission || can(c.permission))
+            .map((c) => ({ to: c.to, icon: c.icon, label: t($ => $.items[c.i18nKey]) })),
+        }))
         .filter((g) => g.children.length > 0),
-    [can],
+    [can, t],
   )
 
   // Single-open accordion: the group containing the active route auto-expands,
@@ -242,6 +253,7 @@ export default function AppShell() {
             <NavGroup
               key={group.key}
               group={group}
+              ariaLabel={t($ => $.shell.groupAria, { name: group.label })}
               pathname={pathname}
               isNavCollapsed={isNavCollapsed}
               expanded={expandedKey === group.key}
@@ -253,10 +265,10 @@ export default function AppShell() {
       </Box>
       {!isMobile && (
         <Box sx={{ display: 'flex', justifyContent: isNavCollapsed ? 'center' : 'flex-end', px: 1, py: 0.5 }}>
-          <Tooltip title={isNavCollapsed ? 'Expand navigation' : 'Collapse navigation'}>
+          <Tooltip title={isNavCollapsed ? t($ => $.shell.expandNav) : t($ => $.shell.collapseNav)}>
             <IconButton
               onClick={() => setNavCollapsed((collapsed) => !collapsed)}
-              aria-label={isNavCollapsed ? 'expand navigation' : 'collapse navigation'}
+              aria-label={isNavCollapsed ? t($ => $.shell.expandNavAria) : t($ => $.shell.collapseNavAria)}
               size="small"
             >
               {isNavCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
@@ -286,7 +298,7 @@ export default function AppShell() {
               edge="start"
               onClick={() => setMobileOpen((o) => !o)}
               sx={{ mr: 1 }}
-              aria-label="open navigation"
+              aria-label={t($ => $.shell.openNav)}
             >
               <MenuIcon />
             </IconButton>
@@ -310,7 +322,7 @@ export default function AppShell() {
                   size="small"
                   type="search"
                   autoComplete="off"
-                  placeholder="Search for contacts, gigs or files…"
+                  placeholder={t($ => $.shell.searchPlaceholder)}
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
                   onFocus={() => setSearchOpen(true)}
@@ -336,8 +348,8 @@ export default function AppShell() {
             </ClickAwayListener>
           )}
           {isMobile && (
-            <Tooltip title="Search">
-              <IconButton onClick={() => setSearchOpen((o) => !o)} aria-label="open search">
+            <Tooltip title={t($ => $.shell.search)}>
+              <IconButton onClick={() => setSearchOpen((o) => !o)} aria-label={t($ => $.shell.openSearch)}>
                 <SearchIcon />
               </IconButton>
             </Tooltip>
@@ -347,10 +359,10 @@ export default function AppShell() {
             onSubscribe={subscribe}
             onUnsubscribe={unsubscribe}
           />
-          <Tooltip title="Settings">
+          <Tooltip title={t($ => $.shell.settings)}>
             <IconButton
               onClick={(e) => setSettingsMenuAnchor(e.currentTarget)}
-              aria-label="open settings menu"
+              aria-label={t($ => $.shell.openSettings)}
             >
               <SettingsOutlinedIcon />
             </IconButton>
@@ -371,7 +383,7 @@ export default function AppShell() {
                 <IconButton
                   onClick={(e) => setUserMenuAnchor(e.currentTarget)}
                   size="small"
-                  aria-label="open user menu"
+                  aria-label={t($ => $.shell.openUserMenu)}
                   sx={{ ml: 1 }}
                 >
                   <Avatar
@@ -405,7 +417,7 @@ export default function AppShell() {
                 size="small"
                 type="search"
                 autoComplete="off"
-                placeholder="Search…"
+                placeholder={t($ => $.shell.searchPlaceholderShort)}
                 value={searchValue}
                 onFocus={() => setSearchOpen(true)}
                 onChange={(e) => setSearchValue(e.target.value)}

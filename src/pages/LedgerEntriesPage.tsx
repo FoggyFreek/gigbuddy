@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
@@ -33,6 +34,7 @@ import type { LedgerEntryRow, Period } from '../types/entities.ts'
 type SortField = 'id' | 'entry_date'
 
 export default function LedgerEntriesPage() {
+  const { t } = useTranslation('ledger')
   const navigate = useNavigate()
   // Restore the previous session's filters so navigating into an entry detail
   // and back keeps the user's view.
@@ -141,12 +143,12 @@ export default function LedgerEntriesPage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          Ledger transactions
-</Typography>
+          {t($ => $.title)}
+        </Typography>
         <Chip size="small" label={visibleEntries.length} />
         <TextField
           size="small"
-          placeholder="Search..."
+          placeholder={t($ => $.searchPlaceholder)}
           value={searchQuery}
           onChange={(e) => handleFilterChange(setSearchQuery)(e.target.value)}
           slotProps={{
@@ -168,7 +170,7 @@ export default function LedgerEntriesPage() {
               onChange={(e) => handleFilterChange(setShowVoided)(e.target.checked)}
             />
           )}
-          label="Show voided"
+          label={t($ => $.showVoided)}
         />
         <LedgerTypeFilter value={activeGroups} onChange={handleFilterChange(setActiveGroups)} />
         <PeriodPicker
@@ -206,7 +208,7 @@ export default function LedgerEntriesPage() {
               setPage(0)
             }}
             rowsPerPageOptions={[25, 50, 100]}
-            labelRowsPerPage="per page"
+            labelRowsPerPage={t($ => $.perPage)}
           />
         </>
       )}
@@ -223,6 +225,7 @@ interface LedgerEntriesListProps {
 }
 
 function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }: LedgerEntriesListProps) {
+  const { t } = useTranslation('ledger')
   const isCompact = useCompactLayout()
 
   if (isCompact) {
@@ -230,7 +233,7 @@ function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }: Le
       <Paper variant="outlined">
         {!entries.length && (
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No ledger entries found
+            {t($ => $.emptyEntries)}
           </Typography>
         )}
         {entries.map((row) => (
@@ -296,20 +299,20 @@ function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }: Le
                   #
                 </TableSortLabel>
               </TableCell>
-              <TableCell>File</TableCell>
-              <TableCell>Receipt</TableCell>
+              <TableCell>{t($ => $.columns.file)}</TableCell>
+              <TableCell>{t($ => $.columns.receipt)}</TableCell>
               <TableCell sortDirection={sortDirectionFor('entry_date')}>
                 <TableSortLabel
                   active={sortBy === 'entry_date'}
                   direction={sortBy === 'entry_date' && sortDesc ? 'desc' : 'asc'}
                   onClick={() => onSort('entry_date')}
                 >
-                  Date
+                  {t($ => $.columns.date)}
                 </TableSortLabel>
               </TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Description</TableCell>
-              <MoneyHeaderCells label="Amount" />
+              <TableCell>{t($ => $.columns.type)}</TableCell>
+              <TableCell>{t($ => $.columns.description)}</TableCell>
+              <MoneyHeaderCells label={t($ => $.columns.amount)} />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -317,7 +320,7 @@ function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }: Le
               <TableRow>
                 <TableCell colSpan={8}>
                   <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                    No ledger entries found
+                    {t($ => $.emptyEntries)}
                   </Typography>
                 </TableCell>
               </TableRow>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
@@ -19,6 +20,7 @@ interface SupplierPurchasesSectionProps {
 // Purchases page data flow (server-side period filter + the shared
 // PurchasesList renderer) but scoped to one supplier via supplier_contact_id.
 export default function SupplierPurchasesSection({ contactId }: SupplierPurchasesSectionProps) {
+  const { t } = useTranslation('contacts')
   const navigate = useNavigate()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
@@ -63,7 +65,7 @@ export default function SupplierPurchasesSection({ contactId }: SupplierPurchase
       <Divider sx={{ my: 3 }} />
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Purchases</Typography>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{t($ => $.detail.purchasesHeading)}</Typography>
         <Chip size="small" label={purchases.length} />
         <Box sx={{ flexGrow: 1 }} />
         <PeriodPicker availableDates={availableDates} value={period} onChange={setPeriod} />

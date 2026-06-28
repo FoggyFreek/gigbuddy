@@ -1,5 +1,6 @@
 import type { Rehearsal, Member, Id } from '../types/entities.ts'
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -44,6 +45,7 @@ export default function RehearsalParticipantsSection({
   canWrite = true,
   currentMemberId = null,
 }: RehearsalParticipantsSectionProps) {
+  const { t } = useTranslation(['rehearsals', 'common'])
   const participantIds = useMemo(
     () => new Set((rehearsal.participants ?? []).map((p) => p.band_member_id)),
     [rehearsal],
@@ -53,15 +55,16 @@ export default function RehearsalParticipantsSection({
     (rehearsal.participants?.length ?? 0) > 0 &&
     rehearsal.participants?.every((p) => p.vote === 'yes')
   const isPlanned = rehearsal.status === 'planned'
+  const statusKey = isPlanned ? 'planned' : 'option'
 
   return (
     <>
       <Grid size={12}>
         <Divider sx={{ my: 1 }} />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Status</Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{t($ => $.participants.status)}</Typography>
           <Chip
-            label={rehearsal.status}
+            label={t($ => $.status[statusKey])}
             color={isPlanned ? 'primary' : 'default'}
             size="small"
           />
@@ -69,16 +72,16 @@ export default function RehearsalParticipantsSection({
           {canWrite && (
             rehearsal.status === 'option' ? (
               <Button variant="contained" disabled={!allYes} onClick={onPromote}>
-                Plan this rehearsal
+                {t($ => $.participants.planThisRehearsal)}
               </Button>
             ) : (
-              <Button variant="outlined" onClick={onDemote}>Revert to option</Button>
+              <Button variant="outlined" onClick={onDemote}>{t($ => $.participants.revertToOption)}</Button>
             )
           )}
         </Box>
         {rehearsal.status === 'option' && !allYes && (
           <Typography variant="caption" color="text.secondary">
-            Every required participant must vote yes before this can be planned.
+            {t($ => $.participants.planHint)}
           </Typography>
         )}
       </Grid>
@@ -96,12 +99,12 @@ export default function RehearsalParticipantsSection({
         <Grid size={12}>
           <Divider sx={{ my: 1 }} />
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Required participants
+            {t($ => $.participants.requiredParticipants)}
           </Typography>
           <Stack spacing={1}>
             {(rehearsal.participants?.length ?? 0) === 0 && (
               <Typography variant="body2" color="text.secondary">
-                No participants yet — add at least one below.
+                {t($ => $.participants.noParticipants)}
               </Typography>
             )}
             {rehearsal.participants?.map((p) => (
@@ -139,7 +142,7 @@ export default function RehearsalParticipantsSection({
                 {canWrite && (
                   <IconButton
                     size="small"
-                    aria-label={`remove ${p.name}`}
+                    aria-label={t($ => $.participants.removeParticipant, { name: p.name })}
                     onClick={() => onRemoveParticipant?.(p.band_member_id)}
                   >
                     <DeleteIcon fontSize="small" />
@@ -152,10 +155,10 @@ export default function RehearsalParticipantsSection({
           {canWrite && candidateMembers.length > 0 && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
               <FormControl size="small" sx={{ minWidth: 220 }}>
-                <InputLabel id="add-participant-label">Add participant</InputLabel>
+                <InputLabel id="add-participant-label">{t($ => $.participants.addParticipant)}</InputLabel>
                 <Select
                   labelId="add-participant-label"
-                  label="Add participant"
+                  label={t($ => $.participants.addParticipant)}
                   value={addMemberId ?? ''}
                   onChange={(e) => onAddMemberIdChange?.(e.target.value as Id | '')}
                 >
@@ -167,7 +170,7 @@ export default function RehearsalParticipantsSection({
                 </Select>
               </FormControl>
               <Button variant="outlined" disabled={!addMemberId} onClick={onAddParticipant}>
-                Add
+                {t($ => $.actions.add, { ns: 'common' })}
               </Button>
             </Box>
           )}

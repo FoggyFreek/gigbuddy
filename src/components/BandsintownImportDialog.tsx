@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -127,6 +128,7 @@ function buildGigPayload(row: BandsintownRow, state: RowState): BandsintownGigPa
 }
 
 export default function BandsintownImportDialog({ onClose }: BandsintownImportDialogProps) {
+  const { t } = useTranslation(['gigs', 'common'])
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [step, setStep] = useState('upload')
   const [rows, setRows] = useState<BandsintownRow[]>([])
@@ -180,7 +182,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
       setResult(res as unknown as { created: number; skipped: number })
       setStep('done')
     } catch (err) {
-      setImportError((err as Error).message || 'Import failed')
+      setImportError((err as Error).message || t($ => $.bandsintown.importFailed))
       setStep('review')
     }
   }
@@ -192,7 +194,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
 
   return (
     <Dialog open fullWidth maxWidth="xl">
-      <DialogTitle>Import from Bandsintown</DialogTitle>
+      <DialogTitle>{t($ => $.bandsintown.title)}</DialogTitle>
 
       <DialogContent dividers>
         {step === 'upload' && (
@@ -201,7 +203,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                 <CircularProgress size={18} />
                 <Typography variant="body2" color="text.secondary">
-                  Loading gig list…
+                  {t($ => $.bandsintown.loadingGigList)}
                 </Typography>
               </Box>
             )}
@@ -211,8 +213,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
               </Alert>
             )}
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Select a Bandsintown CSV export file. Duplicate rows are merged
-              automatically. Gigs that already exist in GigBuddy are pre-unchecked.
+              {t($ => $.bandsintown.uploadHint)}
             </Typography>
             <input
               type="file"
@@ -225,7 +226,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
               disabled={!gigsLoaded}
               onClick={() => fileRef.current?.click()}
             >
-              Choose CSV file
+              {t($ => $.bandsintown.chooseFile)}
             </Button>
           </Box>
         )}
@@ -238,20 +239,19 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
               </Alert>
             )}
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {rows.length} event{rows.length === 1 ? '' : 's'} found.
-              Uncheck any you don&apos;t want to import. Select or create a venue/festival for each row.
+              {t($ => $.bandsintown.reviewIntro, { count: rows.length })}
             </Typography>
             <Box sx={{ overflowX: 'auto' }}>
               <Table size="small" sx={{ minWidth: 900 }}>
                 <TableHead>
                   <TableRow>
                     <TableCell padding="checkbox" />
-                    <TableCell>Date</TableCell>
-                    <TableCell>Event</TableCell>
-                    <TableCell>CSV venue / city</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell sx={{ minWidth: 280 }}>Match in GigBuddy</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>{t($ => $.bandsintown.colDate)}</TableCell>
+                    <TableCell>{t($ => $.bandsintown.colEvent)}</TableCell>
+                    <TableCell>{t($ => $.bandsintown.colCsvVenueCity)}</TableCell>
+                    <TableCell>{t($ => $.bandsintown.colType)}</TableCell>
+                    <TableCell sx={{ minWidth: 280 }}>{t($ => $.bandsintown.colMatch)}</TableCell>
+                    <TableCell>{t($ => $.bandsintown.colStatus)}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -270,7 +270,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
                             }
                           />
                           {rowStates[i].isDuplicate && (
-                            <Tooltip title="Possible duplicate — a gig on this date with a similar venue already exists">
+                            <Tooltip title={t($ => $.bandsintown.duplicateTooltip)}>
                               <WarningAmberIcon
                                 fontSize="small"
                                 color="warning"
@@ -303,8 +303,8 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
                             if (val) updateRowState(i, { venueType: val, selectedVenue: null })
                           }}
                         >
-                          <ToggleButton value="venue">Venue</ToggleButton>
-                          <ToggleButton value="festival">Festival</ToggleButton>
+                          <ToggleButton value="venue">{t($ => $.bandsintown.typeVenue)}</ToggleButton>
+                          <ToggleButton value="festival">{t($ => $.bandsintown.typeFestival)}</ToggleButton>
                         </ToggleButtonGroup>
                       </TableCell>
                       <TableCell sx={{ minWidth: 280 }}>
@@ -325,9 +325,9 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
                           onChange={(e) => updateRowState(i, { status: e.target.value })}
                           sx={{ minWidth: 130 }}
                         >
-                          <MenuItem value="option">Option</MenuItem>
-                          <MenuItem value="confirmed">Confirmed</MenuItem>
-                          <MenuItem value="announced">Announced</MenuItem>
+                          <MenuItem value="option">{t($ => $.status.option)}</MenuItem>
+                          <MenuItem value="confirmed">{t($ => $.status.confirmed)}</MenuItem>
+                          <MenuItem value="announced">{t($ => $.status.announced)}</MenuItem>
                         </TextField>
                       </TableCell>
                     </TableRow>
@@ -342,7 +342,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
           <Box sx={{ py: 4 }}>
             <LinearProgress sx={{ mb: 2 }} />
             <Typography variant="body2" color="text.secondary" align="center">
-              Importing {selectedCount} gig{selectedCount === 1 ? '' : 's'}…
+              {t($ => $.bandsintown.importing, { count: selectedCount })}
             </Typography>
           </Box>
         )}
@@ -350,8 +350,9 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
         {step === 'done' && result && (
           <Box sx={{ py: 2 }}>
             <Alert severity="success">
-              {result.created} gig{result.created === 1 ? '' : 's'} imported
-              {result.skipped > 0 ? `, ${result.skipped} skipped` : ''}.
+              {result.skipped > 0
+                ? t($ => $.bandsintown.doneWithSkip, { count: result.created, skipped: result.skipped })
+                : t($ => $.bandsintown.doneNoSkip, { count: result.created })}
             </Alert>
           </Box>
         )}
@@ -359,7 +360,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
 
       <DialogActions>
         {(step === 'upload' || step === 'review') && (
-          <Button onClick={() => onClose(false)}>Cancel</Button>
+          <Button onClick={() => onClose(false)}>{t($ => $.common.actions.cancel)}</Button>
         )}
         {step === 'review' && (
           <Button
@@ -367,7 +368,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
             disabled={selectedCount === 0}
             onClick={handleImport}
           >
-            Import {selectedCount} gig{selectedCount === 1 ? '' : 's'}
+            {t($ => $.bandsintown.importButton, { count: selectedCount })}
           </Button>
         )}
         {step === 'done' && (
@@ -375,7 +376,7 @@ export default function BandsintownImportDialog({ onClose }: BandsintownImportDi
             variant="contained"
             onClick={() => onClose((result?.created ?? 0) > 0)}
           >
-            Close
+            {t($ => $.common.actions.close)}
           </Button>
         )}
       </DialogActions>

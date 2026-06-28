@@ -56,7 +56,9 @@ function maskKey(key) {
   const underscore = key.indexOf('_')
   const prefix = underscore >= 0 ? key.slice(0, underscore + 1) : key.slice(0, 5)
   const last4 = key.slice(-4)
-  const dots = '•'.repeat(Math.max(0, key.length - prefix.length - 4))
+  // Fixed-width mask: one dot per char balloons the rendered preview and eats
+  // horizontal space, so cap the dots regardless of the real key length.
+  const dots = '•'.repeat(Math.min(4, Math.max(0, key.length - prefix.length - 4)))
   return `${prefix}${dots}${last4}`
 }
 

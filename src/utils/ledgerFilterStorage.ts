@@ -20,7 +20,7 @@ export function loadLedgerFilters(): LedgerFilterSnapshot | null {
     const parsed = JSON.parse(raw) as LedgerFilterSnapshot
     if (!parsed || typeof parsed !== 'object') return null
     if (Array.isArray(parsed.activeGroups)) {
-      parsed.activeGroups = parsed.activeGroups.filter((g) => ALL_LEDGER_GROUPS.includes(g))
+      parsed.activeGroups = parsed.activeGroups.filter((g) => (ALL_LEDGER_GROUPS as readonly string[]).includes(g))
     }
     return parsed
   } catch {

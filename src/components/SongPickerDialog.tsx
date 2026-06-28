@@ -1,5 +1,6 @@
 import type { Song } from '../types/entities.ts'
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Dialog from '@mui/material/Dialog'
 import DialogContent from '@mui/material/DialogContent'
@@ -24,6 +25,7 @@ interface SongPickerDialogProps {
 }
 
 export default function SongPickerDialog({ open, onClose, onSelect }: SongPickerDialogProps) {
+  const { t } = useTranslation('songs')
   const [songs, setSongs] = useState<Song[]>([])
   const [search, setSearch] = useState('')
 
@@ -41,13 +43,13 @@ export default function SongPickerDialog({ open, onClose, onSelect }: SongPicker
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Add song</DialogTitle>
+      <DialogTitle>{t($ => $.addSong)}</DialogTitle>
       <DialogContent>
         <TextField
           size="small"
           fullWidth
           autoFocus
-          placeholder="Search songs…"
+          placeholder={t($ => $.searchSongs)}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           sx={{ mb: 1 }}
@@ -63,7 +65,7 @@ export default function SongPickerDialog({ open, onClose, onSelect }: SongPicker
         />
         {filtered.length === 0 ? (
           <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-            No songs found.
+            {t($ => $.noSongsFound)}
           </Typography>
         ) : (
           <List dense sx={{ maxHeight: 400, overflow: 'auto' }}>

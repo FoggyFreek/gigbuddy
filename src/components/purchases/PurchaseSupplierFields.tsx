@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { PurchaseForm } from './purchaseFormHelpers.ts'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import FormControl from '@mui/material/FormControl'
@@ -17,6 +18,7 @@ interface PurchaseSupplierFieldsProps {
 }
 
 export default function PurchaseSupplierFields({ form, patchForm, readOnly }: PurchaseSupplierFieldsProps) {
+  const { t } = useTranslation('purchases')
   const [dueOpen, setDueOpen] = useState(Boolean(form.due_date))
 
   function openDue() {
@@ -31,7 +33,7 @@ export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Pu
           value={form.supplier_name}
           onChange={(patch) => patchForm(patch)}
           disabled={readOnly}
-          label="Supplier"
+          label={t($ => $.labels.supplier)}
           autoFocus
         />
       </Box>
@@ -40,7 +42,8 @@ export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Pu
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <DateEntryField
-              label="Receipt date"
+              label={t($ => $.labels.receiptDate)}
+              openPickerLabel={t($ => $.supplierFields.openReceiptDatePicker)}
               size="small"
               fullWidth
               value={form.receipt_date || ''}
@@ -51,14 +54,15 @@ export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Pu
 
             {!dueOpen && (
               <Button size="small" startIcon={<AddCircleOutlineIcon />} onClick={openDue} disabled={readOnly}>
-                Due
+                {t($ => $.supplierFields.addDueDate)}
               </Button>
             )}
           </Box>
           {dueOpen && (
             <Box sx={{ mt: 2 }}>
               <DateEntryField
-                label="Due date"
+                label={t($ => $.labels.dueDate)}
+                openPickerLabel={t($ => $.supplierFields.openDueDatePicker)}
                 size="small"
                 fullWidth
                 value={form.due_date || ''}
@@ -72,9 +76,9 @@ export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Pu
 
         <Box>
           <FormControl size="small" fullWidth disabled={readOnly}>
-            <InputLabel>Currency</InputLabel>
+            <InputLabel>{t($ => $.labels.currency)}</InputLabel>
             <Select
-              label="Currency"
+              label={t($ => $.labels.currency)}
               value={form.currency || 'EUR'}
               onChange={(e) => patchForm({ currency: e.target.value })}
             >

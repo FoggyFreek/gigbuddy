@@ -1,0 +1,97 @@
+{
+  "title": "Locaties",
+  "detailTitle": "Locatie",
+  "importTooltip": "Importeren",
+  "empty": "Nog geen locaties — voeg er een toe of importeer uit CSV.",
+  "category": {
+    "venue": "Locatie",
+    "festival": "Festival",
+    "venuePlural": "Locaties",
+    "festivalPlural": "Festivals"
+  },
+  "fields": {
+    "category": "Categorie",
+    "venueName": "Naam locatie",
+    "festivalName": "Festival- / evenementnaam",
+    "title": "Aanhef",
+    "givenName": "Voornaam",
+    "familyName": "Achternaam",
+    "organizationName": "Organisatienaam",
+    "streetAndNumber": "Straat en huisnummer",
+    "streetAdditional": "Adres aanvullend",
+    "postalCode": "Postcode",
+    "city": "Plaats",
+    "region": "Regio",
+    "country": "Land",
+    "website": "Website",
+    "phone": "Telefoon",
+    "email": "E-mail"
+  },
+  "placeholders": {
+    "title": "Dhr.",
+    "postalCode": "1234AB",
+    "streetAdditional": "App. 1",
+    "region": "Noord-Holland",
+    "country": "NL",
+    "website": "https://"
+  },
+  "openInNewTab": "Openen in nieuw tabblad",
+  "table": {
+    "columns": {
+      "category": "Categorie",
+      "name": "Naam",
+      "cityCountry": "Plaats / Land",
+      "contact": "Contact",
+      "performed": "Opgetreden"
+    },
+    "searchPlaceholder": "Locaties zoeken…",
+    "filter": "Filter",
+    "filterCount": "Filter ({{count}})",
+    "allCategories": "Alle categorieën",
+    "noResults": "Geen resultaten.",
+    "selected_one": "{{count}} locatie geselecteerd",
+    "selected_other": "{{count}} locaties geselecteerd",
+    "copyEmails": "E-mailadressen kopiëren (puntkomma-gescheiden)"
+  },
+  "detail": {
+    "contactsHeading": "Contacten",
+    "primarySet": "Primair contact — klik om los te koppelen",
+    "primaryMark": "Markeren als primair",
+    "setPrimaryAria": "set primary",
+    "unsetPrimaryAria": "unset primary",
+    "openContact": "Contact openen",
+    "openContactAria": "open contact",
+    "removeContactAria": "remove contact",
+    "deleteTitle": "Locatie verwijderen?"
+  },
+  "modal": {
+    "addTitle": "Locatie toevoegen",
+    "confirmDelete": "Deze locatie verwijderen?"
+  },
+  "categoryChange": {
+    "title_one": "Categoriewijziging raakt {{count}} optreden",
+    "title_other": "Categoriewijziging raakt {{count}} optredens",
+    "body_one": "Het volgende optreden is aan dit record gekoppeld als <strong>{{prevCategory}}</strong>. Wijzigen naar <strong>{{newCategory}}</strong> vereist dat de koppeling van elk optreden wordt bijgewerkt.",
+    "body_other": "De volgende optredens zijn aan dit record gekoppeld als <strong>{{prevCategory}}</strong>. Wijzigen naar <strong>{{newCategory}}</strong> vereist dat de koppeling van elk optreden wordt bijgewerkt.",
+    "untitled": "(naamloos)",
+    "actions": "<strong>Koppelingen verplaatsen</strong> — houd elk optreden aan dit record gekoppeld, verplaatst naar de plek {{category}}.<br/><strong>Koppelingen verwijderen</strong> — ontkoppel elk optreden volledig van dit record.",
+    "removeButton": "Koppelingen verwijderen",
+    "moveButton": "Koppelingen verplaatsen"
+  },
+  "import": {
+    "title": "Locaties importeren uit CSV",
+    "uploadHelp": "Upload een UTF-8 CSV-bestand met kolomkoppen. Ondersteunde velden: naam, categorie, aanhef, voornaam, achternaam, organisatienaam, straat en huisnummer, adres aanvullend, postcode, plaats, regio, land, website, telefoon, e-mail.",
+    "mapHelp": "Koppel je CSV-kolommen aan locatievelden. {{count}} rijen gevonden.",
+    "columns": {
+      "category": "Categorie",
+      "name": "Naam",
+      "city": "Plaats",
+      "country": "Land",
+      "contact": "Contact"
+    },
+    "result_one": "{{count}} locatie geïmporteerd.",
+    "result_other": "{{count}} locaties geïmporteerd.",
+    "resultSkipped_one": "{{count}} locatie geïmporteerd ({{skipped}} overgeslagen als duplicaten).",
+    "resultSkipped_other": "{{count}} locaties geïmporteerd ({{skipped}} overgeslagen als duplicaten)."
+  }
+}

@@ -1,4 +1,5 @@
-﻿import Box from '@mui/material/Box'
+﻿import { useTranslation } from 'react-i18next'
+import Box from '@mui/material/Box'
 import { useTheme, alpha } from '@mui/material/styles'
 import type { Theme } from '@mui/material/styles'
 import { formatNote, STANDARD_TUNING, type AbsoluteFret } from '../../utils/chordIdentify.ts'
@@ -35,7 +36,14 @@ const BOARD_CENTER_Y = BOARD_H / 2
 const DOUBLE_MARKER_SPACING = 2 * ROW_H
 
 export default function InteractiveFretboard({ frets, onChange, fretCount = 15 }: InteractiveFretboardProps) {
+  const { t } = useTranslation('songs')
   const theme = useTheme()
+
+  const stateLabel = (value: AbsoluteFret): string => {
+    if (value === OPEN) return t($ => $.fretboard.stateOpen)
+    if (value === MUTE) return t($ => $.fretboard.stateMuted)
+    return t($ => $.fretboard.stateFret, { n: value })
+  }
 
   const setString = (string: number, value: AbsoluteFret) => {
     const next = frets.slice()
@@ -59,7 +67,7 @@ export default function InteractiveFretboard({ frets, onChange, fretCount = 15 }
   const allFrets = Array.from({ length: fretCount }, (_, i) => i + 1)
 
   return (
-    <Box role="group" aria-label="Guitar fretboard" sx={{ userSelect: 'none', minWidth: 'max-content' }}>
+    <Box role="group" aria-label={t($ => $.fretboard.label)} sx={{ userSelect: 'none', minWidth: 'max-content' }}>
       {/* Header: fret numbers aligned to the fret columns. */}
       <Box sx={{ display: 'grid', gridTemplateColumns: gridCols }}>
         <Box />
@@ -132,7 +140,7 @@ export default function InteractiveFretboard({ frets, onChange, fretCount = 15 }
                   component="button"
                   type="button"
                   onClick={() => handleNut(string)}
-                  aria-label={`Toggle ${label} string open or muted, currently ${stateLabel(value)}`}
+                  aria-label={t($ => $.fretboard.nutAria, { label, state: stateLabel(value) })}
                   sx={nutSx(theme, value, stringLine)}
                 >
                   {value === OPEN ? (
@@ -153,7 +161,7 @@ export default function InteractiveFretboard({ frets, onChange, fretCount = 15 }
                       type="button"
                       key={`${label}-${fret}`}
                       onClick={() => handleFret(string, fret)}
-                      aria-label={`Set ${label} string to fret ${fret}`}
+                      aria-label={t($ => $.fretboard.fretAria, { label, fret })}
                       aria-pressed={active}
                       sx={cellSx(theme, stringLine)}
                     >
@@ -211,12 +219,6 @@ function isMarker(fret: number): boolean {
 // The note a string sounds at a given fret, in standard tuning.
 function noteAt(string: number, fret: number): string {
   return formatNote((STANDARD_TUNING[string] + fret) % 12)
-}
-
-function stateLabel(value: AbsoluteFret): string {
-  if (value === OPEN) return 'open'
-  if (value === MUTE) return 'muted'
-  return `fret ${value}`
 }
 
 // A horizontal string line, drawn as a centred gradient stripe so it runs

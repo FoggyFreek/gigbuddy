@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   deletePurchase,
   deletePurchaseAttachment,
@@ -11,7 +12,7 @@ import { getAccountingSettings, listAccounts } from '../../api/accounts.ts'
 import { listProducts } from '../../api/merch.ts'
 import { listMembers } from '../../api/bandMembers.ts'
 import { computePurchaseTotals } from '../../utils/purchaseTotals.ts'
-import type { Purchase, PurchaseAttachment, Account, AccountingSettings, Member, Product, Id } from '../../types/entities.ts'
+import type { Purchase, PurchaseAttachment, PurchasePaymentMethod, PurchaseStatus, Account, AccountingSettings, Member, Product, Id } from '../../types/entities.ts'
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.ts'
 import type { PurchaseForm, PurchaseFormLine } from './purchaseFormHelpers.ts'
 
@@ -27,6 +28,7 @@ interface UsePurchaseFormStateArgs {
 
 /** Per-line validation errors keyed by field name. */
 type LineErrors = Record<string, string>
+type EditablePurchaseStatus = Exclude<PurchaseStatus, 'paid'>
 
 export interface UsePurchaseFormStateResult {
   loading: boolean
@@ -46,8 +48,8 @@ export interface UsePurchaseFormStateResult {
   bandMembers: Member[]
   paymentDialogOpen: boolean
   paymentError: string | null
-  paymentMethod: string
-  setPaymentMethod: (method: string) => void
+  paymentMethod: PurchasePaymentMethod
+  setPaymentMethod: (method: PurchasePaymentMethod) => void
   paidOn: string
   setPaidOn: (date: string) => void
   paidByBandMemberId: Id | null
@@ -58,7 +60,7 @@ export interface UsePurchaseFormStateResult {
   patchLine: (index: number, patch: Partial<PurchaseFormLine>) => void
   addLine: () => void
   removeLine: (index: number) => void
-  handleSave: (status: string) => Promise<void>
+  handleSave: (status: EditablePurchaseStatus) => Promise<void>
   openPaymentDialog: () => void
   closePaymentDialog: () => void
   handleRegisterPayment: () => Promise<void>
@@ -76,6 +78,7 @@ export interface UsePurchaseFormStateResult {
 // lifecycle. Purchases are always created upfront (NewPurchaseDialog) and then
 // edited here, so this hook only deals with an existing purchase.
 export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: UsePurchaseFormStateArgs): UsePurchaseFormStateResult {
+  const { t } = useTranslation('purchases')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -92,7 +95,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
   const [products, setProducts] = useState<Product[]>([])
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [paymentError, setPaymentError] = useState<string | null>(null)
-  const [paymentMethod, setPaymentMethod] = useState('bank')
+  const [paymentMethod, setPaymentMethod] = useState<PurchasePaymentMethod>('bank')
   const [paidOn, setPaidOn] = useState(todayIso())
   const [paidByBandMemberId, setPaidByBandMemberId] = useState<Id | null>(null)
   const [attachments, setAttachments] = useState<PurchaseAttachment[]>([])
@@ -220,20 +223,20 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
     const nextLineErrors: LineErrors[] = form.lines.map((line) => {
       const err: LineErrors = {}
       if (!String(line.description || '').trim()) {
-        err.description = 'Enter a description'
+        err.description = t($ => $.validation.description)
       }
       if (needsExplicitExpenseAccount && !line.account_code) {
-        err.account_code = 'Choose an expense account'
+        err.account_code = t($ => $.validation.expenseAccount)
       }
       if (Number(line.amount_incl_cents) <= 0) {
-        err.amount_incl_cents = 'Enter an amount greater than zero'
+        err.amount_incl_cents = t($ => $.validation.positiveAmount)
       }
       return err
     })
     const hasLineErrors = nextLineErrors.some((err) => Object.keys(err).length > 0)
     setLineErrors(nextLineErrors)
     if (hasLineErrors) {
-      setError('Complete the highlighted purchase line fields before approving.')
+      setError(t($ => $.validation.approvalIncomplete))
       return false
     }
     return true
@@ -243,9 +246,9 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
     const err = e as Record<string, unknown>
     if (form && err.code === 'accounting_not_configured' && err.field === 'default_expense_account_code') {
       setLineErrors(form.lines.map((line): LineErrors => (
-        line.account_code ? {} : { account_code: 'Choose an expense account' }
+        line.account_code ? {} : { account_code: t($ => $.validation.expenseAccount) }
       )))
-      setError('Choose an expense account for each line, or configure a default expense account in Accounting Settings.')
+      setError(t($ => $.validation.accountingSetup))
       return
     }
     if (form && err.code === 'purchase_line_validation' && Array.isArray(err.fields)) {
@@ -254,7 +257,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
         if (fieldError.line == null || !fieldError.field) continue
         nextLineErrors[fieldError.line] = {
           ...nextLineErrors[fieldError.line],
-          [fieldError.field]: fieldError.message || 'Required',
+          [fieldError.field]: fieldError.message || t($ => $.validation.required),
         }
       }
       setLineErrors(nextLineErrors)
@@ -265,11 +268,11 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
   }
 
   // status is 'draft' (Save as draft) or 'approved' (Approve).
-  async function handleSave(status: string) {
+  async function handleSave(status: EditablePurchaseStatus) {
     if (!form) return
     setLineErrors([])
     if (!form.supplier_name?.trim()) {
-      setError('Supplier is required')
+      setError(t($ => $.validation.supplierRequired))
       return
     }
     if (status === 'approved' && !validateApprovalFields()) return
@@ -279,7 +282,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
       const validCodes = new Set(lineAccounts.map((a) => a.code))
       const badIdx = form.lines.findIndex((l) => l.account_code && !validCodes.has(l.account_code))
       if (badIdx >= 0) {
-        setError(`Replace the inactive account on line ${badIdx + 1}`)
+        setError(t($ => $.validation.inactiveAccount, { number: badIdx + 1 }))
         return
       }
     }
@@ -322,7 +325,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
 
   async function handleRegisterPayment() {
     if (paymentMethod === 'member' && !paidByBandMemberId) {
-      setPaymentError('Choose the band member who paid for this purchase')
+      setPaymentError(t($ => $.validation.bandMemberRequired))
       return
     }
     try {

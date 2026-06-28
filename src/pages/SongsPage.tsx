@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -14,6 +15,7 @@ import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Song, Id } from '../types/entities.ts'
 
 export default function SongsPage() {
+  const { t } = useTranslation(['songs', 'common'])
   const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
@@ -58,7 +60,7 @@ export default function SongsPage() {
     >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
-          Songs
+          {t($ => $.title)}
         </Typography>
         {canWritePlanning && (
           <SongImportMenu
@@ -72,7 +74,7 @@ export default function SongsPage() {
             startIcon={<AddIcon />}
             onClick={() => setModal({ mode: 'create' })}
           >
-            Add
+            {t($ => $.common.actions.add)}
           </Button>
         )}
       </Box>

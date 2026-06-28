@@ -1,0 +1,36 @@
+{
+  "title": "Band Events",
+  "table": {
+    "colDate": "Date",
+    "colTitle": "Title",
+    "colTime": "Time",
+    "colLocation": "Location",
+    "shareEvent": "share event",
+    "shareWhatsApp": "Share via WhatsApp",
+    "emptyAll": "No events yet — add one to get started.",
+    "emptyUpcoming": "No upcoming events.",
+    "pastEvents": "Past events ({{count}})"
+  },
+  "form": {
+    "addTitle": "Add band event",
+    "detailsTitle": "Band event",
+    "title": "Title",
+    "titlePlaceholder": "e.g. Studio session, Photo shoot, Band meeting",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "endDateHint": "Leave blank for single day",
+    "openStartPicker": "open start picker",
+    "openEndPicker": "open end picker",
+    "location": "Location",
+    "startTime": "Start time",
+    "endTime": "End time",
+    "notes": "Notes",
+    "required": "Required",
+    "endDateError": "Must be on or after start date",
+    "addEvent": "Add event"
+  },
+  "page": {
+    "title": "Band event details",
+    "deleteConfirmTitle": "Delete band event?"
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "title": "Btw-aangiften",
+  "declaration": "Btw-aangifte",
+  "newDeclaration": "Nieuwe aangifte",
+  "empty": "Nog geen btw-aangiften ingediend",
+  "summary": {
+    "all": "Alle aangiften",
+    "open": "Klaargezet",
+    "overdue": "Te laat",
+    "settled": "Afgehandeld"
+  },
+  "quarters": {
+    "first": "1e kwartaal {{year}}",
+    "second": "2e kwartaal {{year}}",
+    "third": "3e kwartaal {{year}}",
+    "fourth": "4e kwartaal {{year}}"
+  },
+  "status": {
+    "paid": "Betaald",
+    "received": "Ontvangen",
+    "settled": "Afgehandeld",
+    "partially_paid": "Gedeeltelijk betaald",
+    "partially_received": "Gedeeltelijk ontvangen",
+    "overdue": "Te laat",
+    "ready_to_pay": "Klaar om te betalen",
+    "to_receive": "Te ontvangen"
+  },
+  "direction": {
+    "payable": "Te betalen",
+    "receivable": "Te ontvangen",
+    "nil": "Niets verschuldigd"
+  },
+  "actions": {
+    "viewBreakdown": "Uitsplitsing bekijken",
+    "recordRefund": "Terugbetaling registreren",
+    "recordPayment": "Betaling registreren",
+    "settleQuarter": "Kwartaal afrekenen",
+    "viewLedgerEntry": "Boeking van afrekening bekijken",
+    "returnActions": "acties voor {{period}}"
+  },
+  "fields": {
+    "year": "Jaar",
+    "quarter": "Kwartaal",
+    "period": "Periode",
+    "dueDate": "Vervaldatum",
+    "filed": "Ingediend",
+    "outputVat": "Af te dragen btw (verkopen)",
+    "inputVat": "Voorbelasting (inkopen)",
+    "outstanding": "Openstaand",
+    "amount": "Bedrag (€)",
+    "receivedOn": "Ontvangen op",
+    "paidOn": "Betaald op",
+    "toAccount": "Naar rekening",
+    "fromAccount": "Van rekening"
+  },
+  "paymentHistory": {
+    "refundsReceived": "Terugbetalingen ontvangen",
+    "payments": "Betalingen"
+  },
+  "newDialog": {
+    "title": "Nieuwe btw-aangifte",
+    "previewDue": "{{period}} · vervalt op {{date}}",
+    "quarterNotEnded": "Dit kwartaal is nog niet afgelopen — de aangifte kan vanaf {{date}} worden ingediend.",
+    "nothingAccumulated": "In deze periode is geen btw opgebouwd.",
+    "filingWarning": "Indienen verrekent de btw-rekeningen en sluit de boeken tot en met {{date}}."
+  },
+  "paymentDialog": {
+    "recordRefundTitle": "Terugbetaling registreren · {{period}}",
+    "recordPaymentTitle": "Betaling registreren · {{period}}"
+  }
+}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Invoice, Id } from '../../types/entities.ts'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import Alert from '@mui/material/Alert'
@@ -17,22 +18,28 @@ import LaunchIcon from '@mui/icons-material/Launch'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { createInvoicePaymentLink, syncInvoicePaymentLink, deleteInvoicePaymentLink } from '../../api/invoices.ts'
 
-const MOLLIE_STATUS_COLOR: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
+const MOLLIE_STATUS_COLOR = {
   open: 'default',
   paid: 'success',
   expired: 'warning',
   canceled: 'error',
-}
+} as const
 
-const CREATE_ERROR_MESSAGES: Record<string, string> = {
-  mollie_key_missing: 'Mollie API key not configured. Go to Settings → Integrations.',
-  zero_amount: 'Invoice total must be greater than zero.',
-  void_invoice: 'Cannot create a payment link for a void invoice.',
-}
+const CREATE_ERROR_KEYS = {
+  mollie_key_missing: 'mollieKeyMissing',
+  zero_amount: 'zeroAmount',
+  void_invoice: 'voidInvoice',
+} as const
 
-const REMOVE_ERROR_MESSAGES: Record<string, string> = {
-  payment_link_paid: 'This payment link has already been paid — the invoice is now marked paid.',
-  mollie_error: 'Mollie could not remove the link. Try again later.',
+const REMOVE_ERROR_KEYS = {
+  payment_link_paid: 'alreadyPaid',
+  mollie_error: 'removeFailed',
+} as const
+
+type PaymentStatus = keyof typeof MOLLIE_STATUS_COLOR
+
+function isPaymentStatus(status: string | undefined): status is PaymentStatus {
+  return Boolean(status && Object.hasOwn(MOLLIE_STATUS_COLOR, status))
 }
 
 interface PaymentLinkPanelProps {
@@ -41,6 +48,7 @@ interface PaymentLinkPanelProps {
 }
 
 export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPanelProps) {
+  const { t } = useTranslation('invoices')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -65,7 +73,8 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
       onUpdated(patch)
     } catch (err) {
       const e = err as Record<string, unknown>
-      setError(CREATE_ERROR_MESSAGES[e.message as string] ?? String(e.message))
+      const errorKey = CREATE_ERROR_KEYS[e.message as keyof typeof CREATE_ERROR_KEYS]
+      setError(errorKey ? t($ => $.paymentLink.errors[errorKey]) : String(e.message))
     } finally {
       setBusy(false)
     }
@@ -80,7 +89,7 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
       const result = await syncInvoicePaymentLink(invoice.id!) as Record<string, unknown>
       onUpdated({
         mollie_payment_status: result.status as string | undefined,
-        status: (result.invoiceStatus as string | undefined) ?? (result.status as string | undefined),
+        status: ((result.invoiceStatus as string | undefined) ?? (result.status as string | undefined)) as Invoice['status'],
       })
     } catch (err) {
       const e = err as Error
@@ -99,7 +108,9 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
       onUpdated((result as Partial<Invoice>) ?? { mollie_payment_link_id: undefined, mollie_payment_link_url: undefined })
     } catch (err) {
       const e = err as Record<string, unknown>
-      setError(REMOVE_ERROR_MESSAGES[e.code as string] ?? REMOVE_ERROR_MESSAGES[e.message as string] ?? String(e.message))
+      const code = (e.code ?? e.message) as keyof typeof REMOVE_ERROR_KEYS
+      const errorKey = REMOVE_ERROR_KEYS[code]
+      setError(errorKey ? t($ => $.paymentLink.errors[errorKey]) : String(e.message))
     } finally {
       setBusy(false)
     }
@@ -125,7 +136,7 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
         alt="Mollie"
         sx={{ height: 20, display: 'block', mb: 1 }}
       />
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>Payment link</Typography>
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>{t($ => $.paymentLink.title)}</Typography>
 
       {error && (
         <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError(null)}>{error}</Alert>
@@ -140,11 +151,11 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
             disabled={busy || isVoid || !hasAmount}
             startIcon={busy ? <CircularProgress size={14} color="inherit" /> : null}
           >
-            Create payment link
+            {t($ => $.paymentLink.create)}
           </Button>
           {(isVoid || !hasAmount) && (
             <Typography variant="caption" color="text.secondary">
-              {isVoid ? 'Invoice is void.' : 'Invoice total must be > 0.'}
+              {isVoid ? t($ => $.paymentLink.invoiceVoid) : t($ => $.paymentLink.amountRequired)}
             </Typography>
           )}
         </Stack>
@@ -153,8 +164,12 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Chip
               size="small"
-              label={paymentStatus || 'open'}
-              color={MOLLIE_STATUS_COLOR[paymentStatus ?? ''] ?? 'default'}
+              label={paymentStatus === 'paid'
+                ? t($ => $.rawStatus.paid)
+                : isPaymentStatus(paymentStatus)
+                  ? t($ => $.paymentLink.status[paymentStatus as Exclude<PaymentStatus, 'paid'>])
+                  : (paymentStatus || t($ => $.paymentLink.status.open))}
+              color={isPaymentStatus(paymentStatus) ? MOLLIE_STATUS_COLOR[paymentStatus] : 'default'}
             />
             <Typography
               variant="body2"
@@ -165,18 +180,18 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
           </Stack>
 
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-            <Tooltip title={copied === 'url' ? 'Copied!' : 'Copy link'}>
+            <Tooltip title={copied === 'url' ? t($ => $.paymentLink.copied) : t($ => $.paymentLink.copy)}>
               <Button
                 size="small"
                 variant="outlined"
                 startIcon={copied === 'url' ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
                 onClick={copyUrl}
               >
-                Copy link
+                {t($ => $.paymentLink.copy)}
               </Button>
             </Tooltip>
 
-            <Tooltip title="Open payment page">
+            <Tooltip title={t($ => $.paymentLink.openTooltip)}>
               <Button
                 size="small"
                 variant="outlined"
@@ -186,19 +201,19 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
                 rel="noopener noreferrer"
                 startIcon={<LaunchIcon fontSize="small" />}
               >
-                Open
+                {t($ => $.paymentLink.open)}
               </Button>
             </Tooltip>
 
-            <Tooltip title="Refresh payment status from Mollie">
-              <IconButton size="small" onClick={handleSync} disabled={busy} aria-label="Refresh payment status">
+            <Tooltip title={t($ => $.paymentLink.refresh)}>
+              <IconButton size="small" onClick={handleSync} disabled={busy} aria-label={t($ => $.paymentLink.refreshAria)}>
                 {busy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
               </IconButton>
             </Tooltip>
 
             {paymentStatus !== 'paid' && (
-              <Tooltip title="Remove payment link">
-                <IconButton size="small" color="error" onClick={handleRemove} disabled={busy} aria-label="Remove payment link">
+              <Tooltip title={t($ => $.paymentLink.remove)}>
+                <IconButton size="small" color="error" onClick={handleRemove} disabled={busy} aria-label={t($ => $.paymentLink.remove)}>
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
               </Tooltip>

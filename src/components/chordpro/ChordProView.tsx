@@ -1,4 +1,5 @@
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Collapse from '@mui/material/Collapse'
 import ButtonBase from '@mui/material/ButtonBase'
@@ -475,6 +476,7 @@ function DiagramGrid({ chords }: { chords: ResolvedChord[] }) {
 // A collapsible header at the top of the view holding the guitar chord diagrams.
 // Starts collapsed so the chart stays the focus; the count hints at what's inside.
 function CollapsibleDiagrams({ chords }: { chords: ResolvedChord[] }) {
+  const { t } = useTranslation('songs')
   const [open, setOpen] = useState(false)
   return (
     <Box className="cp-diagrams-collapsible" sx={{ mb: 2 }}>
@@ -484,7 +486,7 @@ function CollapsibleDiagrams({ chords }: { chords: ResolvedChord[] }) {
         sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', justifyContent: 'flex-start', py: 0.5, borderRadius: 1, fontWeight: 600, fontSize: '0.8125rem', textTransform: 'uppercase', letterSpacing: '0.03em', color: 'text.secondary' }}
       >
         <ExpandMoreIcon fontSize="small" sx={{ transition: 'transform 0.2s', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }} />
-        Chords ({chords.length})
+        {t($ => $.view.chordsHeading, { n: chords.length })}
       </ButtonBase>
       <Collapse in={open} unmountOnExit>
         <DiagramGrid chords={chords} />

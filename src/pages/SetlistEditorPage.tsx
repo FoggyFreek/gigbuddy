@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   DndContext,
@@ -113,6 +114,7 @@ function countSongsBeforeSet(sets: SetlistSet[], setIndex: number): number {
 }
 
 export default function SetlistEditorPage() {
+  const { t } = useTranslation(['setlists', 'common'])
   const { id } = useParams()
   const setlistId = Number(id)
   const { canWritePlanning } = usePermissions()
@@ -158,15 +160,15 @@ export default function SetlistEditorPage() {
       setOpStatus('saved')
     } catch (err: unknown) {
       setOpStatus('error')
-      showToast?.(errorMsg || (err instanceof Error ? err.message : null) || 'Something went wrong')
+      showToast?.(errorMsg || (err instanceof Error ? err.message : null) || t($ => $.toast.generic))
       reload().catch(() => {})
     }
-  }, [showToast, reload])
+  }, [showToast, reload, t])
 
   // The debounced name save reports failure through its own status; mirror it as a toast.
   useEffect(() => {
-    if (nameStatus === 'error') showToast?.('Failed to save the setlist name')
-  }, [nameStatus, showToast])
+    if (nameStatus === 'error') showToast?.(t($ => $.toast.saveName))
+  }, [nameStatus, showToast, t])
 
   useEffect(() => {
     let cancelled = false
@@ -235,7 +237,7 @@ export default function SetlistEditorPage() {
     runSave(async () => {
       const res = await reorderItems(setlistId, order) as unknown as { clearedIds?: number[] } | null
       if (res?.clearedIds?.length) setSets((prev) => applyClearedLinks(prev, res.clearedIds!))
-    }, 'Failed to reorder items')
+    }, t($ => $.toast.reorderItems))
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -289,7 +291,7 @@ export default function SetlistEditorPage() {
       await deleteSetlist(setlistId)
       navigate('/setlists')
     } catch (err: unknown) {
-      showToast?.((err instanceof Error ? err.message : null) || 'Failed to delete the setlist')
+      showToast?.((err instanceof Error ? err.message : null) || t($ => $.toast.deleteSetlist))
     }
   }
 
@@ -297,22 +299,22 @@ export default function SetlistEditorPage() {
     await runSave(async () => {
       const created = await addSet(setlistId, {}) as SetlistSet & { items?: SetlistItem[] }
       setSets((prev) => [...prev, { ...created, items: created.items || [] }])
-    }, 'Failed to add set')
+    }, t($ => $.toast.addSet))
   }
 
   async function handleRenameSet(setId: number, newName: string) {
     setSets((prev) => prev.map((s) => (s.id === setId ? { ...s, name: newName } : s)))
-    await runSave(async () => { await updateSet(setlistId, setId, { name: newName }) }, 'Failed to rename set')
+    await runSave(async () => { await updateSet(setlistId, setId, { name: newName }) }, t($ => $.toast.renameSet))
   }
 
   async function handleToggleTotal(setId: number, value: boolean) {
     setSets((prev) => prev.map((s) => (s.id === setId ? { ...s, include_in_total: value } : s)))
-    await runSave(async () => { await updateSet(setlistId, setId, { include_in_total: value }) }, 'Failed to update set')
+    await runSave(async () => { await updateSet(setlistId, setId, { include_in_total: value }) }, t($ => $.toast.updateSet))
   }
 
   async function handleDeleteSet(setId: number) {
     setSets((prev) => prev.filter((s) => s.id !== setId))
-    await runSave(() => deleteSet(setlistId, setId), 'Failed to delete set')
+    await runSave(() => deleteSet(setlistId, setId), t($ => $.toast.deleteSet))
   }
 
   async function handleMoveSet(index: number, dir: number) {
@@ -320,7 +322,7 @@ export default function SetlistEditorPage() {
     if (target < 0 || target >= sets.length) return
     const next = arrayMove(sets, index, target)
     setSets(next)
-    await runSave(() => reorderSets(setlistId, next.map((s) => s.id!)), 'Failed to reorder sets')
+    await runSave(() => reorderSets(setlistId, next.map((s) => s.id!)), t($ => $.toast.reorderSets))
   }
 
   function appendItem(setId: number, item: SetlistItem) {
@@ -339,14 +341,14 @@ export default function SetlistEditorPage() {
     await runSave(async () => {
       const item = await addItem(setlistId, setId!, { item_type: 'song', song_id: song.id }) as SetlistItem
       appendItem(setId!, item)
-    }, 'Failed to add song')
+    }, t($ => $.toast.addSong))
   }
 
   async function handleAddBreakLike(setId: number, itemType: string, durationSeconds: number) {
     await runSave(async () => {
       const item = await addItem(setlistId, setId, { item_type: itemType as 'song' | 'pause' | 'break', duration_seconds: durationSeconds }) as SetlistItem
       appendItem(setId, item)
-    }, 'Failed to add item')
+    }, t($ => $.toast.addItem))
   }
 
   async function handleDeleteItem(itemId: Id) {
@@ -355,14 +357,14 @@ export default function SetlistEditorPage() {
     await runSave(async () => {
       const res = await deleteItem(setlistId, itemId) as unknown as { clearedIds?: number[] } | null
       if (res?.clearedIds?.length) setSets((prev) => applyClearedLinks(prev, res.clearedIds!))
-    }, 'Failed to delete item')
+    }, t($ => $.toast.deleteItem))
   }
 
   async function handleUpdateItem(itemId: Id, patch: SetlistItemPatch) {
     await runSave(async () => {
       const updated = await updateItem(setlistId, itemId, patch as Partial<SetlistItem>) as SetlistItem
       applyItemUpdate(Number(itemId), updated)
-    }, 'Failed to save changes')
+    }, t($ => $.toast.saveChanges))
   }
 
   // Save the current member's personal note on a song. Trust the server's
@@ -371,7 +373,7 @@ export default function SetlistEditorPage() {
     await runSave(async () => {
       const { my_note } = await saveItemNote(setlistId, itemId, note) as unknown as { my_note?: string }
       applyItemUpdate(Number(itemId), { my_note })
-    }, 'Failed to save note')
+    }, t($ => $.toast.saveNote))
   }
 
   if (loading) {
@@ -387,7 +389,7 @@ export default function SetlistEditorPage() {
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-        <IconButton onClick={handleBack} aria-label="back">
+        <IconButton onClick={handleBack} aria-label={t($ => $.aria.back, { ns: 'common' })}>
           <ArrowBackIcon />
         </IconButton>
         <Box sx={{ flexGrow: 1 }}>
@@ -396,18 +398,18 @@ export default function SetlistEditorPage() {
               variant="standard"
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
-              slotProps={{ input: { sx: { fontSize: '1.5rem', fontWeight: 600 } }, htmlInput: { 'aria-label': 'setlist name' } }}
+              slotProps={{ input: { sx: { fontSize: '1.5rem', fontWeight: 600 } }, htmlInput: { 'aria-label': t($ => $.editor.nameAria) } }}
               fullWidth
             />
           ) : (
             <Typography variant="h5" sx={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {name || 'Untitled setlist'}
+              {name || t($ => $.editor.untitled)}
             </Typography>
           )}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
             <AccessTimeIcon fontSize="small" color="disabled" />
             <Typography variant="body2" color="text.secondary">
-              Total {formatDuration(total) || '0:00'}
+              {t($ => $.editor.total, { duration: formatDuration(total) || '0:00' })}
             </Typography>
             <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
               {canWritePlanning && (
@@ -417,7 +419,7 @@ export default function SetlistEditorPage() {
                   size="small"
                   variant={editing ? 'contained' : 'text'}
                 >
-                  {editing ? 'Done' : 'Edit'}
+                  {editing ? t($ => $.common.actions.done) : t($ => $.common.actions.edit)}
                 </Button>
               )}
               <Button
@@ -425,7 +427,7 @@ export default function SetlistEditorPage() {
                 onClick={() => setPreviewOpen(true)}
                 size="small"
               >
-                Preview
+                {t($ => $.editor.preview)}
               </Button>
             </Box>
           </Box>
@@ -480,14 +482,14 @@ export default function SetlistEditorPage() {
 
       {editing && (
         <Button startIcon={<AddIcon />} onClick={handleAddSet} sx={{ mt: 1 }}>
-          Add set
+          {t($ => $.editor.addSet)}
         </Button>
       )}
 
       {editing && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" startIcon={<DeleteIcon />} onClick={() => setConfirmingDelete(true)}>
-            Delete setlist
+            {t($ => $.editor.deleteSetlist)}
           </Button>
         </Box>
       )}
@@ -507,13 +509,13 @@ export default function SetlistEditorPage() {
       />
 
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
-        <DialogTitle>Delete setlist?</DialogTitle>
+        <DialogTitle>{t($ => $.editor.deleteTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>This cannot be undone.</DialogContentText>
+          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={handleDeleteSetlist}>Delete</Button>
+          <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
+          <Button color="error" variant="contained" onClick={handleDeleteSetlist}>{t($ => $.common.actions.delete)}</Button>
         </DialogActions>
       </Dialog>
     </Box>

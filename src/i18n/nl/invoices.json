@@ -1,0 +1,157 @@
+{
+  "title": "Facturen",
+  "singularTitle": "Factuur",
+  "createInvoice": "Factuur aanmaken",
+  "state": {
+    "all": "Alle facturen",
+    "draft": "Concept",
+    "overdue": "Achterstallig",
+    "unpaid": "Onbetaald",
+    "paid": "Betaald",
+    "sent": "Verzonden",
+    "void": "Vervallen"
+  },
+  "labels": {
+    "customer": "Klant",
+    "total": "Totaal"
+  },
+  "rawStatus": {
+    "draft": "concept",
+    "sent": "verzonden",
+    "paid": "betaald",
+    "void": "vervallen"
+  },
+  "searchPlaceholder": "Zoeken",
+  "empty": "Geen facturen gevonden",
+  "gigPicker": {
+    "label": "Optreden",
+    "untitled": "(zonder titel)",
+    "empty": "Nog geen optredens - maak er eerst een aan"
+  },
+  "pagination": {
+    "rowsPerPage": "Rijen per pagina:",
+    "displayedRows": "{{from}}–{{to}} van {{count}}",
+    "first": "Ga naar de eerste pagina",
+    "last": "Ga naar de laatste pagina",
+    "next": "Ga naar de volgende pagina",
+    "previous": "Ga naar de vorige pagina"
+  },
+  "table": {
+    "invoiceNumber": "Factuurnummer",
+    "date": "Datum"
+  },
+  "detail": {
+    "heading": "Factuur {{number}}",
+    "finalizedNotice": "Deze factuur is definitief. Om correcties aan te brengen, moet je de factuur laten vervallen en opnieuw uitgeven.",
+    "downloadEmail": "E-mail downloaden",
+    "saving": "Opslaan...",
+    "saveChanges": "Wijzigingen opslaan"
+  },
+  "customerFields": {
+    "issueDate": "Factuurdatum",
+    "openIssueDatePicker": "factuurdatumkiezer openen",
+    "paymentTerm": "Betalingstermijn",
+    "paymentTermDays_one": "{{count}} dag",
+    "paymentTermDays_other": "{{count}} dagen",
+    "status": "Status",
+    "organisationName": "Organisatienaam",
+    "email": "E-mail",
+    "title": "Aanhef",
+    "titlePlaceholder": "bijv. Dhr.",
+    "givenName": "Voornaam",
+    "familyName": "Achternaam",
+    "streetAndNumber": "Straat en huisnummer",
+    "postalCode": "Postcode",
+    "city": "Plaats",
+    "country": "Land",
+    "customerKvk": "KVK klant (optioneel)",
+    "addMemo": "Notitie toevoegen",
+    "memo": "Notitie"
+  },
+  "lines": {
+    "title": "Regels",
+    "inclusiveVat": "Inclusief btw",
+    "exclusiveVat": "Exclusief btw",
+    "description": "Omschrijving",
+    "quantity": "Aantal",
+    "price": "Prijs",
+    "vatPercentage": "Btw %",
+    "descriptionPlaceholder": "Begin met typen…",
+    "removeLine": "regel verwijderen",
+    "addItem": "Regel toevoegen"
+  },
+  "totals": {
+    "subtotal": "Subtotaal",
+    "discount": "Korting",
+    "removeDiscount": "korting verwijderen",
+    "addDiscount": "Korting toevoegen",
+    "vatRate": "Btw {{rate}}%",
+    "korNotice": "Kleineondernemersregeling — er wordt geen btw berekend."
+  },
+  "logo": {
+    "alt": "Factuurlogo",
+    "replace": "Vervangen",
+    "remove": "Verwijderen",
+    "add": "Logo toevoegen",
+    "useDark": "Donker logo gebruiken"
+  },
+  "deleteDialog": {
+    "title": "Factuur verwijderen?",
+    "body": "Factuur {{number}} verwijderen? Dit kan niet ongedaan worden gemaakt."
+  },
+  "voidDialog": {
+    "title": "Factuur {{number}} laten vervallen?",
+    "intro": "Het laten vervallen van deze factuur heeft de volgende gevolgen:",
+    "permanent": "De factuur kan niet meer worden bewerkt, verzonden of betaald — vervallen is definitief.",
+    "ledgerReversal": "Er wordt een tegenboeking in het grootboek geplaatst die de geboekte omzet en vordering terugdraait.",
+    "paymentLinkRemoved": "De Mollie-betaallink wordt verwijderd; de klant kan er niet meer mee betalen. Als de betaling al blijkt te zijn voldaan, wordt de factuur als betaald gemarkeerd in plaats van als vervallen.",
+    "correction": "Laat deze factuur vervallen en maak een nieuwe om een fout te corrigeren.",
+    "confirm": "Factuur laten vervallen"
+  },
+  "emailDialog": {
+    "title": "Pas het persoonlijk bericht aan",
+    "helperText": "Dit is de persoonlijke begeleidende tekst in het e-mailbericht."
+  },
+  "newDialog": {
+    "title": "Nieuwe factuur",
+    "description": "Kies een optreden om een conceptfactuur op te stellen. De gage, het adres van de locatie en een standaardomschrijving worden ingevuld.",
+    "continue": "Doorgaan",
+    "selectBillingTarget": "Selecteer de factuurontvanger",
+    "billingTargetDescription": "Dit optreden heeft zowel een festival als een locatie. Kies aan welke organisatie je factureert.",
+    "festivalTarget": "Festival / evenementorganisatie",
+    "venueTarget": "Locatie / fysieke locatie"
+  },
+  "paymentLink": {
+    "title": "Betaallink",
+    "create": "Betaallink aanmaken",
+    "invoiceVoid": "De factuur is vervallen.",
+    "amountRequired": "Het factuurtotaal moet groter zijn dan 0.",
+    "copied": "Gekopieerd!",
+    "copy": "Link kopiëren",
+    "open": "Openen",
+    "openTooltip": "Betaalpagina openen",
+    "refresh": "Betaalstatus bij Mollie vernieuwen",
+    "refreshAria": "Betaalstatus vernieuwen",
+    "remove": "Betaallink verwijderen",
+    "status": {
+      "open": "open",
+      "expired": "verlopen",
+      "canceled": "geannuleerd"
+    },
+    "errors": {
+      "mollieKeyMissing": "Mollie API-sleutel is niet ingesteld. Ga naar Instellingen → Integraties.",
+      "zeroAmount": "Het factuurtotaal moet groter zijn dan nul.",
+      "voidInvoice": "Voor een vervallen factuur kan geen betaallink worden aangemaakt.",
+      "alreadyPaid": "Deze betaallink is al betaald — de factuur is nu als betaald gemarkeerd.",
+      "removeFailed": "Mollie kon de link niet verwijderen. Probeer het later opnieuw."
+    }
+  },
+  "pdf": {
+    "download": "Pdf downloaden",
+    "retry": "Het maken van de pdf is mislukt - klik om opnieuw te proberen"
+  },
+  "validation": {
+    "customerRequired": "Naam van de klant is verplicht",
+    "lineRequired": "Minstens één regel met een omschrijving is verplicht"
+  }
+}

@@ -1,4 +1,5 @@
 import { type ReactNode, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -26,27 +27,24 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
-import { CONTACT_CATEGORIES, contactCategoryColor, contactCategoryLabel } from '../utils/contactCategories.ts'
+import { CONTACT_CATEGORIES, contactCategoryColor, useContactCategoryLabel } from '../utils/contactCategories.ts'
 import type { Contact, Id } from '../types/entities.ts'
 
 const PAGE_SIZE = 25
 const COLUMN_COUNT = 5
 
-const COLUMNS = [
-  { id: 'category', label: 'Category' },
-  { id: 'name',     label: 'Name' },
-  { id: 'email',    label: 'Email' },
-  { id: 'phone',    label: 'Phone' },
-]
+const COLUMN_IDS = ['category', 'name', 'email', 'phone'] as const
+type ColumnId = typeof COLUMN_IDS[number]
 
 interface CategoryChipProps {
   category?: string
 }
 
 function CategoryChip({ category }: CategoryChipProps) {
+  const categoryLabel = useContactCategoryLabel()
   return (
     <Chip
-      label={contactCategoryLabel(category)}
+      label={categoryLabel(category)}
       size="small"
       color={contactCategoryColor(category)}
     />
@@ -116,25 +114,11 @@ function ContactCard({ contact, selected, active, onToggle, onClick }: ContactCa
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.25 }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          <Typography variant="body2">
             {contact.name}
           </Typography>
           <CategoryChip category={contact.category} />
         </Box>
-        {(contact.email || contact.phone) && (
-          <Box sx={{ display: 'flex', gap: 1.5 }}>
-            {contact.email && (
-              <Typography variant="caption" color="text.secondary">
-                {contact.email}
-              </Typography>
-            )}
-            {contact.phone && (
-              <Typography variant="caption" color="text.secondary">
-                {contact.phone}
-              </Typography>
-            )}
-          </Box>
-        )}
       </Box>
     </Box>
   )
@@ -153,8 +137,11 @@ export default function ContactsTable({
   onRowClick,
   selectedId = undefined,
   categories = CONTACT_CATEGORIES,
-  emptyMessage = 'No contacts yet - add one or import from CSV.',
+  emptyMessage,
 }: ContactsTableProps) {
+  const { t } = useTranslation('contacts')
+  const categoryLabel = useContactCategoryLabel()
+  const resolvedEmptyMessage = emptyMessage ?? t($ => $.empty)
   const categoryKey = categories.join('|')
   const selectableCategories = useMemo(() => categoryKey.split('|').filter(Boolean), [categoryKey])
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(() => new Set(selectableCategories))
@@ -245,9 +232,9 @@ export default function ContactsTable({
   const selectionBar = selectedCount > 0 && (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
       <Typography variant="body2" color="primary" sx={{ fontWeight: 600 }}>
-        {selectedCount} contact{selectedCount !== 1 ? 's' : ''} selected
+        {t($ => $.table.selected, { count: selectedCount })}
       </Typography>
-      <Tooltip title="Copy email addresses (semicolon-separated)">
+      <Tooltip title={t($ => $.table.copyEmails)}>
         <IconButton size="small" color="primary" onClick={copyEmails}>
           <ContentCopyIcon fontSize="small" />
         </IconButton>
@@ -263,7 +250,7 @@ export default function ContactsTable({
     <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
       <TextField
         size="small"
-        placeholder="Search contacts…"
+        placeholder={t($ => $.table.searchPlaceholder)}
         value={search}
         onChange={(e) => handleSearch(e.target.value)}
         sx={{ flex: '1 1 200px', minWidth: 160 }}
@@ -285,7 +272,7 @@ export default function ContactsTable({
             startIcon={<FilterListIcon />}
             onClick={(e) => setFilterAnchor(e.currentTarget)}
           >
-            {someCatsSelected ? `Filter (${selectedCategories.size})` : 'Filter'}
+            {someCatsSelected ? t($ => $.table.filterCount, { count: selectedCategories.size }) : t($ => $.table.filter)}
           </Button>
           <Menu
             anchorEl={filterAnchor}
@@ -298,13 +285,13 @@ export default function ContactsTable({
                 checked={allCatsSelected}
                 indeterminate={someCatsSelected}
               />
-              <ListItemText primary="All categories" />
+              <ListItemText primary={t($ => $.table.allCategories)} />
             </MenuItem>
             <Divider />
             {selectableCategories.map((cat) => (
               <MenuItem key={cat} dense onClick={() => toggleCategory(cat)}>
                 <Checkbox size="small" checked={selectedCategories.has(cat)} />
-                <ListItemText primary={contactCategoryLabel(cat)} />
+                <ListItemText primary={categoryLabel(cat)} />
               </MenuItem>
             ))}
           </Menu>
@@ -318,13 +305,13 @@ export default function ContactsTable({
     if (isEmpty) {
       compactContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          {emptyMessage}
+          {resolvedEmptyMessage}
         </Box>
       )
     } else if (sorted.length === 0) {
       compactContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No results.
+          {t($ => $.table.noResults)}
         </Box>
       )
     } else {
@@ -378,14 +365,14 @@ export default function ContactsTable({
                     onChange={toggleAll}
                   />
                 </TableCell>
-                {COLUMNS.map((col) => (
-                  <TableCell key={col.id}>
+                {COLUMN_IDS.map((col) => (
+                  <TableCell key={col}>
                     <TableSortLabel
-                      active={sortBy === col.id}
-                      direction={sortBy === col.id ? sortDir : 'asc'}
-                      onClick={() => handleSort(col.id)}
+                      active={sortBy === col}
+                      direction={sortBy === col ? sortDir : 'asc'}
+                      onClick={() => handleSort(col)}
                     >
-                      {col.label}
+                      {t($ => $.fields[col])}
                     </TableSortLabel>
                   </TableCell>
                 ))}
@@ -395,14 +382,14 @@ export default function ContactsTable({
               {isEmpty && (
                 <TableRow>
                   <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                    {emptyMessage}
+                    {resolvedEmptyMessage}
                   </TableCell>
                 </TableRow>
               )}
               {!isEmpty && sorted.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                    No results.
+                    {t($ => $.table.noResults)}
                   </TableCell>
                 </TableRow>
               )}

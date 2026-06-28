@@ -18,6 +18,7 @@ vi.mock('../components/GigPicker.tsx', () => ({
 
 import { createInvoice, draftFromGig } from '../api/invoices.ts'
 import NewInvoiceDialog from '../components/NewInvoiceDialog.tsx'
+import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
 
 const DRAFT_PAYLOAD = {
@@ -45,7 +46,8 @@ function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
   vi.clearAllMocks()
   draftFromGig.mockResolvedValue(DRAFT_PAYLOAD)
   createInvoice.mockResolvedValue({ id: 123 })
@@ -97,5 +99,15 @@ describe('NewInvoiceDialog', () => {
       customer_email: 'venue@example.test',
     }))
     expect(onCreated).toHaveBeenCalledWith(123)
+  })
+
+  it('renders the new-invoice flow in Dutch', async () => {
+    await i18n.changeLanguage('nl')
+    wrap(<NewInvoiceDialog onClose={vi.fn()} onCreated={vi.fn()} />)
+
+    expect(screen.getByRole('heading', { name: 'Nieuwe factuur' })).toBeInTheDocument()
+    expect(screen.getByText(/Kies een optreden/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Annuleren' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Doorgaan' })).toBeInTheDocument()
   })
 })

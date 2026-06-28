@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
@@ -41,9 +42,20 @@ import type { SearchResultItem } from '../../hooks/useCategorySearch.ts'
 import { PERMISSIONS } from '../../auth/permissions.ts'
 import type { Id } from '../../types/entities.ts'
 
+type CategoryKey =
+  | 'contacts'
+  | 'gigs'
+  | 'files'
+  | 'invoices'
+  | 'purchases'
+  | 'songs'
+  | 'setlists'
+  | 'suppliers'
+  | 'venues'
+  | 'transaction'
+
 interface SearchCategory {
-  key: string
-  label: string
+  key: CategoryKey
   icon: SvgIconComponent
 }
 
@@ -56,16 +68,16 @@ interface SearchPanelProps {
 // All searchable areas. The first three are active by default; the rest are
 // added on demand from the "Add new" menu.
 const ALL_CATEGORIES: SearchCategory[] = [
-  { key: 'contacts', label: 'Contacts', icon: ContactsOutlined },
-  { key: 'gigs', label: 'Gigs', icon: EventOutlined },
-  { key: 'files', label: 'Files', icon: InsertDriveFileOutlined },
-  { key: 'invoices', label: 'Invoices', icon: ReceiptLongOutlined },
-  { key: 'purchases', label: 'Purchases', icon: ShoppingCartOutlined },
-  { key: 'songs', label: 'Songs', icon: LibraryMusicOutlined },
-  { key: 'setlists', label: 'Setlists', icon: QueueMusicOutlined },
-  { key: 'suppliers', label: 'Suppliers', icon: StorefrontOutlined },
-  { key: 'venues', label: 'Venues', icon: PlaceOutlined },
-  { key: 'transaction', label: 'Transaction', icon: ListAltOutlined },
+  { key: 'contacts', icon: ContactsOutlined },
+  { key: 'gigs', icon: EventOutlined },
+  { key: 'files', icon: InsertDriveFileOutlined },
+  { key: 'invoices', icon: ReceiptLongOutlined },
+  { key: 'purchases', icon: ShoppingCartOutlined },
+  { key: 'songs', icon: LibraryMusicOutlined },
+  { key: 'setlists', icon: QueueMusicOutlined },
+  { key: 'suppliers', icon: StorefrontOutlined },
+  { key: 'venues', icon: PlaceOutlined },
+  { key: 'transaction', icon: ListAltOutlined },
 ]
 
 const DEFAULT_KEYS = ['contacts', 'gigs', 'files']
@@ -99,6 +111,7 @@ function RecentRow({ item, onClick, onRemove }: {
   onClick: () => void
   onRemove: () => void
 }) {
+  const { t } = useTranslation('navigation')
   const Icon = ALL_CATEGORIES.find((c) => c.key === item.category)?.icon ?? ListAltOutlined
   return (
     <ListItem
@@ -107,7 +120,7 @@ function RecentRow({ item, onClick, onRemove }: {
         <IconButton
           edge="end"
           size="small"
-          aria-label="remove recent search"
+          aria-label={t($ => $.search.removeRecentAria)}
           onClick={(e) => { e.stopPropagation(); onRemove() }}
         >
           <CloseIcon sx={{ fontSize: 14 }} />
@@ -126,6 +139,7 @@ function RecentRow({ item, onClick, onRemove }: {
 
 export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanelProps) {
   const navigate = useNavigate()
+  const { t } = useTranslation('navigation')
   const { can } = usePermissions()
   const canViewFinance = can(PERMISSIONS.FINANCE_VIEW)
   const { recents, addRecent, removeRecent, clearRecents } = useRecentSearches(tenantId)
@@ -184,9 +198,9 @@ export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanel
         <Box sx={{ mb: 1.5, maxHeight: 280, overflowY: 'auto' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <HistoryIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-            <Typography variant="overline" color="text.secondary">Recent</Typography>
+            <Typography variant="overline" color="text.secondary">{t($ => $.search.recent)}</Typography>
             <Box sx={{ flexGrow: 1 }} />
-            <Button size="small" sx={{ fontSize: 12 }} onClick={clearRecents}>Clear</Button>
+            <Button size="small" sx={{ fontSize: 12 }} onClick={clearRecents}>{t($ => $.search.clear)}</Button>
           </Box>
           <List dense disablePadding sx={{ mt: 0.5 }}>
             {recents.map((item) => (
@@ -202,13 +216,13 @@ export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanel
       )}
 
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
-        Searching for
+        {t($ => $.search.searchingFor)}
       </Typography>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, ml:1, mt: 1.5, mb: 1.5 }}>
         {active.map((cat) => (
           <Chip
             key={cat.key}
-            label={cat.label}
+            label={t($ => $.search.categories[cat.key])}
             variant="outlined"
             
             onDelete={() => removeCategory(cat.key)}
@@ -223,10 +237,10 @@ export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanel
         ))}
         {available.length > 0 && (
           <Chip
-            label="+ Add new"
+            label={t($ => $.search.addNew)}
             variant="outlined"
             onClick={(e) => setMenuAnchor(e.currentTarget)}
-            aria-label="add search category"
+            aria-label={t($ => $.search.addCategoryAria)}
             size="small"
             sx={{ fontSize: 12 }}
           />
@@ -245,7 +259,7 @@ export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanel
               <Box key={cat.key} sx={{ mt: idx === 0 ? 0 : 1.5 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Icon fontSize="small" sx={{ color: 'text.secondary' }} />
-                  <Typography variant="subtitle2">{cat.label}</Typography>
+                  <Typography variant="subtitle2">{t($ => $.search.categories[cat.key])}</Typography>
                   {loading ? (
                     <CircularProgress size={16} thickness={5} sx={{ ml: 0.5 }} />
                   ) : (
@@ -258,14 +272,14 @@ export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanel
                       sx={{ fontSize: 12 }}
                       onClick={() => expandCategory(cat.key)}
                     >
-                      Show all
+                      {t($ => $.search.showAll)}
                     </Button>
                   )}
                 </Box>
                 {!loading && (
                   items.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ ml: RESULT_INDENT, mt: 0.5 }}>
-                      No results
+                      {t($ => $.search.noResults)}
                     </Typography>
                   ) : (
                     <List dense disablePadding sx={{ ml: RESULT_INDENT, mt: 0.5 }}>
@@ -318,7 +332,7 @@ export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanel
           return (
             <MenuItem key={cat.key} onClick={() => addCategory(cat.key)}>
               <ListItemIcon><Icon fontSize="small" /></ListItemIcon>
-              <ListItemText>{cat.label}</ListItemText>
+              <ListItemText>{t($ => $.search.categories[cat.key])}</ListItemText>
             </MenuItem>
           )
         })}

@@ -92,37 +92,35 @@ afterEach(() => {
 describe('VatReturnsPage', () => {
   it('lists filed quarters with status and net amount', async () => {
     wrap(<VatReturnsPage />)
-    expect(screen.getByRole('heading', { name: /vat declarations/i })).toBeInTheDocument()
+    expect(screen.getByTestId('vat-returns-heading')).toBeInTheDocument()
 
-    await waitFor(() => expect(screen.getByText('1st quarter 2026')).toBeInTheDocument())
-    expect(screen.getByText('4th quarter 2025')).toBeInTheDocument()
+    const q1Row = await screen.findByTestId('vat-return-row-1')
+    const q4Row = screen.getByTestId('vat-return-row-2')
     // Unpaid (due 2026-04-30, today 2026-06-11) → overdue; the other is paid.
     // Scope to the rows — the summary cards repeat the status labels.
-    const q1Row = screen.getByText('1st quarter 2026').closest('div')
-    expect(within(q1Row).getByText('Overdue')).toBeInTheDocument()
-    const q4Row = screen.getByText('4th quarter 2025').closest('div')
-    expect(within(q4Row).getByText('Paid')).toBeInTheDocument()
+    expect(q1Row).toHaveAttribute('data-status', 'overdue')
+    expect(q4Row).toHaveAttribute('data-status', 'paid')
     // Amounts appear in both the summary cards and the rows.
-    expect(within(q1Row.parentElement).getByText(/210,00/)).toBeInTheDocument()
-    expect(within(q4Row.parentElement).getByText(/520,00/)).toBeInTheDocument()
+    expect(q1Row).toHaveAttribute('data-net-cents', '21000')
+    expect(q4Row).toHaveAttribute('data-net-cents', '52000')
   })
 
   it('summary cards filter the list by settlement state', async () => {
     const user = userEvent.setup()
     wrap(<VatReturnsPage />)
-    await waitFor(() => expect(screen.getByText('1st quarter 2026')).toBeInTheDocument())
+    await screen.findByTestId('vat-return-row-1')
 
     // Cards show counts and totals per state.
-    expect(screen.getByText('All declarations')).toBeInTheDocument()
-    expect(screen.getByText('Ready to pay / receive')).toBeInTheDocument()
+    expect(screen.getByTestId('vat-summary-all')).toHaveAttribute('data-count', '2')
+    expect(screen.getByTestId('vat-summary-open')).toHaveAttribute('data-count', '0')
 
     // Q1 2026 is overdue, Q4 2025 is paid → the Settled card hides Q1.
-    await user.click(screen.getByText('Settled'))
-    expect(screen.queryByText('1st quarter 2026')).not.toBeInTheDocument()
-    expect(screen.getByText('4th quarter 2025')).toBeInTheDocument()
+    await user.click(screen.getByTestId('vat-summary-settled'))
+    expect(screen.queryByTestId('vat-return-row-1')).not.toBeInTheDocument()
+    expect(screen.getByTestId('vat-return-row-2')).toBeInTheDocument()
 
-    await user.click(screen.getByText('All declarations'))
-    expect(screen.getByText('1st quarter 2026')).toBeInTheDocument()
+    await user.click(screen.getByTestId('vat-summary-all'))
+    expect(screen.getByTestId('vat-return-row-1')).toBeInTheDocument()
   })
 
   it('new declaration: shows the quarter breakdown and files via createVatReturn', async () => {
@@ -142,20 +140,19 @@ describe('VatReturnsPage', () => {
     })
     createVatReturn.mockResolvedValue(PAYABLE_RETURN)
     wrap(<VatReturnsPage />)
-    await waitFor(() => expect(screen.getByText(/no vat declarations/i)).toBeInTheDocument())
+    await screen.findByTestId('vat-returns-empty')
 
-    await user.click(screen.getByRole('button', { name: /new declaration/i }))
+    await user.click(screen.getByTestId('new-vat-return'))
 
     // Defaults to the previous quarter (today 2026-06-11 → Q1 2026).
     await waitFor(() => expect(previewVatReturn).toHaveBeenCalledWith(2026, 1))
-    expect(screen.getByText(/output vat/i)).toBeInTheDocument()
-    expect(screen.getByText(/420,00/)).toBeInTheDocument()
-    expect(screen.getByText(/input vat/i)).toBeInTheDocument()
+    expect(screen.getByTestId('vat-preview-output')).toHaveAttribute('data-cents', '42000')
+    expect(screen.getByTestId('vat-preview-input')).toHaveAttribute('data-cents', '21000')
     // € 210,00 appears as both the input VAT and the net amount.
-    expect(screen.getAllByText(/210,00/)).toHaveLength(2)
-    expect(screen.getByText('To pay')).toBeInTheDocument()
+    expect(screen.getByTestId('vat-preview-net')).toHaveAttribute('data-cents', '21000')
+    expect(screen.getByTestId('vat-preview-net')).toHaveAttribute('data-direction', 'payable')
 
-    await user.click(screen.getByRole('button', { name: /settle quarter/i }))
+    await user.click(screen.getByTestId('settle-vat-quarter'))
 
     await waitFor(() => expect(createVatReturn).toHaveBeenCalledWith({ year: 2026, quarter: 1 }))
     // The list reloads after filing.
@@ -178,12 +175,12 @@ describe('VatReturnsPage', () => {
       period_ended: false,
     })
     wrap(<VatReturnsPage />)
-    await waitFor(() => expect(screen.getByText(/no vat declarations/i)).toBeInTheDocument())
+    await screen.findByTestId('vat-returns-empty')
 
-    await user.click(screen.getByRole('button', { name: /new declaration/i }))
+    await user.click(screen.getByTestId('new-vat-return'))
 
-    await waitFor(() => expect(screen.getByText(/has not ended yet/i)).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /settle quarter/i })).toBeDisabled()
+    await screen.findByTestId('vat-quarter-not-ended')
+    expect(screen.getByTestId('settle-vat-quarter')).toBeDisabled()
   })
 
   it('record payment defaults to the primary checking account and posts', async () => {
@@ -191,22 +188,20 @@ describe('VatReturnsPage', () => {
     getVatReturn.mockResolvedValue({ ...PAYABLE_RETURN, payments: [], ledger_transaction_id: 77 })
     recordVatPayment.mockResolvedValue({ id: 9 })
     wrap(<VatReturnsPage />)
-    await waitFor(() => expect(screen.getByText('1st quarter 2026')).toBeInTheDocument())
+    const row = await screen.findByTestId('vat-return-row-1')
 
-    await user.click(screen.getByText('1st quarter 2026'))
+    await user.click(row)
     await waitFor(() => expect(getVatReturn).toHaveBeenCalledWith(1))
-    expect(screen.getByText(/view settlement ledger entry/i)).toBeInTheDocument()
+    expect(screen.getByTestId('vat-ledger-entry-link')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /record payment/i }))
+    await user.click(screen.getByTestId('record-vat-settlement'))
 
     // Bank picker defaults to the settings' checking account.
     await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: /from account/i })).toHaveTextContent('11000'),
+      expect(within(screen.getByTestId('vat-bank-account')).getByRole('combobox')).toHaveTextContent('11000'),
     )
 
-    const dialogs = screen.getAllByRole('dialog')
-    const payDialog = dialogs[dialogs.length - 1]
-    await user.click(within(payDialog).getByRole('button', { name: /record payment/i }))
+    await user.click(screen.getByTestId('submit-vat-settlement'))
 
     await waitFor(() =>
       expect(recordVatPayment).toHaveBeenCalledWith(1, {

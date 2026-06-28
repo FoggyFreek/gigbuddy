@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { Journal, Id } from '../../types/entities.ts'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
@@ -11,28 +12,11 @@ import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined'
 
-// Friendly explanation per backend error code; falls back to the server message.
-const CODE_MESSAGES: Record<string, string> = {
-  unbalanced_journal: 'Debits and credits do not balance.',
-  invalid_account_code: 'A line is missing a valid account.',
-  missing_side: 'A line needs a debit or credit amount.',
-  invalid_amount: 'A line amount must be greater than zero.',
-  invalid_balancing_account: 'A balancing account is inactive.',
-  accounting_not_configured: 'Required accounting accounts are not configured (check Settings).',
-  no_lines: 'The entry has no lines.',
-  already_approved: 'The entry was already approved.',
-}
-
 interface ApproveError {
   id?: Id
   error?: string
   code?: string
   line?: number
-}
-
-function reasonFor(err: ApproveError): string {
-  const base = CODE_MESSAGES[err.code ?? ''] || err.error || 'Could not be approved.'
-  return err.line ? `Line ${err.line}: ${base}` : base
 }
 
 interface JournalApproveErrorDialogProps {
@@ -42,17 +26,36 @@ interface JournalApproveErrorDialogProps {
 }
 
 export default function JournalApproveErrorDialog({ errors, journals, onClose }: JournalApproveErrorDialogProps) {
+  const { t } = useTranslation(['journal', 'common'])
+
+  // Friendly explanation per backend error code; falls back to the server message.
+  const codeMessages: Record<string, string> = {
+    unbalanced_journal: t($ => $.approveErrors.codes.unbalanced_journal),
+    invalid_account_code: t($ => $.approveErrors.codes.invalid_account_code),
+    missing_side: t($ => $.approveErrors.codes.missing_side),
+    invalid_amount: t($ => $.approveErrors.codes.invalid_amount),
+    invalid_balancing_account: t($ => $.approveErrors.codes.invalid_balancing_account),
+    accounting_not_configured: t($ => $.approveErrors.codes.accounting_not_configured),
+    no_lines: t($ => $.approveErrors.codes.no_lines),
+    already_approved: t($ => $.approveErrors.codes.already_approved),
+  }
+
+  const reasonFor = (err: ApproveError): string => {
+    const base = codeMessages[err.code ?? ''] || err.error || t($ => $.approveErrors.fallback)
+    return err.line ? t($ => $.approveErrors.linePrefix, { line: err.line, message: base }) : base
+  }
+
   const labelFor = (id: Id | undefined) => {
     const j = journals.find((x) => x.id === id)
-    return j ? `Entry J${j.entry_number}` : `Entry #${id}`
+    return j ? t($ => $.approveErrors.entryLabel, { number: j.entry_number }) : t($ => $.approveErrors.entryLabelFallback, { id })
   }
 
   return (
     <Dialog open={errors.length > 0} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Some entries could not be approved</DialogTitle>
+      <DialogTitle>{t($ => $.approveErrors.title)}</DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ mb: 1 }}>
-          {errors.length} {errors.length === 1 ? 'entry was' : 'entries were'} left as a draft. Fix the issues below and try again.
+          {t($ => $.approveErrors.summary, { count: errors.length })}
         </DialogContentText>
         <List dense disablePadding>
           {errors.map((err, i) => (
@@ -66,7 +69,7 @@ export default function JournalApproveErrorDialog({ errors, journals, onClose }:
         </List>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="contained">OK</Button>
+        <Button onClick={onClose} variant="contained">{t($ => $.actions.ok, { ns: 'common' })}</Button>
       </DialogActions>
     </Dialog>
   )

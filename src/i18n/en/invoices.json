@@ -1,0 +1,157 @@
+{
+  "title": "Invoices",
+  "singularTitle": "Invoice",
+  "createInvoice": "Create Invoice",
+  "state": {
+    "all": "All invoices",
+    "draft": "Draft",
+    "overdue": "Overdue",
+    "unpaid": "Unpaid",
+    "paid": "Paid",
+    "sent": "Sent",
+    "void": "Void"
+  },
+  "labels": {
+    "customer": "Customer",
+    "total": "Total"
+  },
+  "rawStatus": {
+    "draft": "draft",
+    "sent": "sent",
+    "paid": "paid",
+    "void": "void"
+  },
+  "searchPlaceholder": "Search",
+  "empty": "No invoices found",
+  "gigPicker": {
+    "label": "Gig",
+    "untitled": "(untitled)",
+    "empty": "No gigs yet - create one first"
+  },
+  "pagination": {
+    "rowsPerPage": "Rows per page:",
+    "displayedRows": "{{from}}–{{to}} of {{count}}",
+    "first": "Go to first page",
+    "last": "Go to last page",
+    "next": "Go to next page",
+    "previous": "Go to previous page"
+  },
+  "table": {
+    "invoiceNumber": "Invoice #",
+    "date": "Date"
+  },
+  "detail": {
+    "heading": "Invoice {{number}}",
+    "finalizedNotice": "This invoice is finalized. Voiding and re-issuing is required to make corrections.",
+    "downloadEmail": "Download email",
+    "saving": "Saving...",
+    "saveChanges": "Save changes"
+  },
+  "customerFields": {
+    "issueDate": "Issue date",
+    "openIssueDatePicker": "open issue date picker",
+    "paymentTerm": "Payment term",
+    "paymentTermDays_one": "{{count}} day",
+    "paymentTermDays_other": "{{count}} days",
+    "status": "Status",
+    "organisationName": "Organisation name",
+    "email": "Email",
+    "title": "Title",
+    "titlePlaceholder": "e.g. Dhr.",
+    "givenName": "Given name",
+    "familyName": "Family name",
+    "streetAndNumber": "Street and number",
+    "postalCode": "Postal code",
+    "city": "City",
+    "country": "Country",
+    "customerKvk": "Customer KVK (optional)",
+    "addMemo": "Add memo",
+    "memo": "Memo"
+  },
+  "lines": {
+    "title": "Items",
+    "inclusiveVat": "Inclusive VAT",
+    "exclusiveVat": "Exclusive VAT",
+    "description": "Description",
+    "quantity": "Qty",
+    "price": "Price",
+    "vatPercentage": "VAT %",
+    "descriptionPlaceholder": "Start typing…",
+    "removeLine": "remove line",
+    "addItem": "Add item"
+  },
+  "totals": {
+    "subtotal": "Subtotal",
+    "discount": "Discount",
+    "removeDiscount": "remove discount",
+    "addDiscount": "Add discount",
+    "vatRate": "VAT {{rate}}%",
+    "korNotice": "Kleine ondernemersregeling — no VAT charged."
+  },
+  "logo": {
+    "alt": "Invoice logo",
+    "replace": "Replace",
+    "remove": "Remove",
+    "add": "Add logo",
+    "useDark": "Use dark logo"
+  },
+  "deleteDialog": {
+    "title": "Delete invoice?",
+    "body": "Delete invoice {{number}}? Cannot be undone."
+  },
+  "voidDialog": {
+    "title": "Void invoice {{number}}?",
+    "intro": "Voiding this invoice has the following consequences:",
+    "permanent": "The invoice can no longer be edited, sent or paid — voiding is permanent.",
+    "ledgerReversal": "A reversing entry is posted to the ledger, undoing the recorded revenue and receivable.",
+    "paymentLinkRemoved": "The Mollie payment link is removed; the customer can no longer pay through it. If it turns out to have been paid already, the invoice is marked paid instead of voided.",
+    "correction": "To correct a mistake, void this invoice and create a new one.",
+    "confirm": "Void invoice"
+  },
+  "emailDialog": {
+    "title": "Edit the personal message",
+    "helperText": "This is the personal accompanying text in the email message."
+  },
+  "newDialog": {
+    "title": "New invoice",
+    "description": "Pick a gig to draft the invoice from. The band fee, venue address, and a default line description will be filled in.",
+    "continue": "Continue",
+    "selectBillingTarget": "Select billing target",
+    "billingTargetDescription": "This gig has both a festival and a venue. Choose which organisation to bill.",
+    "festivalTarget": "Festival / event organisation",
+    "venueTarget": "Venue / physical location"
+  },
+  "paymentLink": {
+    "title": "Payment link",
+    "create": "Create payment link",
+    "invoiceVoid": "Invoice is void.",
+    "amountRequired": "Invoice total must be > 0.",
+    "copied": "Copied!",
+    "copy": "Copy link",
+    "open": "Open",
+    "openTooltip": "Open payment page",
+    "refresh": "Refresh payment status from Mollie",
+    "refreshAria": "Refresh payment status",
+    "remove": "Remove payment link",
+    "status": {
+      "open": "open",
+      "expired": "expired",
+      "canceled": "canceled"
+    },
+    "errors": {
+      "mollieKeyMissing": "Mollie API key not configured. Go to Settings → Integrations.",
+      "zeroAmount": "Invoice total must be greater than zero.",
+      "voidInvoice": "Cannot create a payment link for a void invoice.",
+      "alreadyPaid": "This payment link has already been paid — the invoice is now marked paid.",
+      "removeFailed": "Mollie could not remove the link. Try again later."
+    }
+  },
+  "pdf": {
+    "download": "Download PDF",
+    "retry": "PDF render failed - click to retry"
+  },
+  "validation": {
+    "customerRequired": "Customer name is required",
+    "lineRequired": "At least one line with a description is required"
+  }
+}

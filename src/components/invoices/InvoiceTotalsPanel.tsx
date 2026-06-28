@@ -1,4 +1,5 @@
 import type { SxProps, Theme } from '@mui/material/styles'
+import { useTranslation } from 'react-i18next'
 import type { InvoiceForm } from './invoiceFormHelpers.ts'
 import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
 import Box from '@mui/material/Box'
@@ -56,9 +57,10 @@ interface DiscountEditorProps {
 }
 
 function DiscountEditor({ form, patchForm, readOnly, totals, onRemove }: DiscountEditorProps) {
+  const { t } = useTranslation('invoices')
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
-      <Typography variant="body2" sx={{ flexGrow: 1 }}>Discount</Typography>
+      <Typography variant="body2" sx={{ flexGrow: 1 }}>{t($ => $.totals.discount)}</Typography>
       <DiscountValueInput form={form} patchForm={patchForm} readOnly={readOnly} />
       <Select
         size="small"
@@ -73,7 +75,7 @@ function DiscountEditor({ form, patchForm, readOnly, totals, onRemove }: Discoun
       <Typography variant="body2" sx={{ minWidth: 80, textAlign: 'right' }}>
         {formatEur(-totals.discountCents)}
       </Typography>
-      <IconButton size="small" disabled={readOnly} onClick={onRemove} aria-label="remove discount">
+      <IconButton size="small" disabled={readOnly} onClick={onRemove} aria-label={t($ => $.totals.removeDiscount)}>
         <DeleteIcon fontSize="small" />
       </IconButton>
     </Box>
@@ -93,6 +95,7 @@ interface InvoiceTotalsPanelProps {
 export default function InvoiceTotalsPanel({
   form, totals, appliesKor, readOnly, patchForm, discountOpen, setDiscountOpen,
 }: InvoiceTotalsPanelProps) {
+  const { t } = useTranslation('invoices')
   function removeDiscount() {
     patchForm({ discount_pct: 0, discount_cents: 0 })
     setDiscountOpen(false)
@@ -101,7 +104,7 @@ export default function InvoiceTotalsPanel({
   return (
     <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
       <Box sx={{ minWidth: 320 }}>
-        <SummaryRow label="Subtotal" value={formatEur(totals.subtotalCents)} />
+        <SummaryRow label={t($ => $.totals.subtotal)} value={formatEur(totals.subtotalCents)} />
         {discountOpen ? (
           <DiscountEditor
             form={form}
@@ -112,19 +115,19 @@ export default function InvoiceTotalsPanel({
           />
         ) : (
           <Button size="small" startIcon={<AddIcon />} disabled={readOnly} onClick={() => setDiscountOpen(true)}>
-            Add discount
+            {t($ => $.totals.addDiscount)}
           </Button>
         )}
         {!appliesKor && totals.vatByRate.map(({ rate, cents }) => (
-          <SummaryRow key={rate} label={`VAT ${rate}%`} value={formatEur(cents)} />
+          <SummaryRow key={rate} label={t($ => $.totals.vatRate, { rate })} value={formatEur(cents)} />
         ))}
         {appliesKor && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'right' }}>
-            Kleine ondernemersregeling — no VAT charged.
+            {t($ => $.totals.korNotice)}
           </Typography>
         )}
         <Divider sx={{ my: 1 }} />
-        <SummaryRow label={<strong>Total</strong>} value={<strong>{formatEur(totals.totalCents)}</strong>} />
+        <SummaryRow label={<strong>{t($ => $.labels.total)}</strong>} value={<strong>{formatEur(totals.totalCents)}</strong>} />
       </Box>
     </Box>
   )

@@ -135,10 +135,12 @@ export interface InvoiceLine {
   position?: number
 }
 
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'void'
+
 export interface Invoice {
   id?: Id
   invoice_number?: string
-  status?: string
+  status?: InvoiceStatus
   finalized_at?: string
   issue_date?: string
   due_date?: string
@@ -177,10 +179,13 @@ export interface PurchaseAttachment {
   uploaded_at?: string
 }
 
+export type PurchaseStatus = 'draft' | 'approved' | 'paid'
+export type PurchasePaymentMethod = 'bank' | 'member'
+
 export interface Purchase {
   id?: Id
   receipt_number?: number
-  status?: string
+  status?: PurchaseStatus
   finalized_at?: string
   receipt_date?: string
   due_date?: string | null
@@ -193,7 +198,7 @@ export interface Purchase {
   tax_cents?: number
   total_cents?: number
   paid_at?: string
-  payment_method?: string
+  payment_method?: PurchasePaymentMethod
   paid_by_band_member_id?: Id
   lines?: PurchaseLine[]
   attachments?: PurchaseAttachment[]
@@ -416,11 +421,22 @@ export interface VatReturnPayment {
   paid_on?: string
 }
 
+export type VatReturnStatus =
+  | 'paid'
+  | 'received'
+  | 'settled'
+  | 'partially_paid'
+  | 'partially_received'
+  | 'unpaid'
+  | 'not_received'
+
+export type VatQuarter = 1 | 2 | 3 | 4
+
 /** A filed VAT declaration (GET /api/vat-returns). */
 export interface VatReturn {
   id?: Id
   year?: number
-  quarter?: number
+  quarter?: VatQuarter
   period_from?: string
   period_to?: string
   input_vat_cents?: number
@@ -430,7 +446,7 @@ export interface VatReturn {
   settlement_account_code?: string
   due_date?: string
   notes?: string
-  status?: string
+  status?: VatReturnStatus
   paid_cents?: number
   payments?: VatReturnPayment[]
   ledger_transaction_id?: Id
@@ -439,7 +455,7 @@ export interface VatReturn {
 /** The quarter preview returned by GET /api/vat-returns/preview. */
 export interface VatReturnPreview {
   year?: number
-  quarter?: number
+  quarter?: VatQuarter
   period_from?: string
   period_to?: string
   due_date?: string

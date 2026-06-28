@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { SxProps, Theme } from '@mui/material/styles'
 import type { Account } from '../../types/entities.ts'
 import type { JournalFormLine } from './journalFormHelpers.ts'
@@ -51,6 +52,7 @@ export default function JournalLineRow({
   line, idx, accounts, readOnly, canDelete,
   patchLine, addLine, removeLine, duplicateLine,
 }: JournalLineRowProps) {
+  const { t } = useTranslation('journal')
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
 
   const commitDebit = (cents: number) => {
@@ -68,7 +70,7 @@ export default function JournalLineRow({
         size="small"
         fullWidth
         sx={connect('first')}
-        placeholder="Description"
+        placeholder={t($ => $.line.description)}
         value={line.description}
         disabled={readOnly}
         onChange={(e) => patchLine(idx, { description: e.target.value })}
@@ -76,15 +78,15 @@ export default function JournalLineRow({
       <AccountAutocomplete
         value={line.account_code}
         accounts={accounts}
-        placeholder="Account"
+        placeholder={t($ => $.line.account)}
         disabled={readOnly}
         sx={connect('mid')}
         onChange={(code) => patchLine(idx, { account_code: code })}
       />
       <FormControl size="small" fullWidth disabled={readOnly} sx={connect('mid')}>
-        <InputLabel>VAT rate</InputLabel>
+        <InputLabel>{t($ => $.line.vatRate)}</InputLabel>
         <Select
-          label="VAT rate"
+          label={t($ => $.line.vatRate)}
           value={VAT_RATES.includes(Number(line.vat_rate)) ? Number(line.vat_rate) : 0}
           onChange={(e) => patchLine(idx, { vat_rate: Number(e.target.value) })}
           renderValue={(v) => `${v}%`}
@@ -97,7 +99,7 @@ export default function JournalLineRow({
       <AmountCell
         cents={line.amount_cents}
         active={line.side === 'debit'}
-        placeholder="Debit"
+        placeholder={t($ => $.line.debit)}
         disabled={readOnly}
         sx={connect('mid')}
         onCommit={commitDebit}
@@ -105,7 +107,7 @@ export default function JournalLineRow({
       <AmountCell
         cents={line.amount_cents}
         active={line.side === 'credit'}
-        placeholder="Credit"
+        placeholder={t($ => $.line.credit)}
         disabled={readOnly}
         sx={connect('last')}
         onCommit={commitCredit}
@@ -117,13 +119,13 @@ export default function JournalLineRow({
       <AccountAutocomplete
         value={line.balancing_account_code}
         accounts={accounts}
-        placeholder="Balancing account"
+        placeholder={t($ => $.line.balancingAccount)}
         disabled={readOnly}
         onChange={(code) => patchLine(idx, { balancing_account_code: code })}
       />
       <IconButton
         size="small"
-        aria-label="line actions"
+        aria-label={t($ => $.line.actions)}
         disabled={readOnly}
         sx={{ ml: 0.5, justifySelf: 'center' }}
         onClick={(e) => setAnchorEl(e.currentTarget)}

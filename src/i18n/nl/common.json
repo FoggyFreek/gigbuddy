@@ -1,0 +1,104 @@
+{
+  "appearance": {
+    "switchToLight": "Schakel naar lichte modus",
+    "switchToDark": "Schakel naar donkere modus"
+  },
+  "language": {
+    "switchToDutch": "Nederlands",
+    "switchToEnglish": "English"
+  },
+  "actions": {
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "add": "Toevoegen",
+    "edit": "Bewerken",
+    "done": "Klaar",
+    "delete": "Verwijderen",
+    "close": "Sluiten",
+    "copy": "Kopiëren",
+    "confirm": "Bevestigen",
+    "back": "Terug",
+    "search": "Zoeken",
+    "ok": "OK"
+  },
+  "state": {
+    "loading": "Laden…",
+    "none": "Geen"
+  },
+  "aria": {
+    "back": "terug",
+    "close": "sluiten"
+  },
+  "confirmation": {
+    "cannotUndo": "Dit kan niet ongedaan worden gemaakt."
+  },
+  "csvImport": {
+    "chooseFile": "Kies CSV-bestand",
+    "notMapped": "(niet gekoppeld)",
+    "nameColumnRequired": "Naamkolom is verplicht",
+    "preview": "Voorbeeld",
+    "showing": "Eerste {{shown}} van {{total}} rijen worden getoond.",
+    "willImport_one": "{{count}} rij wordt geïmporteerd.",
+    "willImport_other": "{{count}} rijen worden geïmporteerd.",
+    "importError": "Importeren mislukt",
+    "importButton_one": "{{count}} rij importeren",
+    "importButton_other": "{{count}} rijen importeren"
+  },
+  "answer": {
+    "yes": "Ja",
+    "no": "Nee"
+  },
+  "picker": {
+    "typeMinChars_one": "Typ minstens {{count}} teken…",
+    "typeMinChars_other": "Typ minstens {{count}} tekens…",
+    "searching": "Zoeken…",
+    "noMatches": "Geen overeenkomsten"
+  },
+  "periodPicker": {
+    "modes": {
+      "month": "Maand",
+      "quarter": "Kwartaal",
+      "fiscal_year": "Boekjaar",
+      "all_time": "Alles"
+    },
+    "months": {
+      "jan": "jan",
+      "feb": "feb",
+      "mar": "mrt",
+      "apr": "apr",
+      "may": "mei",
+      "jun": "jun",
+      "jul": "jul",
+      "aug": "aug",
+      "sep": "sep",
+      "oct": "okt",
+      "nov": "nov",
+      "dec": "dec"
+    },
+    "previous": "vorige",
+    "next": "volgende",
+    "selectFiscalYear": "Selecteer boekjaar",
+    "selectMonth": "Selecteer maand",
+    "selectQuarter": "Selecteer kwartaal",
+    "customRange": "Aangepaste periode",
+    "from": "Van",
+    "to": "Tot",
+    "rangeSeparator": "tot",
+    "openFromPicker": "vanaf-datumkiezer openen",
+    "openToPicker": "tot-datumkiezer openen",
+    "apply": "Toepassen"
+  },
+  "contactPicker": {
+    "label": "Contact toevoegen",
+    "createContact": "+ Contact '{{name}}' aanmaken"
+  },
+  "venuePicker": {
+    "labelVenue": "Locatie / fysieke locatie",
+    "labelFestival": "Festival / evenementorganisatie",
+    "createVenue": "+ Locatie '{{name}}' aanmaken",
+    "createFestival": "+ Festival '{{name}}' aanmaken",
+    "openVenue": "Locatie openen",
+    "categoryVenue": "(locatie)",
+    "categoryFestival": "(festival)"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "title": "Dashboard",
+  "bandLogoAlt": "Band logo",
+  "card": {
+    "viewAll": "View all",
+    "viewDetails": "View details",
+    "loadError": "⚠ Couldn't load",
+    "empty": "Nothing to show"
+  },
+  "nextGig": {
+    "title": "Next gig",
+    "empty": "No upcoming gigs"
+  },
+  "nextRehearsal": {
+    "title": "Next rehearsal",
+    "empty": "No planned rehearsals",
+    "fallbackLocation": "Rehearsal"
+  },
+  "nextBandEvent": {
+    "title": "Next band event",
+    "empty": "No upcoming band events"
+  },
+  "upcomingShows": {
+    "title": "Upcoming shows",
+    "empty": "No upcoming shows"
+  },
+  "myTasks": {
+    "title": "My tasks",
+    "empty": "No open tasks"
+  },
+  "map": {
+    "title": "Played here",
+    "viewMap": "View map",
+    "empty": "No past gigs yet",
+    "openAria": "Open the gig world map"
+  }
+}

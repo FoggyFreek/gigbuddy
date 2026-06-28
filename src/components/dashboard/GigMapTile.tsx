@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Skeleton from '@mui/material/Skeleton'
@@ -12,6 +13,7 @@ const GigWorldMap = lazy(() => import('../map/GigWorldMap.tsx'))
 const MAP_HEIGHT = 180
 
 export default function GigMapTile() {
+  const { t } = useTranslation('dashboard')
   const navigate = useNavigate()
   const { status, loading, cityCount, markers } = useGigMapData()
   const isEmpty = status === 'ok' && !loading && cityCount === 0
@@ -21,20 +23,20 @@ export default function GigMapTile() {
 
   return (
     <DashboardCard
-      title="Played here"
+      title={t($ => $.map.title)}
       icon={PublicIcon}
       count={cityCount}
       viewAllTo="/map"
-      viewAllLabel="View map"
+      viewAllLabel={t($ => $.map.viewMap)}
       status={status}
       isEmpty={isEmpty}
-      emptyText="No past gigs yet"
+      emptyText={t($ => $.map.empty)}
     >
       {/* Only the preview is clickable — DashboardCard owns its own "View map" link. */}
       <Box
         role="button"
         tabIndex={0}
-        aria-label="Open the gig world map"
+        aria-label={t($ => $.map.openAria)}
         onClick={openMap}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {

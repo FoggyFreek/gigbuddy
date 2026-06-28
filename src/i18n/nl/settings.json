@@ -1,0 +1,149 @@
+{
+  "title": "Instellingen",
+  "theme": {
+    "title": "Thema",
+    "description": "Kies de stijl van het oppervlak voor dit apparaat. Je accentkleur blijft binnen elk thema gelden.",
+    "variants": {
+      "default": { "label": "Standaard", "description": "Material 3-violet" },
+      "warm": { "label": "Warm", "description": "Zand- en aardetinten" },
+      "slate": { "label": "Leisteen", "description": "Koel blauwgrijs" }
+    }
+  },
+  "accentColor": {
+    "title": "Accentkleur",
+    "description": "Kies de primaire kleur die in de hele app voor deze band wordt gebruikt.",
+    "custom": "Aangepaste kleur",
+    "reset": "Terug naar standaard",
+    "presets": {
+      "purple": "Paars (standaard)",
+      "blue": "Blauw",
+      "lightBlue": "Lichtblauw",
+      "teal": "Petrol",
+      "green": "Groen",
+      "olive": "Olijf",
+      "amber": "Amber",
+      "deepOrange": "Dieporanje",
+      "red": "Rood",
+      "pink": "Roze",
+      "deepPurple": "Dieppaars",
+      "indigo": "Indigo"
+    }
+  },
+  "storage": {
+    "title": "Opslag gebruikt",
+    "recompute": "Nu opnieuw berekenen",
+    "recomputeAria": "opslaggebruik opnieuw berekenen",
+    "description": "Totale grootte van de geüploade bestanden van deze band (banners, bijlagen, foto's, logo's, facturen).",
+    "fileCount_one": "{{count}} bestand",
+    "fileCount_other": "{{count}} bestanden"
+  },
+  "integrations": {
+    "title": "Integraties",
+    "add": "Integratie toevoegen",
+    "notConfigured": "Niet geconfigureerd",
+    "showKey": "Sleutel tonen",
+    "hideKey": "Sleutel verbergen",
+    "configure": "Configureren"
+  },
+  "shopify": {
+    "title": "Shopify-app-inloggegevens",
+    "description": "Verbind je Shopify-winkel om bestellingen te lezen en als merchandise te importeren. Voer de Client ID en het secret van je app in (uit het Shopify Dev Dashboard) en je winkeldomein — er wordt automatisch een kortlevend toegangstoken opgehaald bij het importeren. Het secret wordt veilig opgeslagen en na het opslaan nooit meer volledig getoond.",
+    "clientId": {
+      "label": "Client ID",
+      "placeholder": "Client ID van 32 tekens",
+      "helper": "De Client ID van je app uit het Shopify Dev Dashboard.",
+      "error": "Ongeldige Client ID. Deze bestaat uit minstens 32 hexadecimale tekens.",
+      "replace": "ID vervangen",
+      "remove": "Client ID verwijderen"
+    },
+    "secret": {
+      "label": "App-secret",
+      "placeholder": "shpss_…",
+      "helper": "Plak het client secret van je app uit het Shopify Dev Dashboard.",
+      "invalidFormat": "Ongeldig secret-formaat. Het app-secret begint met \"shpss_\" gevolgd door 32 hexadecimale tekens.",
+      "saveFailed": "Het app-secret kon niet worden opgeslagen. Probeer het opnieuw.",
+      "replace": "Secret vervangen",
+      "remove": "Secret verwijderen"
+    },
+    "domain": {
+      "label": "Winkeldomein",
+      "description": "Je myshopify.com-domein — vereist om bestellingen te kunnen lezen voor import.",
+      "placeholder": "jouwband.myshopify.com",
+      "error": "Ongeldig domein. Gebruik de vorm jouwband.myshopify.com."
+    }
+  },
+  "mollie": {
+    "title": "Mollie-API-sleutel",
+    "description": "Wordt gebruikt om betaallinks via Mollie te maken. De sleutel wordt veilig opgeslagen en na het opslaan nooit meer volledig getoond.",
+    "label": "Mollie-API-sleutel",
+    "placeholder": "live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "helper": "Plak je live- of test-sleutel uit het Mollie-dashboard.",
+    "invalidFormat": "Ongeldig sleutelformaat. Sleutels beginnen met live_ of test_ gevolgd door minstens 25 alfanumerieke tekens.",
+    "saveFailed": "De sleutel kon niet worden opgeslagen. Probeer het opnieuw.",
+    "replace": "Sleutel vervangen",
+    "remove": "Sleutel verwijderen"
+  },
+  "accounting": {
+    "title": "Boekhoudinstellingen",
+    "description": "Standaardrekeningen die worden gebruikt bij het maken van facturen en inkopen.",
+    "currency": "Valuta",
+    "fields": {
+      "receivable_account_code": "Debiteurenrekening",
+      "primary_checking_account_code": "Primaire betaalrekening",
+      "cash_account_code": "Kasrekening",
+      "default_revenue_account_code": "Standaard omzetrekening",
+      "payable_account_code": "Crediteuren",
+      "default_reimbursement_account_code": "Standaard onkostenrekening",
+      "default_expense_account_code": "Standaard kostenrekening",
+      "output_vat_account_code": "Btw-rekening verkopen (af te dragen)",
+      "input_vat_account_code": "Btw-rekening inkopen (te vorderen)",
+      "merch_revenue_account_code": "Omzetrekening merchandise"
+    },
+    "booksClosedThrough": "Boeken gesloten tot en met",
+    "booksClosedThroughHelper": "Op of vóór deze datum kan niets worden geboekt. Laat leeg om de boeken open te houden.",
+    "errors": {
+      "account_has_open_balance": "Deze rekening heeft nog een openstaand saldo (onbetaalde rekeningen, niet-vereffende ledenschulden of onbetaalde facturen). Vereffen deze voordat je de rekening wijzigt.",
+      "invalid_books_closed_through": "Voer een geldige datum (JJJJ-MM-DD) in of maak het veld leeg.",
+      "unknown": "Onbekende fout"
+    }
+  },
+  "chartOfAccounts": {
+    "title": "Rekeningschema",
+    "description": "De rekeningen die worden gebruikt om financiële transacties te categoriseren. Voeg subrekeningen toe of deactiveer rekeningen die je niet nodig hebt.",
+    "types": {
+      "asset": "Activa",
+      "liability": "Passiva",
+      "equity": "Eigen vermogen",
+      "revenue": "Omzet",
+      "cost_of_goods_sold": "Kostprijs van de omzet",
+      "expense": "Kosten"
+    },
+    "inactive": "Inactief",
+    "capitalizable": "Activeerbaar",
+    "setCapitalizable": "Sta toe inkopen te activeren op deze activarekening",
+    "unsetCapitalizable": "Bied deze activarekening niet meer aan bij inkopen",
+    "addSubAccount": "Subrekening toevoegen",
+    "activate": "Activeren",
+    "deactivate": "Deactiveren",
+    "inUse": "Rekening is in gebruik en kan niet worden gewijzigd.",
+    "aria": {
+      "setCapitalizable": "activeerbaar instellen",
+      "unsetCapitalizable": "activeerbaar uitzetten",
+      "addSubAccount": "subrekening toevoegen",
+      "activate": "activeren",
+      "deactivate": "deactiveren",
+      "delete": "verwijderen"
+    },
+    "addDialog": {
+      "title": "Subrekening toevoegen onder {{code}}",
+      "codeLabel": "Rekeningnummer",
+      "nameLabel": "Rekeningnaam",
+      "typeHelper": "Type: {{type}}",
+      "createFailed": "Aanmaken van rekening mislukt"
+    },
+    "deleteDialog": {
+      "title": "Rekening verwijderen?",
+      "confirm": "<strong>{{label}}</strong> verwijderen? Dit kan niet ongedaan worden gemaakt."
+    }
+  }
+}

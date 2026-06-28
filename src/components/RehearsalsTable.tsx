@@ -1,5 +1,6 @@
 import type { Rehearsal, Participant, Id } from '../types/entities.ts'
 import { type ReactNode, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Collapse from '@mui/material/Collapse'
 import IconButton from '@mui/material/IconButton'
@@ -58,11 +59,12 @@ function tallyCounts(participants: Participant[] | undefined) {
 }
 
 function ParticipantProgress({ participants }: { participants?: Participant[] }) {
+  const { t } = useTranslation('rehearsals')
   const { yes, no, pending, total } = tallyCounts(participants)
   if (!total) {
     return (
       <Typography variant="caption" color="text.secondary">
-        no required participants
+        {t($ => $.table.noRequiredParticipants)}
       </Typography>
     )
   }
@@ -88,6 +90,7 @@ interface RehearsalCardProps {
 }
 
 function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVote }: RehearsalCardProps) {
+  const { t } = useTranslation('rehearsals')
   const myParticipant = bandMemberId
     ? (rehearsal.participants ?? []).find((p) => p.band_member_id === bandMemberId)
     : null
@@ -119,7 +122,7 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVo
             </Typography>
             <IconButton
               size="small"
-              aria-label="share rehearsal"
+              aria-label={t($ => $.table.shareRehearsal)}
               onClick={(e) => { e.stopPropagation(); onShare?.(rehearsal) }}
               sx={{ ml: 'auto', mt: -0.5 }}
             >
@@ -137,7 +140,7 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVo
               sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <Typography variant="caption" color="text.secondary">My vote:</Typography>
+              <Typography variant="caption" color="text.secondary">{t($ => $.table.myVote)}</Typography>
               <VoteToggle
                 vote={myParticipant.vote}
                 onChange={(v) => onVote?.(rehearsal.id, bandMemberId ?? undefined, v)}
@@ -158,6 +161,7 @@ interface DesktopRowProps {
 }
 
 function DesktopRow({ rehearsal, active, onClick, onShare }: DesktopRowProps) {
+  const { t } = useTranslation('rehearsals')
   return (
     <TableRow
       hover
@@ -178,10 +182,10 @@ function DesktopRow({ rehearsal, active, onClick, onShare }: DesktopRowProps) {
         <ParticipantProgress participants={rehearsal.participants} />
       </TableCell>
       <TableCell align="right" padding="none" sx={{ pr: 1 }}>
-        <Tooltip title="Share via WhatsApp">
+        <Tooltip title={t($ => $.table.shareWhatsApp)}>
           <IconButton
             size="small"
-            aria-label="share rehearsal"
+            aria-label={t($ => $.table.shareRehearsal)}
             onClick={(e) => { e.stopPropagation(); onShare?.(rehearsal) }}
           >
             <ShareIcon fontSize="small" />
@@ -193,14 +197,15 @@ function DesktopRow({ rehearsal, active, onClick, onShare }: DesktopRowProps) {
 }
 
 function DesktopHead() {
+  const { t } = useTranslation('rehearsals')
   return (
     <TableHead>
       <TableRow sx={{ '& th': { fontWeight: 600 } }}>
         <TableCell padding="none" sx={{ width: 40 }} />
-        <TableCell>Date</TableCell>
-        <TableCell>Time</TableCell>
-        <TableCell>Location</TableCell>
-        <TableCell>Votes</TableCell>
+        <TableCell>{t($ => $.table.colDate)}</TableCell>
+        <TableCell>{t($ => $.table.colTime)}</TableCell>
+        <TableCell>{t($ => $.table.colLocation)}</TableCell>
+        <TableCell>{t($ => $.table.colVotes)}</TableCell>
         <TableCell />
       </TableRow>
     </TableHead>
@@ -214,6 +219,7 @@ interface PastHeaderProps {
 }
 
 function PastHeader({ open, count, onToggle }: PastHeaderProps) {
+  const { t } = useTranslation('rehearsals')
   return (
     <Box
       onClick={onToggle}
@@ -235,7 +241,7 @@ function PastHeader({ open, count, onToggle }: PastHeaderProps) {
         }}
       />
       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-        Past rehearsals ({count})
+        {t($ => $.table.pastRehearsals, { count })}
       </Typography>
     </Box>
   )
@@ -251,6 +257,7 @@ interface RehearsalsTableProps {
 }
 
 export default function RehearsalsTable({ rehearsals = [], bandMemberId, onVote, onRowClick, onShare, selectedId = null }: RehearsalsTableProps) {
+  const { t } = useTranslation('rehearsals')
   const [pastOpen, setPastOpen] = useState(false)
   const isCompact = useCompactLayout()
 
@@ -263,13 +270,13 @@ export default function RehearsalsTable({ rehearsals = [], bandMemberId, onVote,
     if (emptyAll) {
       upcomingContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No rehearsals yet — propose one to get started.
+          {t($ => $.table.emptyAll)}
         </Box>
       )
     } else if (upcoming.length === 0) {
       upcomingContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No upcoming rehearsals.
+          {t($ => $.table.emptyUpcoming)}
         </Box>
       )
     } else {
@@ -312,14 +319,14 @@ export default function RehearsalsTable({ rehearsals = [], bandMemberId, onVote,
             {emptyAll && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  No rehearsals yet — propose one to get started.
+                  {t($ => $.table.emptyAll)}
                 </TableCell>
               </TableRow>
             )}
             {!emptyAll && upcoming.length === 0 && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  No upcoming rehearsals.
+                  {t($ => $.table.emptyUpcoming)}
                 </TableCell>
               </TableRow>
             )}

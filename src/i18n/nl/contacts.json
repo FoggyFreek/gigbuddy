@@ -1,0 +1,64 @@
+{
+  "title": "Contacten",
+  "detailTitle": "Contact",
+  "addContact": "Contact toevoegen",
+  "empty": "Nog geen contacten - voeg er een toe of importeer uit CSV.",
+  "importTitle": "Contacten importeren uit CSV",
+  "importTooltip": "Importeren",
+  "categories": {
+    "press": "Pers",
+    "radio & tv": "Radio & TV",
+    "booker": "Booker",
+    "promotion": "Promotie",
+    "network": "Netwerk",
+    "supplier": "Leverancier"
+  },
+  "fields": {
+    "category": "Categorie",
+    "name": "Naam",
+    "email": "E-mail",
+    "phone": "Telefoon"
+  },
+  "table": {
+    "searchPlaceholder": "Contacten zoeken…",
+    "filter": "Filter",
+    "filterCount": "Filter ({{count}})",
+    "allCategories": "Alle categorieën",
+    "noResults": "Geen resultaten.",
+    "selected_one": "{{count}} contact geselecteerd",
+    "selected_other": "{{count}} contacten geselecteerd",
+    "copyEmails": "E-mailadressen kopiëren (puntkomma-gescheiden)"
+  },
+  "detail": {
+    "venuesHeading": "Locaties & festivals",
+    "venueChip": "locatie",
+    "festivalChip": "festival",
+    "unnamed": "(naamloos)",
+    "primaryStar": "Dit contact is het primaire contact voor deze locatie",
+    "primaryStarAria": "primair contact voor deze locatie",
+    "openVenue": "Locatie openen",
+    "openVenueAria": "locatie openen",
+    "removeVenueAria": "locatie verwijderen",
+    "addVenue": "Locatie / festival toevoegen",
+    "notesHeading": "Notities",
+    "addNotePlaceholder": "Voeg een notitie toe…",
+    "addNoteAria": "Notitie toevoegen",
+    "deleteNoteAria": "notitie verwijderen",
+    "deleteTitle": "Contact verwijderen?",
+    "deleteErrorTitle": "Kan contact niet verwijderen",
+    "purchasesHeading": "Inkopen"
+  },
+  "modal": {
+    "confirmDelete": "Dit contact verwijderen?"
+  },
+  "import": {
+    "title": "Contacten importeren uit CSV",
+    "uploadHelp": "Upload een UTF-8 CSV-bestand met kolomkoppen. Ondersteunde velden: naam, e-mail, telefoon, categorie. Categoriewaarden: press, radio & tv, booker, promotion, network (standaard press indien niet herkend).",
+    "uploadHelpFixed": "Upload een UTF-8 CSV-bestand met kolomkoppen. Ondersteunde velden: naam, e-mail, telefoon. Elke geïmporteerde rij krijgt de categorie '{{category}}'.",
+    "mapHelp": "Koppel je CSV-kolommen aan contactvelden. {{count}} rijen gevonden.",
+    "result_one": "{{count}} contact geïmporteerd.",
+    "result_other": "{{count}} contacten geïmporteerd.",
+    "resultSkipped_one": "{{count}} contact geïmporteerd ({{skipped}} overgeslagen als duplicaten).",
+    "resultSkipped_other": "{{count}} contacten geïmporteerd ({{skipped}} overgeslagen als duplicaten)."
+  }
+}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import Divider from '@mui/material/Divider'
@@ -12,15 +13,9 @@ import type { Account } from '../../types/entities.ts'
 // Account nodes in the tree carry their children.
 type AccountNode = Account & { children: AccountNode[] }
 
-const TYPE_LABELS: Record<string, string> = {
-  asset: 'Assets',
-  liability: 'Liabilities',
-  equity: 'Equity',
-  revenue: 'Revenue',
-  cost_of_goods_sold: 'Cost of Goods Sold',
-  expense: 'Expenses',
-}
-const TYPE_ORDER = ['asset', 'liability', 'equity', 'revenue', 'cost_of_goods_sold', 'expense']
+// Account-type labels are shared with the chart of accounts; reuse the
+// `settings.chartOfAccounts.types` translations rather than duplicating them.
+const TYPE_ORDER = ['asset', 'liability', 'equity', 'revenue', 'cost_of_goods_sold', 'expense'] as const
 
 // Build the parent/child forest for one account type (sub-accounts inherit
 // their parent's type, so a per-type tree is complete).
@@ -56,6 +51,7 @@ interface AccountMultiSelectFilterProps {
 // A parent shows checked when its whole subtree is selected, indeterminate when
 // only part of it is.
 export default function AccountMultiSelectFilter({ accounts, value, onChange }: AccountMultiSelectFilterProps) {
+  const { t } = useTranslation(['ledger', 'common', 'settings'])
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
 
   const groups = useMemo(
@@ -91,7 +87,9 @@ export default function AccountMultiSelectFilter({ accounts, value, onChange }: 
     ]
   }
 
-  const label = value.size ? `${value.size} selected` : 'None'
+  const selection = value.size
+    ? t($ => $.accountFilter.selected, { count: value.size })
+    : t($ => $.state.none, { ns: 'common' })
 
   return (
     <>
@@ -103,7 +101,7 @@ export default function AccountMultiSelectFilter({ accounts, value, onChange }: 
         aria-haspopup="true"
         aria-expanded={Boolean(anchor)}
       >
-        Accounts: {label}
+        {t($ => $.accountFilter.button, { selection })}
       </Button>
       <Menu
         anchorEl={anchor}
@@ -113,7 +111,7 @@ export default function AccountMultiSelectFilter({ accounts, value, onChange }: 
       >
         {value.size > 0 && [
           <MenuItem key="__clear" onClick={() => onChange(new Set())}>
-            <ListItemText primary="Clear selection" slotProps={{ primary: { variant: 'body2', color: 'primary' } }} />
+            <ListItemText primary={t($ => $.accountFilter.clear)} slotProps={{ primary: { variant: 'body2', color: 'primary' } }} />
           </MenuItem>,
           <Divider key="__clear-divider" />,
         ]}
@@ -126,7 +124,7 @@ export default function AccountMultiSelectFilter({ accounts, value, onChange }: 
               textTransform: 'uppercase', letterSpacing: '0.06em', color: 'text.secondary',
             }}
           >
-            {TYPE_LABELS[type]}
+            {t($ => $.chartOfAccounts.types[type], { ns: 'settings' })}
           </Typography>,
           ...trees.flatMap((node) => renderNode(node, 0)),
         ])}

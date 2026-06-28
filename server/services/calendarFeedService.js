@@ -75,7 +75,7 @@ function gigEvent(gig, base) {
   const calVenue = gig.venue ?? gig.festival
   const summary = [gig.event_description, venueHeadline(calVenue)].filter(Boolean).join(' @ ') || 'Gig'
   const desc = [gig.status, venueCity(calVenue)].filter(Boolean).join(', ')
-  const url = `${base}/gigs?open=${gig.id}`
+  const url = `${base}/gigs/${gig.id}`
   const location = [venueHeadline(calVenue), venueCity(calVenue)].filter(Boolean).join(', ')
   return {
     uid: `gigbuddy-gig-${gig.id}@gigbuddy`,
@@ -94,7 +94,7 @@ function rehearsalEvent(reh, base) {
   const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
   const total = reh.participants?.length ?? 0
   const desc = [reh.location, `${yes}/${total} yes`, reh.notes].filter(Boolean).join(' — ')
-  const url = `${base}/rehearsals?open=${reh.id}`
+  const url = `${base}/rehearsals/${reh.id}`
   const statusSuffix = reh.status ? ` (${reh.status})` : ''
   return {
     uid: `gigbuddy-rehearsal-${reh.id}@gigbuddy`,
@@ -110,7 +110,7 @@ function rehearsalEvent(reh, base) {
 }
 
 function bandEvent(ev, base) {
-  const url = `${base}/events?open=${ev.id}`
+  const url = `${base}/events/${ev.id}`
   return {
     uid: `gigbuddy-bandevent-${ev.id}@gigbuddy`,
     summary: ev.title || 'Band Event',

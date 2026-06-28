@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
@@ -64,6 +65,7 @@ function monthBounds(year: number, month: number) {
 }
 
 export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 }: AvailabilitySectionProps = {}) {
+  const { t, i18n } = useTranslation(['availability', 'common'])
   const isMobile = useCompactLayout()
   const { bandName } = useProfile()
   const navigate = useNavigate()
@@ -251,14 +253,14 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
       {isMobile && selectedDay && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            {new Date(selectedDay + 'T00:00:00').toLocaleDateString('en', {
+            {new Date(selectedDay + 'T00:00:00').toLocaleDateString(i18n.resolvedLanguage ?? 'en', {
               weekday: 'long',
               day: 'numeric',
               month: 'long',
             })}
           </Typography>
           {dayGigs.length === 0 && dayRehearsals.length === 0 && dayBandEvents.length === 0 && daySlots.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">No events.</Typography>
+            <Typography variant="body2" color="text.secondary">{t($ => $.events.noEvents)}</Typography>
           ) : (
             <List dense disablePadding>
               {dayGigs.map((gig) => (
@@ -274,7 +276,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
                     }}
                   />
                   <ListItemText
-                    primary={gig.event_description || venueHeadline(gig.venue ?? gig.festival) || 'Gig'}
+                    primary={gig.event_description || venueHeadline(gig.venue ?? gig.festival) || t($ => $.events.gigFallback)}
                     secondary={[venueHeadline(gig.venue ?? gig.festival), gig.status].filter(Boolean).join(' — ')}
                   />
                 </ListItemButton>
@@ -295,8 +297,8 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
                       }}
                     />
                     <ListItemText
-                      primary={`Rehearsal — ${reh.status}`}
-                      secondary={[reh.location, `${yes}/${total} yes`].filter(Boolean).join(' — ')}
+                      primary={t($ => $.events.rehearsalTooltip, { status: reh.status })}
+                      secondary={[reh.location, t($ => $.events.votesYes, { yes, total })].filter(Boolean).join(' — ')}
                     />
                   </ListItemButton>
                 )
@@ -323,7 +325,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
                 const member = slot.band_member_id === null
                   ? null
                   : members.find((m) => m.id === slot.band_member_id)
-                const name = slot.band_member_id === null ? 'Band' : member?.name || ''
+                const name = slot.band_member_id === null ? t($ => $.events.band) : member?.name || ''
                 return (
                   <ListItemButton key={`s-${slot.id}`} onClick={() => handleSlotClick(slot)}>
                     <Box
@@ -352,7 +354,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
         <Fab
           ref={fabRef}
           color="primary"
-          aria-label="add event"
+          aria-label={t($ => $.addEventAria)}
           onClick={handleFabClick}
           sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: (t) => t.zIndex.fab }}
         >
@@ -375,19 +377,19 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
       >
         <MenuItem onClick={() => handleMenuSelect('availability')}>
           <ListItemIcon><EventAvailableIcon fontSize="small" /></ListItemIcon>
-          Availability
+          {t($ => $.addMenu.availability)}
         </MenuItem>
         <MenuItem onClick={() => handleMenuSelect('gig')}>
           <ListItemIcon><MicIcon fontSize="small" /></ListItemIcon>
-          Gig
+          {t($ => $.addMenu.gig)}
         </MenuItem>
         <MenuItem onClick={() => handleMenuSelect('rehearsal')}>
           <ListItemIcon><MusicNoteIcon fontSize="small" /></ListItemIcon>
-          Rehearsal
+          {t($ => $.addMenu.rehearsal)}
         </MenuItem>
         <MenuItem onClick={() => handleMenuSelect('bandEvent')}>
           <ListItemIcon><GroupIcon fontSize="small" /></ListItemIcon>
-          Band Event
+          {t($ => $.addMenu.bandEvent)}
         </MenuItem>
       </Menu>
 
@@ -433,11 +435,12 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
       <CalendarFeedDialog open={calendarFeedOpen} onClose={() => setCalendarFeedOpen(false)} />
 
       <Dialog open={exportModal} onClose={() => setExportModal(false)}>
-        <DialogTitle>Export calendar</DialogTitle>
+        <DialogTitle>{t($ => $.exportDialog.title)}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Choose which events to include in the .ics export for{' '}
-            {new Date(viewYear, viewMonth - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' })}.
+            {t($ => $.exportDialog.intro, {
+              month: new Date(viewYear, viewMonth - 1, 1).toLocaleString(i18n.resolvedLanguage ?? 'en', { month: 'long', year: 'numeric' }),
+            })}
           </Typography>
           <FormGroup>
             <FormControlLabel
@@ -447,7 +450,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
                   onChange={(e) => setExportOptions((o) => ({ ...o, gigs: e.target.checked }))}
                 />
               }
-              label="Gigs"
+              label={t($ => $.exportDialog.gigs)}
             />
             <FormControlLabel
               control={
@@ -456,7 +459,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
                   onChange={(e) => setExportOptions((o) => ({ ...o, rehearsals: e.target.checked }))}
                 />
               }
-              label="Rehearsals"
+              label={t($ => $.exportDialog.rehearsals)}
             />
             <FormControlLabel
               control={
@@ -465,15 +468,15 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
                   onChange={(e) => setExportOptions((o) => ({ ...o, bandEvents: e.target.checked }))}
                 />
               }
-              label="Band events"
+              label={t($ => $.exportDialog.bandEvents)}
             />
           </FormGroup>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
-            Only confirmed and announced gigs and planned rehearsals are exported. Options are excluded.
+            {t($ => $.exportDialog.note)}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setExportModal(false)}>Cancel</Button>
+          <Button onClick={() => setExportModal(false)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
           <Button
             variant="contained"
             disabled={!exportOptions.gigs && !exportOptions.rehearsals && !exportOptions.bandEvents}
@@ -489,7 +492,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
               setExportModal(false)
             }}
           >
-            Export
+            {t($ => $.exportDialog.export)}
           </Button>
         </DialogActions>
       </Dialog>

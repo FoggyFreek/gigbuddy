@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -29,6 +30,7 @@ import { downloadBandsintownCsv } from '../utils/bandsintownExport.ts'
 import type { Gig } from '../types/entities.ts'
 
 export default function GigsPage() {
+  const { t } = useTranslation(['gigs', 'common'])
   const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
@@ -94,12 +96,12 @@ export default function GigsPage() {
     >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1.5 }}>
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          Gigs
+          {t($ => $.title)}
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
         {canWritePlanning && (
           <>
-            <Tooltip title="Import">
+            <Tooltip title={t($ => $.toolbar.import)}>
               <IconButton onClick={(e) => setImportMenuAnchor(e.currentTarget)}>
                 <FileUploadOutlinedIcon />
               </IconButton>
@@ -114,13 +116,13 @@ export default function GigsPage() {
                 dense
               >
                 <Button variant="outlined" size="small" fullWidth>
-                  Import from Bandsintown
+                  {t($ => $.toolbar.importFromBandsintown)}
                 </Button>
               </MenuItem>
             </Menu>
           </>
         )}
-        <Tooltip title="Export">
+        <Tooltip title={t($ => $.toolbar.export)}>
           <IconButton onClick={(e) => setExportMenuAnchor(e.currentTarget)}>
             <FileDownloadOutlinedIcon />
           </IconButton>
@@ -136,7 +138,7 @@ export default function GigsPage() {
             dense
           >
             <Button variant="outlined" size="small" fullWidth disabled={filteredForShare.length === 0}>
-              Export tour dates
+              {t($ => $.toolbar.exportTourDates)}
             </Button>
           </MenuItem>
           <MenuItem
@@ -148,11 +150,11 @@ export default function GigsPage() {
             dense
           >
             <Button variant="outlined" size="small" fullWidth disabled={filteredForShare.length === 0}>
-              Export to Bandsintown
+              {t($ => $.toolbar.exportToBandsintown)}
             </Button>
           </MenuItem>
         </Menu>
-        <Tooltip title="Share tour dates">
+        <Tooltip title={t($ => $.toolbar.shareTourDates)}>
           <IconButton onClick={(e) => setTourMenuAnchor(e.currentTarget)}>
             <ShareIcon />
           </IconButton>
@@ -164,11 +166,11 @@ export default function GigsPage() {
         >
           <MenuItem onClick={() => setTourIncludeConfirmed((v) => !v)} dense>
             <Checkbox checked={tourIncludeConfirmed} size="small" sx={{ p: 0.5 }} />
-            <ListItemText primary="Confirmed" />
+            <ListItemText primary={t($ => $.status.confirmed)} />
           </MenuItem>
           <MenuItem onClick={() => setTourIncludeAnnounced((v) => !v)} dense>
             <Checkbox checked={tourIncludeAnnounced} size="small" sx={{ p: 0.5 }} />
-            <ListItemText primary="Announced" />
+            <ListItemText primary={t($ => $.status.announced)} />
           </MenuItem>
           <Divider />
           <MenuItem
@@ -177,7 +179,7 @@ export default function GigsPage() {
             dense
           >
             <Button variant="contained" size="small" fullWidth>
-              Create Tour Card
+              {t($ => $.toolbar.createTourCard)}
             </Button>
           </MenuItem>
            <MenuItem
@@ -186,7 +188,7 @@ export default function GigsPage() {
             dense
           >
             <Button variant="contained" size="small" fullWidth>
-              Banner Mosaic
+              {t($ => $.toolbar.bannerMosaic)}
             </Button>
           </MenuItem>
         </Menu>
@@ -196,7 +198,7 @@ export default function GigsPage() {
             startIcon={<AddIcon />}
             onClick={() => setModal({ mode: 'create' })}
           >
-            Add
+            {t($ => $.common.actions.add)}
           </Button>
         )}
       </Box>

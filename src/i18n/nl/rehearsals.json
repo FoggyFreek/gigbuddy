@@ -1,0 +1,59 @@
+{
+  "title": "Repetities",
+  "status": {
+    "option": "Optie",
+    "planned": "Gepland"
+  },
+  "table": {
+    "colDate": "Datum",
+    "colTime": "Tijd",
+    "colLocation": "Locatie",
+    "colVotes": "Stemmen",
+    "shareRehearsal": "repetitie delen",
+    "shareWhatsApp": "Delen via WhatsApp",
+    "noRequiredParticipants": "geen verplichte deelnemers",
+    "myVote": "Mijn stem:",
+    "emptyAll": "Nog geen repetities — stel er een voor om te beginnen.",
+    "emptyUpcoming": "Geen aankomende repetities.",
+    "pastRehearsals": "Eerdere repetities ({{count}})"
+  },
+  "form": {
+    "proposeTitle": "Repetitie voorstellen",
+    "detailsTitle": "Repetitiedetails",
+    "date": "Datum",
+    "location": "Locatie",
+    "startTime": "Begintijd",
+    "endTime": "Eindtijd",
+    "alsoInclude": "Ook toevoegen",
+    "alsoIncludeHint": "Leadleden worden automatisch toegevoegd. Kies optionele leden of invallers die je ook nodig hebt.",
+    "memberAvailability": "Beschikbaarheid leden",
+    "required": "Verplicht",
+    "propose": "Voorstellen",
+    "unavailableTitle": "Lid niet beschikbaar",
+    "unavailableBody_one": "{{names}} is op deze datum als niet beschikbaar gemarkeerd. Weet je zeker dat je deze repetitie wilt voorstellen?",
+    "unavailableBody_other": "{{names}} zijn op deze datum als niet beschikbaar gemarkeerd. Weet je zeker dat je deze repetitie wilt voorstellen?",
+    "goBack": "Terug",
+    "proposeAnyway": "Toch voorstellen",
+    "notes": "Notities"
+  },
+  "songs": {
+    "title": "Songs",
+    "openSong": "Song openen",
+    "openSongAria": "{{title}} openen",
+    "detachSong": "{{title}} loskoppelen"
+  },
+  "participants": {
+    "status": "Status",
+    "planThisRehearsal": "Deze repetitie plannen",
+    "revertToOption": "Terug naar optie",
+    "planHint": "Elke verplichte deelnemer moet ja stemmen voordat de oefening kan worden gepland.",
+    "requiredParticipants": "Verplichte deelnemers",
+    "noParticipants": "Nog geen deelnemers — voeg er hieronder minstens één toe.",
+    "addParticipant": "Deelnemer toevoegen",
+    "removeParticipant": "{{name}} verwijderen"
+  },
+  "page": {
+    "title": "Repetitiedetails",
+    "deleteConfirmTitle": "Repetitie verwijderen?"
+  }
+}

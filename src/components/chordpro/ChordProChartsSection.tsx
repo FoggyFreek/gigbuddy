@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -24,13 +25,14 @@ interface ChartCardProps {
 }
 
 function NewChartCard({ busy, onClick }: { busy: boolean; onClick: () => void }) {
+  const { t } = useTranslation('songs')
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, width: CARD_W }}>
       <Box
         component="button"
         onClick={onClick}
         disabled={busy}
-        aria-label="Create new chart"
+        aria-label={t($ => $.charts.createAria)}
         sx={{
           all: 'unset',
           cursor: busy ? 'default' : 'pointer',
@@ -53,20 +55,21 @@ function NewChartCard({ busy, onClick }: { busy: boolean; onClick: () => void })
           : <NoteAddOutlinedIcon sx={{ fontSize: 36 }} />}
       </Box>
       <Typography variant="caption" sx={{ color: 'primary.main', lineHeight: 1.3 }}>
-        Create
+        {t($ => $.charts.create)}
       </Typography>
     </Box>
   )
 }
 
 function ChartCard({ chart, onOpen }: ChartCardProps) {
+  const { t } = useTranslation('songs')
   const id = chart.id as Id
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, width: CARD_W }}>
       <Box
         component="button"
         onClick={() => onOpen(id)}
-        aria-label={`Open ${chart.name || 'chart'}`}
+        aria-label={t($ => $.charts.openAria, { name: chart.name || t($ => $.charts.chartFallbackLower) })}
         sx={{
           all: 'unset',
           cursor: 'pointer',
@@ -86,10 +89,10 @@ function ChartCard({ chart, onOpen }: ChartCardProps) {
       </Box>
       <Typography
         variant="caption"
-        title={chart.name || 'Chart'}
+        title={chart.name || t($ => $.charts.chartFallback)}
         sx={{ width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, textAlign: 'center' }}
       >
-        {chart.name || 'Chart'}
+        {chart.name || t($ => $.charts.chartFallback)}
       </Typography>
     </Box>
   )
@@ -100,6 +103,7 @@ export default function ChordProChartsSection({
   initialCharts = [],
   canWrite = true,
 }: ChordProChartsSectionProps) {
+  const { t } = useTranslation('songs')
   const [charts, setCharts] = useState<SongChart[]>(initialCharts)
   const [openId, setOpenId] = useState<Id | null>(null)
   const [busy, setBusy] = useState(false)
@@ -111,11 +115,11 @@ export default function ChordProChartsSection({
     setError(null)
     setBusy(true)
     try {
-      const chart = await createSongChart(songId, { name: 'New chart', source: '' })
+      const chart = await createSongChart(songId, { name: t($ => $.charts.newChartName), source: '' })
       setCharts((prev) => [...prev, chart])
       setOpenId(chart.id as Id)
     } catch (err) {
-      setError((err as Error).message || 'Could not create chart.')
+      setError((err as Error).message || t($ => $.charts.createError))
     } finally {
       setBusy(false)
     }

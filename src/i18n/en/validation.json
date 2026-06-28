@@ -1,0 +1,6 @@
+{
+  "required": "This field is required",
+  "invalidEmail": "Enter a valid email address",
+  "tooShort": "Too short",
+  "tooLong": "Too long"
+}

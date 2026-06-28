@@ -1,0 +1,62 @@
+{
+  "title": "Financieel",
+  "resultCard": {
+    "title": "Resultaat in {{currency}}",
+    "exclVat": "Excl. btw",
+    "revenue": "Omzet",
+    "expenses": "Kosten",
+    "result": "Resultaat"
+  },
+  "overview": {
+    "title": "Overzicht",
+    "income": "Inkomsten",
+    "expenses": "Uitgaven",
+    "profit": "Winst",
+    "bankBalance": "Banksaldo"
+  },
+  "resultTrend": {
+    "title": "Resultaattrend",
+    "subtitle": "Laatste {{count}} jr · {{currency}}"
+  },
+  "invoices": {
+    "title": "Facturen",
+    "create": "Factuur maken",
+    "overdue": "Achterstallig",
+    "unpaid": "Onbetaald",
+    "draft": "Concept",
+    "count_one": "{{count}} factuur",
+    "count_other": "{{count}} facturen"
+  },
+  "merch": {
+    "title": "Merchandise",
+    "manage": "Merch beheren",
+    "grossProfit": "Brutowinst",
+    "noSales": "Geen merchverkoop in deze periode",
+    "margin": "{{pct}}% marge op verkoop",
+    "inventoryValue": "Voorraadwaarde",
+    "stockOnHand": "Voorraad, tegen kostprijs",
+    "breakdown": "Verkoop {{sales}} − kostprijs {{cogs}}",
+    "breakdownWithShare": "Verkoop {{sales}} − kostprijs {{cogs}} — {{pct}}% van de totale omzet"
+  },
+  "upcomingFees": {
+    "title": "Aankomende gages",
+    "viewGigs": "Optredens bekijken",
+    "grossBandFees": "Bruto bandgages",
+    "noGigs": "Geen aankomende optredens met een gage",
+    "across_one": "Verdeeld over {{count}} aankomend optreden",
+    "across_other": "Verdeeld over {{count}} aankomende optredens",
+    "confirmed": "Bevestigd",
+    "announced": "Aangekondigd",
+    "option": "Optie"
+  },
+  "vat": {
+    "title": "Btw",
+    "balanceWithTax": "Saldo bij de Belastingdienst",
+    "forPeriod": "Voor periode: K{{quarter}} {{year}}",
+    "dueDate": "Vervaldatum",
+    "days_one": "{{count}} dag",
+    "days_other": "{{count}} dagen",
+    "oweBreakdown": "Je moet btw betalen: btw over verkopen {{output}}, over inkopen {{input}}",
+    "getBackBreakdown": "Je krijgt geld terug: btw over verkopen {{output}}, over inkopen {{input}}"
+  }
+}

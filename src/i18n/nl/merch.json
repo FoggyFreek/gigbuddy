@@ -1,0 +1,153 @@
+{
+  "title": "Merchandise",
+  "status": {
+    "recorded": "Geregistreerd",
+    "voided": "Geannuleerd"
+  },
+  "products": {
+    "heading": "Producten",
+    "new": "Nieuw product",
+    "recordSale": "Verkoop registreren",
+    "empty": "Nog geen producten — maak er een aan om voorraad bij te houden.",
+    "archived": "Gearchiveerd",
+    "priceLine": "{{price}} incl. {{rate}}% btw · inkoop {{cost}}",
+    "onHand": "{{qty}} op voorraad",
+    "archive": "Archiveren",
+    "table": {
+      "name": "Naam",
+      "unitCost": "Inkoopprijs",
+      "price": "Prijs (incl. btw)",
+      "vat": "Btw",
+      "onHand": "Op voorraad",
+      "actions": "Acties"
+    }
+  },
+  "summary": {
+    "heading": "Verkoop per product",
+    "importShopify": "Importeren uit Shopify",
+    "empty": "Geen verkopen in deze periode.",
+    "table": {
+      "product": "Product",
+      "account": "Rekening",
+      "qty": "Aantal",
+      "total": "Totaal"
+    }
+  },
+  "details": {
+    "title": "Productverkopen",
+    "empty": "Geen verkopen in deze periode.",
+    "voidSale": "Verkoop annuleren",
+    "table": {
+      "date": "Datum",
+      "qty": "Aantal",
+      "unitPrice": "Stuksprijs",
+      "total": "Totaal",
+      "paidInto": "Ontvangen op",
+      "actions": "Acties"
+    }
+  },
+  "payment": {
+    "cash": "Kas",
+    "bank": "Bank"
+  },
+  "productDialog": {
+    "editTitle": "Product bewerken",
+    "newTitle": "Nieuw product",
+    "name": "Naam",
+    "unitCost": "Inkoopprijs (excl. btw)",
+    "startingUnitCost": "Begininkoopprijs (excl. btw)",
+    "movingAverageHelp": "Voortschrijdend gemiddelde — automatisch bijgewerkt door inkopen",
+    "sellingPrice": "Verkoopprijs (incl. btw)",
+    "vatRate": "Btw-tarief",
+    "revenueAccount": "Opbrengstrekening",
+    "revenueAccountHelp": "Waar de verkoopopbrengst van dit product wordt geboekt",
+    "revenueAccountDefault": "Standaard (merchandise-opbrengst band)",
+    "create": "Aanmaken"
+  },
+  "saleDialog": {
+    "title": "Merchandiseverkoop registreren",
+    "product": "Product",
+    "productOption": "{{name}} ({{qty}} op voorraad)",
+    "quantity": "Aantal",
+    "unitPrice": "Stuksprijs (incl. btw)",
+    "vatRate": "Btw-tarief",
+    "saleDate": "Verkoopdatum",
+    "paidInto": "Ontvangen op",
+    "bankAccount": "Bankrekening",
+    "cashOnHand": "Kas",
+    "gigOptional": "Optreden (optioneel)",
+    "customerPays": "Klant betaalt {{amount}}",
+    "submit": "Verkoop registreren"
+  },
+  "void": {
+    "title": "Deze verkoop annuleren?",
+    "body": "Er wordt een tegenboeking in het grootboek geplaatst die de geregistreerde opbrengst en kosten terugdraait, en {{qty}} × {{name}} gaat terug in voorraad. Annuleren is definitief.",
+    "confirm": "Verkoop annuleren"
+  },
+  "shopify": {
+    "title": "Bestellingen importeren uit Shopify",
+    "notConnected": "Shopify is nog niet verbonden. Voeg eerst je API-sleutel en winkeldomein toe in <settingsLink>Instellingen → Integraties</settingsLink>.",
+    "next": "Volgende ({{count}})",
+    "importLines_one": "{{count}} regel importeren",
+    "importLines_other": "{{count}} regels importeren",
+    "noOrders": "Geen recente bestellingen gevonden.",
+    "loadMore": "Oudere bestellingen laden",
+    "imported": "Geïmporteerd",
+    "refunded": "Terugbetaald",
+    "skip": "Overslaan",
+    "productsGroup": "Producten",
+    "revenueAccountsGroup": "Opbrengstrekeningen",
+    "vat": "Btw",
+    "lineCount_one": "{{count}} regel",
+    "lineCount_other": "{{count}} regels",
+    "mapIntro": "Koppel elke regel aan een product (opbrengst gebruikt de rekening van het product en past de voorraad aan) of aan een opbrengstrekening, of sla hem over. Reeds geïmporteerde en terugbetaalde regels zijn vergrendeld.",
+    "table": {
+      "order": "Bestelling",
+      "date": "Datum",
+      "status": "Status",
+      "lines": "Regels",
+      "total": "Totaal"
+    },
+    "mapTable": {
+      "item": "Artikel",
+      "qty": "Aantal",
+      "mapTo": "Koppelen aan"
+    },
+    "done": {
+      "importedOnly_one": "{{count}} regel geïmporteerd.",
+      "importedOnly_other": "{{count}} regels geïmporteerd.",
+      "importedWithSkipped_one": "{{count}} regel geïmporteerd, {{skipped}} overgeslagen.",
+      "importedWithSkipped_other": "{{count}} regels geïmporteerd, {{skipped}} overgeslagen.",
+      "line": "Regel",
+      "reason": "Reden"
+    },
+    "errors": {
+      "appNotInstalled": "Deze app is nog niet geïnstalleerd in je Shopify-winkel. Open je Shopify-beheer, installeer de app en probeer het opnieuw.",
+      "invalidClient": "Shopify heeft je app-gegevens geweigerd. Controleer de Client ID en het app-geheim in Instellingen → Integraties.",
+      "rateLimited": "Shopify beperkt het aantal verzoeken. Wacht even en probeer het opnieuw.",
+      "loadOrders": "Bestellingen laden mislukt",
+      "loadMoreOrders": "Meer bestellingen laden mislukt",
+      "importFailed": "Importeren mislukt"
+    },
+    "lineStatus": {
+      "imported": "Geïmporteerd",
+      "skipped": "Overgeslagen",
+      "skipped_duplicate": "Al geïmporteerd",
+      "skipped_insufficient_stock": "Onvoldoende voorraad",
+      "skipped_refunded_line": "Terugbetaald",
+      "skipped_invalid_mapping": "Ongeldige koppeling",
+      "skipped_invalid_account": "Ongeldige rekening",
+      "skipped_closed_period": "Periode gesloten",
+      "skipped_cancelled": "Bestelling geannuleerd",
+      "skipped_unsupported_currency": "Niet-ondersteunde valuta",
+      "skipped_unpaid": "Bestelling onbetaald",
+      "skipped_not_found": "Bestelling niet gevonden",
+      "skipped_accounting_not_configured": "Boekhouding niet geconfigureerd"
+    },
+    "orderSkip": {
+      "skipped_cancelled": "Geannuleerd",
+      "skipped_unsupported_currency": "Niet EUR",
+      "skipped_unpaid": "Onbetaald"
+    }
+  }
+}

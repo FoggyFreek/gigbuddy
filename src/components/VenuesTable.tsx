@@ -1,5 +1,6 @@
 import type { Venue, Id } from '../types/entities.ts'
 import { type ReactNode, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -32,14 +33,13 @@ const PAGE_SIZE = 25
 const COLUMN_COUNT = 6
 
 const ALL_CATEGORIES = ['venue', 'festival'] as const
-const CATEGORY_LABELS: Record<string, string> = { venue: 'Venues', festival: 'Festivals' }
 
 const COLUMNS = [
-  { id: 'category', label: 'Category' },
-  { id: 'name',     label: 'Name' },
-  { id: 'city',     label: 'City / Country' },
-  { id: 'contact',  label: 'Contact' },
-  { id: 'years',    label: 'Performed', sortable: false },
+  { id: 'category', labelKey: 'category' as const },
+  { id: 'name',     labelKey: 'name' as const },
+  { id: 'city',     labelKey: 'cityCountry' as const },
+  { id: 'contact',  labelKey: 'contact' as const },
+  { id: 'years',    labelKey: 'performed' as const, sortable: false },
 ]
 
 // Extended venue shape used within VenuesTable (email/phone are included in
@@ -59,9 +59,10 @@ function displayName(venue: VenueRow): string {
 
 interface CategoryChipProps { category?: string }
 function CategoryChip({ category }: CategoryChipProps) {
+  const { t } = useTranslation('venues')
   return (
     <Chip
-      label={category === 'festival' ? 'Festival' : 'Venue'}
+      label={category === 'festival' ? t($ => $.category.festival) : t($ => $.category.venue)}
       size="small"
       color={category === 'festival' ? 'primary' : 'default'}
       variant={category === 'festival' ? 'filled' : 'outlined'}
@@ -143,7 +144,7 @@ function VenueCard({ venue, selected, active, onToggle, onClick }: VenueCardProp
       >
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
           <Box>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            <Typography variant="body2">
               {displayName(venue)}
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -152,16 +153,11 @@ function VenueCard({ venue, selected, active, onToggle, onClick }: VenueCardProp
           </Box>
           <CategoryChip category={venue.category} />
         </Box>
-        {(contactName(venue) || (venue.years ?? []).length > 0) && (
+        {((venue.years ?? []).length > 0) && (
           <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-            {contactName(venue) ? (
-              <Typography variant="caption" color="text.secondary">
-                {contactName(venue)}
-              </Typography>
-            ) : <Box />}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end' }}>
               {(venue.years ?? []).map((yr) => (
-                <Chip key={yr} label={yr} size="small" variant="outlined" />
+                <Chip key={yr} label={yr} size="small" sx={{ bgcolor: 'secondary.main', color: 'secondary.contrastText' }} />
               ))}
             </Box>
           </Box>
@@ -178,6 +174,9 @@ interface VenuesTableProps {
 }
 
 export default function VenuesTable({ venues, onRowClick, selectedId = null }: VenuesTableProps) {
+  const { t } = useTranslation('venues')
+  const categoryLabel = (category: string) =>
+    category === 'festival' ? t($ => $.category.festivalPlural) : t($ => $.category.venuePlural)
   const [selectedCategories, setSelectedCategories] = useState(new Set<string>(ALL_CATEGORIES))
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
   const [search, setSearch] = useState('')
@@ -267,9 +266,9 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
   const selectionBar = selectedCount > 0 && (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
       <Typography variant="body2" color="primary" sx={{ fontWeight: 600 }}>
-        {selectedCount} venue{selectedCount !== 1 ? 's' : ''} selected
+        {t($ => $.table.selected, { count: selectedCount })}
       </Typography>
-      <Tooltip title="Copy email addresses (semicolon-separated)">
+      <Tooltip title={t($ => $.table.copyEmails)}>
         <IconButton size="small" color="primary" onClick={copyEmails}>
           <ContentCopyIcon fontSize="small" />
         </IconButton>
@@ -284,7 +283,7 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
     <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
       <TextField
         size="small"
-        placeholder="Search venues…"
+        placeholder={t($ => $.table.searchPlaceholder)}
         value={search}
         onChange={(e) => handleSearch(e.target.value)}
         sx={{ flex: '1 1 200px', minWidth: 160 }}
@@ -304,7 +303,7 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
         startIcon={<FilterListIcon />}
         onClick={(e) => setFilterAnchor(e.currentTarget)}
       >
-        {someCategoriesSelected ? `Filter (${selectedCategories.size})` : 'Filter'}
+        {someCategoriesSelected ? t($ => $.table.filterCount, { count: selectedCategories.size }) : t($ => $.table.filter)}
       </Button>
       <Menu
         anchorEl={filterAnchor}
@@ -317,13 +316,13 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
             checked={allCategoriesSelected}
             indeterminate={someCategoriesSelected}
           />
-          <ListItemText primary="All categories" />
+          <ListItemText primary={t($ => $.table.allCategories)} />
         </MenuItem>
         <Divider />
         {ALL_CATEGORIES.map((category) => (
           <MenuItem key={category} dense onClick={() => toggleCategory(category)}>
             <Checkbox size="small" checked={selectedCategories.has(category)} />
-            <ListItemText primary={CATEGORY_LABELS[category]} />
+            <ListItemText primary={categoryLabel(category)} />
           </MenuItem>
         ))}
       </Menu>
@@ -335,13 +334,13 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
     if (isEmpty) {
       compactContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No venues yet — add one or import from CSV.
+          {t($ => $.empty)}
         </Box>
       )
     } else if (sorted.length === 0) {
       compactContent = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No results.
+          {t($ => $.table.noResults)}
         </Box>
       )
     } else {
@@ -397,7 +396,7 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
                 </TableCell>
                 {COLUMNS.map((col) =>
                   col.sortable === false ? (
-                    <TableCell key={col.id}>{col.label}</TableCell>
+                    <TableCell key={col.id}>{t($ => $.table.columns[col.labelKey])}</TableCell>
                   ) : (
                     <TableCell key={col.id}>
                       <TableSortLabel
@@ -405,7 +404,7 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
                         direction={sortBy === col.id ? sortDir : 'asc'}
                         onClick={() => handleSort(col.id)}
                       >
-                        {col.label}
+                        {t($ => $.table.columns[col.labelKey])}
                       </TableSortLabel>
                     </TableCell>
                   )
@@ -416,14 +415,14 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: V
               {isEmpty && (
                 <TableRow>
                   <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                    No venues yet — add one or import from CSV.
+                    {t($ => $.empty)}
                   </TableCell>
                 </TableRow>
               )}
               {!isEmpty && sorted.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                    No results.
+                    {t($ => $.table.noResults)}
                   </TableCell>
                 </TableRow>
               )}

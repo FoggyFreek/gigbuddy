@@ -30,6 +30,7 @@ import type { SvgIconComponent } from '@mui/icons-material'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
+import { useTranslation } from 'react-i18next'
 import DateEntryField from './DateEntryField.tsx'
 import GigAttachments from './GigAttachments.tsx'
 import GigTasks from './GigTasks.tsx'
@@ -64,18 +65,18 @@ const REQUIRED_FIELDS = ['event_date', 'event_description']
 
 dayjs.extend(customParseFormat)
 
-const STATUSES = ['option', 'confirmed', 'announced']
+const STATUSES = ['option', 'confirmed', 'announced'] as const
 
-type TabKey = 'event' | 'terms' | 'availability' | 'tasks'
+export type TabKey = 'event' | 'terms' | 'availability' | 'tasks'
 
 // The detail body is split across four tabs, selected from the floating pill
 // that overlaps the banner. Panels stay mounted (toggled via `display`) so
 // auto-saving children (tasks/attachments) and form state survive tab switches.
-const TABS: { key: TabKey; label: string; Icon: SvgIconComponent }[] = [
-  { key: 'event', label: 'Event', Icon: FestivalIcon },
-  { key: 'terms', label: 'Terms', Icon: HandshakeIcon },
-  { key: 'availability', label: 'Availability', Icon: PeopleIcon },
-  { key: 'tasks', label: 'Tasks', Icon: ChecklistIcon },
+const TABS: { key: TabKey; Icon: SvgIconComponent }[] = [
+  { key: 'event', Icon: FestivalIcon },
+  { key: 'terms', Icon: HandshakeIcon },
+  { key: 'availability', Icon: PeopleIcon },
+  { key: 'tasks', Icon: ChecklistIcon },
 ]
 
 interface LocalGigTask {
@@ -134,6 +135,8 @@ interface GigDetailContentProps {
   // banner/participant/contact/attachment/task-edit affordances. They keep the
   // one self-action — ticking their own assigned task done (see GigTasks).
   canWrite?: boolean
+  // Tab to open on first mount (e.g. arriving from the tasks list → 'tasks').
+  initialTab?: TabKey
 }
 
 function feeToDisplay(cents: number | null | undefined): string {
@@ -163,7 +166,8 @@ const NO_NUMBER_SPINNER_SX = {
   '& input[type=number]::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 },
 }
 
-const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, canWrite = true }, ref) {
+const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, canWrite = true, initialTab = 'event' }, ref) {
+  const { t } = useTranslation('gigs')
   const { user } = useAuth()
   const currentBandMemberId = user?.bandMemberId ?? null
   const [form, setForm] = useState<GigForm>({
@@ -199,7 +203,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const [merchSummary, setMerchSummary] = useState<GigMerchSummary | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<TabKey>('event')
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const bannerInputRef = useRef<HTMLInputElement | null>(null)
 
   const saveFn = useCallback(
@@ -337,7 +341,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       setBannerPath(result.banner_path ?? null)
       onBannerUpdate?.(gigId, { banner_path: result.banner_path })
     } catch (err) {
-      setBannerError((err as Error).message || 'Banner upload failed')
+      setBannerError((err as Error).message || t($ => $.detail.banner.uploadFailed))
     } finally {
       setBannerBusy(false)
     }
@@ -357,7 +361,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       setBannerPath(null)
       onBannerUpdate?.(gigId, { banner_path: null })
     } catch (err) {
-      setBannerError((err as Error).message || 'Banner delete failed')
+      setBannerError((err as Error).message || t($ => $.detail.banner.deleteFailed))
     } finally {
       setBannerBusy(false)
     }
@@ -447,7 +451,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             <Box
               component="img"
               src={`/api/files/${bannerPath}`}
-              alt="Event banner"
+              alt={t($ => $.detail.banner.alt)}
               sx={{ maxWidth: '70%', maxHeight: '80%', objectFit: 'contain', display: 'block' }}
             />
           ) : (
@@ -467,7 +471,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               }}
             >
               <ImageIcon sx={{ fontSize: 36 }} />
-              <Typography variant="caption">No event banner</Typography>
+              <Typography variant="caption">{t($ => $.detail.banner.none)}</Typography>
             </Box>
           )}
         </Box>
@@ -497,7 +501,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               style={{ display: 'none' }}
               onChange={handleBannerFileChange}
             />
-            <Tooltip title={bannerPath ? 'Change event banner' : 'Add event banner'}>
+            <Tooltip title={bannerPath ? t($ => $.detail.banner.change) : t($ => $.detail.banner.add)}>
               <span>
                 <IconButton
                   size="small"
@@ -515,7 +519,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               </span>
             </Tooltip>
             {bannerPath && (
-              <Tooltip title="Remove event banner">
+              <Tooltip title={t($ => $.detail.banner.remove)}>
                 <span>
                   <IconButton
                     size="small"
@@ -556,8 +560,9 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         }}
       >
         <Paper elevation={6} sx={{ display: 'inline-flex', gap: 0.5, p: 0.75, borderRadius: 999 }}>
-          {TABS.map(({ key, label, Icon }) => {
+          {TABS.map(({ key, Icon }) => {
             const selected = activeTab === key
+            const label = t($ => $.detail.tabs[key])
             return (
               <Tooltip key={key} title={label}>
                 <IconButton
@@ -583,12 +588,12 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         <Grid container spacing={2}>
           <Grid size={12}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Event details
+              {t($ => $.detail.eventDetails)}
             </Typography>
           </Grid>
           <Grid size={{ xs: 12, sm: 3 }}>
             <DateEntryField
-              label="Date"
+              label={t($ => $.detail.date)}
               fullWidth
               required
               disabled={!canWrite}
@@ -600,7 +605,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           </Grid>
           <Grid size={{ xs: 6, sm: 3 }}>
             <TimePicker
-              label="Start time"
+              label={t($ => $.detail.startTime)}
               ampm={false}
               disabled={!canWrite}
               value={timeStringToDayjs(form.start_time)}
@@ -610,7 +615,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           </Grid>
           <Grid size={{ xs: 6, sm: 3 }}>
             <TimePicker
-              label="End time"
+              label={t($ => $.detail.endTime)}
               ampm={false}
               disabled={!canWrite}
               value={timeStringToDayjs(form.end_time)}
@@ -621,20 +626,20 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           <Grid size={{ xs: 12, sm: 3 }}>
             <TextField
               select
-              label="Status"
+              label={t($ => $.detail.status)}
               fullWidth
               disabled={!canWrite}
               value={form.status}
               onChange={(e) => handleChange('status', e.target.value)}
             >
               {STATUSES.map((s) => (
-                <MenuItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
+                <MenuItem key={s} value={s}>{t($ => $.status[s])}</MenuItem>
               ))}
             </TextField>
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
-              label="Event description"
+              label={t($ => $.detail.eventDescription)}
               fullWidth
               required
               disabled={!canWrite}
@@ -668,7 +673,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
-              label="Event link"
+              label={t($ => $.detail.eventLink)}
               type="url"
               fullWidth
               disabled={!canWrite}
@@ -678,7 +683,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                 input: {
                   endAdornment: form.event_link ? (
                     <InputAdornment position="end">
-                      <Tooltip title="Open link">
+                      <Tooltip title={t($ => $.detail.openLink)}>
                         <IconButton
                           size="small"
                           edge="end"
@@ -704,7 +709,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         <Grid container spacing={2}>
           <Grid size={12}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Terms
+              {t($ => $.detail.terms)}
             </Typography>
           </Grid>
           <Grid size={{ xs: 12 }}>
@@ -718,12 +723,12 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                   }
                 />
               }
-              label="Paid admission"
+              label={t($ => $.detail.paidAdmission)}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
-              label="Guaranteed fee"
+              label={t($ => $.detail.guaranteedFee)}
               fullWidth
               disabled={!canWrite}
               value={form.booking_fee}
@@ -738,7 +743,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
-              label="Merchandise cut"
+              label={t($ => $.detail.merchandiseCut)}
               type="number"
               fullWidth
               disabled={!canWrite}
@@ -757,7 +762,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           {form.admission === 'paid' && (
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label="Percentage of net sales"
+                label={t($ => $.detail.percentageOfNetSales)}
                 type="number"
                 fullWidth
                 disabled={!canWrite}
@@ -777,7 +782,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           {form.admission === 'paid' && (
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label="Ticket link"
+                label={t($ => $.detail.ticketLink)}
                 type="url"
                 fullWidth
                 disabled={!canWrite}
@@ -787,7 +792,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                   input: {
                     endAdornment: form.ticket_link ? (
                       <InputAdornment position="end">
-                        <Tooltip title="Open link">
+                        <Tooltip title={t($ => $.detail.openLink)}>
                           <IconButton
                             size="small"
                             edge="end"
@@ -815,14 +820,14 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                 <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                   <LocalMallIcon color="action" />
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, flexGrow: 1 }}>
-                    Merchandise sold
+                    {t($ => $.detail.merchandiseSold)}
                   </Typography>
                   <Box sx={{ textAlign: 'right' }}>
                     <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
                       {formatEur(merchSummary.netCents)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {merchSummary.unitsSold} item{merchSummary.unitsSold === 1 ? '' : 's'} · excl. VAT
+                      {t($ => $.detail.itemsSold, { count: merchSummary.unitsSold })}
                     </Typography>
                   </Box>
                 </Stack>
@@ -834,7 +839,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           <Grid size={12}>
             <Divider sx={{ my: 1 }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Available equipment on-site
+              {t($ => $.detail.equipmentOnSite)}
             </Typography>
             <FormGroup row>
               <FormControlLabel
@@ -845,7 +850,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                     onChange={(e) => handleChange('has_pa_system', e.target.checked)}
                   />
                 }
-                label="PA system"
+                label={t($ => $.detail.paSystem)}
               />
               <FormControlLabel
                 control={
@@ -855,7 +860,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                     onChange={(e) => handleChange('has_drumkit', e.target.checked)}
                   />
                 }
-                label="Drumkit"
+                label={t($ => $.detail.drumkit)}
               />
               <FormControlLabel
                 control={
@@ -865,7 +870,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                     onChange={(e) => handleChange('has_stage_lights', e.target.checked)}
                   />
                 }
-                label="Stage light"
+                label={t($ => $.detail.stageLight)}
               />
             </FormGroup>
           </Grid>
@@ -877,7 +882,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         <Grid container spacing={2}>
           <Grid size={12}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Member availability
+              {t($ => $.detail.memberAvailability)}
             </Typography>
             {form.status === 'option' ? (
               <GigParticipantsSection
@@ -897,7 +902,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           <Grid size={12}>
             <Divider sx={{ my: 1 }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Contacts
+              {t($ => $.detail.contacts)}
             </Typography>
             <GigContactsSection
               gigId={gigId}
@@ -915,21 +920,21 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         <Grid container spacing={2}>
           <Grid size={12}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Tasks
+              {t($ => $.detail.tasks)}
             </Typography>
             <GigTasks key={String(gigId)} gigId={gigId} initialTasks={initialTasks} members={members} canWrite={canWrite} currentBandMemberId={currentBandMemberId} />
           </Grid>
           <Grid size={12}>
             <Divider sx={{ my: 1 }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Attachments
+              {t($ => $.detail.attachments)}
             </Typography>
             <GigAttachments key={String(gigId)} gigId={gigId} initialAttachments={gig?.attachments ?? []} canWrite={canWrite} />
           </Grid>
           <Grid size={12}>
             <Divider sx={{ my: 1 }} />
             <TextField
-              label="Notes"
+              label={t($ => $.detail.notes)}
               fullWidth
               multiline
               minRows={3}

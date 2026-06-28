@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -47,6 +48,7 @@ interface RehearsalForm {
 const REQUIRED_FIELDS = ['proposed_date']
 
 export default function RehearsalDetailPage() {
+  const { t } = useTranslation(['rehearsals', 'common'])
   const { id } = useParams()
   const rehearsalId = Number(id)
   const navigate = useNavigate()
@@ -167,15 +169,15 @@ export default function RehearsalDetailPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={handleBack} aria-label="back">
+          <IconButton onClick={handleBack} aria-label={t($ => $.aria.back, { ns: 'common' })}>
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Rehearsal details</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.page.title)}</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={handleBack} aria-label="close">
+            <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
               <CloseIcon />
             </IconButton>
           </>
@@ -219,7 +221,7 @@ export default function RehearsalDetailPage() {
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
                 <TextField
-                  label="Notes"
+                  label={t($ => $.form.notes)}
                   fullWidth
                   multiline
                   minRows={3}
@@ -239,18 +241,18 @@ export default function RehearsalDetailPage() {
       {canWritePlanning && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
-            Delete
+            {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </Box>
       )}
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>Delete rehearsal?</DialogTitle>
+        <DialogTitle>{t($ => $.page.deleteConfirmTitle)}</DialogTitle>
         <DialogContent>
-          <DialogContentText>This cannot be undone.</DialogContentText>
+          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
           <Button
             color="error"
             variant="contained"
@@ -262,7 +264,7 @@ export default function RehearsalDetailPage() {
               else navigate(-1)
             }}
           >
-            Delete
+            {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </DialogActions>
       </Dialog>

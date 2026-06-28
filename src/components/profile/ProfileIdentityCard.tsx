@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ProfileForm } from './profileForm.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -106,6 +107,7 @@ export default function ProfileIdentityCard({
   form, isAdmin, editing, onToggleEditing, onChange,
   logo, logoDark, banner, avatar,
 }: ProfileIdentityCardProps) {
+  const { t } = useTranslation(['profile', 'common'])
   const { mode } = useThemeMode()
   const [logoMenuAnchor, setLogoMenuAnchor] = useState<HTMLElement | null>(null)
 
@@ -128,7 +130,7 @@ export default function ProfileIdentityCard({
           <Box
             component="img"
             src={`/api/files/${banner.path}`}
-            alt="Profile banner"
+            alt={t($ => $.identity.bannerAlt)}
             sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
@@ -142,7 +144,7 @@ export default function ProfileIdentityCard({
         <UploadOverlay show={banner.uploading} />
         {isAdmin && editing && banner.onUploadClick && (
           <CameraButton
-            tooltipTitle="Change banner"
+            tooltipTitle={t($ => $.identity.changeBanner)}
             onClick={banner.onUploadClick}
             disabled={banner.uploading}
             sx={{ position: 'absolute', top: 8, right: 8 }}
@@ -157,14 +159,14 @@ export default function ProfileIdentityCard({
           <Box
             component="img"
             src={logoSrc(displayLogoPath)}
-            alt="Band logo"
+            alt={t($ => $.identity.logoAlt)}
             sx={{ maxWidth: 140, maxHeight: 80, objectFit: 'contain', display: 'block' }}
             onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.src = '/share/logo.png' }}
           />
           <UploadOverlay show={logoUploading} borderRadius="4px" />
           {isAdmin && editing && (logo.onUploadClick || logoDark.onUploadClick) && (
             <CameraButton
-              tooltipTitle="Change logo"
+              tooltipTitle={t($ => $.identity.changeLogo)}
               onClick={(e) => setLogoMenuAnchor(e.currentTarget)}
               disabled={logoUploading}
               sx={{ position: 'absolute', top: -10, right: -10 }}
@@ -192,7 +194,7 @@ export default function ProfileIdentityCard({
               <Box
                 component="img"
                 src={`/api/files/${avatar.path}`}
-                alt="Profile picture"
+                alt={t($ => $.identity.avatarAlt)}
                 sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none' }}
               />
@@ -205,7 +207,7 @@ export default function ProfileIdentityCard({
           <UploadOverlay show={avatar.uploading} borderRadius="50%" />
           {isAdmin && editing && avatar.onUploadClick && (
             <CameraButton
-              tooltipTitle="Change profile picture"
+              tooltipTitle={t($ => $.identity.changeAvatar)}
               onClick={avatar.onUploadClick}
               disabled={avatar.uploading}
               sx={{ position: 'absolute', bottom: 6, right: 6 }}
@@ -219,14 +221,14 @@ export default function ProfileIdentityCard({
             <Box
               component="img"
               src={logoSrc(displayLogoPath)}
-              alt="Band logo"
+              alt={t($ => $.identity.logoAlt)}
               sx={{ maxWidth: 140, maxHeight: 80, objectFit: 'contain', display: 'block' }}
               onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.src = '/share/logo.png' }}
             />
             <UploadOverlay show={logoUploading} borderRadius="4px" />
             {isAdmin && editing && (logo.onUploadClick || logoDark.onUploadClick) && (
               <CameraButton
-                tooltipTitle="Change logo"
+                tooltipTitle={t($ => $.identity.changeLogo)}
                 onClick={(e) => setLogoMenuAnchor(e.currentTarget)}
                 disabled={logoUploading}
                 sx={{ position: 'absolute', top: -10, right: -10 }}
@@ -245,7 +247,7 @@ export default function ProfileIdentityCard({
             onClick={onToggleEditing}
             variant={editing ? 'contained' : 'outlined'}
           >
-            {editing ? 'Done' : 'Edit'}
+            {editing ? t($ => $.actions.done, { ns: 'common' }) : t($ => $.actions.edit, { ns: 'common' })}
           </Button>
         </Box>
       </Box>
@@ -257,10 +259,10 @@ export default function ProfileIdentityCard({
         onClose={() => setLogoMenuAnchor(null)}
       >
         <MenuItem onClick={() => { setLogoMenuAnchor(null); logo.onUploadClick?.() }}>
-          Light theme logo
+          {t($ => $.identity.lightLogo)}
         </MenuItem>
         <MenuItem onClick={() => { setLogoMenuAnchor(null); logoDark.onUploadClick?.() }}>
-          Dark theme logo
+          {t($ => $.identity.darkLogo)}
         </MenuItem>
       </Menu>
 
@@ -285,7 +287,7 @@ export default function ProfileIdentityCard({
                 <Box
                   component="img"
                   src={`/api/files/${avatar.path}`}
-                  alt="Profile picture"
+                  alt={t($ => $.identity.avatarAlt)}
                   sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none' }}
                 />
@@ -298,7 +300,7 @@ export default function ProfileIdentityCard({
             <UploadOverlay show={avatar.uploading} borderRadius="50%" />
             {isAdmin && editing && avatar.onUploadClick && (
               <CameraButton
-                tooltipTitle="Change profile picture"
+                tooltipTitle={t($ => $.identity.changeAvatar)}
                 onClick={avatar.onUploadClick}
                 disabled={avatar.uploading}
                 sx={{ position: 'absolute', bottom: 6, right: 6 }}
@@ -310,14 +312,14 @@ export default function ProfileIdentityCard({
           <Box sx={{ flex: 1, minWidth: 0 }}>
             {editing ? (
               <TextField
-                label="Band name"
+                label={t($ => $.identity.bandName)}
                 fullWidth
                 value={form.band_name}
                 onChange={(e) => onChange('band_name', e.target.value)}
               />
             ) : (
               <Box>
-                <Typography variant="caption" color="text.secondary">Band name</Typography>
+                <Typography variant="caption" color="text.secondary">{t($ => $.identity.bandName)}</Typography>
                 <Typography>{form.band_name || '—'}</Typography>
               </Box>
             )}
@@ -331,7 +333,7 @@ export default function ProfileIdentityCard({
               onClick={onToggleEditing}
               variant={editing ? 'contained' : 'outlined'}
             >
-              {editing ? 'Done' : 'Edit'}
+              {editing ? t($ => $.actions.done, { ns: 'common' }) : t($ => $.actions.edit, { ns: 'common' })}
             </Button>
           </Box>
 
@@ -340,7 +342,7 @@ export default function ProfileIdentityCard({
         {/* Bio — full width */}
         {editing ? (
           <TextField
-            label="Bio"
+            label={t($ => $.identity.bio)}
             fullWidth
             multiline
             minRows={4}
@@ -349,7 +351,7 @@ export default function ProfileIdentityCard({
           />
         ) : (
           <Box>
-            <Typography variant="caption" color="text.secondary">Bio</Typography>
+            <Typography variant="caption" color="text.secondary">{t($ => $.identity.bio)}</Typography>
             <Typography sx={{ whiteSpace: 'pre-wrap' }}>{form.bio || '—'}</Typography>
           </Box>
         )}

@@ -1,0 +1,78 @@
+{
+  "title": "Profiel",
+  "tabs": {
+    "socials": "Socials",
+    "links": "Links",
+    "financials": "Financiëel"
+  },
+  "crop": {
+    "logo": "Bandlogo bijsnijden",
+    "logoDark": "Donker logo bijsnijden",
+    "banner": "Profielbanner bijsnijden",
+    "avatar": "Profielfoto bijsnijden"
+  },
+  "identity": {
+    "bannerAlt": "Profielbanner",
+    "logoAlt": "Bandlogo",
+    "avatarAlt": "Profielfoto",
+    "changeBanner": "Banner wijzigen",
+    "changeLogo": "Logo wijzigen",
+    "changeAvatar": "Profielfoto wijzigen",
+    "lightLogo": "Logo voor lichte modus",
+    "darkLogo": "Logo voor donkere modus",
+    "bandName": "Bandnaam",
+    "bio": "Bio"
+  },
+  "socials": {
+    "copy": "URL kopiëren",
+    "copied": "Gekopieerd",
+    "copyAria": "{{label}}-URL kopiëren",
+    "handlePlaceholder": "jouwnaam"
+  },
+  "links": {
+    "label": "Label",
+    "url": "URL",
+    "empty": "Nog geen links. Voeg er hieronder een toe — bijv. een Google Drive-map met je EPK.",
+    "openInNewTab": "Openen in nieuw tabblad",
+    "edit": "Link bewerken",
+    "delete": "Link verwijderen",
+    "doneEditing": "Klaar met bewerken",
+    "add": "Link toevoegen"
+  },
+  "financials": {
+    "editAria": "Financiële gegevens bewerken",
+    "doneAria": "Klaar met bewerken van financiële gegevens",
+    "formalName": "Formele naam (KvK)",
+    "formalNamePlaceholder": "Zoals geregistreerd bij de Kamer van Koophandel",
+    "kvkNumber": "KvK-nummer",
+    "street": "Straat + nummer",
+    "postalCode": "Postcode",
+    "city": "Plaats",
+    "country": "Land",
+    "address": "Adres",
+    "iban": "IBAN",
+    "ibanHelper": "bijv. NL91 ABNA 0417 1643 00",
+    "taxId": "Btw-nummer",
+    "taxIdHelper": "Formaat: NL123456789B01",
+    "taxPercent": "Btw %"
+  },
+  "members": {
+    "title": "Bandleden",
+    "emptyEditing": "Nog geen leden.",
+    "emptyHint": "Nog geen leden. Klik op Bewerken om er een toe te voegen.",
+    "name": "Naam",
+    "role": "Rol",
+    "rolePlaceholder": "Gitaar, Zang…",
+    "position": "Positie",
+    "positions": {
+      "lead": "Vast",
+      "optional": "Optioneel",
+      "sub": "Invaller"
+    },
+    "add": "Lid toevoegen",
+    "edit": "Lid bewerken",
+    "delete": "Lid verwijderen",
+    "doneEditing": "Klaar met bewerken",
+    "colorAria": "kleur {{color}}"
+  }
+}

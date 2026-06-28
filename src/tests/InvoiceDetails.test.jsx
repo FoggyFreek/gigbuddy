@@ -18,6 +18,7 @@ vi.mock('../api/invoices.ts', () => ({
 
 import * as invoicesApi from '../api/invoices.ts'
 import InvoiceDetails from '../components/InvoiceDetails.tsx'
+import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
 
 function wrap(ui) {
@@ -58,7 +59,10 @@ const FINALIZED_INVOICE = {
   finalized_at: '2026-05-02T00:00:00.000Z',
 }
 
-afterEach(() => { vi.clearAllMocks() })
+afterEach(async () => {
+  vi.clearAllMocks()
+  await i18n.changeLanguage('en')
+})
 
 describe('InvoiceDetails', () => {
   it('saves invoice changes via updateInvoice and closes', async () => {
@@ -271,5 +275,18 @@ describe('InvoiceDetails', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Download email' }))
     expect(await screen.findByDisplayValue('Hartelijk dank voor de samenwerking.')).toBeInTheDocument()
     expect(invoicesApi.getInvoiceEmlDefaults).toHaveBeenCalledWith(7)
+  })
+
+  it('renders the invoice editor in Dutch', async () => {
+    await i18n.changeLanguage('nl')
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('Factuur 2026-0007')).toBeInTheDocument())
+    expect(screen.getByLabelText('Factuurdatum')).toBeInTheDocument()
+    expect(screen.getByText('Klant')).toBeInTheDocument()
+    expect(screen.getByText('Regels')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Wijzigingen opslaan' })).toBeInTheDocument()
+    expect(screen.getByText('Betaallink')).toBeInTheDocument()
   })
 })

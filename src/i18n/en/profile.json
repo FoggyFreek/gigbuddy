@@ -1,0 +1,78 @@
+{
+  "title": "Profile",
+  "tabs": {
+    "socials": "Socials",
+    "links": "Links",
+    "financials": "Financials"
+  },
+  "crop": {
+    "logo": "Crop band logo",
+    "logoDark": "Crop dark logo",
+    "banner": "Crop profile banner",
+    "avatar": "Crop profile picture"
+  },
+  "identity": {
+    "bannerAlt": "Profile banner",
+    "logoAlt": "Band logo",
+    "avatarAlt": "Profile picture",
+    "changeBanner": "Change banner",
+    "changeLogo": "Change logo",
+    "changeAvatar": "Change profile picture",
+    "lightLogo": "Light theme logo",
+    "darkLogo": "Dark theme logo",
+    "bandName": "Band name",
+    "bio": "Bio"
+  },
+  "socials": {
+    "copy": "Copy URL",
+    "copied": "Copied",
+    "copyAria": "Copy {{label}} URL",
+    "handlePlaceholder": "yourhandle"
+  },
+  "links": {
+    "label": "Label",
+    "url": "URL",
+    "empty": "No links yet. Add one below — e.g. a Google Drive folder with your EPK.",
+    "openInNewTab": "Open in new tab",
+    "edit": "Edit link",
+    "delete": "Delete link",
+    "doneEditing": "Done editing",
+    "add": "Add link"
+  },
+  "financials": {
+    "editAria": "Edit financial details",
+    "doneAria": "Done editing financial details",
+    "formalName": "Formal name (KvK)",
+    "formalNamePlaceholder": "As registered at the Chamber of Commerce",
+    "kvkNumber": "KvK number",
+    "street": "Street + number",
+    "postalCode": "Postal code",
+    "city": "City",
+    "country": "Country",
+    "address": "Address",
+    "iban": "IBAN",
+    "ibanHelper": "e.g. NL91 ABNA 0417 1643 00",
+    "taxId": "Tax ID (BTW)",
+    "taxIdHelper": "Format: NL123456789B01",
+    "taxPercent": "Tax %"
+  },
+  "members": {
+    "title": "Band members",
+    "emptyEditing": "No members yet.",
+    "emptyHint": "No members yet. Click Edit to add one.",
+    "name": "Name",
+    "role": "Role",
+    "rolePlaceholder": "Guitar, Vocals…",
+    "position": "Position",
+    "positions": {
+      "lead": "Lead",
+      "optional": "Optional",
+      "sub": "Sub"
+    },
+    "add": "Add member",
+    "edit": "Edit member",
+    "delete": "Delete member",
+    "doneEditing": "Done editing",
+    "colorAria": "color {{color}}"
+  }
+}

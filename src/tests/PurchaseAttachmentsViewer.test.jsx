@@ -151,4 +151,5 @@ describe('PurchaseAttachmentsViewer', () => {
     await user.click(screen.getByRole('menuitem', { name: /delete/i }))
     expect(onDelete).toHaveBeenCalledWith(2)
   })
+
 })

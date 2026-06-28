@@ -25,7 +25,7 @@ function buildWhatsAppUrl(text: string): string {
 }
 
 export function gigShareUrl(gig: Gig): string {
-  const deepLink = `${APP_URL}/gigs?open=${gig.id}`
+  const deepLink = `${APP_URL}/gigs/${gig.id}`
   const start = formatTime(gig.start_time)
   const end = formatTime(gig.end_time)
   let timeStr: string | null
@@ -108,7 +108,7 @@ export function exportMonthToICS(
     const calVenue = gig.venue ?? gig.festival
     const summary = [gig.event_description, venueHeadline(calVenue)].filter(Boolean).join(' @ ') || 'Gig'
     const desc = [gig.status, venueCity(calVenue)].filter(Boolean).join(', ')
-    const gigUrl = `${APP_URL}/gigs?open=${gig.id}`
+    const gigUrl = `${APP_URL}/gigs/${gig.id}`
     const location = [venueHeadline(calVenue), venueCity(calVenue)].filter(Boolean).join(', ')
     events.push({
       uid: `gigbuddy-gig-${gig.id}@gigbuddy`,
@@ -128,7 +128,7 @@ export function exportMonthToICS(
     const yes = reh.participants?.filter((q) => q.vote === 'yes').length ?? 0
     const total = reh.participants?.length ?? 0
     const desc = [reh.location, `${yes}/${total} yes`, reh.notes].filter(Boolean).join(' — ')
-    const rehUrl = `${APP_URL}/rehearsals?open=${reh.id}`
+    const rehUrl = `${APP_URL}/rehearsals/${reh.id}`
     const statusSuffix = reh.status ? ` (${reh.status})` : ''
     events.push({
       uid: `gigbuddy-rehearsal-${reh.id}@gigbuddy`,
@@ -146,7 +146,7 @@ export function exportMonthToICS(
     const start = normalizeIsoDate(ev.start_date)
     const end = normalizeIsoDate(ev.end_date) || start
     if (!start || end < monthStart || start > monthEnd) continue
-    const evUrl = `${APP_URL}/events?open=${ev.id}`
+    const evUrl = `${APP_URL}/events/${ev.id}`
     events.push({
       uid: `gigbuddy-bandevent-${ev.id}@gigbuddy`,
       summary: ev.title || 'Band Event',
@@ -172,7 +172,7 @@ export function exportMonthToICS(
 }
 
 export function rehearsalShareUrl(rehearsal: RehearsalWithTimes): string {
-  const deepLink = `${APP_URL}/rehearsals?open=${rehearsal.id}`
+  const deepLink = `${APP_URL}/rehearsals/${rehearsal.id}`
   const start = formatTime(rehearsal.start_time)
   const end = formatTime(rehearsal.end_time)
   let timeStr: string | null
@@ -199,7 +199,7 @@ export function rehearsalShareUrl(rehearsal: RehearsalWithTimes): string {
 }
 
 export function bandEventShareUrl(event: BandEventWithTimes): string {
-  const deepLink = `${APP_URL}/events?open=${event.id}`
+  const deepLink = `${APP_URL}/events/${event.id}`
   const startDate = formatDate(event.start_date)
   const endDate = event.end_date && event.end_date !== event.start_date
     ? formatDate(event.end_date)

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
 import IconButton from '@mui/material/IconButton'
@@ -28,6 +29,7 @@ interface SongImportMenuProps {
 }
 
 export default function SongImportMenu({ onImported, onSongCreated }: SongImportMenuProps) {
+  const { t } = useTranslation('songs')
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [csvOpen, setCsvOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -49,7 +51,7 @@ export default function SongImportMenu({ onImported, onSongCreated }: SongImport
     if (!file) return
     e.target.value = ''
     if (file.size > CHART_MAX) {
-      setError('File exceeds the 512 KB limit.')
+      setError(t($ => $.import.sizeLimit))
       return
     }
     setBusy(true)
@@ -73,7 +75,7 @@ export default function SongImportMenu({ onImported, onSongCreated }: SongImport
       onImported()
       onSongCreated(song)
     } catch (err) {
-      setError((err as Error).message || 'Import failed.')
+      setError((err as Error).message || t($ => $.import.failed))
     } finally {
       setBusy(false)
     }
@@ -88,9 +90,9 @@ export default function SongImportMenu({ onImported, onSongCreated }: SongImport
         style={{ display: 'none' }}
         onChange={handleChordProFile}
       />
-      <Tooltip title="Import">
+      <Tooltip title={t($ => $.import.menuTooltip)}>
         <span>
-          <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} disabled={busy} aria-label="Import">
+          <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} disabled={busy} aria-label={t($ => $.import.menuTooltip)}>
             {busy ? <CircularProgress size={20} color="inherit" /> : <FileUploadOutlinedIcon />}
           </IconButton>
         </span>
@@ -99,11 +101,11 @@ export default function SongImportMenu({ onImported, onSongCreated }: SongImport
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
         <MenuItem onClick={openCsv}>
           <ListItemIcon><TableChartOutlinedIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>From CSV…</ListItemText>
+          <ListItemText>{t($ => $.import.fromCsv)}</ListItemText>
         </MenuItem>
         <MenuItem onClick={pickChordPro}>
           <ListItemIcon><LibraryMusicIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>From ChordPro file (.pro)…</ListItemText>
+          <ListItemText>{t($ => $.import.fromChordPro)}</ListItemText>
         </MenuItem>
       </Menu>
 

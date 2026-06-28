@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import ToggleButton from '@mui/material/ToggleButton'
@@ -18,6 +19,7 @@ interface Task extends GigTask {
 }
 
 export default function TasksPage() {
+  const { t } = useTranslation('tasks')
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
@@ -60,7 +62,7 @@ export default function TasksPage() {
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
-          Tasks
+          {t($ => $.title)}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           {user?.bandMemberId && (
@@ -70,7 +72,7 @@ export default function TasksPage() {
               onChange={() => setMyTasksOnly((v) => !v)}
               size="small"
             >
-              My tasks
+              {t($ => $.myTasks)}
             </ToggleButton>
           )}
           <ToggleButton
@@ -79,7 +81,7 @@ export default function TasksPage() {
             onChange={() => setShowFinished((v) => !v)}
             size="small"
           >
-            Show finished
+            {t($ => $.showFinished)}
           </ToggleButton>
         </Box>
       </Box>
@@ -100,7 +102,7 @@ export default function TasksPage() {
         <TasksTable
           tasks={visibleTasks}
           onRowClick={canWritePlanning
-            ? (task) => { const gigId = (task as Task).gig_id; if (gigId !== undefined) navigate(`/gigs/${gigId}`) }
+            ? (task) => { const gigId = (task as Task).gig_id; if (gigId !== undefined) navigate(`/gigs/${gigId}?tab=tasks`) }
             : undefined}
           onToggleDone={handleToggle}
         />

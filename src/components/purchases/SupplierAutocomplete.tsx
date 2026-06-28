@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Contact, Id } from '../../types/entities.ts'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
@@ -40,8 +41,9 @@ interface SupplierAutocompleteProps {
 // falls back to re-searching and selecting an exact match rather than reading
 // the error shape.
 export default function SupplierAutocomplete({
-  value, onChange, disabled, autoFocus, label = 'Supplier',
+  value, onChange, disabled, autoFocus, label,
 }: SupplierAutocompleteProps) {
+  const { t } = useTranslation(['purchases', 'common'])
   const [options, setOptions] = useState<Contact[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,8 +81,8 @@ export default function SupplierAutocomplete({
 
   const augmentedOptions: SupplierOption[] = useMemo(() => {
     if (tooShort || loading || hasExactMatch) return options
-    return [...options, { __action: 'create-supplier' as const, __label: `+ Add '${trimmed}' as supplier` }]
-  }, [options, tooShort, loading, hasExactMatch, trimmed])
+    return [...options, { __action: 'create-supplier' as const, __label: t($ => $.supplierPicker.create, { name: trimmed }) }]
+  }, [options, tooShort, loading, hasExactMatch, trimmed, t])
 
   async function createSupplier(name: string) {
     setError(null)
@@ -92,9 +94,9 @@ export default function SupplierAutocomplete({
         const rows = await searchContacts(name)
         const match = rows.find((r) => (r.name || '').toLowerCase() === name.toLowerCase())
         if (match) onChange({ supplier_name: match.name ?? '', supplier_contact_id: match.id ?? null })
-        else setError('Could not add supplier')
+        else setError(t($ => $.supplierPicker.createFailed))
       } catch {
-        setError('Could not add supplier')
+        setError(t($ => $.supplierPicker.createFailed))
       }
     }
   }
@@ -126,6 +128,10 @@ export default function SupplierAutocomplete({
       filterOptions={(x) => x}
       loading={loading}
       disabled={disabled}
+      clearText={t($ => $.supplierPicker.clear)}
+      openText={t($ => $.supplierPicker.open)}
+      loadingText={t($ => $.state.loading, { ns: 'common' })}
+      noOptionsText={t($ => $.supplierPicker.noOptions)}
       getOptionLabel={(o) => {
         if (typeof o === 'string') return o
         return isAction(o) ? o.__label : o.name || ''
@@ -154,9 +160,9 @@ export default function SupplierAutocomplete({
       renderInput={(params) => (
         <TextField
           {...params}
-          label={label}
+          label={label ?? t($ => $.labels.supplier)}
           autoFocus={autoFocus}
-          placeholder="Search or type contact name…"
+          placeholder={t($ => $.supplierPicker.placeholder)}
           error={Boolean(error)}
           helperText={error || undefined}
           slotProps={{

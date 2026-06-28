@@ -84,14 +84,14 @@ describe('TasksPage', () => {
   it('shows "My tasks" toggle when user has a bandMemberId', async () => {
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /my tasks/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /assigned to me/i })).toBeInTheDocument()
   })
 
   it('hides "My tasks" toggle when user has no bandMemberId', async () => {
     useAuth.mockReturnValue({ user: { id: 1, bandMemberId: null } })
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: /my tasks/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /assigned to me/i })).not.toBeInTheDocument()
   })
 
   it('filters to only the current user\'s tasks when "My tasks" is toggled on', async () => {
@@ -99,7 +99,7 @@ describe('TasksPage', () => {
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: /my tasks/i }))
+    await user.click(screen.getByRole('button', { name: /assigned to me/i }))
     expect(screen.getByText('Send invoice')).toBeInTheDocument()
     expect(screen.queryByText('Confirm rider')).not.toBeInTheDocument()
   })
@@ -109,7 +109,7 @@ describe('TasksPage', () => {
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
 
-    const toggle = screen.getByRole('button', { name: /my tasks/i })
+    const toggle = screen.getByRole('button', { name: /assigned to me/i })
     await user.click(toggle)
     await user.click(toggle)
     expect(screen.getByText('Send invoice')).toBeInTheDocument()
@@ -127,7 +127,7 @@ describe('TasksPage', () => {
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: /show finished/i }))
+    await user.click(screen.getByRole('button', { name: /finished/i }))
     expect(screen.getByText('Book hotel')).toBeInTheDocument()
   })
 
@@ -136,7 +136,7 @@ describe('TasksPage', () => {
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
 
-    const toggle = screen.getByRole('button', { name: /show finished/i })
+    const toggle = screen.getByRole('button', { name: /finished/i })
     await user.click(toggle)
     expect(screen.getByText('Book hotel')).toBeInTheDocument()
 

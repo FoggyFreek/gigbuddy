@@ -1,5 +1,6 @@
 import type { Song, Id } from '../types/entities.ts'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -22,12 +23,12 @@ import { formatDuration } from '../utils/formatDuration.ts'
 const PAGE_SIZE = 25
 
 const COLUMNS = [
-  { id: 'title',    label: 'Title' },
-  { id: 'song_key', label: 'Key' },
-  { id: 'tempo',    label: 'Tempo' },
-  { id: 'duration', label: 'Duration' },
-  { id: 'tags',     label: 'Tags' },
-]
+  { id: 'title',    labelKey: 'title' },
+  { id: 'song_key', labelKey: 'key' },
+  { id: 'tempo',    labelKey: 'tempo' },
+  { id: 'duration', labelKey: 'duration' },
+  { id: 'tags',     labelKey: 'tags' },
+] as const
 const COLUMN_COUNT = COLUMNS.length
 
 function tagNames(song: Song): string[] {
@@ -118,6 +119,7 @@ interface SongsTableProps {
 }
 
 export default function SongsTable({ songs, onRowClick, selectedId = null }: SongsTableProps) {
+  const { t } = useTranslation('songs')
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('title')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -147,7 +149,7 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }: Son
   const controls = (
     <TextField
       size="small"
-      placeholder="Search songs…"
+      placeholder={t($ => $.searchSongs)}
       value={search}
       onChange={(e) => handleSearch(e.target.value)}
       sx={{ mb: 1.5, width: '100%' }}
@@ -179,12 +181,12 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }: Son
     if (isEmpty) {
       compactBody = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          No songs yet — add one or import from CSV.
+          {t($ => $.table.empty)}
         </Box>
       )
     } else if (sorted.length === 0) {
       compactBody = (
-        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>No results.</Box>
+        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>{t($ => $.table.noResults)}</Box>
       )
     } else {
       compactBody = paged.map((s) => (
@@ -222,7 +224,7 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }: Son
                       direction={sortBy === col.id ? sortDir : 'asc'}
                       onClick={() => handleSort(col.id)}
                     >
-                      {col.label}
+                      {t($ => $.fields[col.labelKey])}
                     </TableSortLabel>
                   </TableCell>
                 ))}
@@ -232,14 +234,14 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }: Son
               {isEmpty && (
                 <TableRow>
                   <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                    No songs yet — add one or import from CSV.
+                    {t($ => $.table.empty)}
                   </TableCell>
                 </TableRow>
               )}
               {!isEmpty && sorted.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                    No results.
+                    {t($ => $.table.noResults)}
                   </TableCell>
                 </TableRow>
               )}

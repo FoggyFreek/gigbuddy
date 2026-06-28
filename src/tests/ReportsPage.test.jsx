@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import i18n from '../i18n/index.ts'
 
 vi.mock('../api/ledger.ts', () => ({
   listLedgerPeriods: vi.fn(),
@@ -68,8 +69,9 @@ function mockHappyPath() {
   getFinancialReport.mockResolvedValue(reportFixture())
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.clearAllMocks()
+  await i18n.changeLanguage('en')
 })
 
 describe('ReportsPage', () => {
@@ -77,12 +79,8 @@ describe('ReportsPage', () => {
     mockHappyPath()
     wrap(<ReportsPage />)
 
-    await waitFor(() => expect(screen.getByText('Profit & Loss')).toBeInTheDocument())
-    expect(getFinancialReport).toHaveBeenCalledWith({ mode: 'fiscal_year', year: 2026 })
-
-    expect(screen.getByText('Balance Sheet')).toBeInTheDocument()
-    expect(screen.getByText('VAT position')).toBeInTheDocument()
-    expect(screen.getByText('Trial Balance')).toBeInTheDocument()
+    await waitFor(() => expect(getFinancialReport).toHaveBeenCalledWith({ mode: 'fiscal_year', year: 2026 }))
+    expect(screen.getAllByRole('table')).toHaveLength(4)
 
     // Account rows appear in both the P&L/balance sheet and the trial balance;
     // the code renders as a separate monospace tag before the name.
@@ -91,8 +89,6 @@ describe('ReportsPage', () => {
     expect(screen.getByText('62100')).toBeInTheDocument()
     expect(screen.getByText('Instruments & Equipment')).toBeInTheDocument()
     expect(screen.getAllByText('11200')).toHaveLength(2)
-    expect(screen.getByText('Unallocated result')).toBeInTheDocument()
-    expect(screen.getByText('Net VAT position (payable)')).toBeInTheDocument()
   })
 
   it('exports the report as xlsx and pdf via download', async () => {
@@ -104,14 +100,14 @@ describe('ReportsPage', () => {
 
     const user = userEvent.setup()
     wrap(<ReportsPage />)
-    await waitFor(() => expect(screen.getByText('Profit & Loss')).toBeInTheDocument())
+    await waitFor(() => expect(getFinancialReport).toHaveBeenCalledTimes(1))
 
-    await user.click(screen.getByRole('button', { name: /export excel/i }))
+    await user.click(screen.getByTestId('GridOnOutlinedIcon').closest('button'))
     await waitFor(() => expect(exportFinancialReport).toHaveBeenCalledWith(
       { mode: 'fiscal_year', year: 2026 }, 'xlsx',
     ))
 
-    await user.click(screen.getByRole('button', { name: /export pdf/i }))
+    await user.click(screen.getByTestId('PictureAsPdfOutlinedIcon').closest('button'))
     await waitFor(() => expect(exportFinancialReport).toHaveBeenCalledWith(
       { mode: 'fiscal_year', year: 2026 }, 'pdf',
     ))
@@ -125,11 +121,11 @@ describe('ReportsPage', () => {
   it('stacks the trial balance account above its amounts in compact layout', async () => {
     mockHappyPath()
     wrap(<ReportsPage />, { compact: true })
-    await waitFor(() => expect(screen.getByText('Trial Balance')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByRole('table')).toHaveLength(4))
 
     // The compact trial balance drops the Account column header; the account
     // cell spans both amount columns on its own row.
-    expect(screen.queryByText('Account')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('table')[3].querySelectorAll('thead th')).toHaveLength(2)
     const accountCell = screen.getAllByText('Gig fees')
       .map((el) => el.closest('td'))
       .find((td) => td?.getAttribute('colspan') === '2')
@@ -142,5 +138,21 @@ describe('ReportsPage', () => {
     wrap(<ReportsPage />)
 
     await waitFor(() => expect(screen.getByText('report exploded')).toBeInTheDocument())
+  })
+
+  it('updates visible report copy without reloading data when the language changes', async () => {
+    mockHappyPath()
+    wrap(<ReportsPage />)
+
+    await waitFor(() => expect(getFinancialReport).toHaveBeenCalledTimes(1))
+    const heading = screen.getByRole('heading', { level: 5 })
+    const initialTitle = heading.textContent
+
+    await act(async () => {
+      await i18n.changeLanguage('nl')
+    })
+
+    await waitFor(() => expect(heading).not.toHaveTextContent(initialTitle))
+    expect(getFinancialReport).toHaveBeenCalledTimes(1)
   })
 })

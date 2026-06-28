@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -13,6 +14,7 @@ import { bandEventShareUrl } from '../utils/shareUtils.ts'
 import type { BandEvent } from '../types/entities.ts'
 
 export default function BandEventsPage() {
+  const { t } = useTranslation(['bandEvents', 'common'])
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -59,14 +61,14 @@ export default function BandEventsPage() {
     >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>
-          Band Events
+          {t($ => $.title)}
         </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setModal({ mode: 'create' })}
         >
-          Add
+          {t($ => $.actions.add, { ns: 'common' })}
         </Button>
       </Box>
 

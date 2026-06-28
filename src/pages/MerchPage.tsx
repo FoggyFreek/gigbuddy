@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -45,6 +46,7 @@ interface SaleBody {
 }
 
 export default function MerchPage() {
+  const { t } = useTranslation('merch')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -124,7 +126,19 @@ export default function MerchPage() {
 
   return (
     <SplitView basePath="/merch" outletContext={{ onReload: handleSalesChanged, period }}>
-      <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>Merchandise</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.title)}</Typography>
+        {!loading && (
+          <Button
+            variant="contained"
+            startIcon={<PointOfSaleOutlinedIcon />}
+            disabled={!products!.some((p) => !p.archived_at)}
+            onClick={() => setSaleDialogOpen(true)}
+          >
+            {t($ => $.products.recordSale)}
+          </Button>
+        )}
+      </Box>
 
       {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
       {loading && (
@@ -134,25 +148,15 @@ export default function MerchPage() {
       {!loading && (
         <>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="h6">Products</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button startIcon={<AddIcon />} onClick={() => setProductDialog('new')}>
-                New product
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<PointOfSaleOutlinedIcon />}
-                disabled={!products!.some((p) => !p.archived_at)}
-                onClick={() => setSaleDialogOpen(true)}
-              >
-                Record sale
-              </Button>
-            </Box>
+            <Typography variant="h6">{t($ => $.products.heading)}</Typography>
+            <Button startIcon={<AddIcon />} onClick={() => setProductDialog('new')}>
+              {t($ => $.products.new)}
+            </Button>
           </Box>
 
           {!products!.length && (
             <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-              No products yet — create one to start tracking inventory.
+              {t($ => $.products.empty)}
             </Typography>
           )}
 
@@ -166,15 +170,14 @@ export default function MerchPage() {
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1 }}>
-              <Typography variant="h6">Sales by product</Typography>
+              <Typography variant="h6">{t($ => $.summary.heading)}</Typography>
               <Chip size="small" label={summary.length} />
             </Box>
             <Button
-              size="small"
               startIcon={<CloudDownloadOutlinedIcon />}
               onClick={() => setShopifyOpen(true)}
             >
-              Import from Shopify
+              {t($ => $.summary.importShopify)}
             </Button>
             <PeriodPicker availableDates={availableDates} value={period} onChange={setPeriod} />
           </Box>
@@ -236,15 +239,16 @@ interface ProductActionsProps {
 }
 
 function ProductActions({ product, onEdit, onArchive }: ProductActionsProps) {
+  const { t } = useTranslation(['merch', 'common'])
   return (
     <>
-      <Tooltip title="Edit">
+      <Tooltip title={t($ => $.actions.edit, { ns: 'common' })}>
         <IconButton size="small" onClick={() => onEdit(product)}>
           <EditOutlinedIcon fontSize="small" />
         </IconButton>
       </Tooltip>
       {!product.archived_at && (
-        <Tooltip title="Archive">
+        <Tooltip title={t($ => $.products.archive)}>
           <IconButton size="small" onClick={() => onArchive(product)}>
             <ArchiveOutlinedIcon fontSize="small" />
           </IconButton>
@@ -261,6 +265,7 @@ interface ProductsListProps {
 }
 
 function ProductsList({ products, onEdit, onArchive }: ProductsListProps) {
+  const { t } = useTranslation('merch')
   const isCompact = useCompactLayout()
 
   if (isCompact) {
@@ -271,13 +276,17 @@ function ProductsList({ products, onEdit, onArchive }: ProductsListProps) {
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</Typography>
-                {p.archived_at && <Chip label="Archived" size="small" />}
+                {p.archived_at && <Chip label={t($ => $.products.archived)} size="small" />}
               </Box>
               <Typography variant="caption" color="text.secondary">
-                {formatEur(p.default_price_incl_cents)} incl. {Number(p.vat_rate)}% VAT · cost {formatEur(p.unit_cost_cents)}
+                {t($ => $.products.priceLine, {
+                  price: formatEur(p.default_price_incl_cents),
+                  rate: Number(p.vat_rate),
+                  cost: formatEur(p.unit_cost_cents),
+                })}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {p.quantity_on_hand} on hand
+                {t($ => $.products.onHand, { qty: p.quantity_on_hand })}
               </Typography>
             </Box>
             <Box sx={{ flexShrink: 0 }}>
@@ -295,12 +304,12 @@ function ProductsList({ products, onEdit, onArchive }: ProductsListProps) {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
-              <MoneyHeaderCells label="Unit cost" />
-              <MoneyHeaderCells label="Price (incl. VAT)" />
-              <TableCell align="right">VAT</TableCell>
-              <TableCell align="right">On hand</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell>{t($ => $.products.table.name)}</TableCell>
+              <MoneyHeaderCells label={t($ => $.products.table.unitCost)} />
+              <MoneyHeaderCells label={t($ => $.products.table.price)} />
+              <TableCell align="right">{t($ => $.products.table.vat)}</TableCell>
+              <TableCell align="right">{t($ => $.products.table.onHand)}</TableCell>
+              <TableCell align="right">{t($ => $.products.table.actions)}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -308,7 +317,7 @@ function ProductsList({ products, onEdit, onArchive }: ProductsListProps) {
               <TableRow key={String(p.id)} sx={p.archived_at ? { opacity: 0.5 } : undefined}>
                 <TableCell>
                   {p.name}
-                  {p.archived_at && <Chip label="Archived" size="small" sx={{ ml: 1 }} />}
+                  {p.archived_at && <Chip label={t($ => $.products.archived)} size="small" sx={{ ml: 1 }} />}
                 </TableCell>
                 <MoneyCells cents={p.unit_cost_cents} />
                 <MoneyCells cents={p.default_price_incl_cents} />
@@ -340,13 +349,14 @@ interface ProductSalesSummaryListProps {
 }
 
 function ProductSalesSummaryList({ rows, selectedId, onRowClick }: ProductSalesSummaryListProps) {
+  const { t } = useTranslation('merch')
   const isCompact = useCompactLayout()
 
   if (!rows.length) {
     return (
       <Paper variant="outlined">
         <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-          No sales in this period.
+          {t($ => $.summary.empty)}
         </Typography>
       </Paper>
     )
@@ -391,10 +401,10 @@ function ProductSalesSummaryList({ rows, selectedId, onRowClick }: ProductSalesS
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Product</TableCell>
-              <TableCell>Account</TableCell>
-              <TableCell align="right">Qty</TableCell>
-              <MoneyHeaderCells label="Total" />
+              <TableCell>{t($ => $.summary.table.product)}</TableCell>
+              <TableCell>{t($ => $.summary.table.account)}</TableCell>
+              <TableCell align="right">{t($ => $.summary.table.qty)}</TableCell>
+              <MoneyHeaderCells label={t($ => $.summary.table.total)} />
             </TableRow>
           </TableHead>
           <TableBody>

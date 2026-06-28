@@ -106,7 +106,7 @@ describe('calendar feed — public .ics', () => {
 
     expect(res.text).toContain('1/1 yes')
     expect(res.text).toContain(`Open in GigBuddy: `)
-    expect(res.text).toContain(`/rehearsals?open=${seed.rehearsalA.id}`)
+    expect(res.text).toContain(`/rehearsals/${seed.rehearsalA.id}`)
   })
 
   it('returns 404 for an unknown token', async () => {

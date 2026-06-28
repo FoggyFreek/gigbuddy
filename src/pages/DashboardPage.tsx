@@ -1,6 +1,7 @@
 ﻿import React from 'react'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { alpha, useTheme } from '@mui/material/styles'
 import Box from '@mui/material/Box'
@@ -200,6 +201,7 @@ interface ProfileData {
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation('dashboard')
   const { user } = useAuth()
   const bandMemberId = user?.bandMemberId ?? null
   const navigate = useNavigate()
@@ -297,7 +299,7 @@ export default function DashboardPage() {
           <Box
             component="img"
             src={logoSrc(theme.palette.mode === 'dark' && profile?.logo_dark_path ? profile.logo_dark_path : profile?.logo_path)}
-            alt="Band logo"
+            alt={t($ => $.bandLogoAlt)}
             onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.src = '/share/logo.png' }}
             sx={{ maxHeight: 48, maxWidth: 120, objectFit: 'contain', display: 'block' }}
           />
@@ -326,13 +328,13 @@ export default function DashboardPage() {
         {/* Next gig */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
-            title="Next gig"
+            title={t($ => $.nextGig.title)}
             icon={EventIcon}
             viewAllTo={nextGig.data ? `/gigs/${nextGig.data.id}` : undefined}
-            viewAllLabel="View details"
+            viewAllLabel={t($ => $.card.viewDetails)}
             status={nextGig.status}
             isEmpty={!nextGig.data}
-            emptyText="No upcoming gigs"
+            emptyText={t($ => $.nextGig.empty)}
             sx={{ height: 'auto', flexShrink: 0 }}
           >
             {nextGig.data && (
@@ -389,13 +391,13 @@ export default function DashboardPage() {
         {/* Next rehearsal */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
-            title="Next rehearsal"
+            title={t($ => $.nextRehearsal.title)}
             icon={MusicNoteIcon}
             viewAllTo={nextRehearsal.data ? `/rehearsals/${nextRehearsal.data.id}` : '/rehearsals'}
-            viewAllLabel={nextRehearsal.data ? 'View details' : undefined}
+            viewAllLabel={nextRehearsal.data ? t($ => $.card.viewDetails) : undefined}
             status={nextRehearsal.status}
             isEmpty={!nextRehearsal.data}
-            emptyText="No planned rehearsals"
+            emptyText={t($ => $.nextRehearsal.empty)}
             sx={{ height: 'auto', flexShrink: 0 }}
           >
             {nextRehearsal.data && (
@@ -417,7 +419,7 @@ export default function DashboardPage() {
                     {new Date(nextRehearsal.data.proposed_date!).toLocaleDateString('nl-NL', { month: 'short' })}
                   </Typography>
                   <Typography variant="body1" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {nextRehearsal.data.location || 'Rehearsal'}
+                    {nextRehearsal.data.location || t($ => $.nextRehearsal.fallbackLocation)}
                   </Typography>
                   <Typography variant="h5" sx={{ color: 'text.primary', fontWeight: 700, textAlign: 'center' }}>
                     {new Date(nextRehearsal.data.proposed_date!).getDate()}
@@ -435,13 +437,13 @@ export default function DashboardPage() {
         {/* Next band event */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
-            title="Next band event"
+            title={t($ => $.nextBandEvent.title)}
             icon={EventIcon}
             viewAllTo={nextBandEvent.data ? `/events/${nextBandEvent.data.id}` : undefined}
-            viewAllLabel="View details"
+            viewAllLabel={t($ => $.card.viewDetails)}
             status={nextBandEvent.status}
             isEmpty={!nextBandEvent.data}
-            emptyText="No upcoming band events"
+            emptyText={t($ => $.nextBandEvent.empty)}
             sx={{ height: 'auto', flexShrink: 0 }}
           >
             {nextBandEvent.data && (
@@ -505,13 +507,13 @@ export default function DashboardPage() {
         {/* Upcoming shows */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
-            title="Upcoming shows"
+            title={t($ => $.upcomingShows.title)}
             icon={EventIcon}
             count={shows.total}
             viewAllTo="/gigs"
             status={shows.status}
             isEmpty={shows.data.length === 0}
-            emptyText="No upcoming shows"
+            emptyText={t($ => $.upcomingShows.empty)}
           >
             <List dense disablePadding>
               {shows.data.map((g, i) => {
@@ -558,13 +560,13 @@ export default function DashboardPage() {
         {/* My tasks */}
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
           <DashboardCard
-            title="My tasks"
+            title={t($ => $.myTasks.title)}
             icon={ChecklistIcon}
             count={tasks.total}
             viewAllTo="/tasks"
             status={tasks.status}
             isEmpty={tasks.data.length === 0}
-            emptyText="No open tasks"
+            emptyText={t($ => $.myTasks.empty)}
           >
             <List dense disablePadding>
               {tasks.data.map((t) => (

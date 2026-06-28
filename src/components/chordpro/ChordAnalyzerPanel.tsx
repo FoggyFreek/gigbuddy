@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -20,6 +21,7 @@ interface ChordAnalyzerPanelProps {
 }
 
 export default function ChordAnalyzerPanel({ fretCount = 15 }: ChordAnalyzerPanelProps) {
+  const { t } = useTranslation('songs')
   const [frets, setFrets] = useState<AbsoluteFret[]>(ALL_MUTED)
 
   const candidates = useMemo(() => identifyChords(frets), [frets])
@@ -30,7 +32,7 @@ export default function ChordAnalyzerPanel({ fretCount = 15 }: ChordAnalyzerPane
     <Stack spacing={1.5}>
       <Box  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Place fingers on the neck to identify the chord
+          {t($ => $.analyzer.prompt)}
         </Typography>
         <Button
           size="small"
@@ -38,7 +40,7 @@ export default function ChordAnalyzerPanel({ fretCount = 15 }: ChordAnalyzerPane
           onClick={() => setFrets(ALL_MUTED)}
           disabled={!anyFingered}
         >
-          Clear
+          {t($ => $.analyzer.clear)}
         </Button>
       </Box>
 
@@ -49,7 +51,7 @@ export default function ChordAnalyzerPanel({ fretCount = 15 }: ChordAnalyzerPane
       <Box aria-live="polite" sx={{ minHeight: 64 }}>
         {!best ? (
           <Typography variant="body2" color="text.secondary">
-            {anyFingered ? 'No recognized chord.' : 'No notes selected.'}
+            {anyFingered ? t($ => $.analyzer.noChord) : t($ => $.analyzer.noNotes)}
           </Typography>
         ) : (
           <Stack spacing={1}>
@@ -71,7 +73,7 @@ export default function ChordAnalyzerPanel({ fretCount = 15 }: ChordAnalyzerPane
             {alternates.length > 0 && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="caption" color="text.secondary">
-                  Also:
+                  {t($ => $.analyzer.also)}
                 </Typography>
                 {alternates.map((c) => (
                   <Chip key={c.name} label={<ChordName name={c.name} />} size="small" />

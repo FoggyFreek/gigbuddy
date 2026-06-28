@@ -1,6 +1,7 @@
 import type { Id } from '../types/entities.ts'
 import { useState } from 'react'
 import Box from '@mui/material/Box'
+import { useTranslation } from 'react-i18next'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
@@ -23,6 +24,7 @@ interface NewPurchaseDialogProps {
 }
 
 export default function NewPurchaseDialog({ onClose, onCreated }: NewPurchaseDialogProps) {
+  const { t } = useTranslation(['purchases', 'common'])
   const [supplierName, setSupplierName] = useState('')
   const [supplierContactId, setSupplierContactId] = useState<Id | null>(null)
   const [receiptDate, setReceiptDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -56,14 +58,14 @@ export default function NewPurchaseDialog({ onClose, onCreated }: NewPurchaseDia
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>New purchase</DialogTitle>
+      <DialogTitle>{t($ => $.newDialog.title)}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Pick a supplier and the receipt date to start. You can fill in the lines next.
+          {t($ => $.newDialog.description)}
         </Typography>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Supplier</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{t($ => $.labels.supplier)}</Typography>
           <SupplierAutocomplete
             value={supplierName}
             onChange={({ supplier_name, supplier_contact_id }) => {
@@ -76,7 +78,8 @@ export default function NewPurchaseDialog({ onClose, onCreated }: NewPurchaseDia
         </Box>
         <Box>
           <DateEntryField
-            label="Receipt date"
+            label={t($ => $.labels.receiptDate)}
+            openPickerLabel={t($ => $.supplierFields.openReceiptDatePicker)}
             size="small"
             fullWidth
             value={receiptDate}
@@ -85,8 +88,8 @@ export default function NewPurchaseDialog({ onClose, onCreated }: NewPurchaseDia
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>Cancel</Button>
-        <Button variant="contained" disabled={!canContinue} onClick={handleContinue}>Continue</Button>
+        <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.cancel)}</Button>
+        <Button variant="contained" disabled={!canContinue} onClick={handleContinue}>{t($ => $.newDialog.continue)}</Button>
       </DialogActions>
     </Dialog>
   )

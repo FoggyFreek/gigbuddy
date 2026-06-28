@@ -1,5 +1,6 @@
 import type { Venue, Id } from '../types/entities.ts'
 import { useCallback, useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -60,6 +61,9 @@ interface VenueFormModalProps {
 }
 
 export default function VenueFormModal({ mode, venueId, onClose, onDelete, initial, onCreated, lockedCategory }: VenueFormModalProps) {
+  const { t } = useTranslation(['venues', 'common'])
+  const categoryLabel = (category: string) =>
+    category === 'festival' ? t($ => $.category.festival) : t($ => $.category.venue)
   const [form, setForm] = useState<VenueForm>(() => ({ ...EMPTY_FORM, ...initial }))
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(mode === 'edit')
@@ -183,7 +187,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
   return (
     <>
     <Dialog open fullWidth maxWidth="sm" onClose={mode === 'edit' ? handleClose : undefined}>
-      <DialogTitle>{mode === 'create' ? 'Add venue' : 'Venue'}</DialogTitle>
+      <DialogTitle>{mode === 'create' ? t($ => $.modal.addTitle) : t($ => $.detailTitle)}</DialogTitle>
 
       {loading ? (
         <DialogContent sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -212,8 +216,8 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
           if (mode === 'create') {
             return (
               <>
-                <Button onClick={onClose}>Cancel</Button>
-                <Button variant="contained" onClick={handleCreate}>Add venue</Button>
+                <Button onClick={onClose}>{t($ => $.common.actions.cancel)}</Button>
+                <Button variant="contained" onClick={handleCreate}>{t($ => $.modal.addTitle)}</Button>
               </>
             )
           }
@@ -221,18 +225,18 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
             return (
               <>
                 <Typography variant="body2" sx={{ flexGrow: 1, color: 'text.secondary' }}>
-                  Delete this venue?
+                  {t($ => $.modal.confirmDelete)}
                 </Typography>
-                <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
-                <Button color="error" variant="contained" onClick={onDelete}>Delete</Button>
+                <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
+                <Button color="error" variant="contained" onClick={onDelete}>{t($ => $.common.actions.delete)}</Button>
               </>
             )
           }
           return (
             <>
-              {canWrite && <Button color="error" onClick={() => setConfirmingDelete(true)}>Delete</Button>}
+              {canWrite && <Button color="error" onClick={() => setConfirmingDelete(true)}>{t($ => $.common.actions.delete)}</Button>}
               <Box sx={{ flexGrow: 1 }} />
-              <Button variant="contained" onClick={handleClose}>Close</Button>
+              <Button variant="contained" onClick={handleClose}>{t($ => $.common.actions.close)}</Button>
             </>
           )
         })()}
@@ -242,35 +246,44 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
     {categoryChange && (
       <Dialog open onClose={handleCategoryCancel} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Category change affects {categoryChange.affectedGigs.length} gig{categoryChange.affectedGigs.length !== 1 ? 's' : ''}
+          {t($ => $.categoryChange.title, { count: categoryChange.affectedGigs.length })}
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" gutterBottom>
-            The following {categoryChange.affectedGigs.length === 1 ? 'gig links' : 'gigs link'} to this record
-            as a <strong>{categoryChange.prevCategory}</strong>. Changing to
-            a <strong>{categoryChange.newCategory}</strong> requires each gig's link to be updated.
+            <Trans
+              t={t}
+              i18nKey={$ => $.categoryChange.body}
+              count={categoryChange.affectedGigs.length}
+              values={{
+                prevCategory: categoryLabel(categoryChange.prevCategory),
+                newCategory: categoryLabel(categoryChange.newCategory),
+              }}
+              components={{ strong: <strong /> }}
+            />
           </Typography>
           <Box component="ul" sx={{ pl: 2, mt: 1, mb: 2 }}>
             {categoryChange.affectedGigs.map((g) => (
               <li key={String(g.id)}>
                 <Typography variant="body2">
-                  {g.event_description || '(untitled)'} — {String(g.event_date ?? '').slice(0, 10)}
+                  {g.event_description || t($ => $.categoryChange.untitled)} — {String(g.event_date ?? '').slice(0, 10)}
                 </Typography>
               </li>
             ))}
           </Box>
           <Typography variant="body2" color="text.secondary">
-            <strong>Move links</strong> — keep each gig linked to this record, moved to
-            the {categoryChange.newCategory} slot.
-            <br />
-            <strong>Remove links</strong> — unlink each gig from this record entirely.
+            <Trans
+              t={t}
+              i18nKey={$ => $.categoryChange.actions}
+              values={{ category: categoryLabel(categoryChange.newCategory) }}
+              components={{ strong: <strong />, br: <br /> }}
+            />
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCategoryCancel}>Cancel</Button>
-          <Button onClick={() => handleCategoryConfirm('remove')}>Remove links</Button>
+          <Button onClick={handleCategoryCancel}>{t($ => $.common.actions.cancel)}</Button>
+          <Button onClick={() => handleCategoryConfirm('remove')}>{t($ => $.categoryChange.removeButton)}</Button>
           <Button variant="contained" onClick={() => handleCategoryConfirm('migrate')}>
-            Move links
+            {t($ => $.categoryChange.moveButton)}
           </Button>
         </DialogActions>
       </Dialog>

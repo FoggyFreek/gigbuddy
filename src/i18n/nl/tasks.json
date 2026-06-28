@@ -1,0 +1,13 @@
+{
+  "title": "Taken bij optredens",
+  "myTasks": "Mijn taken",
+  "showFinished": "Voltooid",
+  "table": {
+    "colDone": "Gereed",
+    "colTitle": "Titel",
+    "colGig": "Optreden",
+    "colAssignedTo": "Toegewezen aan",
+    "colDueDate": "Vervaldatum",
+    "empty": "Nog geen taken."
+  }
+}

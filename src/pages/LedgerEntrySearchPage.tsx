@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link as RouterLink } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
@@ -40,6 +41,7 @@ const SORT_FIELDS: ReadonlySet<SortField> = new Set(['id', 'entry_date', 'amount
 const signedAmount = (row: LedgerEntryLineRow) => (row.debit_cents ?? 0) - (row.credit_cents ?? 0)
 
 export default function LedgerEntrySearchPage() {
+  const { t } = useTranslation('ledger')
   // Restore the previous session's filters so navigating away and back keeps
   // the user's account selection, period, search, sort and pagination.
   const saved = loadLedgerEntrySearchFilters()
@@ -190,12 +192,12 @@ export default function LedgerEntrySearchPage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          Ledger entries
+          {t($ => $.search.title)}
         </Typography>
         <Chip size="small" label={visibleEntries.length} />
         <TextField
           size="small"
-          placeholder="Search memo..."
+          placeholder={t($ => $.search.searchPlaceholder)}
           value={searchQuery}
           onChange={(e) => handleFilterChange(setSearchQuery)(e.target.value)}
           slotProps={{
@@ -217,7 +219,7 @@ export default function LedgerEntrySearchPage() {
               onChange={(e) => handleFilterChange(setShowVoided)(e.target.checked)}
             />
           )}
-          label="Show voided"
+          label={t($ => $.showVoided)}
         />
         <AccountMultiSelectFilter
           accounts={accounts}
@@ -238,7 +240,7 @@ export default function LedgerEntrySearchPage() {
           return (
             <Paper variant="outlined">
               <Typography color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
-                Select one or more accounts to search their entries.
+                {t($ => $.search.selectAccountsPrompt)}
               </Typography>
             </Paper>
           )
@@ -258,12 +260,12 @@ export default function LedgerEntrySearchPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>{sortLabel('id', '#')}</TableCell>
-                      <TableCell>{sortLabel('entry_date', 'Date')}</TableCell>
-                      <TableCell>Account</TableCell>
-                      <TableCell>Type</TableCell>
-                      <TableCell>Memo</TableCell>
-                      <MoneyHeaderCells label={sortLabel('amount', 'Debit')} />
-                      <MoneyHeaderCells label="Credit" />
+                      <TableCell>{sortLabel('entry_date', t($ => $.columns.date))}</TableCell>
+                      <TableCell>{t($ => $.columns.account)}</TableCell>
+                      <TableCell>{t($ => $.columns.type)}</TableCell>
+                      <TableCell>{t($ => $.columns.memo)}</TableCell>
+                      <MoneyHeaderCells label={sortLabel('amount', t($ => $.columns.debit))} />
+                      <MoneyHeaderCells label={t($ => $.columns.credit)} />
                       <TableCell />
                     </TableRow>
                   </TableHead>
@@ -272,7 +274,7 @@ export default function LedgerEntrySearchPage() {
                       <TableRow>
                         <TableCell colSpan={10}>
                           <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                            No ledger entries found
+                            {t($ => $.emptyEntries)}
                           </Typography>
                         </TableCell>
                       </TableRow>
@@ -289,12 +291,12 @@ export default function LedgerEntrySearchPage() {
                         {row.debit_cents ? <MoneyCells cents={row.debit_cents} /> : (<><TableCell padding="none" /><TableCell /></>)}
                         {row.credit_cents ? <MoneyCells cents={row.credit_cents} /> : (<><TableCell padding="none" /><TableCell /></>)}
                         <TableCell padding="checkbox" align="center">
-                          <Tooltip title="Open transaction">
+                          <Tooltip title={t($ => $.search.openTransaction)}>
                             <IconButton
                               size="small"
                               component={RouterLink}
                               to={`/ledger/${row.transaction_id}`}
-                              aria-label="open transaction"
+                              aria-label={t($ => $.search.openTransactionAria)}
                             >
                               <LinkIcon fontSize="small" />
                             </IconButton>
@@ -307,7 +309,7 @@ export default function LedgerEntrySearchPage() {
                     <TableFooter>
                       <TableRow>
                         <TableCell colSpan={5} sx={{ fontWeight: 700, color: 'text.primary' }}>
-                          Totals ({visibleEntries.length})
+                          {t($ => $.search.totals, { count: visibleEntries.length })}
                         </TableCell>
                         <MoneyCells cents={totals.debit} bold />
                         <MoneyCells cents={totals.credit} bold />
@@ -328,7 +330,7 @@ export default function LedgerEntrySearchPage() {
                 setPage(0)
               }}
               rowsPerPageOptions={[25, 50, 100]}
-              labelRowsPerPage="per page"
+              labelRowsPerPage={t($ => $.perPage)}
             />
           </>
         )

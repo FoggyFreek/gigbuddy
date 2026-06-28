@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
@@ -13,19 +14,18 @@ interface VoidSaleDialogProps {
 }
 
 export default function VoidSaleDialog({ sale, onConfirm, onClose }: VoidSaleDialogProps) {
+  const { t } = useTranslation(['merch', 'common'])
   return (
     <Dialog open onClose={onClose}>
-      <DialogTitle>Void this sale?</DialogTitle>
+      <DialogTitle>{t($ => $.void.title)}</DialogTitle>
       <DialogContent>
         <DialogContentText>
-          A reversing entry is posted to the ledger, undoing the recorded revenue
-          and cost, and {sale.quantity} × {sale.product_name} goes back in stock.
-          Voiding is permanent.
+          {t($ => $.void.body, { qty: sale.quantity, name: sale.product_name })}
         </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button color="error" variant="contained" onClick={onConfirm}>Void sale</Button>
+        <Button onClick={onClose}>{t($ => $.common.actions.cancel)}</Button>
+        <Button color="error" variant="contained" onClick={onConfirm}>{t($ => $.void.confirm)}</Button>
       </DialogActions>
     </Dialog>
   )

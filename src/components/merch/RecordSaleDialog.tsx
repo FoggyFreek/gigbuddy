@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -35,6 +36,7 @@ interface RecordSaleDialogProps {
 // Records a merch sale. Picking a product prefills its default price and VAT
 // rate (both editable per sale). The gig link is optional context only.
 export default function RecordSaleDialog({ products, onSubmit, onClose }: RecordSaleDialogProps) {
+  const { t } = useTranslation(['merch', 'common'])
   const sellable = useMemo(() => products.filter((p) => !p.archived_at), [products])
   const [productId, setProductId] = useState<Id | ''>('')
   const [quantity, setQuantity] = useState<number | string>(1)
@@ -93,12 +95,12 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Record
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>Record merch sale</DialogTitle>
+      <DialogTitle>{t($ => $.saleDialog.title)}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <TextField
-            label="Product"
+            label={t($ => $.saleDialog.product)}
             size="small"
             select
             value={productId}
@@ -106,12 +108,12 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Record
           >
             {sellable.map((p) => (
               <MenuItem key={String(p.id)} value={p.id}>
-                {p.name} ({p.quantity_on_hand} on hand)
+                {t($ => $.saleDialog.productOption, { name: p.name, qty: p.quantity_on_hand })}
               </MenuItem>
             ))}
           </TextField>
           <TextField
-            label="Quantity"
+            label={t($ => $.saleDialog.quantity)}
             size="small"
             type="number"
             value={quantity}
@@ -120,14 +122,14 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Record
             slotProps={{ htmlInput: { min: 1, step: 1 } }}
           />
           <MoneyInput
-            label="Unit price (incl. VAT)"
+            label={t($ => $.saleDialog.unitPrice)}
             cents={priceInclCents}
             onChange={setPriceInclCents}
             helperText={undefined}
             sx={undefined}
           />
           <TextField
-            label="VAT rate"
+            label={t($ => $.saleDialog.vatRate)}
             size="small"
             select
             value={vatRate}
@@ -138,7 +140,7 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Record
             ))}
           </TextField>
           <DateEntryField
-            label="Sale date"
+            label={t($ => $.saleDialog.saleDate)}
             size="small"
             fullWidth
             value={saleDate}
@@ -146,23 +148,23 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Record
             sx={undefined}
           />
           <TextField
-            label="Paid into"
+            label={t($ => $.saleDialog.paidInto)}
             size="small"
             select
             value={paymentMethod}
             onChange={(e) => setPaymentMethod(e.target.value)}
           >
-            <MenuItem value="bank">Bank account</MenuItem>
-            <MenuItem value="cash">Cash on hand</MenuItem>
+            <MenuItem value="bank">{t($ => $.saleDialog.bankAccount)}</MenuItem>
+            <MenuItem value="cash">{t($ => $.saleDialog.cashOnHand)}</MenuItem>
           </TextField>
           <TextField
-            label="Gig (optional)"
+            label={t($ => $.saleDialog.gigOptional)}
             size="small"
             select
             value={gigId}
             onChange={(e) => setGigId(e.target.value)}
           >
-            <MenuItem value="">None</MenuItem>
+            <MenuItem value="">{t($ => $.common.state.none)}</MenuItem>
             {gigs.map((g) => (
               <MenuItem key={String(g.id)} value={g.id}>
                 {String(g.event_date ?? '').slice(0, 10)} — {g.event_description}
@@ -171,15 +173,15 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Record
           </TextField>
           {product && validQty && (
             <Typography variant="body2" color="text.secondary">
-              Customer pays {formatEur(qty * priceInclCents)}
+              {t($ => $.saleDialog.customerPays, { amount: formatEur(qty * priceInclCents) })}
             </Typography>
           )}
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.cancel)}</Button>
         <Button variant="contained" disabled={!canSubmit} onClick={handleSubmit}>
-          Record sale
+          {t($ => $.saleDialog.submit)}
         </Button>
       </DialogActions>
     </Dialog>

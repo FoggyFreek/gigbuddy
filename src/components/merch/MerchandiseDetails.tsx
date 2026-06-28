@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import IconButton from '@mui/material/IconButton'
@@ -36,6 +37,7 @@ interface MerchandiseDetailsProps {
 }
 
 export default function MerchandiseDetails({ productId, period, onReload }: MerchandiseDetailsProps) {
+  const { t } = useTranslation('merch')
   const [sales, setSales] = useState<MerchSale[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -125,7 +127,7 @@ export default function MerchandiseDetails({ productId, period, onReload }: Merc
       {!sorted.length ? (
         <Paper variant="outlined">
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No sales in this period.
+            {t($ => $.details.empty)}
           </Typography>
         </Paper>
       ) : (
@@ -140,7 +142,7 @@ export default function MerchandiseDetails({ productId, period, onReload }: Merc
                       direction={sortKey === 'date' ? sortDir : 'desc'}
                       onClick={() => handleSort('date')}
                     >
-                      Date
+                      {t($ => $.details.table.date)}
                     </TableSortLabel>
                   </TableCell>
                   <TableCell align="right" sortDirection={sortKey === 'qty' ? sortDir : false}>
@@ -149,10 +151,10 @@ export default function MerchandiseDetails({ productId, period, onReload }: Merc
                       direction={sortKey === 'qty' ? sortDir : 'desc'}
                       onClick={() => handleSort('qty')}
                     >
-                      Qty
+                      {t($ => $.details.table.qty)}
                     </TableSortLabel>
                   </TableCell>
-                  <MoneyHeaderCells label="Unit price" />
+                  <MoneyHeaderCells label={t($ => $.details.table.unitPrice)} />
                   <MoneyHeaderCells
                     label={
                       <TableSortLabel
@@ -160,12 +162,12 @@ export default function MerchandiseDetails({ productId, period, onReload }: Merc
                         direction={sortKey === 'amount' ? sortDir : 'desc'}
                         onClick={() => handleSort('amount')}
                       >
-                        Total
+                        {t($ => $.details.table.total)}
                       </TableSortLabel>
                     }
                   />
-                  <TableCell>Paid into</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell>{t($ => $.details.table.paidInto)}</TableCell>
+                  <TableCell align="right">{t($ => $.details.table.actions)}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -175,10 +177,10 @@ export default function MerchandiseDetails({ productId, period, onReload }: Merc
                     <TableCell align="right">{s.quantity}</TableCell>
                     <MoneyCells cents={s.unit_price_incl_cents} />
                     <MoneyCells cents={saleAmount(s)} />
-                    <TableCell>{s.payment_method === 'cash' ? 'Cash on hand' : 'Bank'}</TableCell>
+                    <TableCell>{s.payment_method === 'cash' ? t($ => $.payment.cash) : t($ => $.payment.bank)}</TableCell>
                     <TableCell align="right">
                       {s.status === 'recorded' && (
-                        <Tooltip title="Void sale">
+                        <Tooltip title={t($ => $.details.voidSale)}>
                           <IconButton size="small" onClick={() => setVoidTarget(s)}>
                             <BlockOutlinedIcon fontSize="small" />
                           </IconButton>

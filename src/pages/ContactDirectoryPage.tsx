@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -32,6 +33,7 @@ interface ContactDirectoryPageProps {
   createSubmitLabel?: string
   allowImport?: boolean
   emptyMessage?: string
+  importTitle?: string
 }
 
 export default function ContactDirectoryPage({
@@ -40,11 +42,17 @@ export default function ContactDirectoryPage({
   listFilter = {},
   categories = ALL_CONTACT_CATEGORIES,
   createInitial = {},
-  createTitle = 'Add contact',
-  createSubmitLabel = 'Add contact',
+  createTitle,
+  createSubmitLabel,
   allowImport = true,
-  emptyMessage = 'No contacts yet - add one or import from CSV.',
+  emptyMessage,
+  importTitle,
 }: ContactDirectoryPageProps) {
+  const { t } = useTranslation(['contacts', 'common'])
+  const resolvedCreateTitle = createTitle ?? t($ => $.addContact)
+  const resolvedSubmitLabel = createSubmitLabel ?? t($ => $.addContact)
+  const resolvedEmptyMessage = emptyMessage ?? t($ => $.empty)
+  const resolvedImportTitle = importTitle ?? t($ => $.importTitle)
   const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
@@ -109,7 +117,7 @@ export default function ContactDirectoryPage({
           {title}
         </Typography>
         {allowImport && canWritePlanning && (
-          <Tooltip title="Import">
+          <Tooltip title={t($ => $.importTooltip)}>
             <IconButton onClick={() => setImportOpen(true)}>
               <FileUploadOutlinedIcon />
             </IconButton>
@@ -121,7 +129,7 @@ export default function ContactDirectoryPage({
             startIcon={<AddIcon />}
             onClick={() => setModal({ mode: 'create' })}
           >
-            Add
+            {t($ => $.common.actions.add)}
           </Button>
         )}
       </Box>
@@ -144,7 +152,7 @@ export default function ContactDirectoryPage({
           onRowClick={(c) => navigate(`${basePath}/${c.id}`)}
           selectedId={selectedId ?? undefined}
           categories={categories}
-          emptyMessage={emptyMessage}
+          emptyMessage={resolvedEmptyMessage}
         />
       )}
 
@@ -153,14 +161,16 @@ export default function ContactDirectoryPage({
           mode="create"
           initial={createInitial}
           categories={categories}
-          title={createTitle}
-          submitLabel={createSubmitLabel}
+          title={resolvedCreateTitle}
+          submitLabel={resolvedSubmitLabel}
           onClose={handleClose}
         />
       )}
 
       {importOpen && (
         <ContactImportDialog
+          fixedCategory={category}
+          title={resolvedImportTitle}
           onClose={(reloaded) => {
             setImportOpen(false)
             if (reloaded) load()

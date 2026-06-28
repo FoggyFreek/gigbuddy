@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -21,12 +22,12 @@ import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
 import type { Purchase, Id, Period } from '../types/entities.ts'
 
 const SUMMARY_CARDS = [
-  { key: 'all', label: 'Purchases', chipColor: 'primary' },
-  { key: 'draft', label: 'Draft', chipColor: 'secondary' },
-  { key: 'overdue', label: 'Overdue', chipColor: 'error' },
-  { key: 'unpaid', label: 'Unpaid', chipColor: 'warning' },
-  { key: 'paid', label: 'Paid', chipColor: 'success' },
-]
+  { key: 'all', chipColor: 'primary' },
+  { key: 'draft', chipColor: 'secondary' },
+  { key: 'overdue', chipColor: 'error' },
+  { key: 'unpaid', chipColor: 'warning' },
+  { key: 'paid', chipColor: 'success' },
+] as const
 
 type SummaryKey = 'all' | 'draft' | 'overdue' | 'unpaid' | 'paid'
 
@@ -40,15 +41,26 @@ function getPurchaseState(p: Purchase): SummaryKey {
   return today > new Date(p.due_date) ? 'overdue' : 'unpaid'
 }
 
+// "unpaid" is the everything-not-yet-paid bucket, so it also matches overdue
+// purchases (overdue is the past-due subset of unpaid).
+function matchesSummaryFilter(p: Purchase, filter: SummaryKey): boolean {
+  if (filter === 'all') return true
+  const state = getPurchaseState(p)
+  if (filter === 'unpaid') return state === 'unpaid' || state === 'overdue'
+  return state === filter
+}
+
 export default function PurchasesPage() {
+  const { t } = useTranslation('purchases')
   const navigate = useNavigate()
+  const location = useLocation()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newDialog, setNewDialog] = useState(false)
-  const [summaryFilter, setSummaryFilter] = useState<SummaryKey>('all')
+  const [summaryFilter, setSummaryFilter] = useState<SummaryKey>('unpaid')
   const [searchQuery, setSearchQuery] = useState('')
   const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
   const [availableDates, setAvailableDates] = useState<string[]>([])
@@ -75,6 +87,16 @@ export default function PurchasesPage() {
     refreshPeriods({ signalLoaded: true })
   }, [refreshPeriods])
 
+  // Other pages (e.g. Reimbursements) can deep-link here asking to create a
+  // purchase straight away; open the dialog, then clear the flag so a refresh
+  // or back-navigation doesn't re-open it.
+  useEffect(() => {
+    if ((location.state as { openNewPurchase?: boolean } | null)?.openNewPurchase) {
+      setNewDialog(true)
+      navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location.state, location.pathname, navigate])
+
   const summaryStats = useMemo(() => {
     const stats: Record<SummaryKey, { count: number; total: number }> = {
       all: { count: 0, total: 0 },
@@ -84,11 +106,17 @@ export default function PurchasesPage() {
       paid: { count: 0, total: 0 },
     }
     for (const p of purchases) {
+      const amount = Number(p.total_cents) || 0
       const state = getPurchaseState(p)
       stats[state].count++
-      stats[state].total += Number(p.total_cents) || 0
+      stats[state].total += amount
+      // overdue is a subset of unpaid — also fold it into the unpaid totals.
+      if (state === 'overdue') {
+        stats.unpaid.count++
+        stats.unpaid.total += amount
+      }
       stats.all.count++
-      stats.all.total += Number(p.total_cents) || 0
+      stats.all.total += amount
     }
     return stats
   }, [purchases])
@@ -96,7 +124,7 @@ export default function PurchasesPage() {
   const visiblePurchases = useMemo(() => {
     let list = purchases
     if (summaryFilter !== 'all') {
-      list = list.filter((p) => getPurchaseState(p) === summaryFilter)
+      list = list.filter((p) => matchesSummaryFilter(p, summaryFilter))
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -140,16 +168,16 @@ export default function PurchasesPage() {
     setPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
   }, [])
 
-  const activeSummaryLabel = SUMMARY_CARDS.find((c) => c.key === summaryFilter)?.label ?? 'Purchases'
+  const activeSummaryLabel = t($ => $.state[summaryFilter])
 
   return (
     <SplitView basePath="/purchases" outletContext={{ onReload: load, onPurchaseUpdate: handlePurchaseUpdate }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
-          Purchases
+          {t($ => $.title)}
         </Typography>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewDialog(true)}>
-          Create purchase
+          {t($ => $.createPurchase)}
         </Button>
       </Box>
 
@@ -204,7 +232,7 @@ export default function PurchasesPage() {
                       {stats.count}
                     </Box>
                     <Typography variant="body2" sx={{ fontWeight: 500, color: `${card.chipColor}.main` }}>
-                      {card.label}
+                      {t($ => $.state[card.key])}
                     </Typography>
                   </Box>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(stats.total)}</Typography>
@@ -218,7 +246,7 @@ export default function PurchasesPage() {
             <Chip size="small" label={visiblePurchases.length} />
             <TextField
               size="small"
-              placeholder="Search"
+              placeholder={t($ => $.searchPlaceholder)}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               slotProps={{

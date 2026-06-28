@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -29,19 +30,19 @@ import { invoiceStatusColor } from '../utils/invoiceStatus.ts'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
 import StatusDot from '../components/StatusDot.tsx'
 import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
-import type { Invoice, Id, Period } from '../types/entities.ts'
+import type { Invoice, InvoiceStatus, Id, Period } from '../types/entities.ts'
 
 const SUMMARY_CARDS = [
-  { key: 'all', label: 'All invoices', chipColor: 'primary' },
-  { key: 'draft', label: 'Draft', chipColor: 'secondary' },
-  { key: 'overdue', label: 'Overdue', chipColor: 'error' },
-  { key: 'unpaid', label: 'Unpaid', chipColor: 'warning' },
-  { key: 'paid', label: 'Paid', chipColor: 'success' },
+  { key: 'all', chipColor: 'primary' },
+  { key: 'draft', chipColor: 'secondary' },
+  { key: 'overdue', chipColor: 'error' },
+  { key: 'unpaid', chipColor: 'warning' },
+  { key: 'paid', chipColor: 'success' },
 ] as const
 
 type SummaryKey = 'all' | 'draft' | 'overdue' | 'unpaid' | 'paid'
 
-function getInvoiceState(inv: Invoice): string {
+function getInvoiceState(inv: Invoice): SummaryKey | 'void' {
   if (inv.status === 'paid') return 'paid'
   if (inv.status === 'draft') return 'draft'
   if (inv.status === 'void') return 'void'
@@ -53,7 +54,17 @@ function getInvoiceState(inv: Invoice): string {
   return today > dueDate ? 'overdue' : 'unpaid'
 }
 
+// "unpaid" is the everything-not-yet-paid bucket, so it also matches overdue
+// invoices (overdue is the past-due subset of unpaid).
+function matchesSummaryFilter(inv: Invoice, filter: SummaryKey): boolean {
+  if (filter === 'all') return true
+  const state = getInvoiceState(inv)
+  if (filter === 'unpaid') return state === 'unpaid' || state === 'overdue'
+  return state === filter
+}
+
 export default function InvoicesPage() {
+  const { t } = useTranslation('invoices')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -61,7 +72,7 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newDialog, setNewDialog] = useState(false)
-  const [summaryFilter, setSummaryFilter] = useState<SummaryKey>('all')
+  const [summaryFilter, setSummaryFilter] = useState<SummaryKey>('unpaid')
   const [searchQuery, setSearchQuery] = useState('')
   const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
   const [availableDates, setAvailableDates] = useState<string[]>([])
@@ -99,10 +110,16 @@ export default function InvoicesPage() {
     for (const inv of invoices) {
       const state = getInvoiceState(inv)
       if (state === 'void') continue
+      const amount = Number(inv.total_cents) || 0
       stats[state].count++
-      stats[state].total += Number(inv.total_cents) || 0
+      stats[state].total += amount
+      // overdue is a subset of unpaid — also fold it into the unpaid totals.
+      if (state === 'overdue') {
+        stats.unpaid.count++
+        stats.unpaid.total += amount
+      }
       stats.all.count++
-      stats.all.total += Number(inv.total_cents) || 0
+      stats.all.total += amount
     }
     return stats
   }, [invoices])
@@ -110,7 +127,7 @@ export default function InvoicesPage() {
   const visibleInvoices = useMemo(() => {
     let list = invoices
     if (summaryFilter !== 'all') {
-      list = list.filter((inv) => getInvoiceState(inv) === summaryFilter)
+      list = list.filter((inv) => matchesSummaryFilter(inv, summaryFilter))
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -151,20 +168,20 @@ export default function InvoicesPage() {
     setInvoices((prev) => prev.map((inv) => (inv.id === id ? { ...inv, ...patch } : inv)))
   }, [])
 
-  const activeSummaryLabel = SUMMARY_CARDS.find((c) => c.key === summaryFilter)?.label ?? 'All invoices'
+  const activeSummaryLabel = t($ => $.state[summaryFilter])
 
   return (
     <SplitView basePath="/invoices" outletContext={{ onReload: load, onInvoiceUpdate: handleInvoiceUpdate }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>
-          Invoices
+          {t($ => $.title)}
         </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setNewDialog(true)}
         >
-          Create Invoice
+          {t($ => $.createInvoice)}
         </Button>
       </Box>
 
@@ -221,7 +238,7 @@ export default function InvoicesPage() {
                       {stats.count}
                     </Box>
                     <Typography variant="body2" sx={{ fontWeight: 500, color: `${card.chipColor}.main` }}>
-                      {card.label}
+                      {t($ => $.state[card.key])}
                     </Typography>
                   </Box>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -239,7 +256,7 @@ export default function InvoicesPage() {
             <Chip size="small" label={visibleInvoices.length} />
             <TextField
               size="small"
-              placeholder="Search"
+              placeholder={t($ => $.searchPlaceholder)}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               slotProps={{
@@ -287,6 +304,7 @@ interface InvoicesListProps {
 }
 
 function InvoicesList({ invoices, selectedId, onRowClick }: InvoicesListProps) {
+  const { t, i18n } = useTranslation('invoices')
   const isCompact = useCompactLayout()
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)
@@ -303,6 +321,9 @@ function InvoicesList({ invoices, selectedId, onRowClick }: InvoicesListProps) {
       page={safePage}
       rowsPerPage={rowsPerPage}
       rowsPerPageOptions={[25, 50, 100]}
+      labelRowsPerPage={t($ => $.pagination.rowsPerPage)}
+      labelDisplayedRows={({ from, to, count }) => t($ => $.pagination.displayedRows, { from, to, count })}
+      getItemAriaLabel={(type) => t($ => $.pagination[type])}
       onPageChange={(_, p) => setPage(p)}
       onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0) }}
     />
@@ -313,7 +334,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }: InvoicesListProps) {
       <Paper variant="outlined">
         {!invoices.length && (
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No invoices found
+            {t($ => $.empty)}
           </Typography>
         )}
         {paged.map((inv) => (
@@ -335,14 +356,14 @@ function InvoicesList({ invoices, selectedId, onRowClick }: InvoicesListProps) {
                 : 'none',
             }}
           >
-            <StatusDot color={invoiceStatusColor(inv.status)} label={inv.status} />
+            <StatusDot color={invoiceStatusColor(inv.status)} label={inv.status ? t($ => $.rawStatus[inv.status as InvoiceStatus]) : undefined} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   #{inv.invoice_number}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {formatShortDate(inv.issue_date)}
+                  {formatShortDate(inv.issue_date, i18n.resolvedLanguage)}
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -366,10 +387,10 @@ function InvoicesList({ invoices, selectedId, onRowClick }: InvoicesListProps) {
           <TableHead>
             <TableRow>
               <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }} />
-              <TableCell>Invoice #</TableCell>
-              <TableCell>Date</TableCell>
-              <TableCell>Customer</TableCell>
-              <MoneyHeaderCells label="Total" />
+              <TableCell>{t($ => $.table.invoiceNumber)}</TableCell>
+              <TableCell>{t($ => $.table.date)}</TableCell>
+              <TableCell>{t($ => $.labels.customer)}</TableCell>
+              <MoneyHeaderCells label={t($ => $.labels.total)} />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -377,7 +398,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }: InvoicesListProps) {
               <TableRow>
                 <TableCell colSpan={6}>
                   <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                    No invoices found
+                    {t($ => $.empty)}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -391,10 +412,10 @@ function InvoicesList({ invoices, selectedId, onRowClick }: InvoicesListProps) {
                 onClick={() => onRowClick(inv)}
               >
                 <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 1.5 }}>
-                  <StatusDot color={invoiceStatusColor(inv.status)} label={inv.status} />
+                  <StatusDot color={invoiceStatusColor(inv.status)} label={inv.status ? t($ => $.rawStatus[inv.status as InvoiceStatus]) : undefined} />
                 </TableCell>
                 <TableCell>#{inv.invoice_number}</TableCell>
-                <TableCell>{formatShortDate(inv.issue_date)}</TableCell>
+                <TableCell>{formatShortDate(inv.issue_date, i18n.resolvedLanguage)}</TableCell>
                 <TableCell>{inv.customer_name}</TableCell>
                 <MoneyCells cents={inv.total_cents} />
               </TableRow>

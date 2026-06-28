@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
@@ -15,6 +16,7 @@ interface MerchDetailOutletContext {
 }
 
 export default function MerchandiseDetailsPage() {
+  const { t } = useTranslation(['merch', 'common'])
   const { id } = useParams()
   const productId = Number(id)
   const navigate = useNavigate()
@@ -30,15 +32,15 @@ export default function MerchandiseDetailsPage() {
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 1200, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         {!insideSplitView && (
-          <IconButton onClick={closeView} aria-label="back">
+          <IconButton onClick={closeView} aria-label={t($ => $.aria.back, { ns: 'common' })}>
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Product sales</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.details.title)}</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={closeView} aria-label="close">
+            <IconButton onClick={closeView} aria-label={t($ => $.aria.close, { ns: 'common' })}>
               <CloseIcon />
             </IconButton>
           </>

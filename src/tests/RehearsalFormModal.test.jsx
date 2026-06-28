@@ -36,6 +36,10 @@ vi.mock('../api/rehearsals.ts', () => ({
   setVote: vi.fn().mockResolvedValue({}),
 }))
 
+vi.mock('../api/availability.ts', () => ({
+  getAvailabilityOn: vi.fn().mockResolvedValue({ members: [], bandWide: null }),
+}))
+
 import {
   addParticipant,
   createRehearsal,
@@ -44,6 +48,7 @@ import {
   setVote,
   updateRehearsal,
 } from '../api/rehearsals.ts'
+import { getAvailabilityOn } from '../api/availability.ts'
 
 function wrap(ui) {
   return render(
@@ -56,6 +61,8 @@ function wrap(ui) {
 describe('RehearsalFormModal — create mode', () => {
   beforeEach(() => {
     createRehearsal.mockClear()
+    getAvailabilityOn.mockClear()
+    getAvailabilityOn.mockResolvedValue({ members: [], bandWide: null })
   })
 
   it('renders the propose rehearsal dialog', async () => {
@@ -100,6 +107,37 @@ describe('RehearsalFormModal — create mode', () => {
         extra_member_ids: [12],
       })
     )
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  it('warns when a selected member is unavailable and proposes anyway after confirm', async () => {
+    getAvailabilityOn.mockResolvedValue({
+      members: [
+        { member_id: 10, name: 'Alice', position: 'lead', status: 'unavailable', reason: 'On holiday' },
+        { member_id: 11, name: 'Bob', position: 'lead', status: 'available' },
+      ],
+      bandWide: null,
+    })
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    wrap(<RehearsalFormModal mode="create" onClose={onClose} />)
+
+    await waitFor(() => screen.getByText(/Sam/))
+
+    const dateInput = screen.getByLabelText(/^date\s*\*?$/i)
+    await user.type(dateInput, '2099-08-01')
+
+    // The unavailability panel surfaces the unavailable lead.
+    await waitFor(() => screen.getByText(/Alice — On holiday/))
+
+    await user.click(screen.getByRole('button', { name: /^propose$/i }))
+
+    // A confirmation dialog blocks the create instead of proposing immediately.
+    await waitFor(() => screen.getByText(/marked unavailable on this date/i))
+    expect(createRehearsal).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /propose anyway/i }))
+    await waitFor(() => expect(createRehearsal).toHaveBeenCalled())
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 })

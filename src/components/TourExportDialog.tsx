@@ -1,5 +1,6 @@
 import type { Gig } from '../types/entities.ts'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
@@ -26,6 +27,7 @@ interface TourExportDialogProps {
 }
 
 export default function TourExportDialog({ open, onClose, gigs = [] }: TourExportDialogProps) {
+  const { t } = useTranslation(['gigs', 'common'])
   const [snackbar, setSnackbar] = useState(false)
 
   const text = useMemo(
@@ -50,10 +52,10 @@ export default function TourExportDialog({ open, onClose, gigs = [] }: TourExpor
         fullWidth
         onClick={(e) => e.stopPropagation()}
       >
-        <DialogTitle>Export tour dates</DialogTitle>
+        <DialogTitle>{t($ => $.tourExport.title)}</DialogTitle>
         <DialogContent dividers>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-            Tab-separated table — paste directly into Figma, Notion, or any design tool.
+            {t($ => $.tourExport.hint)}
           </Typography>
           <Box
             component="pre"
@@ -71,18 +73,18 @@ export default function TourExportDialog({ open, onClose, gigs = [] }: TourExpor
               color: gigs.length ? 'text.primary' : 'text.secondary',
             }}
           >
-            {text || 'No gigs to export.'}
+            {text || t($ => $.tourExport.noGigsToExport)}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>Close</Button>
+          <Button onClick={onClose}>{t($ => $.common.actions.close)}</Button>
           <Button
             variant="contained"
             startIcon={<ContentCopyIcon />}
             onClick={handleCopy}
             disabled={!text}
           >
-            Copy
+            {t($ => $.common.actions.copy)}
           </Button>
         </DialogActions>
       </Dialog>
@@ -91,7 +93,7 @@ export default function TourExportDialog({ open, onClose, gigs = [] }: TourExpor
         open={snackbar}
         autoHideDuration={3000}
         onClose={() => setSnackbar(false)}
-        message="Copied to clipboard"
+        message={t($ => $.tourExport.copiedToClipboard)}
       />
     </>
   )

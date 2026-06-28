@@ -1,4 +1,5 @@
-import type { Id, Member, Account, Purchase } from '../types/entities.ts'
+import type { Id, Member, Account, Purchase, PurchasePaymentMethod, PurchaseStatus } from '../types/entities.ts'
+import { useTranslation } from 'react-i18next'
 import type { UsePurchaseFormStateResult } from './purchases/usePurchaseFormState.ts'
 import { useState } from 'react'
 import Alert from '@mui/material/Alert'
@@ -36,10 +37,10 @@ import PurchaseLinesEditor from './purchases/PurchaseLinesEditor.tsx'
 import PurchaseTotalsPanel from './purchases/PurchaseTotalsPanel.tsx'
 import DateEntryField from './DateEntryField.tsx'
 
-function accountLabel(account: Account | { code: string } | null): string {
-  if (!account) return 'Bank account'
+function accountLabel(account: Account | { code: string } | null, fallback: string): string {
+  if (!account) return fallback
   const acc = account as Account
-  if (!acc.code) return 'Bank account'
+  if (!acc.code) return fallback
   return acc.name ? `${acc.code} - ${acc.name}` : acc.code
 }
 
@@ -54,12 +55,12 @@ interface PaymentRegistrationDialogProps {
   open: boolean
   saving?: boolean
   error?: string | null
-  method: string
+  method: PurchasePaymentMethod
   paidOn?: string
   paidByBandMemberId?: Id | null
   bandMembers: Member[]
   onClose: () => void
-  onMethodChange: (method: string) => void
+  onMethodChange: (method: PurchasePaymentMethod) => void
   onPaidOnChange: (date: string) => void
   onPaidByBandMemberIdChange: (id: Id | null) => void
   onSubmit: () => void
@@ -79,17 +80,19 @@ function PaymentRegistrationDialog({
   onPaidByBandMemberIdChange,
   onSubmit,
 }: PaymentRegistrationDialogProps) {
+  const { t } = useTranslation(['purchases', 'common'])
   const hasBandMembers = bandMembers.length > 0
   const selectedPayee = bandMembers.find((m) => Number(m.id) === Number(paidByBandMemberId)) || null
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>Register payment</DialogTitle>
+      <DialogTitle>{t($ => $.payment.dialogTitle)}</DialogTitle>
       <DialogContent dividers>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <Box sx={{ display: 'grid', gap: 2 }}>
           <DateEntryField
-            label="Paid on"
+            label={t($ => $.payment.paidOn)}
+            openPickerLabel={t($ => $.payment.openPaidOnPicker)}
             size="small"
             fullWidth
             value={paidOn || ''}
@@ -97,23 +100,23 @@ function PaymentRegistrationDialog({
             disabled={saving}
           />
           <FormControl>
-            <FormLabel>Payment method</FormLabel>
+            <FormLabel>{t($ => $.payment.method)}</FormLabel>
             <RadioGroup
               value={method}
-              onChange={(e) => onMethodChange(e.target.value)}
+              onChange={(e) => onMethodChange(e.target.value as PurchasePaymentMethod)}
             >
-              <FormControlLabel value="bank" control={<Radio />} label="Bank" disabled={saving} />
+              <FormControlLabel value="bank" control={<Radio />} label={t($ => $.payment.bank)} disabled={saving} />
               <FormControlLabel
                 value="member"
                 control={<Radio />}
-                label="Band member"
+                label={t($ => $.payment.bandMember)}
                 disabled={saving || !hasBandMembers}
               />
             </RadioGroup>
           </FormControl>
           {!hasBandMembers && (
             <Alert severity="info">
-              Add a band member before registering a member-paid purchase.
+              {t($ => $.payment.noBandMembers)}
             </Alert>
           )}
           {method === 'member' && (
@@ -130,15 +133,15 @@ function PaymentRegistrationDialog({
                 return `${m.name}${role}`
               }}
               isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
-              renderInput={(params) => <TextField {...params} label="Paid by" />}
+              renderInput={(params) => <TextField {...params} label={t($ => $.payment.paidBy)} />}
             />
           )}
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button onClick={onClose} disabled={saving}>{t($ => $.common.actions.cancel)}</Button>
         <Button variant="contained" onClick={onSubmit} disabled={saving}>
-          Register
+          {t($ => $.payment.register)}
         </Button>
       </DialogActions>
     </Dialog>
@@ -152,16 +155,17 @@ interface PaidPaymentSummaryProps {
 }
 
 function PaidPaymentSummary({ purchase, bandMembers, paymentAccount }: PaidPaymentSummaryProps) {
+  const { t } = useTranslation('purchases')
   const isMemberPayment = purchase.payment_method === 'member'
   const bandMember = isMemberPayment
     ? bandMembers.find((m) => Number(m.id) === Number(purchase.paid_by_band_member_id))
     : null
   let payer: string
-  if (!isMemberPayment) payer = accountLabel(paymentAccount)
+  if (!isMemberPayment) payer = accountLabel(paymentAccount, t($ => $.payment.bankAccount))
   else if (bandMember?.name) payer = bandMember.name
-  else if (purchase.paid_by_band_member_id) payer = `Band member #${purchase.paid_by_band_member_id}`
-  else payer = 'Band member'
-  const label = isMemberPayment ? 'Paid by' : 'Paid from'
+  else if (purchase.paid_by_band_member_id) payer = t($ => $.payment.bandMemberNumber, { number: purchase.paid_by_band_member_id })
+  else payer = t($ => $.payment.bandMember)
+  const label = isMemberPayment ? t($ => $.payment.paidBy) : t($ => $.payment.paidFrom)
 
   return (
     <Box
@@ -217,6 +221,7 @@ interface PurchaseDetailsProps {
 }
 
 export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseUpdate, embedded = false }: PurchaseDetailsProps) {
+  const { t } = useTranslation(['purchases', 'common'])
   // usePurchaseFormState always expects a purchaseId; in practice mode='create'
   // always pairs with a real id from NewPurchaseDialog.
   const s: UsePurchaseFormStateResult = usePurchaseFormState({ purchaseId: purchaseId!, onClose, onPurchaseUpdate })
@@ -243,18 +248,29 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
         />
       ) : (
         <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          Purchase {s.purchase?.receipt_number ?? ''}
+          {t($ => $.detail.heading, { number: s.purchase?.receipt_number ?? '' })}
         </Typography>
       )}
       {canEditNumber && !editingNumber && (
-        <IconButton size="small" onClick={() => setEditingNumber(true)} aria-label="edit receipt number">
+        <IconButton size="small" onClick={() => setEditingNumber(true)} aria-label={t($ => $.detail.editReceiptNumber)}>
           <EditOutlinedIcon fontSize="small" />
         </IconButton>
       )}
       {s.purchase && (
-        <Chip size="small" color={purchaseStatusColor(s.purchase.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} label={s.purchase.status} />
+        <Chip size="small" color={purchaseStatusColor(s.purchase.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} label={s.purchase.status ? t($ => $.rawStatus[s.purchase!.status as PurchaseStatus]) : ''} />
       )}
     </Box>
+  )
+
+  const registerPaymentButton = !s.isPaid && canRegister && (
+    <Button
+      variant="outlined"
+      startIcon={<VolunteerActivismOutlinedIcon />}
+      onClick={s.openPaymentDialog}
+      disabled={s.saving}
+    >
+      {t($ => $.detail.registerPayment)}
+    </Button>
   )
 
   const saveActions = !s.readOnly && (
@@ -265,7 +281,7 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
         onClick={() => s.handleSave('draft')}
         disabled={s.saving}
       >
-        Save as draft
+        {t($ => $.detail.saveAsDraft)}
       </Button>
       <Button
         variant="contained"
@@ -273,7 +289,7 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
         onClick={() => s.handleSave('approved')}
         disabled={s.saving}
       >
-        Approve
+        {t($ => $.detail.approve)}
       </Button>
     </>
   )
@@ -301,22 +317,12 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
             removeLine={s.removeLine}
           />
         )}
-        {s.isPaid && s.purchase ? (
+        {s.isPaid && s.purchase && (
           <PaidPaymentSummary
             purchase={s.purchase}
             bandMembers={s.bandMembers}
             paymentAccount={s.paymentAccount}
           />
-        ) : (
-          <Button
-            fullWidth
-            startIcon={<VolunteerActivismOutlinedIcon />}
-            onClick={s.openPaymentDialog}
-            disabled={!canRegister || s.saving}
-            sx={{ mt: 2, py: 1.25, bgcolor: 'action.hover', borderRadius: 99, color: 'text.primary' }}
-          >
-            Register Payment
-          </Button>
         )}
       </Box>
 
@@ -328,13 +334,13 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
 
   const deleteDialog = (
     <Dialog open={s.deleteDialogOpen} onClose={() => s.setDeleteDialogOpen(false)}>
-      <DialogTitle>Delete purchase?</DialogTitle>
+      <DialogTitle>{t($ => $.deleteDialog.title)}</DialogTitle>
       <DialogContent>
-        <DialogContentText>This permanently deletes the draft purchase. This cannot be undone.</DialogContentText>
+        <DialogContentText>{t($ => $.deleteDialog.body)}</DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => s.setDeleteDialogOpen(false)}>Cancel</Button>
-        <Button color="error" onClick={s.confirmDelete}>Delete</Button>
+        <Button onClick={() => s.setDeleteDialogOpen(false)}>{t($ => $.common.actions.cancel)}</Button>
+        <Button color="error" onClick={s.confirmDelete}>{t($ => $.common.actions.delete)}</Button>
       </DialogActions>
     </Dialog>
   )
@@ -376,14 +382,17 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
           </Box>
           <Box sx={{ flex: isCompact ? '0 0 auto' : '1 1 55%', minWidth: 0, width: isCompact ? '100%' : 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, mb: 2 }}>
-              {!s.readOnly && (
-                <Button color="error" startIcon={<DeleteIcon />} onClick={s.handleDelete} sx={{ mr: 'auto' }}>
-                  Delete
-                </Button>
-              )}
+              {registerPaymentButton}
               {saveActions}
             </Box>
             {bodyCards}
+            {!s.readOnly && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-start', mt: 2 }}>
+                <Button color="error" startIcon={<DeleteIcon />} onClick={s.handleDelete}>
+                  {t($ => $.common.actions.delete)}
+                </Button>
+              </Box>
+            )}
           </Box>
         </Box>
         {deleteDialog}
@@ -396,14 +405,14 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
     <>
       <Dialog open fullWidth maxWidth="sm" onClose={() => onClose(false)}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box sx={{ flexGrow: 1 }}>New purchase</Box>
-          <IconButton size="small" onClick={() => onClose(false)} aria-label="close">
+          <Box sx={{ flexGrow: 1 }}>{t($ => $.newDialog.title)}</Box>
+          <IconButton size="small" onClick={() => onClose(false)} aria-label={t($ => $.common.actions.close)}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <DialogContent dividers>{bodyCards}</DialogContent>
         <DialogActions>
-          <Button onClick={() => onClose(false)}>Cancel</Button>
+          <Button onClick={() => onClose(false)}>{t($ => $.common.actions.cancel)}</Button>
           {saveActions}
         </DialogActions>
       </Dialog>

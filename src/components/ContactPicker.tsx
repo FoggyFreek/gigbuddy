@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
@@ -28,7 +29,9 @@ function isActionOption(o: PickerOption): o is ActionOption {
 // when nothing matches, and reports the chosen contact via onSelect. Contacts
 // in excludeIds (already linked) are filtered out so a duplicate link can't be
 // picked — the _client.js error path can't surface the server's 409 cleanly.
-export default function ContactPicker({ onSelect, excludeIds = [], disabled, label = 'Add contact' }: ContactPickerProps) {
+export default function ContactPicker({ onSelect, excludeIds = [], disabled, label }: ContactPickerProps) {
+  const { t } = useTranslation('common')
+  const resolvedLabel = label ?? t($ => $.contactPicker.label)
   const [input, setInput] = useState('')
   const [options, setOptions] = useState<Contact[]>([])
   const [loading, setLoading] = useState(false)
@@ -79,8 +82,8 @@ export default function ContactPicker({ onSelect, excludeIds = [], disabled, lab
   const augmentedOptions = useMemo((): PickerOption[] => {
     if (tooShort || loading) return options
     if (options.length > 0) return options
-    return [{ __action: 'create-contact', __label: `+ Create contact '${trimmed}'` }]
-  }, [options, tooShort, loading, trimmed])
+    return [{ __action: 'create-contact', __label: t($ => $.contactPicker.createContact, { name: trimmed }) }]
+  }, [options, tooShort, loading, trimmed, t])
 
   function handleSelect(_event: React.SyntheticEvent, picked: PickerOption | null) {
     if (!picked) return
@@ -104,11 +107,11 @@ export default function ContactPicker({ onSelect, excludeIds = [], disabled, lab
 
   let noOptionsText: string
   if (tooShort) {
-    noOptionsText = `Type at least ${MIN_CHARS} characters…`
+    noOptionsText = t($ => $.picker.typeMinChars, { count: MIN_CHARS })
   } else if (loading) {
-    noOptionsText = 'Searching…'
+    noOptionsText = t($ => $.picker.searching)
   } else {
-    noOptionsText = 'No matches'
+    noOptionsText = t($ => $.picker.noMatches)
   }
 
   return (
@@ -152,7 +155,7 @@ export default function ContactPicker({ onSelect, excludeIds = [], disabled, lab
             </li>
           )
         }}
-        renderInput={(params) => <TextField {...params} label={label} />}
+        renderInput={(params) => <TextField {...params} label={resolvedLabel} />}
       />
       {createPrefill && (
         <ContactFormModal

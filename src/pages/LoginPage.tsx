@@ -1,8 +1,13 @@
+import { useMemo } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
+import { ThemeProvider } from '@mui/material/styles'
+import { useTranslation } from 'react-i18next'
+import { createAppTheme } from '../theme'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 
 function GoogleIcon() {
   return (
@@ -28,11 +33,17 @@ function GoogleIcon() {
 }
 
 export default function LoginPage() {
+  const { t } = useTranslation('auth')
+  // The login page is always presented in the light 'default' variant, regardless
+  // of the user's saved theme — its branding (logo, lavender background) is designed
+  // for it. Locked here so a returning user's dark/warm/slate choice can't apply.
+  const lightTheme = useMemo(() => createAppTheme('light', null, 'default'), [])
   const handleSignIn = () => {
     window.location.href = '/api/auth/login'
   }
 
   return (
+    <ThemeProvider theme={lightTheme}>
     <Box
       sx={{
         display: 'flex',
@@ -44,6 +55,9 @@ export default function LoginPage() {
         px: 2,
       }}
     >
+      <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+        <LanguageSwitcher />
+      </Box>
       <Paper
         elevation={0}
         sx={{
@@ -76,7 +90,7 @@ export default function LoginPage() {
           variant="body1"
           sx={{ color: 'text.secondary', textAlign: 'center', lineHeight: 1.6 }}
         >
-          Band management for working musicians
+          {t($ => $.tagline)}
         </Typography>
 
         <Divider sx={{ width: '100%', my: 1 }} />
@@ -106,11 +120,11 @@ export default function LoginPage() {
             },
           }}
         >
-          Sign in with Google
+          {t($ => $.signInWithGoogle)}
         </Button>
 
         <Typography variant="caption" sx={{ color: 'text.disabled', textAlign: 'center', mt: 0.5 }}>
-          Access is invite-only
+          {t($ => $.inviteOnly)}
         </Typography>
       </Paper>
 
@@ -118,5 +132,6 @@ export default function LoginPage() {
         © {new Date().getFullYear()} gigbuddy
       </Typography>
     </Box>
+    </ThemeProvider>
   )
 }

@@ -1,4 +1,5 @@
 import Button from '@mui/material/Button'
+import { useTranslation } from 'react-i18next'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -12,15 +13,16 @@ interface InvoiceDeleteDialogProps {
 }
 
 export default function InvoiceDeleteDialog({ open, invoiceNumber, onCancel, onConfirm }: InvoiceDeleteDialogProps) {
+  const { t } = useTranslation(['invoices', 'common'])
   return (
     <Dialog open={open} onClose={onCancel}>
-      <DialogTitle>Delete invoice?</DialogTitle>
+      <DialogTitle>{t($ => $.deleteDialog.title)}</DialogTitle>
       <DialogContent>
-        Delete invoice {invoiceNumber}? Cannot be undone.
+        {t($ => $.deleteDialog.body, { number: invoiceNumber || '' })}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel}>Cancel</Button>
-        <Button color="error" variant="contained" onClick={onConfirm}>Delete</Button>
+        <Button onClick={onCancel}>{t($ => $.common.actions.cancel)}</Button>
+        <Button color="error" variant="contained" onClick={onConfirm}>{t($ => $.common.actions.delete)}</Button>
       </DialogActions>
     </Dialog>
   )

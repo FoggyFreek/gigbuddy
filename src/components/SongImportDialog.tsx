@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Papa from 'papaparse'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -27,18 +28,18 @@ type ImportStep = 'upload' | 'map' | 'preview' | 'importing' | 'done'
 
 interface SongField {
   key: string
-  label: string
+  labelKey: 'title' | 'artist' | 'key' | 'tempo' | 'duration' | 'tags'
   required: boolean
   aliases: string[]
 }
 
 const SONG_FIELDS: SongField[] = [
-  { key: 'title',    label: 'Title',    required: true,  aliases: ['title', 'song', 'song title', 'name'] },
-  { key: 'artist',   label: 'Artist',   required: false, aliases: ['artist', 'band', 'performer'] },
-  { key: 'song_key', label: 'Key',      required: false, aliases: ['key', 'song key', 'song_key'] },
-  { key: 'tempo',    label: 'Tempo',    required: false, aliases: ['tempo', 'bpm'] },
-  { key: 'duration', label: 'Duration', required: false, aliases: ['duration', 'length', 'time', 'duration_seconds'] },
-  { key: 'tags',     label: 'Tags',     required: false, aliases: ['tags', 'genre', 'genres', 'style'] },
+  { key: 'title',    labelKey: 'title',    required: true,  aliases: ['title', 'song', 'song title', 'name'] },
+  { key: 'artist',   labelKey: 'artist',   required: false, aliases: ['artist', 'band', 'performer'] },
+  { key: 'song_key', labelKey: 'key',      required: false, aliases: ['key', 'song key', 'song_key'] },
+  { key: 'tempo',    labelKey: 'tempo',    required: false, aliases: ['tempo', 'bpm'] },
+  { key: 'duration', labelKey: 'duration', required: false, aliases: ['duration', 'length', 'time', 'duration_seconds'] },
+  { key: 'tags',     labelKey: 'tags',     required: false, aliases: ['tags', 'genre', 'genres', 'style'] },
 ]
 
 function autoMap(headers: string[]): Record<string, string> {
@@ -80,6 +81,7 @@ interface SongImportDialogProps {
 }
 
 export default function SongImportDialog({ onClose }: SongImportDialogProps) {
+  const { t } = useTranslation(['songs', 'common'])
   const [step, setStep] = useState<ImportStep>('upload')
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
   const [csvRows, setCsvRows] = useState<Record<string, unknown>[]>([])
@@ -110,7 +112,7 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
   }
 
   function handlePreview() {
-    if (!mapping.title) { setMapErrors({ title: 'Title column is required' }); return }
+    if (!mapping.title) { setMapErrors({ title: t($ => $.import.titleColumnRequired) }); return }
     setStep('preview')
   }
 
@@ -129,7 +131,7 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
       setResult(res as unknown as { imported: number; skipped: number })
       setStep('done')
     } catch (err) {
-      setImportError((err as Error).message || 'Import failed')
+      setImportError((err as Error).message || t($ => $.csvImport.importError, { ns: 'common' }))
       setStep('preview')
     }
   }
@@ -138,17 +140,16 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
 
   return (
     <Dialog open fullWidth maxWidth="md">
-      <DialogTitle>Import songs from CSV</DialogTitle>
+      <DialogTitle>{t($ => $.import.csvTitle)}</DialogTitle>
 
       <DialogContent>
         {step === 'upload' && (
           <Box sx={{ py: 2 }}>
             <Typography variant="body2" sx={{ mb: 2 }}>
-              Upload a UTF-8 CSV file with column headers. Supported fields: title, artist, key,
-              tempo, duration (mm:ss or seconds), tags (comma-separated).
+              {t($ => $.import.uploadHelp)}
             </Typography>
             <Button component="label">
-              Choose CSV file
+              {t($ => $.csvImport.chooseFile, { ns: 'common' })}
               {' '}
               <input ref={fileRef} type="file" accept=".csv" hidden onChange={handleFile} />
             </Button>
@@ -158,19 +159,21 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
         {step === 'map' && (
           <Box sx={{ py: 1 }}>
             <Typography variant="body2" sx={{ mb: 2 }}>
-              Map your CSV columns to song fields. {csvRows.length} rows detected.
+              {t($ => $.import.mapHelp, { count: csvRows.length })}
             </Typography>
             <Grid container spacing={2}>
-              {SONG_FIELDS.map((field) => (
+              {SONG_FIELDS.map((field) => {
+                const label = t($ => $.fields[field.labelKey]) + (field.required ? ' *' : '')
+                return (
                 <Grid size={{ xs: 12, sm: 6 }} key={field.key}>
                   <FormControl fullWidth size="small" error={!!mapErrors[field.key]}>
-                    <InputLabel>{field.label}{field.required ? ' *' : ''}</InputLabel>
+                    <InputLabel>{label}</InputLabel>
                     <Select
-                      label={field.label + (field.required ? ' *' : '')}
+                      label={label}
                       value={mapping[field.key] || ''}
                       onChange={(e) => handleMappingChange(field.key, e.target.value)}
                     >
-                      <MenuItem value="">(not mapped)</MenuItem>
+                      <MenuItem value="">{t($ => $.csvImport.notMapped, { ns: 'common' })}</MenuItem>
                       {csvHeaders.map((h) => (
                         <MenuItem key={h} value={h}>{h}</MenuItem>
                       ))}
@@ -178,7 +181,8 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
                     {mapErrors[field.key] && <FormHelperText>{mapErrors[field.key]}</FormHelperText>}
                   </FormControl>
                 </Grid>
-              ))}
+                )
+              })}
             </Grid>
           </Box>
         )}
@@ -186,18 +190,18 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
         {step === 'preview' && (
           <Box sx={{ py: 1 }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              Showing first {Math.min(5, csvRows.length)} of {csvRows.length} rows.
-              {' '}{importableCount} row{importableCount === 1 ? '' : 's'} will be imported.
+              {t($ => $.csvImport.showing, { ns: 'common', shown: Math.min(5, csvRows.length), total: csvRows.length })}
+              {' '}{t($ => $.csvImport.willImport, { ns: 'common', count: importableCount })}
             </Typography>
             {importError && <Alert severity="error" sx={{ mb: 2 }}>{importError}</Alert>}
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-                  <TableCell>Title</TableCell>
-                  <TableCell>Artist</TableCell>
-                  <TableCell>Key</TableCell>
-                  <TableCell>Tempo</TableCell>
-                  <TableCell>Tags</TableCell>
+                  <TableCell>{t($ => $.fields.title)}</TableCell>
+                  <TableCell>{t($ => $.fields.artist)}</TableCell>
+                  <TableCell>{t($ => $.fields.key)}</TableCell>
+                  <TableCell>{t($ => $.fields.tempo)}</TableCell>
+                  <TableCell>{t($ => $.fields.tags)}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -223,18 +227,19 @@ export default function SongImportDialog({ onClose }: SongImportDialogProps) {
 
         {result && (
           <Alert severity="success" sx={{ mt: 2 }}>
-            Imported {result.imported} song{result.imported === 1 ? '' : 's'}
-            {result.skipped > 0 ? ` (${result.skipped} skipped as duplicates)` : ''}.
+            {result.skipped > 0
+              ? t($ => $.import.resultSkipped, { count: result.imported, skipped: result.skipped })
+              : t($ => $.import.result, { count: result.imported })}
           </Alert>
         )}
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={() => onClose(!!result)}>{result ? 'Close' : 'Cancel'}</Button>
-        {step === 'map' && <Button variant="outlined" onClick={handlePreview}>Preview</Button>}
+        <Button onClick={() => onClose(!!result)}>{result ? t($ => $.common.actions.close) : t($ => $.common.actions.cancel)}</Button>
+        {step === 'map' && <Button variant="outlined" onClick={handlePreview}>{t($ => $.preview)}</Button>}
         {step === 'preview' && !result && (
           <Button variant="contained" onClick={handleImport} disabled={importableCount === 0}>
-            Import {importableCount} row{importableCount === 1 ? '' : 's'}
+            {t($ => $.csvImport.importButton, { ns: 'common', count: importableCount })}
           </Button>
         )}
       </DialogActions>

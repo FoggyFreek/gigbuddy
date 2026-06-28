@@ -1,0 +1,6 @@
+{
+  "required": "Dit veld is verplicht",
+  "invalidEmail": "Voer een geldig e-mailadres in",
+  "tooShort": "Te kort",
+  "tooLong": "Te lang"
+}

@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -24,9 +25,10 @@ interface SetlistCardProps {
 }
 
 function SetlistCard({ setlist, onClick }: SetlistCardProps) {
+  const { t } = useTranslation('setlists')
   const parts = [
-    `${setlist.set_count} set${setlist.set_count === 1 ? '' : 's'}`,
-    `${setlist.song_count} song${setlist.song_count === 1 ? '' : 's'}`,
+    t($ => $.list.setCount, { count: setlist.set_count ?? 0 }),
+    t($ => $.list.songCount, { count: setlist.song_count ?? 0 }),
     formatDuration(setlist.total_seconds) || '0:00',
   ]
   return (
@@ -56,6 +58,7 @@ function SetlistCard({ setlist, onClick }: SetlistCardProps) {
 }
 
 export default function SetlistsPage() {
+  const { t } = useTranslation(['setlists', 'common'])
   const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
   const [setlists, setSetlists] = useState<Setlist[]>([])
@@ -91,11 +94,11 @@ export default function SetlistsPage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
-          Setlists
+          {t($ => $.title)}
         </Typography>
         {canWritePlanning && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>
-            Add
+            {t($ => $.common.actions.add)}
           </Button>
         )}
       </Box>
@@ -109,7 +112,7 @@ export default function SetlistsPage() {
 
       {!loading && setlists.length === 0 && (
         <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-          No setlists yet — create one to start building.
+          {t($ => $.list.empty)}
         </Typography>
       )}
 
@@ -124,10 +127,10 @@ export default function SetlistsPage() {
       )}
 
       <Dialog open={creating} onClose={() => setCreating(false)} fullWidth maxWidth="sm">
-        <DialogTitle>New setlist</DialogTitle>
+        <DialogTitle>{t($ => $.create.title)}</DialogTitle>
         <DialogContent>
           <TextField
-            label="Name"
+            label={t($ => $.create.nameLabel)}
             fullWidth
             autoFocus
             sx={{ mt: 1 }}
@@ -137,9 +140,9 @@ export default function SetlistsPage() {
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setCreating(false)}>Cancel</Button>
+          <Button onClick={() => setCreating(false)}>{t($ => $.common.actions.cancel)}</Button>
           <Button variant="contained" onClick={handleCreate} disabled={!newName.trim()}>
-            Create
+            {t($ => $.create.submit)}
           </Button>
         </DialogActions>
       </Dialog>

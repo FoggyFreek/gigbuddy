@@ -1,4 +1,5 @@
 import Button from '@mui/material/Button'
+import { useTranslation } from 'react-i18next'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -18,35 +19,36 @@ interface InvoiceVoidDialogProps {
 }
 
 export default function InvoiceVoidDialog({ open, invoiceNumber, hasPaymentLink, wasSent, onCancel, onConfirm }: InvoiceVoidDialogProps) {
+  const { t } = useTranslation(['invoices', 'common'])
   return (
     <Dialog open={open} onClose={onCancel}>
-      <DialogTitle>Void invoice {invoiceNumber}?</DialogTitle>
+      <DialogTitle>{t($ => $.voidDialog.title, { number: invoiceNumber || '' })}</DialogTitle>
       <DialogContent>
         <DialogContentText>
-          Voiding this invoice has the following consequences:
+          {t($ => $.voidDialog.intro)}
         </DialogContentText>
         <List dense sx={{ listStyleType: 'disc', pl: 3 }}>
           <ListItem sx={{ display: 'list-item', pl: 0 }}>
-            <ListItemText primary="The invoice can no longer be edited, sent or paid — voiding is permanent." />
+            <ListItemText primary={t($ => $.voidDialog.permanent)} />
           </ListItem>
           {wasSent && (
             <ListItem sx={{ display: 'list-item', pl: 0 }}>
-              <ListItemText primary="A reversing entry is posted to the ledger, undoing the recorded revenue and receivable." />
+              <ListItemText primary={t($ => $.voidDialog.ledgerReversal)} />
             </ListItem>
           )}
           {hasPaymentLink && (
             <ListItem sx={{ display: 'list-item', pl: 0 }}>
-              <ListItemText primary="The Mollie payment link is removed; the customer can no longer pay through it. If it turns out to have been paid already, the invoice is marked paid instead of voided." />
+              <ListItemText primary={t($ => $.voidDialog.paymentLinkRemoved)} />
             </ListItem>
           )}
           <ListItem sx={{ display: 'list-item', pl: 0 }}>
-            <ListItemText primary="To correct a mistake, void this invoice and create a new one." />
+            <ListItemText primary={t($ => $.voidDialog.correction)} />
           </ListItem>
         </List>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel}>Cancel</Button>
-        <Button color="error" variant="contained" onClick={onConfirm}>Void invoice</Button>
+        <Button onClick={onCancel}>{t($ => $.common.actions.cancel)}</Button>
+        <Button color="error" variant="contained" onClick={onConfirm}>{t($ => $.voidDialog.confirm)}</Button>
       </DialogActions>
     </Dialog>
   )

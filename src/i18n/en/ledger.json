@@ -1,0 +1,86 @@
+{
+  "title": "Ledger transactions",
+  "searchPlaceholder": "Search...",
+  "showVoided": "Show voided",
+  "perPage": "per page",
+  "emptyEntries": "No ledger entries found",
+  "columns": {
+    "file": "File",
+    "receipt": "Receipt",
+    "date": "Date",
+    "type": "Type",
+    "description": "Description",
+    "amount": "Amount",
+    "account": "Account",
+    "memo": "Memo",
+    "debit": "Debit",
+    "credit": "Credit"
+  },
+  "typeFilter": {
+    "button": "Types: {{selection}}",
+    "all": "All"
+  },
+  "typeGroups": {
+    "purchases": "Purchases",
+    "invoices": "Invoices",
+    "payments": "Payments",
+    "journals": "Journals"
+  },
+  "accountFilter": {
+    "button": "Accounts: {{selection}}",
+    "selected": "{{count}} selected",
+    "clear": "Clear selection"
+  },
+  "search": {
+    "title": "Ledger entries",
+    "searchPlaceholder": "Search memo...",
+    "selectAccountsPrompt": "Select one or more accounts to search their entries.",
+    "openTransaction": "Open transaction",
+    "openTransactionAria": "open transaction",
+    "totals": "Totals ({{count}})"
+  },
+  "detail": {
+    "heading": "Ledger entry: {{name}}",
+    "notice": {
+      "voided": "This ledger entry has been voided by another ledger entry.",
+      "reversed": "This ledger entry has been reversed by another ledger entry.",
+      "correctionVoid": "This ledger entry was created to void another ledger entry.",
+      "correctionReverse": "This ledger entry was created to reverse another ledger entry.",
+      "viewEntry": "View entry #{{id}}"
+    },
+    "voidDialog": {
+      "title": "Void ledger entry?",
+      "body": "Do you want to void this ledger entry? Doing so will create a new ledger entry that cancels out this one.",
+      "confirm": "Void entry"
+    },
+    "reverseDialog": {
+      "title": "Reverse ledger entry?",
+      "body": "This entry falls in a closed booking period. Reversing posts a new, visible ledger entry in the current open period that cancels it out; the original entry is kept unchanged.",
+      "confirm": "Reverse entry"
+    },
+    "actions": {
+      "void": "Void",
+      "reverse": "Reverse"
+    },
+    "meta": {
+      "number": "Ledger entry number",
+      "receipt": "Receipt",
+      "date": "Date",
+      "created": "Created",
+      "createdBy": "Created by",
+      "origin": "Origin"
+    },
+    "lines": {
+      "number": "Number",
+      "name": "Name",
+      "description": "Description",
+      "inEur": "In EUR",
+      "debit": "Debit",
+      "credit": "Credit",
+      "total": "Total",
+      "totalEur": "Total EUR:",
+      "totalDebit": "{{amount}} debit",
+      "totalCredit": "{{amount}} credit"
+    }
+  }
+}
