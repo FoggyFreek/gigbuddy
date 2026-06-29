@@ -1,9 +1,10 @@
 import './_envSetup.js'
 // @vitest-environment node
-import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
+import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
 import request from 'supertest'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
+let getAccessToken, resetShopifyTokenCacheForTests
 let seed
 
 beforeAll(async () => {
@@ -14,12 +15,14 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
+  ;({ getAccessToken, resetShopifyTokenCacheForTests } = await import('../../../server/services/shopifyTokenService.js'))
   await runMigrations()
 })
 
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  resetShopifyTokenCacheForTests()
   // seedTwoTenants() makes every user a tenant_admin. Downgrade userA in
   // tenantA to a plain member so we can test the financial-field gate.
   await pool.query(
@@ -126,32 +129,36 @@ describe('PATCH /api/profile — financial fields', () => {
   })
 })
 
-describe('PUT /api/profile/shopify-secret — app secret validation & masking', () => {
+describe('Shopify credential management', () => {
   // Stub secret in the real "shpss_" + 32-hex format — not a real credential.
   // Built by concatenation so the full token never appears as a literal in source
   // (otherwise GitHub push protection flags it as a leaked Shopify secret).
   const validSecret = 'shpss_' + '0123456789abcdef'.repeat(2)
 
-  it('accepts an "shpss_"-prefixed 32-hex secret and returns a masked preview', async () => {
+  it('encrypts a valid secret and returns status without a preview', async () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).put('/api/profile/shopify-secret').send({ secret: validSecret }),
     ).expect(200)
-    expect(res.body.isSet).toBe(true)
-    // Preview keeps the "shpss_" prefix and last 4 chars visible, masks the rest,
-    // and never echoes the raw secret.
-    expect(res.body.preview).toMatch(/^shpss_•+cdef$/)
-    expect(res.body.preview).not.toContain('0123456789')
+    expect(res.body).toEqual({ isSet: true, changedAt: expect.any(String) })
+    expect(res.headers['cache-control']).toBe('no-store')
+
+    const { rows: [stored] } = await pool.query(
+      'SELECT shopify_client_secret, shopify_client_secret_encrypted FROM tenants WHERE id = $1',
+      [seed.tenantA.id],
+    )
+    expect(stored.shopify_client_secret).toBeNull()
+    expect(stored.shopify_client_secret_encrypted).toEqual(expect.objectContaining({ v: 1, kid: 'test' }))
   })
 
-  it('persists the secret so a re-read reports it set with the same mask', async () => {
+  it('persists the secret so a re-read reports only set status', async () => {
     await as(seed.superUser.id, seed.tenantA.id)(
       request(app).put('/api/profile/shopify-secret').send({ secret: validSecret }),
     ).expect(200)
     const reread = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).get('/api/profile/shopify-secret'),
     ).expect(200)
-    expect(reread.body.isSet).toBe(true)
-    expect(reread.body.preview).toMatch(/^shpss_•+cdef$/)
+    expect(reread.body).toEqual({ isSet: true, changedAt: expect.any(String) })
+    expect(JSON.stringify(reread.body)).not.toContain('preview')
   })
 
   it('rejects a bare 32-hex secret (no "shpss_" prefix) with 400', async () => {
@@ -179,5 +186,75 @@ describe('PUT /api/profile/shopify-secret — app secret validation & masking', 
     await as(seed.userA.id, seed.tenantA.id)(
       request(app).put('/api/profile/shopify-secret').send({ secret: validSecret }),
     ).expect(403)
+  })
+
+  it('forbids a financial admin from reading or changing all Shopify configuration', async () => {
+    await pool.query(
+      'UPDATE memberships SET role = $1 WHERE user_id = $2 AND tenant_id = $3',
+      ['financial_admin', seed.userA.id, seed.tenantA.id],
+    )
+    for (const path of ['shopify-secret', 'shopify-client-id', 'shopify-domain']) {
+      await as(seed.userA.id, seed.tenantA.id)(request(app).get(`/api/profile/${path}`)).expect(403)
+    }
+  })
+
+  it('audits committed changes without logging credential values', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await as(seed.superUser.id, seed.tenantA.id)(
+        request(app).put('/api/profile/shopify-secret').send({ secret: validSecret }),
+      ).expect(200)
+      const event = JSON.parse(log.mock.calls.at(-1)[0])
+      expect(event).toMatchObject({
+        action: 'integration.shopify_secret.set',
+        userId: seed.superUser.id,
+        tenantId: seed.tenantA.id,
+      })
+      expect(event.ts).toEqual(expect.any(String))
+      expect(event.ip).toBeDefined()
+      expect(JSON.stringify([...log.mock.calls, ...error.mock.calls])).not.toContain(validSecret)
+    } finally {
+      log.mockRestore()
+      error.mockRestore()
+    }
+  })
+
+  it.each([
+    ['PUT', 'shopify-secret', { secret: validSecret }],
+    ['DELETE', 'shopify-secret', null],
+    ['PUT', 'shopify-client-id', { clientId: 'c'.repeat(32) }],
+    ['DELETE', 'shopify-client-id', null],
+    ['PUT', 'shopify-domain', { domain: 'changed.myshopify.com' }],
+    ['DELETE', 'shopify-domain', null],
+  ])('invalidates cached tokens after %s /%s', async (method, path, body) => {
+    await pool.query(
+      `UPDATE tenants SET shopify_client_id = $1, shopify_client_secret = $2,
+                          shopify_client_secret_encrypted = NULL, shopify_shop_domain = $3
+        WHERE id = $4`,
+      ['a'.repeat(32), validSecret, 'test-band.myshopify.com', seed.tenantA.id],
+    )
+    const mint = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ access_token: 'short-lived-token', expires_in: 3600 }),
+    }))
+    await getAccessToken(pool, seed.tenantA.id, mint)
+    expect(mint).toHaveBeenCalledTimes(1)
+
+    let req = request(app)[method.toLowerCase()](`/api/profile/${path}`)
+    req = as(seed.superUser.id, seed.tenantA.id)(req)
+    if (body) req = req.send(body)
+    await req.expect(200)
+
+    const after = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ access_token: 'replacement-token', expires_in: 3600 }),
+    }))
+    const result = await getAccessToken(pool, seed.tenantA.id, after)
+    if (method === 'DELETE') {
+      expect(result.error).toBeDefined()
+    } else {
+      expect(after).toHaveBeenCalledTimes(1)
+    }
   })
 })

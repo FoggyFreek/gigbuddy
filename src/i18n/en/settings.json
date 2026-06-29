@@ -41,6 +41,7 @@
     "title": "Integrations",
     "add": "Add integration",
     "notConfigured": "Not configured",
+    "configured": "Configured",
     "showKey": "Show key",
     "hideKey": "Hide key",
     "configure": "Configure"

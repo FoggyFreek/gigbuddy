@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import type { Id, Invoice, InvoiceStatus } from '../types/entities.ts'
 import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
@@ -16,6 +18,7 @@ import InvoiceCustomerFields from './invoices/InvoiceCustomerFields.tsx'
 import InvoiceLinesEditor from './invoices/InvoiceLinesEditor.tsx'
 import InvoiceTotalsPanel from './invoices/InvoiceTotalsPanel.tsx'
 import InvoiceDeleteDialog from './invoices/InvoiceDeleteDialog.tsx'
+import InvoicePaidDialog from './invoices/InvoicePaidDialog.tsx'
 import InvoiceVoidDialog from './invoices/InvoiceVoidDialog.tsx'
 import InvoiceEmlDialog from './invoices/InvoiceEmlDialog.tsx'
 import PaymentLinkPanel from './invoices/PaymentLinkPanel.tsx'
@@ -24,11 +27,20 @@ interface InvoiceDetailsProps {
   invoiceId: Id
   onClose: (updated?: boolean) => void
   onInvoiceUpdate?: (id: Id, patch: Partial<Invoice>) => void
+  onTitleReady?: (title: string) => void
 }
 
-export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: InvoiceDetailsProps) {
+export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, onTitleReady }: InvoiceDetailsProps) {
   const { t } = useTranslation(['invoices', 'common'])
   const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate })
+  const isCompact = useCompactLayout()
+
+  useEffect(() => {
+    if (s.invoice?.invoice_number != null) {
+      onTitleReady?.(t($ => $.detail.heading, { number: s.invoice!.invoice_number }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.invoice?.invoice_number])
 
   if (s.loading) {
     return (
@@ -50,6 +62,12 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: 
         invoiceNumber={s.invoice?.invoice_number}
         onCancel={() => s.setDeleteDialogOpen(false)}
         onConfirm={s.confirmDelete}
+      />
+      <InvoicePaidDialog
+        open={s.paidDialogOpen}
+        invoiceNumber={s.invoice?.invoice_number}
+        onCancel={() => s.setPaidDialogOpen(false)}
+        onConfirm={s.confirmPaid}
       />
       <InvoiceVoidDialog
         open={s.voidDialogOpen}
@@ -75,17 +93,15 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: 
   return (
     <>
       <Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <Box sx={{ flexGrow: 1 }}>
-            {t($ => $.detail.heading, { number: s.invoice?.invoice_number || '' })}
-          </Box>
-          {s.invoice && (
-            <Chip size="small" color={invoiceStatusColor(s.invoice.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} label={s.invoice.status ? t($ => $.rawStatus[s.invoice!.status as InvoiceStatus]) : ''} />
-          )}
-        </Box>
-        <Divider sx={{ mb: 2 }} />
-
         <Box>
+          {s.invoice?.status && (
+            <Chip
+              size="small"
+              color={invoiceStatusColor(s.invoice.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
+              label={t($ => $.rawStatus[s.invoice!.status as InvoiceStatus])}
+              sx={{ mb: 2 }}
+            />
+          )}
           {s.finalized && (
             <Alert severity="info" sx={{ mb: 2 }}>
               {t($ => $.detail.finalizedNotice)}
@@ -154,39 +170,81 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate }: 
         </Box>
 
         <Divider sx={{ mt: 3, mb: 2 }} />
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            {!s.finalized && (
-              <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
-                {t($ => $.common.actions.delete)}
-              </Button>
-            )}
+        {isCompact ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {s.invoice?.pdf_path ? (
+                <Button
+                  component="a"
+                  href={`/api/files/${s.invoice.pdf_path}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  startIcon={<DownloadIcon />}
+                >
+                  {t($ => $.pdf.download)}
+                </Button>
+              ) : <Box />}
+              {s.invoice && (
+                <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>
+                  {t($ => $.detail.downloadEmail)}
+                </Button>
+              )}
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'center' }}>
+              <Box>
+                {!s.finalized && (
+                  <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
+                    {t($ => $.common.actions.delete)}
+                  </Button>
+                )}
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                <Button onClick={() => onClose(false)}>{t($ => $.common.actions.close)}</Button>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                {!s.readOnly && (
+                  <Button variant="contained" onClick={s.handleSave} disabled={s.saving}>
+                    {s.saving ? t($ => $.detail.saving) : t($ => $.detail.saveChanges)}
+                  </Button>
+                )}
+              </Box>
+            </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            {s.invoice?.pdf_path && (
-              <Button
-                component="a"
-                href={`/api/files/${s.invoice.pdf_path}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                startIcon={<DownloadIcon />}
-              >
-                {t($ => $.pdf.download)}
-              </Button>
-            )}
-            {s.invoice && (
-              <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>
-                {t($ => $.detail.downloadEmail)}
-              </Button>
-            )}
-            <Button onClick={() => onClose(false)}>{t($ => $.common.actions.close)}</Button>
-            {!s.readOnly && (
-              <Button variant="contained" onClick={s.handleSave} disabled={s.saving}>
-                {s.saving ? t($ => $.detail.saving) : t($ => $.detail.saveChanges)}
-              </Button>
-            )}
+        ) : (
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box>
+              {!s.finalized && (
+                <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
+                  {t($ => $.common.actions.delete)}
+                </Button>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {s.invoice?.pdf_path && (
+                <Button
+                  component="a"
+                  href={`/api/files/${s.invoice.pdf_path}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  startIcon={<DownloadIcon />}
+                >
+                  {t($ => $.pdf.download)}
+                </Button>
+              )}
+              {s.invoice && (
+                <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>
+                  {t($ => $.detail.downloadEmail)}
+                </Button>
+              )}
+              <Button onClick={() => onClose(false)}>{t($ => $.common.actions.close)}</Button>
+              {!s.readOnly && (
+                <Button variant="contained" onClick={s.handleSave} disabled={s.saving}>
+                  {s.saving ? t($ => $.detail.saving) : t($ => $.detail.saveChanges)}
+                </Button>
+              )}
+            </Box>
           </Box>
-        </Box>
+        )}
       </Box>
       {dialogs}
     </>

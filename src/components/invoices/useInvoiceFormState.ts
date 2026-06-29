@@ -43,6 +43,9 @@ export interface UseInvoiceFormStateResult {
   voidDialogOpen: boolean
   setVoidDialogOpen: (open: boolean) => void
   confirmVoid: () => Promise<void>
+  paidDialogOpen: boolean
+  setPaidDialogOpen: (open: boolean) => void
+  confirmPaid: () => Promise<void>
   patchForm: (patch: Partial<InvoiceForm>) => void
   patchLine: (index: number, patch: Partial<InvoiceFormLine>) => void
   addLine: () => void
@@ -63,6 +66,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
   const [saving, setSaving] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
+  const [paidDialogOpen, setPaidDialogOpen] = useState(false)
   const [form, setForm] = useState<InvoiceForm>(() => emptyDraft())
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [invoice, setInvoice] = useState<Invoice | null>(null)
@@ -177,11 +181,15 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     }
   }
 
-  // Voiding is irreversible and has side effects (ledger reversal, payment-link
-  // removal), so it goes through a confirmation dialog first.
+  // Status changes to 'void' and 'paid' go through confirmation dialogs first
+  // because both have ledger side effects.
   function handleStatusChange(newStatus: InvoiceStatus) {
     if (newStatus === 'void' && invoice?.status !== 'void') {
       setVoidDialogOpen(true)
+      return
+    }
+    if (newStatus === 'paid' && invoice?.status !== 'paid') {
+      setPaidDialogOpen(true)
       return
     }
     return applyStatusChange(newStatus)
@@ -190,6 +198,11 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
   async function confirmVoid() {
     setVoidDialogOpen(false)
     await applyStatusChange('void')
+  }
+
+  async function confirmPaid() {
+    setPaidDialogOpen(false)
+    await applyStatusChange('paid')
   }
 
   function handleDelete() {
@@ -228,6 +241,9 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     voidDialogOpen,
     setVoidDialogOpen,
     confirmVoid,
+    paidDialogOpen,
+    setPaidDialogOpen,
+    confirmPaid,
     patchForm,
     patchLine,
     addLine,

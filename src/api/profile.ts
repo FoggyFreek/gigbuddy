@@ -12,9 +12,9 @@ interface Profile extends Tenant {
   links?: ProfileLink[]
 }
 
-interface MollieKey {
-  key_last4?: string
-  has_key?: boolean
+export interface IntegrationSecretStatus {
+  isSet: boolean
+  changedAt: string | null
 }
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
@@ -76,18 +76,13 @@ export function uploadLogoDark(file: File) {
   return requestForm<{ logo_dark_path: string | null }>('/api/profile/logo-dark', fd)
 }
 
-export const getMollieKey = () => api<MollieKey>('/mollie-key')
+export const getMollieKey = () => api<IntegrationSecretStatus>('/mollie-key')
 export const setMollieKey = (key: string) =>
-  api<void>('/mollie-key', { method: 'PUT', body: JSON.stringify({ key }) })
-export const clearMollieKey = () => api<void>('/mollie-key', { method: 'DELETE' })
+  api<IntegrationSecretStatus>('/mollie-key', { method: 'PUT', body: JSON.stringify({ key }) })
+export const clearMollieKey = () => api<IntegrationSecretStatus>('/mollie-key', { method: 'DELETE' })
 
 interface ShopifyClientId {
   clientId?: string | null
-}
-
-interface ShopifySecretStatus {
-  isSet?: boolean
-  preview?: string | null
 }
 
 export const getShopifyClientId = () => api<ShopifyClientId>('/shopify-client-id')
@@ -95,10 +90,10 @@ export const setShopifyClientId = (clientId: string) =>
   api<ShopifyClientId>('/shopify-client-id', { method: 'PUT', body: JSON.stringify({ clientId }) })
 export const clearShopifyClientId = () => api<ShopifyClientId>('/shopify-client-id', { method: 'DELETE' })
 
-export const getShopifySecret = () => api<ShopifySecretStatus>('/shopify-secret')
+export const getShopifySecret = () => api<IntegrationSecretStatus>('/shopify-secret')
 export const setShopifySecret = (secret: string) =>
-  api<ShopifySecretStatus>('/shopify-secret', { method: 'PUT', body: JSON.stringify({ secret }) })
-export const clearShopifySecret = () => api<ShopifySecretStatus>('/shopify-secret', { method: 'DELETE' })
+  api<IntegrationSecretStatus>('/shopify-secret', { method: 'PUT', body: JSON.stringify({ secret }) })
+export const clearShopifySecret = () => api<IntegrationSecretStatus>('/shopify-secret', { method: 'DELETE' })
 
 interface ShopifyDomain {
   domain?: string | null

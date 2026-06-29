@@ -27,21 +27,22 @@ import {
   insertProfileLink,
   updateProfileLink,
   deleteProfileLink,
-  getMollieKey,
-  setMollieKey,
-  clearMollieKey,
   getShopifyClientId,
   setShopifyClientId,
   clearShopifyClientId,
-  getShopifyClientSecret,
-  setShopifyClientSecret,
-  clearShopifyClientSecret,
   getShopifyDomain,
   setShopifyDomain,
   clearShopifyDomain,
   getTenantImagePath,
   setTenantImagePath,
 } from '../repositories/profileRepository.js'
+import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
+import {
+  clearIntegrationCredential,
+  getIntegrationCredentialStatus,
+  setIntegrationCredential,
+} from './integrationCredentialService.js'
+import { invalidateToken } from './shopifyTokenService.js'
 
 function badRequest(error) {
   return { error: { status: 400, body: { error } } }
@@ -51,33 +52,13 @@ function notFound(error) {
   return { error: { status: 404, body: { error } } }
 }
 
-function maskKey(key) {
-  if (!key) return null
-  const underscore = key.indexOf('_')
-  const prefix = underscore >= 0 ? key.slice(0, underscore + 1) : key.slice(0, 5)
-  const last4 = key.slice(-4)
-  // Fixed-width mask: one dot per char balloons the rendered preview and eats
-  // horizontal space, so cap the dots regardless of the real key length.
-  const dots = '•'.repeat(Math.min(4, Math.max(0, key.length - prefix.length - 4)))
-  return `${prefix}${dots}${last4}`
-}
-
-// mollie_api_key and shopify_client_secret are never returned in profile
-// payloads — use the dedicated endpoints for masked status.
-function stripSecretKeys(tenant) {
-  const copy = { ...tenant }
-  delete copy.mollie_api_key
-  delete copy.shopify_client_secret
-  return copy
-}
-
 // ---------- profile ----------
 
 export async function getProfile(db, tenantId) {
   const tenant = await fetchTenant(db, tenantId)
   if (!tenant) return notFound('Profile not found')
   const links = await listProfileLinks(db, tenantId)
-  return { profile: { ...stripSecretKeys(tenant), links } }
+  return { profile: { ...tenant, links } }
 }
 
 // `isAdmin` is computed by the route (tenant_admin or super admin); financial
@@ -94,7 +75,7 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
 
   const updated = await updateTenantFields(db, tenantId, built.fields, built.values)
   if (!updated) return notFound('Profile not found')
-  return { profile: stripSecretKeys(updated) }
+  return { profile: updated }
 }
 
 // ---------- links ----------
@@ -126,20 +107,18 @@ export async function deleteLink(db, tenantId, linkId) {
 // ---------- mollie key ----------
 
 export async function getMollieKeyStatus(db, tenantId) {
-  const key = await getMollieKey(db, tenantId)
-  return { isSet: !!key, preview: maskKey(key) }
+  return getIntegrationCredentialStatus(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
 }
 
 export async function setMollieKeyValue(db, tenantId, body) {
   const { key } = body || {}
   if (!isValidMollieKey(key)) return badRequest('invalid_mollie_key')
-  const stored = await setMollieKey(db, tenantId, key)
-  return { status: { isSet: !!stored, preview: maskKey(stored) } }
+  const status = await setIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY, key.trim())
+  return { status }
 }
 
 export async function clearMollieKeyValue(db, tenantId) {
-  await clearMollieKey(db, tenantId)
-  return { isSet: false, preview: null }
+  return clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
 }
 
 // ---------- shopify app credentials ----------
@@ -154,30 +133,33 @@ export async function setShopifyClientIdValue(db, tenantId, body) {
   const { clientId } = body || {}
   if (!isValidShopifyClientId(clientId)) return badRequest('invalid_shopify_client_id')
   const stored = await setShopifyClientId(db, tenantId, clientId.trim())
+  invalidateToken(tenantId)
   return { status: { clientId: stored } }
 }
 
 export async function clearShopifyClientIdValue(db, tenantId) {
   await clearShopifyClientId(db, tenantId)
+  invalidateToken(tenantId)
   return { clientId: null }
 }
 
-// Client secret is masked, like the Mollie key.
+// Secret status exposes only presence and the last configuration-change time.
 export async function getShopifySecretStatus(db, tenantId) {
-  const secret = await getShopifyClientSecret(db, tenantId)
-  return { isSet: !!secret, preview: maskKey(secret) }
+  return getIntegrationCredentialStatus(db, tenantId, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET)
 }
 
 export async function setShopifySecretValue(db, tenantId, body) {
   const { secret } = body || {}
   if (!isValidShopifyClientSecret(secret)) return badRequest('invalid_shopify_client_secret')
-  const stored = await setShopifyClientSecret(db, tenantId, secret.trim())
-  return { status: { isSet: !!stored, preview: maskKey(stored) } }
+  const status = await setIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET, secret.trim())
+  invalidateToken(tenantId)
+  return { status }
 }
 
 export async function clearShopifySecretValue(db, tenantId) {
-  await clearShopifyClientSecret(db, tenantId)
-  return { isSet: false, preview: null }
+  const status = await clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET)
+  invalidateToken(tenantId)
+  return status
 }
 
 // ---------- shopify store domain (non-secret, returned in full) ----------
@@ -191,11 +173,13 @@ export async function setShopifyDomainValue(db, tenantId, body) {
   const { domain } = body || {}
   if (!isValidShopifyDomain(domain)) return badRequest('invalid_shopify_domain')
   const stored = await setShopifyDomain(db, tenantId, normalizeShopifyDomain(domain))
+  invalidateToken(tenantId)
   return { status: { domain: stored } }
 }
 
 export async function clearShopifyDomainValue(db, tenantId) {
   await clearShopifyDomain(db, tenantId)
+  invalidateToken(tenantId)
   return { domain: null }
 }
 

@@ -16,3 +16,6 @@ process.env.PGDATABASE = testDb
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-secure'
 process.env.NODE_ENV = 'test'
 process.env.ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@test.local'
+process.env.INTEGRATION_SECRETS_KEYS = process.env.INTEGRATION_SECRETS_KEYS
+  || JSON.stringify({ test: Buffer.alloc(32, 0x42).toString('base64') })
+process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID = process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID || 'test'

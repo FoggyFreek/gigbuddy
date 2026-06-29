@@ -405,7 +405,7 @@ function IntegrationCard({ logoLight, logoDark, alt, title, description, configu
 
 interface ShopifyKeyStatus {
   isSet?: boolean
-  preview?: string
+  changedAt?: string | null
 }
 
 function ShopifyKeySection() {
@@ -547,7 +547,7 @@ function ShopifyKeySection() {
   } else if (status.isSet) {
     secretStatusNode = (
       <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-        {status.preview}
+        {t($ => $.integrations.configured)}
       </Typography>
     )
   } else {
@@ -729,7 +729,7 @@ function ShopifyKeySection() {
 
 interface MollieKeyStatus {
   isSet?: boolean
-  preview?: string
+  changedAt?: string | null
 }
 
 function MollieKeyStatusDisplay({ status }: { status: MollieKeyStatus | null }) {
@@ -738,7 +738,7 @@ function MollieKeyStatusDisplay({ status }: { status: MollieKeyStatus | null }) 
   if (status.isSet) {
     return (
       <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-        {status.preview}
+        {t($ => $.integrations.configured)}
       </Typography>
     )
   }

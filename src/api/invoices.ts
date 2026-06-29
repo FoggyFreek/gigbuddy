@@ -17,9 +17,13 @@ interface EmlDefaults {
   personalMessage?: string
 }
 
-interface PaymentLinkResult {
-  payment_link_id?: string
-  payment_link_url?: string
+interface PaymentLinkSyncResult {
+  paymentLinkId?: string | null
+  paymentLinkUrl?: string | null
+  paymentId?: string | null
+  status?: string | null
+  paidAt?: string | null
+  invoiceStatus?: Invoice['status']
 }
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
@@ -47,13 +51,13 @@ export function uploadInvoiceLogo(id: Id, file: File) {
 export const removeInvoiceLogo = (id: Id) => api<Invoice>(`/${id}/logo`, { method: 'DELETE' })
 
 export const createInvoicePaymentLink = (id: Id, body: Record<string, unknown> = {}) =>
-  api<PaymentLinkResult>(`/${id}/payment-link`, { method: 'POST', body: JSON.stringify(body) })
+  api<Invoice>(`/${id}/payment-link`, { method: 'POST', body: JSON.stringify(body) })
 
 export const syncInvoicePaymentLink = (id: Id) =>
-  api<Invoice>(`/${id}/payment-link/sync`, { method: 'POST' })
+  api<PaymentLinkSyncResult>(`/${id}/payment-link/sync`, { method: 'POST' })
 
 export const deleteInvoicePaymentLink = (id: Id) =>
-  api<void>(`/${id}/payment-link`, { method: 'DELETE' })
+  api<Invoice>(`/${id}/payment-link`, { method: 'DELETE' })
 
 export const getInvoiceEmlDefaults = (id: Id) => api<EmlDefaults>(`/${id}/eml-defaults`)
 

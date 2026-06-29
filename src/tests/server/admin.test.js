@@ -36,6 +36,17 @@ function as(userId, tenantId) {
 const asUserA = (req) => as(seed.userA.id, seed.tenantA.id)(req)
 const asSuper = (req, tenantId = seed.tenantA.id) => as(seed.superUser.id, tenantId)(req)
 
+const CREDENTIAL_FIELDS = [
+  'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
+  'shopify_client_secret', 'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+]
+
+function expectNoCredentialFields(value) {
+  if (!value || typeof value !== 'object') return
+  for (const key of Object.keys(value)) expect(CREDENTIAL_FIELDS).not.toContain(key)
+  for (const child of Object.values(value)) expectNoCredentialFields(child)
+}
+
 async function createPendingUser({ email, name = 'Pending', tenantId, status = 'pending' }) {
   const { rows: u } = await pool.query(
     `INSERT INTO users (google_sub, email, name, status, is_super_admin)
@@ -296,6 +307,19 @@ describe('/api/invites/redeem', () => {
 describe('/api/admin/tenants — super admin only', () => {
   it('GET / requires super admin', async () => {
     await asUserA(request(app).get('/api/admin/tenants')).expect(403)
+  })
+
+  it('never returns plaintext or encrypted credential fields', async () => {
+    await pool.query(
+      `UPDATE tenants SET mollie_api_key = $1, shopify_client_secret = $2,
+       mollie_api_key_encrypted = $3::jsonb, shopify_client_secret_encrypted = $4::jsonb
+       WHERE id = $5`,
+      ['legacy-mollie', 'legacy-shopify', '{}', '{}', seed.tenantA.id],
+    )
+    const list = await asSuper(request(app).get('/api/admin/tenants')).expect(200)
+    const detail = await asSuper(request(app).get(`/api/admin/tenants/${seed.tenantA.id}`)).expect(200)
+    expectNoCredentialFields(list.body)
+    expectNoCredentialFields(detail.body)
   })
 
   it('super admin can list, create, archive, unarchive tenants', async () => {

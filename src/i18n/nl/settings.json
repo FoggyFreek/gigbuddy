@@ -41,6 +41,7 @@
     "title": "Integraties",
     "add": "Integratie toevoegen",
     "notConfigured": "Niet geconfigureerd",
+    "configured": "Geconfigureerd",
     "showKey": "Sleutel tonen",
     "hideKey": "Sleutel verbergen",
     "configure": "Configureren"

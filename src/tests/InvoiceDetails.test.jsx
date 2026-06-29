@@ -69,7 +69,7 @@ describe('InvoiceDetails', () => {
     const onClose = vi.fn()
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={onClose} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
@@ -84,7 +84,7 @@ describe('InvoiceDetails', () => {
   it('loads and renders an existing invoice in edit mode', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
     // Payment-link panel is only rendered in edit mode once the invoice loads.
     expect(screen.getByText('Payment link')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create payment link/ })).toBeInTheDocument()
@@ -98,6 +98,21 @@ describe('InvoiceDetails', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Create payment link/ }))
     expect(await screen.findByText(/Mollie API key not configured/)).toBeInTheDocument()
+  })
+
+  it('immediately renders the payment link returned after successful creation', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    invoicesApi.createInvoicePaymentLink.mockResolvedValueOnce(LINKED_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: /Create payment link/ }))
+
+    expect(await screen.findByText(LINKED_INVOICE.mollie_payment_link_url)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open payment page' })).toHaveAttribute(
+      'href', LINKED_INVOICE.mollie_payment_link_url,
+    )
+    expect(screen.getByRole('button', { name: 'Remove payment link' })).toBeInTheDocument()
   })
 
   it('reflects a successful payment-link sync (maps the API response shape)', async () => {
@@ -133,7 +148,7 @@ describe('InvoiceDetails', () => {
   it('renders a finalized invoice read-only (no Save, fields disabled)', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(FINALIZED_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
     expect(screen.getByText(/This invoice is finalized/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
@@ -143,7 +158,7 @@ describe('InvoiceDetails', () => {
   it('adds and removes invoice lines', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
     expect(screen.getAllByPlaceholderText(/Start typing/)).toHaveLength(1)
     // With a single line the remove control is disabled.
@@ -160,7 +175,7 @@ describe('InvoiceDetails', () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     invoicesApi.uploadInvoiceLogo.mockRejectedValueOnce(new Error('upload boom'))
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
     const fileInput = document.querySelector('input[type="file"]')
     const file = new File(['x'], 'logo.png', { type: 'image/png' })
@@ -210,7 +225,7 @@ describe('InvoiceDetails', () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(FINALIZED_INVOICE)
     invoicesApi.updateInvoice.mockResolvedValueOnce({ ...FINALIZED_INVOICE, status: 'void' })
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
     // Pick "Void" in the status select → dialog appears, nothing PATCHed yet.
     await userEvent.click(screen.getByRole('combobox', { name: 'Status' }))
@@ -227,7 +242,7 @@ describe('InvoiceDetails', () => {
   it('cancelling the void dialog leaves the invoice untouched', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(FINALIZED_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Status' }))
     await userEvent.click(await screen.findByRole('option', { name: 'Void' }))
@@ -235,14 +250,14 @@ describe('InvoiceDetails', () => {
     expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
   })
 
-  it('hides the "Use dark logo" toggle when the tenant has no dark logo', async () => {
+  it('hides the "Use alternative logo" toggle when the tenant has no alternative logo', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
-    expect(screen.queryByLabelText('Use dark logo')).toBeNull()
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+    expect(screen.queryByLabelText('Use alternative logo')).toBeNull()
   })
 
-  it('shows the "Use dark logo" toggle and switches the preview when tenant has a dark logo', async () => {
+  it('shows the "Use alternative logo" toggle and switches the preview when tenant has an alternative logo', async () => {
     const invoiceWithLogos = {
       ...EDIT_INVOICE,
       tenant: {
@@ -253,9 +268,9 @@ describe('InvoiceDetails', () => {
     }
     invoicesApi.getInvoice.mockResolvedValueOnce(invoiceWithLogos)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    const toggle = screen.getByLabelText('Use dark logo')
+    const toggle = screen.getByLabelText('Use alternative logo')
     expect(toggle).not.toBeChecked()
     // Preview shows the light logo initially.
     expect(screen.getByAltText('Invoice logo').src).toContain('/api/files/logo/light.png')
@@ -270,7 +285,7 @@ describe('InvoiceDetails', () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     invoicesApi.getInvoiceEmlDefaults.mockResolvedValueOnce({ personalMessage: 'Hartelijk dank voor de samenwerking.' })
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Invoice 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: 'Download email' }))
     expect(await screen.findByDisplayValue('Hartelijk dank voor de samenwerking.')).toBeInTheDocument()
@@ -282,7 +297,7 @@ describe('InvoiceDetails', () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText('Factuur 2026-0007')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
     expect(screen.getByLabelText('Factuurdatum')).toBeInTheDocument()
     expect(screen.getByText('Klant')).toBeInTheDocument()
     expect(screen.getByText('Regels')).toBeInTheDocument()

@@ -3,10 +3,11 @@
 //
 // Tenants are global super-admin-managed resources (no tenant_id scoping); the
 // memberships table joins them to users.
+import { tenantSafeProjection } from './tenantSafeProjection.js'
 
 export async function listTenantsWithMemberCount(executor) {
   const { rows } = await executor.query(
-    `SELECT t.*,
+    `SELECT ${tenantSafeProjection('t')},
             (SELECT COUNT(*)::int FROM memberships m
                WHERE m.tenant_id = t.id AND m.status = 'approved') AS member_count
        FROM tenants t
@@ -16,7 +17,10 @@ export async function listTenantsWithMemberCount(executor) {
 }
 
 export async function fetchTenant(executor, tenantId) {
-  const { rows } = await executor.query('SELECT * FROM tenants WHERE id = $1', [tenantId])
+  const { rows } = await executor.query(
+    `SELECT ${tenantSafeProjection()} FROM tenants WHERE id = $1`,
+    [tenantId],
+  )
   return rows[0] || null
 }
 
@@ -37,7 +41,7 @@ export async function insertTenant(executor, slug, bandName, createdByUserId) {
   const { rows } = await executor.query(
     `INSERT INTO tenants (slug, band_name, created_by_user_id)
      VALUES ($1, $2, $3)
-     RETURNING *`,
+     RETURNING ${tenantSafeProjection()}`,
     [slug, bandName, createdByUserId],
   )
   return rows[0]
@@ -68,7 +72,8 @@ export async function updateTenantFields(executor, tenantId, fields, values) {
   const assignments = [...fields, 'updated_at = NOW()']
   const whereIdx = values.length + 1
   const { rows } = await executor.query(
-    `UPDATE tenants SET ${assignments.join(', ')} WHERE id = $${whereIdx} RETURNING *`,
+    `UPDATE tenants SET ${assignments.join(', ')} WHERE id = $${whereIdx}
+     RETURNING ${tenantSafeProjection()}`,
     [...values, tenantId],
   )
   return rows[0] || null
@@ -119,7 +124,7 @@ export async function demoteAdminToMember(executor, tenantId, userId) {
 export async function setTenantArchived(executor, tenantId, archived) {
   const { rows } = await executor.query(
     `UPDATE tenants SET archived_at = ${archived ? 'NOW()' : 'NULL'}, updated_at = NOW()
-      WHERE id = $1 RETURNING *`,
+      WHERE id = $1 RETURNING ${tenantSafeProjection()}`,
     [tenantId],
   )
   return rows[0] || null

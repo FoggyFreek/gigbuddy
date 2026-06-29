@@ -670,10 +670,13 @@ describe('Webhook notifies tenant on paid transition', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/profile — Mollie key hardening', () => {
-  it('does not include mollie_api_key in profile response', async () => {
+  it('does not include plaintext or encrypted credential fields in profile response', async () => {
     const res = await asUserA(request(app).get('/api/profile'))
     expect(res.status).toBe(200)
-    expect(res.body).not.toHaveProperty('mollie_api_key')
+    for (const field of [
+      'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
+      'shopify_client_secret', 'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+    ]) expect(res.body).not.toHaveProperty(field)
   })
 
   it('does not include mollie_api_key after PATCH', async () => {
@@ -688,20 +691,43 @@ describe('GET /api/profile — Mollie key hardening', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/profile/mollie-key', () => {
-  it('reports isSet:true with a masked preview when a key is stored', async () => {
+  it('reports status without loading or previewing the legacy key', async () => {
     const res = await asUserA(request(app).get('/api/profile/mollie-key'))
     expect(res.status).toBe(200)
-    expect(res.body.isSet).toBe(true)
-    expect(res.body.preview).toMatch(/^test_/)
-    expect(res.body.preview).not.toBe('test_mollie_key_alpha')
+    expect(res.body).toEqual({ isSet: true, changedAt: null })
+    expect(res.headers['cache-control']).toBe('no-store')
   })
 
   it('reports isSet:false when no key is stored', async () => {
     await pool.query('UPDATE tenants SET mollie_api_key = NULL WHERE id = $1', [seed.tenantA.id])
     const res = await asUserA(request(app).get('/api/profile/mollie-key'))
     expect(res.status).toBe(200)
-    expect(res.body.isSet).toBe(false)
-    expect(res.body.preview).toBeNull()
+    expect(res.body).toEqual({ isSet: false, changedAt: null })
+  })
+
+  it('stores new keys encrypted and returns the new status contract', async () => {
+    const value = `test_${'a'.repeat(30)}`
+    const res = await asUserA(request(app).put('/api/profile/mollie-key').send({ key: value })).expect(200)
+    expect(res.body).toEqual({ isSet: true, changedAt: expect.any(String) })
+    const { rows: [stored] } = await pool.query(
+      'SELECT mollie_api_key, mollie_api_key_encrypted FROM tenants WHERE id = $1',
+      [seed.tenantA.id],
+    )
+    expect(stored.mollie_api_key).toBeNull()
+    expect(stored.mollie_api_key_encrypted).toEqual(expect.objectContaining({ v: 1, kid: 'test' }))
+
+    const cleared = await asUserA(request(app).delete('/api/profile/mollie-key')).expect(200)
+    expect(cleared.body).toEqual({ isSet: false, changedAt: expect.any(String) })
+  })
+
+  it('forbids a financial admin from reading credential status', async () => {
+    await pool.query(
+      'UPDATE memberships SET role = $1 WHERE user_id = $2 AND tenant_id = $3',
+      ['financial_admin', seed.userA.id, seed.tenantA.id],
+    )
+    await asUserA(request(app).get('/api/profile/mollie-key')).expect(403)
+    await asUserA(request(app).put('/api/profile/mollie-key').send({ key: `test_${'a'.repeat(30)}` })).expect(403)
+    await asUserA(request(app).delete('/api/profile/mollie-key')).expect(403)
   })
 })
 
@@ -729,12 +755,15 @@ describe('public webhook endpoint authentication', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/invoices/:id — Mollie key hardening (review #1)', () => {
-  it('does not include tenant.mollie_api_key in invoice detail response', async () => {
+  it('does not include plaintext or encrypted credentials in invoice detail response', async () => {
     const inv = await createInvoiceA()
     const res = await asUserA(request(app).get(`/api/invoices/${inv.id}`))
     expect(res.status).toBe(200)
     expect(res.body.tenant).toBeDefined()
-    expect(res.body.tenant).not.toHaveProperty('mollie_api_key')
+    for (const field of [
+      'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
+      'shopify_client_secret', 'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+    ]) expect(res.body.tenant).not.toHaveProperty(field)
     // Verify the tenant object still contains expected display fields
     expect(res.body.tenant.band_name).toBe('Alpha Band')
   })

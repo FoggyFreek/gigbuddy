@@ -10,13 +10,15 @@ import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
-import { createTenantMollieClient, assertMollieConfigured } from '../utils/mollieClient.js'
 import {
   createMolliePaymentLink,
+  getMollieClientForTenant,
   removeMolliePaymentLink,
   syncInvoicePaymentStatus,
 } from './molliePaymentLinkService.js'
 import { sendPushToTenant } from '../utils/sendPush.js'
+import { logError } from '../utils/redactedLogger.js'
+import { invoiceProjection } from '../repositories/invoiceProjection.js'
 import {
   fetchTenant,
   fetchInvoice,
@@ -33,7 +35,6 @@ import {
   nextInvoiceNumber,
   deleteInvoiceRow,
   setCustomLogoPath,
-  stripMollieKey,
   fetchPublicInvoiceLogoPath,
 } from '../repositories/invoiceRepository.js'
 import {
@@ -74,7 +75,7 @@ async function withAccountingSettingsSessionLock(pool, tenantId, fn) {
       await client.query('SELECT pg_advisory_unlock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
     } catch (err) {
       releaseError = err
-      console.error('[invoices] failed to release accounting-settings advisory lock:', err)
+      logError('invoice.accounting_lock_release_failed', err)
     }
     client.release(releaseError)
   }
@@ -104,7 +105,7 @@ async function loadLogoBuffer(tenant, customLogoPath, useDarkLogo = false) {
     for await (const chunk of stream) chunks.push(chunk)
     return Buffer.concat(chunks)
   } catch (err) {
-    console.warn('[invoices] failed to load logo:', err.message)
+    logError('invoice.logo_load_failed', err)
     return null
   }
 }
@@ -420,7 +421,7 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
   try {
     await client.query('BEGIN')
     const locked = await client.query(
-      'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+      `SELECT ${invoiceProjection()} FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
       [invoiceId, tenantId],
     )
     if (!locked.rows.length) {
@@ -446,7 +447,7 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
               finalized_at = COALESCE(finalized_at, NOW()),
               updated_at = NOW()
         WHERE id = $1 AND tenant_id = $2
-      RETURNING *`,
+      RETURNING ${invoiceProjection()}`,
       [invoiceId, tenantId],
     )
     // The invoice is now sent (revenue recognised). Idempotent if already posted
@@ -595,7 +596,7 @@ export async function getInvoice(pool, tenantId, invoiceId) {
   if (!invoice) return NOT_FOUND
   const lines = await fetchLines(pool, invoiceId, tenantId)
   const tenant = await fetchTenant(pool, tenantId)
-  return { invoice: { ...invoice, lines, tenant: stripMollieKey(tenant) } }
+  return { invoice: { ...invoice, lines, tenant } }
 }
 
 // Creates an invoice with its lines, then renders the PDF (best-effort — the
@@ -666,7 +667,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
   try {
     await renderAndStorePdf(pool, invoiceId, tenantId)
   } catch (err) {
-    console.error('[invoices] PDF render failed (row persisted, retry via POST /:id/render):', err)
+    logError('invoice.pdf_render_failed', err, { tenantId, invoiceId })
   }
 
   const created = await fetchInvoice(pool, tenantId, invoiceId)
@@ -686,7 +687,7 @@ export async function patchInvoice(pool, tenantId, invoiceId, body, actorUserId 
     try {
       await renderAndStorePdf(pool, invoiceId, tenantId)
     } catch (err) {
-      console.error('[invoices] PDF re-render failed:', err)
+      logError('invoice.pdf_rerender_failed', err, { tenantId, invoiceId })
     }
   }
 
@@ -742,7 +743,7 @@ export async function uploadInvoiceLogo(pool, tenantId, invoiceId, file) {
   try {
     await renderAndStorePdf(pool, invoiceId, tenantId)
   } catch (err) {
-    console.error('[invoices] PDF re-render after logo upload failed:', err)
+    logError('invoice.pdf_rerender_after_logo_failed', err, { tenantId, invoiceId })
   }
 
   return { custom_logo_path: objectKey }
@@ -760,7 +761,7 @@ export async function removeInvoiceLogo(pool, tenantId, invoiceId) {
   try {
     await renderAndStorePdf(pool, invoiceId, tenantId)
   } catch (err) {
-    console.error('[invoices] PDF re-render after logo remove failed:', err)
+    logError('invoice.pdf_rerender_after_logo_remove_failed', err, { tenantId, invoiceId })
   }
   return {}
 }
@@ -780,7 +781,7 @@ async function withPaymentLinkCreationLock(db, invoiceId, fn) {
       await client.query('SELECT pg_advisory_unlock($1, $2)', [PAYMENT_LINK_LOCK_NAMESPACE, invoiceId])
     } catch (err) {
       releaseError = err
-      console.error('[invoices] failed to release payment-link advisory lock:', err)
+      logError('invoice.payment_link_lock_release_failed', err, { invoiceId })
     }
     client.release(releaseError)
   }
@@ -803,10 +804,9 @@ export async function createInvoicePaymentLink(pool, tenantId, invoiceId, actorU
 
     if (finalize.alreadyLinked) {
       const lines = await fetchLines(pool, invoiceId, tenantId)
-      return { invoice: { ...finalize.alreadyLinked, lines, tenant: stripMollieKey(tenant) }, created: false }
+      return { invoice: { ...finalize.alreadyLinked, lines, tenant }, created: false }
     }
 
-    assertMollieConfigured(tenant)
     const created = await createMolliePaymentLink({
       pool, tenant, invoice: finalize.invoice, tenantId, invoiceId, opts,
     })
@@ -821,11 +821,11 @@ export async function createInvoicePaymentLink(pool, tenantId, invoiceId, actorU
       const refreshed = await fetchInvoice(pool, tenantId, invoiceId)
       if (refreshed) finalInvoice = refreshed
     } catch (err) {
-      console.error('[invoices] PDF re-render after payment-link creation failed:', err)
+      logError('invoice.pdf_rerender_after_payment_link_failed', err, { tenantId, invoiceId })
     }
 
     const lines = await fetchLines(pool, invoiceId, tenantId)
-    return { invoice: { ...finalInvoice, lines, tenant: stripMollieKey(tenant) }, created: true }
+    return { invoice: { ...finalInvoice, lines, tenant }, created: true }
   })
 }
 
@@ -852,11 +852,11 @@ export async function removeInvoicePaymentLink(pool, tenantId, invoiceId) {
     const refreshed = await fetchInvoice(pool, tenantId, invoiceId)
     if (refreshed) finalInvoice = refreshed
   } catch (err) {
-    console.error('[invoices] PDF re-render after payment-link removal failed:', err)
+    logError('invoice.pdf_rerender_after_payment_link_removal_failed', err, { tenantId, invoiceId })
   }
 
   const lines = await fetchLines(pool, invoiceId, tenantId)
-  return { invoice: { ...finalInvoice, lines, tenant: stripMollieKey(tenant) } }
+  return { invoice: { ...finalInvoice, lines, tenant } }
 }
 
 // Pulls authoritative payment state from Mollie. Returns { error } | { sync }.
@@ -867,10 +867,9 @@ export async function syncInvoicePaymentLink(pool, tenantId, invoiceId) {
     return { error: { status: 400, body: { error: 'no_payment_link' } } }
   }
 
-  const tenant = await fetchTenant(pool, tenantId)
-  assertMollieConfigured(tenant)
-
-  const mollie = createTenantMollieClient(tenant.mollie_api_key)
+  const configured = await getMollieClientForTenant(pool, tenantId)
+  if (configured.error) return configured
+  const { mollie } = configured
   const updated = await syncInvoicePaymentStatus(mollie, pool, invoice)
 
   return {
@@ -896,7 +895,7 @@ export function notifyInvoicePaid(tenantId, invoice) {
       .filter(Boolean).join(' · '),
     tag: 'invoice-paid',
     url: `/invoices/${invoice.id}`,
-  }).catch((err) => console.error('[push] invoice paid notify failed', err))
+  }).catch((err) => logError('invoice.paid_notification_failed', err, { tenantId }))
 }
 
 // Public (unauthenticated) tenant logo for an invoice shared via a Mollie

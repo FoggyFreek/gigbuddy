@@ -1,9 +1,14 @@
 // Data-access helpers for invoices. Each takes an `executor` (a pool or a
 // transaction client) so callers control transaction boundaries.
 import { formatInvoiceNumber } from '../validators/invoiceValidators.js'
+import { tenantSafeProjection } from './tenantSafeProjection.js'
+import { invoiceProjection } from './invoiceProjection.js'
 
 export async function fetchTenant(executor, tenantId) {
-  const { rows } = await executor.query('SELECT * FROM tenants WHERE id = $1', [tenantId])
+  const { rows } = await executor.query(
+    `SELECT ${tenantSafeProjection()} FROM tenants WHERE id = $1`,
+    [tenantId],
+  )
   return rows[0] || null
 }
 
@@ -75,7 +80,7 @@ export async function fetchVenue(executor, tenantId, venueId) {
 
 export async function fetchInvoice(executor, tenantId, invoiceId) {
   const { rows } = await executor.query(
-    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
+    `SELECT ${invoiceProjection()} FROM invoices WHERE id = $1 AND tenant_id = $2`,
     [invoiceId, tenantId],
   )
   return rows[0] || null
@@ -96,11 +101,10 @@ export async function fetchPublicInvoiceLogoPath(executor, invoiceId) {
   return rows[0]?.logo_path ?? null
 }
 
-export async function fetchInvoiceWithMollieKey(executor, invoiceId) {
+export async function fetchPublicMollieInvoice(executor, invoiceId) {
   const { rows } = await executor.query(
-    `SELECT i.*, t.mollie_api_key
+    `SELECT ${invoiceProjection('i')}
        FROM invoices i
-       JOIN tenants t ON t.id = i.tenant_id
       WHERE i.id = $1 AND i.mollie_payment_link_id IS NOT NULL`,
     [invoiceId],
   )
@@ -188,7 +192,7 @@ export async function setCustomLogoPath(executor, tenantId, invoiceId, key) {
 // Invoice plus the linked gig's date/description (for email subject lines).
 export async function fetchInvoiceWithGig(executor, tenantId, invoiceId) {
   const { rows } = await executor.query(
-    `SELECT i.*, g.event_date, g.event_description
+    `SELECT ${invoiceProjection('i')}, g.event_date, g.event_description
        FROM invoices i
        LEFT JOIN gigs g ON g.id = i.gig_id AND g.tenant_id = i.tenant_id
       WHERE i.id = $1 AND i.tenant_id = $2`,
@@ -239,7 +243,7 @@ export async function setInvoicePaymentLink(executor, tenantId, invoiceId, { lin
             updated_at = NOW()
       WHERE id = $4 AND tenant_id = $5
         AND mollie_payment_link_id IS NULL
-    RETURNING *`,
+    RETURNING ${invoiceProjection()}`,
     [linkId, url, expiresAt ?? null, invoiceId, tenantId],
   )
   return rows[0] || null
@@ -271,7 +275,7 @@ export async function updateInvoicePaymentState(executor, tenantId, invoiceId, {
             status                = $4,
             updated_at            = NOW()
       WHERE id = $5 AND tenant_id = $6
-      RETURNING *`,
+      RETURNING ${invoiceProjection()}`,
     [mollieStatus, paymentId, paidAt, invoiceStatus, invoiceId, tenantId],
   )
   return rows[0]
@@ -293,12 +297,4 @@ export async function openInvoiceBuckets(executor, tenantId) {
     [tenantId],
   )
   return rows[0]
-}
-
-// Drops the secret Mollie API key before a tenant row is returned to a client.
-export function stripMollieKey(tenant) {
-  if (!tenant) return tenant
-  const safe = { ...tenant }
-  delete safe.mollie_api_key
-  return safe
 }

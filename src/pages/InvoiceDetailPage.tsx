@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
@@ -15,6 +16,7 @@ export default function InvoiceDetailPage() {
   const navigate = useNavigate()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
+  const [invoiceTitle, setInvoiceTitle] = useState(t($ => $.singularTitle))
 
   function closeView(reload: boolean) {
     if (reload && typeof outletCtx.onReload === 'function') outletCtx.onReload()
@@ -30,7 +32,7 @@ export default function InvoiceDetailPage() {
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.singularTitle)}</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{invoiceTitle}</Typography>
         {insideSplitView && (
           <>
             <Box sx={{ flexGrow: 1 }} />
@@ -46,6 +48,7 @@ export default function InvoiceDetailPage() {
         invoiceId={invoiceId}
         onClose={(reload) => closeView(reload ?? false)}
         onInvoiceUpdate={outletCtx.onInvoiceUpdate as ((id: Id, patch: Partial<Invoice>) => void) | undefined}
+        onTitleReady={setInvoiceTitle}
       />
     </Box>
   )

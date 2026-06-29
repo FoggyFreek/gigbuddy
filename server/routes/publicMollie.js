@@ -2,6 +2,7 @@ import { Router, urlencoded } from 'express'
 import pool from '../db/index.js'
 import { notifyInvoicePaid } from '../services/invoiceService.js'
 import { handlePaymentWebhook } from '../services/molliePaymentLinkService.js'
+import { logError } from '../utils/redactedLogger.js'
 
 const router = Router()
 
@@ -28,7 +29,7 @@ router.post('/payment-links/webhook', async (req, res) => {
       notifyInvoicePaid(result.notify.tenantId, result.notify.invoice)
     }
   } catch (err) {
-    console.error('[mollie-webhook] error processing payment update:', err.message)
+    logError('mollie.webhook_failed', err, { invoiceId })
   }
 
   res.status(200).end()

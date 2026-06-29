@@ -20,6 +20,7 @@ scripts/local/
 
 # Database dumps
 *.dump
+*.dump.enc
 *.sql.gz
 
 #deployment manual and log

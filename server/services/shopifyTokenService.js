@@ -5,9 +5,10 @@
 // token) follows Shopify's Dev Dashboard guidance.
 import {
   getShopifyClientId,
-  getShopifyClientSecret,
   getShopifyDomain,
 } from '../repositories/profileRepository.js'
+import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
+import { loadIntegrationCredential } from './integrationCredentialService.js'
 
 // Re-mint this many ms before the real expiry so an in-flight request never uses
 // an about-to-expire token.
@@ -34,13 +35,21 @@ export function resetShopifyTokenCacheForTests() {
 export async function getAccessToken(executor, tenantId, fetchImpl = globalThis.fetch) {
   const cached = cache.get(tenantId)
   if (cached && cached.expiresAt > Date.now()) return { token: cached.token, domain: cached.domain }
+  if (cached) cache.delete(tenantId)
 
-  const [domain, clientId, clientSecret] = await Promise.all([
+  const [domain, clientId] = await Promise.all([
     getShopifyDomain(executor, tenantId),
     getShopifyClientId(executor, tenantId),
-    getShopifyClientSecret(executor, tenantId),
   ])
-  if (!domain || !clientId || !clientSecret) return shopifyError(400, 'shopify_not_configured')
+  if (!domain || !clientId) return shopifyError(400, 'shopify_not_configured')
+
+  let clientSecret
+  try {
+    clientSecret = await loadIntegrationCredential(executor, tenantId, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET)
+  } catch {
+    return shopifyError(503, 'shopify_credential_unavailable')
+  }
+  if (!clientSecret) return shopifyError(400, 'shopify_not_configured')
 
   const url = `https://${domain}/admin/oauth/access_token`
   let res

@@ -3,6 +3,7 @@ import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
+import { auditLog } from '../utils/auditLog.js'
 import { parseId } from '../validators/profileValidators.js'
 import {
   getProfile,
@@ -64,6 +65,12 @@ function sendError(res, error) {
   res.status(error.status).json(error.body)
 }
 
+const manageIntegration = requirePermission(PERMISSIONS.TENANT_MANAGE)
+function noStore(_req, res, next) {
+  res.set('Cache-Control', 'no-store')
+  next()
+}
+
 // Get tenant profile with its links.
 router.get('/', async (req, res) => {
   const result = await getProfile(pool, req.tenantId)
@@ -102,72 +109,84 @@ router.delete('/links/:linkId', async (req, res) => {
   res.status(204).end()
 })
 
-// Get Mollie API key status (returns masked preview, never the raw key)
-router.get('/mollie-key', async (req, res) => {
+// Get Mollie API key status without returning any credential-derived preview.
+router.get('/mollie-key', manageIntegration, noStore, async (req, res) => {
   res.json(await getMollieKeyStatus(pool, req.tenantId))
 })
 
 // Set or replace Mollie API key (tenant admin only)
-router.put('/mollie-key', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+router.put('/mollie-key', manageIntegration, noStore, async (req, res) => {
   const result = await setMollieKeyValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
+  auditLog(req, 'integration.mollie_key.set')
   res.json(result.status)
 })
 
 // Clear Mollie API key (tenant admin only)
-router.delete('/mollie-key', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
-  res.json(await clearMollieKeyValue(pool, req.tenantId))
+router.delete('/mollie-key', manageIntegration, noStore, async (req, res) => {
+  const status = await clearMollieKeyValue(pool, req.tenantId)
+  auditLog(req, 'integration.mollie_key.clear')
+  res.json(status)
 })
 
 // Get Shopify app Client ID (non-secret, returned in full)
-router.get('/shopify-client-id', async (req, res) => {
+router.get('/shopify-client-id', manageIntegration, noStore, async (req, res) => {
   res.json(await getShopifyClientIdStatus(pool, req.tenantId))
 })
 
 // Set or replace Shopify app Client ID (tenant admin only)
-router.put('/shopify-client-id', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
+router.put('/shopify-client-id', manageIntegration, noStore, async (req, res) => {
   const result = await setShopifyClientIdValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
+  auditLog(req, 'integration.shopify_client_id.set')
   res.json(result.status)
 })
 
 // Clear Shopify app Client ID (tenant admin only)
-router.delete('/shopify-client-id', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
-  res.json(await clearShopifyClientIdValue(pool, req.tenantId))
+router.delete('/shopify-client-id', manageIntegration, noStore, async (req, res) => {
+  const status = await clearShopifyClientIdValue(pool, req.tenantId)
+  auditLog(req, 'integration.shopify_client_id.clear')
+  res.json(status)
 })
 
-// Get Shopify app secret status (returns masked preview, never the raw secret)
-router.get('/shopify-secret', async (req, res) => {
+// Get Shopify app secret status without returning any credential-derived preview.
+router.get('/shopify-secret', manageIntegration, noStore, async (req, res) => {
   res.json(await getShopifySecretStatus(pool, req.tenantId))
 })
 
 // Set or replace Shopify app secret (tenant admin only)
-router.put('/shopify-secret', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
+router.put('/shopify-secret', manageIntegration, noStore, async (req, res) => {
   const result = await setShopifySecretValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
+  auditLog(req, 'integration.shopify_secret.set')
   res.json(result.status)
 })
 
 // Clear Shopify app secret (tenant admin only)
-router.delete('/shopify-secret', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
-  res.json(await clearShopifySecretValue(pool, req.tenantId))
+router.delete('/shopify-secret', manageIntegration, noStore, async (req, res) => {
+  const status = await clearShopifySecretValue(pool, req.tenantId)
+  auditLog(req, 'integration.shopify_secret.clear')
+  res.json(status)
 })
 
 // Get Shopify store domain (non-secret, returned in full)
-router.get('/shopify-domain', async (req, res) => {
+router.get('/shopify-domain', manageIntegration, noStore, async (req, res) => {
   res.json(await getShopifyDomainStatus(pool, req.tenantId))
 })
 
 // Set or replace Shopify store domain (tenant admin only)
-router.put('/shopify-domain', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
+router.put('/shopify-domain', manageIntegration, noStore, async (req, res) => {
   const result = await setShopifyDomainValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
+  auditLog(req, 'integration.shopify_domain.set')
   res.json(result.status)
 })
 
 // Clear Shopify store domain (tenant admin only)
-router.delete('/shopify-domain', requirePermission(PERMISSIONS.TENANT_MANAGE), async (req, res) => {
-  res.json(await clearShopifyDomainValue(pool, req.tenantId))
+router.delete('/shopify-domain', manageIntegration, noStore, async (req, res) => {
+  const status = await clearShopifyDomainValue(pool, req.tenantId)
+  auditLog(req, 'integration.shopify_domain.clear')
+  res.json(status)
 })
 
 // Upload / replace band logo (tenant admin only)

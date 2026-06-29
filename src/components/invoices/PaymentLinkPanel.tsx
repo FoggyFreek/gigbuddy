@@ -58,6 +58,7 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
   const url = invoice.mollie_payment_link_url
   const paymentStatus = invoice.mollie_payment_status
   const isVoid = invoice.status === 'void'
+  const isSaved = Boolean(invoice.id)
   const hasAmount = (invoice.total_cents ?? 0) > 0
 
   async function handleCreate() {
@@ -65,12 +66,7 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
     setError(null)
     try {
       const result = await createInvoicePaymentLink(invoice.id!)
-      // PaymentLinkResult has payment_link_id / payment_link_url — map to Invoice fields
-      const patch: Partial<Invoice> = {
-        mollie_payment_link_id: (result as Record<string, unknown>).payment_link_id as string | undefined,
-        mollie_payment_link_url: (result as Record<string, unknown>).payment_link_url as string | undefined,
-      }
-      onUpdated(patch)
+      onUpdated(result)
     } catch (err) {
       const e = err as Record<string, unknown>
       const errorKey = CREATE_ERROR_KEYS[e.message as keyof typeof CREATE_ERROR_KEYS]
@@ -84,12 +80,10 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
     setBusy(true)
     setError(null)
     try {
-      // The real sync response shape from the backend: { status, invoiceStatus, paymentId, paidAt, ... }
-      // The API is typed as Invoice for convenience but has these extra runtime fields.
-      const result = await syncInvoicePaymentLink(invoice.id!) as Record<string, unknown>
+      const result = await syncInvoicePaymentLink(invoice.id!)
       onUpdated({
-        mollie_payment_status: result.status as string | undefined,
-        status: ((result.invoiceStatus as string | undefined) ?? (result.status as string | undefined)) as Invoice['status'],
+        mollie_payment_status: result.status ?? undefined,
+        status: result.invoiceStatus,
       })
     } catch (err) {
       const e = err as Error
@@ -103,9 +97,8 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
     setBusy(true)
     setError(null)
     try {
-      // API typed as void but real backend returns updated invoice fields; cast to pass through.
-      const result = await deleteInvoicePaymentLink(invoice.id!) as unknown
-      onUpdated((result as Partial<Invoice>) ?? { mollie_payment_link_id: undefined, mollie_payment_link_url: undefined })
+      const result = await deleteInvoicePaymentLink(invoice.id!)
+      onUpdated(result)
     } catch (err) {
       const e = err as Record<string, unknown>
       const code = (e.code ?? e.message) as keyof typeof REMOVE_ERROR_KEYS
@@ -148,14 +141,18 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPane
             variant="outlined"
             size="small"
             onClick={handleCreate}
-            disabled={busy || isVoid || !hasAmount}
+            disabled={busy || isVoid || !isSaved || !hasAmount}
             startIcon={busy ? <CircularProgress size={14} color="inherit" /> : null}
           >
             {t($ => $.paymentLink.create)}
           </Button>
-          {(isVoid || !hasAmount) && (
+          {(isVoid || !isSaved || !hasAmount) && (
             <Typography variant="caption" color="text.secondary">
-              {isVoid ? t($ => $.paymentLink.invoiceVoid) : t($ => $.paymentLink.amountRequired)}
+              {isVoid
+                ? t($ => $.paymentLink.invoiceVoid)
+                : !isSaved
+                  ? t($ => $.paymentLink.notSaved)
+                  : t($ => $.paymentLink.amountRequired)}
             </Typography>
           )}
         </Stack>

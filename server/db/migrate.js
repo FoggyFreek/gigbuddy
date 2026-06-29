@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pool from './index.js'
+import { logError } from '../utils/redactedLogger.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const migrationsDir = join(__dirname, 'migrations')
@@ -39,6 +40,6 @@ async function migrate() {
 try {
   await migrate()
 } catch (err) {
-  console.error(err)
+  logError('database.migration_failed', err)
   process.exit(1)
 }

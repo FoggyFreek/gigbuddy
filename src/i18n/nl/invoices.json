@@ -93,7 +93,12 @@
     "replace": "Vervangen",
     "remove": "Verwijderen",
     "add": "Logo toevoegen",
-    "useDark": "Donker logo gebruiken"
+    "useDark": "Alternatief logo gebruiken"
+  },
+  "paidDialog": {
+    "title": "Factuur {{number}} als betaald markeren?",
+    "body": "De ontvangen betaling wordt geboekt op de standaard betaalrekening in het grootboek.",
+    "confirm": "Als betaald markeren"
   },
   "deleteDialog": {
     "title": "Factuur verwijderen?",
@@ -125,6 +130,7 @@
     "title": "Betaallink",
     "create": "Betaallink aanmaken",
     "invoiceVoid": "De factuur is vervallen.",
+    "notSaved": "Sla de factuur op voordat je een betaallink aanmaakt.",
     "amountRequired": "Het factuurtotaal moet groter zijn dan 0.",
     "copied": "Gekopieerd!",
     "copy": "Link kopiëren",

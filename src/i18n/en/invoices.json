@@ -93,7 +93,12 @@
     "replace": "Replace",
     "remove": "Remove",
     "add": "Add logo",
-    "useDark": "Use dark logo"
+    "useDark": "Use alternative logo"
+  },
+  "paidDialog": {
+    "title": "Mark invoice {{number}} as paid?",
+    "body": "The received payment will be booked to the default payment account in the ledger.",
+    "confirm": "Mark as paid"
   },
   "deleteDialog": {
     "title": "Delete invoice?",
@@ -125,7 +130,8 @@
     "title": "Payment link",
     "create": "Create payment link",
     "invoiceVoid": "Invoice is void.",
-    "amountRequired": "Invoice total must be > 0.",
+    "notSaved": "Save the invoice before creating a payment link.",
+    "amountRequired": "Invoice total must be greater than 0.",
     "copied": "Copied!",
     "copy": "Copy link",
     "open": "Open",

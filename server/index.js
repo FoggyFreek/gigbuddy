@@ -9,12 +9,15 @@ import pool from './db/index.js'
 import routes from './routes/index.js'
 import { initOidc } from './oidc.js'
 import { securityHeaders } from './middleware/securityHeaders.js'
+import { validateIntegrationSecretsConfig } from './security/integrationSecrets.js'
+import { logError } from './utils/redactedLogger.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 if (!process.env.SESSION_SECRET) {
   throw new Error('SESSION_SECRET environment variable must be set')
 }
+validateIntegrationSecretsConfig()
 
 const app = express()
 const PORT = process.env.SERVER_PORT || 3002
@@ -54,7 +57,7 @@ app.use((_req, res) => {
 })
 
 app.use((err, _req, res, _next) => {
-  console.error(err)
+  logError('application.unhandled_error', err)
   const status = err.status || 500
   // Only surface the specific message for client errors (4xx); for server
   // errors expose nothing beyond a generic string to avoid leaking internals

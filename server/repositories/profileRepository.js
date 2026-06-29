@@ -1,9 +1,13 @@
 // Data-access helpers for the tenant profile (a view over the tenants row plus
 // profile_links) and the Mollie key / logo columns. Each query takes an
 // `executor` (a pool or transaction client) so callers control transactions.
+import { tenantSafeProjection } from './tenantSafeProjection.js'
 
 export async function fetchTenant(executor, tenantId) {
-  const { rows } = await executor.query('SELECT * FROM tenants WHERE id = $1', [tenantId])
+  const { rows } = await executor.query(
+    `SELECT ${tenantSafeProjection()} FROM tenants WHERE id = $1`,
+    [tenantId],
+  )
   return rows[0] || null
 }
 
@@ -21,7 +25,8 @@ export async function updateTenantFields(executor, tenantId, fields, values) {
   const assignments = [...fields, 'updated_at = NOW()']
   const whereIdx = values.length + 1
   const { rows } = await executor.query(
-    `UPDATE tenants SET ${assignments.join(', ')} WHERE id = $${whereIdx} RETURNING *`,
+    `UPDATE tenants SET ${assignments.join(', ')} WHERE id = $${whereIdx}
+     RETURNING ${tenantSafeProjection()}`,
     [...values, tenantId],
   )
   return rows[0] || null
@@ -64,31 +69,6 @@ export async function deleteProfileLink(executor, linkId, tenantId) {
   return rowCount > 0
 }
 
-// ---------- mollie key ----------
-
-export async function getMollieKey(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT mollie_api_key FROM tenants WHERE id = $1',
-    [tenantId],
-  )
-  return rows[0]?.mollie_api_key || null
-}
-
-export async function setMollieKey(executor, tenantId, key) {
-  const { rows } = await executor.query(
-    'UPDATE tenants SET mollie_api_key = $1, updated_at = NOW() WHERE id = $2 RETURNING mollie_api_key',
-    [key, tenantId],
-  )
-  return rows[0]?.mollie_api_key
-}
-
-export async function clearMollieKey(executor, tenantId) {
-  await executor.query(
-    'UPDATE tenants SET mollie_api_key = NULL, updated_at = NOW() WHERE id = $1',
-    [tenantId],
-  )
-}
-
 // ---------- shopify app credentials (client id + secret) ----------
 
 export async function getShopifyClientId(executor, tenantId) {
@@ -110,29 +90,6 @@ export async function setShopifyClientId(executor, tenantId, clientId) {
 export async function clearShopifyClientId(executor, tenantId) {
   await executor.query(
     'UPDATE tenants SET shopify_client_id = NULL, updated_at = NOW() WHERE id = $1',
-    [tenantId],
-  )
-}
-
-export async function getShopifyClientSecret(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT shopify_client_secret FROM tenants WHERE id = $1',
-    [tenantId],
-  )
-  return rows[0]?.shopify_client_secret || null
-}
-
-export async function setShopifyClientSecret(executor, tenantId, secret) {
-  const { rows } = await executor.query(
-    'UPDATE tenants SET shopify_client_secret = $1, updated_at = NOW() WHERE id = $2 RETURNING shopify_client_secret',
-    [secret, tenantId],
-  )
-  return rows[0]?.shopify_client_secret
-}
-
-export async function clearShopifyClientSecret(executor, tenantId) {
-  await executor.query(
-    'UPDATE tenants SET shopify_client_secret = NULL, updated_at = NOW() WHERE id = $1',
     [tenantId],
   )
 }
