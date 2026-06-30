@@ -1,6 +1,7 @@
 ---
 name: i18n
 description: i18next / react-i18next localization for this app — the v26 TypeScript selector API (`t($ => $.key)`), namespaces, plurals, interpolation, and Intl formatting, plus the localization best practices that keep strings translatable. Use when adding, wiring, or reviewing translations. Pinned to i18next 26.3.2 / react-i18next v17. Full directive tables and examples live in i18n_reference.md.
+user-invocable: false
 ---
 
 # i18n — i18next localization for this app

@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { pathToFileURL } from 'node:url'
 import pool from '../db/index.js'
-import { logError } from '../utils/redactedLogger.js'
+import { logger } from '../utils/logger.js'
 import {
   CREDENTIAL_TYPES,
   decryptIntegrationSecret,
@@ -121,7 +121,7 @@ async function main() {
     throw new Error('Usage: npm run migrate:integration-secrets -- --check|--apply')
   }
   const result = await migrateIntegrationSecrets(pool, { apply: args[0] === '--apply' })
-  console.log(JSON.stringify({ event: 'integration_secret_migration', mode: args[0].slice(2), ...result.counts }))
+  logger.info('integration_secret_migration.completed', { mode: args[0].slice(2), ...result.counts })
   if (!result.ok) process.exitCode = 2
 }
 
@@ -129,7 +129,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     await main()
   } catch (err) {
-    logError('integration_secret_migration.failed', err)
+    logger.error('integration_secret_migration.failed', { err })
     process.exitCode = 1
   } finally {
     await pool.end()

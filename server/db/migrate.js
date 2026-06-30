@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pool from './index.js'
-import { logError } from '../utils/redactedLogger.js'
+import { logger } from '../utils/logger.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const migrationsDir = join(__dirname, 'migrations')
@@ -30,16 +30,16 @@ async function migrate() {
     const sql = await readFile(join(migrationsDir, file), 'utf8')
     await pool.query(sql)
     await pool.query('INSERT INTO migrations (filename) VALUES ($1)', [file])
-    console.log(`Migrated: ${file}`)
+    logger.info('migration.applied', { filename: file })
   }
 
   await pool.end()
-  console.log('Migrations complete.')
+  logger.info('migration.complete', {})
 }
 
 try {
   await migrate()
 } catch (err) {
-  logError('database.migration_failed', err)
+  logger.error('migration.failed', { err })
   process.exit(1)
 }

@@ -1,6 +1,7 @@
 ---
 name: detail-component-permissions
 description: How to gate editing affordances in detail/editor components on the active tenant's capabilities. Use when writing or reviewing any component that shows a single resource with editable fields, create/delete/upload controls, or vote/assign actions — covers the canWrite prop contract, disable-vs-hide rules, preserving self-actions, prop threading, and required reader-mode tests. Canonical example: the GigDetailPage stack.
+user-invocable: false
 ---
 
 # Detail-component permissions

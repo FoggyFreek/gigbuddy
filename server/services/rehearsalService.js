@@ -4,6 +4,7 @@
 import pool from '../db/index.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { sendPushToTenant } from '../utils/sendPush.js'
+import { logger } from '../utils/logger.js'
 import {
   VALID_STATUSES,
   VALID_VOTES,
@@ -50,7 +51,7 @@ export function notifyRehearsalCreated(tenantId, rehearsal) {
     body: [rehearsalDateStr(rehearsal), rehearsal.location].filter(Boolean).join(' · '),
     tag: 'rehearsal-new',
     url: '/rehearsals',
-  }).catch((err) => console.error('[push] sendPushToTenant failed', err))
+  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
 }
 
 export function notifyRehearsalConfirmed(tenantId, rehearsal) {
@@ -59,7 +60,7 @@ export function notifyRehearsalConfirmed(tenantId, rehearsal) {
     body: rehearsalDateStr(rehearsal),
     tag: 'rehearsal-confirmed',
     url: '/rehearsals',
-  }).catch((err) => console.error('[push] sendPushToTenant failed', err))
+  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
 }
 
 // ---------- internals ----------

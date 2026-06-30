@@ -1,6 +1,7 @@
 ---
 name: backend-layering
 description: Route/service/repository layering rules for this Express backend. Use when adding or refactoring any server route, service, repository, or validator — covers layer responsibilities, error contract, transactions, tenant scoping, and the canonical rehearsals example.
+user-invocable: false
 ---
 
 # Backend layering: route → service → repository
@@ -28,7 +29,7 @@ Read those files before writing or refactoring backend code; match their style e
 - All domain logic: validation beyond id parsing, state-transition rules, transactions, idempotency, mapping DB errors (`err.code === '23505'` → 409), composing response payloads (e.g. attaching participants).
 - **Error contract**: expected failures return `{ error: { status, body } }` (define a shared `NOT_FOUND` const); success returns a named payload like `{ rehearsal }` or `{}` for deletes. Throw only on unexpected errors — the global handler turns those into 500s.
 - Owns transactions: `pool.connect()` / `BEGIN` / `COMMIT` / `ROLLBACK` / `release()` lives here, passing the `client` to repository functions.
-- Push notifications: export `notifyXxx(tenantId, entity)` functions that fire-and-forget (`.catch(console.error)`); the route decides when to call them so they happen after the HTTP response.
+- Push notifications: export `notifyXxx(tenantId, entity)` functions that fire-and-forget (`.catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))` — see `server/utils/logger.js`, CLAUDE.md "Logging"); the route decides when to call them so they happen after the HTTP response.
 
 ### Repository (`server/repositories/<resource>Repository.js`)
 - SQL **only** — no business decisions, no HTTP statuses, no notifications.

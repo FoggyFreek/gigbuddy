@@ -2,6 +2,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { statObject, getObject } from '../services/storageService.js'
 import { getPublicInvoiceLogoPath } from '../services/invoiceService.js'
+import { logger } from '../utils/logger.js'
 
 const router = Router()
 
@@ -23,7 +24,9 @@ router.get('/:id/logo', async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=3600')
     const stream = await getObject(logoPath)
     stream.on('error', (streamErr) => {
-      console.error('[public-invoices] storage stream error:', streamErr)
+      // Pre-auth route (mounted before tenant resolution) — tenantId/userId
+      // enrichment will be absent here by design, not a bug.
+      logger.error('storage.stream_error', { err: streamErr })
       if (!res.headersSent) res.status(502).end()
       else res.destroy()
     })

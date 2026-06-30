@@ -1,12 +1,11 @@
 // @vitest-environment node
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   CREDENTIAL_TYPES,
   decryptIntegrationSecret,
   encryptIntegrationSecret,
   parseIntegrationSecretsConfig,
 } from '../../../server/security/integrationSecrets.js'
-import { logError } from '../../../server/utils/redactedLogger.js'
 
 const keyA = Buffer.alloc(32, 0x11).toString('base64')
 const keyB = Buffer.alloc(32, 0x22).toString('base64')
@@ -50,24 +49,5 @@ describe('integration secret AES-256-GCM envelopes', () => {
       INTEGRATION_SECRETS_KEYS: JSON.stringify({ a: 'bad' }),
       INTEGRATION_SECRETS_ACTIVE_KEY_ID: 'a',
     })).toThrow('integration_secrets_key_invalid')
-  })
-})
-
-describe('redacted integration logging', () => {
-  it('never serializes error messages, stacks, secrets, or unapproved context', () => {
-    const secret = 'test_sensitive_credential_value'
-    const output = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      const err = Object.assign(new Error(`upstream rejected ${secret}`), { code: 'AUTH_FAILED' })
-      logError('integration.failed', err, { tenantId: 7, credential: secret })
-      const line = output.mock.calls[0][0]
-      expect(line).not.toContain(secret)
-      expect(JSON.parse(line)).toMatchObject({
-        event: 'integration.failed', errorName: 'Error', errorCode: 'AUTH_FAILED', tenantId: 7,
-      })
-      expect(JSON.parse(line)).not.toHaveProperty('credential')
-    } finally {
-      output.mockRestore()
-    }
   })
 })

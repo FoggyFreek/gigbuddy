@@ -1,5 +1,6 @@
 import { storageClient, BUCKET } from '../utils/storage.js'
-import { refreshTenantStorageForKey } from './statisticsService.js'
+import { refreshTenantStorageForKey, tenantIdFromKey } from './statisticsService.js'
+import { logger } from '../utils/logger.js'
 
 // ---------- key builders ----------
 
@@ -69,7 +70,10 @@ export function removeObject(key) {
 
 // safeRemove delegates to removeObject (which already triggers the refresh), so
 // no extra refresh here — adding one would run a second full S3 listing.
-export function safeRemove(key, warnMsg) {
+// `_warnMsg` is kept for the many existing call sites' signatures but is no
+// longer used for free-text logging — see logger.js's CONTEXT_KEYS doc comment
+// for why structured logs don't accept arbitrary message strings.
+export function safeRemove(key, _warnMsg) {
   if (!key) return
-  removeObject(key).catch((e) => console.warn(warnMsg, e.message))
+  removeObject(key).catch((err) => logger.warn('storage.remove_failed', { err, tenantId: tenantIdFromKey(key) }))
 }

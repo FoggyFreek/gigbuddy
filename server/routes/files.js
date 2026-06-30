@@ -5,6 +5,7 @@ import { resolveFileAccess, canReadFinanceFile, searchFiles } from '../services/
 import { can } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { sanitizeFilename } from '../utils/sanitizeFilename.js'
+import { logger } from '../utils/logger.js'
 
 const router = Router()
 
@@ -66,7 +67,7 @@ router.get('/*objectKey', async (req, res) => {
     // Handle stream errors that occur after headers are sent; pipe() won't
     // propagate these to Express's error handler (OWASP A10).
     stream.on('error', (streamErr) => {
-      console.error('[files] storage stream error:', streamErr)
+      logger.error('storage.stream_error', { err: streamErr })
       if (!res.headersSent) {
         res.status(502).json({ error: 'Storage error' })
       } else {

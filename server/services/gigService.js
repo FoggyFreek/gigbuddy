@@ -10,6 +10,7 @@ import { uploadObject, removeObject, safeRemove, gigBannerKey, gigAttachmentKey 
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { sendPushToTenant, sendPushToMember } from '../utils/sendPush.js'
+import { logger } from '../utils/logger.js'
 import {
   parseId,
   parseSearchLimit,
@@ -78,7 +79,7 @@ export function notifyGigCreated(tenantId, gig) {
     body: gigPushSummary(gig),
     tag: 'gig-new',
     url: '/gigs',
-  }).catch((err) => console.error('[push] sendPushToTenant failed', err))
+  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
 }
 
 export function notifyGigConfirmed(tenantId, gig) {
@@ -87,7 +88,7 @@ export function notifyGigConfirmed(tenantId, gig) {
     body: gigPushSummary(gig),
     tag: 'gig-confirmed',
     url: '/gigs',
-  }).catch((err) => console.error('[push] sendPushToTenant failed', err))
+  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
 }
 
 export function notifyGigsImported(tenantId, count) {
@@ -96,7 +97,7 @@ export function notifyGigsImported(tenantId, count) {
     body: 'Your Bandsintown import is complete.',
     tag: 'gig-import',
     url: '/gigs',
-  }).catch((err) => console.error('[push] sendPushToTenant failed', err))
+  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
 }
 
 async function notifyTaskAssignment(db, tenantId, gigId, task) {
@@ -106,7 +107,7 @@ async function notifyTaskAssignment(db, tenantId, gigId, task) {
     title: 'Task assigned to you',
     body: `${task.title}${suffix}`,
     url: '/tasks',
-  }).catch((err) => console.error('[push] task assignment notify failed', err))
+  }).catch((err) => logger.error('push.task_assignment_notify_failed', { err, tenantId, gigId }))
 }
 
 // ---------- internals ----------

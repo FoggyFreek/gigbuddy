@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit'
 import QRCode from 'qrcode'
 import { computeInvoiceTotals } from './computeInvoiceTotals.js'
+import { logger } from './logger.js'
 
 const PAGE_MARGIN = 48
 const PAGE_W = 595.28   // A4 width in points
@@ -82,7 +83,7 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
         color: { dark: '#000000', light: '#ffffff' },
       })
     } catch (err) {
-      console.warn('[renderInvoicePdf] QR generation failed:', err.message)
+      logger.warn('invoice_pdf.qr_generation_failed', { err })
     }
   }
 

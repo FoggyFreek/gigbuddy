@@ -3,6 +3,7 @@
 import QRCode from 'qrcode'
 import { getObject } from './storageService.js'
 import { fetchTenant, fetchInvoiceWithGig } from '../repositories/invoiceRepository.js'
+import { logger } from '../utils/logger.js'
 
 const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
 
@@ -228,7 +229,7 @@ export async function buildInvoiceEml(pool, tenantId, invoiceId, rawPersonalMess
       const qrBuffer = await QRCode.toBuffer(invoice.mollie_payment_link_url, { type: 'png', width: 200, margin: 1 })
       qrBase64 = qrBuffer.toString('base64')
     } catch (err) {
-      console.warn('[invoices/eml] QR generation failed:', err.message)
+      logger.warn('invoice_email.qr_generation_failed', { err })
     }
   }
 
@@ -247,7 +248,7 @@ export async function buildInvoiceEml(pool, tenantId, invoiceId, rawPersonalMess
       for await (const chunk of stream) chunks.push(chunk)
       pdfBase64 = Buffer.concat(chunks).toString('base64')
     } catch (err) {
-      console.warn('[invoices/eml] PDF fetch failed:', err.message)
+      logger.warn('invoice_email.pdf_fetch_failed', { err })
     }
   }
 

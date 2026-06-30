@@ -17,7 +17,7 @@ import {
   syncInvoicePaymentStatus,
 } from './molliePaymentLinkService.js'
 import { sendPushToTenant } from '../utils/sendPush.js'
-import { logError } from '../utils/redactedLogger.js'
+import { logger } from '../utils/logger.js'
 import { invoiceProjection } from '../repositories/invoiceProjection.js'
 import {
   fetchTenant,
@@ -75,7 +75,7 @@ async function withAccountingSettingsSessionLock(pool, tenantId, fn) {
       await client.query('SELECT pg_advisory_unlock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
     } catch (err) {
       releaseError = err
-      logError('invoice.accounting_lock_release_failed', err)
+      logger.error('invoice.accounting_lock_release_failed', { err })
     }
     client.release(releaseError)
   }
@@ -105,7 +105,7 @@ async function loadLogoBuffer(tenant, customLogoPath, useDarkLogo = false) {
     for await (const chunk of stream) chunks.push(chunk)
     return Buffer.concat(chunks)
   } catch (err) {
-    logError('invoice.logo_load_failed', err)
+    logger.error('invoice.logo_load_failed', { err })
     return null
   }
 }
@@ -667,7 +667,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
   try {
     await renderAndStorePdf(pool, invoiceId, tenantId)
   } catch (err) {
-    logError('invoice.pdf_render_failed', err, { tenantId, invoiceId })
+    logger.error('invoice.pdf_render_failed', { err, tenantId, invoiceId })
   }
 
   const created = await fetchInvoice(pool, tenantId, invoiceId)
@@ -687,7 +687,7 @@ export async function patchInvoice(pool, tenantId, invoiceId, body, actorUserId 
     try {
       await renderAndStorePdf(pool, invoiceId, tenantId)
     } catch (err) {
-      logError('invoice.pdf_rerender_failed', err, { tenantId, invoiceId })
+      logger.error('invoice.pdf_rerender_failed', { err, tenantId, invoiceId })
     }
   }
 
@@ -743,7 +743,7 @@ export async function uploadInvoiceLogo(pool, tenantId, invoiceId, file) {
   try {
     await renderAndStorePdf(pool, invoiceId, tenantId)
   } catch (err) {
-    logError('invoice.pdf_rerender_after_logo_failed', err, { tenantId, invoiceId })
+    logger.error('invoice.pdf_rerender_after_logo_failed', { err, tenantId, invoiceId })
   }
 
   return { custom_logo_path: objectKey }
@@ -761,7 +761,7 @@ export async function removeInvoiceLogo(pool, tenantId, invoiceId) {
   try {
     await renderAndStorePdf(pool, invoiceId, tenantId)
   } catch (err) {
-    logError('invoice.pdf_rerender_after_logo_remove_failed', err, { tenantId, invoiceId })
+    logger.error('invoice.pdf_rerender_after_logo_remove_failed', { err, tenantId, invoiceId })
   }
   return {}
 }
@@ -781,7 +781,7 @@ async function withPaymentLinkCreationLock(db, invoiceId, fn) {
       await client.query('SELECT pg_advisory_unlock($1, $2)', [PAYMENT_LINK_LOCK_NAMESPACE, invoiceId])
     } catch (err) {
       releaseError = err
-      logError('invoice.payment_link_lock_release_failed', err, { invoiceId })
+      logger.error('invoice.payment_link_lock_release_failed', { err, invoiceId })
     }
     client.release(releaseError)
   }
@@ -821,7 +821,7 @@ export async function createInvoicePaymentLink(pool, tenantId, invoiceId, actorU
       const refreshed = await fetchInvoice(pool, tenantId, invoiceId)
       if (refreshed) finalInvoice = refreshed
     } catch (err) {
-      logError('invoice.pdf_rerender_after_payment_link_failed', err, { tenantId, invoiceId })
+      logger.error('invoice.pdf_rerender_after_payment_link_failed', { err, tenantId, invoiceId })
     }
 
     const lines = await fetchLines(pool, invoiceId, tenantId)
@@ -852,7 +852,7 @@ export async function removeInvoicePaymentLink(pool, tenantId, invoiceId) {
     const refreshed = await fetchInvoice(pool, tenantId, invoiceId)
     if (refreshed) finalInvoice = refreshed
   } catch (err) {
-    logError('invoice.pdf_rerender_after_payment_link_removal_failed', err, { tenantId, invoiceId })
+    logger.error('invoice.pdf_rerender_after_payment_link_removal_failed', { err, tenantId, invoiceId })
   }
 
   const lines = await fetchLines(pool, invoiceId, tenantId)
@@ -895,7 +895,7 @@ export function notifyInvoicePaid(tenantId, invoice) {
       .filter(Boolean).join(' · '),
     tag: 'invoice-paid',
     url: `/invoices/${invoice.id}`,
-  }).catch((err) => logError('invoice.paid_notification_failed', err, { tenantId }))
+  }).catch((err) => logger.error('invoice.paid_notification_failed', { err, tenantId }))
 }
 
 // Public (unauthenticated) tenant logo for an invoice shared via a Mollie

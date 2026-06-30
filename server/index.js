@@ -10,7 +10,8 @@ import routes from './routes/index.js'
 import { initOidc } from './oidc.js'
 import { securityHeaders } from './middleware/securityHeaders.js'
 import { validateIntegrationSecretsConfig } from './security/integrationSecrets.js'
-import { logError } from './utils/redactedLogger.js'
+import { logger } from './utils/logger.js'
+import { requestContext, requestLogger } from './middleware/requestContext.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -25,6 +26,8 @@ const PORT = process.env.SERVER_PORT || 3002
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
 
+app.use(requestContext)
+app.use('/api', requestLogger)
 app.use(securityHeaders())
 
 const PgSession = connectPgSimple(session)
@@ -32,7 +35,7 @@ const PgSession = connectPgSimple(session)
 app.use(cors({
   origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   credentials: true,
-  exposedHeaders: ['X-CSRF-Token'],
+  exposedHeaders: ['X-CSRF-Token', 'X-Request-Id'],
 }))
 app.use(express.json())
 app.use(express.static(join(__dirname, '../dist')))
@@ -57,7 +60,7 @@ app.use((_req, res) => {
 })
 
 app.use((err, _req, res, _next) => {
-  logError('application.unhandled_error', err)
+  logger.error('application.unhandled_error', { err })
   const status = err.status || 500
   // Only surface the specific message for client errors (4xx); for server
   // errors expose nothing beyond a generic string to avoid leaking internals
@@ -69,7 +72,7 @@ app.use((err, _req, res, _next) => {
 await initOidc()
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`)
+  logger.info('server.started', { port: PORT })
 })
 
 export default app

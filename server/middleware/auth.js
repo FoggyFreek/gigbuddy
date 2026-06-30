@@ -1,4 +1,5 @@
 import pool from '../db/index.js'
+import { setContextField } from '../utils/requestContextStore.js'
 
 export function requireAuth(req, res, next) {
   if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
@@ -7,6 +8,7 @@ export function requireAuth(req, res, next) {
 
 export async function loadUser(req, res, next) {
   if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
+  setContextField('userId', req.session.userId)
   if (req.user) return next()
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.userId])

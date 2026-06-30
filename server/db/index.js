@@ -1,6 +1,6 @@
 import pg from 'pg'
 import 'dotenv/config'
-import { logError } from '../utils/redactedLogger.js'
+import { logger } from '../utils/logger.js'
 
 const { Pool, types } = pg
 
@@ -13,7 +13,7 @@ types.setTypeParser(1082, (val) => val)
 const pool = new Pool()
 
 pool.on('error', (err) => {
-  logError('postgres.unexpected_client_error', err)
+  logger.error('postgres.unexpected_client_error', { err })
 })
 
 export default pool

@@ -1,5 +1,18 @@
 import webpush from 'web-push'
 import pool from '../db/index.js'
+import { logger } from './logger.js'
+
+// Web Push endpoint URLs embed a per-device subscriber token in the path
+// (e.g. https://fcm.googleapis.com/fcm/send/<token>), not just a service
+// name — never log the full endpoint. The host alone identifies which push
+// service rejected the message without exposing the subscription.
+function safeHost(endpoint) {
+  try {
+    return new URL(endpoint).host
+  } catch {
+    return null
+  }
+}
 
 const configured = Boolean(
   process.env.VAPID_PUBLIC_KEY &&
@@ -14,7 +27,7 @@ if (configured) {
     process.env.VAPID_PRIVATE_KEY,
   )
 } else {
-  console.warn('[push] VAPID_* env vars not set — push notifications disabled')
+  logger.warn('push.vapid_not_configured', {})
 }
 
 async function fanOut(rows, payload) {
@@ -37,11 +50,7 @@ async function fanOut(rows, payload) {
       if (status === 410 || status === 404) {
         stale.push(rows[i].endpoint)
       } else {
-        console.error('[push] send failed', {
-          endpoint: rows[i].endpoint,
-          status,
-          message: result.reason?.message,
-        })
+        logger.error('push.send_failed', { err: result.reason, endpointHost: safeHost(rows[i].endpoint) })
       }
     }
   }

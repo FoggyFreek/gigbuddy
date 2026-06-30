@@ -1,5 +1,6 @@
 import pool from '../db/index.js'
 import { loadUser } from './auth.js'
+import { setContextField } from '../utils/requestContextStore.js'
 
 async function fetchMembership(userId, tenantId) {
   const { rows } = await pool.query(
@@ -33,6 +34,7 @@ export async function resolveTenantId(req, res, next) {
       }
       req.tenantId = tenantId
       req.membership = membership
+      setContextField('tenantId', tenantId)
       next()
     } catch (e) {
       next(e)

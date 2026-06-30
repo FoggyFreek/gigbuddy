@@ -1,5 +1,6 @@
 import pool from '../db/index.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
+import { logger } from '../utils/logger.js'
 
 // Per-tenant storage accounting. The source of truth is the object store:
 // every tenant's files live under the key prefix `tenants/<id>/`, so the
@@ -60,8 +61,8 @@ export async function refreshTenantStorage(tenantId) {
 export function refreshTenantStorageForKey(key) {
   const tenantId = tenantIdFromKey(key)
   if (!tenantId) return Promise.resolve()
-  return refreshTenantStorage(tenantId).catch((e) =>
-    console.warn('tenant storage refresh failed:', e.message),
+  return refreshTenantStorage(tenantId).catch((err) =>
+    logger.warn('tenant_storage.refresh_failed', { err, tenantId }),
   )
 }
 

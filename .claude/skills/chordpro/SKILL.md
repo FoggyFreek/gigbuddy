@@ -1,6 +1,7 @@
 ---
 name: chordpro
 description: ChordPro (.pro/.cho/.chordpro) lead-sheet format — its syntax and concepts, plus a map of how this app already parses, edits, and renders it. Use as a reference when working on the ChordPro charts feature (src/utils/chordpro.ts, ChordProView, ChordDiagram, the songs charts routes). Authoritative format details live at chordpro.org; see reference.md for the full directive tables and link index.
+user-invocable: false
 ---
 
 # ChordPro — format reference & where it lives in this app

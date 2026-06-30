@@ -19,7 +19,7 @@ import {
 import { postInvoiceSent, postInvoicePaid } from './ledgerService.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import { loadIntegrationCredential } from './integrationCredentialService.js'
-import { logError } from '../utils/redactedLogger.js'
+import { logger } from '../utils/logger.js'
 
 export function isMollieWebhookDisabled() {
   return process.env.MOLLIE_DISABLE_WEBHOOK === 'true'
@@ -34,7 +34,7 @@ export async function getMollieClientForTenant(executor, tenantId) {
   try {
     apiKey = await loadIntegrationCredential(executor, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
   } catch (err) {
-    logError('mollie.credential_decryption_failed', err, { tenantId })
+    logger.error('mollie.credential_decryption_failed', { err, tenantId })
     return { error: { status: 503, body: { error: 'mollie_credential_unavailable' } } }
   }
   if (!apiKey) {
@@ -124,11 +124,11 @@ export async function removeMolliePaymentLink({ pool, tenant: _tenant, invoice, 
       try {
         await mollie.paymentLinks.update(linkId, { archived: true })
       } catch (archiveErr) {
-        logError('mollie.payment_link_archive_failed', archiveErr, { tenantId, invoiceId })
+        logger.error('mollie.payment_link_archive_failed', { err: archiveErr, tenantId, invoiceId })
         return { error: { status: 502, body: { error: 'mollie_error', code: 'mollie_error' } } }
       }
     } else if (status !== 404) {
-      logError('mollie.payment_link_delete_failed', err, { tenantId, invoiceId })
+      logger.error('mollie.payment_link_delete_failed', { err, tenantId, invoiceId })
       return { error: { status: 502, body: { error: 'mollie_error', code: 'mollie_error' } } }
     }
   }

@@ -14,7 +14,7 @@ infisical run -- <command>
 
 **local dev env: Postgres and object storage run on a local Docker instance** (Windows host, different from `docker-compose.yml`):
 
-Container needs a start 'bosdat-postgres' and 'bosdat-v2-rustfs-1`. `docker start bosdat-postgres` and `docker start bosdat-v2-rustfs-1` # start the local DB image S3-compatible storage
+Start both before running locally: `docker start bosdat-postgres` (Postgres) and `docker start bosdat-v2-rustfs-1` (S3-compatible storage).
 
 The `app`/`migrate`/`rustfs_init` compose services are for container deploys; for local dev run the app on the host (below) against the Dockerized Postgres + RustFS. RustFS is S3-compatible (MinIO client). Outside Docker use `RUSTFS_ENDPOINT=localhost`; the `app` container overrides it to `rustfs`.
 
@@ -82,6 +82,17 @@ Gates: `requireApproved` 403s non-approved users; `resolveTenantId` 403s a non-a
 - OIDC redirect GETs (`/auth/login`, `/auth/callback`) bypass CSRF. **`/push/resubscribe` is explicitly CSRF-exempt** — the service worker can't read the in-memory token; `sameSite:lax` cookies + the `(oldEndpoint, user_id)` match are the integrity gate there.
 - Cold sign-in is **invite-only**: a new Google sign-in creates an approved `users` row with zero memberships → `/redeem-invite`. Access comes from invite redemption + tenant-admin approval. `ADMIN_EMAIL` is bootstrapped as super admin + seed-tenant admin on first login.
 
+## Logging
+
+Structured JSON-line logging, zero external dependencies — `docker logs` (the `json-file` driver) is the only log sink, there's no ELK/Datadog.
+
+- **`server/utils/logger.js`** exports `logger.debug/info/warn/error(event, fields)`. One JSON line per call to stdout (debug/info) or stderr (warn/error). `LOG_LEVEL` env var (`debug|info|warn|error`, default `info`; an unrecognized value also falls back to `info`) gates verbosity.
+- **`fields.err` is auto-redacted to `{errorName, errorCode, errorStatus}` only — never `err.message`/`err.stack`, in any environment.** This is deliberate, not a gap: a thrown error's `.message` can embed secrets (see the credential-leak case in `src/tests/server/logger.test.js`). Don't reintroduce message/stack via an env-gated "non-production" branch — that was considered and rejected.
+- Every other field must be in the `CONTEXT_KEYS` whitelist in `logger.js` **and** a primitive (string/number/boolean/null) — non-whitelisted or non-primitive values are silently dropped. Extending `CONTEXT_KEYS` is the intended way to add a new field; never add a generic `message`/free-text key — route diagnostic text through `err` instead.
+- **Request correlation is automatic, no `req` threading required.** `server/middleware/requestContext.js`'s `requestContext` middleware opens an `AsyncLocalStorage` store (`server/utils/requestContextStore.js`) per request and returns the id as the `X-Request-Id` response header; `loadUser` (`middleware/auth.js`) and `resolveTenantId` (`middleware/tenant.js`) call `setContextField` once `userId`/`tenantId` resolve. Any `logger.*` call anywhere in the route→service→repository chain — including background `.catch()` handlers — picks these up for free. When both an ALS value and a caller-passed field share a name, **the ALS value wins** (a stale closure value must never override the real request's tenant/user).
+- `requestLogger` (mounted on `/api`, before the body parser/session so a parse/session failure still gets logged) emits one `http.request` line per request: `info` for `<400`, `warn` for `<500` (also the client-disconnect/abort path, flagged `aborted: true`), `error` for `>=500`.
+- **`server/utils/auditLog.js` is a separate, untouched security-audit-trail logger** (`action`/`userId`/`tenantId`/`ip` shape, its own whitelist) for sensitive events like login/invite-redeem. Don't conflate it with `logger.js` or change its field shape — it predates and is independent of the request-logging work above.
+
 ## Double-entry ledger
 
 Finance is built on an **immutable double-entry ledger** (`ledger_transactions` + `ledger_entries`, migration `065`). Rules that aren't obvious from any single file:
@@ -98,26 +109,36 @@ Finance is built on an **immutable double-entry ledger** (`ledger_transactions` 
 
 ## Backend layering: route → service → repository
 
-Backend resources follow a three-layer split. **The rehearsals stack is the canonical example** — `server/routes/rehearsals.js`, `server/services/rehearsalService.js`, `server/repositories/rehearsalRepository.js`, `server/validators/rehearsalValidators.js`. New routes and refactors must follow it; the backend-layering skill has the full rules.
-
-- **Route** (`server/routes/`): HTTP only — parse/validate params, call one service function, translate `{ error: { status, body } }` to a response. No SQL, no business rules.
-- **Service** (`server/services/`): domain logic, transactions, push notifications, mapping DB errors (e.g. `23505` → 409). Returns `{ error: { status, body } }` on expected failures, a domain payload on success. Throws only on unexpected errors.
-- **Repository** (`server/repositories/`): SQL only. Every function takes an `executor` (pool or transaction client) as its first argument so callers control transactions. Every query is tenant-scoped.
-- **Validators** (`server/validators/`): pure input parsing/normalization and SET-fragment builders, no DB access.
+Backend resources follow a route → service → repository → validator split. **The rehearsals stack is the canonical example** — `server/routes/rehearsals.js`, `server/services/rehearsalService.js`, `server/repositories/rehearsalRepository.js`, `server/validators/rehearsalValidators.js`. New routes and refactors must follow it. Load the **backend-layering** skill for the full layer responsibilities, error contract, and refactoring playbook.
 
 ## Migrations
 
 New migrations go in `server/db/migrations/` as `NNN_name.sql` and run on the next `migrate`. The runner sorts alphabetically, so **numeric prefixes must stay monotonic** and zero-padded. They run automatically; don't hand-apply SQL.
 
 ## Conventions
+
+### TypeScript & React
 - Load react-frontend skill before working on the front end.
-- **The frontend is TypeScript, strict mode on.** All app code under `src/` is `.ts`/`.tsx`; only tests stay `.jsx`/`.js`. `tsc --noEmit` via `npm run type-check` is the type gate — keep it at 0 errors. tsconfig has `strict:true` (incl. `strictNullChecks`); only `noUnusedLocals`/`noUnusedParameters` stay off (eslint covers unused, and tsc's variant is noisier on PascalCase type imports). Because of strict null checks, **entity fields that carry `null` in API payloads are typed `T | null`, not just optional `T?`** (e.g. `Slot.band_member_id?: Id | null` where null = whole band, `Contact.email?: string | null`) — match that when a payload sends an explicit `null`; don't paper over it by switching the call site to `undefined` (that changes the JSON sent). Canonical shared entity types live in `src/types/entities.ts` (the `Id`, `Gig`, `Invoice`, … you import instead of redeclaring); api error shape in `src/types/api.ts`. Type MUI icon component props as `SvgIconComponent` (from `@mui/icons-material`), not `ComponentType<…>` — raw MUI icons are `OverridableComponent` and won't assign to a plain `ComponentType`. Imports use explicit extensions; when a test mocks a module by path (`vi.mock`), the path must match the `.ts`/`.tsx` source. ESLint lints `.ts/.tsx` via `typescript-eslint` (non-type-checked recommended) and `.js/.jsx` (tests, server, config) via the JS recommended set; `npm run lint` and `npm run type-check` should both stay clean.
-- **MUI v9** (Material 3 theme, `borderRadius: 12`): system props like `justifyContent` go in `sx`; `TextField`'s `inputProps` is replaced by `slotProps.htmlInput`.
+- **The frontend is TypeScript, strict mode on.** All app code under `src/` is `.ts`/`.tsx`; only tests stay `.jsx`/`.js`. `tsc --noEmit` via `npm run type-check` is the type gate — keep it at 0 errors. tsconfig has `strict:true` (incl. `strictNullChecks`); only `noUnusedLocals`/`noUnusedParameters` stay off (eslint covers unused, and tsc's variant is noisier on PascalCase type imports).
+- Because of strict null checks, **entity fields that carry `null` in API payloads are typed `T | null`, not just optional `T?`** (e.g. `Slot.band_member_id?: Id | null` where null = whole band, `Contact.email?: string | null`) — match that when a payload sends an explicit `null`; don't paper over it by switching the call site to `undefined` (that changes the JSON sent).
+- Canonical shared entity types live in `src/types/entities.ts` (the `Id`, `Gig`, `Invoice`, … you import instead of redeclaring); api error shape in `src/types/api.ts`.
+- Type MUI icon component props as `SvgIconComponent` (from `@mui/icons-material`), not `ComponentType<…>` — raw MUI icons are `OverridableComponent` and won't assign to a plain `ComponentType`.
+- Imports use explicit extensions; when a test mocks a module by path (`vi.mock`), the path must match the `.ts`/`.tsx` source.
+- ESLint lints `.ts/.tsx` via `typescript-eslint` (non-type-checked recommended) and `.js/.jsx` (tests, server, config) via the JS recommended set; `npm run lint` and `npm run type-check` should both stay clean.
+- **Components are typed, not PropTyped.** Every component declares a `interface ComponentNameProps { ... }` on its signature (no `prop-types`; React 19 ignores PropTypes at runtime). Reuse shared entity types from `src/types/entities.ts` rather than redeclaring shapes inline; add a field there when a component needs one that isn't present yet. For a local-only field, extend the entity (`type Foo = Account & { __stale?: boolean }`).
+
+### MUI & theming
+- **MUI v9** (Material 3 theme, `borderRadius: 12`); `TextField`'s `inputProps` is replaced by `slotProps.htmlInput`. System-prop placement (`sx` vs bare props) is covered by the react-frontend skill.
 - **Theme mode detection**: use `const { mode } = useThemeMode()` from `src/contexts/themeModeContext.ts` to get `'light' | 'dark'`. Do not use MUI's `useTheme().palette.mode` for branching — `useThemeMode` is the single source of truth. Use it to switch between logo variants (e.g. `mode === 'dark' ? '/share/foo/foo_white.png' : '/share/foo/foo_black.png'`) or to apply conditional styles.
+- **Currency in tables**: render money amounts with `<MoneyCells cents={…} />` (and `<MoneyHeaderCells label="…" />` in the head) from `src/components/shared/MoneyCells.tsx`. It splits the EUR symbol into its own narrow right-aligned column so the `€` lines up vertically across rows while the digits stay right-aligned. Each `MoneyCells`/`MoneyHeaderCells` emits **two** `<TableCell>`s — account for that in `colSpan`. Don't put a bare `formatEur()` in a `TableCell` (compact card views still use `formatEur` directly).
+
+### API & data flow
 - New resource routers are registered in `server/routes/index.js`; each frontend resource gets one thin `src/api/*.ts` wrapper around `_client.request` (the only place that knows the `/api/*` path). Use the generic `request<T>()` so responses are typed.
 - Auto-save fields use `useDebouncedSave` (600 ms debounce; `flush()` on modal close).
+
+### i18n
+- **i18n (i18next, selector API).** Load the i18n skill before non-trivial translation work. Strings are localized en/nl via the **typed selector form** `t($ => $.key)` (never bare `t('key')`) — a missing key is a `type-check` error. `src/i18n/` has 28 namespaces scaffolded from the nav + views (`common`, `navigation`, `glossary`, `validation`, then one per view); per-view bodies are still mostly hardcoded English — extract them into the **existing** namespace. `index.ts` registers en (canonical) + nl, with a `DeepKeyShape` `satisfies` guard enforcing en/nl key parity at compile time. When wiring an existing English string, copy its wording verbatim (tests assert literal copy).
+
+### Misc
 - When giving the user a multi-line vs. line-by-line command, say which — don't leave a block ambiguous.
-- **Components are typed, not PropTyped.** Every component declares a `interface ComponentNameProps { ... }` on its signature (no `prop-types`; React 19 ignores PropTypes at runtime). Reuse shared entity types from `src/types/entities.ts` rather than redeclaring shapes inline; add a field there when a component needs one that isn't present yet. For a local-only field, extend the entity (`type Foo = Account & { __stale?: boolean }`).
-- **Currency in tables**: render money amounts with `<MoneyCells cents={…} />` (and `<MoneyHeaderCells label="…" />` in the head) from `src/components/shared/MoneyCells.tsx`. It splits the EUR symbol into its own narrow right-aligned column so the `€` lines up vertically across rows while the digits stay right-aligned. Each `MoneyCells`/`MoneyHeaderCells` emits **two** `<TableCell>`s — account for that in `colSpan`. Don't put a bare `formatEur()` in a `TableCell` (compact card views still use `formatEur` directly).
 - Don't restructure readable code solely to satisfy a linter or SonarQube cognitive-complexity (S3776) threshold — prefer a clear `switch`/early-returns, or mark the issue `accept`. Extracting genuine helpers is fine; obfuscating to win a metric is not.
-- **i18n (i18next, selector API).** Strings are localized en/nl via the **typed selector form** `t($ => $.key)` (never bare `t('key')`) — a missing key is a `type-check` error. `src/i18n/` has 28 namespaces scaffolded from the nav + views (`common`, `navigation`, `glossary`, `validation`, then one per view); per-view bodies are still mostly hardcoded English — extract them into the **existing** namespace. `index.ts` registers en (canonical) + nl, with a `DeepKeyShape` `satisfies` guard enforcing en/nl key parity at compile time. When wiring an existing English string, copy its wording verbatim (tests assert literal copy). Load the **i18n skill** before non-trivial translation work.
