@@ -343,31 +343,6 @@ export async function getBandMemberIdForUser(executor, userId, tenantId) {
   return rows[0]?.id ?? null
 }
 
-export async function getGigTaskById(executor, taskId, gigId, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT * FROM gig_tasks WHERE id = $1 AND gig_id = $2 AND tenant_id = $3',
-    [taskId, gigId, tenantId],
-  )
-  return rows[0] || null
-}
-
-export async function insertGigTask(executor, tenantId, gigId, title, dueDate) {
-  const { rows } = await executor.query(
-    `INSERT INTO gig_tasks (tenant_id, gig_id, title, due_date)
-     VALUES ($1, $2, $3, $4) RETURNING *`,
-    [tenantId, gigId, title, dueDate],
-  )
-  return rows[0]
-}
-
-export async function deleteGigTask(executor, taskId, gigId, tenantId) {
-  const { rowCount } = await executor.query(
-    'DELETE FROM gig_tasks WHERE id = $1 AND gig_id = $2 AND tenant_id = $3',
-    [taskId, gigId, tenantId],
-  )
-  return rowCount > 0
-}
-
 export async function insertGigAttachment(executor, tenantId, gigId, file, objectKey) {
   const { rows } = await executor.query(
     `INSERT INTO gig_attachments (gig_id, tenant_id, object_key, original_filename, content_type, file_size)
@@ -483,14 +458,3 @@ export async function updateGigFields(executor, tenantId, gigId, fields, values)
   return rows[0] || null
 }
 
-// Applies prebuilt SET fragments to a gig task. Returns the updated task row, or
-// null when no matching row exists.
-export async function updateGigTaskFields(executor, tenantId, gigId, taskId, fields, values) {
-  const whereIdx = values.length + 1
-  const { rows } = await executor.query(
-    `UPDATE gig_tasks SET ${fields.join(', ')}
-     WHERE id = $${whereIdx} AND gig_id = $${whereIdx + 1} AND tenant_id = $${whereIdx + 2} RETURNING *`,
-    [...values, taskId, gigId, tenantId],
-  )
-  return rows[0] || null
-}

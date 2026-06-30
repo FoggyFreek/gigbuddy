@@ -37,6 +37,7 @@ function wrap(ui) {
         <Routes>
           <Route path="/" element={ui} />
           <Route path="/gigs/:id" element={<GigDetailProbe />} />
+          <Route path="/tasks" element={<div>tasks-page</div>} />
         </Routes>
       </ThemeProvider>
     </MemoryRouter>
@@ -133,6 +134,17 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
     await user.click(screen.getByText('Send invoice'))
     expect(screen.getByText('gig-detail-3')).toBeInTheDocument()
+  })
+
+  it('navigates to the tasks page when a gig-less task is clicked', async () => {
+    const user = userEvent.setup()
+    listAllTasks.mockResolvedValue([
+      { id: 60, gig_id: null, title: 'Standalone chore', done: false, due_date: null, assigned_to: 7, event_description: null },
+    ])
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Standalone chore')).toBeInTheDocument())
+    await user.click(screen.getByText('Standalone chore'))
+    expect(screen.getByText('tasks-page')).toBeInTheDocument()
   })
 
   it('renders empty states when sources return nothing', async () => {

@@ -275,6 +275,24 @@ describe('reader self-scope', () => {
     await a(request(app).patch(`/api/gigs/${seed.gigA.id}/tasks/${foreign[0].id}`).send({ done: true })).expect(403)
   })
 
+  it('reader self-scope carries over to the top-level /api/tasks PATCH on a gig-less task', async () => {
+    const reader = await createRoleUser({ email: 'r5@a.local', role: 'reader', tenantId: seed.tenantA.id, link: true })
+    const a = as(reader.user.id, seed.tenantA.id)
+    const { rows: own } = await pool.query(
+      `INSERT INTO gig_tasks (tenant_id, gig_id, title, assigned_to) VALUES ($1, NULL, 'Mine', $2) RETURNING id`,
+      [seed.tenantA.id, reader.bandMemberId],
+    )
+    const { rows: foreign } = await pool.query(
+      `INSERT INTO gig_tasks (tenant_id, gig_id, title) VALUES ($1, NULL, 'Theirs') RETURNING id`,
+      [seed.tenantA.id],
+    )
+    await a(request(app).patch(`/api/tasks/${own[0].id}`).send({ done: true })).expect(200)
+    // Non-done field on own task → 403
+    await a(request(app).patch(`/api/tasks/${own[0].id}`).send({ title: 'Hacked' })).expect(403)
+    // Someone else's task → 403
+    await a(request(app).patch(`/api/tasks/${foreign[0].id}`).send({ done: true })).expect(403)
+  })
+
   it('reader may vote only on their own rehearsal participation', async () => {
     const reader = await createRoleUser({ email: 'r4@a.local', role: 'reader', tenantId: seed.tenantA.id, link: true })
     const a = as(reader.user.id, seed.tenantA.id)

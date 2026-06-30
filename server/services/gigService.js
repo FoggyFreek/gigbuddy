@@ -4,15 +4,14 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import pool from '../db/index.js'
-import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import { uploadObject, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
-import { sendPushToTenant, sendPushToMember } from '../utils/sendPush.js'
+import { sendPushToTenant } from '../utils/sendPush.js'
 import { logger } from '../utils/logger.js'
+import { createTask as createTaskService, patchTask as patchTaskService, removeTask as removeTaskService } from './taskService.js'
 import {
-  parseId,
   parseSearchLimit,
   toDateStr,
   venueDisplay,
@@ -21,7 +20,6 @@ import {
   normalizeGigVenueRefs,
   normalizeImportRow,
   buildGigUpdateFields,
-  buildGigTaskUpdateFields,
 } from '../validators/gigValidators.js'
 import {
   assertVenueInTenant,
@@ -37,7 +35,6 @@ import {
   listGigTasks,
   listGigAttachments,
   getLeadMemberIds,
-  getGigDescription,
   insertGigForImport,
   insertGigWithRelations,
   insertGigParticipant,
@@ -48,10 +45,6 @@ import {
   getGigBannerRow,
   setGigBannerPath,
   clearGigBannerPath,
-  insertGigTask,
-  getGigTaskById,
-  getBandMemberIdForUser,
-  deleteGigTask as deleteGigTaskRow,
   insertGigAttachment,
   deleteGigAttachment as deleteGigAttachmentRow,
   getContactInTenant,
@@ -62,8 +55,8 @@ import {
   setGigContactPrimary as setGigContactPrimaryRow,
   deleteGigContact,
   updateGigFields,
-  updateGigTaskFields,
 } from '../repositories/gigRepository.js'
+import { getTaskById } from '../repositories/taskRepository.js'
 
 const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
 
@@ -98,16 +91,6 @@ export function notifyGigsImported(tenantId, count) {
     tag: 'gig-import',
     url: '/gigs',
   }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
-}
-
-async function notifyTaskAssignment(db, tenantId, gigId, task) {
-  const description = await getGigDescription(db, gigId, tenantId)
-  const suffix = description ? ` (${description})` : ''
-  sendPushToMember(task.assigned_to, tenantId, {
-    title: 'Task assigned to you',
-    body: `${task.title}${suffix}`,
-    url: '/tasks',
-  }).catch((err) => logger.error('push.task_assignment_notify_failed', { err, tenantId, gigId }))
 }
 
 // ---------- internals ----------
@@ -353,75 +336,27 @@ export async function deleteGig(db, tenantId, gigId) {
 }
 
 // ---------- tasks ----------
+//
+// The gig-nested task routes delegate to taskService (the single task
+// implementation). Each handler first enforces that the task is scoped to the
+// gig in the URL — without the `task.gig_id !== gigId` check the unified service
+// would let a caller mutate any of the tenant's tasks via an unrelated gig's URL.
 
 export async function addGigTask(db, tenantId, gigId, body) {
-  const { title, due_date } = body
-  if (!title) return { error: { status: 400, body: { error: 'title is required' } } }
   if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
-
-  const task = await insertGigTask(db, tenantId, gigId, title, due_date || null)
-  return { task }
+  return createTaskService(db, tenantId, { ...body, gig_id: gigId })
 }
 
-// Validates assigned_to (when present) and returns a normalized copy of body
-// with it parsed to an integer, leaving the input untouched. A null/absent
-// assigned_to passes through unchanged (null clears the assignee). Returns
-// { error } | { body: normalizedBody }.
-async function resolveTaskAssignee(db, tenantId, body) {
-  if (!('assigned_to' in body) || body.assigned_to === null) return { body }
-  const assignedTo = parseId(body.assigned_to)
-  if (assignedTo === null) return { error: { status: 400, body: { error: 'Invalid assigned_to' } } }
-  if (!(await memberExistsInTenant(db, assignedTo, tenantId))) {
-    return { error: { status: 404, body: { error: 'assigned_to not found' } } }
-  }
-  return { body: { ...body, assigned_to: assignedTo } }
-}
-
-// Readers (no planning.write) may only toggle `done` on a task assigned to their
-// own band member. Any other field, an unassigned/foreign task, or an unlinked
-// caller is rejected 403. Returns { error } on denial, or {} when allowed.
-async function authorizeSelfTaskPatch(db, tenantId, gigId, taskId, body, userId) {
-  const forbidden = { error: { status: 403, body: { error: 'Forbidden' } } }
-  const keys = Object.keys(body)
-  const onlyDone = keys.length > 0 && keys.every((key) => key === 'done')
-  if (!onlyDone) return forbidden
-
-  const task = await getGigTaskById(db, taskId, gigId, tenantId)
-  if (!task) return NOT_FOUND
-  const callerMemberId = await getBandMemberIdForUser(db, userId, tenantId)
-  if (callerMemberId == null || task.assigned_to !== callerMemberId) return forbidden
-  return {}
-}
-
-// Validates and applies a gig-task PATCH. Returns { error } or { task }. Fires
-// the assignment push notification as a side effect when assigned_to is set.
-// `caller` ({ role, isSuperAdmin, userId }) gates the reader self-scope:
-// holders of planning.write patch any task/field; readers only their own `done`.
 export async function patchGigTask(db, tenantId, gigId, taskId, body, caller = {}) {
-  if (!hasPermission(caller.role, PERMISSIONS.PLANNING_WRITE, { isSuperAdmin: caller.isSuperAdmin })) {
-    const denial = await authorizeSelfTaskPatch(db, tenantId, gigId, taskId, body, caller.userId)
-    if (denial.error) return denial
-  }
-
-  const assignee = await resolveTaskAssignee(db, tenantId, body)
-  if (assignee.error) return assignee
-  const normalizedBody = assignee.body
-
-  const built = buildGigTaskUpdateFields(normalizedBody)
-  if (!built.fields.length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
-
-  const task = await updateGigTaskFields(db, tenantId, gigId, taskId, built.fields, built.values)
-  if (!task) return NOT_FOUND
-
-  if (normalizedBody.assigned_to) {
-    await notifyTaskAssignment(db, tenantId, gigId, task)
-  }
-  return { task }
+  const task = await getTaskById(db, taskId, tenantId)
+  if (!task || task.gig_id !== gigId) return NOT_FOUND
+  return patchTaskService(db, tenantId, taskId, body, caller)
 }
 
 export async function deleteGigTask(db, tenantId, gigId, taskId) {
-  const deleted = await deleteGigTaskRow(db, taskId, gigId, tenantId)
-  return deleted ? {} : NOT_FOUND
+  const task = await getTaskById(db, taskId, tenantId)
+  if (!task || task.gig_id !== gigId) return NOT_FOUND
+  return removeTaskService(db, tenantId, taskId)
 }
 
 // ---------- participants ----------

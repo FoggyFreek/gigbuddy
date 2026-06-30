@@ -1,13 +1,20 @@
 {
-  "title": "Tasks with gigs",
+  "title": "Tasks",
   "myTasks": "Assigned to me",
   "showFinished": "Finished",
-  "table": {
-    "colDone": "Done",
-    "colTitle": "Title",
-    "colGig": "Gig",
-    "colAssignedTo": "Assigned to",
-    "colDueDate": "Due date",
-    "empty": "No tasks yet."
+  "newTask": "New task",
+  "empty": "No tasks yet.",
+  "unassigned": "Unassigned",
+  "openGig": "Open gig",
+  "dialog": {
+    "createTitle": "New task",
+    "editTitle": "Edit task",
+    "titleLabel": "Title",
+    "dueDateLabel": "Due date",
+    "openDueDatePicker": "open date picker",
+    "assigneeLabel": "Assigned to",
+    "gigLabel": "Linked gig",
+    "noGig": "No gig",
+    "deleteConfirm": "Delete this task? This cannot be undone."
   }
 }

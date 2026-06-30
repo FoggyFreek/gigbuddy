@@ -1,249 +1,285 @@
-import type { Id } from '../types/entities.ts'
-import { type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
+import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
-import Paper from '@mui/material/Paper'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
+import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
+import Stack from '@mui/material/Stack'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import useMediaQuery from '@mui/material/useMediaQuery'
-import { useTheme } from '@mui/material/styles'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import PersonIcon from '@mui/icons-material/Person'
+import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import type { Id, Task } from '../types/entities.ts'
 
-export interface GigTask {
-  id?: Id
-  title?: string
-  done?: boolean
-  due_date?: string | null
-  assigned_to?: Id | null
-  assigned_to_name?: string | null
-  event_description?: string
-  event_date?: string
-}
+const CHIP_SX = {
+  height: 20,
+  fontSize: '0.7rem',
+  '& .MuiChip-icon': { fontSize: '0.8rem', ml: 0.5 },
+  '& .MuiChip-label': { px: 0.75 },
+} as const
 
-function formatDate(val: string | null | undefined) {
+function formatDate(val: string | Date | null | undefined): string {
   if (!val) return '—'
   return new Date(val).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function isOverdue(task: GigTask) {
+function daysUntil(date: string, today = new Date()): number | null {
+  const [year, month, day] = date.slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) return null
+  const dueUtc = Date.UTC(year, month - 1, day)
+  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  return Math.round((dueUtc - todayUtc) / 86_400_000)
+}
+
+function formatDueDate(date: string, locale: string): string {
+  const days = daysUntil(date)
+  if (days != null && days >= 0 && days < 7) {
+    const numeric = days <= 1 ? 'auto' : 'always'
+    return new Intl.RelativeTimeFormat(locale, { numeric }).format(days, 'day')
+  }
+  return formatDate(date)
+}
+
+function isOverdue(task: Task): boolean {
   if (task.done || !task.due_date) return false
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return new Date(task.due_date) < today
 }
 
-interface MobileTaskCardProps {
-  task: GigTask
-  onRowClick?: (task: GigTask) => void
-  onToggleDone: (task: GigTask) => void
+interface TaskRowProps {
+  task: Task
+  onToggleDone: (task: Task) => void
+  canToggleDone: (task: Task) => boolean
+  onEditTask?: (task: Task) => void
 }
 
-function MobileTaskCard({ task, onRowClick, onToggleDone }: MobileTaskCardProps) {
-  const { t } = useTranslation('tasks')
+function TaskRow({ task, onToggleDone, canToggleDone, onEditTask }: TaskRowProps) {
+  const { i18n } = useTranslation('tasks')
   const overdue = isOverdue(task)
-  let dueDateNode: ReactNode
-  if (!task.due_date) {
-    dueDateNode = <Typography variant="body2">—</Typography>
-  } else if (overdue) {
-    dueDateNode = <Chip label={formatDate(task.due_date)} color="error" size="small" />
-  } else {
-    dueDateNode = <Typography variant="body2">{formatDate(task.due_date)}</Typography>
-  }
-  return (
-    <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 2fr 1fr', gap: 1, alignItems: 'start' }}>
-        {/* Checkbox spanning 2 rows */}
-        <Box sx={{ gridRow: '1 / 3', alignSelf: 'stretch', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Checkbox
-            size="small"
-            checked={task.done}
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleDone(task)
-            }}
-          />
-        </Box>
+  const dueLabel = task.due_date
+    ? formatDueDate(task.due_date, i18n.resolvedLanguage ?? 'en')
+    : null
+  const editable = !!onEditTask && !task.done
 
-        {/* Row 1 Left: Title */}
-        <Box
-          onClick={() => onRowClick?.(task)}
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, p: 1.5 }}>
+      <Checkbox
+        size="small"
+        checked={task.done ?? false}
+        disabled={task.done || !canToggleDone(task)}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleDone(task)
+        }}
+        sx={{ flexShrink: 0, p: 0.25, mt: 0.1 }}
+      />
+      <Box
+        onClick={() => { if (editable) onEditTask?.(task) }}
+        sx={{ flex: 1, minWidth: 0, cursor: editable ? 'pointer' : 'default' }}
+      >
+        <Typography
+          variant="body2"
           sx={{
-            cursor: onRowClick ? 'pointer' : 'default',
-            gridColumn: '2 / 3',
+            fontWeight: 'normal',
+            wordBreak: 'break-word',
             textDecoration: task.done ? 'line-through' : 'none',
             color: task.done ? 'text.disabled' : 'text.primary',
-            wordBreak: 'break-word',
           }}
         >
-          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            {task.title}
-          </Typography>
-        </Box>
-
-        {/* Row 1 Right: Assigned to */}
-        <Box
-          onClick={() => onRowClick?.(task)}
-          sx={{
-            cursor: onRowClick ? 'pointer' : 'default',
-            gridColumn: '3 / 4',
-            textAlign: 'right',
-          }}
-        >
-          <Typography variant="caption" color="text.secondary">
-            {t($ => $.table.colAssignedTo)}
-          </Typography>
-          <Typography variant="body2">
-            {task.assigned_to_name ?? '—'}
-          </Typography>
-        </Box>
-
-        {/* Row 2 Left: Gig */}
-        <Box
-          onClick={() => onRowClick?.(task)}
-          sx={{
-            cursor: onRowClick ? 'pointer' : 'default',
-            gridColumn: '2 / 3',
-            pt: 1,
-            borderTop: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          <Typography variant="body2">{task.event_description}</Typography>
-          <Typography variant="caption" color="text.secondary">
-            {formatDate(task.event_date)}
-          </Typography>
-        </Box>
-
-        {/* Row 2 Right: Due date */}
-        <Box
-          onClick={() => onRowClick?.(task)}
-          sx={{
-            cursor: onRowClick ? 'pointer' : 'default',
-            gridColumn: '3 / 4',
-            textAlign: 'right',
-          }}
-        >
-          <Typography variant="caption" color="text.secondary">
-            {t($ => $.table.colDueDate)}
-          </Typography>
-          <Box>
-            {dueDateNode}
-          </Box>
-        </Box>
+          {task.title}
+        </Typography>
+        {(dueLabel || task.assigned_to_name) && (
+          <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+            {dueLabel && (
+              <Chip
+                icon={<CalendarMonthIcon />}
+                label={dueLabel}
+                size="small"
+                color={overdue ? 'error' : 'default'}
+                variant="outlined"
+                sx={CHIP_SX}
+              />
+            )}
+            {task.assigned_to_name && (
+              <Chip
+                icon={<PersonIcon />}
+                label={task.assigned_to_name}
+                size="small"
+                variant="outlined"
+                sx={CHIP_SX}
+              />
+            )}
+          </Stack>
+        )}
       </Box>
-    </Paper>
+    </Box>
   )
 }
 
-interface TasksTableProps {
-  tasks: GigTask[]
-  onRowClick?: (task: GigTask) => void
-  onToggleDone: (task: GigTask) => void
+const CARD_SX = { boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)' } as const
+
+type StandaloneTaskCardProps = TaskRowProps
+
+function StandaloneTaskCard(props: StandaloneTaskCardProps) {
+  return (
+    <Card variant="outlined" data-card sx={CARD_SX}>
+      <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+        <TaskRow {...props} />
+      </CardContent>
+    </Card>
+  )
 }
 
-export default function TasksTable({ tasks, onRowClick, onToggleDone }: TasksTableProps) {
-  const { t } = useTranslation('tasks')
-  const theme = useTheme()
-  const isCompact = useMediaQuery(theme.breakpoints.down('sm'))
+interface GigTaskCardProps {
+  gigId: Id
+  tasks: Task[]
+  onToggleDone: (task: Task) => void
+  canToggleDone: (task: Task) => boolean
+  onOpenGig: (gigId: Id) => void
+  onEditTask?: (task: Task) => void
+}
 
-  if (isCompact) {
-    return (
-      <Box>
-        {tasks.length === 0 && (
-          <Box sx={{ textAlign: 'center', color: 'text.secondary', py: 4 }}>
-            <Typography>{t($ => $.table.empty)}</Typography>
+function GigTaskCard({ gigId, tasks, onToggleDone, canToggleDone, onOpenGig, onEditTask }: GigTaskCardProps) {
+  const { t } = useTranslation('tasks')
+  const gig = tasks[0]
+
+  return (
+    <Card variant="outlined" data-card sx={CARD_SX}>
+      <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+        <Box sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+              {gig.event_description}
+            </Typography>
+            {gig.event_date && (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {formatDate(gig.event_date)}
+              </Typography>
+            )}
           </Box>
-        )}
-        {tasks.map((task) => (
-          <MobileTaskCard
-            key={String(task.id)}
-            task={task}
-            onRowClick={onRowClick}
-            onToggleDone={onToggleDone}
-          />
-        ))}
+          <Tooltip title={t($ => $.openGig)}>
+            <IconButton
+              size="small"
+              aria-label={t($ => $.openGig)}
+              onClick={() => onOpenGig(gigId)}
+            >
+              <OpenInNewIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+        <Divider />
+        <Stack divider={<Divider flexItem />}>
+          {tasks.map((task) => (
+            <TaskRow
+              key={String(task.id)}
+              task={task}
+              onToggleDone={onToggleDone}
+              canToggleDone={canToggleDone}
+              onEditTask={onEditTask}
+            />
+          ))}
+        </Stack>
+      </CardContent>
+    </Card>
+  )
+}
+
+type TaskCardGroup =
+  | { kind: 'gig'; gigId: Id; tasks: Task[] }
+  | { kind: 'standalone'; task: Task }
+
+function compareTasksByDueDate(a: Task, b: Task): number {
+  if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
+  if (a.due_date) return -1
+  if (b.due_date) return 1
+  return 0
+}
+
+function groupTasks(tasks: Task[]): TaskCardGroup[] {
+  const groups: TaskCardGroup[] = []
+  const gigGroups = new Map<string, Extract<TaskCardGroup, { kind: 'gig' }>>()
+
+  tasks.forEach((task) => {
+    if (task.gig_id == null) {
+      groups.push({ kind: 'standalone', task })
+      return
+    }
+
+    const key = String(task.gig_id)
+    const existing = gigGroups.get(key)
+    if (existing) {
+      existing.tasks.push(task)
+      return
+    }
+
+    const group: Extract<TaskCardGroup, { kind: 'gig' }> = {
+      kind: 'gig',
+      gigId: task.gig_id,
+      tasks: [task],
+    }
+    gigGroups.set(key, group)
+    groups.push(group)
+  })
+
+  gigGroups.forEach((group) => group.tasks.sort(compareTasksByDueDate))
+  return groups
+}
+
+interface TasksTableProps {
+  tasks: Task[]
+  onToggleDone: (task: Task) => void
+  canToggleDone: (task: Task) => boolean
+  onOpenGig: (gigId: Id) => void
+  onEditTask?: (task: Task) => void
+}
+
+export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenGig, onEditTask }: TasksTableProps) {
+  const { t } = useTranslation('tasks')
+  const isCompact = useCompactLayout()
+
+  if (tasks.length === 0) {
+    return (
+      <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+        <Typography>{t($ => $.empty)}</Typography>
       </Box>
     )
   }
 
+  const groups = groupTasks(tasks)
+
   return (
-    <TableContainer component={Paper} variant="outlined">
-      <Table size="small">
-        <TableHead>
-          <TableRow sx={{ '& th': { fontWeight: 600 } }}>
-            <TableCell padding="checkbox">{t($ => $.table.colDone)}</TableCell>
-            <TableCell>{t($ => $.table.colTitle)}</TableCell>
-            <TableCell>{t($ => $.table.colGig)}</TableCell>
-            <TableCell>{t($ => $.table.colAssignedTo)}</TableCell>
-            <TableCell>{t($ => $.table.colDueDate)}</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {tasks.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={5} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                {t($ => $.table.empty)}
-              </TableCell>
-            </TableRow>
-          )}
-          {tasks.map((task) => {
-            const overdue = isOverdue(task)
-            let dueDateCell: ReactNode
-            if (!task.due_date) {
-              dueDateCell = '—'
-            } else if (overdue) {
-              dueDateCell = <Chip label={formatDate(task.due_date)} color="error" size="small" />
-            } else {
-              dueDateCell = formatDate(task.due_date)
-            }
-            return (
-              <TableRow
-                key={String(task.id)}
-                hover
-                onClick={() => onRowClick?.(task)}
-                sx={{ cursor: onRowClick ? 'pointer' : 'default' }}
-              >
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    size="small"
-                    checked={task.done}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onToggleDone(task)
-                    }}
-                  />
-                </TableCell>
-                <TableCell
-                  sx={{
-                    textDecoration: task.done ? 'line-through' : 'none',
-                    color: task.done ? 'text.disabled' : 'text.primary',
-                  }}
-                >
-                  {task.title}
-                </TableCell>
-                <TableCell>
-                  <Box>
-                    <Typography variant="body2">{task.event_description}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {formatDate(task.event_date)}
-                    </Typography>
-                  </Box>
-                </TableCell>
-                <TableCell>{task.assigned_to_name ?? '—'}</TableCell>
-                <TableCell>
-                  {dueDateCell}
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: isCompact ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
+        gap: 1.5,
+        alignItems: 'start',
+      }}
+    >
+      {groups.map((group, index) => group.kind === 'gig' ? (
+        <GigTaskCard
+          key={`gig-${String(group.gigId)}`}
+          gigId={group.gigId}
+          tasks={group.tasks}
+          onToggleDone={onToggleDone}
+          canToggleDone={canToggleDone}
+          onOpenGig={onOpenGig}
+          onEditTask={onEditTask}
+        />
+      ) : (
+        <StandaloneTaskCard
+          key={`task-${String(group.task.id ?? index)}`}
+          task={group.task}
+          onToggleDone={onToggleDone}
+          canToggleDone={canToggleDone}
+          onEditTask={onEditTask}
+        />
+      ))}
+    </Box>
   )
 }

@@ -19,15 +19,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import PersonIcon from '@mui/icons-material/Person'
 import { createTask, deleteTask, updateTask } from '../api/gigs.ts'
-import type { Id, Member } from '../types/entities.ts'
-
-interface LocalGigTask {
-  id?: Id
-  title?: string
-  done?: boolean
-  due_date?: string | null
-  assigned_to?: Id | null
-}
+import type { Id, Member, Task } from '../types/entities.ts'
 
 interface DueDateAdornmentProps {
   label: string
@@ -36,7 +28,7 @@ interface DueDateAdornmentProps {
 
 interface GigTasksProps {
   gigId: Id
-  initialTasks?: LocalGigTask[]
+  initialTasks?: Task[]
   members?: Member[]
   // Planning-write gates creating/deleting/editing tasks. Readers keep one
   // self-action: ticking *their own* assigned task done (task.complete.self on
@@ -96,7 +88,7 @@ export default function GigTasks({
   currentBandMemberId = null,
 }: GigTasksProps) {
   const { t, i18n } = useTranslation(['gigs', 'common'])
-  const [tasks, setTasks] = useState<LocalGigTask[]>(initialTasks)
+  const [tasks, setTasks] = useState<Task[]>(initialTasks)
 
   // add-task form
   const [showAddForm, setShowAddForm] = useState(false)
@@ -148,21 +140,21 @@ export default function GigTasks({
       due_date: newDue || null,
       assigned_to: newAssignTo || null,
     })
-    setTasks((prev) => [...prev, task as LocalGigTask])
+    setTasks((prev) => [...prev, task as Task])
     setNewTitle('')
     setNewDue('')
     setNewAssignTo('')
     setTimeout(() => newTitleInputRef.current?.focus(), 0)
   }
 
-  async function handleToggle(task: LocalGigTask) {
+  async function handleToggle(task: Task) {
     const updated = await updateTask(gigId, task.id!, { done: !task.done })
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as LocalGigTask) : t)))
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as Task) : t)))
   }
 
-  async function handleDueChange(task: LocalGigTask, value: string) {
+  async function handleDueChange(task: Task, value: string) {
     const updated = await updateTask(gigId, task.id!, { due_date: value || null })
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as LocalGigTask) : t)))
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as Task) : t)))
   }
 
   async function handleDelete(taskId: Id) {
@@ -171,9 +163,9 @@ export default function GigTasks({
     if (expandedId === taskId) setExpandedId(null)
   }
 
-  async function handleAssign(task: LocalGigTask, value: string) {
+  async function handleAssign(task: Task, value: string) {
     const updated = await updateTask(gigId, task.id!, { assigned_to: value || null })
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as LocalGigTask) : t)))
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as Task) : t)))
   }
 
   function getMemberName(id: Id | null | undefined): string | undefined {
@@ -182,7 +174,7 @@ export default function GigTasks({
   }
 
   // Render helper — not a component, does not use hooks
-  function renderTaskRow(task: LocalGigTask) {
+  function renderTaskRow(task: Task) {
     const canToggleDone =
       canWrite || (task.assigned_to != null && task.assigned_to === currentBandMemberId)
     const isExpanded = expandedId === task.id

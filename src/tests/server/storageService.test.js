@@ -22,6 +22,10 @@ vi.mock('../../../server/utils/sendPush.js', () => ({
 // so we can assert the mutation → refresh wiring.
 vi.mock('../../../server/services/statisticsService.js', () => ({
   refreshTenantStorageForKey: vi.fn(() => Promise.resolve()),
+  tenantIdFromKey: vi.fn((key) => {
+    const m = /^tenants\/(\d+)\//.exec(key || '')
+    return m ? Number(m[1]) : null
+  }),
 }))
 
 // Allow verifyDocumentContent to pass for rollback test
@@ -120,8 +124,9 @@ describe('safeRemove', () => {
   it('calls removeObject and does not warn on success', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
     const { safeRemove } = await import('../../../server/services/storageService.js')
+    const { logger } = await import('../../../server/utils/logger.js')
     storageClient.removeObject.mockResolvedValueOnce(undefined)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
     safeRemove('tenants/1/logo/x.png', 'unexpected warn')
     await Promise.resolve()
     expect(warn).not.toHaveBeenCalled()
@@ -131,11 +136,15 @@ describe('safeRemove', () => {
   it('catches remove error and warns without throwing', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
     const { safeRemove } = await import('../../../server/services/storageService.js')
+    const { logger } = await import('../../../server/utils/logger.js')
     storageClient.removeObject.mockRejectedValueOnce(new Error('gone'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
     safeRemove('tenants/1/logo/x.png', 'cleanup failed:')
     await Promise.resolve()
-    expect(warn).toHaveBeenCalledWith('cleanup failed:', 'gone')
+    expect(warn).toHaveBeenCalledWith(
+      'storage.remove_failed',
+      expect.objectContaining({ err: expect.any(Error), tenantId: 1 }),
+    )
     warn.mockRestore()
   })
 })

@@ -1,13 +1,5 @@
 import { request, requestForm } from './_client.ts'
-import type { Gig, GigMerchSummary, Id } from '../types/entities.ts'
-
-interface GigTask {
-  id?: Id
-  title?: string
-  done?: boolean
-  due_date?: string | null
-  assigned_to?: Id | null
-}
+import type { Gig, GigMerchSummary, Id, Task } from '../types/entities.ts'
 
 interface GigParticipant {
   band_member_id?: Id
@@ -44,10 +36,10 @@ export const deleteGig = (id: Id) => api<void>(`/${id}`, { method: 'DELETE' })
 export const importGigs = (rows: Partial<Gig>[]) =>
   api<Gig[]>('/import', { method: 'POST', body: JSON.stringify(rows) })
 
-export const createTask = (gigId: Id, body: Partial<GigTask>) =>
-  api<GigTask>(`/${gigId}/tasks`, { method: 'POST', body: JSON.stringify(body) })
-export const updateTask = (gigId: Id, taskId: Id, body: Partial<GigTask>) =>
-  api<GigTask>(`/${gigId}/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const createTask = (gigId: Id, body: Partial<Task>) =>
+  api<Task>(`/${gigId}/tasks`, { method: 'POST', body: JSON.stringify(body) })
+export const updateTask = (gigId: Id, taskId: Id, body: Partial<Task>) =>
+  api<Task>(`/${gigId}/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteTask = (gigId: Id, taskId: Id) =>
   api<void>(`/${gigId}/tasks/${taskId}`, { method: 'DELETE' })
 

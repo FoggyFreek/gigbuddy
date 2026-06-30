@@ -33,7 +33,7 @@ import { listBandEvents } from '../api/bandEvents.ts'
 import { getProfile } from '../api/profile.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
-import type { Gig, Rehearsal, BandEvent } from '../types/entities.ts'
+import type { Gig, Rehearsal, BandEvent, Task } from '../types/entities.ts'
 
 function logoSrc(logoPath: string | undefined | null) {
   return logoPath ? `/api/files/${logoPath}` : '/share/logo.png'
@@ -105,16 +105,6 @@ const settleOne = <T,>(r: PromiseSettledResult<T | null>): { status: 'ok' | 'err
   r.status === 'fulfilled'
     ? { status: 'ok', data: r.value ?? null }
     : { status: 'error', data: null }
-
-interface Task {
-  id?: number
-  title?: string
-  done?: boolean
-  assigned_to?: number | null
-  due_date?: string | null
-  gig_id?: number
-  event_description?: string
-}
 
 interface SectionData<T> {
   status: 'ok' | 'error'
@@ -576,7 +566,7 @@ export default function DashboardPage() {
                   secondary={[t.event_description, t.due_date && formatShortDate(t.due_date)]
                     .filter(Boolean)
                     .join(' · ')}
-                  onClick={() => navigate(`/gigs/${t.gig_id}`)}
+                  onClick={() => navigate(t.gig_id ? `/gigs/${t.gig_id}` : '/tasks')}
                 />
               ))}
             </List>

@@ -59,7 +59,7 @@ import { compressBanner } from '../utils/compressImage.ts'
 import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
-import type { Id, Gig, GigMerchSummary, Participant, PurchaseAttachment, Member, Venue } from '../types/entities.ts'
+import type { Id, Gig, GigMerchSummary, Participant, PurchaseAttachment, Member, Venue, Task } from '../types/entities.ts'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
 
@@ -79,14 +79,6 @@ const TABS: { key: TabKey; Icon: SvgIconComponent }[] = [
   { key: 'tasks', Icon: ChecklistIcon },
 ]
 
-interface LocalGigTask {
-  id?: Id
-  title?: string
-  done?: boolean
-  due_date?: string | null
-  assigned_to?: Id | null
-}
-
 interface GigDetail extends Gig {
   event_link?: string
   booking_fee_cents?: number
@@ -96,7 +88,7 @@ interface GigDetail extends Gig {
   has_pa_system?: boolean
   has_drumkit?: boolean
   has_stage_lights?: boolean
-  tasks?: LocalGigTask[]
+  tasks?: Task[]
   attachments?: PurchaseAttachment[]
   participants?: Participant[]
 }
@@ -190,7 +182,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     has_stage_lights: false,
   })
   const [loading, setLoading] = useState(true)
-  const [initialTasks, setInitialTasks] = useState<LocalGigTask[]>([])
+  const [initialTasks, setInitialTasks] = useState<Task[]>([])
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
   const [selectedFestival, setSelectedFestival] = useState<Venue | null>(null)
   const [gig, setGig] = useState<GigDetail | null>(null)
@@ -243,7 +235,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       has_drumkit: !!g.has_drumkit,
       has_stage_lights: !!g.has_stage_lights,
     })
-    setInitialTasks((g.tasks as LocalGigTask[]) || [])
+    setInitialTasks((g.tasks as Task[]) || [])
   }, [onGigLoaded])
 
   const refresh = useCallback(async () => {

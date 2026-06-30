@@ -385,6 +385,17 @@ describe('gig task assignment — assigned_to normalization', () => {
     const { rows } = await pool.query('SELECT assigned_to FROM gig_tasks WHERE id = $1', [taskA().id])
     expect(rows[0].assigned_to).toBeNull()
   })
+
+  it('POST persists assigned_to set at creation time', async () => {
+    const res = await asUserA(
+      request(app)
+        .post(`/api/gigs/${seed.gigA.id}/tasks`)
+        .send({ title: 'New task', assigned_to: seed.memberA.id }),
+    ).expect(201)
+    expect(res.body.assigned_to).toBe(seed.memberA.id)
+    const { rows } = await pool.query('SELECT assigned_to FROM gig_tasks WHERE id = $1', [res.body.id])
+    expect(rows[0].assigned_to).toBe(seed.memberA.id)
+  })
 })
 
 describe('gig search', () => {

@@ -130,11 +130,15 @@ describe('refreshTenantStorageForKey', () => {
     storage.storageClient.listObjects.mockImplementationOnce(() =>
       streamFrom([], 's3 down'),
     )
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { logger } = await import('../../../server/utils/logger.js')
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
     await expect(
       svc.refreshTenantStorageForKey(`tenants/${seed.tenantA.id}/logo/x.png`),
     ).resolves.toBeUndefined()
-    expect(warn).toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(
+      'tenant_storage.refresh_failed',
+      expect.objectContaining({ err: expect.any(Error), tenantId: seed.tenantA.id }),
+    )
     warn.mockRestore()
   })
 })

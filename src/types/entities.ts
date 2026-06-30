@@ -51,6 +51,22 @@ export interface Member {
   sort_order?: number
 }
 
+// A task. May be linked to a gig (gig_id set, with event_description/event_date
+// joined in for display) or stand alone (gig_id null). assigned_to null = no
+// assignee.
+export interface Task {
+  id?: Id
+  title?: string
+  done?: boolean
+  due_date?: string | null
+  assigned_to?: Id | null
+  assigned_to_name?: string | null
+  gig_id?: Id | null
+  event_description?: string | null
+  event_date?: string | Date | null
+  created_at?: string
+}
+
 export interface Participant {
   band_member_id?: Id
   name?: string
