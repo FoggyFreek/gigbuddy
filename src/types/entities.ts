@@ -15,6 +15,7 @@ export interface Venue {
   name?: string
   category?: string
   organization_name?: string
+  street_and_number?: string | null
   city?: string
   region?: string
   postal_code?: string

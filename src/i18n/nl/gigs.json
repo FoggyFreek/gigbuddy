@@ -165,6 +165,8 @@
     "eventDescription": "Omschrijving evenement",
     "eventLink": "Evenementlink",
     "openLink": "Link openen",
+    "location": "Locatie",
+    "openInMaps": "Openen in kaarten",
     "terms": "Afspraken",
     "paidAdmission": "Betaalde toegang",
     "guaranteedFee": "Gegarandeerde gage",

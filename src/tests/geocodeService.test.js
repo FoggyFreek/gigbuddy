@@ -37,6 +37,38 @@ describe('server geocode service', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
+  it('adds street and postalcode to the structured query and free-form q when given an address', async () => {
+    const fetchImpl = vi.fn(async () => hit(52.09, 5.12))
+
+    await geocodePlace(
+      { city: 'Utrecht', country: 'NL', address: 'Domplein 1', postalCode: '3512 JC' },
+      { fetchImpl },
+    )
+
+    // A single structured hit means only one call; inspect its URL.
+    const url = new URL(fetchImpl.mock.calls[0][0])
+    expect(url.searchParams.get('street')).toBe('Domplein 1')
+    expect(url.searchParams.get('postalcode')).toBe('3512 JC')
+    expect(url.searchParams.get('city')).toBe('Utrecht')
+  })
+
+  it('keys the cache by address so street-level and city-level lookups do not collide', async () => {
+    const fetchImpl = vi.fn(async () => hit(1, 2))
+
+    // City-level first (runs immediately), then the same city with a street:
+    // distinct keys → two calls. The second waits out the 1s provider gap.
+    await geocodePlace({ city: 'Utrecht', country: 'NL' }, { fetchImpl })
+    const second = geocodePlace({ city: 'Utrecht', country: 'NL', address: 'Domplein 1' }, { fetchImpl })
+    await vi.advanceTimersByTimeAsync(1000)
+    await second
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+
+    // Repeating the city-level lookup reuses the original three-part key: served
+    // from cache, so no new provider call (and no queue wait).
+    await geocodePlace({ city: 'Utrecht', country: 'NL' }, { fetchImpl })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
   it('queues distinct provider calls at least one second apart', async () => {
     const fetchImpl = vi.fn(async () => hit(1, 2))
 

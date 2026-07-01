@@ -4,17 +4,21 @@ interface GeocodePlace {
   city: string
   region?: string
   country?: string
+  address?: string
+  postalCode?: string
 }
 
 interface GeocodeResult {
-  status: 'hit' | 'empty'
+  status: 'hit' | 'empty' | 'fail'
   coords?: { lat: number; lon: number }
 }
 
-export function lookupGeocode({ city, region, country }: GeocodePlace) {
+export function lookupGeocode({ city, region, country, address, postalCode }: GeocodePlace) {
   const params = new URLSearchParams()
   params.set('city', city)
   if (region) params.set('region', region)
   if (country) params.set('country', country)
+  if (address) params.set('address', address)
+  if (postalCode) params.set('postalCode', postalCode)
   return request<GeocodeResult>(`/api/geocode?${params}`)
 }

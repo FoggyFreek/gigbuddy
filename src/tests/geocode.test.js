@@ -85,4 +85,21 @@ describe('geocodePlace', () => {
     const result = await geocodePlace({ city: 'Paris' })
     expect(result).toEqual({ lat: 48.85, lon: 2.35 })
   })
+
+  it('forwards address/postalCode and keys them separately from a city-only lookup', async () => {
+    lookupGeocode.mockResolvedValue(hit(52.09, 5.12))
+
+    await geocodePlace({ city: 'Utrecht', country: 'NL' })
+    await geocodePlace({ city: 'Utrecht', country: 'NL', address: 'Domplein 1', postalCode: '3512 JC' })
+
+    // Distinct keys → two lookups; the second carries the refinement fields.
+    expect(lookupGeocode).toHaveBeenCalledTimes(2)
+    expect(lookupGeocode).toHaveBeenLastCalledWith(
+      expect.objectContaining({ city: 'Utrecht', address: 'Domplein 1', postalCode: '3512 JC' }),
+    )
+
+    // The city-only key is unchanged, so repeating it is served from cache.
+    await geocodePlace({ city: 'Utrecht', country: 'NL' })
+    expect(lookupGeocode).toHaveBeenCalledTimes(2)
+  })
 })

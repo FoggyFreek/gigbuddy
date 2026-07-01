@@ -1,6 +1,7 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import React, { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
+import Skeleton from '@mui/material/Skeleton'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import FormControlLabel from '@mui/material/FormControlLabel'
@@ -56,6 +57,7 @@ import { addGigParticipant, deleteGigBanner, getGig, getGigMerchSummary, removeG
 import { getBannerPath } from '../api/profile.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import { compressBanner } from '../utils/compressImage.ts'
+import { geocodePlace } from '../utils/geocode.ts'
 import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
@@ -66,6 +68,11 @@ const REQUIRED_FIELDS = ['event_date', 'event_description']
 dayjs.extend(customParseFormat)
 
 const STATUSES = ['option', 'confirmed', 'announced'] as const
+
+// Lazy so Leaflet stays in its own chunk, off the gig-detail critical path.
+const GigLocationMap = lazy(() => import('./map/GigLocationMap.tsx'))
+const MAP_STREET_ZOOM = 16
+const MAP_CITY_ZOOM = 11
 
 export type TabKey = 'event' | 'terms' | 'availability' | 'tasks'
 
@@ -185,6 +192,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const [initialTasks, setInitialTasks] = useState<Task[]>([])
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
   const [selectedFestival, setSelectedFestival] = useState<Venue | null>(null)
+  const [mapCoords, setMapCoords] = useState<{ lat: number; lon: number } | null>(null)
   const [gig, setGig] = useState<GigDetail | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [addMemberId, setAddMemberId] = useState<Id | ''>('')
@@ -242,6 +250,42 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     const g = await getGig(gigId)
     applyGig(g)
   }, [gigId, applyGig])
+
+  // Location map: prefer the venue, fall back to the festival; city is the gate
+  // (no city → no map). street_and_number, when present, sharpens to street
+  // level. Recomputed only when the picked venue/festival changes.
+  const mapSource = selectedVenue?.city ? selectedVenue : selectedFestival
+  const mapPlace = useMemo(() => {
+    if (!mapSource?.city) return null
+    return {
+      city: mapSource.city,
+      region: mapSource.region || undefined,
+      country: mapSource.country || undefined,
+      postalCode: mapSource.postal_code || undefined,
+      address: mapSource.street_and_number || undefined,
+    }
+  }, [mapSource])
+  const mapZoom = mapPlace?.address ? MAP_STREET_ZOOM : MAP_CITY_ZOOM
+  const mapLabel = mapSource?.name || ''
+  const mapsHref = useMemo(() => {
+    if (!mapCoords) return ''
+    const query = [mapPlace?.address, mapPlace?.postalCode, mapPlace?.city, mapPlace?.country]
+      .filter(Boolean)
+      .join(', ') || `${mapCoords.lat},${mapCoords.lon}`
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+  }, [mapCoords, mapPlace])
+
+  useEffect(() => {
+    // Clear synchronously so the previous venue's pin doesn't linger while the
+    // next lookup is in flight.
+    setMapCoords(null)
+    if (!mapPlace) return
+    let cancelled = false
+    geocodePlace(mapPlace).then((coords) => {
+      if (!cancelled) setMapCoords(coords)
+    })
+    return () => { cancelled = true }
+  }, [mapPlace])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -693,6 +737,27 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               }}
             />
           </Grid>
+          {/* Location map — only mount on the active Event tab (the panel stays
+              mounted under display:none, so gating avoids initializing Leaflet
+              while hidden). Full width, 150px. */}
+          {activeTab === 'event' && mapCoords && (
+            <Grid size={12}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                {t($ => $.detail.location)}
+              </Typography>
+              <Suspense fallback={<Skeleton variant="rounded" height={150} />}>
+                <GigLocationMap
+                  key={`${mapCoords.lat},${mapCoords.lon},${mapZoom}`}
+                  lat={mapCoords.lat}
+                  lon={mapCoords.lon}
+                  zoom={mapZoom}
+                  label={mapLabel}
+                  openLabel={t($ => $.detail.openInMaps)}
+                  mapsHref={mapsHref}
+                />
+              </Suspense>
+            </Grid>
+          )}
         </Grid>
       </Box>
 

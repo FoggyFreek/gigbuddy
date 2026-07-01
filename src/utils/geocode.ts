@@ -11,8 +11,21 @@ const MISS_TTL_MS = 7 * 24 * 60 * 60 * 1000 // confirmed misses self-heal after 
 
 const norm = (v: string | null | undefined) => String(v ?? '').trim().toLowerCase()
 
-function cacheKey(city: string | null | undefined, region: string | null | undefined, country: string | null | undefined): string {
-  return `${norm(city)}|${norm(region)}|${norm(country)}`
+interface GeoPlace {
+  city?: string
+  region?: string
+  country?: string
+  address?: string
+  postalCode?: string
+}
+
+function cacheKey({ city, region, country, address, postalCode }: GeoPlace): string {
+  const base = `${norm(city)}|${norm(region)}|${norm(country)}`
+  // Keep the original three-part key when no refinement is present so existing
+  // city-level cache entries (gb.geocache.v1) stay reusable; widen only for
+  // street/postal precision. Mirrors the server key rule.
+  if (!norm(address) && !norm(postalCode)) return base
+  return `${base}|${norm(postalCode)}|${norm(address)}`
 }
 
 interface CacheCoords {
@@ -70,7 +83,7 @@ function writeMiss(key: string): void {
   saveStore(store)
 }
 
-async function fetchAndCache(key: string, place: { city: string; region?: string; country?: string }): Promise<CacheCoords | null> {
+async function fetchAndCache(key: string, place: { city: string; region?: string; country?: string; address?: string; postalCode?: string }): Promise<CacheCoords | null> {
   try {
     const result = await lookupGeocode(place)
     if (result?.status === 'hit' && result.coords) {
@@ -88,18 +101,19 @@ const inflight = new Map<string, Promise<CacheCoords | null>>()
 
 /**
  * Resolve a place to { lat, lon }, or null if it can't be geocoded.
- * Requires `city`; `region` and `country` are optional refinements.
+ * Requires `city`; `region`, `country`, `address` (street), and `postalCode`
+ * are optional refinements — `address`/`postalCode` sharpen to street level.
  */
-export async function geocodePlace({ city, region, country }: { city?: string; region?: string; country?: string } = {}): Promise<CacheCoords | null> {
+export async function geocodePlace({ city, region, country, address, postalCode }: GeoPlace = {}): Promise<CacheCoords | null> {
   if (!GEOCODING_ENABLED || !norm(city)) return null
 
-  const key = cacheKey(city, region, country)
+  const key = cacheKey({ city, region, country, address, postalCode })
   const cached = readCache(key)
   if (cached !== undefined) return cached
 
   if (inflight.has(key)) return inflight.get(key) as Promise<CacheCoords | null>
 
-  const promise = fetchAndCache(key, { city: city ?? '', region, country }).finally(() =>
+  const promise = fetchAndCache(key, { city: city ?? '', region, country, address, postalCode }).finally(() =>
     inflight.delete(key),
   )
   inflight.set(key, promise)

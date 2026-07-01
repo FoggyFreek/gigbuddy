@@ -12,6 +12,7 @@ import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import React from 'react'
 import { formatShortDate } from '../../utils/dateFormat.ts'
+import { OSM_ATTRIBUTION, OSM_URL } from './osm.ts'
 import type { MapMarker } from '../../hooks/useGigMapData.ts'
 
 // leaflet has no bundled .d.ts; react-leaflet's types inherit MapOptions from
@@ -21,11 +22,6 @@ type LeafletComponentProps = Record<string, unknown> & { children?: React.ReactN
 const MapContainer = _MapContainer as unknown as React.ComponentType<LeafletComponentProps>
 const TileLayer = _TileLayer as unknown as React.ComponentType<LeafletComponentProps>
 const Marker = _Marker as unknown as React.ComponentType<LeafletComponentProps>
-
-// OSM tile usage requires visible attribution — keep it in every mode.
-const OSM_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-const OSM_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 
 // A count badge as a divIcon — also sidesteps Leaflet's broken default marker
 // image paths under bundlers, and gives us the clustered look without a plugin.

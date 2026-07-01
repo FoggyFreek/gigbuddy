@@ -94,7 +94,7 @@ export default function GigsPage() {
       basePath="/gigs"
       outletContext={{ onGigUpdate: handleGigUpdate, onGigDelete: handleGigDelete }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 0.5 }}>
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
           {t($ => $.title)}
         </Typography>
@@ -201,7 +201,7 @@ export default function GigsPage() {
             {t($ => $.common.actions.add)}
           </Button>
         )}
-      </Box>
+      </Box>  
 
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

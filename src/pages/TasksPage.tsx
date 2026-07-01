@@ -96,7 +96,7 @@ export default function TasksPage() {
 
   return (
     <>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 0.5, flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>
           {t($ => $.title)}
         </Typography>
@@ -105,7 +105,6 @@ export default function TasksPage() {
             value="myTasks"
             selected={myTasksOnly}
             onChange={() => setMyTasksOnly((v) => !v)}
-            size="small"
             aria-label={t($ => $.myTasks)}
             sx={isCompact ? COMPACT_FILTER_SX : FILTER_SX}
           >
@@ -116,14 +115,13 @@ export default function TasksPage() {
           value="showFinished"
           selected={showFinished}
           onChange={() => setShowFinished((v) => !v)}
-          size="small"
           aria-label={t($ => $.showFinished)}
           sx={isCompact ? COMPACT_FILTER_SX : FILTER_SX}
         >
           {isCompact ? <CheckIcon /> : t($ => $.showFinished)}
         </ToggleButton>
         {canWritePlanning && (
-          <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={openCreate}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
             {t($ => $.newTask)}
           </Button>
         )}

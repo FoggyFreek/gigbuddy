@@ -1,11 +1,13 @@
 const GEOCODING_ENABLED = process.env.GEOCODING_ENABLED !== 'false'
 
 const GEOCODER = {
-  buildUrls({ city, region, country }) {
+  buildUrls({ city, region, country, address, postalCode }) {
     const base = 'https://nominatim.openstreetmap.org/search'
     const common = { format: 'jsonv2', limit: '1' }
 
     const structured = new URLSearchParams({ ...common, city })
+    if (address) structured.set('street', address)
+    if (postalCode) structured.set('postalcode', postalCode)
     if (region) structured.set('state', region)
     if (country) {
       if (/^[a-z]{2}$/i.test(country)) {
@@ -17,7 +19,7 @@ const GEOCODER = {
 
     const free = new URLSearchParams({
       ...common,
-      q: [city, region, country].filter(Boolean).join(', '),
+      q: [address, postalCode, city, region, country].filter(Boolean).join(', '),
     })
 
     return [`${base}?${structured}`, `${base}?${free}`]
@@ -36,8 +38,13 @@ const USER_AGENT = process.env.GEOCODER_USER_AGENT || 'gigbuddy-server-geocoder/
 
 const norm = (v) => String(v ?? '').trim().toLowerCase()
 
-function cacheKey({ city, region, country }) {
-  return `${norm(city)}|${norm(region)}|${norm(country)}`
+function cacheKey({ city, region, country, address, postalCode }) {
+  const base = `${norm(city)}|${norm(region)}|${norm(country)}`
+  // Keep the three-part key when no refinement is present so pre-existing
+  // city-level cache entries stay reusable; only widen when we actually
+  // geocode at street/postal precision.
+  if (!norm(address) && !norm(postalCode)) return base
+  return `${base}|${norm(postalCode)}|${norm(address)}`
 }
 
 const cache = new Map()
@@ -124,6 +131,8 @@ export async function geocodePlace(place = {}, { fetchImpl = globalThis.fetch } 
     city: String(place.city ?? '').trim(),
     region: String(place.region ?? '').trim(),
     country: String(place.country ?? '').trim(),
+    address: String(place.address ?? '').trim(),
+    postalCode: String(place.postalCode ?? '').trim(),
   }
   if (!GEOCODING_ENABLED || !normalized.city || typeof fetchImpl !== 'function') {
     return { status: 'fail' }

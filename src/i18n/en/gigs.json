@@ -165,6 +165,8 @@
     "eventDescription": "Event description",
     "eventLink": "Event link",
     "openLink": "Open link",
+    "location": "Location",
+    "openInMaps": "Open in maps",
     "terms": "Terms",
     "paidAdmission": "Paid admission",
     "guaranteedFee": "Guaranteed fee",

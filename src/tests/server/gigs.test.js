@@ -458,6 +458,43 @@ describe('gig search', () => {
   })
 })
 
+describe('gig payload — venue/festival address for the location map', () => {
+  async function insertVenue(tenantId, { category, name, city, street }) {
+    const { rows: [venue] } = await pool.query(
+      `INSERT INTO venues (tenant_id, category, name, city, street_and_number)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [tenantId, category, name, city, street],
+    )
+    return venue.id
+  }
+
+  it('includes venue.street_and_number in the single-gig payload', async () => {
+    const venueId = await insertVenue(seed.tenantA.id, {
+      category: 'venue', name: 'Bimhuis', city: 'Amsterdam', street: 'Piet Heinkade 3',
+    })
+    await asUserA(request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ venue_id: venueId })).expect(200)
+
+    const res = await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}`)).expect(200)
+    expect(res.body.venue).toMatchObject({
+      city: 'Amsterdam',
+      street_and_number: 'Piet Heinkade 3',
+    })
+  })
+
+  it('includes festival.street_and_number in the single-gig payload', async () => {
+    const festivalId = await insertVenue(seed.tenantA.id, {
+      category: 'festival', name: 'Pinkpop', city: 'Landgraaf', street: 'Sportlaan 1',
+    })
+    await asUserA(request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ festival_id: festivalId })).expect(200)
+
+    const res = await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}`)).expect(200)
+    expect(res.body.festival).toMatchObject({
+      city: 'Landgraaf',
+      street_and_number: 'Sportlaan 1',
+    })
+  })
+})
+
 describe('gig merch summary — GET /api/gigs/:id/merch-summary', () => {
   async function insertProduct(tenantId) {
     const { rows } = await pool.query(

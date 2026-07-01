@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -59,7 +59,28 @@ vi.mock('../api/venues.ts', async (importOriginal) => ({
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 
+// Geocoding is the browser cache/dedupe layer; mock it so the location map is
+// deterministic and no /api/geocode network call fires. Default: no result
+// (falsy) so existing tests render no map.
+vi.mock('../utils/geocode.ts', () => ({ geocodePlace: vi.fn(() => Promise.resolve(null)) }))
+
+// Stub the lazy Leaflet map so tests don't pull in leaflet; expose the props we
+// assert on as data-attributes.
+vi.mock('../components/map/GigLocationMap.tsx', () => ({
+  default: (props) => (
+    <div
+      data-testid="gig-location-map"
+      data-href={props.mapsHref}
+      data-zoom={String(props.zoom)}
+      data-label={props.label}
+    >
+      {props.openLabel}
+    </div>
+  ),
+}))
+
 import { getGig, getGigMerchSummary, updateGig } from '../api/gigs.ts'
+import { geocodePlace } from '../utils/geocode.ts'
 
 const GIG_PAID = {
   id: 1,
@@ -400,5 +421,100 @@ describe('GigDetailContent — ticket link field', () => {
     // ticket_link is empty — no anchor with a ticket URL should exist
     const links = screen.queryAllByRole('link')
     expect(links.every((l) => !l.getAttribute('href')?.startsWith('https://'))).toBe(true)
+  })
+})
+
+describe('GigDetailContent — location map', () => {
+  const baseGig = {
+    id: 1,
+    event_date: '2026-06-15',
+    event_description: 'Jazz Night',
+    event_link: '',
+    start_time: '20:00:00',
+    end_time: '23:00:00',
+    status: 'option',
+    booking_fee_cents: 15000,
+    admission: 'free',
+    ticket_link: null,
+    notes: '',
+    has_pa_system: false,
+    has_drumkit: false,
+    has_stage_lights: false,
+    tasks: [],
+    attachments: [],
+    participants: [],
+  }
+  const gigWith = (extra) => ({ ...baseGig, ...extra })
+
+  beforeEach(() => {
+    getGig.mockClear()
+    geocodePlace.mockReset()
+    geocodePlace.mockResolvedValue({ lat: 52.37, lon: 4.9 })
+  })
+
+  it('renders the map at city zoom and geocodes the venue city when no street is set', async () => {
+    // default getGig mock: venue Amsterdam, city only
+    wrap(<GigDetailContent gigId={1} />)
+    const map = await screen.findByTestId('gig-location-map')
+    expect(map).toHaveAttribute('data-zoom', '11')
+    expect(geocodePlace).toHaveBeenCalledWith(expect.objectContaining({ city: 'Amsterdam' }))
+    // marker link points at an external maps search including the city
+    const href = map.getAttribute('data-href')
+    expect(href).toContain('google.com/maps')
+    expect(decodeURIComponent(href)).toContain('Amsterdam')
+  })
+
+  it('uses street zoom and passes the address when the venue has a street', async () => {
+    getGig.mockResolvedValueOnce(
+      gigWith({ venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam', street_and_number: 'Piet Heinkade 3' } }),
+    )
+    wrap(<GigDetailContent gigId={1} />)
+    const map = await screen.findByTestId('gig-location-map')
+    expect(map).toHaveAttribute('data-zoom', '16')
+    expect(geocodePlace).toHaveBeenCalledWith(
+      expect.objectContaining({ city: 'Amsterdam', address: 'Piet Heinkade 3' }),
+    )
+  })
+
+  it('prefers the venue over the festival when both have a city', async () => {
+    getGig.mockResolvedValueOnce(
+      gigWith({
+        venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam' },
+        festival: { id: 22, name: 'Pinkpop', category: 'festival', city: 'Landgraaf' },
+      }),
+    )
+    wrap(<GigDetailContent gigId={1} />)
+    await screen.findByTestId('gig-location-map')
+    expect(geocodePlace).toHaveBeenCalledWith(expect.objectContaining({ city: 'Amsterdam' }))
+  })
+
+  it('falls back to the festival when the venue has no city', async () => {
+    getGig.mockResolvedValueOnce(
+      gigWith({
+        venue: { id: 11, name: 'TBD', category: 'venue' },
+        festival: { id: 22, name: 'Pinkpop', category: 'festival', city: 'Landgraaf' },
+      }),
+    )
+    wrap(<GigDetailContent gigId={1} />)
+    await screen.findByTestId('gig-location-map')
+    expect(geocodePlace).toHaveBeenCalledWith(expect.objectContaining({ city: 'Landgraaf' }))
+  })
+
+  it('hides the map and does not geocode when neither venue nor festival has a city', async () => {
+    getGig.mockResolvedValueOnce(gigWith({ venue: { id: 11, name: 'TBD', category: 'venue' }, festival: null }))
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    expect(geocodePlace).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('gig-location-map')).not.toBeInTheDocument()
+  })
+
+  it('drops a geocode result that resolves after unmount (no stale pin)', async () => {
+    let resolve
+    geocodePlace.mockReturnValueOnce(new Promise((r) => { resolve = r }))
+    const { unmount } = wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    unmount()
+    await act(async () => { resolve({ lat: 1, lon: 2 }) })
+    expect(screen.queryByTestId('gig-location-map')).not.toBeInTheDocument()
   })
 })

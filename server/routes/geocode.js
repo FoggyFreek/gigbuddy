@@ -13,6 +13,8 @@ function validatePlace(query) {
     city: textParam(query.city),
     region: textParam(query.region),
     country: textParam(query.country),
+    address: textParam(query.address),
+    postalCode: textParam(query.postalCode),
   }
 
   if (!place.city) return { error: 'city is required' }
