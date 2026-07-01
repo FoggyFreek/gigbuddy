@@ -30,6 +30,95 @@ export const MONO_FONT = 'Consolas, "DejaVu Sans Mono", "Liberation Mono", Menlo
 export const GRID_CELL_W = '3em'
 export const GRID_BAR_W = '1.8em'
 
+// Starter source seeded into a brand-new chart: a runnable tour of every pattern
+// this editor renders (metadata, sections, chords/annotations, custom {define},
+// styled comments, inline diagram, textblock, tab, jazz grid, ABC, multi-column).
+// Lines beginning with `#` are ChordPro source comments — they explain each block
+// and don't render, so a user can read the syntax and delete what they don't need.
+// Kept warning-free (property-form grid, closed environments, valid ABC).
+export const SAMPLE_CHART_SOURCE = `{title: New Song}
+{subtitle: A ChordPro starter}
+{artist: Artist name}
+{composer: Composer name}
+{key: G}
+{capo: 0}
+{tempo: 120}
+{time: 4/4}
+{album: Album name}
+{year: 2026}
+{copyright: © 2026 Your Band}
+
+# Lines starting with '#' are source comments — they never render.
+# This starter demonstrates every pattern the editor supports; delete what you don't need.
+
+# {transpose: n} shifts every chord by n semitones (0 = no change).
+{transpose: 0}
+
+# {define} registers a custom fretboard; {diagrams} places the chord grid (top/bottom/off).
+{define: G7sus4 base-fret 1 frets 3 3 0 0 1 1}
+
+# Sections: verse / chorus / bridge (short forms: sov/eov, soc/eoc, sob/eob).
+{start_of_verse: Verse 1}
+[G]This is a verse with [C]chords above the [D]words
+[*Softly] [Em]annotations start with a [C]star, and [G7sus4]custom chords work too
+{end_of_verse}
+
+{start_of_chorus: Chorus}
+[G]Sing the [D]chorus [Em]nice and [C]loud
+{end_of_chorus}
+
+# {chorus} recalls the chorus above without retyping it.
+{chorus}
+
+{start_of_bridge: Bridge}
+[Am]A short [D]bridge [G]section
+{end_of_bridge}
+
+# Comments that DO render, three styles:
+{comment: Plain comment}
+{comment_box: Boxed comment}
+{comment_italic: Italic comment}
+
+# Inline chord diagram, drawn right here — resolves the {define} above (or the
+# built-in library); display-only, so it doesn't register a shape into the grid:
+{chord: G7sus4}
+
+# Aligned text block — fixed-width, exact spacing (align = left/center/right):
+{start_of_textblock align=center}
+Capo 2 · Standard tuning
+{end_of_textblock}
+
+# Guitar tab — fixed-width, whitespace preserved exactly:
+{start_of_tab: Intro riff}
+e|-------7---10~---|
+B|---8-------------|
+{end_of_tab}
+
+# Jazz grid — bars (|), beats (.) and repeats; use shape="…"/label="…" (not the colon form):
+{start_of_grid shape="4x4" label="Turnaround"}
+|| G . . . | Em . . . | C . . . | D . . . ||
+{end_of_grid}
+
+# Embedded music notation (ABC) — engraved automatically:
+{start_of_abc}
+X:1
+T:Melody
+M:4/4
+L:1/8
+K:G
+GABc dedB|A2 G2 G4|
+{end_of_abc}
+
+# Image — the src must be an http/https URL; uncomment and set your own:
+# {image: src="https://example.com/diagram.png" scale="60%"}
+
+# Multi-column layout: {columns} sets the count, {column_break} splits the flow.
+{columns: 2}
+[G]Left column [C]line
+{column_break}
+[D]Right column [Em]line
+`
+
 export type DocBlock =
   | { kind: 'abc'; abc: string }
   | { kind: 'chordpro'; source: string }
@@ -351,9 +440,11 @@ function readEnvironment(lines: string[], start: number, trimmed: string, lastGr
 // {image}, the inline display-only {chord}, and styled {comment_*}. A non-null
 // outer result means the line was consumed even when `block` is null (e.g. an
 // image with a missing/non-http src is dropped, not pushed into a chordpro run).
-// {chord} is inline and display-only — it does NOT register a shape (that's
-// {define}); parseChordDefinition is hoisted (declared below).
-function readInlineDirective(trimmed: string): { block: DocBlock | null } | null {
+// {chord} is inline and display-only — it does NOT *register* a shape (that's
+// {define}), but a bare {chord: X} resolves X against the document's {define}s
+// (`defs`) first, then the built-in library, so it matches the diagram grid.
+// parseChordDefinition is hoisted (declared below).
+function readInlineDirective(trimmed: string, defs: ChordDefs): { block: DocBlock | null } | null {
   const mImg = RE_IMAGE.exec(trimmed)
   if (mImg) {
     const raw = readAttr(mImg[1], 'src')
@@ -366,7 +457,9 @@ function readInlineDirective(trimmed: string): { block: DocBlock | null } | null
     const parsed = parseChordDefinition(mChord[1])
     if (!parsed) return { block: null }
     const nm = (parsed.display ?? parsed.name).replace(/^\[|\]$/g, '')
-    return { block: { kind: 'chorddef', name: nm, shape: parsed.shape ?? lookupGuitarChord(nm) } }
+    // Inline frets win; else a matching {define}; else the built-in library.
+    const shape = parsed.shape ?? defs[nm]?.shape ?? lookupGuitarChord(nm)
+    return { block: { kind: 'chorddef', name: nm, shape } }
   }
   const mComment = RE_COMMENT_STYLED.exec(trimmed)
   if (mComment) {
@@ -386,6 +479,7 @@ interface ParseState {
   columns: number
   lastGridShape: string | null
   buf: string[]
+  defs: ChordDefs // document-wide {define}s, so a bare {chord: X} can resolve X
 }
 
 // Emit the buffered plain lines as one chordpro block (skipping a buffer that is
@@ -414,7 +508,7 @@ function consumeLine(lines: string[], i: number, state: ParseState): number {
     return env.end + 1
   }
 
-  const inline = readInlineDirective(trimmed)
+  const inline = readInlineDirective(trimmed, state.defs)
   if (inline) {
     flushBuf(state)
     if (inline.block) state.blocks.push(inline.block)
@@ -436,7 +530,10 @@ function consumeLine(lines: string[], i: number, state: ParseState): number {
 // broken <img> and shows directive attributes as stray labels).
 export function parseChordProDocument(source: string): ChordProDocument {
   const lines = (source ?? '').replace(/\r\n?/g, '\n').split('\n')
-  const state: ParseState = { blocks: [], warnings: [], columns: 1, lastGridShape: null, buf: [] }
+  // Pre-collect the document's {define}s (order-independent, like the grid) so an
+  // inline {chord: X} can resolve a custom-defined shape even when defined later.
+  const { defs } = collectDefsAndPlacement(source ?? '')
+  const state: ParseState = { blocks: [], warnings: [], columns: 1, lastGridShape: null, buf: [], defs }
   let i = 0
   while (i < lines.length) i = consumeLine(lines, i, state)
   flushBuf(state)
@@ -716,6 +813,19 @@ export function parseChordDefinition(arg: string): { name: string; shape: ChordS
   return result
 }
 
+// Serialize a chord shape into a {define: …} directive — the inverse of
+// parseChordDefinition, so a round-trip preserves the shape. Muted strings are
+// written as `x` (ChordPro's canonical mute token); `fingers` is emitted only
+// when the shape carries a non-trivial fingering.
+export function formatChordDefinition(name: string, shape: ChordShape): string {
+  const fret = (f: number): string => (f < 0 ? 'x' : String(f))
+  const parts = [`{define: ${name}`, `base-fret ${shape.baseFret}`, `frets ${shape.frets.map(fret).join(' ')}`]
+  if (shape.fingers?.some((f) => f > 0)) {
+    parts.push(`fingers ${shape.fingers.map((f) => (f > 0 ? f : 0)).join(' ')}`)
+  }
+  return `${parts.join(' ')}}`
+}
+
 // Collect the chord-diagram grid for a song: the {diagrams} placement, every
 // distinct chord used in [brackets] (first-appearance order), and each resolved
 // to a shape — a song's own {define}/{chord} overrides the built-in library.
@@ -831,7 +941,9 @@ export const CHORDPRO_PRINT_CSS = `
   .column { display: flex; flex-direction: column; }
   .chord { font-weight: 700; color: #1565c0; white-space: pre; }
   .chord:not(:last-child) { padding-right: 10px; }
-  .chord:after, .lyrics:after { content: '\\200b'; }
+  .annotation { font-style: italic; color: #555; white-space: pre; }
+  .annotation:not(:last-child) { padding-right: 10px; }
+  .chord:after, .annotation:after, .lyrics:after { content: '\\200b'; }
   .lyrics { white-space: pre; }
   .comment { font-style: italic; color: #555; margin: 0.4em 0; }
 `

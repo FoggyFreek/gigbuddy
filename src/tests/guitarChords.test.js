@@ -20,9 +20,35 @@ describe('lookupGuitarChord', () => {
     expect(lookupGuitarChord(undefined)).toBeNull()
   })
 
-  it('falls back to the part before a slash bass note', () => {
-    // "Am7/G" has no exact entry, so it resolves to the "Am7" shape.
-    expect(lookupGuitarChord('Am7/G')).toBe(lookupGuitarChord('Am7'))
+  it('re-voices a slash bass into the lowest string, per common voicings', () => {
+    // The bass note becomes the lowest sounding string; the base shape's upper
+    // strings are kept and anything below the bass is muted.
+    expect(lookupGuitarChord('Dm/F')).toEqual({ baseFret: 1, frets: [1, -1, 0, 2, 3, 1] })
+    expect(lookupGuitarChord('C/G')).toEqual({ baseFret: 1, frets: [3, 3, 2, 0, 1, 0] })
+    expect(lookupGuitarChord('C/E')).toEqual({ baseFret: 1, frets: [0, 3, 2, 0, 1, 0] })
+    expect(lookupGuitarChord('C/B')).toEqual({ baseFret: 1, frets: [-1, 2, 2, 0, 1, 0] })
+    expect(lookupGuitarChord('G/B')).toEqual({ baseFret: 1, frets: [-1, 2, 0, 0, 0, 3] })
+    expect(lookupGuitarChord('G/F#')).toEqual({ baseFret: 1, frets: [2, 2, 0, 0, 0, 3] })
+    expect(lookupGuitarChord('D/F#')).toEqual({ baseFret: 1, frets: [2, -1, 0, 2, 3, 2] })
+    expect(lookupGuitarChord('A/C#')).toEqual({ baseFret: 1, frets: [-1, 4, 2, 2, 2, 0] })
+    expect(lookupGuitarChord('F/A')).toEqual({ baseFret: 1, frets: [-1, 0, 3, 2, 1, 1] })
+    expect(lookupGuitarChord('Bb/D')).toEqual({ baseFret: 1, frets: [-1, -1, 0, 3, 3, 1] })
+  })
+
+  it('picks the enharmonic bass shape regardless of accidental spelling', () => {
+    // Db in the bass is the same pitch class as C# → same low-string placement.
+    expect(lookupGuitarChord('A/Db')).toEqual(lookupGuitarChord('A/C#'))
+    // Unicode accidentals fold to ASCII before the bass is resolved.
+    expect(lookupGuitarChord('D/F♯')).toEqual(lookupGuitarChord('D/F#'))
+  })
+
+  it('leaves the base shape untouched when the slash part is not a note', () => {
+    // "C6/9" is a chord extension, not a slash bass — resolve to the C6 shape.
+    expect(lookupGuitarChord('C6/9')).toBe(lookupGuitarChord('C6'))
+  })
+
+  it('returns null for a slash chord whose base shape is unknown', () => {
+    expect(lookupGuitarChord('Xyz/G')).toBeNull()
   })
 
   it('folds Unicode accidentals to ASCII (♯ → #, ♭ → b)', () => {

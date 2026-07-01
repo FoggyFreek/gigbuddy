@@ -118,6 +118,13 @@ function fileReturn(body) {
   return asUserA(request(app).post('/api/vat-returns')).send({ year: 2026, quarter: 1, ...body })
 }
 
+// The quarter containing "now" — its period_to is always >= today, so filing it
+// is rejected as not-yet-ended regardless of when the suite runs.
+function currentYearQuarter() {
+  const now = new Date()
+  return { year: now.getUTCFullYear(), quarter: Math.floor(now.getUTCMonth() / 3) + 1 }
+}
+
 // ============================================================
 describe('VAT returns — preview', () => {
   it('returns the period breakdown without writing anything', async () => {
@@ -243,8 +250,10 @@ describe('VAT returns — filing (settlement journal)', () => {
   })
 
   it('rejects filing the current (unfinished) quarter', async () => {
-    await createSentInvoice({ issueDate: '2026-06-01' })
-    const res = await fileReturn({ year: 2026, quarter: 2 }).expect(400)
+    const { year, quarter } = currentYearQuarter()
+    const startMonth = String((quarter - 1) * 3 + 1).padStart(2, '0')
+    await createSentInvoice({ issueDate: `${year}-${startMonth}-01` })
+    const res = await fileReturn({ year, quarter }).expect(400)
     expect(res.body.code).toBe('period_not_ended')
   })
 

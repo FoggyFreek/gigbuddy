@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderChordProHtml, parseChordProDocument, safeImageSrc, parseChordDefinition, analyzeChords, getTransposeAmount, extractMetadata, songFieldsFromChordPro, lyricsHtmlFromChordPro, parseGridLine, parseGridShape, isValidGridShape, transposeGridChord, buildGridItems, voltaInfo, buildVoltaSpans, GRID_CELL_W, GRID_BAR_W, printChordPro } from '../utils/chordpro.ts'
+import { renderChordProHtml, parseChordProDocument, safeImageSrc, parseChordDefinition, formatChordDefinition, analyzeChords, getTransposeAmount, extractMetadata, songFieldsFromChordPro, lyricsHtmlFromChordPro, parseGridLine, parseGridShape, isValidGridShape, transposeGridChord, buildGridItems, voltaInfo, buildVoltaSpans, GRID_CELL_W, GRID_BAR_W, printChordPro, SAMPLE_CHART_SOURCE } from '../utils/chordpro.ts'
 import { lookupGuitarChord } from '../utils/guitarChords.ts'
 
 afterEach(() => {
@@ -27,6 +27,13 @@ describe('renderChordProHtml', () => {
     expect(html).not.toContain('<script')
     // No tag may carry an event handler; any leftover "onerror" is inert escaped text.
     expect(html).not.toMatch(/<[^>]+\son\w+=/i)
+  })
+
+  it('renders an annotation [*..] in its own .annotation cell (styled by the viewer/print CSS)', () => {
+    const html = renderChordProHtml('[*Softly] [Em]word')
+    expect(html).toContain('class="annotation">Softly</div>')
+    // It is not a chord, so it must not pick up the bold-chord cell.
+    expect(html).not.toContain('class="chord">Softly')
   })
 
   it('marks a chorus section so the viewer can style it', () => {
@@ -64,6 +71,13 @@ describe('printChordPro', () => {
     expect(win.print).not.toHaveBeenCalled()
     vi.runAllTimers()
     expect(win.print).toHaveBeenCalledTimes(1)
+  })
+
+  it('ships an .annotation rule in the print stylesheet', () => {
+    const win = { document: { write: vi.fn(), close: vi.fn() }, focus: vi.fn(), print: vi.fn(), opener: {} }
+    vi.spyOn(window, 'open').mockReturnValue(win)
+    printChordPro('<div class="cp-doc">x</div>', '', 'T')
+    expect(win.document.write.mock.calls[0][0]).toContain('.annotation')
   })
 })
 
@@ -562,6 +576,22 @@ describe('{chord} (inline, display-only)', () => {
     expect(cd).toMatchObject({ name: 'Am', shape: { frets: [0, 0, 2, 2, 1, 0] } })
   })
 
+  it('resolves a bare {chord: X} against a document {define} (any order), like the grid', () => {
+    // A custom chord with no built-in shape renders its {define}d fretboard inline…
+    const after = parseChordProDocument('{chord: G7sus4}\n{define: G7sus4 base-fret 1 frets 3 3 0 0 1 1}')
+      .blocks.find((b) => b.kind === 'chorddef')
+    expect(after).toMatchObject({ name: 'G7sus4', shape: { frets: [3, 3, 0, 0, 1, 1] } })
+    // …even when the {chord} appears before its {define} in the source.
+    const defined = parseChordProDocument('{define: Am base-fret 1 frets 1 1 1 1 1 1}\n{chord: Am}')
+      .blocks.find((b) => b.kind === 'chorddef')
+    expect(defined.shape.frets).toEqual([1, 1, 1, 1, 1, 1]) // the define overrides the built-in Am
+  })
+
+  it('renders just the name (null shape) for a bare custom {chord} with no matching define', () => {
+    const cd = parseChordProDocument('{chord: G7sus4}').blocks.find((b) => b.kind === 'chorddef')
+    expect(cd).toMatchObject({ name: 'G7sus4', shape: null })
+  })
+
   it('does NOT register into the grid or override a used chord shape (unlike {define})', () => {
     const { chords } = analyzeChords('{chord: Am base-fret 1 frets 1 1 1 1 1 1}\n[Am]hi')
     expect(chords[0].shape.frets).toEqual([0, 0, 2, 2, 1, 0]) // built-in Am, not overridden
@@ -628,10 +658,50 @@ describe('{transpose}', () => {
   })
 })
 
+describe('SAMPLE_CHART_SOURCE', () => {
+  it('parses without any warnings', () => {
+    expect(parseChordProDocument(SAMPLE_CHART_SOURCE).warnings).toEqual([])
+  })
+
+  it('exercises every specially-rendered block kind', () => {
+    const kinds = new Set(parseChordProDocument(SAMPLE_CHART_SOURCE).blocks.map((b) => b.kind))
+    for (const kind of ['chordpro', 'chorddef', 'comment', 'textblock', 'tab', 'grid', 'abc', 'colb']) {
+      expect(kinds).toContain(kind)
+    }
+  })
+
+  it('surfaces its metadata and a custom {define} used in the grid', () => {
+    expect(extractMetadata(SAMPLE_CHART_SOURCE).title).toBe('New Song')
+    const { placement, chords } = analyzeChords(SAMPLE_CHART_SOURCE)
+    expect(placement).toBe('bottom')
+    // The custom G7sus4 define resolves to its own shape, not the built-in lookup.
+    expect(chords.find((c) => c.name === 'G7sus4')?.shape).toMatchObject({ frets: [3, 3, 0, 0, 1, 1] })
+  })
+})
+
+describe('formatChordDefinition', () => {
+  it('serializes a shape into a {define} directive (muted strings as x)', () => {
+    expect(formatChordDefinition('Dm/F', { baseFret: 1, frets: [1, -1, 0, 2, 3, 1] }))
+      .toBe('{define: Dm/F base-fret 1 frets 1 x 0 2 3 1}')
+  })
+
+  it('emits base-fret and fingers when present', () => {
+    expect(formatChordDefinition('C', { baseFret: 1, frets: [-1, 3, 2, 0, 1, 0], fingers: [0, 3, 2, 0, 1, 0] }))
+      .toBe('{define: C base-fret 1 frets x 3 2 0 1 0 fingers 0 3 2 0 1 0}')
+  })
+
+  it('round-trips through parseChordDefinition', () => {
+    const shape = { baseFret: 3, frets: [-1, 1, 3, 3, 2, 1] } // Bbm-style barre
+    const directive = formatChordDefinition('Xm', shape)
+    const parsed = parseChordDefinition(directive.replace(/^\{define:\s*/, '').replace(/\}$/, ''))
+    expect(parsed).toMatchObject({ name: 'Xm', shape: { baseFret: 3, frets: [-1, 1, 3, 3, 2, 1] } })
+  })
+})
+
 describe('lookupGuitarChord', () => {
   it('finds common chords and falls back past a slash bass', () => {
     expect(lookupGuitarChord('G')).toMatchObject({ frets: [3, 2, 0, 0, 0, 3] })
-    expect(lookupGuitarChord('Am7/G')).toMatchObject({ baseFret: 1 }) // falls back to Am7
+    expect(lookupGuitarChord('Am7/G')).toMatchObject({ frets: [3, 0, 2, 0, 1, 0] }) // Am7 with G re-voiced into the bass
     expect(lookupGuitarChord('Zzz')).toBeNull()
   })
 

@@ -8,6 +8,7 @@ import AudioFileOutlinedIcon from '@mui/icons-material/AudioFileOutlined'
 import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined'
 import ChordProViewerDialog from './ChordProViewerDialog.tsx'
 import { createSongChart, deleteSongChart } from '../../api/songs.ts'
+import { SAMPLE_CHART_SOURCE } from '../../utils/chordpro.ts'
 import type { SongChart, Id } from '../../types/entities.ts'
 
 const CARD_W = 70
@@ -106,6 +107,7 @@ export default function ChordProChartsSection({
   const { t } = useTranslation('songs')
   const [charts, setCharts] = useState<SongChart[]>(initialCharts)
   const [openId, setOpenId] = useState<Id | null>(null)
+  const [createdId, setCreatedId] = useState<Id | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -115,9 +117,10 @@ export default function ChordProChartsSection({
     setError(null)
     setBusy(true)
     try {
-      const chart = await createSongChart(songId, { name: t($ => $.charts.newChartName), source: '' })
+      const chart = await createSongChart(songId, { name: t($ => $.charts.newChartName), source: SAMPLE_CHART_SOURCE })
       setCharts((prev) => [...prev, chart])
       setOpenId(chart.id as Id)
+      setCreatedId(chart.id as Id)
     } catch (err) {
       setError((err as Error).message || t($ => $.charts.createError))
     } finally {
@@ -161,7 +164,7 @@ export default function ChordProChartsSection({
           songId={songId}
           chart={openChart}
           canWrite={canWrite}
-          startInEdit={!openChart.source?.trim()}
+          startInEdit={openChart.id === createdId || !openChart.source?.trim()}
           onClose={() => setOpenId(null)}
           onChartChange={handleChartChange}
           onDelete={canWrite ? handleDelete : undefined}

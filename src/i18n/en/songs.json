@@ -92,7 +92,8 @@
     "resetTranspose": "Reset transpose",
     "transposeResetAria": "transpose {{n}} semitones, reset",
     "chordFinder": "Chord finder",
-    "toggleChordFinder": "toggle chord finder"
+    "toggleChordFinder": "toggle chord finder",
+    "chordAdded": "Added {{name}} with this voicing to the chart"
   },
   "view": {
     "chordsHeading": "Chords ({{n}})"
@@ -102,7 +103,8 @@
     "clear": "Clear",
     "noChord": "No recognized chord.",
     "noNotes": "No notes selected.",
-    "also": "Also:"
+    "also": "Also:",
+    "addToChart": "Add to chart"
   },
   "fretboard": {
     "label": "Guitar fretboard",

@@ -44,10 +44,13 @@ const chordSheetSx = {
   // Quality/extension raised by superscriptChordCells (Bb⁷⁽ᵇ⁹⁾); line-height:0
   // keeps it from stretching the chord line.
   '& .chord sup': { fontSize: '0.7em', lineHeight: 0, verticalAlign: 'super' },
+  // Annotations ([*text]) sit in the chord slot above the lyric; render them as
+  // italic secondary text so they read as directions, distinct from bold chords.
+  '& .annotation': { fontStyle: 'italic', color: 'text.secondary', whiteSpace: 'pre', pr: '10px' },
   '& .lyrics': { whiteSpace: 'pre' },
   // Keep empty chord/lyric cells a full line tall so chords stay above their
   // syllable and lyrics share one baseline (ChordSheetJS's own alignment trick).
-  '& .chord:after, & .lyrics:after': { content: '"\\200b"' },
+  '& .chord:after, & .annotation:after, & .lyrics:after': { content: '"\\200b"' },
   '& .comment': { fontStyle: 'italic', color: 'text.secondary', my: 0.5 },
 } as const
 

@@ -6,21 +6,27 @@ import Chip from '@mui/material/Chip'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import ClearIcon from '@mui/icons-material/Clear'
+import LibraryAddIcon from '@mui/icons-material/LibraryAdd'
 import InteractiveFretboard from './InteractiveFretboard.tsx'
 import ChordName from './ChordName.tsx'
-import { identifyChords, type AbsoluteFret } from '../../utils/chordIdentify.ts'
+import { identifyChords, absoluteFretsToChordShape, type AbsoluteFret } from '../../utils/chordIdentify.ts'
+import { formatChordDefinition } from '../../utils/chordpro.ts'
 
 // Read-only chord *finder*: place fingers on the neck, see which chord name(s)
 // those notes spell (top guess + alternates, the sounding notes, and the
-// interval breakdown), like oolimo's analyzer. It never reads or writes the
-// chart source — purely a reference tool.
+// interval breakdown), like oolimo's analyzer. When `onAddToChart` is supplied
+// (edit-capable viewers) it can also emit the top chord as a {define} directive
+// — the identified name plus this exact voicing — for insertion into the source.
 const ALL_MUTED: AbsoluteFret[] = [-1, -1, -1, -1, -1, -1]
 
 interface ChordAnalyzerPanelProps {
   fretCount?: number
+  // Insert the top chord and its current voicing into the chart as a {define}.
+  // Omitted for read-only viewers; the finder then stays purely a reference tool.
+  onAddToChart?: (name: string, directive: string) => void
 }
 
-export default function ChordAnalyzerPanel({ fretCount = 15 }: Readonly<ChordAnalyzerPanelProps>) {
+export default function ChordAnalyzerPanel({ fretCount = 15, onAddToChart }: Readonly<ChordAnalyzerPanelProps>) {
   const { t } = useTranslation('songs')
   const [frets, setFrets] = useState<AbsoluteFret[]>(ALL_MUTED)
 
@@ -62,6 +68,17 @@ export default function ChordAnalyzerPanel({ fretCount = 15 }: Readonly<ChordAna
               <Typography variant="body2" color="text.secondary">
                 {best.notes.join(' · ')}
               </Typography>
+              {onAddToChart && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<LibraryAddIcon fontSize="small" />}
+                  onClick={() => onAddToChart(best.name, formatChordDefinition(best.name, absoluteFretsToChordShape(frets)))}
+                  sx={{ alignSelf: 'center', ml: 'auto' }}
+                >
+                  {t($ => $.analyzer.addToChart)}
+                </Button>
+              )}
             </Box>
 
             <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>

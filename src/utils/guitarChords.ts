@@ -1,3 +1,5 @@
+import { STANDARD_TUNING, absoluteFretsToChordShape } from './chordIdentify.ts'
+
 // Curated built-in guitar chord shapes, the app's stand-in for ChordPro's
 // instrument config library: common chords (G, Em, Am, D7, …) have no {define}
 // in a song, so their fretboard shapes come from here. A song's own
@@ -225,13 +227,70 @@ for (const { alias, target } of ENHARMONIC_FLAT_ROOTS) {
   }
 }
 
+// Semitone of each natural note within an octave (C=0); H is German B.
+const NOTE_PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11, H: 11 }
+
+// Pitch class (0..11) of a slash-bass note name ("F", "F#", "Bb"), or null when
+// it isn't a plain note (e.g. the "9" in "C6/9", which is not a slash bass).
+function bassNoteToPc(note: string): number | null {
+  const m = /^([A-Ha-h])([#b]?)$/.exec(note.trim())
+  if (!m) return null
+  const base = NOTE_PC[m[1].toUpperCase()]
+  if (base === undefined) return null
+  const accidental = m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0
+  return (base + accidental + 12) % 12
+}
+
+// The bass note is voiced on one of the three low strings (low-E, A, D) — where
+// a slash bass actually sits on a guitar. Higher strings can also sound the same
+// pitch class, but never as a *bass*.
+const BASS_STRINGS = [0, 1, 2] as const
+
+// Re-voice a base chord shape so its lowest sounding string plays `bassPc` (the
+// slash-bass note). Places the bass at the lowest fret across the low strings
+// (ties → lowest string), mutes every string below it, and keeps the base
+// shape's upper strings. Fingers are dropped — the base fingering no longer
+// applies. Returns null for a keyboard/empty define (no guitar strings to move).
+function applyBassNote(base: ChordShape, bassPc: number): ChordShape | null {
+  if (base.frets.length !== STANDARD_TUNING.length) return null
+
+  // Base shape in absolute (nut-relative) frets: mute (-1) and open (0) stay,
+  // fretted values shift up by the shape's fret window.
+  const abs = base.frets.map((f) => (f > 0 ? f + base.baseFret - 1 : f))
+
+  let bassString = -1
+  let bassFret = Infinity
+  for (const i of BASS_STRINGS) {
+    const openPc = (((STANDARD_TUNING[i] % 12) + 12) % 12)
+    const fret = (bassPc - openPc + 12) % 12 // lowest fret on this string for the bass note
+    if (fret < bassFret) {
+      bassFret = fret
+      bassString = i
+    }
+  }
+  if (bassString === -1) return null
+
+  abs[bassString] = bassFret
+  for (let i = 0; i < bassString; i++) abs[i] = MUTE
+  return absoluteFretsToChordShape(abs)
+}
+
 // Resolve a chord name (e.g. "Am7/G") to a built-in shape, or null. Tries the
-// exact name, then the part before a slash bass note. Unicode accidentals are
-// folded to ASCII first.
+// exact name first, then a slash chord: the part before the "/" gives the base
+// shape and the note after it is re-voiced into the bass (see applyBassNote).
+// Unicode accidentals are folded to ASCII first.
 export function lookupGuitarChord(name: string): ChordShape | null {
   const n = (name ?? '').trim().replace(/♯/g, '#').replace(/♭/g, 'b')
   if (!n) return null
   if (CHORDS[n]) return CHORDS[n]
-  const base = n.split('/')[0]
-  return CHORDS[base] ?? null
+
+  const slashAt = n.indexOf('/')
+  if (slashAt === -1) return null
+
+  const base = CHORDS[n.slice(0, slashAt)]
+  if (!base) return null
+
+  const bassPc = bassNoteToPc(n.slice(slashAt + 1))
+  if (bassPc === null) return base // not a real bass note (e.g. "C6/9") → plain base shape
+  return applyBassNote(base, bassPc) ?? base
 }

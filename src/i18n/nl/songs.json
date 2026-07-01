@@ -92,7 +92,8 @@
     "resetTranspose": "Transponeren resetten",
     "transposeResetAria": "transponeer {{n}} halve tonen, resetten",
     "chordFinder": "Akkoordzoeker",
-    "toggleChordFinder": "akkoordzoeker schakelen"
+    "toggleChordFinder": "akkoordzoeker schakelen",
+    "chordAdded": "{{name}} met deze greep aan het blad toegevoegd"
   },
   "view": {
     "chordsHeading": "Akkoorden ({{n}})"
@@ -102,7 +103,8 @@
     "clear": "Wissen",
     "noChord": "Geen herkend akkoord.",
     "noNotes": "Geen noten geselecteerd.",
-    "also": "Ook:"
+    "also": "Ook:",
+    "addToChart": "Aan blad toevoegen"
   },
   "fretboard": {
     "label": "Gitaarhals",

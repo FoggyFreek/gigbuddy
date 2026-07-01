@@ -30,6 +30,7 @@ import ChordProView from './ChordProView.tsx'
 import ChordAnalyzerPanel from './ChordAnalyzerPanel.tsx'
 import SaveStatusLabel from '../SaveStatusLabel.tsx'
 import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
+import { useToast } from '../../contexts/toastContext.ts'
 import { printChordPro, MONO_FONT } from '../../utils/chordpro.ts'
 import { updateSongChart } from '../../api/songs.ts'
 import type { SongChart, Id } from '../../types/entities.ts'
@@ -63,6 +64,7 @@ export default function ChordProViewerDialog({
   onDelete,
 }: Readonly<ChordProViewerDialogProps>) {
   const { t } = useTranslation(['songs', 'common'])
+  const showToast = useToast()
   const theme = useTheme()
   const stacked = useMediaQuery(theme.breakpoints.down('md'))
   const chartId = chart.id as Id
@@ -101,6 +103,16 @@ export default function ChordProViewerDialog({
   function handleSource(value: string) {
     setSource(value)
     schedule({ source: value })
+  }
+
+  // Append a chord {define} built by the chord finder to the source, so its
+  // custom voicing is registered for the chart. Flip to the editor so the new
+  // line is visible and can be tweaked.
+  function handleAddDefine(chordName: string, directive: string) {
+    const base = source.replace(/\s*$/, '')
+    handleSource(base ? `${base}\n${directive}\n` : `${directive}\n`)
+    setEditing(true)
+    showToast?.(t($ => $.viewer.chordAdded, { name: chordName }), 'success')
   }
 
   async function handleClose() {
@@ -251,7 +263,7 @@ export default function ChordProViewerDialog({
 
       <Collapse in={showAnalyzer} unmountOnExit sx={{ flexShrink: 0 }}>
         <Paper variant="outlined" square sx={{ p: { xs: 1.5, md: 2 }, borderWidth: '0 0 1px 0'  }}>
-          <ChordAnalyzerPanel fretCount={stacked ? 7 : 15} />
+          <ChordAnalyzerPanel fretCount={stacked ? 7 : 15} onAddToChart={canWrite ? handleAddDefine : undefined} />
         </Paper>
       </Collapse>
 

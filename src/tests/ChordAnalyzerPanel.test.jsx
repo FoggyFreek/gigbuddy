@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import ChordAnalyzerPanel from '../components/chordpro/ChordAnalyzerPanel.tsx'
 import theme from '../theme.ts'
 
@@ -38,5 +38,19 @@ describe('ChordAnalyzerPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
     expect(screen.getByText(/No notes selected/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Clear' })).toBeDisabled()
+  })
+
+  it('offers no "Add to chart" action for read-only viewers', async () => {
+    wrap(<ChordAnalyzerPanel />)
+    await playOpenC()
+    expect(screen.queryByRole('button', { name: 'Add to chart' })).not.toBeInTheDocument()
+  })
+
+  it('adds the identified chord and its voicing as a {define} directive', async () => {
+    const onAddToChart = vi.fn()
+    wrap(<ChordAnalyzerPanel onAddToChart={onAddToChart} />)
+    await playOpenC()
+    await userEvent.click(screen.getByRole('button', { name: 'Add to chart' }))
+    expect(onAddToChart).toHaveBeenCalledWith('C', '{define: C base-fret 1 frets x 3 2 0 1 0}')
   })
 })

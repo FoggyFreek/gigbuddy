@@ -23,6 +23,7 @@ vi.mock('../components/chordpro/ChordProViewerDialog.tsx', () => ({
 
 import ChordProChartsSection from '../components/chordpro/ChordProChartsSection.tsx'
 import { createSongChart, deleteSongChart } from '../api/songs.ts'
+import { SAMPLE_CHART_SOURCE } from '../utils/chordpro.ts'
 import theme from '../theme.ts'
 
 const CHARTS = [
@@ -57,14 +58,15 @@ describe('ChordProChartsSection', () => {
     expect(screen.getByTestId('viewer')).toHaveTextContent('Viewer: Guitar (view)')
   })
 
-  it('creates a blank chart and opens it in edit mode', async () => {
+  it('seeds a new chart with the sample template and opens it in edit mode', async () => {
     const user = userEvent.setup()
-    createSongChart.mockResolvedValue({ id: 99, name: 'New chart', source: '' })
+    createSongChart.mockResolvedValue({ id: 99, name: 'New chart', source: SAMPLE_CHART_SOURCE })
     wrap()
 
     await user.click(screen.getByRole('button', { name: /new chart/i }))
 
-    expect(createSongChart).toHaveBeenCalledWith(7, { name: 'New chart', source: '' })
+    expect(createSongChart).toHaveBeenCalledWith(7, { name: 'New chart', source: SAMPLE_CHART_SOURCE })
+    // Newly created charts open in the editor even though the seeded source is non-empty.
     await waitFor(() =>
       expect(screen.getByTestId('viewer')).toHaveTextContent('Viewer: New chart (edit)')
     )
