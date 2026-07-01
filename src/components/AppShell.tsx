@@ -21,7 +21,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import SearchIcon from '@mui/icons-material/Search'
-import CloseIcon from '@mui/icons-material/Close'
 // Group headers use TwoTone icons (slightly larger); children use Outlined.
 import SpaceDashboardTwoTone from '@mui/icons-material/SpaceDashboardTwoTone'
 import EventNoteTwoTone from '@mui/icons-material/EventNoteTwoTone'

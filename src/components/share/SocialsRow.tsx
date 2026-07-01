@@ -29,7 +29,7 @@ export default function SocialsRow({
   size = 28,
   justify = 'center',
   style,
-}: SocialsRowProps) {
+}: Readonly<SocialsRowProps>) {
   const items = ICONS.filter((i) => socials?.[i.key])
   if (items.length === 0) return null
 

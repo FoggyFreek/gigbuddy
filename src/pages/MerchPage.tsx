@@ -20,8 +20,12 @@ import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined'
 import CloudDownloadOutlinedIcon from '@mui/icons-material/CloudDownloadOutlined'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
 import ProductDialog from '../components/merch/ProductDialog.tsx'
 import RecordSaleDialog from '../components/merch/RecordSaleDialog.tsx'
+import NoStockDialog from '../components/merch/NoStockDialog.tsx'
+import ArchiveProductDialog from '../components/merch/ArchiveProductDialog.tsx'
 import ShopifyImportDialog from '../components/merch/ShopifyImportDialog.tsx'
 import { useMerchState } from '../components/merch/useMerchState.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
@@ -53,6 +57,9 @@ export default function MerchPage() {
   const { products, revenueAccounts, error, setError, reload } = useMerchState()
   const [productDialog, setProductDialog] = useState<Product | 'new' | null>(null)
   const [saleDialogOpen, setSaleDialogOpen] = useState(false)
+  const [noStockOpen, setNoStockOpen] = useState(false)
+  const [archiveTarget, setArchiveTarget] = useState<Product | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
   const [shopifyOpen, setShopifyOpen] = useState(false)
 
   // Merch defaults to all-time: bands want their full sales-per-product picture
@@ -107,10 +114,12 @@ export default function MerchPage() {
     await reload()
   }
 
-  async function handleArchive(product: Product) {
+  async function handleArchive() {
+    if (!archiveTarget) return
     try {
       setError(null)
-      await archiveProduct(product.id!)
+      await archiveProduct(archiveTarget.id!)
+      setArchiveTarget(null)
       await reload()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -123,6 +132,7 @@ export default function MerchPage() {
   }
 
   const loading = products === null
+  const visibleProducts = (products ?? []).filter((p) => showArchived || !p.archived_at)
 
   return (
     <SplitView basePath="/merch" outletContext={{ onReload: handleSalesChanged, period }}>
@@ -133,7 +143,11 @@ export default function MerchPage() {
             variant="contained"
             startIcon={<PointOfSaleOutlinedIcon />}
             disabled={!products!.some((p) => !p.archived_at)}
-            onClick={() => setSaleDialogOpen(true)}
+            onClick={() => {
+              const hasStock = products!.some((p) => !p.archived_at && Number(p.quantity_on_hand) > 0)
+              if (hasStock) setSaleDialogOpen(true)
+              else setNoStockOpen(true)
+            }}
           >
             {t($ => $.products.recordSale)}
           </Button>
@@ -149,22 +163,31 @@ export default function MerchPage() {
         <>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant="h6">{t($ => $.products.heading)}</Typography>
-            <Button startIcon={<AddIcon />} onClick={() => setProductDialog('new')}>
-              {t($ => $.products.new)}
-            </Button>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {products!.some((p) => p.archived_at) && (
+                <Tooltip title={showArchived ? t($ => $.products.hideArchived) : t($ => $.products.showArchived)}>
+                  <IconButton onClick={() => setShowArchived((v) => !v)}>
+                    {showArchived ? <VisibilityOffOutlinedIcon /> : <VisibilityOutlinedIcon />}
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Button startIcon={<AddIcon />} onClick={() => setProductDialog('new')}>
+                {t($ => $.products.new)}
+              </Button>
+            </Box>
           </Box>
 
           {!products!.length && (
-            <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+            <Typography sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
               {t($ => $.products.empty)}
             </Typography>
           )}
 
-          {Boolean(products!.length) && (
+          {Boolean(visibleProducts.length) && (
             <ProductsList
-              products={products!}
+              products={visibleProducts}
               onEdit={(p) => setProductDialog(p)}
-              onArchive={handleArchive}
+              onArchive={(p) => setArchiveTarget(p)}
             />
           )}
 
@@ -209,6 +232,14 @@ export default function MerchPage() {
           onClose={() => setSaleDialogOpen(false)}
         />
       )}
+      {noStockOpen && <NoStockDialog onClose={() => setNoStockOpen(false)} />}
+      {archiveTarget && (
+        <ArchiveProductDialog
+          product={archiveTarget}
+          onConfirm={handleArchive}
+          onClose={() => setArchiveTarget(null)}
+        />
+      )}
       {shopifyOpen && (
         <ShopifyImportDialog
           products={products || []}
@@ -238,7 +269,7 @@ interface ProductActionsProps {
   onArchive: (p: Product) => void
 }
 
-function ProductActions({ product, onEdit, onArchive }: ProductActionsProps) {
+function ProductActions({ product, onEdit, onArchive }: Readonly<ProductActionsProps>) {
   const { t } = useTranslation(['merch', 'common'])
   return (
     <>
@@ -264,7 +295,7 @@ interface ProductsListProps {
   onArchive: (p: Product) => void
 }
 
-function ProductsList({ products, onEdit, onArchive }: ProductsListProps) {
+function ProductsList({ products, onEdit, onArchive }: Readonly<ProductsListProps>) {
   const { t } = useTranslation('merch')
   const isCompact = useCompactLayout()
 
@@ -348,7 +379,7 @@ interface ProductSalesSummaryListProps {
   onRowClick: (row: MerchSalesSummaryRow) => void
 }
 
-function ProductSalesSummaryList({ rows, selectedId, onRowClick }: ProductSalesSummaryListProps) {
+function ProductSalesSummaryList({ rows, selectedId, onRowClick }: Readonly<ProductSalesSummaryListProps>) {
   const { t } = useTranslation('merch')
   const isCompact = useCompactLayout()
 

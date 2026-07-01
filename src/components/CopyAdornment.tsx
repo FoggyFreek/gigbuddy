@@ -5,7 +5,7 @@ interface CopyAdornmentProps {
   value?: string
 }
 
-export default function CopyAdornment({ value }: CopyAdornmentProps) {
+export default function CopyAdornment({ value }: Readonly<CopyAdornmentProps>) {
   if (!value) return null
   return (
     <InputAdornment position="end">

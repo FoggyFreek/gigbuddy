@@ -98,16 +98,31 @@ describe('TasksPage', () => {
     expect(screen.queryByText('Confirm rider')).not.toBeInTheDocument()
   })
 
-  it('uses icons instead of filter text in compact view', async () => {
+  it('collapses the filters into a menu in compact view', async () => {
+    const user = userEvent.setup()
     wrap(<TasksPage />, { compact: true })
 
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
-    expect(screen.getByTestId('AssignmentIndIcon')).toBeInTheDocument()
-    expect(screen.getByTestId('CheckIcon')).toBeInTheDocument()
-    expect(screen.queryByText('Assigned to me')).not.toBeInTheDocument()
-    expect(screen.queryByText('Finished')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Assigned to me' })).toHaveStyle({ height: '31px' })
-    expect(screen.getByRole('button', { name: 'Finished' })).toHaveStyle({ height: '31px' })
+    // No inline filter toggles; a single Filters button opens a menu instead.
+    expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Assigned to me' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Finished' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /filters/i }))
+    // The menu items carry the filter labels as plain text (no icons).
+    expect(await screen.findByRole('menuitem', { name: 'Assigned to me' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Finished' })).toBeInTheDocument()
+  })
+
+  it('filters via the compact filter menu', async () => {
+    const user = userEvent.setup()
+    wrap(<TasksPage />, { compact: true })
+
+    await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /filters/i }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Assigned to me' }))
+    expect(screen.getByText('Send invoice')).toBeInTheDocument()
+    expect(screen.queryByText('Confirm rider')).not.toBeInTheDocument()
   })
 
   it('keeps filter text in desktop view', async () => {

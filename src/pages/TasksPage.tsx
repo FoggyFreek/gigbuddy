@@ -4,11 +4,13 @@ import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import IconButton from '@mui/material/IconButton'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import ToggleButton from '@mui/material/ToggleButton'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
-import AssignmentIndIcon from '@mui/icons-material/AssignmentInd'
-import CheckIcon from '@mui/icons-material/Check'
+import FilterAltIcon from '@mui/icons-material/FilterAlt'
 import TasksTable from '../components/TasksTable.tsx'
 import TaskFormDialog from '../components/TaskFormDialog.tsx'
 import { useAuth } from '../contexts/authContext.ts'
@@ -39,6 +41,7 @@ export default function TasksPage() {
   const [showFinished, setShowFinished] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
 
   const load = useCallback(async (silent = false) => {
     try {
@@ -100,26 +103,55 @@ export default function TasksPage() {
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>
           {t($ => $.title)}
         </Typography>
-        {user?.bandMemberId && (
-          <ToggleButton
-            value="myTasks"
-            selected={myTasksOnly}
-            onChange={() => setMyTasksOnly((v) => !v)}
-            aria-label={t($ => $.myTasks)}
-            sx={isCompact ? COMPACT_FILTER_SX : FILTER_SX}
-          >
-            {isCompact ? <AssignmentIndIcon /> : t($ => $.myTasks)}
-          </ToggleButton>
+        {isCompact ? (
+          <>
+            <IconButton
+              aria-label={t($ => $.filters)}
+              onClick={(e) => setFilterAnchor(e.currentTarget)}
+              color={myTasksOnly || showFinished ? 'primary' : 'default'}
+              sx={COMPACT_FILTER_SX}
+            >
+              <FilterAltIcon />
+            </IconButton>
+            <Menu
+              anchorEl={filterAnchor}
+              open={Boolean(filterAnchor)}
+              onClose={() => setFilterAnchor(null)}
+            >
+              {user?.bandMemberId && (
+                <MenuItem selected={myTasksOnly} onClick={() => setMyTasksOnly((v) => !v)}>
+                  {t($ => $.myTasks)}
+                </MenuItem>
+              )}
+              <MenuItem selected={showFinished} onClick={() => setShowFinished((v) => !v)}>
+                {t($ => $.showFinished)}
+              </MenuItem>
+            </Menu>
+          </>
+        ) : (
+          <>
+            {user?.bandMemberId && (
+              <ToggleButton
+                value="myTasks"
+                selected={myTasksOnly}
+                onChange={() => setMyTasksOnly((v) => !v)}
+                aria-label={t($ => $.myTasks)}
+                sx={FILTER_SX}
+              >
+                {t($ => $.myTasks)}
+              </ToggleButton>
+            )}
+            <ToggleButton
+              value="showFinished"
+              selected={showFinished}
+              onChange={() => setShowFinished((v) => !v)}
+              aria-label={t($ => $.showFinished)}
+              sx={FILTER_SX}
+            >
+              {t($ => $.showFinished)}
+            </ToggleButton>
+          </>
         )}
-        <ToggleButton
-          value="showFinished"
-          selected={showFinished}
-          onChange={() => setShowFinished((v) => !v)}
-          aria-label={t($ => $.showFinished)}
-          sx={isCompact ? COMPACT_FILTER_SX : FILTER_SX}
-        >
-          {isCompact ? <CheckIcon /> : t($ => $.showFinished)}
-        </ToggleButton>
         {canWritePlanning && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
             {t($ => $.newTask)}

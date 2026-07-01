@@ -16,7 +16,7 @@ interface LedgerTypeFilterProps {
 
 // "Types: All ▾" dropdown of checkbox menu items. Emits the active Set of
 // group keys upward; "All" toggles every group on/off at once.
-export default function LedgerTypeFilter({ value, onChange }: LedgerTypeFilterProps) {
+export default function LedgerTypeFilter({ value, onChange }: Readonly<LedgerTypeFilterProps>) {
   const { t } = useTranslation(['ledger', 'common'])
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
 

@@ -57,7 +57,7 @@ interface RehearsalFormModalProps {
   initialDate?: string
 }
 
-export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }: RehearsalFormModalProps) {
+export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }: Readonly<RehearsalFormModalProps>) {
   const { t } = useTranslation(['rehearsals', 'common'])
   const [form, setForm] = useState<RehearsalForm>(() =>
     mode === 'create' && initialDate ? { ...EMPTY_FORM, proposed_date: initialDate } : EMPTY_FORM,

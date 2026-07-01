@@ -33,7 +33,7 @@ interface NewVatReturnDialogProps {
 // Picks a quarter, previews the running VAT position (output − input) and
 // files the declaration: the backend posts the settlement journal and closes
 // the books through the period end.
-export default function NewVatReturnDialog({ onFiled, onClose }: NewVatReturnDialogProps) {
+export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVatReturnDialogProps>) {
   const { t, i18n } = useTranslation(['vatReturns', 'common'])
   const [{ year, quarter }, setPeriod] = useState<{ year: number; quarter: VatQuarter }>(() => previousQuarter())
   const [years] = useState(() => yearOptions())

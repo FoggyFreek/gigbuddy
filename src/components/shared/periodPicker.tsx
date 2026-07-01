@@ -27,7 +27,7 @@ interface GridCellProps {
   onClick: () => void
 }
 
-function GridCell({ label, hasData, isSelected, onClick }: GridCellProps) {
+function GridCell({ label, hasData, isSelected, onClick }: Readonly<GridCellProps>) {
   let color = 'text.disabled'
   if (isSelected) color = 'primary.contrastText'
   else if (hasData) color = 'text.primary'
@@ -87,7 +87,7 @@ interface PeriodPickerProps {
   onChange: (value: Period) => void
 }
 
-export default function PeriodPicker({ availableDates, value, onChange }: PeriodPickerProps) {
+export default function PeriodPicker({ availableDates, value, onChange }: Readonly<PeriodPickerProps>) {
   const { t } = useTranslation('common')
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [pickerMode, setPickerMode] = useState<string>(

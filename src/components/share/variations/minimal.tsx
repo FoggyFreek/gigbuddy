@@ -25,16 +25,12 @@ interface ShareLayoutProps {
   gig?: Gig
   photoSrc?: string
   pan?: number
-  zoom?: number
   accent?: string
   socials?: Socials
   sticker?: string
   stickerPosition?: string
   logoSrc?: string
   bannerSrc?: string
-  bandName?: string
-  showLogo?: boolean
-  format?: string
 }
 
 interface SmallCapsProps {
@@ -46,7 +42,7 @@ interface SmallCapsProps {
   [key: string]: unknown
 }
 
-function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }: SmallCapsProps) {
+function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }: Readonly<SmallCapsProps>) {
   return (
     <div
       style={{
@@ -65,7 +61,7 @@ function SmallCaps({ children, color = INK, size = 22, gap = 4, style, ...rest }
   )
 }
 
-function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }: ShareLayoutProps) {
+function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }: Readonly<ShareLayoutProps>) {
   const f = SHARE_FORMATS.square
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
@@ -215,7 +211,7 @@ function MinimalSquare({ gig, photoSrc, pan = 0, accent, socials, sticker, stick
   )
 }
 
-function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }: ShareLayoutProps) {
+function MinimalStory({ gig, photoSrc, pan = 0, accent, socials, sticker, stickerPosition, logoSrc, bannerSrc }: Readonly<ShareLayoutProps>) {
   const f = SHARE_FORMATS.story
   const date = formatGigDateShort(gig)
   const venueName = formatGigVenueName(gig)

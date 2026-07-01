@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
-import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
+import { computeInvoiceTotals, formatEur } from '../../utils/invoiceTotals.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
@@ -13,7 +13,6 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import MoneyInput from './MoneyInput.tsx'
-import { formatEur } from '../../utils/invoiceTotals.ts'
 
 const GRID_COLUMNS = '2fr 0.6fr 1fr 0.7fr 1fr 32px'
 
@@ -32,7 +31,7 @@ interface InvoiceLineRowProps {
   removeLine: (idx: number) => void
 }
 
-function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readOnly, canRemove, compact, patchLine, removeLine }: InvoiceLineRowProps) {
+function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readOnly, canRemove, compact, patchLine, removeLine }: Readonly<InvoiceLineRowProps>) {
   const { t } = useTranslation('invoices')
   const displayCents = taxInclusive ? lineTotals.grossCents : lineTotals.netCents
 
@@ -155,7 +154,7 @@ interface InvoiceLinesEditorProps {
   removeLine: (idx: number) => void
 }
 
-export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly, patchForm, patchLine, addLine, removeLine }: InvoiceLinesEditorProps) {
+export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly, patchForm, patchLine, addLine, removeLine }: Readonly<InvoiceLinesEditorProps>) {
   const { t } = useTranslation('invoices')
   const compact = useCompactLayout()
   return (

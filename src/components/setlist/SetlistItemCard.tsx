@@ -26,7 +26,7 @@ interface SongNoteButtonProps {
   onUpdateNote: (note: string) => void
 }
 
-function SongNoteButton({ note, onUpdateNote }: SongNoteButtonProps) {
+function SongNoteButton({ note, onUpdateNote }: Readonly<SongNoteButtonProps>) {
   const { t } = useTranslation('setlists')
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const inputRef: RefObject<HTMLInputElement | null> = useRef(null)
@@ -76,7 +76,7 @@ interface SongBodyProps {
   item: SetlistItem
 }
 
-function SongBody({ item }: SongBodyProps) {
+function SongBody({ item }: Readonly<SongBodyProps>) {
   const { t } = useTranslation('setlists')
   const meta = [
     item.tag,
@@ -109,7 +109,7 @@ interface BreakBodyProps {
   editing?: boolean
 }
 
-function BreakBody({ item, onUpdate, editing = true }: BreakBodyProps) {
+function BreakBody({ item, onUpdate, editing = true }: Readonly<BreakBodyProps>) {
   const { t } = useTranslation('setlists')
   const isPause = item.item_type === 'pause'
   if (!editing) {
@@ -174,7 +174,7 @@ interface SetlistItemCardProps {
   editing?: boolean
 }
 
-export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote = () => {}, dragOverlay = false, songOrder = null, editing = true }: SetlistItemCardProps) {
+export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote = () => {}, dragOverlay = false, songOrder = null, editing = true }: Readonly<SetlistItemCardProps>) {
   const { t } = useTranslation('setlists')
   const sortable = useSortable({ id: itemDomId(item.id!), disabled: !editing })
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable

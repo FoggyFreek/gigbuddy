@@ -63,7 +63,7 @@ interface TourShareDialogProps {
   gigs?: Gig[]
 }
 
-export default function TourShareDialog({ open, onClose, gigs = [] }: TourShareDialogProps) {
+export default function TourShareDialog({ open, onClose, gigs = [] }: Readonly<TourShareDialogProps>) {
   const { t } = useTranslation(['gigs', 'common'])
   const { user } = useContext(AuthContext)
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'

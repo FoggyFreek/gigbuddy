@@ -10,7 +10,7 @@ interface InvoicePdfActionProps {
   onRetryRender: (invoice: Invoice) => void
 }
 
-export default function InvoicePdfAction({ invoice, onRetryRender }: InvoicePdfActionProps) {
+export default function InvoicePdfAction({ invoice, onRetryRender }: Readonly<InvoicePdfActionProps>) {
   const { t } = useTranslation('invoices')
   if (invoice.pdf_path) {
     return (

@@ -40,7 +40,7 @@ const BACKGROUND_COLORS = [
   ...SHARE_VINTAGE_COLORS,
 ]
 
-export default function BannerMosaicDialog({ open, onClose, gigs = [] }: BannerMosaicDialogProps) {
+export default function BannerMosaicDialog({ open, onClose, gigs = [] }: Readonly<BannerMosaicDialogProps>) {
   const { t } = useTranslation(['gigs', 'common'])
   const [format, setFormat] = useState('square')
   const [selectedYear, setSelectedYear] = useState<number | 'all'>('all')

@@ -11,7 +11,7 @@ type ListPaginationProps = Pick<
 // window) so the rows scroll underneath it and the controls stay on-screen no
 // matter how long the list gets. Place it as the last child of the list's
 // <Paper>, after the <TableContainer>.
-export default function ListPagination(props: ListPaginationProps) {
+export default function ListPagination(props: Readonly<ListPaginationProps>) {
   return (
     <TablePagination
       component="div"

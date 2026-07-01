@@ -22,7 +22,7 @@ interface RehearsalFieldsProps {
   errors?: Record<string, string | undefined>
 }
 
-export default function RehearsalFields({ form, onChange, errors = {} }: RehearsalFieldsProps) {
+export default function RehearsalFields({ form, onChange, errors = {} }: Readonly<RehearsalFieldsProps>) {
   const { t } = useTranslation('rehearsals')
   return (
     <>

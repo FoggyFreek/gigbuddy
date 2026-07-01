@@ -1,15 +1,14 @@
-import { computePurchaseTotals } from '../../utils/purchaseTotals.ts'
+import { computePurchaseTotals, formatEur } from '../../utils/purchaseTotals.ts'
 import Box from '@mui/material/Box'
 import { useTranslation } from 'react-i18next'
 import Typography from '@mui/material/Typography'
-import { formatEur } from '../../utils/purchaseTotals.ts'
 
 interface PurchaseTotalsPanelProps {
   totals: ReturnType<typeof computePurchaseTotals>
   currency?: string
 }
 
-export default function PurchaseTotalsPanel({ totals, currency = 'EUR' }: PurchaseTotalsPanelProps) {
+export default function PurchaseTotalsPanel({ totals, currency = 'EUR' }: Readonly<PurchaseTotalsPanelProps>) {
   const { t } = useTranslation('purchases')
   return (
     <Box

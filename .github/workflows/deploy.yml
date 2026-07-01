@@ -54,7 +54,7 @@ jobs:
             INTEGRATION_SECRETS_KEYS=${{ secrets.INTEGRATION_SECRETS_KEYS }}
             INTEGRATION_SECRETS_ACTIVE_KEY_ID=${{ secrets.INTEGRATION_SECRETS_ACTIVE_KEY_ID }}
             NODE_ENV=production
-            LOG_LEVEL=info
+            LOG_LEVEL=warn
             EOF
             chmod 600 .env
             docker compose build

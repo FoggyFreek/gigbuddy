@@ -29,7 +29,7 @@ interface UserMenuProps {
 
 export default function UserMenu({
   anchorEl, open, onClose, isSuperAdmin, approvedMemberships, activeTenantId, onSwitch, onLogout,
-}: UserMenuProps) {
+}: Readonly<UserMenuProps>) {
   return (
     <Menu
       anchorEl={anchorEl}

@@ -11,7 +11,7 @@ interface StatusDotProps {
   size?: number
 }
 
-export default function StatusDot({ color = 'default', label, size = 12 }: StatusDotProps) {
+export default function StatusDot({ color = 'default', label, size = 12 }: Readonly<StatusDotProps>) {
   const dot = (
     <Box
       component="span"

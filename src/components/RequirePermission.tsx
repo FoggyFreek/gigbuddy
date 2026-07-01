@@ -9,7 +9,7 @@ interface RequirePermissionProps {
 // Route guard: renders the nested routes only when the active tenant role grants
 // `permission`, otherwise redirects home. The API enforces the same gate — this
 // is presentation. Use as <Route element={<RequirePermission permission="finance.view" />}>.
-export default function RequirePermission({ permission }: RequirePermissionProps) {
+export default function RequirePermission({ permission }: Readonly<RequirePermissionProps>) {
   const { can } = usePermissions()
   if (!can(permission)) return <Navigate to="/" replace />
   return <Outlet />

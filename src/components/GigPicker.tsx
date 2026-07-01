@@ -19,7 +19,7 @@ interface GigPickerProps {
   autoFocus?: boolean
 }
 
-export default function GigPicker({ value, onChange, disabled, label, autoFocus }: GigPickerProps) {
+export default function GigPicker({ value, onChange, disabled, label, autoFocus }: Readonly<GigPickerProps>) {
   const { t, i18n } = useTranslation('invoices')
   const [gigs, setGigs] = useState<GigOption[]>([])
   const [loading, setLoading] = useState(true)

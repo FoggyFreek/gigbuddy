@@ -40,7 +40,7 @@ interface CategoryChipProps {
   category?: string
 }
 
-function CategoryChip({ category }: CategoryChipProps) {
+function CategoryChip({ category }: Readonly<CategoryChipProps>) {
   const categoryLabel = useContactCategoryLabel()
   return (
     <Chip
@@ -85,7 +85,7 @@ function applySearch(list: Contact[], q: string): Contact[] {
   )
 }
 
-function ContactCard({ contact, selected, active, onToggle, onClick }: ContactCardProps) {
+function ContactCard({ contact, selected, active, onToggle, onClick }: Readonly<ContactCardProps>) {
   return (
     <Box
       sx={{
@@ -138,7 +138,7 @@ export default function ContactsTable({
   selectedId = undefined,
   categories = CONTACT_CATEGORIES,
   emptyMessage,
-}: ContactsTableProps) {
+}: Readonly<ContactsTableProps>) {
   const { t } = useTranslation('contacts')
   const categoryLabel = useContactCategoryLabel()
   const resolvedEmptyMessage = emptyMessage ?? t($ => $.empty)

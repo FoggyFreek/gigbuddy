@@ -33,7 +33,7 @@ export default function DateEntryField({
   onFocus,
   onBlur,
   ...textFieldProps
-}: DateEntryFieldProps) {
+}: Readonly<DateEntryFieldProps>) {
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
 

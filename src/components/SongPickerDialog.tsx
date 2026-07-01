@@ -24,7 +24,7 @@ interface SongPickerDialogProps {
   onSelect: (song: Song) => void
 }
 
-export default function SongPickerDialog({ open, onClose, onSelect }: SongPickerDialogProps) {
+export default function SongPickerDialog({ open, onClose, onSelect }: Readonly<SongPickerDialogProps>) {
   const { t } = useTranslation('songs')
   const [songs, setSongs] = useState<Song[]>([])
   const [search, setSearch] = useState('')

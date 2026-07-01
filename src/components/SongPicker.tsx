@@ -20,7 +20,7 @@ interface SongPickerProps {
   label?: string
 }
 
-export default function SongPicker({ onSelect, excludeIds = [], label }: SongPickerProps) {
+export default function SongPicker({ onSelect, excludeIds = [], label }: Readonly<SongPickerProps>) {
   const { t } = useTranslation(['songs', 'common'])
   const [input, setInput] = useState('')   // what the field displays
   const [query, setQuery] = useState('')   // what we actually search on

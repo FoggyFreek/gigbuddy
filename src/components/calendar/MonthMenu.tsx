@@ -33,7 +33,7 @@ interface MonthMenuProps {
   onMonthJump: (year: number, month: number) => void
 }
 
-export default function MonthMenu({ year, month, onMonthJump }: MonthMenuProps) {
+export default function MonthMenu({ year, month, onMonthJump }: Readonly<MonthMenuProps>) {
   const anchorRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLElement | null>(null)
   const [open, setOpen] = useState(false)

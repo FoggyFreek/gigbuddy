@@ -79,7 +79,7 @@ interface VenueImportDialogProps {
   onClose: (imported: boolean) => void
 }
 
-export default function VenueImportDialog({ onClose }: VenueImportDialogProps) {
+export default function VenueImportDialog({ onClose }: Readonly<VenueImportDialogProps>) {
   const { t } = useTranslation(['venues', 'common'])
   const [step, setStep] = useState<ImportStep>('upload')
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])

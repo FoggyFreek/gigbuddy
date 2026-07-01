@@ -127,7 +127,7 @@ function buildGigPayload(row: BandsintownRow, state: RowState): BandsintownGigPa
   }
 }
 
-export default function BandsintownImportDialog({ onClose }: BandsintownImportDialogProps) {
+export default function BandsintownImportDialog({ onClose }: Readonly<BandsintownImportDialogProps>) {
   const { t } = useTranslation(['gigs', 'common'])
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [step, setStep] = useState('upload')

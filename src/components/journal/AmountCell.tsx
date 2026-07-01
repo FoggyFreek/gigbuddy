@@ -15,7 +15,7 @@ interface AmountCellProps {
 // A debit/credit amount cell. Shows an empty placeholder ("Debit"/"Credit") when
 // this side isn't the active one, so only one of the two columns ever shows a
 // value. Commits the parsed cent amount on blur (like MoneyInput).
-export default function AmountCell({ cents, active, placeholder, disabled, onCommit, sx }: AmountCellProps) {
+export default function AmountCell({ cents, active, placeholder, disabled, onCommit, sx }: Readonly<AmountCellProps>) {
   const [raw, setRaw] = useState('')
   const [focused, setFocused] = useState(false)
 

@@ -26,7 +26,7 @@ interface JournalEntryRowProps {
 
 export default function JournalEntryRow({
   journal, accounts, selected, onToggleSelect, registerFlush, onSaveStatus,
-}: JournalEntryRowProps) {
+}: Readonly<JournalEntryRowProps>) {
   const { t } = useTranslation('journal')
   const [form, setForm] = useState<JournalForm>(() => journalToForm(journal))
   const readOnly = form.status === 'approved'

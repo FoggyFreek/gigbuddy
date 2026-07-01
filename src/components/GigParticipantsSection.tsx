@@ -35,7 +35,7 @@ export default function GigParticipantsSection({
   onRemoveParticipant,
   onVote,
   canWrite = true,
-}: GigParticipantsSectionProps) {
+}: Readonly<GigParticipantsSectionProps>) {
   const { t } = useTranslation(['gigs', 'common'])
   return (
     <Stack spacing={1}>

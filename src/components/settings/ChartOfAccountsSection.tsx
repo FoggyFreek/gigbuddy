@@ -59,7 +59,7 @@ interface AccountRowProps {
   errorId?: Id | null
 }
 
-function AccountRow({ account, depth, onAddChild, onToggleActive, onToggleCapitalizable, onDelete, errorId }: AccountRowProps) {
+function AccountRow({ account, depth, onAddChild, onToggleActive, onToggleCapitalizable, onDelete, errorId }: Readonly<AccountRowProps>) {
   const { t } = useTranslation(['settings', 'common'])
   return (
     <>

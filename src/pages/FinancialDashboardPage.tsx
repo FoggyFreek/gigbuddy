@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink } from 'react-router-dom'
@@ -230,7 +229,7 @@ interface HeadlineStatProps {
   color: string
 }
 
-function HeadlineStat({ label, cents, color }: HeadlineStatProps) {
+function HeadlineStat({ label, cents, color }: Readonly<HeadlineStatProps>) {
   return (
     <Typography variant="body2" color="text.secondary">
       {label}:{' '}
@@ -267,7 +266,7 @@ interface ResultChartCardProps {
   totals: Totals
 }
 
-function ResultChartCard({ currency, months, totals }: ResultChartCardProps) {
+function ResultChartCard({ currency, months, totals }: Readonly<ResultChartCardProps>) {
   const { t, i18n } = useTranslation('financialDashboard')
   const theme = useTheme()
   // x-charts only sizes bars via the band's categoryGapRatio, so a fixed 30px
@@ -392,7 +391,7 @@ interface OverviewBarProps {
   maxCents: number
 }
 
-function OverviewBar({ label, cents, color, maxCents }: OverviewBarProps) {
+function OverviewBar({ label, cents, color, maxCents }: Readonly<OverviewBarProps>) {
   const pct = maxCents > 0 ? Math.min(100, (Math.abs(cents) / maxCents) * 100) : 0
   // Same treatment as the result chart, laid out horizontally: 80% transparent
   // at the line (left edge), reaching the solid colour 60% across and holding.
@@ -417,7 +416,7 @@ interface OverviewCardProps {
   bank: BankData
 }
 
-function OverviewCard({ totals, bank }: OverviewCardProps) {
+function OverviewCard({ totals, bank }: Readonly<OverviewCardProps>) {
   const { t } = useTranslation('financialDashboard')
   const theme = useTheme()
   const maxCents = Math.max(
@@ -457,7 +456,7 @@ interface ResultsTrendCardProps {
   annualResults: AnnualResult[]
 }
 
-function ResultsTrendCard({ currency, annualResults }: ResultsTrendCardProps) {
+function ResultsTrendCard({ currency, annualResults }: Readonly<ResultsTrendCardProps>) {
   const { t } = useTranslation('financialDashboard')
   const theme = useTheme()
   const latestResult = annualResults[annualResults.length - 1]?.result_cents ?? 0
@@ -517,7 +516,7 @@ interface InvoiceBucketProps {
   dotColor: string
 }
 
-function InvoiceBucket({ label, bucket, dotColor }: InvoiceBucketProps) {
+function InvoiceBucket({ label, bucket, dotColor }: Readonly<InvoiceBucketProps>) {
   const { t } = useTranslation('financialDashboard')
   return (
     <Box sx={{ flex: 1, minWidth: 110 }}>
@@ -539,7 +538,7 @@ interface InvoicesCardProps {
   invoices: InvoicesData
 }
 
-function InvoicesCard({ invoices }: InvoicesCardProps) {
+function InvoicesCard({ invoices }: Readonly<InvoicesCardProps>) {
   const { t } = useTranslation('financialDashboard')
   return (
     <DashboardCard
@@ -573,7 +572,7 @@ interface MerchCardProps {
   totals: Totals
 }
 
-function MerchCard({ merch, totals }: MerchCardProps) {
+function MerchCard({ merch, totals }: Readonly<MerchCardProps>) {
   const { t } = useTranslation('financialDashboard')
   const marginPct = merch.revenue_cents > 0
     ? Math.round((merch.gross_profit_cents / merch.revenue_cents) * 100)
@@ -638,7 +637,7 @@ const FEE_STATUS_META: { key: keyof UpcomingFeesData['by_status']; dotColor: str
   { key: 'option', dotColor: 'warning.main' },
 ]
 
-function UpcomingFeesCard({ fees }: UpcomingFeesCardProps) {
+function UpcomingFeesCard({ fees }: Readonly<UpcomingFeesCardProps>) {
   const { t } = useTranslation('financialDashboard')
   return (
     <DashboardCard
@@ -681,7 +680,7 @@ interface VatCardProps {
   vat: VatData
 }
 
-function VatCard({ vat }: VatCardProps) {
+function VatCard({ vat }: Readonly<VatCardProps>) {
   const { t, i18n } = useTranslation('financialDashboard')
   // Snapshot the clock once on mount so render stays idempotent.
   const [now] = useState(() => Date.now())

@@ -38,7 +38,7 @@ interface VenueFieldsProps {
   disabled?: boolean
 }
 
-export default function VenueFields({ form, onChange, errors = {}, lockedCategory, disabled = false }: VenueFieldsProps) {
+export default function VenueFields({ form, onChange, errors = {}, lockedCategory, disabled = false }: Readonly<VenueFieldsProps>) {
   const { t } = useTranslation('venues')
   const isFestival = form.category === 'festival'
   return (

@@ -10,7 +10,7 @@ interface NotificationToggleProps {
   onUnsubscribe: () => void
 }
 
-export default function NotificationToggle({ status, onSubscribe, onUnsubscribe }: NotificationToggleProps) {
+export default function NotificationToggle({ status, onSubscribe, onUnsubscribe }: Readonly<NotificationToggleProps>) {
   if (status === 'unsupported' || status === 'loading') return null
 
   const subscribed = status === 'subscribed'

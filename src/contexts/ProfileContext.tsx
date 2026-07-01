@@ -8,7 +8,7 @@ interface ProfileProviderProps {
   children: ReactNode
 }
 
-export function ProfileProvider({ children }: ProfileProviderProps) {
+export function ProfileProvider({ children }: Readonly<ProfileProviderProps>) {
   const { user } = useAuth()
   const activeTenantId = user?.activeTenantId ?? null
   const [bandName, setBandName] = useState('')

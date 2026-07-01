@@ -45,7 +45,7 @@ interface PurchaseLineRowProps {
   removeLine: (idx: number) => void
 }
 
-function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, errors = {}, readOnly, canRemove, patchLine, removeLine }: PurchaseLineRowProps) {
+function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, errors = {}, readOnly, canRemove, patchLine, removeLine }: Readonly<PurchaseLineRowProps>) {
   const { t } = useTranslation('purchases')
   const accountGroup = (account: AccountOption) => {
     const type = isAccountGroupKey(account.type) ? account.type : 'expense'
@@ -222,7 +222,7 @@ interface PurchaseLinesEditorProps {
   removeLine: (idx: number) => void
 }
 
-export default function PurchaseLinesEditor({ form, totals, accounts = [], products = [], lineErrors = [], readOnly, patchLine, addLine, removeLine }: PurchaseLinesEditorProps) {
+export default function PurchaseLinesEditor({ form, totals, accounts = [], products = [], lineErrors = [], readOnly, patchLine, addLine, removeLine }: Readonly<PurchaseLinesEditorProps>) {
   const { t } = useTranslation('purchases')
   return (
     <>

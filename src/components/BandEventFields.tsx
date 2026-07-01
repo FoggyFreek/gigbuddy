@@ -23,7 +23,7 @@ interface BandEventFieldsProps {
   errors?: Record<string, string | undefined>
 }
 
-export default function BandEventFields({ form, onChange, errors = {} }: BandEventFieldsProps) {
+export default function BandEventFields({ form, onChange, errors = {} }: Readonly<BandEventFieldsProps>) {
   const { t } = useTranslation('bandEvents')
   return (
     <>

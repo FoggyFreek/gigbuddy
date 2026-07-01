@@ -37,7 +37,7 @@ const EMPTY_FORM = {
   notes: '',
 }
 
-export default function BandEventFormModal({ mode, bandEventId, onClose, initialDate }: BandEventFormModalProps) {
+export default function BandEventFormModal({ mode, bandEventId, onClose, initialDate }: Readonly<BandEventFormModalProps>) {
   const { t } = useTranslation(['bandEvents', 'common'])
   const [form, setForm] = useState(() =>
     mode === 'create' && initialDate

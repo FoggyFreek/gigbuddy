@@ -32,7 +32,7 @@ interface ProfileLinkRowProps {
   onDelete: () => void
 }
 
-function ProfileLinkRow({ link, onChange, onDelete }: ProfileLinkRowProps) {
+function ProfileLinkRow({ link, onChange, onDelete }: Readonly<ProfileLinkRowProps>) {
   const { t } = useTranslation('profile')
   const [editing, setEditing] = useState(false)
   const saveFn = useCallback(
@@ -150,7 +150,7 @@ interface ProfileLinksTabProps {
   onDeleteLink: (id: Id) => void
 }
 
-export default function ProfileLinksTab({ links, newLink, setNewLink, adding, onAdd, onLinkChange, onDeleteLink }: ProfileLinksTabProps) {
+export default function ProfileLinksTab({ links, newLink, setNewLink, adding, onAdd, onLinkChange, onDeleteLink }: Readonly<ProfileLinksTabProps>) {
   const { t } = useTranslation('profile')
   return (
     <Box sx={{ p: 3 }}>

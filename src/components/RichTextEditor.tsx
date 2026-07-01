@@ -24,7 +24,7 @@ interface ToolbarButtonProps {
   children: ReactNode
 }
 
-function ToolbarButton({ title, onClick, active, children }: ToolbarButtonProps) {
+function ToolbarButton({ title, onClick, active, children }: Readonly<ToolbarButtonProps>) {
   return (
     <Tooltip title={title}>
       <IconButton
@@ -47,7 +47,7 @@ interface EditorToolbarProps {
   editor: TiptapEditor | null
 }
 
-function EditorToolbar({ editor }: EditorToolbarProps) {
+function EditorToolbar({ editor }: Readonly<EditorToolbarProps>) {
   if (!editor) return null
 
   function handleLink() {
@@ -111,7 +111,7 @@ interface RichTextEditorProps {
   minHeight?: number
 }
 
-export default function RichTextEditor({ initialHtml = '', onChange, minHeight = 180 }: RichTextEditorProps) {
+export default function RichTextEditor({ initialHtml = '', onChange, minHeight = 180 }: Readonly<RichTextEditorProps>) {
   const onChangeRef = useRef(onChange)
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
 

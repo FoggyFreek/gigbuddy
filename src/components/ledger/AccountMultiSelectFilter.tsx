@@ -50,7 +50,7 @@ interface AccountMultiSelectFilterProps {
 // adds/removes its entire subtree, so the set is ready to send to the API as-is.
 // A parent shows checked when its whole subtree is selected, indeterminate when
 // only part of it is.
-export default function AccountMultiSelectFilter({ accounts, value, onChange }: AccountMultiSelectFilterProps) {
+export default function AccountMultiSelectFilter({ accounts, value, onChange }: Readonly<AccountMultiSelectFilterProps>) {
   const { t } = useTranslation(['ledger', 'common', 'settings'])
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
 

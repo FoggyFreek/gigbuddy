@@ -44,7 +44,7 @@ export default function RehearsalParticipantsSection({
   onDemote,
   canWrite = true,
   currentMemberId = null,
-}: RehearsalParticipantsSectionProps) {
+}: Readonly<RehearsalParticipantsSectionProps>) {
   const { t } = useTranslation(['rehearsals', 'common'])
   const participantIds = useMemo(
     () => new Set((rehearsal.participants ?? []).map((p) => p.band_member_id)),

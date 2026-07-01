@@ -25,7 +25,7 @@ interface CalendarFeedDialogProps {
   onClose: () => void
 }
 
-export default function CalendarFeedDialog({ open, onClose }: CalendarFeedDialogProps) {
+export default function CalendarFeedDialog({ open, onClose }: Readonly<CalendarFeedDialogProps>) {
   const [feed, setFeed] = useState<CalendarFeed | null>(null)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)

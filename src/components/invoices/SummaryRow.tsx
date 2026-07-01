@@ -7,7 +7,7 @@ interface SummaryRowProps {
   value?: ReactNode
 }
 
-export default function SummaryRow({ label, value }: SummaryRowProps) {
+export default function SummaryRow({ label, value }: Readonly<SummaryRowProps>) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5 }}>
       <Typography variant="body2">{label}</Typography>

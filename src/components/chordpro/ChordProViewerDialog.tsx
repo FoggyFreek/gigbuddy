@@ -61,7 +61,7 @@ export default function ChordProViewerDialog({
   onClose,
   onChartChange,
   onDelete,
-}: ChordProViewerDialogProps) {
+}: Readonly<ChordProViewerDialogProps>) {
   const { t } = useTranslation(['songs', 'common'])
   const theme = useTheme()
   const stacked = useMediaQuery(theme.breakpoints.down('md'))

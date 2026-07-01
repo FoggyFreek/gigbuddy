@@ -22,7 +22,7 @@ interface ThemeContextProviderProps {
   children: ReactNode
 }
 
-export function ThemeContextProvider({ children }: ThemeContextProviderProps) {
+export function ThemeContextProvider({ children }: Readonly<ThemeContextProviderProps>) {
   const [mode, setMode] = useState<ThemeMode>(getInitialMode)
   const [variant, setVariantState] = useState<ThemeVariant>(getInitialVariant)
 

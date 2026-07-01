@@ -58,7 +58,7 @@ interface GigShareDialogProps {
   gig?: Gig | null
 }
 
-export default function GigShareDialog({ open, onClose, gig }: GigShareDialogProps) {
+export default function GigShareDialog({ open, onClose, gig }: Readonly<GigShareDialogProps>) {
   const { t } = useTranslation(['gigs', 'common'])
   const { user } = useContext(AuthContext)
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'

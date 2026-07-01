@@ -15,7 +15,7 @@ interface AuthProviderProps {
   children: ReactNode
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
+export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
   // undefined = loading, null = unauthenticated, object = authenticated user
   const [user, setUser] = useState<User | null | undefined>(undefined)
   const navigate = useNavigate()
@@ -48,6 +48,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = useCallback(async () => {
     await apiLogout()
     clearBannerPathCache()
+    // Drop any stashed post-login redirect (e.g. an invite deep-link the user
+    // bounced off of) so a fresh login lands on the default route, not a stale
+    // target the user explicitly walked away from by logging out.
+    localStorage.removeItem('gigbuddy:redirectAfterLogin')
     setUser(null)
     navigate('/login', { replace: true })
   }, [navigate])

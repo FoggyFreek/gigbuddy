@@ -43,7 +43,7 @@ const TOTAL_CELL_SX = {
 
 // Account code as a monospace tag on a subtle background, with a margin
 // separating it from the account name.
-function AccountCode({ code }: { code: string }) {
+function AccountCode({ code }: Readonly<{ code: string }>) {
   return (
     <Box
       component="span"
@@ -66,7 +66,7 @@ function AccountCode({ code }: { code: string }) {
 // currency symbols line up vertically; digits use tabular numerals. With
 // `fullWidth` the block spans its cell, pushing the € to the column's left
 // edge — used where sibling columns must stay width-identical.
-function Money({ cents, fullWidth = false }: { cents: number; fullWidth?: boolean }) {
+function Money({ cents, fullWidth = false }: Readonly<{ cents: number; fullWidth?: boolean }>) {
   return (
     <Box
       component="span"
@@ -87,13 +87,13 @@ function Money({ cents, fullWidth = false }: { cents: number; fullWidth?: boolea
 
 // One P&L / balance-sheet block: account rows under a subheader plus a bold
 // total row. Extra rows (e.g. the unallocated result) slot in before the total.
-function AccountSection({ label, rows, totalLabel, totalCents, extraRows }: {
+function AccountSection({ label, rows, totalLabel, totalCents, extraRows }: Readonly<{
   label: string
   rows: AccountRow[]
   totalLabel: string
   totalCents: number
   extraRows?: ExtraRow[]
-}) {
+}>) {
   return (
     <>
       <TableRow>
@@ -121,7 +121,7 @@ function AccountSection({ label, rows, totalLabel, totalCents, extraRows }: {
   )
 }
 
-function ReportCard({ title, subtitle, children }: { title: string; subtitle?: string; children?: ReactNode }) {
+function ReportCard({ title, subtitle, children }: Readonly<{ title: string; subtitle?: string; children?: ReactNode }>) {
   const isCompact = useCompactLayout()
   return (
     <Paper variant="outlined" sx={{ p: isCompact ? 1.5 : 2.5 }}>
@@ -149,7 +149,7 @@ interface ProfitLossData {
   totals: PlTotals
 }
 
-function ProfitLossCard({ profitLoss }: { profitLoss: ProfitLossData }) {
+function ProfitLossCard({ profitLoss }: Readonly<{ profitLoss: ProfitLossData }>) {
   const { t } = useTranslation('reports')
   const { totals } = profitLoss
   const showCogs = profitLoss.cost_of_goods_sold.length > 0 || totals.cogs_cents !== 0
@@ -206,7 +206,7 @@ interface BalanceSheetData {
   }
 }
 
-function BalanceSheetCard({ balanceSheet }: { balanceSheet: BalanceSheetData }) {
+function BalanceSheetCard({ balanceSheet }: Readonly<{ balanceSheet: BalanceSheetData }>) {
   const { t } = useTranslation('reports')
   const { totals } = balanceSheet
   return (
@@ -258,7 +258,7 @@ interface VatData {
   net_cents: number
 }
 
-function VatCard({ vat }: { vat: VatData }) {
+function VatCard({ vat }: Readonly<{ vat: VatData }>) {
   const { t } = useTranslation('reports')
   return (
     <ReportCard title={t($ => $.vat.title)} subtitle={t($ => $.vat.subtitle)}>
@@ -299,7 +299,7 @@ interface TrialBalanceData {
   }
 }
 
-function TrialBalanceCard({ trialBalance }: { trialBalance: TrialBalanceData }) {
+function TrialBalanceCard({ trialBalance }: Readonly<{ trialBalance: TrialBalanceData }>) {
   const { t } = useTranslation('reports')
   const isCompact = useCompactLayout()
 

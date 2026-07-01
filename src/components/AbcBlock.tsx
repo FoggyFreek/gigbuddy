@@ -10,7 +10,7 @@ interface AbcBlockProps {
   abc: string
 }
 
-export default function AbcBlock({ abc }: AbcBlockProps) {
+export default function AbcBlock({ abc }: Readonly<AbcBlockProps>) {
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {

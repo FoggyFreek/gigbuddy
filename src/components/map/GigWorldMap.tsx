@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import React, { useEffect } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 // react-leaflet types are incomplete (leaflet has no bundled .d.ts) — cast
@@ -10,7 +10,6 @@ import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
-import React from 'react'
 import { formatShortDate } from '../../utils/dateFormat.ts'
 import { OSM_ATTRIBUTION, OSM_URL } from './osm.ts'
 import type { MapMarker } from '../../hooks/useGigMapData.ts'
@@ -64,7 +63,7 @@ interface GigWorldMapProps {
  * In compact mode (interactive=false) interactions and popups are off so the
  * surrounding tile can own the click.
  */
-export default function GigWorldMap({ markers, interactive = true, height = 320 }: GigWorldMapProps) {
+export default function GigWorldMap({ markers, interactive = true, height = 320 }: Readonly<GigWorldMapProps>) {
   const theme = useTheme()
   const color = theme.palette.primary.main
   const contrast = theme.palette.primary.contrastText

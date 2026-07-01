@@ -10,7 +10,7 @@ interface CopyIconButtonProps {
   ariaLabel?: string
 }
 
-export default function CopyIconButton({ value, edge = false, ariaLabel = 'copy' }: CopyIconButtonProps) {
+export default function CopyIconButton({ value, edge = false, ariaLabel = 'copy' }: Readonly<CopyIconButtonProps>) {
   const [copied, setCopied] = useState(false)
   if (!value) return null
   function handleCopy() {

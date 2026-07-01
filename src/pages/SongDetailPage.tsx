@@ -61,7 +61,7 @@ interface SongForm {
   notes: string
 }
 
-function SectionHeading({ children }: { children: ReactNode }) {
+function SectionHeading({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <Typography variant="subtitle2" sx={{ fontWeight: 600,  mb: 1.5  }}>
       {children}

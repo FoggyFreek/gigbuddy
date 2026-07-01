@@ -27,7 +27,7 @@ interface InvoiceLogoHeaderProps {
 export default function InvoiceLogoHeader({
   readOnly, logoKey, invoice, tenant, bandHeading,
   logoBusy, logoInputRef, onLogoFile, onLogoRemove, form, patchForm,
-}: InvoiceLogoHeaderProps) {
+}: Readonly<InvoiceLogoHeaderProps>) {
   const { t } = useTranslation('invoices')
   const hasCustomLogo = Boolean(invoice?.custom_logo_path)
   return (

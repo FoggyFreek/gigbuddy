@@ -19,7 +19,7 @@ interface SupplierPurchasesSectionProps {
 // Linked-purchases list shown on a supplier contact's page. Mirrors the
 // Purchases page data flow (server-side period filter + the shared
 // PurchasesList renderer) but scoped to one supplier via supplier_contact_id.
-export default function SupplierPurchasesSection({ contactId }: SupplierPurchasesSectionProps) {
+export default function SupplierPurchasesSection({ contactId }: Readonly<SupplierPurchasesSectionProps>) {
   const { t } = useTranslation('contacts')
   const navigate = useNavigate()
   const [purchases, setPurchases] = useState<Purchase[]>([])

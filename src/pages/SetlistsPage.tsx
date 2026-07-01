@@ -24,7 +24,7 @@ interface SetlistCardProps {
   onClick: () => void
 }
 
-function SetlistCard({ setlist, onClick }: SetlistCardProps) {
+function SetlistCard({ setlist, onClick }: Readonly<SetlistCardProps>) {
   const { t } = useTranslation('setlists')
   const parts = [
     t($ => $.list.setCount, { count: setlist.set_count ?? 0 }),

@@ -99,8 +99,20 @@ describe('MerchPage — products', () => {
     const [productCell] = await screen.findAllByText('Band T-Shirt')
     const row = productCell.closest('tr')
     expect(within(row).getByText('9')).toBeInTheDocument()
+  })
+
+  it('hides archived products until the toggle is enabled', async () => {
+    const user = userEvent.setup()
+    wrap(<MerchPage />)
+    await screen.findAllByText('Band T-Shirt')
+    // Archived by default is hidden.
+    expect(screen.queryByText('Old Cap')).toBeNull()
+    await user.click(screen.getByRole('button', { name: /show archived products/i }))
     expect(screen.getByText('Old Cap')).toBeInTheDocument()
     expect(screen.getByText('Archived')).toBeInTheDocument()
+    // Toggle flips to hide.
+    await user.click(screen.getByRole('button', { name: /hide archived products/i }))
+    expect(screen.queryByText('Old Cap')).toBeNull()
   })
 
   it('creates a product through the dialog', async () => {
@@ -119,11 +131,16 @@ describe('MerchPage — products', () => {
     await waitFor(() => expect(api.listProducts).toHaveBeenCalledTimes(2))
   })
 
-  it('archives a product', async () => {
+  it('archives a product only after confirming the consequences', async () => {
     const user = userEvent.setup()
     wrap(<MerchPage />)
     await screen.findAllByText('Band T-Shirt')
-    await user.click(screen.getAllByRole('button', { name: /archive/i })[0])
+    await user.click(screen.getByRole('button', { name: /^archive$/i }))
+    // A confirmation dialog appears; nothing is archived yet.
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/can't be undone/i)).toBeInTheDocument()
+    expect(api.archiveProduct).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: /^archive$/i }))
     await waitFor(() => expect(api.archiveProduct).toHaveBeenCalledWith(1))
   })
 
@@ -212,6 +229,24 @@ describe('MerchPage — recording a sale', () => {
     ))
     // The summary reloads after recording.
     await waitFor(() => expect(api.listMerchSalesSummary).toHaveBeenCalledTimes(2))
+  })
+
+  it('shows the no-stock info dialog when no product has stock on hand', async () => {
+    api.listProducts.mockResolvedValue([
+      {
+        id: 1, name: 'Band T-Shirt', unit_cost_cents: 1200, default_price_incl_cents: 3630,
+        vat_rate: '21.00', quantity_on_hand: 0, archived_at: null,
+      },
+    ])
+    const user = userEvent.setup()
+    wrap(<MerchPage />)
+    await screen.findAllByText('Band T-Shirt')
+    await user.click(screen.getByRole('button', { name: /record sale/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/no stock available/i)).toBeInTheDocument()
+    // The sale form is not opened, so nothing can be recorded.
+    expect(within(dialog).queryByLabelText(/quantity/i)).toBeNull()
+    expect(api.recordMerchSale).not.toHaveBeenCalled()
   })
 
   it('surfaces an insufficient-stock error in the dialog', async () => {

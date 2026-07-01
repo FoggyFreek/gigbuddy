@@ -26,7 +26,7 @@ interface MemberAvatarStackProps {
   members?: AvatarMember[]
 }
 
-export default function MemberAvatarStack({ members }: MemberAvatarStackProps) {
+export default function MemberAvatarStack({ members }: Readonly<MemberAvatarStackProps>) {
   if (!members?.length) return null
 
   const visible = members.filter(

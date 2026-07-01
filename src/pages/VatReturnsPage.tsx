@@ -41,7 +41,7 @@ function getReturnState(ret: VatReturn): ReturnState {
   return STATE_BY_COLOR[statusMeta(ret).color] as ReturnState
 }
 
-function StatusDot({ color }: { color: string }) {
+function StatusDot({ color }: Readonly<{ color: string }>) {
   return (
     <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
   )
@@ -238,7 +238,7 @@ interface VatReturnRowProps {
   onMenu: (event: React.MouseEvent, ret: VatReturn) => void
 }
 
-function VatReturnRow({ vatReturn, selected, onClick, onMenu }: VatReturnRowProps) {
+function VatReturnRow({ vatReturn, selected, onClick, onMenu }: Readonly<VatReturnRowProps>) {
   const { t } = useTranslation('vatReturns')
   const meta = statusMeta(vatReturn)
   const period = t($ => $.quarters[quarterKey(vatReturn.quarter ?? 1)], { year: vatReturn.year ?? 0 })

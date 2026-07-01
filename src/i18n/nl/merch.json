@@ -13,6 +13,13 @@
     "priceLine": "{{price}} incl. {{rate}}% btw · inkoop {{cost}}",
     "onHand": "{{qty}} op voorraad",
     "archive": "Archiveren",
+    "showArchived": "Gearchiveerde producten tonen",
+    "hideArchived": "Gearchiveerde producten verbergen",
+    "archiveConfirm": {
+      "title": "Dit product archiveren?",
+      "body": "‘{{name}}’ wordt gearchiveerd. Het kan niet meer worden verkocht of gekozen bij het registreren van nieuwe verkopen. De verkoop- en voorraadhistorie blijft behouden en het blijft zichtbaar onder “Gearchiveerde producten tonen”. Dit kan niet ongedaan worden gemaakt.",
+      "confirm": "Archiveren"
+    },
     "table": {
       "name": "Naam",
       "unitCost": "Inkoopprijs",
@@ -78,6 +85,14 @@
     "gigOptional": "Optreden (optioneel)",
     "customerPays": "Klant betaalt {{amount}}",
     "submit": "Verkoop registreren"
+  },
+  "noStock": {
+    "title": "Geen voorraad beschikbaar",
+    "intro": "Je hebt voorraad nodig om een verkoop te registreren. Volg deze stappen om voorraad voor een product toe te voegen:",
+    "step1": "Voeg het product toe.",
+    "step2": "Registreer een inkoop onder ‘Inkopen’ en koppel deze aan je product(en). Hiermee wordt de inkoopprijs opnieuw berekend op basis van de inkoop.",
+    "step3": "Registreer een verkoop om de opbrengst te berekenen.",
+    "close": "Begrepen"
   },
   "void": {
     "title": "Deze verkoop annuleren?",

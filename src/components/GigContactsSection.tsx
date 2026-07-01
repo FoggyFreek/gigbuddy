@@ -68,7 +68,7 @@ interface GigContactsSectionProps {
 // One read-only contact inherited from the gig's venue or festival. Tagged with
 // a source chip; email/phone are copyable; no link/unlink (it belongs to the
 // venue/festival, edited there).
-function InheritedRow({ contact, source, onOpen }: InheritedRowProps) {
+function InheritedRow({ contact, source, onOpen }: Readonly<InheritedRowProps>) {
   const { t } = useTranslation('gigs')
   return (
     <Box sx={rowSx}>
@@ -99,7 +99,7 @@ function InheritedRow({ contact, source, onOpen }: InheritedRowProps) {
   )
 }
 
-export default function GigContactsSection({ gigId, venueId, festivalId, flush, canWrite = true }: GigContactsSectionProps) {
+export default function GigContactsSection({ gigId, venueId, festivalId, flush, canWrite = true }: Readonly<GigContactsSectionProps>) {
   const { t } = useTranslation('gigs')
   const navigate = useNavigate()
   const [linked, setLinked] = useState<LinkedContact[]>([])

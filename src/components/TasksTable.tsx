@@ -13,6 +13,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import PersonIcon from '@mui/icons-material/Person'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import { formatDueDate } from '../utils/dateFormat.ts'
 import type { Id, Task } from '../types/entities.ts'
 
 const CHIP_SX = {
@@ -25,23 +26,6 @@ const CHIP_SX = {
 function formatDate(val: string | Date | null | undefined): string {
   if (!val) return '—'
   return new Date(val).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function daysUntil(date: string, today = new Date()): number | null {
-  const [year, month, day] = date.slice(0, 10).split('-').map(Number)
-  if (!year || !month || !day) return null
-  const dueUtc = Date.UTC(year, month - 1, day)
-  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
-  return Math.round((dueUtc - todayUtc) / 86_400_000)
-}
-
-function formatDueDate(date: string, locale: string): string {
-  const days = daysUntil(date)
-  if (days != null && days >= 0 && days < 7) {
-    const numeric = days <= 1 ? 'auto' : 'always'
-    return new Intl.RelativeTimeFormat(locale, { numeric }).format(days, 'day')
-  }
-  return formatDate(date)
 }
 
 function isOverdue(task: Task): boolean {
@@ -58,7 +42,7 @@ interface TaskRowProps {
   onEditTask?: (task: Task) => void
 }
 
-function TaskRow({ task, onToggleDone, canToggleDone, onEditTask }: TaskRowProps) {
+function TaskRow({ task, onToggleDone, canToggleDone, onEditTask }: Readonly<TaskRowProps>) {
   const { i18n } = useTranslation('tasks')
   const overdue = isOverdue(task)
   const dueLabel = task.due_date
@@ -125,7 +109,7 @@ const CARD_SX = { boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)' } as const
 
 type StandaloneTaskCardProps = TaskRowProps
 
-function StandaloneTaskCard(props: StandaloneTaskCardProps) {
+function StandaloneTaskCard(props: Readonly<StandaloneTaskCardProps>) {
   return (
     <Card variant="outlined" data-card sx={CARD_SX}>
       <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
@@ -144,7 +128,7 @@ interface GigTaskCardProps {
   onEditTask?: (task: Task) => void
 }
 
-function GigTaskCard({ gigId, tasks, onToggleDone, canToggleDone, onOpenGig, onEditTask }: GigTaskCardProps) {
+function GigTaskCard({ gigId, tasks, onToggleDone, canToggleDone, onOpenGig, onEditTask }: Readonly<GigTaskCardProps>) {
   const { t } = useTranslation('tasks')
   const gig = tasks[0]
 
@@ -238,7 +222,7 @@ interface TasksTableProps {
   onEditTask?: (task: Task) => void
 }
 
-export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenGig, onEditTask }: TasksTableProps) {
+export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenGig, onEditTask }: Readonly<TasksTableProps>) {
   const { t } = useTranslation('tasks')
   const isCompact = useCompactLayout()
 
@@ -254,12 +238,15 @@ export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenG
 
   return (
     <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: isCompact ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
-        gap: 1.5,
-        alignItems: 'start',
-      }}
+      sx={isCompact
+        ? { display: 'flex', flexDirection: 'column', gap: 1.5 }
+        : {
+            // Masonry: cards flow down each column slot, packing shorter cards
+            // together instead of leaving gaps under a row's tallest card.
+            columnWidth: 280,
+            columnGap: 1.5,
+            '& > *': { breakInside: 'avoid', mb: 1.5 },
+          }}
     >
       {groups.map((group, index) => group.kind === 'gig' ? (
         <GigTaskCard

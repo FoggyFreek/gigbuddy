@@ -42,7 +42,7 @@ interface SupplierAutocompleteProps {
 // the error shape.
 export default function SupplierAutocomplete({
   value, onChange, disabled, autoFocus, label,
-}: SupplierAutocompleteProps) {
+}: Readonly<SupplierAutocompleteProps>) {
   const { t } = useTranslation(['purchases', 'common'])
   const [options, setOptions] = useState<Contact[]>([])
   const [loading, setLoading] = useState(false)

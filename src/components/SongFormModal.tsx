@@ -18,7 +18,7 @@ interface SongFormModalProps {
   onCreated?: (song: Song) => void
 }
 
-export default function SongFormModal({ onClose, onCreated }: SongFormModalProps) {
+export default function SongFormModal({ onClose, onCreated }: Readonly<SongFormModalProps>) {
   const { t } = useTranslation(['songs', 'common'])
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})

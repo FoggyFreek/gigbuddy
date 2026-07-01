@@ -16,7 +16,7 @@ interface MoneyCellsProps {
 // left rather than as a gap between the symbol and the digits. Use one
 // <MoneyCells> per money column and pair it with <MoneyHeaderCells> so column
 // counts match.
-export default function MoneyCells({ cents, bold = false }: MoneyCellsProps) {
+export default function MoneyCells({ cents, bold = false }: Readonly<MoneyCellsProps>) {
   const { symbol, value } = formatEurParts(cents)
   return (
     <>
@@ -41,6 +41,6 @@ interface MoneyHeaderCellsProps {
 // symbol and digit columns: the label stays right-aligned over the amount, and
 // because it spans both columns its width can't inflate the (pinned) digit
 // column and push the symbol away from the digits.
-export function MoneyHeaderCells({ label }: MoneyHeaderCellsProps) {
+export function MoneyHeaderCells({ label }: Readonly<MoneyHeaderCellsProps>) {
   return <TableCell align="right" colSpan={2}>{label}</TableCell>
 }

@@ -44,6 +44,7 @@ function wrap(ui) {
 describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.removeItem('gigbuddy:redirectAfterLogin')
     logout.mockResolvedValue(null)
   })
 
@@ -105,6 +106,28 @@ describe('AuthContext', () => {
     await user.click(screen.getByText('logout'))
     await waitFor(() => expect(screen.getByText('unauthenticated')).toBeInTheDocument())
     expect(logout).toHaveBeenCalled()
+  })
+
+  it('clears a stashed post-login redirect on logout', async () => {
+    localStorage.setItem('gigbuddy:redirectAfterLogin', '/redeem-invite?code=XYZ')
+    getCurrentUser.mockResolvedValue({
+      id: 1,
+      name: 'Alice',
+      email: 'alice@example.com',
+      status: 'approved',
+      pictureUrl: null,
+      bandMemberId: null,
+    })
+    const user = userEvent.setup()
+    wrap(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('hello Alice')).toBeInTheDocument())
+    await user.click(screen.getByText('logout'))
+    await waitFor(() => expect(screen.getByText('unauthenticated')).toBeInTheDocument())
+    expect(localStorage.getItem('gigbuddy:redirectAfterLogin')).toBeNull()
   })
 
   it('exposes memberships and active tenant', async () => {

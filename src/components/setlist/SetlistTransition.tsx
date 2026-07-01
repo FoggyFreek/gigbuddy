@@ -25,7 +25,7 @@ interface SetlistTransitionProps {
 // always-visible strip with a chain icon, an inline note, and an unlink button.
 // It's a sibling of the cards (never inside the sortable node), so drag transforms
 // don't move it.
-export default function SetlistTransition({ linked = false, note = null, onUpdate, editing = true }: SetlistTransitionProps) {
+export default function SetlistTransition({ linked = false, note = null, onUpdate, editing = true }: Readonly<SetlistTransitionProps>) {
   const { t } = useTranslation('setlists')
   // Read-only: a linked pair shows a static segue strip; an unlinked pair shows
   // nothing (the add-link affordance is editing-only).

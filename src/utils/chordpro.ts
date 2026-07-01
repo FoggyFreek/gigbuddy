@@ -74,7 +74,7 @@ const META_INFO_ORDER = ['key', 'capo', 'tempo', 'time', 'duration', 'artist', '
 // Parse a single metadata directive line (`{key: value}`, `{key value}`, or
 // `{meta: key value}`). Returns null for any non-metadata directive/line.
 function parseMetaLine(trimmed: string): MetaItem | null {
-  const m = trimmed.match(/^\{([a-z_]+)(?:[:\s]+([\s\S]*?))?\}$/i)
+  const m = /^\{([a-z_]+)(?:[:\s]+([\s\S]*?))?\}$/i.exec(trimmed)
   if (!m) return null
   let dir = m[1].toLowerCase()
   let value = (m[2] ?? '').trim()
@@ -164,7 +164,7 @@ export function lyricsHtmlFromChordPro(source: string): string {
       continue
     }
 
-    const blockStart = trimmed.match(RE_BLOCK_START)
+    const blockStart = RE_BLOCK_START.exec(trimmed)
     if (blockStart && SKIPPED_LYRIC_BLOCKS.has(blockStart[1].toLowerCase())) {
       skippedBlock = blockStart[1].toLowerCase()
       continue
@@ -189,7 +189,7 @@ const RE_TRANSPOSE = /^\{transpose[:\s]+(-?\d+)\}/i
 export function getTransposeAmount(source: string): number {
   let total = 0
   for (const line of (source ?? '').split('\n')) {
-    const m = line.trim().match(RE_TRANSPOSE)
+    const m = RE_TRANSPOSE.exec(line.trim())
     if (m) total += Number(m[1])
   }
   return total
@@ -268,12 +268,12 @@ function readGridShape(arg: string): string | null {
 // Read an HTML-style attribute (name="v", name='v', or name=bare) from a
 // directive's argument string.
 function readAttr(attrs: string, name: string): string | null {
-  const m = attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"|${name}\\s*=\\s*'([^']*)'|${name}\\s*=\\s*([^\\s}]+)`, 'i'))
+  const m = new RegExp(`${name}\\s*=\\s*"([^"]*)"|${name}\\s*=\\s*'([^']*)'|${name}\\s*=\\s*([^\\s}]+)`, 'i').exec(attrs)
   return m ? (m[1] ?? m[2] ?? m[3] ?? null) : null
 }
 
 function readAlign(attrs: string): TextAlign {
-  const m = attrs.match(/(?:align|flush)\s*=\s*["']?(left|right|center)/i)
+  const m = /(?:align|flush)\s*=\s*["']?(left|right|center)/i.exec(attrs)
   return (m?.[1]?.toLowerCase() as TextAlign) ?? 'left'
 }
 
@@ -332,17 +332,17 @@ function readEnvironment(lines: string[], start: number, trimmed: string, lastGr
     const { body, end } = scanEnvBody(lines, start, RE_ABC_END)
     return { block: { kind: 'abc', abc: body.join('\n') }, end, warnings: [], shape: lastGridShape }
   }
-  const mTb = trimmed.match(RE_TEXTBLOCK_START)
+  const mTb = RE_TEXTBLOCK_START.exec(trimmed)
   if (mTb) {
     const { body, end } = scanEnvBody(lines, start, RE_TEXTBLOCK_END)
     return { block: { kind: 'textblock', text: body.join('\n'), align: readAlign(mTb[1]) }, end, warnings: [], shape: lastGridShape }
   }
-  const mTab = trimmed.match(RE_TAB_START)
+  const mTab = RE_TAB_START.exec(trimmed)
   if (mTab) {
     const { body, end } = scanEnvBody(lines, start, RE_TAB_END)
     return { block: { kind: 'tab', text: body.join('\n'), label: readLabel(mTab[1]) }, end, warnings: [], shape: lastGridShape }
   }
-  const mGrid = trimmed.match(RE_GRID_START)
+  const mGrid = RE_GRID_START.exec(trimmed)
   if (mGrid) return readGridBlock(lines, start, mGrid[1], lastGridShape)
   return null
 }
@@ -354,21 +354,21 @@ function readEnvironment(lines: string[], start: number, trimmed: string, lastGr
 // {chord} is inline and display-only — it does NOT register a shape (that's
 // {define}); parseChordDefinition is hoisted (declared below).
 function readInlineDirective(trimmed: string): { block: DocBlock | null } | null {
-  const mImg = trimmed.match(RE_IMAGE)
+  const mImg = RE_IMAGE.exec(trimmed)
   if (mImg) {
     const raw = readAttr(mImg[1], 'src')
     const src = raw ? safeImageSrc(raw) : null
     if (!src) return { block: null }
     return { block: { kind: 'image', src, anchored: /anchor\s*=\s*["']?page/i.test(mImg[1]), scale: readAttr(mImg[1], 'scale') } }
   }
-  const mChord = trimmed.match(RE_CHORD_INLINE)
+  const mChord = RE_CHORD_INLINE.exec(trimmed)
   if (mChord) {
     const parsed = parseChordDefinition(mChord[1])
     if (!parsed) return { block: null }
     const nm = (parsed.display ?? parsed.name).replace(/^\[|\]$/g, '')
     return { block: { kind: 'chorddef', name: nm, shape: parsed.shape ?? lookupGuitarChord(nm) } }
   }
-  const mComment = trimmed.match(RE_COMMENT_STYLED)
+  const mComment = RE_COMMENT_STYLED.exec(trimmed)
   if (mComment) {
     const variant = /^(comment_box|cb)$/i.test(mComment[1]) ? 'box' : 'italic'
     return { block: { kind: 'comment', text: mComment[2].trim(), variant } }
@@ -400,7 +400,7 @@ function flushBuf(state: ParseState): void {
 function consumeLine(lines: string[], i: number, state: ParseState): number {
   const trimmed = lines[i].trim()
 
-  const mCols = trimmed.match(RE_COLUMNS)
+  const mCols = RE_COLUMNS.exec(trimmed)
   if (mCols) { state.columns = Math.max(1, Number(mCols[1] || 2)); return i + 1 }
   if (RE_DIAGRAMS.test(trimmed)) return i + 1 // chord-diagram grid not rendered yet
   if (RE_COLB.test(trimmed)) { flushBuf(state); state.blocks.push({ kind: 'colb' }); return i + 1 }
@@ -477,7 +477,7 @@ export function isValidGridShape(shape: string): boolean {
 // Parse a grid `shape`. Default per spec when unset/invalid: 1+4x4+1.
 export function parseGridShape(shape: string | null): GridShape {
   const s = (shape ?? '').trim()
-  const m = s.match(RE_GRID_SHAPE)
+  const m = RE_GRID_SHAPE.exec(s)
   if (m) return { left: Number(m[1] ?? 1), measures: Number(m[2]), beats: Number(m[3]), right: Number(m[4] ?? 1) }
   if (RE_GRID_SHAPE_CELLS.test(s)) return { left: 0, measures: 1, beats: Number(s), right: 0 }
   return { left: 1, measures: 4, beats: 4, right: 1 }
@@ -607,7 +607,7 @@ const RE_VOLTA_BAR = /^:?\|(\d+)(>?)$/
 const RE_VOLTA_CLOSE = /^(?::\|:|:\||\|\||\|\.)$/
 
 export function voltaInfo(barText: string): VoltaInfo | null {
-  const m = barText.match(RE_VOLTA_BAR)
+  const m = RE_VOLTA_BAR.exec(barText)
   return m ? { number: Number(m[1]), aligned: m[2] === '>' } : null
 }
 
@@ -728,13 +728,13 @@ function collectDefsAndPlacement(text: string): { defs: ChordDefs; placement: Di
   let placement: DiagramsPlacement = 'bottom'
   for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
     const trimmed = line.trim()
-    const md = trimmed.match(RE_DIAGRAMS_VAL)
+    const md = RE_DIAGRAMS_VAL.exec(trimmed)
     if (md) {
       const v = (md[1] || 'on').toLowerCase()
       placement = v === 'off' ? 'off' : v === 'top' ? 'top' : 'bottom'
       continue
     }
-    const mDef = trimmed.match(RE_DEFINE)
+    const mDef = RE_DEFINE.exec(trimmed)
     if (mDef) {
       const parsed = parseChordDefinition(mDef[1])
       if (parsed?.shape) defs[parsed.name] = { shape: parsed.shape, display: parsed.display ?? null }

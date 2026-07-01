@@ -1,7 +1,6 @@
-import type { SxProps, Theme } from '@mui/material/styles'
 import { useTranslation } from 'react-i18next'
 import type { InvoiceForm } from './invoiceFormHelpers.ts'
-import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
+import { computeInvoiceTotals, formatEur } from '../../utils/invoiceTotals.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Divider from '@mui/material/Divider'
@@ -14,7 +13,6 @@ import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import MoneyInput from './MoneyInput.tsx'
 import SummaryRow from './SummaryRow.tsx'
-import { formatEur } from '../../utils/invoiceTotals.ts'
 
 type InvoiceTotals = ReturnType<typeof computeInvoiceTotals>
 
@@ -24,7 +22,7 @@ interface DiscountValueInputProps {
   readOnly?: boolean
 }
 
-function DiscountValueInput({ form, patchForm, readOnly }: DiscountValueInputProps) {
+function DiscountValueInput({ form, patchForm, readOnly }: Readonly<DiscountValueInputProps>) {
   if (form.discount_type === 'pct') {
     return (
       <TextField
@@ -56,7 +54,7 @@ interface DiscountEditorProps {
   onRemove: () => void
 }
 
-function DiscountEditor({ form, patchForm, readOnly, totals, onRemove }: DiscountEditorProps) {
+function DiscountEditor({ form, patchForm, readOnly, totals, onRemove }: Readonly<DiscountEditorProps>) {
   const { t } = useTranslation('invoices')
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
@@ -94,7 +92,7 @@ interface InvoiceTotalsPanelProps {
 
 export default function InvoiceTotalsPanel({
   form, totals, appliesKor, readOnly, patchForm, discountOpen, setDiscountOpen,
-}: InvoiceTotalsPanelProps) {
+}: Readonly<InvoiceTotalsPanelProps>) {
   const { t } = useTranslation('invoices')
   function removeDiscount() {
     patchForm({ discount_pct: 0, discount_cents: 0 })

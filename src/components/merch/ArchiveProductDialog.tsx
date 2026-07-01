@@ -5,27 +5,31 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
-import type { MerchSale } from '../../types/entities.ts'
+import type { Product } from '../../types/entities.ts'
 
-interface VoidSaleDialogProps {
-  sale: MerchSale
+interface ArchiveProductDialogProps {
+  product: Product
   onConfirm: () => void
   onClose: () => void
 }
 
-export default function VoidSaleDialog({ sale, onConfirm, onClose }: Readonly<VoidSaleDialogProps>) {
+// Confirms archiving a product, spelling out the consequences: archiving is
+// permanent (no unarchive), the product drops out of sale flows, but history stays.
+export default function ArchiveProductDialog({ product, onConfirm, onClose }: ArchiveProductDialogProps) {
   const { t } = useTranslation(['merch', 'common'])
   return (
     <Dialog open onClose={onClose}>
-      <DialogTitle>{t($ => $.void.title)}</DialogTitle>
+      <DialogTitle>{t($ => $.products.archiveConfirm.title)}</DialogTitle>
       <DialogContent>
         <DialogContentText>
-          {t($ => $.void.body, { qty: sale.quantity, name: sale.product_name })}
+          {t($ => $.products.archiveConfirm.body, { name: product.name })}
         </DialogContentText>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t($ => $.common.actions.cancel)}</Button>
-        <Button color="error" variant="contained" onClick={onConfirm}>{t($ => $.void.confirm)}</Button>
+        <Button color="error" variant="contained" onClick={onConfirm}>
+          {t($ => $.products.archiveConfirm.confirm)}
+        </Button>
       </DialogActions>
     </Dialog>
   )

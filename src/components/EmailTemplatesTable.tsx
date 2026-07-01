@@ -46,7 +46,7 @@ function formatDate(val?: string): string {
   })
 }
 
-function TemplateCard({ template, onClick }: TemplateCardProps) {
+function TemplateCard({ template, onClick }: Readonly<TemplateCardProps>) {
   const { t } = useTranslation('emailTemplates')
   return (
     <Box
@@ -77,7 +77,7 @@ function TemplateCard({ template, onClick }: TemplateCardProps) {
   )
 }
 
-function DesktopRow({ template, onClick }: DesktopRowProps) {
+function DesktopRow({ template, onClick }: Readonly<DesktopRowProps>) {
   return (
     <TableRow hover onClick={onClick} sx={{ cursor: 'pointer' }}>
       <TableCell>
@@ -90,7 +90,7 @@ function DesktopRow({ template, onClick }: DesktopRowProps) {
   )
 }
 
-export default function EmailTemplatesTable({ templates, onRowClick }: EmailTemplatesTableProps) {
+export default function EmailTemplatesTable({ templates, onRowClick }: Readonly<EmailTemplatesTableProps>) {
   const { t } = useTranslation('emailTemplates')
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'))

@@ -9,7 +9,7 @@ interface CardFrameProps {
   style?: CSSProperties
 }
 
-export default function CardFrame({ format, background, color, children, style }: CardFrameProps) {
+export default function CardFrame({ format, background, color, children, style }: Readonly<CardFrameProps>) {
   return (
     <div
       data-share-frame

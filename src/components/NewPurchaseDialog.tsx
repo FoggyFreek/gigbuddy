@@ -23,7 +23,7 @@ interface NewPurchaseDialogProps {
   onCreated: (id: Id) => void
 }
 
-export default function NewPurchaseDialog({ onClose, onCreated }: NewPurchaseDialogProps) {
+export default function NewPurchaseDialog({ onClose, onCreated }: Readonly<NewPurchaseDialogProps>) {
   const { t } = useTranslation(['purchases', 'common'])
   const [supplierName, setSupplierName] = useState('')
   const [supplierContactId, setSupplierContactId] = useState<Id | null>(null)

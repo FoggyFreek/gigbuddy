@@ -14,7 +14,7 @@ interface ToastProviderProps {
   children: ReactNode
 }
 
-export function ToastProvider({ children }: ToastProviderProps) {
+export function ToastProvider({ children }: Readonly<ToastProviderProps>) {
   const [toast, setToast] = useState<ToastState | null>(null)
 
   const showToast = useCallback((message: string, severity: ToastSeverity = 'error') => {

@@ -44,7 +44,7 @@ interface AccountSelectProps {
   saving?: boolean
 }
 
-function AccountSelect({ field, label, value, accounts = [], onChange, saving }: AccountSelectProps) {
+function AccountSelect({ field, label, value, accounts = [], onChange, saving }: Readonly<AccountSelectProps>) {
   const { t } = useTranslation('common')
   const filtered = accounts.filter((a) => a.type === FIELD_TYPE[field] && a.is_active)
   const selectId = `accounting-${field}`

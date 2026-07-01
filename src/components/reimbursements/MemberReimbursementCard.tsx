@@ -23,7 +23,7 @@ interface MemberReimbursementCardProps {
 
 // Mobile-friendly card equivalent of MemberReimbursementRow: stacks the member,
 // balance, and actions vertically, with the same expand-to-see-purchases panel.
-export default function MemberReimbursementCard({ member, expanded, purchases, onToggle, onRegister, onMarkReimbursed }: MemberReimbursementCardProps) {
+export default function MemberReimbursementCard({ member, expanded, purchases, onToggle, onRegister, onMarkReimbursed }: Readonly<MemberReimbursementCardProps>) {
   const { t } = useTranslation(['reimbursements', 'common'])
   return (
     <Paper variant="outlined" sx={{ p: 1.5 }}>

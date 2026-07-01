@@ -84,7 +84,7 @@ const DEFAULT_KEYS = ['contacts', 'gigs', 'files']
 // Results list indents to line up with the category name: icon width + gap.
 const RESULT_INDENT = '28px'
 
-function CountCircle({ count }: { count: number }) {
+function CountCircle({ count }: Readonly<{ count: number }>) {
   return (
     <Box
       sx={{
@@ -106,11 +106,11 @@ function CountCircle({ count }: { count: number }) {
   )
 }
 
-function RecentRow({ item, onClick, onRemove }: {
+function RecentRow({ item, onClick, onRemove }: Readonly<{
   item: { category: string; label: string }
   onClick: () => void
   onRemove: () => void
-}) {
+}>) {
   const { t } = useTranslation('navigation')
   const Icon = ALL_CATEGORIES.find((c) => c.key === item.category)?.icon ?? ListAltOutlined
   return (
@@ -137,7 +137,7 @@ function RecentRow({ item, onClick, onRemove }: {
   )
 }
 
-export default function SearchPanel({ query, tenantId, onNavigate }: SearchPanelProps) {
+export default function SearchPanel({ query, tenantId, onNavigate }: Readonly<SearchPanelProps>) {
   const navigate = useNavigate()
   const { t } = useTranslation('navigation')
   const { can } = usePermissions()

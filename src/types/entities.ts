@@ -50,6 +50,8 @@ export interface Member {
   color?: string
   position?: string
   sort_order?: number
+  // Set when this band member is linked to an app (gigBuddy) user account.
+  user_id?: Id | null
 }
 
 // A task. May be linked to a gig (gig_id set, with event_description/event_date

@@ -19,7 +19,7 @@ interface SongLinksProps {
   canWrite?: boolean
 }
 
-export default function SongLinks({ songId, initialLinks = [], canWrite = true }: SongLinksProps) {
+export default function SongLinks({ songId, initialLinks = [], canWrite = true }: Readonly<SongLinksProps>) {
   const { t } = useTranslation(['songs', 'common'])
   const [links, setLinks] = useState<SongLink[]>(initialLinks)
   const [label, setLabel] = useState('')

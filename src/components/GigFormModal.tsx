@@ -74,7 +74,7 @@ interface GigFormModalProps {
   initialDate?: string
 }
 
-export default function GigFormModal({ mode, gigId, onClose, initialDate }: GigFormModalProps) {
+export default function GigFormModal({ mode, gigId, onClose, initialDate }: Readonly<GigFormModalProps>) {
   const { t } = useTranslation(['gigs', 'common'])
   const contentRef = useRef<GigDetailHandle | null>(null)
   const { canWritePlanning: canWrite } = usePermissions()

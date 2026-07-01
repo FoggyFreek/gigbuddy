@@ -17,7 +17,7 @@ interface PurchaseSupplierFieldsProps {
   readOnly?: boolean
 }
 
-export default function PurchaseSupplierFields({ form, patchForm, readOnly }: PurchaseSupplierFieldsProps) {
+export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Readonly<PurchaseSupplierFieldsProps>) {
   const { t } = useTranslation('purchases')
   const [dueOpen, setDueOpen] = useState(Boolean(form.due_date))
 

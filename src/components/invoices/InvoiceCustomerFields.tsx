@@ -28,7 +28,7 @@ interface InvoiceCustomerFieldsProps {
 
 export default function InvoiceCustomerFields({
   form, patchForm, readOnly, invoice, onStatusChange, memoOpen, setMemoOpen,
-}: InvoiceCustomerFieldsProps) {
+}: Readonly<InvoiceCustomerFieldsProps>) {
   const { t } = useTranslation('invoices')
   return (
     <>

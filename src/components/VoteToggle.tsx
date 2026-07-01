@@ -8,7 +8,7 @@ interface VoteToggleProps {
   disabled?: boolean
 }
 
-export default function VoteToggle({ vote, onChange, disabled = false }: VoteToggleProps) {
+export default function VoteToggle({ vote, onChange, disabled = false }: Readonly<VoteToggleProps>) {
   const { t } = useTranslation('common')
   return (
     <ButtonGroup size="small" variant="outlined">

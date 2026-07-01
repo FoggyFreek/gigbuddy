@@ -35,7 +35,7 @@ const BOARD_H = ROW_H * DISPLAY_ROWS.length
 const BOARD_CENTER_Y = BOARD_H / 2
 const DOUBLE_MARKER_SPACING = 2 * ROW_H
 
-export default function InteractiveFretboard({ frets, onChange, fretCount = 15 }: InteractiveFretboardProps) {
+export default function InteractiveFretboard({ frets, onChange, fretCount = 15 }: Readonly<InteractiveFretboardProps>) {
   const { t } = useTranslation('songs')
   const theme = useTheme()
 
@@ -184,7 +184,7 @@ export default function InteractiveFretboard({ frets, onChange, fretCount = 15 }
   )
 }
 
-function NoteBadge({ label, bgcolor, color }: { label: string; bgcolor: string; color: string }) {
+function NoteBadge({ label, bgcolor, color }: Readonly<{ label: string; bgcolor: string; color: string }>) {
   return (
     <Box
       sx={{
@@ -208,7 +208,7 @@ function NoteBadge({ label, bgcolor, color }: { label: string; bgcolor: string; 
   )
 }
 
-function Dot({ color }: { color: string }) {
+function Dot({ color }: Readonly<{ color: string }>) {
   return <Box sx={{ width: 11, height: 11, borderRadius: '50%', bgcolor: color }} />
 }
 

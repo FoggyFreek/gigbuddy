@@ -58,7 +58,7 @@ function displayName(venue: VenueRow): string {
 }
 
 interface CategoryChipProps { category?: string }
-function CategoryChip({ category }: CategoryChipProps) {
+function CategoryChip({ category }: Readonly<CategoryChipProps>) {
   const { t } = useTranslation('venues')
   return (
     <Chip
@@ -114,7 +114,7 @@ interface VenueCardProps {
   onClick: () => void
 }
 
-function VenueCard({ venue, selected, active, onToggle, onClick }: VenueCardProps) {
+function VenueCard({ venue, selected, active, onToggle, onClick }: Readonly<VenueCardProps>) {
   return (
     <Box
       sx={{
@@ -173,7 +173,7 @@ interface VenuesTableProps {
   selectedId?: Id | null
 }
 
-export default function VenuesTable({ venues, onRowClick, selectedId = null }: VenuesTableProps) {
+export default function VenuesTable({ venues, onRowClick, selectedId = null }: Readonly<VenuesTableProps>) {
   const { t } = useTranslation('venues')
   const categoryLabel = (category: string) =>
     category === 'festival' ? t($ => $.category.festivalPlural) : t($ => $.category.venuePlural)

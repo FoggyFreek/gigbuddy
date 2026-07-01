@@ -105,7 +105,7 @@ function useShopifyErrorMessage(): (err: unknown, fallback: string) => string {
 }
 
 // The status pill shown for an order in both the table and the compact card.
-function OrderStatusChip({ order }: { order: ShopifyOrder }) {
+function OrderStatusChip({ order }: Readonly<{ order: ShopifyOrder }>) {
   const { t } = useTranslation('merch')
   const orderSkipLabel = useOrderSkipLabel()
   if (order.skip_reason) {
@@ -128,7 +128,7 @@ interface ShopifyImportDialogProps {
   onClose: (imported: boolean) => void
 }
 
-export default function ShopifyImportDialog({ products, onClose }: ShopifyImportDialogProps) {
+export default function ShopifyImportDialog({ products, onClose }: Readonly<ShopifyImportDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
   const shopifyErrorMessage = useShopifyErrorMessage()
   const [step, setStep] = useState<Step>('select')
@@ -339,7 +339,7 @@ interface SelectStepProps {
   onLoadMore: () => void
 }
 
-function SelectStep({ orders, selected, onToggle, nextCursor, loadingMore, onLoadMore }: SelectStepProps) {
+function SelectStep({ orders, selected, onToggle, nextCursor, loadingMore, onLoadMore }: Readonly<SelectStepProps>) {
   const { t } = useTranslation(['merch', 'common'])
   const isCompact = useCompactLayout()
 
@@ -455,7 +455,7 @@ interface LineMapControlProps {
 // select with an optional VAT picker. Shared by the table and the compact cards.
 function LineMapControl({
   line, mapping, activeProducts, revenueAccounts, mappingValue, onMappingSelect, onVatChange, compact = false,
-}: LineMapControlProps) {
+}: Readonly<LineMapControlProps>) {
   const { t } = useTranslation('merch')
   if (!lineMappable(line)) {
     return (
@@ -502,7 +502,7 @@ function LineMapControl({
   )
 }
 
-function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, onMappingSelect, onVatChange }: MapStepProps) {
+function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, onMappingSelect, onVatChange }: Readonly<MapStepProps>) {
   const { t } = useTranslation('merch')
   const isCompact = useCompactLayout()
   const activeProducts = products.filter((p) => !p.archived_at)
@@ -568,7 +568,7 @@ function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, on
   )
 }
 
-function DoneStep({ result }: { result: ShopifyImportResult }) {
+function DoneStep({ result }: Readonly<{ result: ShopifyImportResult }>) {
   const { t } = useTranslation('merch')
   const lineStatusLabel = useLineStatusLabel()
   const isCompact = useCompactLayout()

@@ -73,6 +73,7 @@
     "edit": "Lid bewerken",
     "delete": "Lid verwijderen",
     "doneEditing": "Klaar met bewerken",
-    "colorAria": "kleur {{color}}"
+    "colorAria": "kleur {{color}}",
+    "gigbuddyUser": "gigBuddy-gebruiker"
   }
 }

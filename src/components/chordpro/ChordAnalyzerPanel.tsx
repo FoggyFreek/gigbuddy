@@ -20,7 +20,7 @@ interface ChordAnalyzerPanelProps {
   fretCount?: number
 }
 
-export default function ChordAnalyzerPanel({ fretCount = 15 }: ChordAnalyzerPanelProps) {
+export default function ChordAnalyzerPanel({ fretCount = 15 }: Readonly<ChordAnalyzerPanelProps>) {
   const { t } = useTranslation('songs')
   const [frets, setFrets] = useState<AbsoluteFret[]>(ALL_MUTED)
 

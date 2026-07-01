@@ -31,7 +31,7 @@ interface ProductDialogProps {
 // Create or edit a product. The unit cost is a moving average maintained by
 // purchase stock-ins, so it is only enterable at creation (as the starting
 // cost for stock added before any purchase) and read-only afterwards.
-export default function ProductDialog({ product, revenueAccounts = [], onSubmit, onClose }: ProductDialogProps) {
+export default function ProductDialog({ product, revenueAccounts = [], onSubmit, onClose }: Readonly<ProductDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
   const [name, setName] = useState(product?.name ?? '')
   const [unitCostCents, setUnitCostCents] = useState(product?.unit_cost_cents ?? 0)

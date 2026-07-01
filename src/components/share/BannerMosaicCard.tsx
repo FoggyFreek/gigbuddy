@@ -131,7 +131,7 @@ interface BannerImageProps {
   onImageLoad?: (e: React.SyntheticEvent<HTMLImageElement>) => void
 }
 
-function BannerImage({ gig, style, onImageLoad }: BannerImageProps) {
+function BannerImage({ gig, style, onImageLoad }: Readonly<BannerImageProps>) {
   return (
     <img
       crossOrigin="anonymous"

@@ -63,7 +63,7 @@ interface MemberRowActionsProps {
   onDelete: (userId: Id) => void
 }
 
-function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatus, onDelete }: MemberRowActionsProps) {
+function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatus, onDelete }: Readonly<MemberRowActionsProps>) {
   let removeTooltip: string
   if (isSelf) {
     removeTooltip = 'Cannot remove yourself'
@@ -118,7 +118,7 @@ interface RoleSelectProps {
   onRole: (userId: Id, role: string) => void
 }
 
-function RoleSelect({ r, callerIsSuperAdmin, isSelf, onRole }: RoleSelectProps) {
+function RoleSelect({ r, callerIsSuperAdmin, isSelf, onRole }: Readonly<RoleSelectProps>) {
   // Non-super callers cannot touch a tenant_admin's role, nor grant tenant_admin.
   const cannotDemoteAdmin = r.role === 'tenant_admin' && !callerIsSuperAdmin && !isSelf
   const cannotPromote = !callerIsSuperAdmin
@@ -152,7 +152,7 @@ interface MembersTableProps {
   onDelete: (userId: Id) => void
 }
 
-function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onStatus, onRole, onBandMember, onDelete }: MembersTableProps) {
+function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onStatus, onRole, onBandMember, onDelete }: Readonly<MembersTableProps>) {
   return (
     <>
       {/* Desktop table — hidden below 600 px */}

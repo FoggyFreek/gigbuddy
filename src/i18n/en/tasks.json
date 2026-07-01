@@ -2,6 +2,7 @@
   "title": "Tasks",
   "myTasks": "Assigned to me",
   "showFinished": "Finished",
+  "filters": "Filters",
   "newTask": "New task",
   "empty": "No tasks yet.",
   "unassigned": "Unassigned",

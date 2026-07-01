@@ -16,7 +16,7 @@ interface ContactFieldsProps {
   disabled?: boolean
 }
 
-export default function ContactFields({ form, onChange, errors = {}, categories = ALL_CONTACT_CATEGORIES, disabled = false }: ContactFieldsProps) {
+export default function ContactFields({ form, onChange, errors = {}, categories = ALL_CONTACT_CATEGORIES, disabled = false }: Readonly<ContactFieldsProps>) {
   const { t } = useTranslation('contacts')
   const categoryLabel = useContactCategoryLabel()
   return (

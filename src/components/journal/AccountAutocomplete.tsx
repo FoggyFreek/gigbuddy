@@ -23,7 +23,7 @@ interface AccountAutocompleteProps {
 // Account picker over the full chart of accounts (all active types). A saved code
 // that is no longer active/known is surfaced as a disabled "stale" option so the
 // field never silently drops it — mirrors PurchaseLinesEditor's __stale handling.
-export default function AccountAutocomplete({ value, accounts = [], placeholder, label, disabled, onChange, sx }: AccountAutocompleteProps) {
+export default function AccountAutocomplete({ value, accounts = [], placeholder, label, disabled, onChange, sx }: Readonly<AccountAutocompleteProps>) {
   const { t } = useTranslation('journal')
   const typeLabels: Record<string, string> = {
     asset: t($ => $.accountTypes.asset),

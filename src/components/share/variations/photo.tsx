@@ -27,7 +27,6 @@ interface ShareLayoutProps {
   logoSrc?: string
   bandName?: string
   showLogo?: boolean
-  format?: string
 }
 
 interface TextStripProps {
@@ -39,7 +38,7 @@ interface TextStripProps {
   style?: CSSProperties
 }
 
-function TextStrip({ children, color = INK, background = WHITE, size, radius, style }: TextStripProps) {
+function TextStrip({ children, color = INK, background = WHITE, size, radius, style }: Readonly<TextStripProps>) {
   if (!children) return null
   const borderRadius = radius ?? Math.round(size * 0.16)
   return (
@@ -65,7 +64,7 @@ function TextStrip({ children, color = INK, background = WHITE, size, radius, st
   )
 }
 
-function PhotoSquare({ gig, photoSrc, pan = 0, accent, bandName, sticker, stickerPosition, logoSrc, showLogo = true }: ShareLayoutProps) {
+function PhotoSquare({ gig, photoSrc, pan = 0, accent, bandName, sticker, stickerPosition, logoSrc, showLogo = true }: Readonly<ShareLayoutProps>) {
   const f = SHARE_FORMATS.square
   const date = formatGigDateShort(gig)
   const weekdayShort = date.weekday ? date.weekday.slice(0, 2) : ''
@@ -168,7 +167,7 @@ function PhotoSquare({ gig, photoSrc, pan = 0, accent, bandName, sticker, sticke
   )
 }
 
-function PhotoStory({ gig, photoSrc, zoom, pan = 0, accent, bandName, sticker, stickerPosition, logoSrc, showLogo = true }: ShareLayoutProps) {
+function PhotoStory({ gig, photoSrc, zoom, pan = 0, accent, bandName, sticker, stickerPosition, logoSrc, showLogo = true }: Readonly<ShareLayoutProps>) {
   const f = SHARE_FORMATS.story
   const date = formatGigDateShort(gig)
   const weekdayShort = date.weekday ? date.weekday.slice(0, 2) : ''

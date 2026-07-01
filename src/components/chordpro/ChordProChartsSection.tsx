@@ -24,7 +24,7 @@ interface ChartCardProps {
   onOpen: (id: Id) => void
 }
 
-function NewChartCard({ busy, onClick }: { busy: boolean; onClick: () => void }) {
+function NewChartCard({ busy, onClick }: Readonly<{ busy: boolean; onClick: () => void }>) {
   const { t } = useTranslation('songs')
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, width: CARD_W }}>
@@ -61,7 +61,7 @@ function NewChartCard({ busy, onClick }: { busy: boolean; onClick: () => void })
   )
 }
 
-function ChartCard({ chart, onOpen }: ChartCardProps) {
+function ChartCard({ chart, onOpen }: Readonly<ChartCardProps>) {
   const { t } = useTranslation('songs')
   const id = chart.id as Id
   return (
@@ -102,7 +102,7 @@ export default function ChordProChartsSection({
   songId,
   initialCharts = [],
   canWrite = true,
-}: ChordProChartsSectionProps) {
+}: Readonly<ChordProChartsSectionProps>) {
   const { t } = useTranslation('songs')
   const [charts, setCharts] = useState<SongChart[]>(initialCharts)
   const [openId, setOpenId] = useState<Id | null>(null)

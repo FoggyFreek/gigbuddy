@@ -26,7 +26,7 @@ interface PurchasesListProps {
   onRowClick: (p: Purchase) => void
 }
 
-export default function PurchasesList({ purchases, selectedId, onRowClick }: PurchasesListProps) {
+export default function PurchasesList({ purchases, selectedId, onRowClick }: Readonly<PurchasesListProps>) {
   const { t, i18n } = useTranslation('purchases')
   const isCompact = useCompactLayout()
   const [page, setPage] = useState(0)

@@ -19,7 +19,7 @@ interface GigStatusIconProps {
 
 // Renders the gig status as an icon on a circular background tinted with the
 // status colour.
-export default function GigStatusIcon({ status, size = 28 }: GigStatusIconProps) {
+export default function GigStatusIcon({ status, size = 28 }: Readonly<GigStatusIconProps>) {
   const key = status ?? ''
   const Icon = STATUS_ICONS[key] ?? LiveHelpIcon
   const color = STATUS_COLORS[key] || 'default'

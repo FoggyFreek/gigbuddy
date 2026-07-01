@@ -25,7 +25,7 @@ interface JournalApproveErrorDialogProps {
   onClose: () => void
 }
 
-export default function JournalApproveErrorDialog({ errors, journals, onClose }: JournalApproveErrorDialogProps) {
+export default function JournalApproveErrorDialog({ errors, journals, onClose }: Readonly<JournalApproveErrorDialogProps>) {
   const { t } = useTranslation(['journal', 'common'])
 
   // Friendly explanation per backend error code; falls back to the server message.

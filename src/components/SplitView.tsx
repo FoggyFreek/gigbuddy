@@ -14,7 +14,7 @@ interface SplitViewProps {
   outletContext?: Record<string, unknown>
 }
 
-export default function SplitView({ basePath, children, outletContext }: SplitViewProps) {
+export default function SplitView({ basePath, children, outletContext }: Readonly<SplitViewProps>) {
   const theme = useTheme()
   const isDesktop = useMediaQuery(theme.breakpoints.up('sm'))
   const navigate = useNavigate()

@@ -22,7 +22,7 @@ export default function PhotoBackdrop({
   filter = 'contrast(1.05)',
   bgColor = '#000',
   children,
-}: PhotoBackdropProps) {
+}: Readonly<PhotoBackdropProps>) {
   const [natural, setNatural] = useState<NaturalSize | null>(null)
 
   let imgStyle: CSSProperties

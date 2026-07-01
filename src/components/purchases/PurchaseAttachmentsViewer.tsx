@@ -94,7 +94,7 @@ interface PurchaseAttachmentsViewerProps {
 // Receipt viewer. One prev/next control paginates through every page of every
 // attachment in sequence (PDF pages expand in place once their document loads).
 // Zoom/rotate re-render PDF pages via pdf.js; images use CSS transforms.
-export default function PurchaseAttachmentsViewer({ attachments, busy, error, onUpload, onDelete }: PurchaseAttachmentsViewerProps) {
+export default function PurchaseAttachmentsViewer({ attachments, busy, error, onUpload, onDelete }: Readonly<PurchaseAttachmentsViewerProps>) {
   const { t } = useTranslation(['purchases', 'common'])
   const [index, setIndex] = useState(0)
   const [page, setPage] = useState(1)

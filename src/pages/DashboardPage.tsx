@@ -1,16 +1,14 @@
-﻿import React from 'react'
-import type { ReactNode } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { alpha, useTheme } from '@mui/material/styles'
 import Box from '@mui/material/Box'
-import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
 import CircularProgress from '@mui/material/CircularProgress'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
+import ListSubheader from '@mui/material/ListSubheader'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import Skeleton from '@mui/material/Skeleton'
@@ -31,7 +29,7 @@ import { getNextRehearsal } from '../api/rehearsals.ts'
 import { listAllTasks } from '../api/tasks.ts'
 import { listBandEvents } from '../api/bandEvents.ts'
 import { getProfile } from '../api/profile.ts'
-import { formatShortDate } from '../utils/dateFormat.ts'
+import { daysUntil, formatDueDate } from '../utils/dateFormat.ts'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
 import type { Gig, Rehearsal, BandEvent, Task } from '../types/entities.ts'
 
@@ -112,12 +110,22 @@ interface SectionData<T> {
   total: number
 }
 
+// Local view field: whole-day distance from today (negative = overdue), null when undated.
+type DashTask = Task & { __daysUntil: number | null }
+
+interface TasksSection {
+  status: 'ok' | 'error'
+  total: number
+  overdue: DashTask[]
+  upcoming: DashTask[]
+}
+
 interface Sections {
   nextGig: { status: 'ok' | 'error'; data: Gig | null }
   nextBandEvent: { status: 'ok' | 'error'; data: BandEvent | null }
   nextRehearsal: { status: 'ok' | 'error'; data: Rehearsal | null }
   shows: SectionData<Gig>
-  tasks: SectionData<Task>
+  tasks: TasksSection
 }
 
 // Build the whole view-model in the effect (not in render) so render stays pure.
@@ -142,9 +150,12 @@ function buildSections(
 
   // Featured "next gig" is dropped from the shows list, so total excludes it too.
   const upcomingShows = upcomingGigs.slice(1)
-  const myTasks = taskSettled.data
+  const myTasks: DashTask[] = taskSettled.data
     .filter((t) => !t.done && bandMemberId != null && t.assigned_to === bandMemberId)
     .sort(byDateAscNullsLast('due_date') as (a: Task, b: Task) => number)
+    .map((t) => ({ ...t, __daysUntil: daysUntil(t.due_date) }))
+  // Sorted ascending (nulls last), so overdue rows come first and survive the cap.
+  const visibleTasks = myTasks.slice(0, MAX_ROWS)
 
   return {
     nextGig: { status: gigsSettled.status, data: upcomingGigs[0] || null },
@@ -154,32 +165,10 @@ function buildSections(
     tasks: {
       status: taskSettled.status,
       total: myTasks.length,
-      data: myTasks.slice(0, MAX_ROWS),
+      overdue: visibleTasks.filter((t) => t.__daysUntil != null && t.__daysUntil < 0),
+      upcoming: visibleTasks.filter((t) => t.__daysUntil == null || t.__daysUntil >= 0),
     },
   }
-}
-
-interface RowProps {
-  primary: ReactNode
-  secondary?: ReactNode
-  chip?: ReactNode
-  onClick?: () => void
-}
-
-function Row({ primary, secondary, chip, onClick }: RowProps) {
-  return (
-    <ListItemButton onClick={onClick} disableGutters sx={{ borderRadius: 1, px: 1 }}>
-      <ListItemText
-        primary={primary}
-        secondary={secondary}
-        slotProps={{
-          primary: { variant: 'body2', sx: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } },
-          secondary: { variant: 'caption' },
-        }}
-      />
-      {chip}
-    </ListItemButton>
-  )
 }
 
 interface ProfileData {
@@ -191,7 +180,7 @@ interface ProfileData {
 }
 
 export default function DashboardPage() {
-  const { t } = useTranslation('dashboard')
+  const { t, i18n } = useTranslation('dashboard')
   const { user } = useAuth()
   const bandMemberId = user?.bandMemberId ?? null
   const navigate = useNavigate()
@@ -265,6 +254,63 @@ export default function DashboardPage() {
 
   const { nextGig, nextBandEvent, nextRehearsal, shows, tasks } = sections
   const activeSocials = SOCIALS.filter(({ field, prefix }) => prefix && profile?.[field])
+
+  // Shared with the tasks page: today / tomorrow / "in N days" within the coming
+  // week, else an absolute short date (also the label for overdue rows, which
+  // carry a past date).
+  const locale = i18n.resolvedLanguage ?? 'en'
+  const dueLabel = (task: DashTask): string =>
+    task.due_date ? formatDueDate(task.due_date, locale) : ''
+
+  // Headers only earn their place when both groups are present; a single-group
+  // list (all overdue or all upcoming) is self-explanatory, so drop the heading.
+  const showTaskHeadings = tasks.overdue.length > 0 && tasks.upcoming.length > 0
+  const renderTaskGroup = (heading: string, items: DashTask[]) => {
+    if (items.length === 0) return null
+    return (
+      <React.Fragment key={heading}>
+        {showTaskHeadings && (
+          <ListSubheader
+            disableGutters
+            disableSticky
+            sx={{ px: 1, lineHeight: 2.2, bgcolor: 'transparent', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem' }}
+          >
+            {heading}
+          </ListSubheader>
+        )}
+        {items.map((task) => {
+          const label = dueLabel(task)
+          const overdue = task.__daysUntil != null && task.__daysUntil < 0
+          return (
+            <ListItemButton
+              key={String(task.id)}
+              onClick={() => navigate(task.gig_id ? `/gigs/${task.gig_id}?tab=tasks` : '/tasks')}
+              disableGutters
+              sx={{ borderRadius: 1, px: 1, gap: 1, alignItems: 'baseline' }}
+            >
+              <ListItemText
+                primary={task.title}
+                secondary={task.event_description || undefined}
+                slotProps={{
+                  primary: { variant: 'body2', sx: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } },
+                  secondary: { variant: 'caption' },
+                }}
+                sx={{ my: 0, minWidth: 0 }}
+              />
+              {label && (
+                <Typography
+                  variant="subtitle2"
+                  sx={{ flexShrink: 0, whiteSpace: 'nowrap', color: overdue ? 'error.main' : 'text.secondary' }}
+                >
+                  {label}
+                </Typography>
+              )}
+            </ListItemButton>
+          )
+        })}
+      </React.Fragment>
+    )
+  }
 
   return (
     <Box sx={{ ...backgroundSx, p: 3, position: 'relative' }}>
@@ -555,20 +601,12 @@ export default function DashboardPage() {
             count={tasks.total}
             viewAllTo="/tasks"
             status={tasks.status}
-            isEmpty={tasks.data.length === 0}
+            isEmpty={tasks.overdue.length === 0 && tasks.upcoming.length === 0}
             emptyText={t($ => $.myTasks.empty)}
           >
             <List dense disablePadding>
-              {tasks.data.map((t) => (
-                <Row
-                  key={String(t.id)}
-                  primary={t.title}
-                  secondary={[t.event_description, t.due_date && formatShortDate(t.due_date)]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  onClick={() => navigate(t.gig_id ? `/gigs/${t.gig_id}` : '/tasks')}
-                />
-              ))}
+              {renderTaskGroup(t($ => $.myTasks.overdue), tasks.overdue)}
+              {renderTaskGroup(t($ => $.myTasks.upcoming), tasks.upcoming)}
             </List>
           </DashboardCard>
         </Grid>

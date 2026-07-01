@@ -35,7 +35,7 @@ interface RegisterReimbursementDialogProps {
 // default), shows the resulting total, and posts on submit. Amount is derived
 // from the selection — never free-entered — so it always matches the cleared
 // liability.
-export default function RegisterReimbursementDialog({ member, onSubmit, onClose }: RegisterReimbursementDialogProps) {
+export default function RegisterReimbursementDialog({ member, onSubmit, onClose }: Readonly<RegisterReimbursementDialogProps>) {
   const { t } = useTranslation(['reimbursements', 'common'])
   const [purchases, setPurchases] = useState<Purchase[] | null>(null)
   const [selected, setSelected] = useState<Set<Id>>(() => new Set())

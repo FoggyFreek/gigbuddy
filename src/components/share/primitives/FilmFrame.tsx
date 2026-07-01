@@ -18,10 +18,9 @@ const CARD_RADIUS = 36
 interface FilmFrameProps {
   children?: ReactNode
   format: string
-  accent?: string
 }
 
-export default function FilmFrame({ children, format }: FilmFrameProps) {
+export default function FilmFrame({ children, format }: Readonly<FilmFrameProps>) {
   const f = SHARE_FORMATS[format]
   return (
     <div

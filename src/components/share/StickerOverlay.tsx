@@ -18,12 +18,12 @@ const POSITION_ROTATION: Record<StickerPosition, number> = {
 }
 
 interface StickerOverlayProps {
-  sticker?: StickerId | string
+  sticker?: string
   position?: string
   accent?: string
 }
 
-export default function StickerOverlay({ sticker, position = 'right-top', accent = '#f5c542' }: StickerOverlayProps) {
+export default function StickerOverlay({ sticker, position = 'right-top', accent = '#f5c542' }: Readonly<StickerOverlayProps>) {
   if (!sticker) return null
   const config = STICKER_CONFIGS[sticker as StickerId]
   if (!config) return null

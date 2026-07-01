@@ -26,7 +26,7 @@ interface TourExportDialogProps {
   gigs?: Gig[]
 }
 
-export default function TourExportDialog({ open, onClose, gigs = [] }: TourExportDialogProps) {
+export default function TourExportDialog({ open, onClose, gigs = [] }: Readonly<TourExportDialogProps>) {
   const { t } = useTranslation(['gigs', 'common'])
   const [snackbar, setSnackbar] = useState(false)
 

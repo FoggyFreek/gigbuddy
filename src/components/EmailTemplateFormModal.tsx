@@ -66,7 +66,7 @@ interface ToolbarButtonProps {
   children: ReactNode
 }
 
-function ToolbarButton({ title, onClick, active, children }: ToolbarButtonProps) {
+function ToolbarButton({ title, onClick, active, children }: Readonly<ToolbarButtonProps>) {
   return (
     <Tooltip title={title}>
       <IconButton
@@ -85,7 +85,7 @@ interface EditorToolbarProps {
   editor: Editor | null
 }
 
-function EditorToolbar({ editor }: EditorToolbarProps) {
+function EditorToolbar({ editor }: Readonly<EditorToolbarProps>) {
   const { t } = useTranslation('emailTemplates')
   if (!editor) return null
 
@@ -143,7 +143,7 @@ function EditorToolbar({ editor }: EditorToolbarProps) {
   )
 }
 
-export default function EmailTemplateFormModal({ mode, templateId, onClose }: EmailTemplateFormModalProps) {
+export default function EmailTemplateFormModal({ mode, templateId, onClose }: Readonly<EmailTemplateFormModalProps>) {
   const { t } = useTranslation(['emailTemplates', 'common'])
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})

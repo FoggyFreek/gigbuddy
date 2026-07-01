@@ -30,7 +30,7 @@ interface GigAvailabilityPanelProps {
   onDataLoad?: (data: AvailabilityData | null) => void
 }
 
-export default function GigAvailabilityPanel({ eventDate, onDataLoad }: GigAvailabilityPanelProps) {
+export default function GigAvailabilityPanel({ eventDate, onDataLoad }: Readonly<GigAvailabilityPanelProps>) {
   const [data, setData] = useState<AvailabilityData | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 

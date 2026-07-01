@@ -17,7 +17,7 @@ interface RehearsalStatusIconProps {
 
 // Renders the rehearsal status as an icon on a circular background tinted with
 // the status colour — the rehearsal counterpart of GigStatusIcon.
-export default function RehearsalStatusIcon({ status, size = 28 }: RehearsalStatusIconProps) {
+export default function RehearsalStatusIcon({ status, size = 28 }: Readonly<RehearsalStatusIconProps>) {
   const key = status ?? ''
   const Icon = STATUS_ICONS[key] ?? LiveHelpIcon
   const color = STATUS_COLORS[key] || 'default'

@@ -30,7 +30,7 @@ interface SlotForm {
   reason: string
 }
 
-export default function AvailabilitySlotDialog({ open, slot, members, onSave, onDelete, onClose }: AvailabilitySlotDialogProps) {
+export default function AvailabilitySlotDialog({ open, slot, members, onSave, onDelete, onClose }: Readonly<AvailabilitySlotDialogProps>) {
   const isEdit = !!slot?.id
   const [form, setForm] = useState<SlotForm>(() => slot ? {
     band_member_id: slot.band_member_id ?? null,

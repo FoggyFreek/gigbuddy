@@ -17,7 +17,7 @@ interface GigShareMenuProps {
   gig?: Gig
 }
 
-export default function GigShareMenu({ gig }: GigShareMenuProps) {
+export default function GigShareMenu({ gig }: Readonly<GigShareMenuProps>) {
   const { t } = useTranslation('gigs')
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)

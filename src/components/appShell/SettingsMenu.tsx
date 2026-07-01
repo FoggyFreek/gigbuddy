@@ -44,7 +44,7 @@ interface SettingsMenuProps {
   isSuperAdmin?: boolean
 }
 
-export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, canManageMembers, canManageTenant, isSuperAdmin }: SettingsMenuProps) {
+export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, canManageMembers, canManageTenant, isSuperAdmin }: Readonly<SettingsMenuProps>) {
   const { t, i18n } = useTranslation(['common', 'navigation'])
   const isDutch = i18n.resolvedLanguage === 'nl'
   const toggleLanguage = () => {

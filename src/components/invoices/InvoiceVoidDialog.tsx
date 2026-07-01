@@ -18,7 +18,7 @@ interface InvoiceVoidDialogProps {
   onConfirm: () => void
 }
 
-export default function InvoiceVoidDialog({ open, invoiceNumber, hasPaymentLink, wasSent, onCancel, onConfirm }: InvoiceVoidDialogProps) {
+export default function InvoiceVoidDialog({ open, invoiceNumber, hasPaymentLink, wasSent, onCancel, onConfirm }: Readonly<InvoiceVoidDialogProps>) {
   const { t } = useTranslation(['invoices', 'common'])
   return (
     <Dialog open={open} onClose={onCancel}>

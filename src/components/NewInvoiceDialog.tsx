@@ -39,7 +39,7 @@ interface NewInvoiceDialogProps {
   onCreated: (id: Id) => void
 }
 
-export default function NewInvoiceDialog({ onClose, onCreated }: NewInvoiceDialogProps) {
+export default function NewInvoiceDialog({ onClose, onCreated }: Readonly<NewInvoiceDialogProps>) {
   const { t } = useTranslation(['invoices', 'common'])
   const [gig, setGig] = useState<Gig | null>(null)
   const [busy, setBusy] = useState(false)

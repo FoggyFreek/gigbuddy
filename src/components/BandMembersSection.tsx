@@ -15,6 +15,7 @@ import CheckIcon from '@mui/icons-material/Check'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import type { Member } from '../types/entities.ts'
+import { useThemeMode } from '../contexts/themeModeContext.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { createMember, deleteMember, listMembers, updateMember } from '../api/bandMembers.ts'
 
@@ -165,8 +166,9 @@ export default function BandMembersSection() {
   )
 }
 
-function BandMemberRow({ member, sectionEditing, onChange, onDelete }: BandMemberRowProps) {
+function BandMemberRow({ member, sectionEditing, onChange, onDelete }: Readonly<BandMemberRowProps>) {
   const { t } = useTranslation('profile')
+  const { mode } = useThemeMode()
   const [editing, setEditing] = useState(false)
   const saveFn = useCallback(
     async (patch: Partial<MemberWithRole>) => { await updateMember(member.id!, patch) },
@@ -189,6 +191,19 @@ function BandMemberRow({ member, sectionEditing, onChange, onDelete }: BandMembe
   if (!editing) {
     return (
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        {member.user_id != null && (
+          <Tooltip title={t($ => $.members.gigbuddyUser)}>
+            <Box
+              component="img"
+              src="/icons/gigbuddy_logo_pick.png"
+              alt={t($ => $.members.gigbuddyUser)}
+              sx={{
+                width: 16, height: 16, flexShrink: 0,
+                filter: mode === 'dark' ? 'invert(1)' : 'none',
+              }}
+            />
+          </Tooltip>
+        )}
         <Box
           sx={{
             width: 16, height: 16, borderRadius: '50%',

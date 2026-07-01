@@ -66,7 +66,7 @@ export default function AvailabilityCalendar({
   onMonthJump,
   onExport,
   onSubscribe,
-}: AvailabilityCalendarProps) {
+}: Readonly<AvailabilityCalendarProps>) {
   const { t, i18n } = useTranslation('availability')
   const dayHeaders = useMemo(() => getDayHeaders(i18n.resolvedLanguage ?? 'en'), [i18n.resolvedLanguage])
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)

@@ -12,7 +12,7 @@ interface InvoiceDeleteDialogProps {
   onConfirm: () => void
 }
 
-export default function InvoiceDeleteDialog({ open, invoiceNumber, onCancel, onConfirm }: InvoiceDeleteDialogProps) {
+export default function InvoiceDeleteDialog({ open, invoiceNumber, onCancel, onConfirm }: Readonly<InvoiceDeleteDialogProps>) {
   const { t } = useTranslation(['invoices', 'common'])
   return (
     <Dialog open={open} onClose={onCancel}>

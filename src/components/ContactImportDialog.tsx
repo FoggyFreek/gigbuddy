@@ -79,7 +79,7 @@ function applyMapping(
   return obj
 }
 
-export default function ContactImportDialog({ onClose, fixedCategory, title }: ContactImportDialogProps) {
+export default function ContactImportDialog({ onClose, fixedCategory, title }: Readonly<ContactImportDialogProps>) {
   const { t } = useTranslation(['contacts', 'common'])
   const categoryLabel = useContactCategoryLabel()
   // In fixed-category mode the category column is neither mapped nor previewed.

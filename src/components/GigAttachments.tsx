@@ -28,7 +28,7 @@ interface GigAttachmentsProps {
   canWrite?: boolean
 }
 
-export default function GigAttachments({ gigId, initialAttachments = [], canWrite = true }: GigAttachmentsProps) {
+export default function GigAttachments({ gigId, initialAttachments = [], canWrite = true }: Readonly<GigAttachmentsProps>) {
   const { t } = useTranslation(['gigs', 'common'])
   const [attachments, setAttachments] = useState<PurchaseAttachment[]>(initialAttachments)
   const [uploading, setUploading] = useState(false)

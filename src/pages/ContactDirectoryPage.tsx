@@ -47,7 +47,7 @@ export default function ContactDirectoryPage({
   allowImport = true,
   emptyMessage,
   importTitle,
-}: ContactDirectoryPageProps) {
+}: Readonly<ContactDirectoryPageProps>) {
   const { t } = useTranslation(['contacts', 'common'])
   const resolvedCreateTitle = createTitle ?? t($ => $.addContact)
   const resolvedSubmitLabel = createSubmitLabel ?? t($ => $.addContact)

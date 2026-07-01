@@ -26,7 +26,7 @@ interface MemberReimbursementRowProps {
 
 // One band member's outstanding row, expandable to a display-only list of the
 // member-paid purchases that make up the balance.
-export default function MemberReimbursementRow({ member, expanded, purchases, onToggle, onRegister, onMarkReimbursed }: MemberReimbursementRowProps) {
+export default function MemberReimbursementRow({ member, expanded, purchases, onToggle, onRegister, onMarkReimbursed }: Readonly<MemberReimbursementRowProps>) {
   const { t } = useTranslation(['reimbursements', 'common'])
   return (
     <Fragment>

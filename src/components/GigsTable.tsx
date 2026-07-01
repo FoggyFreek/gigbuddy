@@ -91,7 +91,7 @@ function applySearch(list: GigWithExtras[], q: string): GigWithExtras[] {
   )
 }
 
-function GigCard({ gig, active, onClick }: GigCardProps) {
+function GigCard({ gig, active, onClick }: Readonly<GigCardProps>) {
   const taskCount = gig.open_task_count ?? 0
   const displayVenue = gig.venue ?? gig.festival
   const eventText = [gig.event_description, venueHeadline(displayVenue), venueCity(displayVenue)].filter(Boolean)
@@ -142,7 +142,7 @@ function GigCard({ gig, active, onClick }: GigCardProps) {
   )
 }
 
-function DesktopRow({ gig, active, onClick }: GigCardProps) {
+function DesktopRow({ gig, active, onClick }: Readonly<GigCardProps>) {
   return (
     <TableRow
       hover
@@ -223,7 +223,7 @@ interface PastGigsHeaderProps {
   onToggle: () => void
 }
 
-function PastGigsHeader({ open, count, onToggle }: PastGigsHeaderProps) {
+function PastGigsHeader({ open, count, onToggle }: Readonly<PastGigsHeaderProps>) {
   const { t } = useTranslation('gigs')
   return (
     <Box
@@ -252,7 +252,7 @@ function PastGigsHeader({ open, count, onToggle }: PastGigsHeaderProps) {
   )
 }
 
-export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: GigsTableProps) {
+export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: Readonly<GigsTableProps>) {
   const { t } = useTranslation('gigs')
   const [pastOpen, setPastOpen] = useState(false)
   const [search, setSearch] = useState('')

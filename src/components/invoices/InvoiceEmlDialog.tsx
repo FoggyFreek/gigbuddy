@@ -23,7 +23,7 @@ interface InvoiceEmlDialogProps {
 
 export default function InvoiceEmlDialog({
   open, loading, busy, error, message, onMessageChange, onClose, onDownload,
-}: InvoiceEmlDialogProps) {
+}: Readonly<InvoiceEmlDialogProps>) {
   const { t } = useTranslation(['invoices', 'common'])
   return (
     <Dialog open={open} onClose={() => !busy && onClose()} fullWidth maxWidth="sm">

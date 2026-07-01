@@ -35,7 +35,7 @@ interface RecordSaleDialogProps {
 
 // Records a merch sale. Picking a product prefills its default price and VAT
 // rate (both editable per sale). The gig link is optional context only.
-export default function RecordSaleDialog({ products, onSubmit, onClose }: RecordSaleDialogProps) {
+export default function RecordSaleDialog({ products, onSubmit, onClose }: Readonly<RecordSaleDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
   const sellable = useMemo(() => products.filter((p) => !p.archived_at), [products])
   const [productId, setProductId] = useState<Id | ''>('')

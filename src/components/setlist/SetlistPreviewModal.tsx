@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import type { SetlistSet, SetlistItem } from '../../types/entities.ts'
 import { Fragment, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -68,7 +67,7 @@ interface PageContentProps {
 
 // The page body, shared by the on-screen preview and the hidden print portal so
 // both stay in sync. Plain elements + inline styles keep it print-friendly.
-function PageContent({ page, showKey, showBpm, showNotes }: PageContentProps) {
+function PageContent({ page, showKey, showBpm, showNotes }: Readonly<PageContentProps>) {
   const { t } = useTranslation('setlists')
   const { set, rows } = page
   const rowTitle = (item: SetlistItem): string => {
@@ -130,7 +129,7 @@ interface SetlistPreviewModalProps {
   sets?: SetlistSet[]
 }
 
-export default function SetlistPreviewModal({ open, onClose, setlistName = '', sets = [] }: SetlistPreviewModalProps) {
+export default function SetlistPreviewModal({ open, onClose, setlistName = '', sets = [] }: Readonly<SetlistPreviewModalProps>) {
   const { t } = useTranslation(['setlists', 'common'])
   const [showKey, setShowKey] = useState(true)
   const [showBpm, setShowBpm] = useState(true)

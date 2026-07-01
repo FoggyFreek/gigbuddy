@@ -10,7 +10,7 @@ interface PastEventAlertProps {
  * Warning banner shown on detail pages for events whose date is in the past,
  * reminding users to be careful when editing a historical event.
  */
-export default function PastEventAlert({ date }: PastEventAlertProps) {
+export default function PastEventAlert({ date }: Readonly<PastEventAlertProps>) {
   if (!date) return null
   const eventDay = dayjs(date)
   if (!eventDay.isValid()) return null

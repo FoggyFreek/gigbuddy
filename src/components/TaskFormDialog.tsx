@@ -27,7 +27,7 @@ function toDateInputValue(val: string | null | undefined): string {
   return String(val).slice(0, 10)
 }
 
-export default function TaskFormDialog({ open, task, onClose, onSaved, onDeleted }: TaskFormDialogProps) {
+export default function TaskFormDialog({ open, task, onClose, onSaved, onDeleted }: Readonly<TaskFormDialogProps>) {
   const { t } = useTranslation(['tasks', 'common'])
   const isEdit = task != null
   const [title, setTitle] = useState('')

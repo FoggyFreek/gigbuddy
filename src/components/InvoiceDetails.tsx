@@ -30,7 +30,7 @@ interface InvoiceDetailsProps {
   onTitleReady?: (title: string) => void
 }
 
-export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, onTitleReady }: InvoiceDetailsProps) {
+export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, onTitleReady }: Readonly<InvoiceDetailsProps>) {
   const { t } = useTranslation(['invoices', 'common'])
   const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate })
   const isCompact = useCompactLayout()

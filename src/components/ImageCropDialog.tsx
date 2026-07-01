@@ -55,7 +55,7 @@ function cropToBlob(imgEl: HTMLImageElement, crop: PercentCrop): Promise<Blob> {
   })
 }
 
-function CropContent({ imageSrc, aspect, onConfirm, onCancel }: CropContentProps) {
+function CropContent({ imageSrc, aspect, onConfirm, onCancel }: Readonly<CropContentProps>) {
   const imgRef = useRef<HTMLImageElement | null>(null)
   const [crop, setCrop] = useState<Crop | undefined>()
   const [completedCrop, setCompletedCrop] = useState<PercentCrop | undefined>()
@@ -116,7 +116,7 @@ function CropContent({ imageSrc, aspect, onConfirm, onCancel }: CropContentProps
   )
 }
 
-export default function ImageCropDialog({ open, imageSrc, aspect, onConfirm, onCancel, title = 'Crop image' }: ImageCropDialogProps) {
+export default function ImageCropDialog({ open, imageSrc, aspect, onConfirm, onCancel, title = 'Crop image' }: Readonly<ImageCropDialogProps>) {
   return (
     <Dialog open={open} onClose={onCancel} maxWidth="md" fullWidth>
       <DialogTitle>{title}</DialogTitle>

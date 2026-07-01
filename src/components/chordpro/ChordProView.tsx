@@ -55,13 +55,13 @@ const chordSheetSx = {
 // relative to natural size). Inline style so it carries into the print window.
 function imageScaleStyle(scale: string | null, origin: string): CSSProperties | undefined {
   if (!scale) return undefined
-  const m = scale.trim().match(/^(\d+(?:\.\d+)?)\s*%$/)
+  const m = /^(\d+(?:\.\d+)?)\s*%$/.exec(scale.trim())
   const factor = m ? Number(m[1]) / 100 : Number(scale)
   if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return undefined
   return { transform: `scale(${factor})`, transformOrigin: origin }
 }
 
-function ChordProSegment({ source, transpose }: { source: string; transpose: number }) {
+function ChordProSegment({ source, transpose }: Readonly<{ source: string; transpose: number }>) {
   const html = renderChordProHtml(source, transpose)
   if (html === null) {
     return (
@@ -73,7 +73,7 @@ function ChordProSegment({ source, transpose }: { source: string; transpose: num
   return <Box sx={chordSheetSx} dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-function FlowBlock({ block, transpose }: { block: DocBlock; transpose: number }) {
+function FlowBlock({ block, transpose }: Readonly<{ block: DocBlock; transpose: number }>) {
   if (block.kind === 'chordpro') return <ChordProSegment source={block.source} transpose={transpose} />
   if (block.kind === 'textblock') {
     return (
@@ -134,7 +134,7 @@ function FlowBlock({ block, transpose }: { block: DocBlock; transpose: number })
 // `%%` (repeat the last two measures) carries a small superscript "2", per the
 // usual engraving convention. Drawn with currentColor so it tracks the cell color
 // on screen and in the cloned print DOM alike.
-function GridRepeat({ measures }: { measures: 1 | 2 }) {
+function GridRepeat({ measures }: Readonly<{ measures: 1 | 2 }>) {
   return (
     <Box component="span" sx={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1 }}>
       {measures === 2 && <Box component="span" sx={{ fontSize: '0.65em', fontWeight: 700, mb: '-0.15em' }}>2</Box>}
@@ -162,7 +162,7 @@ function GridEndBar() {
 // A fixed-width beat-cell. `.` renders blank (it only reserves the column so the
 // next chord lines up); chords are left-aligned at the start of the measure.
 const gridCellStyle = { display: 'inline-flex', alignItems: 'center', width: GRID_CELL_W, flex: 'none' } as const
-function GridCellView({ cell, transpose }: { cell: GridCell; transpose: number }) {
+function GridCellView({ cell, transpose }: Readonly<{ cell: GridCell; transpose: number }>) {
   if (cell.kind === 'chord') {
     // Transpose with the song, and split a multi-chord cell (`C~A`) into two
     // chords sharing the one cell.
@@ -201,7 +201,7 @@ const labelPillSx = { bgcolor: 'action.hover', borderRadius: 0.75, px: 0.75, py:
 // alignment shift), so a `:|2>` ending lands under the previous line's first
 // ending. The bracket's horizontal stroke sits on top with hooks dropping toward
 // the measures above; the `N.` label rides the top-left corner.
-function VoltaBracketRow({ spans, leftWidth, bodyMinWidth }: { spans: VoltaSpan[]; leftWidth: string; bodyMinWidth: string }) {
+function VoltaBracketRow({ spans, leftWidth, bodyMinWidth }: Readonly<{ spans: VoltaSpan[]; leftWidth: string; bodyMinWidth: string }>) {
   return (
     <Box className="cp-grow cp-gvolta" sx={{ display: 'flex', alignItems: 'flex-start', minHeight: '1.1em' }}>
       {/* Mirror cp-gmargin's box (width + 8px right padding, same box-sizing) so the bracket origin lines up with the body. */}
@@ -241,7 +241,7 @@ interface GridRowProps {
 // shape defines right cells. An aligned (`:|N>`) ending shifts the whole body
 // right by `shiftEm` so it sits under the previous line's first ending. Volta
 // brackets, when present, are drawn on a thin row beneath.
-function GridRow({ parsed, items, spans, shiftEm, leftWidth, transpose, bodyMinWidth, rightWidth, blockLabel }: GridRowProps) {
+function GridRow({ parsed, items, spans, shiftEm, leftWidth, transpose, bodyMinWidth, rightWidth, blockLabel }: Readonly<GridRowProps>) {
   const { marginLeft, marginRight } = parsed
   if (items.length === 0 && !marginLeft && !blockLabel) return <Box className="cp-grow" sx={{ minHeight: '1.6em' }} />
   // The closing barline of the line is flush-right so a final `||`/`:|`/`|.` lines
@@ -360,7 +360,7 @@ function buildGridRowLayout(parsed: ParsedGridLine[]): GridRowLayout[] {
   return out
 }
 
-function GridBlock({ lines, label, shape, transpose }: { lines: string[]; label: string | null; shape: string | null; transpose: number }) {
+function GridBlock({ lines, label, shape, transpose }: Readonly<{ lines: string[]; label: string | null; shape: string | null; transpose: number }>) {
   const { left, measures, beats, right } = parseGridShape(shape)
   // A grid with a label but no body lines still shows the label row.
   const rows = lines.length > 0 ? lines : ['']
@@ -406,7 +406,7 @@ function GridBlock({ lines, label, shape, transpose }: { lines: string[]; label:
   )
 }
 
-function MetaHeader({ meta }: { meta: SongMeta }) {
+function MetaHeader({ meta }: Readonly<{ meta: SongMeta }>) {
   if (!meta.title && !meta.subtitle && meta.items.length === 0) return null
   return (
     <Box className="cp-meta" sx={{ mb: 2 }}>
@@ -450,7 +450,7 @@ function buildSections(blocks: DocBlock[]): { sections: Section[]; anchoredImage
   return { sections, anchoredImages }
 }
 
-function FlowSection({ columns, multiColumn, transpose }: { columns: DocBlock[][]; multiColumn: boolean; transpose: number }) {
+function FlowSection({ columns, multiColumn, transpose }: Readonly<{ columns: DocBlock[][]; multiColumn: boolean; transpose: number }>) {
   if (!multiColumn || columns.length < 2) {
     return <>{columns.flat().map((b, i) => <FlowBlock key={i} block={b} transpose={transpose} />)}</>
   }
@@ -465,7 +465,7 @@ function FlowSection({ columns, multiColumn, transpose }: { columns: DocBlock[][
   )
 }
 
-function DiagramGrid({ chords }: { chords: ResolvedChord[] }) {
+function DiagramGrid({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
   return (
     <Box className="cp-diagrams" sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2, justifyContent: 'center' }}>
       {chords.map((c, i) => <ChordDiagram key={i} name={c.name} shape={c.shape} />)}
@@ -475,7 +475,7 @@ function DiagramGrid({ chords }: { chords: ResolvedChord[] }) {
 
 // A collapsible header at the top of the view holding the guitar chord diagrams.
 // Starts collapsed so the chart stays the focus; the count hints at what's inside.
-function CollapsibleDiagrams({ chords }: { chords: ResolvedChord[] }) {
+function CollapsibleDiagrams({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
   const { t } = useTranslation('songs')
   const [open, setOpen] = useState(false)
   return (
@@ -495,7 +495,7 @@ function CollapsibleDiagrams({ chords }: { chords: ResolvedChord[] }) {
   )
 }
 
-function PrintDiagrams({ chords }: { chords: ResolvedChord[] }) {
+function PrintDiagrams({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
   return (
     <Box className="cp-diagrams-print" sx={{ display: 'none' }}>
       <DiagramGrid chords={chords} />
@@ -503,7 +503,7 @@ function PrintDiagrams({ chords }: { chords: ResolvedChord[] }) {
   )
 }
 
-export default function ChordProView({ source, transposeOffset = 0 }: ChordProViewProps) {
+export default function ChordProView({ source, transposeOffset = 0 }: Readonly<ChordProViewProps>) {
   const { columns, blocks, warnings } = parseChordProDocument(source)
   const { sections, anchoredImages } = buildSections(blocks)
   const { placement, chords } = analyzeChords(source, transposeOffset)

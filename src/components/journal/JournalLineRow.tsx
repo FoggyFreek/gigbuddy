@@ -51,7 +51,7 @@ interface JournalLineRowProps {
 export default function JournalLineRow({
   line, idx, accounts, readOnly, canDelete,
   patchLine, addLine, removeLine, duplicateLine,
-}: JournalLineRowProps) {
+}: Readonly<JournalLineRowProps>) {
   const { t } = useTranslation('journal')
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
 

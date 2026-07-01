@@ -8,7 +8,7 @@ interface SaveStatusLabelProps {
   sx?: SxProps<Theme>
 }
 
-export default function SaveStatusLabel({ status, sx }: SaveStatusLabelProps) {
+export default function SaveStatusLabel({ status, sx }: Readonly<SaveStatusLabelProps>) {
   const label = (status && LABELS[status]) ?? ''
   const color = status === 'error' ? 'error.main' : 'text.secondary'
   return (

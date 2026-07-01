@@ -224,7 +224,7 @@ interface LedgerEntriesListProps {
   onRowClick: (row: LedgerEntryRow) => void
 }
 
-function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }: LedgerEntriesListProps) {
+function LedgerEntriesList({ entries, sortBy, sortDesc, onSort, onRowClick }: Readonly<LedgerEntriesListProps>) {
   const { t } = useTranslation('ledger')
   const isCompact = useCompactLayout()
 

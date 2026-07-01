@@ -67,7 +67,7 @@ function applySearch(list: Song[], q: string): Song[] {
   )
 }
 
-function TagChips({ song }: { song: Song }) {
+function TagChips({ song }: Readonly<{ song: Song }>) {
   const names = tagNames(song)
   if (names.length === 0) return null
   return (
@@ -79,7 +79,7 @@ function TagChips({ song }: { song: Song }) {
   )
 }
 
-function SongCard({ song, active, onClick }: { song: Song; active: boolean; onClick: () => void }) {
+function SongCard({ song, active, onClick }: Readonly<{ song: Song; active: boolean; onClick: () => void }>) {
   return (
     <Box
       onClick={onClick}
@@ -118,7 +118,7 @@ interface SongsTableProps {
   selectedId?: Id | null
 }
 
-export default function SongsTable({ songs, onRowClick, selectedId = null }: SongsTableProps) {
+export default function SongsTable({ songs, onRowClick, selectedId = null }: Readonly<SongsTableProps>) {
   const { t } = useTranslation('songs')
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('title')

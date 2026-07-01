@@ -60,7 +60,7 @@ interface VenueFormModalProps {
   lockedCategory?: string
 }
 
-export default function VenueFormModal({ mode, venueId, onClose, onDelete, initial, onCreated, lockedCategory }: VenueFormModalProps) {
+export default function VenueFormModal({ mode, venueId, onClose, onDelete, initial, onCreated, lockedCategory }: Readonly<VenueFormModalProps>) {
   const { t } = useTranslation(['venues', 'common'])
   const categoryLabel = (category: string) =>
     category === 'festival' ? t($ => $.category.festival) : t($ => $.category.venue)

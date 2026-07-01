@@ -96,7 +96,7 @@ interface BandEventsTableProps {
   selectedId?: Id
 }
 
-function EventCard({ event, active, onClick, onShare }: BandEventRowProps) {
+function EventCard({ event, active, onClick, onShare }: Readonly<BandEventRowProps>) {
   const { t } = useTranslation('bandEvents')
   return (
     <Box
@@ -136,7 +136,7 @@ function EventCard({ event, active, onClick, onShare }: BandEventRowProps) {
   )
 }
 
-function DesktopRow({ event, active, onClick, onShare }: BandEventRowProps) {
+function DesktopRow({ event, active, onClick, onShare }: Readonly<BandEventRowProps>) {
   const { t } = useTranslation('bandEvents')
   return (
     <TableRow
@@ -182,7 +182,7 @@ function DesktopHead() {
   )
 }
 
-function PastHeader({ open, count, onToggle }: PastHeaderProps) {
+function PastHeader({ open, count, onToggle }: Readonly<PastHeaderProps>) {
   const { t } = useTranslation('bandEvents')
   return (
     <Box
@@ -211,7 +211,7 @@ function PastHeader({ open, count, onToggle }: PastHeaderProps) {
   )
 }
 
-export default function BandEventsTable({ events, onRowClick, onShare, selectedId = undefined }: BandEventsTableProps) {
+export default function BandEventsTable({ events, onRowClick, onShare, selectedId = undefined }: Readonly<BandEventsTableProps>) {
   const { t } = useTranslation('bandEvents')
   const [pastOpen, setPastOpen] = useState(false)
   const isCompact = useCompactLayout()

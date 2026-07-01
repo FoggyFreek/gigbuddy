@@ -361,7 +361,7 @@ interface IntegrationCardProps {
   children: React.ReactNode
 }
 
-function IntegrationCard({ logoLight, logoDark, alt, title, description, configured, mt = 2, children }: IntegrationCardProps) {
+function IntegrationCard({ logoLight, logoDark, alt, title, description, configured, mt = 2, children }: Readonly<IntegrationCardProps>) {
   const { t } = useTranslation('settings')
   const { mode } = useThemeMode()
   const compact = useCompactLayout()
@@ -732,7 +732,7 @@ interface MollieKeyStatus {
   changedAt?: string | null
 }
 
-function MollieKeyStatusDisplay({ status }: { status: MollieKeyStatus | null }) {
+function MollieKeyStatusDisplay({ status }: Readonly<{ status: MollieKeyStatus | null }>) {
   const { t } = useTranslation('settings')
   if (status === null) return <CircularProgress size={18} />
   if (status.isSet) {
@@ -756,7 +756,7 @@ interface MollieKeyEditorProps {
   onCancel: () => void
 }
 
-function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, error, saving, onSave, onCancel }: MollieKeyEditorProps) {
+function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, error, saving, onSave, onCancel }: Readonly<MollieKeyEditorProps>) {
   const { t } = useTranslation(['settings', 'common'])
   return (
     <Stack spacing={1.5}>

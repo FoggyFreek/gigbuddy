@@ -73,6 +73,7 @@
     "edit": "Edit member",
     "delete": "Delete member",
     "doneEditing": "Done editing",
-    "colorAria": "color {{color}}"
+    "colorAria": "color {{color}}",
+    "gigbuddyUser": "gigBuddy user"
   }
 }

@@ -22,7 +22,7 @@ interface CopyButtonProps {
   small?: boolean
 }
 
-function CopyButton({ copied, label, onCopy, small }: CopyButtonProps) {
+function CopyButton({ copied, label, onCopy, small }: Readonly<CopyButtonProps>) {
   const { t } = useTranslation('profile')
   const iconSx: SxProps | undefined = small ? { fontSize: 14 } : undefined
   const fontSize = small ? undefined : ('small' as const)
@@ -49,7 +49,7 @@ interface SocialViewProps {
   onCopy: () => void
 }
 
-function SocialView({ social, handle, copied, onCopy }: SocialViewProps) {
+function SocialView({ social, handle, copied, onCopy }: Readonly<SocialViewProps>) {
   const { Icon } = social
   return (
     <Stack direction="row" spacing={1.5} sx={{ py: 0.5, alignItems: 'center' }}>
@@ -75,7 +75,7 @@ interface SocialEditFieldProps {
   onCopy: () => void
 }
 
-function SocialEditField({ social, handle, copied, onChange, onCopy }: SocialEditFieldProps) {
+function SocialEditField({ social, handle, copied, onChange, onCopy }: Readonly<SocialEditFieldProps>) {
   const { t } = useTranslation('profile')
   const { Icon } = social
   return (
@@ -115,7 +115,7 @@ interface ProfileSocialsTabProps {
   onCopy: (field: string, url: string) => void
 }
 
-export default function ProfileSocialsTab({ form, editing, onToggleEditing, onChange, copiedField, onCopy }: ProfileSocialsTabProps) {
+export default function ProfileSocialsTab({ form, editing, onToggleEditing, onChange, copiedField, onCopy }: Readonly<ProfileSocialsTabProps>) {
   const { t } = useTranslation('common')
   return (
     <Box sx={{ p: 3 }}>

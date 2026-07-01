@@ -49,7 +49,7 @@ interface VenuePickerProps {
   categoryFilter?: 'venue' | 'festival'
 }
 
-export default function VenuePicker({ value, onChange, onSelect, excludeIds = [], disabled, label, categoryFilter }: VenuePickerProps) {
+export default function VenuePicker({ value, onChange, onSelect, excludeIds = [], disabled, label, categoryFilter }: Readonly<VenuePickerProps>) {
   const { t } = useTranslation('common')
   const navigate = useNavigate()
   const [input, setInput] = useState('')   // what the field displays

@@ -48,7 +48,7 @@ interface BandMemberOption {
   id?: Id
   name?: string
   role?: string
-  user_id?: Id
+  user_id?: Id | null
 }
 
 interface PaymentRegistrationDialogProps {
@@ -79,7 +79,7 @@ function PaymentRegistrationDialog({
   onPaidOnChange,
   onPaidByBandMemberIdChange,
   onSubmit,
-}: PaymentRegistrationDialogProps) {
+}: Readonly<PaymentRegistrationDialogProps>) {
   const { t } = useTranslation(['purchases', 'common'])
   const hasBandMembers = bandMembers.length > 0
   const selectedPayee = bandMembers.find((m) => Number(m.id) === Number(paidByBandMemberId)) || null
@@ -154,7 +154,7 @@ interface PaidPaymentSummaryProps {
   paymentAccount: Account | { code: string } | null
 }
 
-function PaidPaymentSummary({ purchase, bandMembers, paymentAccount }: PaidPaymentSummaryProps) {
+function PaidPaymentSummary({ purchase, bandMembers, paymentAccount }: Readonly<PaidPaymentSummaryProps>) {
   const { t } = useTranslation('purchases')
   const isMemberPayment = purchase.payment_method === 'member'
   const bandMember = isMemberPayment
@@ -197,7 +197,7 @@ interface PurchaseDetailsLoadingProps {
   onClose: (updated?: boolean) => void
 }
 
-function PurchaseDetailsLoading({ embedded, onClose }: PurchaseDetailsLoadingProps) {
+function PurchaseDetailsLoading({ embedded, onClose }: Readonly<PurchaseDetailsLoadingProps>) {
   const spinner = (
     <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
       <CircularProgress />
@@ -213,14 +213,13 @@ function PurchaseDetailsLoading({ embedded, onClose }: PurchaseDetailsLoadingPro
 
 interface PurchaseDetailsProps {
   mode: 'create' | 'edit'
-  draft?: { draft?: object }
   purchaseId?: Id
   onClose: (updated?: boolean) => void
   onPurchaseUpdate?: (id: Id, patch: Partial<Purchase>) => void
   embedded?: boolean
 }
 
-export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseUpdate, embedded = false }: PurchaseDetailsProps) {
+export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseUpdate, embedded = false }: Readonly<PurchaseDetailsProps>) {
   const { t } = useTranslation(['purchases', 'common'])
   // usePurchaseFormState always expects a purchaseId; in practice mode='create'
   // always pairs with a real id from NewPurchaseDialog.

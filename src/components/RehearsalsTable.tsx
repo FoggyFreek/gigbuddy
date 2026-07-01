@@ -58,7 +58,7 @@ function tallyCounts(participants: Participant[] | undefined) {
   return { yes, no, pending, total }
 }
 
-function ParticipantProgress({ participants }: { participants?: Participant[] }) {
+function ParticipantProgress({ participants }: Readonly<{ participants?: Participant[] }>) {
   const { t } = useTranslation('rehearsals')
   const { yes, no, pending, total } = tallyCounts(participants)
   if (!total) {
@@ -89,7 +89,7 @@ interface RehearsalCardProps {
   onVote?: (rehearsalId: Id | undefined, memberId: Id | undefined, vote: string | null) => void
 }
 
-function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVote }: RehearsalCardProps) {
+function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVote }: Readonly<RehearsalCardProps>) {
   const { t } = useTranslation('rehearsals')
   const myParticipant = bandMemberId
     ? (rehearsal.participants ?? []).find((p) => p.band_member_id === bandMemberId)
@@ -160,7 +160,7 @@ interface DesktopRowProps {
   onShare?: (rehearsal: Rehearsal) => void
 }
 
-function DesktopRow({ rehearsal, active, onClick, onShare }: DesktopRowProps) {
+function DesktopRow({ rehearsal, active, onClick, onShare }: Readonly<DesktopRowProps>) {
   const { t } = useTranslation('rehearsals')
   return (
     <TableRow
@@ -218,7 +218,7 @@ interface PastHeaderProps {
   onToggle?: () => void
 }
 
-function PastHeader({ open, count, onToggle }: PastHeaderProps) {
+function PastHeader({ open, count, onToggle }: Readonly<PastHeaderProps>) {
   const { t } = useTranslation('rehearsals')
   return (
     <Box
@@ -256,7 +256,7 @@ interface RehearsalsTableProps {
   selectedId?: Id | null
 }
 
-export default function RehearsalsTable({ rehearsals = [], bandMemberId, onVote, onRowClick, onShare, selectedId = null }: RehearsalsTableProps) {
+export default function RehearsalsTable({ rehearsals = [], bandMemberId, onVote, onRowClick, onShare, selectedId = null }: Readonly<RehearsalsTableProps>) {
   const { t } = useTranslation('rehearsals')
   const [pastOpen, setPastOpen] = useState(false)
   const isCompact = useCompactLayout()

@@ -42,7 +42,7 @@ export default function DashboardCard({
   emptyText,
   sx,
   children,
-}: DashboardCardProps) {
+}: Readonly<DashboardCardProps>) {
   const { t } = useTranslation('dashboard')
   let body = children
   if (status === 'error') {

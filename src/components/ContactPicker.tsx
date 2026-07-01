@@ -29,7 +29,7 @@ function isActionOption(o: PickerOption): o is ActionOption {
 // when nothing matches, and reports the chosen contact via onSelect. Contacts
 // in excludeIds (already linked) are filtered out so a duplicate link can't be
 // picked — the _client.js error path can't surface the server's 409 cleanly.
-export default function ContactPicker({ onSelect, excludeIds = [], disabled, label }: ContactPickerProps) {
+export default function ContactPicker({ onSelect, excludeIds = [], disabled, label }: Readonly<ContactPickerProps>) {
   const { t } = useTranslation('common')
   const resolvedLabel = label ?? t($ => $.contactPicker.label)
   const [input, setInput] = useState('')

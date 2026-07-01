@@ -9,7 +9,7 @@ interface TenantThemeProviderProps {
   children: ReactNode
 }
 
-export function TenantThemeProvider({ children }: TenantThemeProviderProps) {
+export function TenantThemeProvider({ children }: Readonly<TenantThemeProviderProps>) {
   const { accentColor } = useProfile()
   const { mode, variant } = useThemeMode()
 

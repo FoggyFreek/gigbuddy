@@ -27,7 +27,7 @@ interface VatReturnDetailOutletContext {
   onChanged?: () => void
 }
 
-function Row({ label, value }: { label: string; value?: ReactNode }) {
+function Row({ label, value }: Readonly<{ label: string; value?: ReactNode }>) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>{label}</Typography>

@@ -42,7 +42,7 @@ interface CollapsedFlyoutProps {
 
 // Rich flyout shown when hovering a collapsed group icon: title + clickable
 // child links so the icon rail stays fully navigable.
-function CollapsedFlyout({ group, pathname, onNavClick }: CollapsedFlyoutProps) {
+function CollapsedFlyout({ group, pathname, onNavClick }: Readonly<CollapsedFlyoutProps>) {
   return (
     <Box sx={{ py: 0.5, minWidth: 160 }}>
       <Typography variant="subtitle2" sx={{ px: 1.5, py: 0.5 }}>
@@ -84,7 +84,7 @@ interface NavGroupProps {
   onNavClick?: () => void
 }
 
-export default function NavGroup({ group, ariaLabel, pathname, isNavCollapsed, expanded, onToggle, onNavClick }: NavGroupProps) {
+export default function NavGroup({ group, ariaLabel, pathname, isNavCollapsed, expanded, onToggle, onNavClick }: Readonly<NavGroupProps>) {
   const GroupIcon = group.icon
   const groupSelected = group.children.some((c) => isItemSelected(c.to, pathname))
 

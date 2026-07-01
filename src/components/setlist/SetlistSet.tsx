@@ -1,4 +1,4 @@
-import type { SetlistSet as SetlistSetType, SetlistItem } from '../../types/entities.ts'
+import type { SetlistSet as SetlistSetType, SetlistItem, Id } from '../../types/entities.ts'
 import { useTranslation } from 'react-i18next'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -20,7 +20,6 @@ import SetlistItemCard from './SetlistItemCard.tsx'
 import SetlistTransition from './SetlistTransition.tsx'
 import { formatDuration } from '../../utils/formatDuration.ts'
 import { itemDomId, setDomId } from './ids.ts'
-import type { Id } from '../../types/entities.ts'
 
 interface SetlistItemPatch {
   duration_seconds?: number
@@ -69,7 +68,7 @@ export default function SetlistSet({
   onUpdateNote,
   editing = true,
   songOrderStart = 0,
-}: SetlistSetProps) {
+}: Readonly<SetlistSetProps>) {
   const { t } = useTranslation('setlists')
   const { setNodeRef, isOver } = useDroppable({ id: setDomId(set.id!) })
   const itemIds = (set.items ?? []).map((it) => itemDomId(it.id!))

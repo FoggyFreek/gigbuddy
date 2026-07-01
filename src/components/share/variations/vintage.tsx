@@ -43,12 +43,9 @@ interface ShareLayoutProps {
   stickerPosition?: string
   logoSrc?: string
   bannerSrc?: string
-  bandName?: string
-  showLogo?: boolean
-  format?: string
 }
 
-function VintageSquare({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }: ShareLayoutProps) {
+function VintageSquare({ gig, photoSrc, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }: Readonly<ShareLayoutProps>) {
   const f = SHARE_FORMATS.square
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
@@ -57,7 +54,7 @@ function VintageSquare({ gig, photoSrc, pan = 0, accent = ACCENT, socials, stick
   const title = gig?.event_description || ''
 
   return (
-    <FilmFrame format="square" accent={accent}>
+    <FilmFrame format="square">
       <div data-share-layer="photo" data-pdf-layer="photo" style={{ position: 'absolute', inset: 0 }}>
         <PhotoBackdrop src={photoSrc} pan={pan} width={f.width} height={f.height} filter="contrast(1.05) saturate(0.85) sepia(0.35)" bgColor="#1a0f06">
           <div
@@ -189,7 +186,7 @@ function VintageSquare({ gig, photoSrc, pan = 0, accent = ACCENT, socials, stick
   )
 }
 
-function VintageStory({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }: ShareLayoutProps) {
+function VintageStory({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, sticker, stickerPosition, logoSrc, bannerSrc }: Readonly<ShareLayoutProps>) {
   const f = SHARE_FORMATS.story
   const date = formatGigDateShort(gig)
   const time = formatGigDoorsTime(gig)
@@ -197,7 +194,7 @@ function VintageStory({ gig, photoSrc, zoom, pan = 0, accent = ACCENT, socials, 
   const title = gig?.event_description || ''
 
   return (
-    <FilmFrame format="story" accent={accent}>
+    <FilmFrame format="story">
       <div data-share-layer="photo" data-pdf-layer="photo" style={{ position: 'absolute', inset: 0 }}>
         <PhotoBackdrop src={photoSrc} zoom={zoom} pan={pan} width={f.width} height={f.height} filter="contrast(1.05) saturate(0.85) sepia(0.35)" bgColor="#000">
           <div

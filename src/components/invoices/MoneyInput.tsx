@@ -17,7 +17,7 @@ interface MoneyInputProps {
 // Lets the user type freely (e.g. "200") and only commits the parsed cent value
 // on blur, preventing the controlled-input loop where every keystroke reformats
 // the display value.
-export default function MoneyInput({ cents, onChange, disabled = false, label, error = false, helperText, sx }: MoneyInputProps) {
+export default function MoneyInput({ cents, onChange, disabled = false, label, error = false, helperText, sx }: Readonly<MoneyInputProps>) {
   const [raw, setRaw] = useState('')
   const [focused, setFocused] = useState(false)
 

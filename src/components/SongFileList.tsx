@@ -43,7 +43,7 @@ export default function SongFileList({
   isAudio = false,
   addLabel,
   canWrite = true,
-}: SongFileListProps) {
+}: Readonly<SongFileListProps>) {
   const { t } = useTranslation(['songs', 'common'])
   const [files, setFiles] = useState<SongFile[]>(initialFiles)
   const [uploading, setUploading] = useState(false)

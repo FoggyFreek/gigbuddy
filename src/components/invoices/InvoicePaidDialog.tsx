@@ -13,7 +13,7 @@ interface InvoicePaidDialogProps {
   onConfirm: () => void
 }
 
-export default function InvoicePaidDialog({ open, invoiceNumber, onCancel, onConfirm }: InvoicePaidDialogProps) {
+export default function InvoicePaidDialog({ open, invoiceNumber, onCancel, onConfirm }: Readonly<InvoicePaidDialogProps>) {
   const { t } = useTranslation(['invoices', 'common'])
   return (
     <Dialog open={open} onClose={onCancel}>

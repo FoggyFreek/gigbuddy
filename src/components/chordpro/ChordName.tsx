@@ -13,7 +13,7 @@ interface ChordNameProps {
 // line-height:0 keeps the raised quality from stretching the line box.
 const supSx = { fontSize: '0.7em', lineHeight: 0, verticalAlign: 'super' } as const
 
-export default function ChordName({ name }: ChordNameProps) {
+export default function ChordName({ name }: Readonly<ChordNameProps>) {
   const { base, sup, bass } = splitChordSymbol(name)
   return (
     <>

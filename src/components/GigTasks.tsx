@@ -64,7 +64,7 @@ function isDueOverdue(due_date: string | null | undefined): boolean {
   return new Date(parts[0], parts[1] - 1, parts[2]) < today
 }
 
-function DueDateAdornment({ label, onClick }: DueDateAdornmentProps) {
+function DueDateAdornment({ label, onClick }: Readonly<DueDateAdornmentProps>) {
   return (
     <InputAdornment position="end">
       <IconButton
@@ -86,7 +86,7 @@ export default function GigTasks({
   members = [],
   canWrite = true,
   currentBandMemberId = null,
-}: GigTasksProps) {
+}: Readonly<GigTasksProps>) {
   const { t, i18n } = useTranslation(['gigs', 'common'])
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
 

@@ -303,7 +303,7 @@ interface InvoicesListProps {
   onRowClick: (inv: Invoice) => void
 }
 
-function InvoicesList({ invoices, selectedId, onRowClick }: InvoicesListProps) {
+function InvoicesList({ invoices, selectedId, onRowClick }: Readonly<InvoicesListProps>) {
   const { t, i18n } = useTranslation('invoices')
   const isCompact = useCompactLayout()
   const [page, setPage] = useState(0)

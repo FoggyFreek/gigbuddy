@@ -265,7 +265,7 @@ interface MetaFieldProps {
   value: string
 }
 
-function MetaField({ label, value }: MetaFieldProps) {
+function MetaField({ label, value }: Readonly<MetaFieldProps>) {
   return (
     <Box sx={{ mb: 1.5 }}>
       <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{label}</Typography>
@@ -280,7 +280,7 @@ interface MoneyOrBlankCellsProps {
   cents: number | undefined
 }
 
-function MoneyOrBlankCells({ cents }: MoneyOrBlankCellsProps) {
+function MoneyOrBlankCells({ cents }: Readonly<MoneyOrBlankCellsProps>) {
   if (!cents) {
     return (
       <>
@@ -296,7 +296,7 @@ interface LedgerLinesTableProps {
   lines: LedgerLine[]
 }
 
-function LedgerLinesTable({ lines }: LedgerLinesTableProps) {
+function LedgerLinesTable({ lines }: Readonly<LedgerLinesTableProps>) {
   const { t } = useTranslation('ledger')
   const isCompact = useCompactLayout()
   const totalDebit = lines.reduce((s, l) => s + (l.debit_cents ?? 0), 0)

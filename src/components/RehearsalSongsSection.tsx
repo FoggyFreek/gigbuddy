@@ -21,7 +21,7 @@ interface RehearsalSongsSectionProps {
   canWrite?: boolean
 }
 
-export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong, canWrite = true }: RehearsalSongsSectionProps) {
+export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong, canWrite = true }: Readonly<RehearsalSongsSectionProps>) {
   const { t } = useTranslation('rehearsals')
   return (
     <Grid size={12}>

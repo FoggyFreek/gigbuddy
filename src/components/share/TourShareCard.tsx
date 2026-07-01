@@ -50,7 +50,7 @@ interface TourFrameProps {
   children?: ReactNode
 }
 
-function TourFrame({ format, photoSrc, photoOpacity, zoom, pan, children }: TourFrameProps) {
+function TourFrame({ format, photoSrc, photoOpacity, zoom, pan, children }: Readonly<TourFrameProps>) {
   const f = SHARE_FORMATS[format]
   return (
     <div
@@ -119,7 +119,7 @@ interface GigRowProps {
   showBanners?: boolean
 }
 
-function GigRow({ gig, today, fontSize = 28, rowHeight, accent, showBanners }: GigRowProps) {
+function GigRow({ gig, today, fontSize = 28, rowHeight, accent, showBanners }: Readonly<GigRowProps>) {
   const gigDate = String(gig.event_date).slice(0, 10)
   const isPast = today ? gigDate < today : false
   const d = new Date(String(gig.event_date))
@@ -234,7 +234,7 @@ interface GigListProps {
   showBanners?: boolean
 }
 
-function GigList({ gigs, today, fontSize, rowHeight, accent, showBanners }: GigListProps) {
+function GigList({ gigs, today, fontSize, rowHeight, accent, showBanners }: Readonly<GigListProps>) {
   if (gigs.length === 0) {
     return (
       <div
@@ -276,11 +276,10 @@ interface TourLayoutProps {
   socials?: Socials
   logoSrc?: string
   showBanners?: boolean
-  format?: string
 }
 
 // Square layout: compact, graphic, medium logo
-function TourSquare({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, today, socials, logoSrc, showBanners }: TourLayoutProps) {
+function TourSquare({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, today, socials, logoSrc, showBanners }: Readonly<TourLayoutProps>) {
   const LIST_AVAILABLE = 620
   const count = gigs.length || 1
   const fontSize = calculateRowFontSize(count, LIST_AVAILABLE)
@@ -333,7 +332,7 @@ function TourSquare({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, tod
 }
 
 // Story layout: airy, large logo, "ON TOUR" and year on separate lines for drama
-function TourStory({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, today, socials, logoSrc, showBanners }: TourLayoutProps) {
+function TourStory({ gigs, photoSrc, photoOpacity, zoom, pan, accent, year, today, socials, logoSrc, showBanners }: Readonly<TourLayoutProps>) {
   const LIST_AVAILABLE = 1280
   const count = gigs.length || 1
   const fontSize = calculateRowFontSize(count, LIST_AVAILABLE)

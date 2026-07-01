@@ -51,7 +51,7 @@ interface DayNumberProps {
   theme: Theme
 }
 
-function DayNumber({ date, mobile, isToday, isSelected, inMonth, theme }: DayNumberProps) {
+function DayNumber({ date, mobile, isToday, isSelected, inMonth, theme }: Readonly<DayNumberProps>) {
   if (mobile) {
     let bgcolor = 'transparent'
     if (isToday) bgcolor = 'primary.main'
@@ -86,7 +86,7 @@ interface DotProps {
   dataAttr?: Record<string, string | number>
 }
 
-function Dot({ bgcolor, opacity, dataAttr }: DotProps) {
+function Dot({ bgcolor, opacity, dataAttr }: Readonly<DotProps>) {
   return <Box {...dataAttr} sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor, opacity }} />
 }
 
@@ -95,7 +95,7 @@ interface MobileDotsProps {
   members: Member[]
 }
 
-function MobileDots({ cell, members }: MobileDotsProps) {
+function MobileDots({ cell, members }: Readonly<MobileDotsProps>) {
   return (
     <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, justifyContent: 'center', flexWrap: 'wrap', gap: 0.5, rowGap: 0.25 }}>
       {(cell.cellGigs ?? []).map((gig) => (
@@ -120,7 +120,7 @@ interface GigBarProps {
   onGigClick?: (gig: Gig) => void
 }
 
-function GigBar({ gig, theme, onGigClick }: GigBarProps) {
+function GigBar({ gig, theme, onGigClick }: Readonly<GigBarProps>) {
   const { t } = useTranslation(['availability', 'gigs'])
   const paletteColor = GIG_STATUS_COLORS[gig.status ?? ''] || 'grey.500'
   const resolvedColor = resolvePaletteColor(theme, paletteColor)
@@ -164,7 +164,7 @@ interface RehearsalBarProps {
   onRehearsalClick?: (reh: Rehearsal) => void
 }
 
-function RehearsalBar({ reh, theme, onRehearsalClick }: RehearsalBarProps) {
+function RehearsalBar({ reh, theme, onRehearsalClick }: Readonly<RehearsalBarProps>) {
   const { t } = useTranslation(['availability', 'rehearsals'])
   const yes = reh.participants?.filter((p) => p.vote === 'yes').length ?? 0
   const total = reh.participants?.length ?? 0
@@ -210,7 +210,7 @@ interface BandEventBarProps {
   onBandEventClick?: (ev: BandEvent) => void
 }
 
-function BandEventBar({ ev, theme, onBandEventClick }: BandEventBarProps) {
+function BandEventBar({ ev, theme, onBandEventClick }: Readonly<BandEventBarProps>) {
   const resolvedColor = resolvePaletteColor(theme, BAND_EVENT_COLOR)
   return (
     <Tooltip title={[ev.title, ev.location].filter(Boolean).join(' — ')}>
@@ -243,7 +243,7 @@ interface SlotBarProps {
   onSlotClick: (slot: Slot) => void
 }
 
-function SlotBar({ slot, members, theme, onSlotClick }: SlotBarProps) {
+function SlotBar({ slot, members, theme, onSlotClick }: Readonly<SlotBarProps>) {
   const { t } = useTranslation('availability')
   const color = getMemberColor(slot, members)
   const isUnavailable = slot.status === 'unavailable'
@@ -284,7 +284,7 @@ interface DesktopEventsProps {
   onSlotClick: (slot: Slot) => void
 }
 
-function DesktopEvents({ cell, members, theme, onGigClick, onRehearsalClick, onBandEventClick, onSlotClick }: DesktopEventsProps) {
+function DesktopEvents({ cell, members, theme, onGigClick, onRehearsalClick, onBandEventClick, onSlotClick }: Readonly<DesktopEventsProps>) {
   return (
     <>
       <Stack spacing={0.375} sx={{ mt: 0.25 }}>
@@ -320,7 +320,7 @@ interface CalendarCellProps {
 
 export default function CalendarCell({
   cell, members, mobile, onDayClick, onSlotClick, onGigClick, onRehearsalClick, onBandEventClick,
-}: CalendarCellProps) {
+}: Readonly<CalendarCellProps>) {
   const theme = useTheme()
   const { iso, date, inMonth, isRowStart, week, isSelected, isToday, bgcolor } = cell
 

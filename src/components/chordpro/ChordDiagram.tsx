@@ -20,7 +20,7 @@ const PAD_RIGHT = 8
 const BOARD_TOP = 22
 const MUTE = -1
 
-export default function ChordDiagram({ name, shape }: ChordDiagramProps) {
+export default function ChordDiagram({ name, shape }: Readonly<ChordDiagramProps>) {
   // No fretted shape (unknown chord, or a keyboard keys-only define): show the
   // name without a fretboard, as ChordPro does for undefined chords.
   if (!shape || shape.frets.length === 0) {

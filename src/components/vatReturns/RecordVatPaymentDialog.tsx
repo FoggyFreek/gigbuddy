@@ -33,7 +33,7 @@ interface RecordVatPaymentDialogProps {
 // Records a (partial) payment to — or refund from — the tax authority against
 // a filed declaration. The bank account picker lists the tenant's active asset
 // accounts and defaults to the primary checking account from settings.
-export default function RecordVatPaymentDialog({ vatReturn, onSubmit, onClose }: RecordVatPaymentDialogProps) {
+export default function RecordVatPaymentDialog({ vatReturn, onSubmit, onClose }: Readonly<RecordVatPaymentDialogProps>) {
   const { t } = useTranslation(['vatReturns', 'common'])
   const isRefund = vatReturn.direction === 'receivable'
   const outstanding = outstandingCents(vatReturn)

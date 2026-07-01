@@ -49,7 +49,7 @@ export default function ContactFormModal({
   categories = ALL_CONTACT_CATEGORIES,
   title,
   submitLabel,
-}: ContactFormModalProps) {
+}: Readonly<ContactFormModalProps>) {
   const { t } = useTranslation(['contacts', 'common'])
   const [form, setForm] = useState(() => ({
     name:     initial?.name ?? EMPTY_FORM.name,

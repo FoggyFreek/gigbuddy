@@ -52,7 +52,7 @@ function inviteState(invite: Invite): { label: string; color: string } {
   return { label: 'active', color: 'success' }
 }
 
-export default function InvitesSection({ canIssueAdmin = false }: InvitesSectionProps) {
+export default function InvitesSection({ canIssueAdmin = false }: Readonly<InvitesSectionProps>) {
   const [invites, setInvites] = useState<Invite[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

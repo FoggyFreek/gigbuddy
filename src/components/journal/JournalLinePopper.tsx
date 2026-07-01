@@ -17,7 +17,7 @@ interface JournalLinePoppperProps {
 }
 
 // Per-line action popper: duplicate, delete, add line (matches the screenshot).
-export default function JournalLinePopper({ anchorEl, onClose, onDuplicate, onDelete, onAdd, canDelete }: JournalLinePoppperProps) {
+export default function JournalLinePopper({ anchorEl, onClose, onDuplicate, onDelete, onAdd, canDelete }: Readonly<JournalLinePoppperProps>) {
   const { t } = useTranslation('journal')
   return (
     <Popover

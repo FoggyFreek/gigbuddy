@@ -80,7 +80,7 @@ interface SongImportDialogProps {
   onClose: (imported: boolean) => void
 }
 
-export default function SongImportDialog({ onClose }: SongImportDialogProps) {
+export default function SongImportDialog({ onClose }: Readonly<SongImportDialogProps>) {
   const { t } = useTranslation(['songs', 'common'])
   const [step, setStep] = useState<ImportStep>('upload')
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])

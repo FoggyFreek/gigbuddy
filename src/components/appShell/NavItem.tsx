@@ -22,7 +22,7 @@ interface NavItemProps {
   onClick?: () => void
 }
 
-export default function NavItem({ item, pathname, isNavCollapsed, indent, rail, onClick }: NavItemProps) {
+export default function NavItem({ item, pathname, isNavCollapsed, indent, rail, onClick }: Readonly<NavItemProps>) {
   const selected = isItemSelected(item.to, pathname)
   const Icon = item.icon
   return (

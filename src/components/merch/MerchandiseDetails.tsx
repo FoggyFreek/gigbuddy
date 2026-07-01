@@ -36,7 +36,7 @@ interface MerchandiseDetailsProps {
   onReload?: () => void
 }
 
-export default function MerchandiseDetails({ productId, period, onReload }: MerchandiseDetailsProps) {
+export default function MerchandiseDetails({ productId, period, onReload }: Readonly<MerchandiseDetailsProps>) {
   const { t } = useTranslation('merch')
   const [sales, setSales] = useState<MerchSale[] | null>(null)
   const [loading, setLoading] = useState(true)

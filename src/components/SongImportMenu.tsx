@@ -28,7 +28,7 @@ interface SongImportMenuProps {
   onSongCreated: (song: Song) => void
 }
 
-export default function SongImportMenu({ onImported, onSongCreated }: SongImportMenuProps) {
+export default function SongImportMenu({ onImported, onSongCreated }: Readonly<SongImportMenuProps>) {
   const { t } = useTranslation('songs')
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [csvOpen, setCsvOpen] = useState(false)

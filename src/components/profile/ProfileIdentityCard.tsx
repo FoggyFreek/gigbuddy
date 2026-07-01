@@ -59,7 +59,7 @@ interface CameraButtonProps {
   iconSize?: number
 }
 
-function CameraButton({ onClick, disabled, tooltipTitle, sx, iconSize = 16 }: CameraButtonProps) {
+function CameraButton({ onClick, disabled, tooltipTitle, sx, iconSize = 16 }: Readonly<CameraButtonProps>) {
   return (
     <Tooltip title={tooltipTitle}>
       <span>
@@ -89,7 +89,7 @@ interface UploadOverlayProps {
   borderRadius?: string
 }
 
-function UploadOverlay({ show, borderRadius = '0' }: UploadOverlayProps) {
+function UploadOverlay({ show, borderRadius = '0' }: Readonly<UploadOverlayProps>) {
   if (!show) return null
   return (
     <Box sx={{
@@ -106,7 +106,7 @@ function UploadOverlay({ show, borderRadius = '0' }: UploadOverlayProps) {
 export default function ProfileIdentityCard({
   form, isAdmin, editing, onToggleEditing, onChange,
   logo, logoDark, banner, avatar,
-}: ProfileIdentityCardProps) {
+}: Readonly<ProfileIdentityCardProps>) {
   const { t } = useTranslation(['profile', 'common'])
   const { mode } = useThemeMode()
   const [logoMenuAnchor, setLogoMenuAnchor] = useState<HTMLElement | null>(null)

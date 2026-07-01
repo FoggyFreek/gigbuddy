@@ -22,7 +22,7 @@ interface FinancialsEditFormProps {
   schedule: (patch: Partial<ProfileForm>) => void
 }
 
-function FinancialsEditForm({ form, onChange, onFormChange, schedule }: FinancialsEditFormProps) {
+function FinancialsEditForm({ form, onChange, onFormChange, schedule }: Readonly<FinancialsEditFormProps>) {
   const { t } = useTranslation('profile')
   function handleTaxPercentageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value
@@ -157,7 +157,7 @@ interface FinancialsViewProps {
   form: ProfileForm
 }
 
-function FinancialsView({ form }: FinancialsViewProps) {
+function FinancialsView({ form }: Readonly<FinancialsViewProps>) {
   const { t } = useTranslation(['profile', 'common'])
   const taxPercentageDisplay = form.tax_percentage != null && form.tax_percentage !== ('' as unknown as number)
     ? `${form.tax_percentage}%`
@@ -217,7 +217,7 @@ interface ProfileFinancialsTabProps {
   schedule: (patch: Partial<ProfileForm>) => void
 }
 
-export default function ProfileFinancialsTab({ form, isAdmin, editing, onToggleEditing, onChange, onFormChange, schedule }: ProfileFinancialsTabProps) {
+export default function ProfileFinancialsTab({ form, isAdmin, editing, onToggleEditing, onChange, onFormChange, schedule }: Readonly<ProfileFinancialsTabProps>) {
   const { t } = useTranslation(['profile', 'common'])
   const editable = editing && isAdmin
   return (

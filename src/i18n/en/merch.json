@@ -13,6 +13,13 @@
     "priceLine": "{{price}} incl. {{rate}}% VAT · cost {{cost}}",
     "onHand": "{{qty}} on hand",
     "archive": "Archive",
+    "showArchived": "Show archived products",
+    "hideArchived": "Hide archived products",
+    "archiveConfirm": {
+      "title": "Archive this product?",
+      "body": "‘{{name}}’ will be archived. It can no longer be sold or picked when recording new sales. Its past sales and stock history stay intact, and it stays visible under “Show archived products”. This can't be undone.",
+      "confirm": "Archive"
+    },
     "table": {
       "name": "Name",
       "unitCost": "Unit cost",
@@ -78,6 +85,14 @@
     "gigOptional": "Gig (optional)",
     "customerPays": "Customer pays {{amount}}",
     "submit": "Record sale"
+  },
+  "noStock": {
+    "title": "No stock available",
+    "intro": "You need stock in order to record a sale. To add stock for any of your products, follow these steps:",
+    "step1": "Add the product.",
+    "step2": "Register a purchase under ‘Purchases’ and link it to your product(s). This recalculates the unit cost based on the purchase.",
+    "step3": "Record a sale to calculate revenue.",
+    "close": "Got it"
   },
   "void": {
     "title": "Void this sale?",

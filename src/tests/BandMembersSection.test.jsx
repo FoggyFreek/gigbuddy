@@ -80,6 +80,18 @@ describe('BandMembersSection', () => {
     await waitFor(() => expect(deleteMember).toHaveBeenCalledWith(1))
   })
 
+  it('shows a gigBuddy badge only for members linked to a user', async () => {
+    listMembers.mockResolvedValueOnce([
+      { id: 1, name: 'Alice', role: 'Guitar', color: '#e53935', sort_order: 0, position: 'lead', user_id: 42 },
+      { id: 2, name: 'Bob', role: 'Drums', color: '#1e88e5', sort_order: 1, position: 'lead', user_id: null },
+    ])
+    wrap(<BandMembersSection />)
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+
+    const badges = screen.getAllByAltText('gigBuddy user')
+    expect(badges).toHaveLength(1)
+  })
+
   it('clicking a color swatch saves color immediately', async () => {
     const user = userEvent.setup()
     wrap(<BandMembersSection />)

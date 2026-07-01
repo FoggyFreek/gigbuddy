@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Invoice, Id } from '../../types/entities.ts'
+import type { Invoice } from '../../types/entities.ts'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -47,7 +47,7 @@ interface PaymentLinkPanelProps {
   onUpdated: (patch: Partial<Invoice>) => void
 }
 
-export default function PaymentLinkPanel({ invoice, onUpdated }: PaymentLinkPanelProps) {
+export default function PaymentLinkPanel({ invoice, onUpdated }: Readonly<PaymentLinkPanelProps>) {
   const { t } = useTranslation('invoices')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
