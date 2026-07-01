@@ -4,6 +4,8 @@ Guidance for Claude Code working in this repository. These are the non-obvious f
 
 ## Environment & secrets
 
+**Node 24** everywhere: local dev, CI (`.github/workflows/deploy.yml`), and the Docker images (`node:24-alpine`). Keep the three in sync when bumping.
+
 **Secrets are injected by Infisical — never edit `.env` by hand and never paste credentials.** Every command that needs env vars must be wrapped:
 
 ```
