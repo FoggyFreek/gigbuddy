@@ -1,0 +1,50 @@
+{
+  "bell": {
+    "title": "Meldingen",
+    "ariaLabel": "Meldingen",
+    "markAllRead": "Alles gelezen",
+    "settingsAria": "Meldingsinstellingen",
+    "empty": "Geen meldingen",
+    "removeAria": "Melding verwijderen"
+  },
+  "settings": {
+    "title": "Accountinstellingen",
+    "sections": {
+      "notifications": "Meldingen",
+      "theme": "Thema"
+    },
+    "theme": {
+      "title": "Thema",
+      "description": "Kies de stijl van het oppervlak voor dit apparaat. De accentkleur van je band blijft binnen elk thema gelden.",
+      "variants": {
+        "default": { "label": "Standaard", "description": "Material 3-violet" },
+        "warm": { "label": "Warm", "description": "Zand- en aardetinten" },
+        "slate": { "label": "Leisteen", "description": "Koel blauwgrijs" }
+      }
+    },
+    "push": {
+      "title": "Browsermeldingen",
+      "label": "Browser-pushmeldingen",
+      "description": "Ontvang meldingen in deze browser, zelfs als gigBuddy gesloten is.",
+      "denied": "Meldingen zijn geblokkeerd in de browser",
+      "unsupported": "Pushmeldingen worden niet ondersteund in deze browser"
+    },
+    "types": {
+      "title": "Soorten meldingen",
+      "description": "Kies welke meldingen je ontvangt.",
+      "labels": {
+        "gigNew": "Nieuwe optreden-opties",
+        "gigConfirmed": "Bevestigde optredens",
+        "gigImport": "Optreden-imports",
+        "rehearsalNew": "Nieuwe repetitie-opties",
+        "rehearsalConfirmed": "Bevestigde repetities",
+        "invoicePaid": "Betaalde facturen",
+        "taskAssigned": "Aan jou toegewezen taken"
+      }
+    },
+    "bands": {
+      "title": "Bands",
+      "description": "Kies van welke bands je meldingen ontvangt."
+    }
+  }
+}

@@ -16,6 +16,7 @@ vi.mock('../../../server/utils/storage.js', () => ({
 vi.mock('../../../server/utils/sendPush.js', () => ({
   sendPushToTenant: vi.fn(),
   sendPushToMember: vi.fn(),
+  sendPushToUsers: vi.fn(),
 }))
 
 // statisticsService pulls in the pg pool; mock it so these stay unit tests and

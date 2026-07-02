@@ -18,22 +18,29 @@ import {
 } from '../repositories/gigRepository.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { parseId, buildGigTaskUpdateFields } from '../validators/gigValidators.js'
-import { sendPushToMember } from '../utils/sendPush.js'
+import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
 
 const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
 
 // ---------- notifications ----------
 
-// Pushes a "task assigned to you" notification to the assignee. The gig name is
-// only appended when the task is linked to a gig.
+// Notifies the assignee that a task was assigned to them. Only the gig
+// description read uses the caller's db — dispatchNotification deliberately
+// runs on its own pool so it never joins the caller's transaction. An assignee
+// who muted the band or the task-assigned type gets nothing (prefs apply).
 async function notifyTaskAssignment(db, tenantId, task) {
   const description = task.gig_id ? await getGigDescription(db, task.gig_id, tenantId) : null
   const suffix = description ? ` (${description})` : ''
-  sendPushToMember(task.assigned_to, tenantId, {
+  await dispatchNotification({
+    tenantId,
+    type: 'task-assigned',
     title: 'Task assigned to you',
     body: `${task.title}${suffix}`,
     url: '/tasks',
+    sourceType: 'task',
+    sourceId: task.id,
+    bandMemberId: task.assigned_to,
   }).catch((err) => logger.error('push.task_assignment_notify_failed', { err, tenantId, taskId: task.id }))
 }
 

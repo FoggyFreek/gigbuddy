@@ -12,8 +12,8 @@ self.addEventListener('push', (event) => {
     catch { data = { body: event.data.text() } }
   }
   const { title = 'gigBuddy', body = '', tag = 'default', url = '/', tenantId, tenantSlug } = data
-  event.waitUntil(
-    self.registration.showNotification(title, {
+  event.waitUntil((async () => {
+    await self.registration.showNotification(title, {
       body,
       tag,
       renotify: true,
@@ -21,7 +21,12 @@ self.addEventListener('push', (event) => {
       badge: new URL('/icons/badge-72.png', self.location.origin).href,
       data: { url, tenantId, tenantSlug },
     })
-  )
+    // Nudge open tabs so the in-app bell refreshes immediately.
+    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+    for (const client of windowClients) {
+      client.postMessage({ type: 'notification' })
+    }
+  })())
 })
 
 self.addEventListener('notificationclick', (event) => {

@@ -17,6 +17,21 @@ export function daysUntil(value: string | null | undefined, today = new Date()):
   return Math.round((dueUtc - todayUtc) / 86_400_000)
 }
 
+// Compact relative timestamp for feeds ("5 minutes ago", "yesterday"); falls
+// back to an absolute short date beyond a week. Localized via Intl.
+export function formatRelativeTime(value: string | Date, locale: string, now = new Date()): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+  const minutes = Math.round((d.getTime() - now.getTime()) / 60_000)
+  if (Math.abs(minutes) < 60) return rtf.format(minutes, 'minute')
+  const hours = Math.round(minutes / 60)
+  if (Math.abs(hours) < 24) return rtf.format(hours, 'hour')
+  const days = Math.round(hours / 24)
+  if (Math.abs(days) < 7) return rtf.format(days, 'day')
+  return formatShortDate(d, locale)
+}
+
 // A due date as a relative label ("today"/"tomorrow"/"in 3 days") when it lands
 // within the coming week, otherwise an absolute short date. Localized via Intl.
 export function formatDueDate(date: string, locale: string): string {

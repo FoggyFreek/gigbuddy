@@ -59,7 +59,7 @@ router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res)
   const result = await createRehearsal(req.tenantId, req.user.id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.rehearsal)
-  notifyRehearsalCreated(req.tenantId, result.rehearsal)
+  await notifyRehearsalCreated(req.tenantId, result.rehearsal)
 })
 
 // Update rehearsal (partial)
@@ -68,7 +68,7 @@ router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, 
   const result = await patchRehearsal(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.rehearsal)
-  if (result.confirmed) notifyRehearsalConfirmed(req.tenantId, result.rehearsal)
+  if (result.confirmed) await notifyRehearsalConfirmed(req.tenantId, result.rehearsal)
 })
 
 // Delete rehearsal

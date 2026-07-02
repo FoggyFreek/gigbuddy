@@ -16,7 +16,8 @@ import {
   removeMolliePaymentLink,
   syncInvoicePaymentStatus,
 } from './molliePaymentLinkService.js'
-import { sendPushToTenant } from '../utils/sendPush.js'
+import { dispatchNotification } from './notificationService.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { logger } from '../utils/logger.js'
 import { invoiceProjection } from '../repositories/invoiceProjection.js'
 import {
@@ -884,17 +885,23 @@ export async function syncInvoicePaymentLink(pool, tenantId, invoiceId) {
   }
 }
 
-// Fire-and-forget push to all approved members of the invoice's tenant that an
-// invoice was paid. Mirrors the notify* helpers in gigService.js: the caller
-// owns the "should we notify?" decision; this owns payload + dispatch + logging.
+// Notifies that an invoice was paid. Mirrors the notify* helpers in
+// gigService.js: the caller owns the "should we notify?" decision; this owns
+// payload + dispatch + logging. The body carries customer and amount, so the
+// audience is restricted to members holding finance.view (invoices routes are
+// gated by the same permission) — super admins included.
 export function notifyInvoicePaid(tenantId, invoice) {
   const amount = `€${((invoice.total_cents ?? 0) / 100).toFixed(2)}`
-  sendPushToTenant(tenantId, {
+  return dispatchNotification({
+    tenantId,
+    type: 'invoice-paid',
     title: 'Invoice paid',
     body: [invoice.invoice_number, invoice.customer_name, amount]
       .filter(Boolean).join(' · '),
-    tag: 'invoice-paid',
     url: `/invoices/${invoice.id}`,
+    sourceType: 'invoice',
+    sourceId: invoice.id,
+    requiredPermission: PERMISSIONS.FINANCE_VIEW,
   }).catch((err) => logger.error('invoice.paid_notification_failed', { err, tenantId }))
 }
 

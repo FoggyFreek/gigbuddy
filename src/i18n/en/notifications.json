@@ -1,0 +1,50 @@
+{
+  "bell": {
+    "title": "Notifications",
+    "ariaLabel": "Notifications",
+    "markAllRead": "Mark all read",
+    "settingsAria": "Notification settings",
+    "empty": "No notifications",
+    "removeAria": "Remove notification"
+  },
+  "settings": {
+    "title": "Account settings",
+    "sections": {
+      "notifications": "Notifications",
+      "theme": "Theme"
+    },
+    "theme": {
+      "title": "Theme",
+      "description": "Choose the surface style for this device. Your band's accent color still applies within each theme.",
+      "variants": {
+        "default": { "label": "Default", "description": "Material 3 violet" },
+        "warm": { "label": "Warm", "description": "Sand & earth tones" },
+        "slate": { "label": "Slate", "description": "Cool blue-grey" }
+      }
+    },
+    "push": {
+      "title": "Browser notifications",
+      "label": "Browser push notifications",
+      "description": "Deliver notifications to this browser, even when gigBuddy is closed.",
+      "denied": "Notifications blocked in browser",
+      "unsupported": "Push notifications are not supported in this browser"
+    },
+    "types": {
+      "title": "Notification types",
+      "description": "Choose which notifications you receive.",
+      "labels": {
+        "gigNew": "New gig options",
+        "gigConfirmed": "Confirmed gigs",
+        "gigImport": "Gig imports",
+        "rehearsalNew": "New rehearsal options",
+        "rehearsalConfirmed": "Confirmed rehearsals",
+        "invoicePaid": "Paid invoices",
+        "taskAssigned": "Tasks assigned to you"
+      }
+    },
+    "bands": {
+      "title": "Bands",
+      "description": "Choose which bands you receive notifications from."
+    }
+  }
+}

@@ -3,7 +3,7 @@
 // success returns a domain payload (see each function).
 import pool from '../db/index.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
-import { sendPushToTenant } from '../utils/sendPush.js'
+import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
 import {
   VALID_STATUSES,
@@ -45,22 +45,30 @@ function rehearsalDateStr(rehearsal) {
   return rehearsal.proposed_date?.toISOString?.().slice(0, 10) ?? String(rehearsal.proposed_date)
 }
 
+// Each notify* returns the dispatch promise so callers can await persistence
+// (the in-app rows) without a failure ever reaching the HTTP response.
 export function notifyRehearsalCreated(tenantId, rehearsal) {
-  sendPushToTenant(tenantId, {
+  return dispatchNotification({
+    tenantId,
+    type: 'rehearsal-new',
     title: 'New rehearsal option',
     body: [rehearsalDateStr(rehearsal), rehearsal.location].filter(Boolean).join(' · '),
-    tag: 'rehearsal-new',
     url: '/rehearsals',
-  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
+    sourceType: 'rehearsal',
+    sourceId: rehearsal.id,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
 }
 
 export function notifyRehearsalConfirmed(tenantId, rehearsal) {
-  sendPushToTenant(tenantId, {
+  return dispatchNotification({
+    tenantId,
+    type: 'rehearsal-confirmed',
     title: 'Rehearsal confirmed!',
     body: rehearsalDateStr(rehearsal),
-    tag: 'rehearsal-confirmed',
     url: '/rehearsals',
-  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
+    sourceType: 'rehearsal',
+    sourceId: rehearsal.id,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
 }
 
 // ---------- internals ----------

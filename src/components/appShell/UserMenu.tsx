@@ -5,9 +5,9 @@ import ListItemText from '@mui/material/ListItemText'
 import ListSubheader from '@mui/material/ListSubheader'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import CheckIcon from '@mui/icons-material/Check'
 import LogoutIcon from '@mui/icons-material/Logout'
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import type { Id } from '../../types/entities.ts'
 
 interface ApprovedMembership {
@@ -20,7 +20,6 @@ interface UserMenuProps {
   anchorEl?: Element | null
   open: boolean
   onClose: () => void
-  isSuperAdmin?: boolean
   approvedMemberships: ApprovedMembership[]
   activeTenantId?: Id
   onSwitch: (tenantId: Id) => void
@@ -28,7 +27,7 @@ interface UserMenuProps {
 }
 
 export default function UserMenu({
-  anchorEl, open, onClose, isSuperAdmin, approvedMemberships, activeTenantId, onSwitch, onLogout,
+  anchorEl, open, onClose, approvedMemberships, activeTenantId, onSwitch, onLogout,
 }: Readonly<UserMenuProps>) {
   return (
     <Menu
@@ -59,14 +58,12 @@ export default function UserMenu({
         )),
         <Divider key="div" />,
       ]}
-      {isSuperAdmin && (
-        <MenuItem component={NavLink} to="/admin/tenants" onClick={onClose}>
-          <ListItemIcon>
-            <AdminPanelSettingsIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Manage tenants" />
-        </MenuItem>
-      )}
+      <MenuItem component={NavLink} to="/account" onClick={onClose}>
+        <ListItemIcon>
+          <ManageAccountsIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Account settings" />
+      </MenuItem>
       <MenuItem onClick={onLogout}>
         <ListItemIcon>
           <LogoutIcon fontSize="small" />

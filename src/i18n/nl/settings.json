@@ -1,14 +1,5 @@
 {
   "title": "Instellingen",
-  "theme": {
-    "title": "Thema",
-    "description": "Kies de stijl van het oppervlak voor dit apparaat. Je accentkleur blijft binnen elk thema gelden.",
-    "variants": {
-      "default": { "label": "Standaard", "description": "Material 3-violet" },
-      "warm": { "label": "Warm", "description": "Zand- en aardetinten" },
-      "slate": { "label": "Leisteen", "description": "Koel blauwgrijs" }
-    }
-  },
   "accentColor": {
     "title": "Accentkleur",
     "description": "Kies de primaire kleur die in de hele app voor deze band wordt gebruikt.",

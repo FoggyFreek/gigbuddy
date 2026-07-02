@@ -137,6 +137,50 @@ export interface Tenant {
   tiktok_handle?: string
 }
 
+// In-app notification shown under the bell. Deliberately user-scoped and
+// cross-tenant: tenantId/tenantName identify the band it came from, and
+// clicking one may switch the active tenant. Server payload is camelCase.
+export type NotificationType =
+  | 'gig-new'
+  | 'gig-confirmed'
+  | 'gig-import'
+  | 'rehearsal-new'
+  | 'rehearsal-confirmed'
+  | 'invoice-paid'
+  | 'task-assigned'
+
+export interface AppNotification {
+  id: number
+  tenantId: number
+  tenantName: string
+  tenantAvatarPath: string | null
+  type: string
+  title: string
+  body: string
+  url: string
+  sourceType: string | null
+  sourceId: number | null
+  readAt: string | null
+  createdAt: string
+}
+
+export interface NotificationTypePref {
+  type: string
+  enabled: boolean
+}
+
+export interface NotificationTenantPref {
+  tenantId: number
+  tenantName: string
+  avatarPath: string | null
+  enabled: boolean
+}
+
+export interface NotificationPrefs {
+  types: NotificationTypePref[]
+  tenants: NotificationTenantPref[]
+}
+
 export interface Contact {
   id?: Id
   name?: string

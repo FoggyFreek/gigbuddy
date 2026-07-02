@@ -57,6 +57,11 @@ function wrap(ui, userOverride = {}) {
 }
 
 describe('TenantSettingsPage — admin view', () => {
+  it('does not render the device theme section', () => {
+    wrap(<TenantSettingsPage />)
+    expect(screen.queryByText(/^theme$/i)).not.toBeInTheDocument()
+  })
+
   it('renders Chart of Accounts section for admins', async () => {
     wrap(<TenantSettingsPage />)
     await waitFor(() => {

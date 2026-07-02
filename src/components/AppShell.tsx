@@ -55,13 +55,12 @@ import { useProfile } from '../contexts/profileContext.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { PERMISSIONS, type Permission } from '../auth/permissions.ts'
-import { usePushNotifications } from '../hooks/usePushNotifications.ts'
 import { useTenantQuerySync } from '../hooks/useTenantQuerySync.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import { ContentWidthContext } from '../contexts/contentWidthContext.ts'
 import NavGroup from './appShell/NavGroup.tsx'
 import { isItemSelected } from './appShell/navSelection.ts'
-import NotificationToggle from './appShell/NotificationToggle.tsx'
+import NotificationsBell from './appShell/NotificationsBell.tsx'
 import SearchPanel from './appShell/SearchPanel.tsx'
 import SettingsMenu from './appShell/SettingsMenu.tsx'
 import UserMenu from './appShell/UserMenu.tsx'
@@ -165,7 +164,6 @@ export default function AppShell() {
   const { pathname } = useLocation()
   const { bandName } = useProfile()
   const { user, logout, switchTenant } = useAuth()
-  const { status: pushStatus, subscribe, unsubscribe } = usePushNotifications()
   const { mode, toggleTheme } = useThemeMode()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -353,11 +351,7 @@ export default function AppShell() {
               </IconButton>
             </Tooltip>
           )}
-          <NotificationToggle
-            status={pushStatus}
-            onSubscribe={subscribe}
-            onUnsubscribe={unsubscribe}
-          />
+          <NotificationsBell />
           <Tooltip title={t($ => $.shell.settings)}>
             <IconButton
               onClick={(e) => setSettingsMenuAnchor(e.currentTarget)}
@@ -397,7 +391,6 @@ export default function AppShell() {
                 anchorEl={userMenuAnchor}
                 open={Boolean(userMenuAnchor)}
                 onClose={() => setUserMenuAnchor(null)}
-                isSuperAdmin={isSuperAdmin}
                 approvedMemberships={approvedMemberships}
                 activeTenantId={activeTenantId ?? undefined}
                 onSwitch={handleSwitch}

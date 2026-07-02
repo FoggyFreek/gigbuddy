@@ -21,6 +21,7 @@ import ledgerRouter from './ledger.js'
 import reimbursementsRouter from './reimbursements.js'
 import vatReturnsRouter from './vatReturns.js'
 import pushRouter from './push.js'
+import notificationsRouter from './notifications.js'
 import authRouter from './auth.js'
 import usersRouter from './users.js'
 import tenantsRouter from './tenants.js'
@@ -159,6 +160,9 @@ router.use('/ledger', financeView, ledgerRouter)
 router.use('/reimbursements', financeView, reimbursementsRouter)
 router.use('/vat-returns', financeView, vatReturnsRouter)
 router.use('/push', tenantMember, pushRouter)
+// User-scoped, deliberately cross-tenant (the bell aggregates all bands) —
+// requireApproved only, no resolveTenantId. See migration 097.
+router.use('/notifications', requireApproved, notificationsRouter)
 router.use('/calendar-feed', tenantMember, calendarFeedRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)
 router.use('/files', tenantMember, filesRouter)

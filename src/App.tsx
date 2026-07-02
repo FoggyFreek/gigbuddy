@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './components/AppShell.tsx'
 import RequireAuth from './components/RequireAuth.tsx'
 import RequireSuperAdmin from './components/RequireSuperAdmin.tsx'
@@ -47,6 +47,7 @@ const ReimbursementsPage = lazy(() => import('./pages/ReimbursementsPage.tsx'))
 const VatReturnsPage = lazy(() => import('./pages/VatReturnsPage.tsx'))
 const VatReturnDetailPage = lazy(() => import('./pages/VatReturnDetailPage.tsx'))
 const TenantSettingsPage = lazy(() => import('./pages/TenantSettingsPage.tsx'))
+const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage.tsx'))
 const PaymentThanksPage = lazy(() => import('./pages/PaymentThanksPage.tsx'))
 const TenantsPage = lazy(() => import('./pages/admin/TenantsPage.tsx'))
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage.tsx'))
@@ -63,6 +64,9 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            {/* Per-user settings — ungated like /profile (not tenant-admin /settings). */}
+            <Route path="/account" element={<Navigate to="/account/notifications" replace />} />
+            <Route path="/account/:section" element={<UserSettingsPage />} />
             <Route path="/gigs" element={<GigsPage />}>
               <Route path=":id" element={<GigDetailPage />} />
             </Route>

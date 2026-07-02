@@ -47,14 +47,17 @@ function mollieApiError(statusCode, message = `mollie ${statusCode}`) {
 }
 
 // Stub the push fan-out so we can assert *which* tenant gets notified without
-// seeding subscriptions. Callers do `sendPushToTenant(...).catch(...)`, so the
-// mock must resolve a promise.
+// seeding subscriptions. Callers await promises off these, so the mocks must
+// resolve. The paid transition dispatches through notificationService, which
+// fans out via sendPushToUsers (and writes in-app rows to the real test DB).
 const mockSendPushToTenant = vi.fn().mockResolvedValue(undefined)
 const mockSendPushToMember = vi.fn().mockResolvedValue(undefined)
+const mockSendPushToUsers = vi.fn().mockResolvedValue(undefined)
 
 vi.mock('../../../server/utils/sendPush.js', () => ({
   sendPushToTenant: mockSendPushToTenant,
   sendPushToMember: mockSendPushToMember,
+  sendPushToUsers: mockSendPushToUsers,
 }))
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
@@ -107,6 +110,7 @@ beforeEach(async () => {
   // Keep push stubs returning a thenable after clearAllMocks.
   mockSendPushToTenant.mockResolvedValue(undefined)
   mockSendPushToMember.mockResolvedValue(undefined)
+  mockSendPushToUsers.mockResolvedValue(undefined)
 })
 
 afterAll(async () => {
@@ -596,8 +600,9 @@ describe('Webhook notifies tenant on paid transition', () => {
 
     await postWebhook(inv.id)
 
-    expect(mockSendPushToTenant).toHaveBeenCalledTimes(1)
-    expect(mockSendPushToTenant).toHaveBeenCalledWith(
+    expect(mockSendPushToUsers).toHaveBeenCalledTimes(1)
+    expect(mockSendPushToUsers).toHaveBeenCalledWith(
+      expect.any(Array),
       seed.tenantA.id,
       expect.objectContaining({
         tag: 'invoice-paid',
@@ -612,11 +617,11 @@ describe('Webhook notifies tenant on paid transition', () => {
     mollieReportsPaid()
 
     await postWebhook(inv.id)
-    expect(mockSendPushToTenant).toHaveBeenCalledTimes(1)
+    expect(mockSendPushToUsers).toHaveBeenCalledTimes(1)
 
-    mockSendPushToTenant.mockClear()
+    mockSendPushToUsers.mockClear()
     await postWebhook(inv.id)
-    expect(mockSendPushToTenant).not.toHaveBeenCalled()
+    expect(mockSendPushToUsers).not.toHaveBeenCalled()
   })
 
   it('does not notify for a non-paid status', async () => {
@@ -627,7 +632,7 @@ describe('Webhook notifies tenant on paid transition', () => {
     }))
 
     await postWebhook(inv.id)
-    expect(mockSendPushToTenant).not.toHaveBeenCalled()
+    expect(mockSendPushToUsers).not.toHaveBeenCalled()
   })
 
   it('does not notify from the manual sync endpoint', async () => {
@@ -637,7 +642,7 @@ describe('Webhook notifies tenant on paid transition', () => {
     const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link/sync`)).send()
     expect(res.status).toBe(200)
     expect(res.body.invoiceStatus).toBe('paid')
-    expect(mockSendPushToTenant).not.toHaveBeenCalled()
+    expect(mockSendPushToUsers).not.toHaveBeenCalled()
   })
 
   it('does not notify for a void invoice even when Mollie reports paid', async () => {
@@ -647,7 +652,7 @@ describe('Webhook notifies tenant on paid transition', () => {
 
     await postWebhook(inv.id)
 
-    expect(mockSendPushToTenant).not.toHaveBeenCalled()
+    expect(mockSendPushToUsers).not.toHaveBeenCalled()
     const { rows } = await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])
     expect(rows[0].status).toBe('void')
   })
@@ -659,9 +664,9 @@ describe('Webhook notifies tenant on paid transition', () => {
     await postWebhook(inv.id)
 
     // The push is scoped to the invoice's own tenant only — tenant B is never a target.
-    expect(mockSendPushToTenant).toHaveBeenCalledTimes(1)
-    expect(mockSendPushToTenant).toHaveBeenCalledWith(seed.tenantA.id, expect.any(Object))
-    expect(mockSendPushToTenant).not.toHaveBeenCalledWith(seed.tenantB.id, expect.anything())
+    expect(mockSendPushToUsers).toHaveBeenCalledTimes(1)
+    expect(mockSendPushToUsers).toHaveBeenCalledWith(expect.any(Array), seed.tenantA.id, expect.any(Object))
+    expect(mockSendPushToUsers).not.toHaveBeenCalledWith(expect.anything(), seed.tenantB.id, expect.anything())
   })
 })
 

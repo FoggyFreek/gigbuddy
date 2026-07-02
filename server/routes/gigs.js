@@ -99,7 +99,7 @@ router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req
   const result = await importGigs(req.tenantId, req.user.id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json({ created: result.created, skipped: result.skipped })
-  if (result.created > 0) notifyGigsImported(req.tenantId, result.created)
+  if (result.created > 0) await notifyGigsImported(req.tenantId, result.created)
 })
 
 // Create gig
@@ -107,7 +107,7 @@ router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res)
   const result = await createGig(req.tenantId, req.user.id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.gig)
-  notifyGigCreated(req.tenantId, result.gig)
+  await notifyGigCreated(req.tenantId, result.gig)
 })
 
 // Update gig (partial)
@@ -116,7 +116,7 @@ router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, 
   const result = await patchGig(pool, req.tenantId, id, req.body || {})
   if (result.error) return sendError(res, result.error)
   res.json(result.gig)
-  if (result.confirmed) notifyGigConfirmed(req.tenantId, result.gig)
+  if (result.confirmed) await notifyGigConfirmed(req.tenantId, result.gig)
 })
 
 // Delete gig

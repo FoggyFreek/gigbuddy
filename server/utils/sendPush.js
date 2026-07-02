@@ -79,6 +79,23 @@ export async function sendPushToTenant(tenantId, payload) {
   await fanOut(rows, { ...payload, tenantId, tenantSlug: slug })
 }
 
+// Fan out to an explicit set of users (the audience resolved by
+// notificationService), still gated by an approved membership in the tenant.
+export async function sendPushToUsers(userIds, tenantId, payload) {
+  if (!configured) return
+  if (!userIds?.length) return
+  const { rows } = await pool.query(
+    `SELECT ps.endpoint, ps.p256dh, ps.auth
+     FROM push_subscriptions ps
+     JOIN memberships m ON m.user_id = ps.user_id AND m.tenant_id = $2
+     WHERE ps.user_id = ANY($1) AND m.status = 'approved'`,
+    [userIds, tenantId],
+  )
+  if (!rows.length) return
+  const slug = await tenantSlug(tenantId)
+  await fanOut(rows, { ...payload, tenantId, tenantSlug: slug })
+}
+
 export async function sendPushToMember(bandMemberId, tenantId, payload) {
   if (!configured) return
   const { rows: members } = await pool.query(

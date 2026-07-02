@@ -8,7 +8,7 @@ import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import { uploadObject, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
-import { sendPushToTenant } from '../utils/sendPush.js'
+import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
 import { createTask as createTaskService, patchTask as patchTaskService, removeTask as removeTaskService } from './taskService.js'
 import {
@@ -66,31 +66,40 @@ function gigPushSummary(gig) {
   return [venueDisplay(gig.festival ?? gig.venue), toDateStr(gig.event_date)].filter(Boolean).join(' · ')
 }
 
+// Each notify* returns the dispatch promise so callers can await persistence
+// (the in-app rows) without a failure ever reaching the HTTP response.
 export function notifyGigCreated(tenantId, gig) {
-  sendPushToTenant(tenantId, {
+  return dispatchNotification({
+    tenantId,
+    type: 'gig-new',
     title: 'New gig option',
     body: gigPushSummary(gig),
-    tag: 'gig-new',
     url: '/gigs',
-  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
+    sourceType: 'gig',
+    sourceId: gig.id,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
 }
 
 export function notifyGigConfirmed(tenantId, gig) {
-  sendPushToTenant(tenantId, {
+  return dispatchNotification({
+    tenantId,
+    type: 'gig-confirmed',
     title: 'Gig confirmed!',
     body: gigPushSummary(gig),
-    tag: 'gig-confirmed',
     url: '/gigs',
-  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
+    sourceType: 'gig',
+    sourceId: gig.id,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
 }
 
 export function notifyGigsImported(tenantId, count) {
-  sendPushToTenant(tenantId, {
+  return dispatchNotification({
+    tenantId,
+    type: 'gig-import',
     title: `${count} gig${count === 1 ? '' : 's'} imported`,
     body: 'Your Bandsintown import is complete.',
-    tag: 'gig-import',
     url: '/gigs',
-  }).catch((err) => logger.error('push.send_to_tenant_failed', { err, tenantId }))
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
 }
 
 // ---------- internals ----------

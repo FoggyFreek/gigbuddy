@@ -1,14 +1,5 @@
 {
   "title": "Settings",
-  "theme": {
-    "title": "Theme",
-    "description": "Choose the surface style for this device. Your accent color still applies within each theme.",
-    "variants": {
-      "default": { "label": "Default", "description": "Material 3 violet" },
-      "warm": { "label": "Warm", "description": "Sand & earth tones" },
-      "slate": { "label": "Slate", "description": "Cool blue-grey" }
-    }
-  },
   "accentColor": {
     "title": "Accent color",
     "description": "Choose the primary color used throughout the app for this band.",

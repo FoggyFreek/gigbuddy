@@ -26,7 +26,7 @@ router.post('/payment-links/webhook', async (req, res) => {
   try {
     const result = await handlePaymentWebhook(pool, invoiceId)
     if (result.notify) {
-      notifyInvoicePaid(result.notify.tenantId, result.notify.invoice)
+      await notifyInvoicePaid(result.notify.tenantId, result.notify.invoice)
     }
   } catch (err) {
     logger.error('mollie.webhook_failed', { err, invoiceId })
