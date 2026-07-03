@@ -27,7 +27,10 @@
     "copy": "URL kopiëren",
     "copied": "Gekopieerd",
     "copyAria": "{{label}}-URL kopiëren",
-    "handlePlaceholder": "jouwnaam"
+    "handlePlaceholder": "jouwnaam",
+    "bandsintownFetch": "Ophalen van Bandsintown",
+    "bandsintownFetchHint": "Vul hieronder je Bandsintown artiest-ID in om je artiestennaam en sociale links op te halen.",
+    "bandsintownFetchFailed": "Artiestgegevens ophalen van Bandsintown is mislukt"
   },
   "links": {
     "label": "Label",

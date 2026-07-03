@@ -15,6 +15,7 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
+import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined'
 import ShareIcon from '@mui/icons-material/Share'
 import GigsTable from '../components/GigsTable.tsx'
 import GigFormModal from '../components/GigFormModal.tsx'
@@ -23,6 +24,7 @@ import TourShareDialog from '../components/TourShareDialog.tsx'
 import TourExportDialog from '../components/TourExportDialog.tsx'
 import BannerMosaicDialog from '../components/BannerMosaicDialog.tsx'
 import BandsintownImportDialog from '../components/BandsintownImportDialog.tsx'
+import BandsintownApiImportDialog from '../components/BandsintownApiImportDialog.tsx'
 import { listGigs } from '../api/gigs.ts'
 import { getProfile } from '../api/profile.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
@@ -49,6 +51,7 @@ export default function GigsPage() {
   const [mosaicOpen, setMosaicOpen] = useState(false)
   const [bandsintownArtistName, setBandsintownArtistName] = useState('')
   const [bandsintownImportOpen, setBandsintownImportOpen] = useState(false)
+  const [bandsintownApiImportOpen, setBandsintownApiImportOpen] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -111,6 +114,14 @@ export default function GigsPage() {
               open={!!importMenuAnchor}
               onClose={() => setImportMenuAnchor(null)}
             >
+              <MenuItem
+                onClick={() => { setImportMenuAnchor(null); setBandsintownApiImportOpen(true) }}
+                dense
+              >
+                <Button variant="outlined" size="small" fullWidth startIcon={<CloudOutlinedIcon />}>
+                  {t($ => $.toolbar.importFromBandsintownApi)}
+                </Button>
+              </MenuItem>
               <MenuItem
                 onClick={() => { setImportMenuAnchor(null); setBandsintownImportOpen(true) }}
                 dense
@@ -248,6 +259,14 @@ export default function GigsPage() {
         gigs={filteredForShare}
       />
 
+      {bandsintownApiImportOpen && (
+        <BandsintownApiImportDialog
+          onClose={(didImport) => {
+            setBandsintownApiImportOpen(false)
+            if (didImport) load()
+          }}
+        />
+      )}
       {bandsintownImportOpen && (
         <BandsintownImportDialog
           onClose={(didImport) => {

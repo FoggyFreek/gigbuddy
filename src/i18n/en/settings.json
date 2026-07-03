@@ -137,5 +137,16 @@
       "title": "Delete account?",
       "confirm": "Delete <strong>{{label}}</strong>? This cannot be undone."
     }
+  },
+  "bandsintown": {
+    "title": "Bandsintown",
+    "description": "Connect Bandsintown to fetch your artist profile and import upcoming events as gigs.",
+    "label": "Bandsintown API key (app_id)",
+    "placeholder": "your_app_id",
+    "helper": "The app_id you registered with Bandsintown for API access.",
+    "invalidFormat": "This doesn't look like a valid Bandsintown API key.",
+    "saveFailed": "Saving the API key failed.",
+    "replace": "Replace key",
+    "remove": "Remove key"
   }
 }

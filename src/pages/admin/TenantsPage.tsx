@@ -34,12 +34,14 @@ import LoginIcon from '@mui/icons-material/Login'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import UnarchiveIcon from '@mui/icons-material/Unarchive'
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import {
   listTenants,
   createTenant,
   archiveTenant,
   unarchiveTenant,
   grantMembership,
+  deleteTenant,
 } from '../../api/tenants.ts'
 import { listAllUsers } from '../../api/adminUsers.ts'
 import { getAllStorageStats, refreshAllStorageStats } from '../../api/statistics.ts'
@@ -84,6 +86,10 @@ export default function TenantsPage() {
   const [memberRole, setMemberRole] = useState('member')
   const [memberSubmitting, setMemberSubmitting] = useState(false)
   const [memberError, setMemberError] = useState('')
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; tenant: TenantRow | null }>({ open: false, tenant: null })
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const refresh = () => {
     setLoading(true)
@@ -169,6 +175,35 @@ export default function TenantsPage() {
       setMemberError(err instanceof Error ? err.message : 'Add failed')
     } finally {
       setMemberSubmitting(false)
+    }
+  }
+
+  const openDeleteDialog = (tenant: TenantRow) => {
+    if (!tenant.archived_at) return
+    setDeleteConfirmation('')
+    setDeleteError('')
+    setDeleteDialog({ open: true, tenant })
+  }
+
+  const closeDeleteDialog = () => {
+    if (deleteSubmitting) return
+    setDeleteDialog({ open: false, tenant: null })
+  }
+
+  const handleDelete = async () => {
+    const tenant = deleteDialog.tenant
+    if (!tenant?.id || deleteConfirmation !== tenant.slug) return
+    setDeleteSubmitting(true)
+    setDeleteError('')
+    try {
+      await deleteTenant(tenant.id, deleteConfirmation)
+      setDeleteDialog({ open: false, tenant: null })
+      setDeleteConfirmation('')
+      refresh()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeleteSubmitting(false)
     }
   }
 
@@ -291,6 +326,19 @@ export default function TenantsPage() {
                           {archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
                         </IconButton>
                       </Tooltip>
+                      <Tooltip title={archived ? 'Permanently delete' : 'Archive before deleting'}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => openDeleteDialog(t)}
+                            disabled={!archived}
+                            aria-label={`permanently delete ${t.band_name}`}
+                          >
+                            <DeleteForeverIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     </Stack>
                   </TableCell>
                 </TableRow>
@@ -381,6 +429,19 @@ export default function TenantsPage() {
                   <IconButton size="small" onClick={() => handleArchive(t)}>
                     {archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
                   </IconButton>
+                </Tooltip>
+                <Tooltip title={archived ? 'Permanently delete' : 'Archive before deleting'}>
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => openDeleteDialog(t)}
+                      disabled={!archived}
+                      aria-label={`permanently delete ${t.band_name}`}
+                    >
+                      <DeleteForeverIcon fontSize="small" />
+                    </IconButton>
+                  </span>
                 </Tooltip>
               </CardActions>
             </Card>
@@ -481,6 +542,47 @@ export default function TenantsPage() {
             disabled={memberSubmitting || !memberUser}
           >
             Add
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteDialog.open}
+        onClose={closeDeleteDialog}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Delete {deleteDialog.tenant?.band_name || 'tenant'} permanently?</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2">
+              This permanently deletes all PostgreSQL and RustFS data for this tenant. This action cannot be undone.
+            </Typography>
+            <Typography variant="body2">
+              Type <strong>{deleteDialog.tenant?.slug}</strong> to confirm.
+            </Typography>
+            <TextField
+              label={`Type ${deleteDialog.tenant?.slug || ''} to confirm`}
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              disabled={deleteSubmitting}
+              autoComplete="off"
+              fullWidth
+            />
+            {deleteError && (
+              <Typography color="error" variant="body2">{deleteError}</Typography>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDeleteDialog} disabled={deleteSubmitting}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={handleDelete}
+            disabled={deleteSubmitting || deleteConfirmation !== deleteDialog.tenant?.slug}
+          >
+            {deleteSubmitting ? 'Deleting…' : 'Delete permanently'}
           </Button>
         </DialogActions>
       </Dialog>

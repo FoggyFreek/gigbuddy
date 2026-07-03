@@ -17,9 +17,10 @@ export const SOCIALS: SocialEntry[] = [
   { field: 'instagram_handle',        label: 'Instagram',               Icon: InstagramIcon,    prefix: 'instagram.com/' },
   { field: 'facebook_handle',         label: 'Facebook',                Icon: FacebookIcon,     prefix: 'facebook.com/' },
   { field: 'tiktok_handle',           label: 'TikTok',                  Icon: TikTokIcon,       prefix: 'tiktok.com/@' },
-  { field: 'youtube_handle',          label: 'YouTube',                 Icon: YouTubeIcon,      prefix: 'youtube.com/@' },
+  { field: 'youtube_handle',          label: 'YouTube',                 Icon: YouTubeIcon,      prefix: 'youtube.com/' },
   { field: 'spotify_handle',          label: 'Spotify',                 Icon: SpotifyIcon,      prefix: 'open.spotify.com/artist/' },
   { field: 'bandsintown_artist_name', label: 'Bandsintown artist name', Icon: BandsintownIcon,  prefix: '' },
+  { field: 'bandsintown_artist_id',   label: 'Bandsintown artist ID',   Icon: BandsintownIcon,  prefix: 'bandsintown.com/a/' },
 ]
 
 /** The editable profile form shape. */
@@ -32,6 +33,7 @@ export interface ProfileForm {
   youtube_handle: string
   spotify_handle: string
   bandsintown_artist_name: string
+  bandsintown_artist_id: string
   formal_name: string
   address_street: string
   address_postal_code: string
@@ -53,6 +55,7 @@ export const EMPTY_FORM: ProfileForm = {
   youtube_handle: '',
   spotify_handle: '',
   bandsintown_artist_name: '',
+  bandsintown_artist_id: '',
   formal_name: '',
   address_street: '',
   address_postal_code: '',
@@ -75,6 +78,7 @@ export function profileToForm(data: Record<string, unknown>): ProfileForm {
     youtube_handle: String(data.youtube_handle || ''),
     spotify_handle: String(data.spotify_handle || ''),
     bandsintown_artist_name: String(data.bandsintown_artist_name || ''),
+    bandsintown_artist_id: String(data.bandsintown_artist_id || ''),
     formal_name: String(data.formal_name || ''),
     address_street: String(data.address_street || ''),
     address_postal_code: String(data.address_postal_code || ''),

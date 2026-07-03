@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -23,136 +23,85 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined'
-import { listGigs } from '../api/gigs.ts'
-import { importBandsintownEvents } from '../api/bandsintown.ts'
-import type { BandsintownImportResult, BandsintownImportRow } from '../api/bandsintown.ts'
-import { searchVenues } from '../api/venues.ts'
 import VenuePicker from './VenuePicker.tsx'
-import {
-  parseBandsintownCsv,
-  venueMatchScore,
-  isLikelyDuplicate,
-} from '../utils/bandsintownImport.ts'
-import type { ParsedBandsintownRow } from '../utils/bandsintownImport.ts'
-import type { Venue, Gig } from '../types/entities.ts'
+import { getBandsintownEvents, importBandsintownEvents } from '../api/bandsintown.ts'
+import type {
+  BandsintownEvent,
+  BandsintownImportResult,
+  BandsintownImportRow,
+} from '../api/bandsintown.ts'
+import { useThemeMode } from '../contexts/themeModeContext.ts'
+import type { Venue } from '../types/entities.ts'
 
-type BandsintownRow = ParsedBandsintownRow
-
-interface BandsintownImportDialogProps {
+interface BandsintownApiImportDialogProps {
   onClose: (created: boolean) => void
 }
 
 interface RowState {
   included: boolean
-  venueType: string
+  venueType: 'venue' | 'festival'
   selectedVenue: Venue | null
   status: string
-  isDuplicate: boolean
 }
 
-function buildInitialRowStates(rows: BandsintownRow[], existingGigs: Gig[]): RowState[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const gigs = existingGigs as any[]
-  return rows.map((row) => ({
-    included: !isLikelyDuplicate(row, gigs),
-    venueType: 'venue',
-    selectedVenue: null,
+function buildInitialRowStates(events: BandsintownEvent[]): RowState[] {
+  return events.map((event) => ({
+    included: !event.is_duplicate,
+    venueType: (event.matched_venue?.category === 'festival' || event.is_festival) ? 'festival' : 'venue',
+    selectedVenue: event.matched_venue
+      ? {
+          id: event.matched_venue.id,
+          name: event.matched_venue.name,
+          category: event.matched_venue.category,
+          city: event.matched_venue.city ?? undefined,
+        }
+      : null,
     status: 'confirmed',
-    isDuplicate: isLikelyDuplicate(row, gigs),
   }))
 }
 
-async function preFillVenueMatches(rows: BandsintownRow[], setRowStates: React.Dispatch<React.SetStateAction<RowState[]>>) {
-  const seen = new Set<string>()
-  const uniqueNames: string[] = []
-  for (const row of rows) {
-    const name = row.venueName.trim()
-    if (name.length >= 3 && !seen.has(name.toLowerCase())) {
-      seen.add(name.toLowerCase())
-      uniqueNames.push(name)
-    }
-  }
-  if (!uniqueNames.length) return
-
-  const cache = new Map<string, Venue[]>()
-  for (let i = 0; i < uniqueNames.length; i += 10) {
-    const chunk = uniqueNames.slice(i, i + 10)
-    const results = await Promise.allSettled(
-      chunk.map((name) => searchVenues(name.slice(0, 25))),
-    )
-    results.forEach((res, j) => {
-      cache.set(
-        chunk[j].toLowerCase(),
-        res.status === 'fulfilled' ? res.value : [],
-      )
-    })
-  }
-
-  setRowStates((prev) => {
-    const next = [...prev]
-    rows.forEach((row, i) => {
-      const candidates = cache.get(row.venueName.toLowerCase()) || []
-      if (!candidates.length) return
-      const scored = candidates
-        .map((v) => ({ venue: v, score: venueMatchScore(row.venueName, v.name ?? '') }))
-        .sort((a, b) => b.score - a.score)
-      if (scored[0].score >= 0.4) {
-        next[i] = {
-          ...next[i],
-          selectedVenue: scored[0].venue,
-          venueType: scored[0].venue.category ?? 'venue',
-        }
-      }
-    })
-    return next
-  })
-}
-
-// CSV rows go through the same import endpoint as the online import, so an
-// unmatched venue/festival is created server-side from the CSV name + city.
-function buildImportRow(row: BandsintownRow, state: RowState): BandsintownImportRow {
+function buildImportRow(event: BandsintownEvent, state: RowState): BandsintownImportRow {
   return {
-    bandsintown_event_id: row.eventId || null,
-    event_date: row.event_date,
-    event_description: row.event_description,
-    start_time: row.start_time || null,
-    end_time: row.end_time || null,
-    event_link: row.event_link || null,
-    ticket_link: row.ticket_link || null,
-    admission: row.admission,
-    venue: {
-      name: row.venueName,
-      city: row.city,
-      region: '',
-      country: '',
-      postal_code: '',
-      street_address: '',
-      location: '',
-      latitude: null,
-      longitude: null,
-    },
+    bandsintown_event_id: event.bandsintown_event_id,
+    event_date: event.event_date,
+    event_description: event.event_description,
+    start_time: event.start_time,
+    end_time: event.end_time,
+    // The Bandsintown event page URL is deliberately not imported; duplicate
+    // detection on re-import falls back to date + venue.
+    event_link: null,
+    ticket_link: event.ticket_link,
+    admission: event.admission,
+    venue: event.venue,
     venue_id: state.selectedVenue?.id ?? null,
-    category: state.venueType === 'festival' ? 'festival' : 'venue',
+    category: state.venueType,
     status: state.status,
   }
 }
 
-export default function BandsintownImportDialog({ onClose }: Readonly<BandsintownImportDialogProps>) {
+export default function BandsintownApiImportDialog({ onClose }: Readonly<BandsintownApiImportDialogProps>) {
   const { t } = useTranslation(['gigs', 'common'])
-  const fileRef = useRef<HTMLInputElement | null>(null)
-  const [step, setStep] = useState('upload')
-  const [rows, setRows] = useState<BandsintownRow[]>([])
+  const { mode } = useThemeMode()
+  const [step, setStep] = useState('loading')
+  const [artistName, setArtistName] = useState('')
+  const [events, setEvents] = useState<BandsintownEvent[]>([])
   const [rowStates, setRowStates] = useState<RowState[]>([])
-  const [existingGigs, setExistingGigs] = useState<Gig[]>([])
-  const [gigsLoaded, setGigsLoaded] = useState(false)
   const [result, setResult] = useState<BandsintownImportResult | null>(null)
-  const [parseError, setParseError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
 
   useEffect(() => {
-    listGigs()
-      .then((gigs) => { setExistingGigs(gigs); setGigsLoaded(true) })
-      .catch(() => setGigsLoaded(true))
+    getBandsintownEvents()
+      .then(({ artist, events: fetched }) => {
+        setArtistName(artist.name)
+        setEvents(fetched)
+        setRowStates(buildInitialRowStates(fetched))
+        setStep('review')
+      })
+      .catch((err) => {
+        setLoadError((err as Error).message)
+        setStep('error')
+      })
   }, [])
 
   function updateRowState(index: number, patch: Partial<RowState>) {
@@ -163,27 +112,9 @@ export default function BandsintownImportDialog({ onClose }: Readonly<Bandsintow
     })
   }
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    const text = await file.text()
-    const { rows: parsed, parseError: err } = parseBandsintownCsv(text)
-    if (err) {
-      setParseError(err)
-      return
-    }
-    setParseError(null)
-    const initialStates = buildInitialRowStates(parsed as BandsintownRow[], existingGigs)
-    setRows(parsed as BandsintownRow[])
-    setRowStates(initialStates)
-    setStep('review')
-    preFillVenueMatches(parsed as BandsintownRow[], setRowStates)
-  }
-
   async function handleImport() {
-    const payload = rows.reduce<BandsintownImportRow[]>((acc, row, i) => {
-      if (rowStates[i].included) acc.push(buildImportRow(row, rowStates[i]))
+    const payload = events.reduce<BandsintownImportRow[]>((acc, event, i) => {
+      if (rowStates[i].included) acc.push(buildImportRow(event, rowStates[i]))
       return acc
     }, [])
     setStep('importing')
@@ -203,52 +134,49 @@ export default function BandsintownImportDialog({ onClose }: Readonly<Bandsintow
 
   return (
     <Dialog open fullWidth maxWidth="xl">
-      <DialogTitle>{t($ => $.bandsintown.title)}</DialogTitle>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box
+            component="img"
+            src={mode === 'dark' ? '/share/bit/01_BIT_Logo_OverDark.png' : '/share/bit/01_BIT_Logo_OverLite.png'}
+            alt="Bandsintown"
+            sx={{ height: 22 }}
+          />
+          {t($ => $.bandsintownApi.title)}
+        </Box>
+      </DialogTitle>
 
       <DialogContent dividers>
-        {step === 'upload' && (
-          <Box sx={{ py: 2 }}>
-            {!gigsLoaded && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <CircularProgress size={18} />
-                <Typography variant="body2" color="text.secondary">
-                  {t($ => $.bandsintown.loadingGigList)}
-                </Typography>
-              </Box>
-            )}
-            {parseError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {parseError}
-              </Alert>
-            )}
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {t($ => $.bandsintown.uploadHint)}
+        {step === 'loading' && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 4 }}>
+            <CircularProgress size={18} />
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {t($ => $.bandsintownApi.loading)}
             </Typography>
-            <input
-              type="file"
-              accept=".csv"
-              ref={fileRef}
-              style={{ display: 'none' }}
-              onChange={handleFile}
-            />
-            <Button
-              disabled={!gigsLoaded}
-              onClick={() => fileRef.current?.click()}
-            >
-              {t($ => $.bandsintown.chooseFile)}
-            </Button>
           </Box>
         )}
 
-        {step === 'review' && (
+        {step === 'error' && (
+          <Alert severity="error" sx={{ my: 2 }}>
+            {loadError || t($ => $.bandsintownApi.fetchFailed)}
+          </Alert>
+        )}
+
+        {step === 'review' && events.length === 0 && (
+          <Typography variant="body2" sx={{ color: 'text.secondary', py: 2 }}>
+            {t($ => $.bandsintownApi.noEvents, { artist: artistName })}
+          </Typography>
+        )}
+
+        {step === 'review' && events.length > 0 && (
           <Box>
             {importError && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {importError}
               </Alert>
             )}
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {t($ => $.bandsintown.reviewIntro, { count: rows.length })}
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+              {t($ => $.bandsintownApi.reviewIntro, { count: events.length, artist: artistName })}
             </Typography>
             <Box sx={{ overflowX: 'auto' }}>
               <Table size="small" sx={{ minWidth: 900 }}>
@@ -257,16 +185,16 @@ export default function BandsintownImportDialog({ onClose }: Readonly<Bandsintow
                     <TableCell padding="checkbox" />
                     <TableCell>{t($ => $.bandsintown.colDate)}</TableCell>
                     <TableCell>{t($ => $.bandsintown.colEvent)}</TableCell>
-                    <TableCell>{t($ => $.bandsintown.colCsvVenueCity)}</TableCell>
+                    <TableCell>{t($ => $.bandsintownApi.colVenue)}</TableCell>
                     <TableCell>{t($ => $.bandsintown.colType)}</TableCell>
                     <TableCell sx={{ minWidth: 280 }}>{t($ => $.bandsintown.colMatch)}</TableCell>
                     <TableCell>{t($ => $.bandsintown.colStatus)}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.map((row, i) => (
+                  {events.map((event, i) => (
                     <TableRow
-                      key={`${row.event_date}|${row.event_description}|${row.venueName}`}
+                      key={event.bandsintown_event_id ?? `${event.event_date}|${event.event_description}`}
                       sx={{ opacity: rowStates[i].included ? 1 : 0.45 }}
                     >
                       <TableCell padding="checkbox">
@@ -278,7 +206,7 @@ export default function BandsintownImportDialog({ onClose }: Readonly<Bandsintow
                               updateRowState(i, { included: e.target.checked })
                             }
                           />
-                          {rowStates[i].isDuplicate && (
+                          {event.is_duplicate && (
                             <Tooltip title={t($ => $.bandsintown.duplicateTooltip)}>
                               <WarningAmberIcon
                                 fontSize="small"
@@ -290,18 +218,16 @@ export default function BandsintownImportDialog({ onClose }: Readonly<Bandsintow
                         </Box>
                       </TableCell>
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                        {row.event_date}
+                        {event.event_date}
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">{row.event_description}</Typography>
+                        <Typography variant="body2">{event.event_description}</Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">{row.venueName}</Typography>
-                        {row.city && (
-                          <Typography variant="caption" color="text.secondary">
-                            {row.city}
-                          </Typography>
-                        )}
+                        <Typography variant="body2">{event.venue.name}</Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          {[event.venue.city, event.venue.country].filter(Boolean).join(', ')}
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <ToggleButtonGroup
@@ -319,17 +245,17 @@ export default function BandsintownImportDialog({ onClose }: Readonly<Bandsintow
                       <TableCell sx={{ minWidth: 280 }}>
                         <VenuePicker
                           value={rowStates[i].selectedVenue}
-                          categoryFilter={rowStates[i].venueType as 'venue' | 'festival'}
+                          categoryFilter={rowStates[i].venueType}
                           onChange={(v: Venue | null) => updateRowState(i, { selectedVenue: v })}
                           label={undefined}
                           disabled={false}
                           onSelect={undefined}
                         />
-                        {!rowStates[i].selectedVenue && row.venueName && (
+                        {!rowStates[i].selectedVenue && event.venue.name && (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
                             <AddLocationAltOutlinedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              {t($ => $.bandsintownApi.willCreate, { name: row.venueName })}
+                              {t($ => $.bandsintownApi.willCreate, { name: event.venue.name })}
                             </Typography>
                           </Box>
                         )}
@@ -358,7 +284,7 @@ export default function BandsintownImportDialog({ onClose }: Readonly<Bandsintow
         {step === 'importing' && (
           <Box sx={{ py: 4 }}>
             <LinearProgress sx={{ mb: 2 }} />
-            <Typography variant="body2" color="text.secondary" align="center">
+            <Typography variant="body2" align="center" sx={{ color: 'text.secondary' }}>
               {t($ => $.bandsintown.importing, { count: selectedCount })}
             </Typography>
           </Box>
@@ -379,10 +305,10 @@ export default function BandsintownImportDialog({ onClose }: Readonly<Bandsintow
       </DialogContent>
 
       <DialogActions>
-        {(step === 'upload' || step === 'review') && (
+        {(step === 'review' || step === 'error') && (
           <Button onClick={() => onClose(false)}>{t($ => $.common.actions.cancel)}</Button>
         )}
-        {step === 'review' && (
+        {step === 'review' && events.length > 0 && (
           <Button
             variant="contained"
             disabled={selectedCount === 0}

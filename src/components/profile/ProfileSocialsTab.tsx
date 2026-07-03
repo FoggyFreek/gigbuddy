@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SxProps } from '@mui/material/styles'
 import type { SocialEntry, ProfileForm } from './profileForm.ts'
+import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import CircularProgress from '@mui/material/CircularProgress'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -14,6 +17,9 @@ import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import EditIcon from '@mui/icons-material/Edit'
 import { SOCIALS } from './profileForm.ts'
+import { getBandsintownArtist } from '../../api/bandsintown.ts'
+import type { BandsintownArtistSocials } from '../../api/bandsintown.ts'
+import { useThemeMode } from '../../contexts/themeModeContext.ts'
 
 interface CopyButtonProps {
   copied?: boolean
@@ -106,6 +112,70 @@ function SocialEditField({ social, handle, copied, onChange, onCopy }: Readonly<
   )
 }
 
+const SOCIAL_FIELDS: (keyof BandsintownArtistSocials)[] = [
+  'instagram_handle', 'facebook_handle', 'tiktok_handle', 'youtube_handle', 'spotify_handle',
+]
+
+interface BandsintownFetchButtonProps {
+  artistId: string
+  onChange: (field: string, value: string) => void
+}
+
+// Pulls the artist name + social links from Bandsintown and fills the
+// corresponding form fields (empty fields only get overwritten with data).
+function BandsintownFetchButton({ artistId, onChange }: Readonly<BandsintownFetchButtonProps>) {
+  const { t } = useTranslation('profile')
+  const { mode } = useThemeMode()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleFetch() {
+    setLoading(true)
+    setError(null)
+    try {
+      const artist = await getBandsintownArtist(artistId.trim())
+      if (artist.name) onChange('bandsintown_artist_name', artist.name)
+      for (const field of SOCIAL_FIELDS) {
+        const value = artist.socials[field]
+        if (value) onChange(field, value)
+      }
+    } catch (err) {
+      setError((err as Error).message || t($ => $.socials.bandsintownFetchFailed))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Box sx={{ mb: 4 }}>
+      <Button
+        variant="outlined"
+        size="small"
+        disabled={!artistId.trim() || loading}
+        onClick={handleFetch}
+        startIcon={loading
+          ? <CircularProgress size={16} />
+          : (
+            <Box
+              component="img"
+              src={mode === 'dark' ? '/share/bit/01_BIT_Logo_OverDark.png' : '/share/bit/01_BIT_Logo_OverLite.png'}
+              alt=""
+              sx={{ height: 16 }}
+            />
+          )}
+      >
+        {t($ => $.socials.bandsintownFetch)}
+      </Button>
+      {!artistId.trim() && (
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+          {t($ => $.socials.bandsintownFetchHint)}
+        </Typography>
+      )}
+      {error && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}
+    </Box>
+  )
+}
+
 interface ProfileSocialsTabProps {
   form: ProfileForm
   editing?: boolean
@@ -119,7 +189,9 @@ export default function ProfileSocialsTab({ form, editing, onToggleEditing, onCh
   const { t } = useTranslation('common')
   return (
     <Box sx={{ p: 3 }}>
-      
+      {editing && (
+        <BandsintownFetchButton artistId={form.bandsintown_artist_id} onChange={onChange} />
+      )}
 
       <Grid container spacing={2}>
         {SOCIALS.map((social) => {

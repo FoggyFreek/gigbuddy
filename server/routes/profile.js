@@ -14,6 +14,9 @@ import {
   getMollieKeyStatus,
   setMollieKeyValue,
   clearMollieKeyValue,
+  getBandsintownKeyStatus,
+  setBandsintownKeyValue,
+  clearBandsintownKeyValue,
   getShopifyClientIdStatus,
   setShopifyClientIdValue,
   clearShopifyClientIdValue,
@@ -126,6 +129,26 @@ router.put('/mollie-key', manageIntegration, noStore, async (req, res) => {
 router.delete('/mollie-key', manageIntegration, noStore, async (req, res) => {
   const status = await clearMollieKeyValue(pool, req.tenantId)
   auditLog(req, 'integration.mollie_key.clear')
+  res.json(status)
+})
+
+// Get Bandsintown API key status without returning any credential-derived preview.
+router.get('/bandsintown-key', manageIntegration, noStore, async (req, res) => {
+  res.json(await getBandsintownKeyStatus(pool, req.tenantId))
+})
+
+// Set or replace Bandsintown API key (tenant admin only)
+router.put('/bandsintown-key', manageIntegration, noStore, async (req, res) => {
+  const result = await setBandsintownKeyValue(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  auditLog(req, 'integration.bandsintown_key.set')
+  res.json(result.status)
+})
+
+// Clear Bandsintown API key (tenant admin only)
+router.delete('/bandsintown-key', manageIntegration, noStore, async (req, res) => {
+  const status = await clearBandsintownKeyValue(pool, req.tenantId)
+  auditLog(req, 'integration.bandsintown_key.clear')
   res.json(status)
 })
 

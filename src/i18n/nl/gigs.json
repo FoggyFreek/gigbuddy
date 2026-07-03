@@ -9,11 +9,12 @@
     "import": "Importeren",
     "export": "Exporteren",
     "shareTourDates": "Tourdata delen",
-    "importFromBandsintown": "Importeren uit Bandsintown",
+    "importFromBandsintown": "Importeren van Bandsintown (CSV)",
     "exportTourDates": "Tourdata exporteren",
-    "exportToBandsintown": "Exporteren naar Bandsintown",
+    "exportToBandsintown": "Exporteren naar Bandsintown (CSV)",
     "createTourCard": "Tourkaart maken",
-    "bannerMosaic": "Bannermozaïek"
+    "bannerMosaic": "Bannermozaïek",
+    "importFromBandsintownApi": "Importeren van Bandsintown"
   },
   "table": {
     "searchPlaceholder": "Optredens zoeken…",
@@ -120,8 +121,8 @@
     "loadingGigList": "Optredenlijst laden…",
     "uploadHint": "Selecteer een Bandsintown CSV-exportbestand. Dubbele rijen worden automatisch samengevoegd. Optredens die al in GigBuddy bestaan, zijn vooraf uitgevinkt.",
     "chooseFile": "CSV-bestand kiezen",
-    "reviewIntro_one": "{{count}} evenement gevonden. Vink uit wat je niet wilt importeren. Selecteer of maak een locatie/festival voor elke rij.",
-    "reviewIntro_other": "{{count}} evenementen gevonden. Vink uit wat je niet wilt importeren. Selecteer of maak een locatie/festival voor elke rij.",
+    "reviewIntro_one": "{{count}} evenement gevonden. Vink uit wat je niet wilt importeren. Locaties en festivals zonder match worden automatisch aangemaakt.",
+    "reviewIntro_other": "{{count}} evenementen gevonden. Vink uit wat je niet wilt importeren. Locaties en festivals zonder match worden automatisch aangemaakt.",
     "colDate": "Datum",
     "colEvent": "Evenement",
     "colCsvVenueCity": "CSV-locatie / stad",
@@ -230,5 +231,17 @@
     "noParticipants": "Nog geen deelnemers — voeg er hieronder een toe.",
     "removeParticipant": "{{name}} verwijderen",
     "addParticipant": "Deelnemer toevoegen"
+  },
+  "bandsintownApi": {
+    "title": "Importeren van Bandsintown",
+    "loading": "Aankomende evenementen ophalen van Bandsintown…",
+    "fetchFailed": "Evenementen ophalen van Bandsintown is mislukt",
+    "noEvents": "Geen aankomende evenementen gevonden op Bandsintown voor {{artist}}.",
+    "reviewIntro_one": "{{count}} aankomend evenement gevonden voor {{artist}}. Vink uit wat je niet wilt importeren. Locaties en festivals zonder match worden automatisch aangemaakt.",
+    "reviewIntro_other": "{{count}} aankomende evenementen gevonden voor {{artist}}. Vink uit wat je niet wilt importeren. Locaties en festivals zonder match worden automatisch aangemaakt.",
+    "colVenue": "Bandsintown-locatie / stad",
+    "willCreate": "Wordt aangemaakt: {{name}}",
+    "venuesCreated_one": "{{count}} locatie aangemaakt.",
+    "venuesCreated_other": "{{count}} locaties aangemaakt."
   }
 }

@@ -129,3 +129,41 @@ export async function setTenantArchived(executor, tenantId, archived) {
   )
   return rows[0] || null
 }
+
+export async function fetchTenantForDeletion(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT id, slug, archived_at FROM tenants WHERE id = $1 FOR UPDATE',
+    [tenantId],
+  )
+  return rows[0] || null
+}
+
+// Capture all database-referenced object keys before the cascading tenant
+// delete. Most are modern prefixed keys; including them also covers the
+// read-only unprefixed keys left by the original single-tenant deployment.
+export async function fetchTenantAssetKeys(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT key FROM (
+       SELECT logo_path AS key FROM tenants WHERE id = $1
+       UNION ALL SELECT banner_path FROM tenants WHERE id = $1
+       UNION ALL SELECT avatar_path FROM tenants WHERE id = $1
+       UNION ALL SELECT logo_dark_path FROM tenants WHERE id = $1
+       UNION ALL SELECT banner_path FROM gigs WHERE tenant_id = $1
+       UNION ALL SELECT object_key FROM share_photos WHERE tenant_id = $1
+       UNION ALL SELECT object_key FROM gig_attachments WHERE tenant_id = $1
+       UNION ALL SELECT pdf_path FROM invoices WHERE tenant_id = $1
+       UNION ALL SELECT custom_logo_path FROM invoices WHERE tenant_id = $1
+       UNION ALL SELECT object_key FROM song_documents WHERE tenant_id = $1
+       UNION ALL SELECT object_key FROM song_recordings WHERE tenant_id = $1
+       UNION ALL SELECT object_key FROM purchase_attachments WHERE tenant_id = $1
+     ) assets
+     WHERE key IS NOT NULL`,
+    [tenantId],
+  )
+  return [...new Set(rows.map(({ key }) => key))]
+}
+
+export async function deleteTenantRow(executor, tenantId) {
+  const { rowCount } = await executor.query('DELETE FROM tenants WHERE id = $1', [tenantId])
+  return rowCount > 0
+}

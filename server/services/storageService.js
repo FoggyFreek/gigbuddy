@@ -77,3 +77,33 @@ export function safeRemove(key, _warnMsg) {
   if (!key) return
   removeObject(key).catch((err) => logger.warn('storage.remove_failed', { err, tenantId: tenantIdFromKey(key) }))
 }
+
+function listObjectKeys(prefix) {
+  return new Promise((resolve, reject) => {
+    const keys = []
+    const stream = storageClient.listObjectsV2(BUCKET, prefix, true)
+    stream.on('data', (obj) => {
+      if (obj.name) keys.push(obj.name)
+    })
+    stream.on('error', reject)
+    stream.on('end', () => resolve(keys))
+  })
+}
+
+// Permanently removes every object owned by a tenant. Modern assets are found
+// by prefix, including unreferenced leftovers; exact legacy keys are supplied
+// by the database because old unprefixed objects cannot encode ownership.
+export async function deleteTenantObjects(tenantId, legacyKeys = []) {
+  const prefix = `tenants/${tenantId}/`
+  const prefixedKeys = await listObjectKeys(prefix)
+  const keys = [...new Set([...prefixedKeys, ...legacyKeys.filter(Boolean)])]
+
+  for (let i = 0; i < keys.length; i += 1000) {
+    const failures = await storageClient.removeObjects(BUCKET, keys.slice(i, i + 1000))
+    if (failures.length) throw new Error('Tenant object deletion failed')
+  }
+
+  if ((await listObjectKeys(prefix)).length) {
+    throw new Error('Tenant storage prefix is not empty after deletion')
+  }
+}

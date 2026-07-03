@@ -76,6 +76,11 @@ export function uploadLogoDark(file: File) {
   return requestForm<{ logo_dark_path: string | null }>('/api/profile/logo-dark', fd)
 }
 
+export const getBandsintownKey = () => api<IntegrationSecretStatus>('/bandsintown-key')
+export const setBandsintownKey = (key: string) =>
+  api<IntegrationSecretStatus>('/bandsintown-key', { method: 'PUT', body: JSON.stringify({ key }) })
+export const clearBandsintownKey = () => api<IntegrationSecretStatus>('/bandsintown-key', { method: 'DELETE' })
+
 export const getMollieKey = () => api<IntegrationSecretStatus>('/mollie-key')
 export const setMollieKey = (key: string) =>
   api<IntegrationSecretStatus>('/mollie-key', { method: 'PUT', body: JSON.stringify({ key }) })

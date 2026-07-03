@@ -25,8 +25,12 @@ beforeAll(async () => {
 
   // The tenant-avatar route streams from object storage; keep storage out of the
   // test loop (only auth/ownership behavior is under test here).
-  mockStatObject = vi.fn().mockResolvedValue({ size: 4, metaData: { 'content-type': 'image/png' } })
-  mockGetObject = vi.fn().mockImplementation(async () => Readable.from(['AVATAR']))
+  const avatar = Buffer.from('AVATAR')
+  mockStatObject = vi.fn().mockResolvedValue({
+    size: avatar.length,
+    metaData: { 'content-type': 'image/png' },
+  })
+  mockGetObject = vi.fn().mockImplementation(async () => Readable.from([avatar]))
   vi.doMock('../../../server/services/storageService.js', async (importOriginal) => ({
     ...(await importOriginal()),
     statObject: (...args) => mockStatObject(...args),

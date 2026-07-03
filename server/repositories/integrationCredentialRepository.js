@@ -5,6 +5,9 @@ const COLUMNS = Object.freeze({
   shopify_client_secret: {
     legacy: 'shopify_client_secret', encrypted: 'shopify_client_secret_encrypted', changedAt: 'shopify_client_secret_changed_at',
   },
+  bandsintown_app_id: {
+    legacy: 'bandsintown_app_id', encrypted: 'bandsintown_app_id_encrypted', changedAt: 'bandsintown_app_id_changed_at',
+  },
 })
 
 function columnsFor(type) {

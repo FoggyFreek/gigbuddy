@@ -137,5 +137,16 @@
       "title": "Rekening verwijderen?",
       "confirm": "<strong>{{label}}</strong> verwijderen? Dit kan niet ongedaan worden gemaakt."
     }
+  },
+  "bandsintown": {
+    "title": "Bandsintown",
+    "description": "Koppel Bandsintown om je artiestenprofiel op te halen en aankomende evenementen als optredens te importeren.",
+    "label": "Bandsintown API-sleutel (app_id)",
+    "placeholder": "jouw_app_id",
+    "helper": "De app_id die je bij Bandsintown hebt geregistreerd voor API-toegang.",
+    "invalidFormat": "Dit lijkt geen geldige Bandsintown API-sleutel.",
+    "saveFailed": "API-sleutel opslaan is mislukt.",
+    "replace": "Sleutel vervangen",
+    "remove": "Sleutel verwijderen"
   }
 }

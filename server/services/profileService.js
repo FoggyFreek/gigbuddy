@@ -11,6 +11,7 @@ import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageP
 import {
   FINANCIAL_FIELDS_SET,
   isValidMollieKey,
+  isValidBandsintownAppId,
   isValidShopifyClientId,
   isValidShopifyClientSecret,
   isValidShopifyDomain,
@@ -119,6 +120,23 @@ export async function setMollieKeyValue(db, tenantId, body) {
 
 export async function clearMollieKeyValue(db, tenantId) {
   return clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
+}
+
+// ---------- bandsintown api key ----------
+
+export async function getBandsintownKeyStatus(db, tenantId) {
+  return getIntegrationCredentialStatus(db, tenantId, CREDENTIAL_TYPES.BANDSINTOWN_APP_ID)
+}
+
+export async function setBandsintownKeyValue(db, tenantId, body) {
+  const { key } = body || {}
+  if (!isValidBandsintownAppId(key)) return badRequest('invalid_bandsintown_key')
+  const status = await setIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.BANDSINTOWN_APP_ID, key.trim())
+  return { status }
+}
+
+export async function clearBandsintownKeyValue(db, tenantId) {
+  return clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.BANDSINTOWN_APP_ID)
 }
 
 // ---------- shopify app credentials ----------

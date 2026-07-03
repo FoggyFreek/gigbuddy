@@ -22,7 +22,12 @@ import {
   upsertMembership,
   demoteAdminToMember,
   setTenantArchived,
+  fetchTenantForDeletion,
+  fetchTenantAssetKeys,
+  deleteTenantRow,
 } from '../repositories/tenantRepository.js'
+import { deleteTenantObjects } from './storageService.js'
+import { logger } from '../utils/logger.js'
 
 function badRequest(error) {
   return { error: { status: 400, body: { error } } }
@@ -142,4 +147,42 @@ export async function setArchived(db, tenantId, archived) {
   const tenant = await setTenantArchived(db, tenantId, archived)
   if (!tenant) return notFound('Tenant not found')
   return { tenant }
+}
+
+export async function deleteTenant(db, tenantId, confirmationSlug) {
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+    const tenant = await fetchTenantForDeletion(client, tenantId)
+    if (!tenant) {
+      await client.query('ROLLBACK')
+      return notFound('Tenant not found')
+    }
+    if (!tenant.archived_at) {
+      await client.query('ROLLBACK')
+      return conflict('Tenant must be archived before deletion')
+    }
+    if (confirmationSlug !== tenant.slug) {
+      await client.query('ROLLBACK')
+      return badRequest('Confirmation slug does not match')
+    }
+
+    const assetKeys = await fetchTenantAssetKeys(client, tenantId)
+    try {
+      await deleteTenantObjects(tenantId, assetKeys)
+    } catch (err) {
+      await client.query('ROLLBACK')
+      logger.error('tenant.delete_storage_failed', { err, tenantId })
+      return { error: { status: 502, body: { error: 'Failed to delete tenant storage' } } }
+    }
+
+    await deleteTenantRow(client, tenantId)
+    await client.query('COMMIT')
+    return { audit: { action: 'tenant.delete', details: { tenantId } } }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
 }

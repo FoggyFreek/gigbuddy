@@ -23,6 +23,13 @@ export function isValidShopifyClientSecret(value) {
   return typeof value === 'string' && SHOPIFY_CLIENT_SECRET_RE.test(value.trim())
 }
 
+// Bandsintown API key (app_id): a short opaque token, no whitespace.
+export const BANDSINTOWN_APP_ID_RE = /^\S{1,200}$/
+
+export function isValidBandsintownAppId(value) {
+  return typeof value === 'string' && BANDSINTOWN_APP_ID_RE.test(value.trim())
+}
+
 // Shopify store domain, e.g. "yourband.myshopify.com" — the Admin REST API host.
 export const SHOPIFY_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i
 
@@ -44,6 +51,7 @@ export const PROFILE_FIELDS = [
   'youtube_handle',
   'spotify_handle',
   'bandsintown_artist_name',
+  'bandsintown_artist_id',
   'accent_color',
 ]
 

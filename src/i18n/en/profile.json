@@ -27,7 +27,10 @@
     "copy": "Copy URL",
     "copied": "Copied",
     "copyAria": "Copy {{label}} URL",
-    "handlePlaceholder": "yourhandle"
+    "handlePlaceholder": "yourhandle",
+    "bandsintownFetch": "Fetch from Bandsintown",
+    "bandsintownFetchHint": "Enter your Bandsintown artist ID below to fetch your artist name and social links.",
+    "bandsintownFetchFailed": "Could not fetch artist data from Bandsintown"
   },
   "links": {
     "label": "Label",

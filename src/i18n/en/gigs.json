@@ -9,11 +9,12 @@
     "import": "Import",
     "export": "Export",
     "shareTourDates": "Share tour dates",
-    "importFromBandsintown": "Import from Bandsintown",
+    "importFromBandsintown": "Import from Bandsintown (CSV)",
     "exportTourDates": "Export tour dates",
-    "exportToBandsintown": "Export to Bandsintown",
+    "exportToBandsintown": "Export to Bandsintown (CSV)",
     "createTourCard": "Create Tour Card",
-    "bannerMosaic": "Banner Mosaic"
+    "bannerMosaic": "Banner Mosaic",
+    "importFromBandsintownApi": "Import from Bandsintown"
   },
   "table": {
     "searchPlaceholder": "Search gigs…",
@@ -120,8 +121,8 @@
     "loadingGigList": "Loading gig list…",
     "uploadHint": "Select a Bandsintown CSV export file. Duplicate rows are merged automatically. Gigs that already exist in GigBuddy are pre-unchecked.",
     "chooseFile": "Choose CSV file",
-    "reviewIntro_one": "{{count}} event found. Uncheck any you don't want to import. Select or create a venue/festival for each row.",
-    "reviewIntro_other": "{{count}} events found. Uncheck any you don't want to import. Select or create a venue/festival for each row.",
+    "reviewIntro_one": "{{count}} event found. Uncheck any you don't want to import. Venues and festivals without a match are created automatically.",
+    "reviewIntro_other": "{{count}} events found. Uncheck any you don't want to import. Venues and festivals without a match are created automatically.",
     "colDate": "Date",
     "colEvent": "Event",
     "colCsvVenueCity": "CSV venue / city",
@@ -230,5 +231,17 @@
     "noParticipants": "No participants yet - add one below.",
     "removeParticipant": "remove {{name}}",
     "addParticipant": "Add participant"
+  },
+  "bandsintownApi": {
+    "title": "Import from Bandsintown",
+    "loading": "Fetching upcoming events from Bandsintown…",
+    "fetchFailed": "Could not fetch events from Bandsintown",
+    "noEvents": "No upcoming events found on Bandsintown for {{artist}}.",
+    "reviewIntro_one": "{{count}} upcoming event found for {{artist}}. Uncheck any you don't want to import. Venues and festivals without a match are created automatically.",
+    "reviewIntro_other": "{{count}} upcoming events found for {{artist}}. Uncheck any you don't want to import. Venues and festivals without a match are created automatically.",
+    "colVenue": "Bandsintown venue / city",
+    "willCreate": "Will be created: {{name}}",
+    "venuesCreated_one": "{{count}} venue created.",
+    "venuesCreated_other": "{{count}} venues created."
   }
 }

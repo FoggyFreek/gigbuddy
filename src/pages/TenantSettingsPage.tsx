@@ -21,7 +21,7 @@ import { useAuth } from '../contexts/authContext.ts'
 import { useProfile } from '../contexts/profileContext.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
-import { clearMollieKey, getMollieKey, setMollieKey, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain, updateProfile } from '../api/profile.ts'
+import { clearMollieKey, getMollieKey, setMollieKey, clearBandsintownKey, getBandsintownKey, setBandsintownKey, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain, updateProfile } from '../api/profile.ts'
 import { getMyStorageStats, refreshMyStorageStats } from '../api/statistics.ts'
 import { formatBytes } from '../utils/formatBytes.ts'
 import ChartOfAccountsSection from '../components/settings/ChartOfAccountsSection.tsx'
@@ -180,6 +180,7 @@ export default function TenantSettingsPage() {
           </Typography>
           <MollieKeySection />
           <ShopifyKeySection />
+          <BandsintownKeySection />
         </>
       )}
       {isAdmin && <ChartOfAccountsSection />}
@@ -797,6 +798,136 @@ function MollieKeySection() {
           </Button>
           {status?.isSet && (
             <Tooltip title={t($ => $.mollie.remove)}>
+              <span>
+                <IconButton size="small" color="error" onClick={handleClear} disabled={saving}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+        </Stack>
+      )}
+    </IntegrationCard>
+  )
+}
+
+// Bandsintown API key (app_id) — same encrypted per-tenant credential storage
+// as the Mollie key; used by the artist/socials fetch and the gig import.
+function BandsintownKeySection() {
+  const { t } = useTranslation(['settings', 'common'])
+  const [status, setStatus] = useState<MollieKeyStatus | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [inputKey, setInputKey] = useState('')
+  const [showKey, setShowKey] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getBandsintownKey().then((s) => setStatus(s as unknown as MollieKeyStatus)).catch(() => {})
+  }, [])
+
+  function startEditing() {
+    setInputKey('')
+    setShowKey(false)
+    setError(null)
+    setEditing(true)
+  }
+
+  async function handleSave() {
+    if (!inputKey.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await setBandsintownKey(inputKey.trim())
+      setStatus(result as unknown as MollieKeyStatus)
+      setEditing(false)
+      setInputKey('')
+    } catch (err: unknown) {
+      setError(err instanceof Error && err.message === 'invalid_bandsintown_key'
+        ? t($ => $.bandsintown.invalidFormat)
+        : t($ => $.bandsintown.saveFailed))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleClear() {
+    setSaving(true)
+    try {
+      const result = await clearBandsintownKey()
+      setStatus(result as unknown as MollieKeyStatus)
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <IntegrationCard
+      logoLight="/share/bit/01_BIT_Logo_OverLite.png"
+      logoDark="/share/bit/01_BIT_Logo_OverDark.png"
+      alt="Bandsintown"
+      title={t($ => $.bandsintown.title)}
+      description={t($ => $.bandsintown.description)}
+      configured={!!status?.isSet}
+      mt={3}
+    >
+      {editing ? (
+        <Stack spacing={1.5}>
+          <TextField
+            label={t($ => $.bandsintown.label)}
+            fullWidth
+            size="small"
+            value={inputKey}
+            onChange={(e) => { setInputKey(e.target.value); setError(null) }}
+            type={showKey ? 'text' : 'password'}
+            placeholder={t($ => $.bandsintown.placeholder)}
+            error={!!error}
+            helperText={error || t($ => $.bandsintown.helper)}
+            autoComplete="off"
+            slotProps={{
+              htmlInput: { spellCheck: false },
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setShowKey((v) => !v)}
+                      edge="end"
+                      aria-label={showKey ? t($ => $.integrations.hideKey) : t($ => $.integrations.showKey)}
+                    >
+                      {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={handleSave}
+              disabled={!inputKey.trim() || saving}
+              startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
+            >
+              {t($ => $.actions.save, { ns: 'common' })}
+            </Button>
+            <Button size="small" onClick={() => { setEditing(false); setInputKey(''); setError(null) }} disabled={saving}>
+              {t($ => $.actions.cancel, { ns: 'common' })}
+            </Button>
+          </Stack>
+        </Stack>
+      ) : (
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Box sx={{ flex: 1 }}>
+            <MollieKeyStatusDisplay status={status} />
+          </Box>
+          <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
+            {status?.isSet ? t($ => $.bandsintown.replace) : t($ => $.integrations.configure)}
+          </Button>
+          {status?.isSet && (
+            <Tooltip title={t($ => $.bandsintown.remove)}>
               <span>
                 <IconButton size="small" color="error" onClick={handleClear} disabled={saving}>
                   <DeleteOutlineIcon fontSize="small" />

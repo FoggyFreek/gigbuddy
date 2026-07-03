@@ -29,6 +29,7 @@ import adminUsersRouter from './adminUsers.js'
 import sharePhotosRouter from './sharePhotos.js'
 import filesRouter from './files.js'
 import geocodeRouter from './geocode.js'
+import bandsintownRouter from './bandsintown.js'
 import { adminRouter as invitesAdminRouter, redeemRouter as invitesRedeemRouter } from './invites.js'
 import { tenantRouter as statisticsRouter, adminRouter as adminStatisticsRouter } from './statistics.js'
 import publicMollieRouter from './publicMollie.js'
@@ -138,6 +139,7 @@ router.use('/users', membersManage, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)
 router.use('/gigs', tenantMember, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
+router.use('/bandsintown', tenantMember, bandsintownRouter)
 router.use('/tasks', tenantMember, tasksRouter)
 router.use('/profile', tenantMember, profileRouter)
 router.use('/band-members', tenantMember, bandMembersRouter)

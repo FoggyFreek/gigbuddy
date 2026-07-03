@@ -9,7 +9,9 @@ import {
   addMembership,
   removeAdmin,
   setArchived,
+  deleteTenant,
 } from '../services/tenantService.js'
+import { auditLog } from '../utils/auditLog.js'
 
 const router = Router()
 
@@ -68,6 +70,13 @@ router.post('/:id/unarchive', async (req, res) => {
   const result = await setArchived(pool, Number(req.params.id), false)
   if (result.error) return sendError(res, result.error)
   res.json(result.tenant)
+})
+
+router.delete('/:id', async (req, res) => {
+  const result = await deleteTenant(pool, Number(req.params.id), req.body?.confirmationSlug)
+  if (result.error) return sendError(res, result.error)
+  if (result.audit) auditLog(req, result.audit.action, result.audit.details)
+  res.status(204).end()
 })
 
 export default router

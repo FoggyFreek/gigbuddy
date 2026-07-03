@@ -1,6 +1,7 @@
 import './_envSetup.js'
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { Readable } from 'node:stream'
 
 vi.mock('../../../server/utils/storage.js', () => ({
   BUCKET: 'test-bucket',
@@ -9,6 +10,8 @@ vi.mock('../../../server/utils/storage.js', () => ({
     getObject: vi.fn(async () => { throw new Error('no such key') }),
     statObject: vi.fn(async () => ({ size: 0, metaData: {} })),
     removeObject: vi.fn(async () => undefined),
+    listObjectsV2: vi.fn(() => Readable.from([])),
+    removeObjects: vi.fn(async () => []),
   },
 }))
 
@@ -74,6 +77,40 @@ describe('removeObject', () => {
     storageClient.removeObject.mockResolvedValueOnce(undefined)
     await removeObject('tenants/1/logo/x.png')
     expect(storageClient.removeObject).toHaveBeenCalledWith('test-bucket', 'tenants/1/logo/x.png')
+  })
+})
+
+describe('deleteTenantObjects', () => {
+  it('deletes the complete tenant prefix and deduplicated legacy keys in batches', async () => {
+    const { storageClient } = await import('../../../server/utils/storage.js')
+    const { deleteTenantObjects } = await import('../../../server/services/storageService.js')
+    const keys = Array.from({ length: 1001 }, (_, i) => ({ name: `tenants/7/files/${i}` }))
+    storageClient.listObjectsV2
+      .mockReturnValueOnce(Readable.from(keys))
+      .mockReturnValueOnce(Readable.from([]))
+    storageClient.removeObjects.mockResolvedValue([])
+
+    await deleteTenantObjects(7, ['legacy/logo.png', 'legacy/logo.png'])
+
+    expect(storageClient.listObjectsV2).toHaveBeenCalledWith('test-bucket', 'tenants/7/', true)
+    expect(storageClient.removeObjects).toHaveBeenCalledTimes(2)
+    const deleted = storageClient.removeObjects.mock.calls.flatMap(([, batch]) => batch)
+    expect(deleted).toContain('legacy/logo.png')
+    expect(new Set(deleted).size).toBe(1002)
+  })
+
+  it('rejects per-object removal failures and a non-empty verification listing', async () => {
+    const { storageClient } = await import('../../../server/utils/storage.js')
+    const { deleteTenantObjects } = await import('../../../server/services/storageService.js')
+    storageClient.listObjectsV2.mockReturnValueOnce(Readable.from([{ name: 'tenants/8/a' }]))
+    storageClient.removeObjects.mockResolvedValueOnce([{ name: 'tenants/8/a', code: 'AccessDenied' }])
+    await expect(deleteTenantObjects(8)).rejects.toThrow('object deletion failed')
+
+    storageClient.listObjectsV2
+      .mockReturnValueOnce(Readable.from([{ name: 'tenants/9/a' }]))
+      .mockReturnValueOnce(Readable.from([{ name: 'tenants/9/a' }]))
+    storageClient.removeObjects.mockResolvedValueOnce([])
+    await expect(deleteTenantObjects(9)).rejects.toThrow('prefix is not empty')
   })
 })
 

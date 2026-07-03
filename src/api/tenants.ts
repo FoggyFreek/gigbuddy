@@ -24,3 +24,5 @@ export const grantMembership = (id: Id, payload: MembershipPayload) =>
   api<void>(`/${id}/memberships`, { method: 'POST', body: JSON.stringify(payload) })
 export const archiveTenant = (id: Id) => api<Tenant>(`/${id}/archive`, { method: 'POST' })
 export const unarchiveTenant = (id: Id) => api<Tenant>(`/${id}/unarchive`, { method: 'POST' })
+export const deleteTenant = (id: Id, confirmationSlug: string) =>
+  api<void>(`/${id}`, { method: 'DELETE', body: JSON.stringify({ confirmationSlug }) })
