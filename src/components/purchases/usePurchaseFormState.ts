@@ -12,6 +12,7 @@ import { getAccountingSettings, listAccounts } from '../../api/accounts.ts'
 import { listProducts } from '../../api/merch.ts'
 import { listMembers } from '../../api/bandMembers.ts'
 import { computePurchaseTotals } from '../../utils/purchaseTotals.ts'
+import { compressReceipt } from '../../utils/compressImage.ts'
 import type { Purchase, PurchaseAttachment, PurchasePaymentMethod, PurchaseStatus, Account, AccountingSettings, Member, Product, Id } from '../../types/entities.ts'
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.ts'
 import type { PurchaseForm, PurchaseFormLine } from './purchaseFormHelpers.ts'
@@ -358,7 +359,10 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
     setAttachmentsBusy(true)
     try {
       for (const file of files) {
-        const created = await uploadPurchaseAttachment(purchaseId, file)
+        const uploadFile = file.type === 'image/jpeg' || file.type === 'image/png'
+          ? await compressReceipt(file)
+          : file
+        const created = await uploadPurchaseAttachment(purchaseId, uploadFile)
         setAttachments((prev) => [...prev, created])
       }
     } catch (e: unknown) {

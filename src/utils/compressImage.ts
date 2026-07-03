@@ -46,3 +46,33 @@ const AVATAR_OPTIONS: Options = {
 export function compressAvatar(file: File): Promise<File> {
   return imageCompression(file, AVATAR_OPTIONS)
 }
+
+const RECEIPT_OPTIONS: Options = {
+  maxSizeMB: 1.5,
+  maxWidthOrHeight: 2000,
+  initialQuality: 0.85,
+  useWebWorker: true,
+}
+
+const RECEIPT_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+}
+
+function receiptFilename(file: File, mimetype: string): string {
+  const originalBase = file.name.replace(/\.[^.]+$/, '') || 'receipt'
+  const base = originalBase.toLowerCase() === 'blob'
+    ? `receipt-${crypto.randomUUID()}`
+    : originalBase
+  const extension = RECEIPT_EXTENSIONS[mimetype] ?? 'bin'
+  return `${base}.${extension}`
+}
+
+export async function compressReceipt(file: File): Promise<File> {
+  const compressed = await imageCompression(file, RECEIPT_OPTIONS)
+  const mimetype = compressed.type || file.type
+  return new File([compressed], receiptFilename(file, mimetype), {
+    type: mimetype,
+    lastModified: file.lastModified,
+  })
+}

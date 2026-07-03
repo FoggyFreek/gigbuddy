@@ -43,7 +43,7 @@ import {
 import { randomUUID } from 'node:crypto'
 import { purchaseAttachmentKey, uploadObject, removeObject, safeRemove } from './storageService.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
-import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
+import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 
 const ATTACHMENT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
 
@@ -67,7 +67,7 @@ export async function createPurchaseAttachment({ db, tenantId, purchaseId, file,
   if (ATTACHMENT_IMAGE_TYPES.has(file.mimetype)) {
     let image
     try {
-      image = await validateAndReencodeImage(file.buffer, file.mimetype)
+      image = await validateAndReencodeImage(file.buffer, file.mimetype, IMAGE_PROCESSING_PRESETS.purchaseReceipt)
     } catch (err) {
       if (err.status === 400) return { error: { status: 400, body: { error: err.message } } }
       throw err

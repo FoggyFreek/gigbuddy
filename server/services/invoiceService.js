@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { getObject, uploadObject, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from './storageService.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
-import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
+import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import {
   createMolliePaymentLink,
@@ -726,7 +726,7 @@ export async function uploadInvoiceLogo(pool, tenantId, invoiceId, file) {
   }
   const oldKey = existing.custom_logo_path || null
 
-  const image = await validateAndReencodeImage(file.buffer, file.mimetype)
+  const image = await validateAndReencodeImage(file.buffer, file.mimetype, IMAGE_PROCESSING_PRESETS.invoiceLogo)
   const ext = extensionForImageMime(image.mimetype)
   const objectKey = invoiceLogoKey(tenantId, randomUUID(), ext)
 

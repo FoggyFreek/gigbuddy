@@ -6,7 +6,7 @@ import path from 'node:path'
 import pool from '../db/index.js'
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import { uploadObject, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
-import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
+import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
@@ -417,7 +417,7 @@ export async function setParticipantVote(db, tenantId, userId, gigId, memberId, 
 // Replaces a gig banner: stores the new object, points the row at it, and
 // removes the old object on success (or the new object on DB failure).
 export async function replaceGigBanner(db, tenantId, gigId, file) {
-  const image = await validateAndReencodeImage(file.buffer, file.mimetype)
+  const image = await validateAndReencodeImage(file.buffer, file.mimetype, IMAGE_PROCESSING_PRESETS.banner)
 
   const before = await getGigBannerRow(db, gigId, tenantId)
   if (!before) return NOT_FOUND

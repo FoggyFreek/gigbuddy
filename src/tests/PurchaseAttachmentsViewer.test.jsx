@@ -136,6 +136,28 @@ describe('PurchaseAttachmentsViewer', () => {
     expect(screen.getByText('75%')).toBeInTheDocument()
   })
 
+  it('the image preview is not draggable, so it cannot be dropped back as an upload', () => {
+    const onUpload = vi.fn()
+    wrap(viewer({ attachments: [imageAttachment], onUpload }))
+
+    const img = screen.getByAltText('receipt.png')
+    expect(img).toHaveAttribute('draggable', 'false')
+  })
+
+  it('zooming in enlarges the image instead of being clamped by max-width', async () => {
+    const user = userEvent.setup()
+    wrap(viewer({ attachments: [imageAttachment] }))
+
+    const img = screen.getByAltText('receipt.png')
+    // At 100% the image is capped to the viewport.
+    expect(getComputedStyle(img).maxWidth).toBe('100%')
+
+    await user.click(screen.getByRole('button', { name: /zoom in/i }))
+    // Zoomed in: width grows and the 100% cap must be lifted, or the zoom is a no-op.
+    expect(getComputedStyle(img).width).toBe('125%')
+    expect(getComputedStyle(img).maxWidth).not.toBe('100%')
+  })
+
   it('dots menu offers add, download and delete; delete reports the current attachment', async () => {
     const onDelete = vi.fn()
     const user = userEvent.setup()

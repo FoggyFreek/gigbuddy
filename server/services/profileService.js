@@ -7,7 +7,7 @@ import {
   uploadObject, removeObject, safeRemove,
   bandLogoKey, bandProfileBannerKey, bandAvatarKey, bandLogoDarkKey,
 } from './storageService.js'
-import { validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
+import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import {
   FINANCIAL_FIELDS_SET,
   isValidMollieKey,
@@ -205,8 +205,8 @@ export async function clearShopifyDomainValue(db, tenantId) {
 
 // Re-encodes the uploaded image, stores it under the given column, and removes
 // the previous object. Rolls the new object back if the DB update fails.
-async function uploadTenantImage(db, tenantId, file, keyBuilder, column) {
-  const image = await validateAndReencodeImage(file.buffer, file.mimetype)
+async function uploadTenantImage(db, tenantId, file, keyBuilder, column, processingPreset) {
+  const image = await validateAndReencodeImage(file.buffer, file.mimetype, processingPreset)
   const ext = extensionForImageMime(image.mimetype)
   const objectKey = keyBuilder(tenantId, randomUUID(), ext)
 
@@ -227,13 +227,13 @@ async function uploadTenantImage(db, tenantId, file, keyBuilder, column) {
 }
 
 export const uploadLogo = (db, tenantId, file) =>
-  uploadTenantImage(db, tenantId, file, bandLogoKey, 'logo_path')
+  uploadTenantImage(db, tenantId, file, bandLogoKey, 'logo_path', IMAGE_PROCESSING_PRESETS.logo)
 
 export const uploadBanner = (db, tenantId, file) =>
-  uploadTenantImage(db, tenantId, file, bandProfileBannerKey, 'banner_path')
+  uploadTenantImage(db, tenantId, file, bandProfileBannerKey, 'banner_path', IMAGE_PROCESSING_PRESETS.banner)
 
 export const uploadAvatar = (db, tenantId, file) =>
-  uploadTenantImage(db, tenantId, file, bandAvatarKey, 'avatar_path')
+  uploadTenantImage(db, tenantId, file, bandAvatarKey, 'avatar_path', IMAGE_PROCESSING_PRESETS.avatar)
 
 export const uploadLogoDark = (db, tenantId, file) =>
-  uploadTenantImage(db, tenantId, file, bandLogoDarkKey, 'logo_dark_path')
+  uploadTenantImage(db, tenantId, file, bandLogoDarkKey, 'logo_dark_path', IMAGE_PROCESSING_PRESETS.logo)

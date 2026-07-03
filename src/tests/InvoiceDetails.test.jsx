@@ -16,7 +16,12 @@ vi.mock('../api/invoices.ts', () => ({
   uploadInvoiceLogo: vi.fn(),
 }))
 
+vi.mock('../utils/compressImage.ts', () => ({
+  compressLogo: vi.fn(async (file) => new File([file], `compressed-${file.name}`, { type: file.type })),
+}))
+
 import * as invoicesApi from '../api/invoices.ts'
+import { compressLogo } from '../utils/compressImage.ts'
 import InvoiceDetails from '../components/InvoiceDetails.tsx'
 import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
@@ -182,7 +187,11 @@ describe('InvoiceDetails', () => {
     fireEvent.change(fileInput, { target: { files: [file] } })
 
     expect(await screen.findByText('upload boom')).toBeInTheDocument()
-    expect(invoicesApi.uploadInvoiceLogo).toHaveBeenCalledWith(7, file)
+    expect(compressLogo).toHaveBeenCalledWith(file)
+    expect(invoicesApi.uploadInvoiceLogo).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ name: 'compressed-logo.png', type: 'image/png' }),
+    )
   })
 
   it('removes the payment link via the remove button', async () => {

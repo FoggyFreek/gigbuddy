@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import sharp from 'sharp'
-import { validateAndReencodeImage, extensionForImageMime } from '../../../server/utils/imageProcess.js'
+import {
+  IMAGE_PROCESSING_PRESETS,
+  validateAndReencodeImage,
+  extensionForImageMime,
+} from '../../../server/utils/imageProcess.js'
 
 // Helpers — synthesize real images on the fly so the test has no fixture deps
 function solid({ width = 8, height = 8, channels = 3, r = 255, g = 0, b = 0 } = {}) {
@@ -50,6 +54,48 @@ describe('validateAndReencodeImage — happy path', () => {
     expect(out.mimetype).toBe('image/webp')
     const meta = await sharp(out.buffer).metadata()
     expect(meta.format).toBe('webp')
+  })
+})
+
+describe('validateAndReencodeImage — asset presets', () => {
+  it.each([
+    ['logo', 800],
+    ['avatar', 720],
+    ['banner', 1600],
+    ['sharePhoto', 1200],
+    ['invoiceLogo', 800],
+    ['purchaseReceipt', 2000],
+  ])('caps the %s preset at %d pixels', async (preset, maxDimension) => {
+    const input = await makeJpeg({ width: maxDimension + 200, height: maxDimension + 100 })
+    const out = await validateAndReencodeImage(input, 'image/jpeg', IMAGE_PROCESSING_PRESETS[preset])
+    const meta = await sharp(out.buffer).metadata()
+
+    expect(Math.max(meta.width, meta.height)).toBe(maxDimension)
+  })
+
+  it('does not enlarge images smaller than the preset', async () => {
+    const input = await makePng({ width: 320, height: 200 })
+    const out = await validateAndReencodeImage(input, 'image/png', IMAGE_PROCESSING_PRESETS.banner)
+    const meta = await sharp(out.buffer).metadata()
+
+    expect(meta.width).toBe(320)
+    expect(meta.height).toBe(200)
+  })
+
+  it('reduces a representative high-quality JPEG', async () => {
+    const input = await solid({ width: 1200, height: 800 }).jpeg({ quality: 100 }).toBuffer()
+    const out = await validateAndReencodeImage(input, 'image/jpeg', IMAGE_PROCESSING_PRESETS.sharePhoto)
+
+    expect(out.size).toBeLessThan(input.length)
+  })
+
+  it('reduces a representative uncompressed PNG without changing its format', async () => {
+    const input = await solid({ width: 512, height: 512 }).png({ compressionLevel: 0 }).toBuffer()
+    const out = await validateAndReencodeImage(input, 'image/png', IMAGE_PROCESSING_PRESETS.logo)
+    const meta = await sharp(out.buffer).metadata()
+
+    expect(out.size).toBeLessThan(input.length)
+    expect(meta.format).toBe('png')
   })
 })
 

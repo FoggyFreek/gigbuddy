@@ -30,6 +30,15 @@ const IMAGE_EXTENSIONS = {
   'image/webp': '.webp',
 }
 
+export const IMAGE_PROCESSING_PRESETS = Object.freeze({
+  logo: Object.freeze({ maxDimension: 800, quality: 90 }),
+  avatar: Object.freeze({ maxDimension: 720, quality: 85 }),
+  banner: Object.freeze({ maxDimension: 1600, quality: 82 }),
+  sharePhoto: Object.freeze({ maxDimension: 1200, quality: 82 }),
+  invoiceLogo: Object.freeze({ maxDimension: 800, quality: 90 }),
+  purchaseReceipt: Object.freeze({ maxDimension: 2000, quality: 85 }),
+})
+
 // Object-key extension for a validated/re-encoded image. Derive it from the
 // output MIME type (authoritative) rather than the original filename, which may
 // be missing, wrong, or in a different format than what we actually stored.
@@ -40,10 +49,11 @@ export function extensionForImageMime(mimetype) {
 /**
  * Validates uploaded image content via magic bytes, then re-encodes with sharp.
  * Re-encoding strips EXIF/metadata and confirms the data is a decodable image.
+ * An optional asset preset caps dimensions and selects lossy-image quality.
  * Returns { buffer, size, mimetype } ready for storage.
  * Throws with .status = 400 on invalid input.
  */
-export async function validateAndReencodeImage(buffer, mimetype) {
+export async function validateAndReencodeImage(buffer, mimetype, options = {}) {
   const checkMagic = MAGIC_BYTES[mimetype]
   if (!checkMagic?.(buffer)) {
     const err = new Error('File content does not match declared type')
@@ -58,13 +68,28 @@ export async function validateAndReencodeImage(buffer, mimetype) {
     // sharp's default of ~268MP is far higher than any band photo needs.
     // .rotate() with no args bakes EXIF orientation into pixels before the
     // re-encode strips metadata, so portrait phone photos stay upright.
-    const img = sharp(buffer, {
+    let img = sharp(buffer, {
       failOn: 'warning',
       limitInputPixels: 50_000_000,
     }).rotate()
-    if (mimetype === 'image/jpeg') output = await img.jpeg({ quality: 85 }).toBuffer()
-    else if (mimetype === 'image/png') output = await img.png().toBuffer()
-    else output = await img.webp({ quality: 85 }).toBuffer()
+
+    if (options.maxDimension) {
+      img = img.resize({
+        width: options.maxDimension,
+        height: options.maxDimension,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+    }
+
+    const quality = options.quality ?? 85
+    if (mimetype === 'image/jpeg') {
+      output = await img.jpeg({ quality, mozjpeg: true }).toBuffer()
+    } else if (mimetype === 'image/png') {
+      output = await img.png({ compressionLevel: 9, effort: 10 }).toBuffer()
+    } else {
+      output = await img.webp({ quality, effort: 6 }).toBuffer()
+    }
   } catch {
     const err = new Error('Invalid or corrupt image')
     err.status = 400

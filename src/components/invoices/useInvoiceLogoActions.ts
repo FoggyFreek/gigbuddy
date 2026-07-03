@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { getInvoice, removeInvoiceLogo, uploadInvoiceLogo } from '../../api/invoices.ts'
+import { compressLogo } from '../../utils/compressImage.ts'
 import type { Invoice, Id } from '../../types/entities.ts'
 
 interface UseInvoiceLogoActionsArgs {
@@ -28,7 +29,7 @@ export function useInvoiceLogoActions({ invoiceId, setInvoice, setError }: UseIn
     try {
       setLogoBusy(true)
       setError(null)
-      await uploadInvoiceLogo(invoiceId, file)
+      await uploadInvoiceLogo(invoiceId, await compressLogo(file))
       const refreshed = await getInvoice(invoiceId)
       setInvoice(refreshed)
     } catch (err) {

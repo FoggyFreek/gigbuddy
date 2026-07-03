@@ -15,6 +15,8 @@ vi.mock('../../../server/utils/storage.js', () => ({
 }))
 
 vi.mock('../../../server/utils/imageProcess.js', () => ({
+  IMAGE_PROCESSING_PRESETS: { invoiceLogo: { maxDimension: 800, quality: 90 } },
+  extensionForImageMime: vi.fn(() => '.png'),
   validateAndReencodeImage: vi.fn(async (buffer) => ({
     buffer, size: buffer.length, mimetype: 'image/png',
   })),

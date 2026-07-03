@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { uploadObject, removeObject, safeRemove, sharePhotoKey } from './storageService.js'
-import { validateAndReencodeImage } from '../utils/imageProcess.js'
+import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage } from '../utils/imageProcess.js'
 import {
   listSharePhotos,
   nextSortOrder,
@@ -22,7 +22,7 @@ export async function listPhotos(db, tenantId) {
 // Re-encodes and stores the uploaded image, then records it. Rolls the object
 // back if the DB insert fails so nothing is orphaned.
 export async function createPhoto(db, tenantId, file) {
-  const image = await validateAndReencodeImage(file.buffer, file.mimetype)
+  const image = await validateAndReencodeImage(file.buffer, file.mimetype, IMAGE_PROCESSING_PRESETS.sharePhoto)
   const ext = path.extname(file.originalname).toLowerCase() || '.jpg'
   const objectKey = sharePhotoKey(tenantId, randomUUID(), ext)
   const label = path.basename(file.originalname, ext) || 'Photo'

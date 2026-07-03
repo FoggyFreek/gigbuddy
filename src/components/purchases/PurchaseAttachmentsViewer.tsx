@@ -356,8 +356,13 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
               key={String(current.id)}
               src={src}
               alt={current.original_filename}
+              // Images are natively draggable; dropping the preview back onto
+              // the viewer's drop zone would re-upload it as a new attachment.
+              draggable={false}
               sx={{
-                maxWidth: rotation % 180 === 0 ? '100%' : undefined,
+                // Cap to the viewport only when not zoomed in — max-width beats
+                // width, so keeping it at scale > 1 would make zoom a no-op.
+                maxWidth: scale <= 1 && rotation % 180 === 0 ? '100%' : undefined,
                 width: scale === 1 ? undefined : `${scale * 100}%`,
                 transform: rotation ? `rotate(${rotation}deg)` : 'none',
                 transformOrigin: 'center center',
