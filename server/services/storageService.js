@@ -1,5 +1,14 @@
 import { storageClient, BUCKET } from '../utils/storage.js'
-import { refreshTenantStorageForKey, tenantIdFromKey } from './statisticsService.js'
+import pool from '../db/index.js'
+import {
+  refreshTenantStorageForKey,
+  tenantIdFromKey,
+  reserveStorageUsage,
+  releaseStorageUsage,
+} from './statisticsService.js'
+import { resolveTenantEntitlements } from './entitlementService.js'
+import { LIMITS } from '../auth/entitlements.js'
+import { enqueueCleanup } from '../repositories/storageCleanupRepository.js'
 import { logger } from '../utils/logger.js'
 
 // ---------- key builders ----------
@@ -48,14 +57,74 @@ export const getObject = (key) => storageClient.getObject(BUCKET, key)
 
 // ---------- mutations ----------
 
-export async function uploadObject(key, buffer, size, contentType) {
-  const result = await storageClient.putObject(BUCKET, key, buffer, size, {
+function putObjectRaw(key, buffer, size, contentType) {
+  return storageClient.putObject(BUCKET, key, buffer, size, {
     'Content-Type': contentType,
   })
-  // Fire-and-forget: keep tenant_statistics fresh without blocking the response
-  // on an S3 listing, and never let a stats failure fail the upload.
-  void refreshTenantStorageForKey(key)
-  return result
+}
+
+// Thrown when an upload would exceed the tenant's storage entitlement. The
+// global error handler turns `.status` into the response code (413).
+export class StorageQuotaError extends Error {
+  constructor(limitMb) {
+    super('Storage limit exceeded')
+    this.name = 'StorageQuotaError'
+    this.status = 413
+    this.code = 'storage_limit_exceeded'
+    this.limitMb = limitMb
+  }
+}
+
+const MB = 1024 * 1024
+
+// A failed put may or may not have left a partial object behind. removeObject
+// is idempotent, so a successful remove CONFIRMS the object is gone and the
+// reservation can be released. If the remove itself fails, keep the
+// reservation (usage stays conservative) and queue the key — the
+// reconciliation drain deletes it and releases the reservation then.
+async function rollbackFailedUpload(tenantId, key, size) {
+  try {
+    await storageClient.removeObject(BUCKET, key)
+    await releaseStorageUsage(tenantId, size)
+  } catch (err) {
+    logger.warn('storage.upload_rollback_queued', { err, tenantId })
+    await enqueueCleanup(pool, tenantId, key, true).catch((queueErr) =>
+      logger.error('storage.cleanup_enqueue_failed', { err: queueErr, tenantId }),
+    )
+  }
+}
+
+// THE quota entry point — every tenant object upload must go through here.
+// Reserve-then-put: the quota check and usage increment commit atomically
+// under the per-tenant advisory lock BEFORE the S3 put, so parallel uploads
+// near the limit serialize and cannot jointly exceed it. Throws
+// StorageQuotaError (413) when the plan's storage limit would be exceeded;
+// tenants without an owner or with an unlimited plan are never blocked.
+export async function uploadObjectWithQuota(key, buffer, size, contentType) {
+  const tenantId = tenantIdFromKey(key)
+  if (!tenantId) {
+    // Legacy unprefixed keys are read-only; nothing should upload them.
+    return putObjectRaw(key, buffer, size, contentType)
+  }
+
+  const resolved = await resolveTenantEntitlements(pool, tenantId)
+  const limitMb = resolved?.entitlements.limits[LIMITS.STORAGE_MB] ?? null
+  const limitBytes = limitMb === null ? null : limitMb * MB
+
+  if (!(await reserveStorageUsage(tenantId, size, limitBytes))) {
+    throw new StorageQuotaError(limitMb)
+  }
+
+  try {
+    const result = await putObjectRaw(key, buffer, size, contentType)
+    // Fire-and-forget reconcile: the reservation already counted the object;
+    // the S3 listing remains the periodic source of truth for drift.
+    void refreshTenantStorageForKey(key)
+    return result
+  } catch (err) {
+    await rollbackFailedUpload(tenantId, key, size)
+    throw err
+  }
 }
 
 export function removeObject(key) {

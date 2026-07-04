@@ -31,6 +31,14 @@ export async function getUserEmail(executor, userId) {
   return rows[0]?.email ?? null
 }
 
+export async function ownsAnyTenant(executor, userId) {
+  const { rowCount } = await executor.query(
+    'SELECT 1 FROM tenants WHERE owner_user_id = $1 LIMIT 1',
+    [userId],
+  )
+  return rowCount > 0
+}
+
 export async function deleteUser(executor, userId) {
   await executor.query('DELETE FROM users WHERE id = $1', [userId])
 }

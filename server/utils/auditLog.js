@@ -32,6 +32,9 @@ const SAFE_EXTRA_KEYS = new Set([
   'status',
   'reason',
   'expiresAt',
+  'planId',
+  'planSlug',
+  'ownerUserId',
 ])
 
 export function sanitizeAuditExtra(extra = {}) {

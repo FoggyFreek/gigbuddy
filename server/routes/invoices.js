@@ -3,6 +3,8 @@ import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
+import { requireEntitlement } from '../middleware/entitlements.js'
+import { FEATURES } from '../auth/entitlements.js'
 import { parseId } from '../validators/invoiceValidators.js'
 import {
   listInvoices,
@@ -128,8 +130,12 @@ router.delete('/:id/logo', requirePermission(PERMISSIONS.FINANCE_MANAGE), async 
   res.status(204).end()
 })
 
-// Create payment link (finalizes the invoice)
-router.post('/:id/payment-link', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+// Create payment link (finalizes the invoice). Issuing NEW Mollie links uses
+// the tenant's integration credentials → integrations entitlement required.
+// Removing a link and syncing an existing one deliberately stay open: cleanup
+// must not be trapped by a downgrade, and already-issued links must keep
+// settling (the public webhook is unauthenticated anyway).
+router.post('/:id/payment-link', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await createInvoicePaymentLink(pool, req.tenantId, id, req.user.id, req.body || {})
   if (result.error) return sendError(res, result.error)
@@ -161,7 +167,6 @@ router.get('/:id/eml-defaults', async (req, res) => {
 })
 
 // Generates and streams the .eml file.
-// X-Unsent: 1 verified working in Outlook 1.2026.105.100 (WebView2 143).
 router.post('/:id/eml', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await buildInvoiceEml(pool, req.tenantId, id, req.body?.personalMessage)

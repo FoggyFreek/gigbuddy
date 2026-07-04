@@ -5,6 +5,7 @@
 import {
   listUsersWithMemberships,
   getUserEmail,
+  ownsAnyTenant,
   deleteUser as deleteUserRow,
 } from '../repositories/adminUserRepository.js'
 
@@ -40,6 +41,17 @@ export async function deleteUser(db, actingUserId, userId) {
     return {
       error: badRequest('Cannot delete yourself'),
       audit: deleteDenied(userId, email, 'self_delete'),
+    }
+  }
+  // tenants.owner_user_id is ON DELETE RESTRICT; surface a clear 409 instead
+  // of an FK error — ownership must be reassigned (or the tenant deleted) first.
+  if (await ownsAnyTenant(db, userId)) {
+    return {
+      error: {
+        status: 409,
+        body: { error: 'User owns one or more tenants', code: 'user_owns_tenants' },
+      },
+      audit: deleteDenied(userId, email, 'owns_tenants'),
     }
   }
 

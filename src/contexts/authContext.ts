@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { Id } from '../types/entities.ts'
+import type { UserEntitlements } from '../auth/entitlements.ts'
 
 export interface UserMembership {
   tenantId?: Id
@@ -22,6 +23,8 @@ export interface User {
   /** Permission keys for the active tenant, sent by /auth/me (see src/auth/permissions.ts). */
   permissions?: string[]
   bandMemberId?: Id | null
+  /** Resolved entitlements for the active tenant; null = ownerless tenant (no enforcement). */
+  entitlements?: UserEntitlements | null
   memberships?: UserMembership[]
 }
 

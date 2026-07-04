@@ -3,6 +3,8 @@ import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
+import { requireEntitlement } from '../middleware/entitlements.js'
+import { FEATURES } from '../auth/entitlements.js'
 import { parseId } from '../validators/songValidators.js'
 import { decodeUploadedText } from '../utils/decodeText.js'
 import {
@@ -141,7 +143,7 @@ router.delete('/:id/links/:linkId', requirePermission(PERMISSIONS.PLANNING_WRITE
 
 // ---------- documents (pdf) ----------
 
-router.post('/:id/documents', requirePermission(PERMISSIONS.PLANNING_WRITE), documentUpload.single('file'), async (req, res) => {
+router.post('/:id/documents', requirePermission(PERMISSIONS.PLANNING_WRITE), requireEntitlement(FEATURES.SONG_FILES), documentUpload.single('file'), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!DOCUMENT_ALLOWED_TYPES.has(req.file.mimetype)) {
@@ -162,7 +164,7 @@ router.delete('/:id/documents/:docId', requirePermission(PERMISSIONS.PLANNING_WR
 
 // ---------- recordings (mp3) ----------
 
-router.post('/:id/recordings', requirePermission(PERMISSIONS.PLANNING_WRITE), recordingUpload.single('file'), async (req, res) => {
+router.post('/:id/recordings', requirePermission(PERMISSIONS.PLANNING_WRITE), requireEntitlement(FEATURES.SONG_FILES), recordingUpload.single('file'), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!RECORDING_ALLOWED_TYPES.has(req.file.mimetype)) {
@@ -183,7 +185,8 @@ router.delete('/:id/recordings/:recId', requirePermission(PERMISSIONS.PLANNING_W
 
 // ---------- chordpro charts ----------
 
-router.post('/:id/charts', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+// Chart DELETEs stay open — losing the chordpro feature must not trap data.
+router.post('/:id/charts', requirePermission(PERMISSIONS.PLANNING_WRITE), requireEntitlement(FEATURES.CHORDPRO), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await createSongChart(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
@@ -192,7 +195,7 @@ router.post('/:id/charts', requirePermission(PERMISSIONS.PLANNING_WRITE), async 
 
 // Upload a .cho/.pro file: its text becomes the chart source, the filename
 // (without extension) its default name.
-router.post('/:id/charts/upload', requirePermission(PERMISSIONS.PLANNING_WRITE), chartUpload.single('file'), async (req, res) => {
+router.post('/:id/charts/upload', requirePermission(PERMISSIONS.PLANNING_WRITE), requireEntitlement(FEATURES.CHORDPRO), chartUpload.single('file'), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (!CHART_ALLOWED_EXTENSIONS.test(req.file.originalname)) {
@@ -207,7 +210,7 @@ router.post('/:id/charts/upload', requirePermission(PERMISSIONS.PLANNING_WRITE),
   res.status(201).json(result.chart)
 })
 
-router.patch('/:id/charts/:chartId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+router.patch('/:id/charts/:chartId', requirePermission(PERMISSIONS.PLANNING_WRITE), requireEntitlement(FEATURES.CHORDPRO), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const chartId = requireParam(req, res, 'chartId'); if (chartId === null) return
   const result = await patchSongChart(pool, req.tenantId, id, chartId, req.body)

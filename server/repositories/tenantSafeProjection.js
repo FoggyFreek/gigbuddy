@@ -6,6 +6,7 @@ const SAFE_TENANT_COLUMNS = Object.freeze([
   'formal_name', 'address_street', 'address_postal_code', 'address_city', 'address_country',
   'kvk_number', 'iban', 'tax_id', 'tax_percentage', 'applies_kor',
   'banner_path', 'avatar_path', 'logo_dark_path',
+  'owner_user_id',
 ])
 
 export function tenantSafeProjection(alias = null) {

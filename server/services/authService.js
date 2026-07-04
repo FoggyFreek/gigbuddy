@@ -12,6 +12,7 @@ import {
   isApprovedMember,
 } from '../repositories/authRepository.js'
 import { permissionsForRole } from '../auth/permissions.js'
+import { resolveTenantEntitlements } from './entitlementService.js'
 
 // Builds the /me payload for a user, resolving the active tenant. The session's
 // preferred active tenant wins when it's still an approved membership, else the
@@ -36,6 +37,24 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
     bandMemberId = await getBandMemberId(db, user.id, activeTenantId)
   }
 
+  // Entitlements of the active tenant (owner's subscription). null = ownerless
+  // tenant, no enforcement — the frontend hides nothing and blocks nothing.
+  let entitlements = null
+  if (activeTenantId) {
+    const resolved = await resolveTenantEntitlements(db, activeTenantId)
+    if (resolved) {
+      entitlements = {
+        planSlug: resolved.planSlug,
+        subscriptionStatus: resolved.subscriptionStatus,
+        locked: resolved.locked,
+        financeReadOnly: resolved.financeReadOnly,
+        flags: resolved.entitlements.features,
+        // Already reflects a pending-downgrade limits snapshot (growth UX).
+        limits: resolved.entitlements.limits,
+      }
+    }
+  }
+
   return {
     payload: {
       id: user.id,
@@ -50,6 +69,7 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
         ? permissionsForRole(activeMembership.role, { isSuperAdmin: !!user.is_super_admin })
         : [],
       bandMemberId,
+      entitlements,
       memberships: memberships.map((m) => ({
         tenantId: m.tenant_id,
         tenantName: m.tenant_name,

@@ -38,6 +38,7 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   const result = await patchTenant(pool, Number(req.params.id), req.body)
   if (result.error) return sendError(res, result.error)
+  if (result.audit) auditLog(req, result.audit.action, result.audit.details)
   res.json(result.tenant)
 })
 

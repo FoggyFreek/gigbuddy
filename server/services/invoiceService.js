@@ -5,7 +5,7 @@
 //   { error: { status, body } }   — caller should respond with that status/body
 //   anything else                 — success payload (see each function)
 import { randomUUID } from 'node:crypto'
-import { getObject, uploadObject, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from './storageService.js'
+import { getObject, uploadObjectWithQuota, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from './storageService.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
@@ -122,7 +122,7 @@ export async function renderAndStorePdf(pool, invoiceId, tenantId) {
   const previousKey = invoice.pdf_path
   const newKey = invoicePdfKey(tenantId, randomUUID())
 
-  await uploadObject(newKey, pdfBuffer, pdfBuffer.length, 'application/pdf')
+  await uploadObjectWithQuota(newKey, pdfBuffer, pdfBuffer.length, 'application/pdf')
 
   try {
     await pool.query(
@@ -730,7 +730,7 @@ export async function uploadInvoiceLogo(pool, tenantId, invoiceId, file) {
   const ext = extensionForImageMime(image.mimetype)
   const objectKey = invoiceLogoKey(tenantId, randomUUID(), ext)
 
-  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
+  await uploadObjectWithQuota(objectKey, image.buffer, image.size, image.mimetype)
 
   try {
     await setCustomLogoPath(pool, tenantId, invoiceId, objectKey)

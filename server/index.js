@@ -12,6 +12,7 @@ import { securityHeaders } from './middleware/securityHeaders.js'
 import { validateIntegrationSecretsConfig } from './security/integrationSecrets.js'
 import { logger } from './utils/logger.js'
 import { requestContext, requestLogger } from './middleware/requestContext.js'
+import { startBillingReconciliation } from './jobs/billingReconciliation.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -74,5 +75,7 @@ await initOidc()
 app.listen(PORT, () => {
   logger.info('server.started', { port: PORT })
 })
+
+startBillingReconciliation()
 
 export default app

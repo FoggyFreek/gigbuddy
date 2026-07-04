@@ -2,6 +2,8 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
+import { requireEntitlement } from '../middleware/entitlements.js'
+import { FEATURES } from '../auth/entitlements.js'
 import { parseId } from '../validators/purchaseValidators.js'
 import {
   listProducts,
@@ -93,14 +95,18 @@ router.post('/sales/:id/void', requirePermission(PERMISSIONS.FINANCE_MANAGE), as
 
 // Recent Shopify orders for the import picker (fetched via the tenant's stored
 // token + store domain). `cursor` pages older orders via the Link header.
-router.get('/shopify/orders', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+// Shopify calls use the tenant's integration credentials, so they also need
+// the integrations entitlement (finance: true with integrations: false must
+// not reach Shopify — and this GET does a remote call, so the write-only
+// finance gate doesn't cover it).
+router.get('/shopify/orders', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
   const result = await fetchRecentOrders(pool, req.tenantId, { cursor: req.query.cursor, limit: req.query.limit })
   if (result.error) return res.status(result.error.status).json(result.error.body)
   res.json({ orders: result.orders, nextCursor: result.nextCursor })
 })
 
 // Import selected order lines (ids + mappings only; amounts re-fetched server-side).
-router.post('/shopify/import', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+router.post('/shopify/import', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
   const result = await importShopifyOrders(pool, req.tenantId, req.body || {}, req.user.id)
   if (result.error) return res.status(result.error.status).json(result.error.body)
   res.json(result)

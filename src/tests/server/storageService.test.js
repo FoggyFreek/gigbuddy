@@ -26,10 +26,19 @@ vi.mock('../../../server/utils/sendPush.js', () => ({
 // so we can assert the mutation → refresh wiring.
 vi.mock('../../../server/services/statisticsService.js', () => ({
   refreshTenantStorageForKey: vi.fn(() => Promise.resolve()),
+  reserveStorageUsage: vi.fn(async () => true),
+  releaseStorageUsage: vi.fn(async () => undefined),
+  refreshTenantStorage: vi.fn(async () => undefined),
   tenantIdFromKey: vi.fn((key) => {
     const m = /^tenants\/(\d+)\//.exec(key || '')
     return m ? Number(m[1]) : null
   }),
+}))
+
+// Quota resolution is covered by storageQuota.test.js against the real DB;
+// here it stays out of the way (null = ownerless, unlimited).
+vi.mock('../../../server/services/entitlementService.js', () => ({
+  resolveTenantEntitlements: vi.fn(async () => null),
 }))
 
 // Allow verifyDocumentContent to pass for rollback test
@@ -117,8 +126,8 @@ describe('deleteTenantObjects', () => {
 // ---------- mutation → stats refresh wiring ----------
 
 describe('storage mutations trigger a tenant stats refresh', () => {
-  it('uploadObject refreshes storage for the key after a successful put', async () => {
-    const { uploadObject } = await import('../../../server/services/storageService.js')
+  it('uploadObjectWithQuota refreshes storage for the key after a successful put', async () => {
+    const { uploadObjectWithQuota: uploadObject } = await import('../../../server/services/storageService.js')
     const { refreshTenantStorageForKey } = await import('../../../server/services/statisticsService.js')
     refreshTenantStorageForKey.mockClear()
     const result = await uploadObject('tenants/7/gig-banners/x.jpg', Buffer.from('x'), 1, 'image/jpeg')
@@ -137,7 +146,7 @@ describe('storage mutations trigger a tenant stats refresh', () => {
   })
 
   it('upload still resolves even though the refresh is fire-and-forget', async () => {
-    const { uploadObject } = await import('../../../server/services/storageService.js')
+    const { uploadObjectWithQuota: uploadObject } = await import('../../../server/services/storageService.js')
     const { refreshTenantStorageForKey } = await import('../../../server/services/statisticsService.js')
     // Real refreshTenantStorageForKey never rejects; the mutation does not await
     // it regardless, so the upload resolves.

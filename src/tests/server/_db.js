@@ -47,6 +47,7 @@ export async function truncateAll() {
       tenant_invites,
       push_subscriptions,
       notifications, notification_type_prefs, notification_tenant_prefs,
+      subscription_payments, billing_operations, subscriptions, storage_cleanup_queue,
       tenant_statistics,
       tenants,
       users

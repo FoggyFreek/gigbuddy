@@ -3,6 +3,8 @@ import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
+import { requireEntitlement, hasEntitledFeature } from '../middleware/entitlements.js'
+import { FEATURES } from '../auth/entitlements.js'
 import { auditLog } from '../utils/auditLog.js'
 import { parseId } from '../validators/profileValidators.js'
 import {
@@ -68,7 +70,14 @@ function sendError(res, error) {
   res.status(error.status).json(error.body)
 }
 
+// Credential endpoints need the tenant.manage permission. Status reads (GET)
+// and erasure (DELETE) deliberately do NOT require the integrations
+// entitlement — after a downgrade an admin must still be able to see and
+// remove stored secrets (GDPR erasure; a lost feature must never trap
+// credentials). Only setting/changing a credential (PUT) needs the feature.
 const manageIntegration = requirePermission(PERMISSIONS.TENANT_MANAGE)
+const setIntegration = [manageIntegration, requireEntitlement(FEATURES.INTEGRATIONS)]
+const customization = requireEntitlement(FEATURES.CUSTOMIZATION)
 function noStore(_req, res, next) {
   res.set('Cache-Control', 'no-store')
   next()
@@ -83,6 +92,15 @@ router.get('/', async (req, res) => {
 
 // Update tenant profile (partial)
 router.patch('/', async (req, res) => {
+  // accent_color is part of the customization feature; the rest of the profile
+  // stays editable on any plan, so the gate is field-level, not route-level.
+  if ('accent_color' in (req.body ?? {}) && !(await hasEntitledFeature(req, FEATURES.CUSTOMIZATION))) {
+    return res.status(403).json({
+      error: 'This feature is not included in the current subscription plan',
+      code: 'entitlement_required',
+      feature: FEATURES.CUSTOMIZATION,
+    })
+  }
   const isAdmin = req.membership?.role === 'tenant_admin' || req.user?.is_super_admin
   const result = await patchProfile(pool, req.tenantId, req.body, isAdmin)
   if (result.error) return sendError(res, result.error)
@@ -118,7 +136,7 @@ router.get('/mollie-key', manageIntegration, noStore, async (req, res) => {
 })
 
 // Set or replace Mollie API key (tenant admin only)
-router.put('/mollie-key', manageIntegration, noStore, async (req, res) => {
+router.put('/mollie-key', setIntegration, noStore, async (req, res) => {
   const result = await setMollieKeyValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.mollie_key.set')
@@ -138,7 +156,7 @@ router.get('/bandsintown-key', manageIntegration, noStore, async (req, res) => {
 })
 
 // Set or replace Bandsintown API key (tenant admin only)
-router.put('/bandsintown-key', manageIntegration, noStore, async (req, res) => {
+router.put('/bandsintown-key', setIntegration, noStore, async (req, res) => {
   const result = await setBandsintownKeyValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.bandsintown_key.set')
@@ -158,7 +176,7 @@ router.get('/shopify-client-id', manageIntegration, noStore, async (req, res) =>
 })
 
 // Set or replace Shopify app Client ID (tenant admin only)
-router.put('/shopify-client-id', manageIntegration, noStore, async (req, res) => {
+router.put('/shopify-client-id', setIntegration, noStore, async (req, res) => {
   const result = await setShopifyClientIdValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.shopify_client_id.set')
@@ -178,7 +196,7 @@ router.get('/shopify-secret', manageIntegration, noStore, async (req, res) => {
 })
 
 // Set or replace Shopify app secret (tenant admin only)
-router.put('/shopify-secret', manageIntegration, noStore, async (req, res) => {
+router.put('/shopify-secret', setIntegration, noStore, async (req, res) => {
   const result = await setShopifySecretValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.shopify_secret.set')
@@ -198,7 +216,7 @@ router.get('/shopify-domain', manageIntegration, noStore, async (req, res) => {
 })
 
 // Set or replace Shopify store domain (tenant admin only)
-router.put('/shopify-domain', manageIntegration, noStore, async (req, res) => {
+router.put('/shopify-domain', setIntegration, noStore, async (req, res) => {
   const result = await setShopifyDomainValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.shopify_domain.set')
@@ -213,19 +231,19 @@ router.delete('/shopify-domain', manageIntegration, noStore, async (req, res) =>
 })
 
 // Upload / replace band logo (tenant admin only)
-router.post('/logo', requirePermission(PERMISSIONS.TENANT_MANAGE), logoUpload.single('logo'), async (req, res) =>
+router.post('/logo', requirePermission(PERMISSIONS.TENANT_MANAGE), customization, logoUpload.single('logo'), async (req, res) =>
   handleImageUpload(req, res, uploadLogo, LOGO_ALLOWED_TYPES))
 
 // Upload / replace profile banner (tenant admin only)
-router.post('/banner', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpload.single('banner'), async (req, res) =>
+router.post('/banner', requirePermission(PERMISSIONS.TENANT_MANAGE), customization, imageUpload.single('banner'), async (req, res) =>
   handleImageUpload(req, res, uploadBanner, JPEG_PNG))
 
 // Upload / replace profile avatar (tenant admin only)
-router.post('/avatar', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpload.single('avatar'), async (req, res) =>
+router.post('/avatar', requirePermission(PERMISSIONS.TENANT_MANAGE), customization, imageUpload.single('avatar'), async (req, res) =>
   handleImageUpload(req, res, uploadAvatar, JPEG_PNG))
 
 // Upload / replace dark-theme logo variant (tenant admin only)
-router.post('/logo-dark', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpload.single('logo_dark'), async (req, res) =>
+router.post('/logo-dark', requirePermission(PERMISSIONS.TENANT_MANAGE), customization, imageUpload.single('logo_dark'), async (req, res) =>
   handleImageUpload(req, res, uploadLogoDark, LOGO_ALLOWED_TYPES))
 
 export default router

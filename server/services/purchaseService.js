@@ -41,7 +41,7 @@ import {
   postBillPaid,
 } from './ledgerService.js'
 import { randomUUID } from 'node:crypto'
-import { purchaseAttachmentKey, uploadObject, removeObject, safeRemove } from './storageService.js'
+import { purchaseAttachmentKey, uploadObjectWithQuota, removeObject, safeRemove } from './storageService.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 
@@ -83,7 +83,7 @@ export async function createPurchaseAttachment({ db, tenantId, purchaseId, file,
   }
 
   const objectKey = purchaseAttachmentKey(tenantId, randomUUID(), ext)
-  await uploadObject(objectKey, buffer, size, file.mimetype)
+  await uploadObjectWithQuota(objectKey, buffer, size, file.mimetype)
 
   try {
     const { rows: inserted } = await db.query(

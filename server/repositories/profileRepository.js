@@ -119,6 +119,15 @@ export async function clearShopifyDomain(executor, tenantId) {
   )
 }
 
+// Clears the Bandsintown integration configuration (non-secret, but part of
+// the integration surface purged when the entitlement is lost).
+export async function clearBandsintownArtist(executor, tenantId) {
+  await executor.query(
+    'UPDATE tenants SET bandsintown_artist_name = NULL, bandsintown_artist_id = NULL, updated_at = NOW() WHERE id = $1',
+    [tenantId],
+  )
+}
+
 // ---------- tenant image paths (logo, banner, avatar, logo_dark) ----------
 
 const IMAGE_COLUMNS = Object.freeze({

@@ -4,7 +4,7 @@
 // validation throws (err.status 400) to match the legacy global-handler shape.
 import { randomUUID } from 'node:crypto'
 import {
-  uploadObject, removeObject, safeRemove,
+  uploadObjectWithQuota, removeObject, safeRemove,
   bandLogoKey, bandProfileBannerKey, bandAvatarKey, bandLogoDarkKey,
 } from './storageService.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
@@ -212,7 +212,7 @@ async function uploadTenantImage(db, tenantId, file, keyBuilder, column, process
 
   const oldKey = await getTenantImagePath(db, tenantId, column)
 
-  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
+  await uploadObjectWithQuota(objectKey, image.buffer, image.size, image.mimetype)
 
   let updatedKey
   try {

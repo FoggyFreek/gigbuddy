@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import pool from '../db/index.js'
 import {
-  uploadObject,
+  uploadObjectWithQuota,
   removeObject,
   safeRemove,
   songDocumentKey,
@@ -216,7 +216,7 @@ export async function createSongDocument(db, tenantId, songId, file) {
   const ext = path.extname(file.originalname).toLowerCase()
   const objectKey = songDocumentKey(tenantId, randomUUID(), ext)
 
-  await uploadObject(objectKey, file.buffer, file.size, file.mimetype)
+  await uploadObjectWithQuota(objectKey, file.buffer, file.size, file.mimetype)
 
   try {
     return { document: await insertSongDocument(db, songId, tenantId, file, objectKey) }
@@ -244,7 +244,7 @@ export async function createSongRecording(db, tenantId, songId, file) {
   const ext = path.extname(file.originalname).toLowerCase()
   const objectKey = songRecordingKey(tenantId, randomUUID(), ext)
 
-  await uploadObject(objectKey, file.buffer, file.size, file.mimetype)
+  await uploadObjectWithQuota(objectKey, file.buffer, file.size, file.mimetype)
 
   try {
     return { recording: await insertSongRecording(db, songId, tenantId, file, objectKey) }
