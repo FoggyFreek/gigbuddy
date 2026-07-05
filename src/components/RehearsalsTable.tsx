@@ -249,6 +249,7 @@ function PastHeader({ open, count, onToggle }: Readonly<PastHeaderProps>) {
 
 interface RehearsalsTableProps {
   rehearsals?: Rehearsal[]
+  selectedStatuses?: ReadonlySet<string>
   bandMemberId?: Id | null
   onVote?: (rehearsalId: Id | undefined, memberId: Id | undefined, vote: string | null) => void
   onRowClick?: (rehearsal: Rehearsal) => void
@@ -256,13 +257,16 @@ interface RehearsalsTableProps {
   selectedId?: Id | null
 }
 
-export default function RehearsalsTable({ rehearsals = [], bandMemberId, onVote, onRowClick, onShare, selectedId = null }: Readonly<RehearsalsTableProps>) {
+export default function RehearsalsTable({ rehearsals = [], selectedStatuses, bandMemberId, onVote, onRowClick, onShare, selectedId = null }: Readonly<RehearsalsTableProps>) {
   const { t } = useTranslation('rehearsals')
   const [pastOpen, setPastOpen] = useState(false)
   const isCompact = useCompactLayout()
 
-  const upcoming = rehearsals.filter((r) => !isPastDate(r.proposed_date))
-  const past = rehearsals.filter((r) => isPastDate(r.proposed_date)).sort(compareRehearsalDateDesc)
+  const filtered = selectedStatuses
+    ? rehearsals.filter((rehearsal) => selectedStatuses.has(rehearsal.status ?? ''))
+    : rehearsals
+  const upcoming = filtered.filter((r) => !isPastDate(r.proposed_date))
+  const past = filtered.filter((r) => isPastDate(r.proposed_date)).sort(compareRehearsalDateDesc)
   const emptyAll = rehearsals.length === 0
 
   if (isCompact) {

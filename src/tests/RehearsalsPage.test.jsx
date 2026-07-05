@@ -92,6 +92,38 @@ describe('RehearsalsPage', () => {
     await waitFor(() => expect(listRehearsals).toHaveBeenCalled())
   })
 
+  it('shows a status filter immediately before Add and filters rehearsals by status', async () => {
+    const user = userEvent.setup()
+    listRehearsals.mockResolvedValueOnce([
+      {
+        id: 1,
+        proposed_date: '2099-05-10',
+        location: 'Studio A',
+        status: 'option',
+        participants: [],
+      },
+      {
+        id: 2,
+        proposed_date: '2099-06-10',
+        location: 'Studio Planned',
+        status: 'planned',
+        participants: [],
+      },
+    ])
+    wrap(<RehearsalsPage />)
+
+    await waitFor(() => expect(screen.getByText('Studio Planned')).toBeInTheDocument())
+    const filterButton = screen.getByRole('button', { name: /filter rehearsals/i })
+    const addButton = screen.getByRole('button', { name: /^add$/i })
+    expect(filterButton.compareDocumentPosition(addButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    await user.click(filterButton)
+    await user.click(screen.getByRole('menuitem', { name: /planned/i }))
+
+    expect(screen.getByText('Studio A')).toBeInTheDocument()
+    expect(screen.queryByText('Studio Planned')).not.toBeInTheDocument()
+  })
+
   it('shows loaded rehearsals in the table', async () => {
     wrap(<RehearsalsPage />)
     await waitFor(() => expect(screen.getByText('Studio A')).toBeInTheDocument())

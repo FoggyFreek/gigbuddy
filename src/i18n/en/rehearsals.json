@@ -9,6 +9,8 @@
     "colTime": "Time",
     "colLocation": "Location",
     "colVotes": "Votes",
+    "filterRehearsals": "Filter rehearsals",
+    "allStatuses": "All statuses",
     "shareRehearsal": "share rehearsal",
     "shareWhatsApp": "Share via WhatsApp",
     "noRequiredParticipants": "no required participants",

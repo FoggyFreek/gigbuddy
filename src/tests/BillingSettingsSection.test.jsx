@@ -79,9 +79,11 @@ describe('BillingSettingsSection — current plan tier logo', () => {
 
   it('shows no tier logo without a subscription', async () => {
     api.getBillingState.mockResolvedValue({ subscription: null, ownedTenantCount: 1, plans: PLANS })
-    const { container } = wrap(<BillingSettingsSection />, participantUser)
-    await screen.findByText(/You are on the free plan/)
-    expect(container.querySelector('img[src^="/icons/gb_"]')).toBeNull()
+    wrap(<BillingSettingsSection />, participantUser)
+    // Scope to the current-subscription card only; the plan cards below legitimately
+    // render their own tier logos, so a container-wide query would false-positive.
+    const currentCard = (await screen.findByText(/You are on the free plan/)).closest('.MuiPaper-root')
+    expect(currentCard?.querySelector('img[src^="/icons/gb_"]')).toBeNull()
   })
 })
 
