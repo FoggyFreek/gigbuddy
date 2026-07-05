@@ -1,0 +1,89 @@
+{
+  "errors": {
+    "plan_change_in_progress": "Er is al een abonnementswijziging bezig. Wacht tot deze is afgerond.",
+    "complimentary_managed_by_admin": "Je abonnement wordt beheerd door een beheerder.",
+    "plan_not_priced": "Dat abonnement is niet beschikbaar voor de gekozen betaalperiode.",
+    "already_subscribed": "Je hebt al een actief abonnement.",
+    "use_downgrade_endpoint": "Gebruik de downgrade-optie voor een lager abonnement.",
+    "not_implemented": "Downgrades zijn nog niet beschikbaar.",
+    "no_mandate": "Er is geen geldige betaalmethode bekend.",
+    "billing_not_configured": "Facturering is niet geconfigureerd op deze server.",
+    "generic": "Er is iets misgegaan."
+  },
+  "status": {
+    "pending_mandate": "Wacht op betalingsbevestiging",
+    "pending_activation": "Wacht op eerste betaling",
+    "trialing": "Proefperiode",
+    "active": "Actief",
+    "past_due": "Betaling achterstallig",
+    "canceled": "Opgezegd"
+  },
+  "features": {
+    "finance": "Financiën & boekhouding",
+    "integrations": "Integraties",
+    "song_files": "Songbestanden",
+    "chordpro": "Akkoordenschema's",
+    "customization": "Eigen huisstijl",
+    "public_promotion": "Publieke promotie"
+  },
+  "limits": {
+    "storage_mb": "Opslag (MB)",
+    "members": "Leden",
+    "bands": "Bands",
+    "unlimited": "onbeperkt"
+  },
+  "current": {
+    "noSubscription": "Geen abonnement",
+    "freePlanName": "Gratis",
+    "complimentary": "Aangeboden",
+    "participantOnly": "Je hebt geen abonnement en je hoeft niets te betalen. Je doet mee in je band(s) onder het abonnement van een ander bandlid. Je kunt alsnog een eigen abonnement nemen — dat begint met het aanmaken van je eigen band. Bands waarin je alleen meedoet tellen niet mee voor de bandlimiet van een abonnement.",
+    "freePlan": "Je gebruikt het gratis abonnement. Kies hieronder een abonnement om meer functies te ontgrendelen.",
+    "trialEnds": "Proefperiode eindigt {{date, datetime}}.",
+    "accessEnds": "Toegang eindigt {{date, datetime}}",
+    "renews": "Verlengt op {{date, datetime}}",
+    "pendingChange": "Er is een abonnementswijziging bezig. Deze gaat in zodra de betaling is bevestigd.",
+    "pastDue": "Je laatste betaling is mislukt. Controleer je betaalgegevens — de toegang eindigt binnenkort.",
+    "repairNeeded": "We ronden het instellen van je betalingsschema af. Je hoeft niets te doen.",
+    "resume": "Abonnement hervatten",
+    "cancel": "Abonnement opzeggen",
+    "sync": "Vernieuwen via betaalprovider"
+  },
+  "plans": {
+    "title": "Abonnementen",
+    "monthly": "Maandelijks",
+    "yearly": "Jaarlijks",
+    "current": "Huidig",
+    "free": "Gratis",
+    "perMonth": "{{price}}/mnd",
+    "perYear": "{{price}}/jr",
+    "notAvailable": "Niet beschikbaar voor deze betaalperiode",
+    "subscribe": "Abonneren",
+    "upgrade": "Upgraden",
+    "downgrade": "Downgraden",
+    "switchToYearly": "Overstappen naar jaarlijks",
+    "switchToMonthly": "Overstappen naar maandelijks"
+  },
+  "toasts": {
+    "paymentStarted": "Betaling gestart — je abonnement wordt bijgewerkt zodra de betaling is bevestigd.",
+    "planUpdated": "Abonnement bijgewerkt.",
+    "downgradeScheduled": "Downgrade ingepland.",
+    "cancellationScheduled": "Opzegging ingepland voor het einde van je periode.",
+    "resumed": "Abonnement hervat.",
+    "synced": "Gesynchroniseerd."
+  },
+  "downgrade": {
+    "title": "Downgraden naar {{plan}}",
+    "freeFallbackWarning": "Aan het einde van je huidige periode stopt je abonnement en worden de gegevens van de functies die je verliest (integraties, songbestanden, eigen huisstijl, enzovoort) permanent verwijderd. Je financiële administratie blijft altijd bewaard.",
+    "paidLowerInfo": "Aan het einde van je huidige periode wordt je account tijdelijk vergrendeld totdat de eerste {{plan}}-betaling is verwerkt. Met iDEAL/SEPA kan dat een paar dagen duren; in die periode heb je geen betaalde toegang. Er wordt niets verwijderd totdat die betaling is bevestigd.",
+    "confirmPrompt": "Je kunt vanaf nu geen gegevens meer toevoegen boven de limieten van {{plan}}. Typ ter bevestiging <mono>{{phrase}}</mono>.",
+    "confirmAria": "bevestigingszin voor downgrade",
+    "confirm": "Downgraden"
+  },
+  "financeReadOnly": "Je huidige abonnement bevat geen financiën. Je bestaande administratie blijft beschikbaar om te bekijken en te exporteren, maar wijzigingen zijn uitgeschakeld. Upgrade je abonnement om je financiën weer te bewerken.",
+  "locked": {
+    "title": "{{feature}} is een premiumfunctie",
+    "description": "Upgrade je abonnement om {{feature}} voor je band te ontgrendelen. Binnenkort zie je hier een voorbeeld van wat je krijgt.",
+    "fallbackFeature": "Deze functie",
+    "viewPlans": "Bekijk abonnementen"
+  }
+}

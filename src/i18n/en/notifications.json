@@ -11,7 +11,8 @@
     "title": "Account settings",
     "sections": {
       "notifications": "Notifications",
-      "theme": "Theme"
+      "theme": "Theme",
+      "billing": "Billing"
     },
     "theme": {
       "title": "Theme",

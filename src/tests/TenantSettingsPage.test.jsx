@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../contexts/authContext.ts'
+import { getMyStorageStats } from '../api/statistics.ts'
 import TenantSettingsPage from '../pages/TenantSettingsPage.tsx'
 import theme from '../theme.ts'
 
@@ -54,9 +56,28 @@ function wrap(ui, userOverride = {}) {
   const user = { isSuperAdmin: false, activeTenantRole: 'tenant_admin', ...userOverride }
   return render(
     <AuthContext.Provider value={{ user, logout: vi.fn() }}>
-      <ThemeProvider theme={theme}>{ui}</ThemeProvider>
+      <ThemeProvider theme={theme}>
+        <MemoryRouter>{ui}</MemoryRouter>
+      </ThemeProvider>
     </AuthContext.Provider>,
   )
+}
+
+// A plan that locks every feature and caps storage at 100 MB.
+const lockedEntitlements = {
+  planSlug: 'free',
+  subscriptionStatus: null,
+  locked: false,
+  financeReadOnly: false,
+  flags: {
+    finance: false,
+    integrations: false,
+    customization: false,
+    song_files: false,
+    chordpro: false,
+    public_promotion: false,
+  },
+  limits: { storage_mb: 100, members: 5, bands: 1 },
 }
 
 describe('TenantSettingsPage — admin view', () => {
@@ -77,6 +98,38 @@ describe('TenantSettingsPage — admin view', () => {
     await waitFor(() => {
       expect(screen.getByText(/accounting settings/i)).toBeInTheDocument()
     })
+  })
+})
+
+describe('TenantSettingsPage — plan gating', () => {
+  it('shows premium diamonds on accent color and integrations when the plan lacks them', async () => {
+    wrap(<TenantSettingsPage />, { entitlements: lockedEntitlements })
+    await waitFor(() => {
+      expect(screen.getAllByRole('link', { name: /premium feature/i })).toHaveLength(2)
+    })
+  })
+
+  it('shows no diamonds when entitlements are unenforced', async () => {
+    wrap(<TenantSettingsPage />)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.queryByRole('link', { name: /premium feature/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a storage progress bar and upgrade button when a storage limit is set', async () => {
+    getMyStorageStats.mockResolvedValueOnce({ storage_bytes: 50 * 1024 * 1024, object_count: 3 })
+    wrap(<TenantSettingsPage />, { entitlements: lockedEntitlements })
+    const bar = await screen.findByRole('progressbar', { name: /storage/i })
+    expect(bar).toHaveAttribute('aria-valuenow', '50')
+    expect(screen.getByRole('button', { name: /upgrade storage/i })).toBeInTheDocument()
+    expect(screen.getByText(/50\.0 MB of 100\.0 MB used/i)).toBeInTheDocument()
+  })
+
+  it('shows only the actual storage when no limit is set', async () => {
+    getMyStorageStats.mockResolvedValueOnce({ storage_bytes: 50 * 1024 * 1024, object_count: 3 })
+    wrap(<TenantSettingsPage />)
+    await screen.findByText(/50\.0 MB/)
+    expect(screen.queryByRole('progressbar', { name: /storage/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /upgrade storage/i })).not.toBeInTheDocument()
   })
 })
 

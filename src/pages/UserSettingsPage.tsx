@@ -9,13 +9,15 @@ import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined'
+import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined'
 import NotificationSettingsSection from '../components/account/NotificationSettingsSection.tsx'
 import ThemeSettingsSection from '../components/account/ThemeSettingsSection.tsx'
+import BillingSettingsSection from '../components/account/BillingSettingsSection.tsx'
 
 // Per-user (cross-tenant) settings, as opposed to /settings which is the
 // tenant-admin band configuration. Sections are addressed by route param so
 // the bell's settings shortcut can deep-link to /account/notifications.
-const SECTIONS = ['notifications', 'theme'] as const
+const SECTIONS = ['notifications', 'theme', 'billing'] as const
 type Section = (typeof SECTIONS)[number]
 
 export default function UserSettingsPage() {
@@ -46,11 +48,19 @@ export default function UserSettingsPage() {
               <ListItemIcon><PaletteOutlinedIcon /></ListItemIcon>
               <ListItemText primary={t($ => $.settings.sections.theme)} />
             </ListItemButton>
+            <ListItemButton
+              selected={activeSection === 'billing'}
+              onClick={() => navigate('/account/billing')}
+            >
+              <ListItemIcon><CreditCardOutlinedIcon /></ListItemIcon>
+              <ListItemText primary={t($ => $.settings.sections.billing)} />
+            </ListItemButton>
           </List>
         </Paper>
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
           {activeSection === 'notifications' && <NotificationSettingsSection />}
           {activeSection === 'theme' && <ThemeSettingsSection />}
+          {activeSection === 'billing' && <BillingSettingsSection />}
         </Box>
       </Box>
     </Box>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -45,6 +46,58 @@ const TWO_TENANT_USER = {
     { tenantId: 1, tenantSlug: 'a', tenantName: 'Band A', role: 'member', status: 'approved' },
     { tenantId: 2, tenantSlug: 'b', tenantName: 'Band B', role: 'tenant_admin', status: 'approved' },
   ],
+}
+
+// Entitlement payloads as /auth/me sends them (complete flags + limits).
+const ENTITLEMENTS_NO_FINANCE = {
+  planSlug: 'free',
+  subscriptionStatus: 'active',
+  locked: false,
+  financeReadOnly: false,
+  flags: { finance: false, integrations: false, customization: false, song_files: false, chordpro: false, public_promotion: false },
+  limits: { storage_mb: 512, members: 5, bands: 1 },
+}
+
+const ENTITLEMENTS_FULL = {
+  planSlug: 'pro',
+  subscriptionStatus: 'active',
+  locked: false,
+  financeReadOnly: false,
+  flags: { finance: true, integrations: true, customization: true, song_files: true, chordpro: true, public_promotion: true },
+  limits: { storage_mb: null, members: null, bands: null },
+}
+
+// In Band A the user is a contributor on a finance-less plan; in Band B a
+// tenant admin on a full plan. No `permissions` list on purpose — the matrix
+// fallback in usePermissions is what a tenant switch exercises.
+const BAND_A_USER = {
+  ...TWO_TENANT_USER,
+  activeTenantId: 1,
+  activeTenantRole: 'contributor',
+  entitlements: ENTITLEMENTS_NO_FINANCE,
+}
+
+const BAND_B_USER = {
+  ...TWO_TENANT_USER,
+  activeTenantId: 2,
+  activeTenantRole: 'tenant_admin',
+  entitlements: ENTITLEMENTS_FULL,
+}
+
+// Stateful stand-in for the real auth context: switchTenant swaps the user,
+// re-rendering AppShell with the new tenant's role and entitlements — the same
+// contract the real context fulfils after /auth/switch-tenant resolves.
+function SwitchableShell({ users = { 1: BAND_A_USER, 2: BAND_B_USER } }) {
+  const [activeId, setActiveId] = useState(1)
+  useAuth.mockImplementation(() => ({
+    user: users[activeId],
+    logout: vi.fn(),
+    switchTenant: (tenantId) => {
+      setActiveId(tenantId)
+      return Promise.resolve({})
+    },
+  }))
+  return <AppShell />
 }
 
 describe('AppShell tenant switcher', () => {
@@ -123,6 +176,102 @@ describe('AppShell tenant switcher', () => {
     const menu = screen.getByRole('menu')
     expect(within(menu).getByText('Members')).toBeInTheDocument()
     expect(within(menu).getByText('Band Settings')).toBeInTheDocument()
+  })
+
+  it('repopulates nav groups and items from the new tenant role and plan after switching', async () => {
+    const user = userEvent.setup()
+    wrap(<SwitchableShell />)
+
+    // Band A (contributor, no finance feature): the Accounting group is
+    // permission-filtered away entirely, leaving 5 of the 6 group headers…
+    expect(screen.queryByRole('button', { name: 'Accounting group' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: / group$/ })).toHaveLength(5)
+
+    // …and inside Financial only Purchases survives (purchase.create), but the
+    // plan lacks finance so it renders locked: diamond icon + upsell link.
+    // Only the expanded group's items are mounted (accordion + unmountOnExit),
+    // so the document's links ARE the Financial items — count them exactly.
+    await user.click(screen.getByRole('button', { name: 'Financial group' }))
+    expect(screen.getAllByRole('link').map((l) => l.textContent)).toEqual(['Purchases'])
+    const lockedPurchases = screen.getByRole('link', { name: 'Purchases' })
+    expect(lockedPurchases).toHaveAttribute('href', '/upgrade/finance')
+    expect(within(lockedPurchases).getByTestId('DiamondOutlinedIcon')).toBeInTheDocument()
+
+    // Switch to Band B via the user menu.
+    await user.click(screen.getByLabelText('open user menu'))
+    await user.click(within(screen.getByRole('menu')).getByText('Band B'))
+
+    // Band B (tenant admin, full plan): Accounting appears (all 6 headers), and
+    // the Financial group — still expanded from before the switch — now shows
+    // exactly its four items, with Purchases unlocked at the real route.
+    expect(await screen.findByRole('button', { name: 'Accounting group' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: / group$/ })).toHaveLength(6)
+    expect(screen.getAllByRole('link').map((l) => l.textContent)).toEqual([
+      'Invoices',
+      'Purchases',
+      'Merchandise',
+      'Reimbursements',
+    ])
+    const purchases = screen.getByRole('link', { name: 'Purchases' })
+    expect(purchases).toHaveAttribute('href', '/purchases')
+    expect(within(purchases).queryByTestId('DiamondOutlinedIcon')).not.toBeInTheDocument()
+  })
+
+  it('replaces diamond items with real ones (no duplicates) when switching to a grandfathered tenant', async () => {
+    // Same tenant_admin role in both bands; both plans lack finance. Band A is
+    // fully gated (diamonds), Band B has pre-existing finance data so the
+    // grandfathering flag unlocks the same items. The switch must swap the
+    // items in place — not append unlocked copies next to the locked ones.
+    const GATED_ADMIN = {
+      ...TWO_TENANT_USER,
+      activeTenantId: 1,
+      activeTenantRole: 'tenant_admin',
+      entitlements: ENTITLEMENTS_NO_FINANCE,
+    }
+    const GRANDFATHERED_ADMIN = {
+      ...TWO_TENANT_USER,
+      activeTenantId: 2,
+      activeTenantRole: 'tenant_admin',
+      entitlements: { ...ENTITLEMENTS_NO_FINANCE, financeReadOnly: true },
+    }
+    const user = userEvent.setup()
+    wrap(<SwitchableShell users={{ 1: GATED_ADMIN, 2: GRANDFATHERED_ADMIN }} />)
+
+    // Band A: all four Financial items visible but locked — every link is the
+    // upsell route with a diamond.
+    await user.click(screen.getByRole('button', { name: 'Financial group' }))
+    const lockedLinks = screen.getAllByRole('link')
+    expect(lockedLinks.map((l) => l.textContent)).toEqual([
+      'Invoices',
+      'Purchases',
+      'Merchandise',
+      'Reimbursements',
+    ])
+    for (const link of lockedLinks) {
+      expect(link).toHaveAttribute('href', '/upgrade/finance')
+      expect(within(link).getByTestId('DiamondOutlinedIcon')).toBeInTheDocument()
+    }
+
+    // Switch to the grandfathered band.
+    await user.click(screen.getByLabelText('open user menu'))
+    await user.click(within(screen.getByRole('menu')).getByText('Band B'))
+
+    // Band B: the SAME four items, unlocked — real routes, no diamonds, and
+    // crucially no leftover locked duplicates.
+    const links = await screen.findAllByRole('link')
+    expect(links.map((l) => l.textContent)).toEqual([
+      'Invoices',
+      'Purchases',
+      'Merchandise',
+      'Reimbursements',
+    ])
+    expect(links.map((l) => l.getAttribute('href'))).toEqual([
+      '/invoices',
+      '/purchases',
+      '/merch',
+      '/reimbursements',
+    ])
+    expect(screen.queryByTestId('DiamondOutlinedIcon')).not.toBeInTheDocument()
   })
 
   it('hides Members nav link from regular members', async () => {

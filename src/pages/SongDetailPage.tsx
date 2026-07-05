@@ -15,6 +15,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
+import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
@@ -37,8 +38,10 @@ import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import SongLinks from '../components/SongLinks.tsx'
 import SongFileList from '../components/SongFileList.tsx'
 import ChordProChartsSection from '../components/chordpro/ChordProChartsSection.tsx'
+import PremiumDiamond from '../components/PremiumDiamond.tsx'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Song, SongTag, Id } from '../types/entities.ts'
+import type { Feature } from '../auth/entitlements.ts'
 
 const DOCUMENT_ACCEPT = '.pdf,application/pdf'
 const DOCUMENT_MAX = 5 * 1024 * 1024
@@ -61,11 +64,16 @@ interface SongForm {
   notes: string
 }
 
-function SectionHeading({ children }: Readonly<{ children: ReactNode }>) {
+// `premium` marks a plan-gated section: a diamond appears next to the heading
+// when the current plan lacks that feature.
+function SectionHeading({ children, premium }: Readonly<{ children: ReactNode; premium?: Feature }>) {
   return (
-    <Typography variant="subtitle2" sx={{ fontWeight: 600,  mb: 1.5  }}>
-      {children}
-    </Typography>
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mb: 1.5 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+        {children}
+      </Typography>
+      {premium && <PremiumDiamond feature={premium} />}
+    </Stack>
   )
 }
 
@@ -274,7 +282,7 @@ export default function SongDetailPage() {
           <SongLinks songId={songId} initialLinks={song.links || []} canWrite={canWritePlanning} />
 
           <Divider sx={{ my: 3 }} />
-          <SectionHeading>{t($ => $.sections.chords)}</SectionHeading>
+          <SectionHeading premium="chordpro">{t($ => $.sections.chords)}</SectionHeading>
           <ChordProChartsSection
             songId={songId}
             initialCharts={song.chordpro_charts || []}
@@ -292,6 +300,7 @@ export default function SongDetailPage() {
             deleteFn={(id, fileId) => fileId !== undefined ? deleteSongDocument(id, fileId) : Promise.resolve()}
             addLabel={t($ => $.addPdf)}
             canWrite={canWritePlanning}
+            premiumFeature="song_files"
           />
 
           <Divider sx={{ my: 3 }} />
@@ -306,6 +315,7 @@ export default function SongDetailPage() {
             isAudio
             addLabel={t($ => $.addMp3)}
             canWrite={canWritePlanning}
+            premiumFeature="song_files"
           />
 
           <Divider sx={{ my: 3 }} />

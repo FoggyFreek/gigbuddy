@@ -26,7 +26,10 @@
     "recomputeAria": "recompute storage usage",
     "description": "Total size of this band's uploaded files (banners, attachments, photos, logos, invoices).",
     "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files"
+    "fileCount_other": "{{count}} files",
+    "limitUsage": "{{used}} of {{limit}} used",
+    "usageAria": "storage usage",
+    "upgrade": "Upgrade storage"
   },
   "integrations": {
     "title": "Integrations",

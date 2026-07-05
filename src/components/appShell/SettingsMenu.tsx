@@ -13,6 +13,7 @@ import ApartmentIcon from '@mui/icons-material/Apartment'
 import GroupIcon from '@mui/icons-material/Group'
 import SettingsIcon from '@mui/icons-material/Settings'
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt'
+import CreditCardIcon from '@mui/icons-material/CreditCard'
 import type { SvgIconComponent } from '@mui/icons-material'
 
 interface NavMenuItemDef {
@@ -54,6 +55,8 @@ export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTh
   const superAdminNavItems: NavMenuItemDef[] = [
     { to: '/admin/tenants', label: t($ => $.admin.tenants, { ns: 'navigation' }), icon: ApartmentIcon },
     { to: '/admin/users', label: t($ => $.admin.allUsers, { ns: 'navigation' }), icon: PeopleAltIcon },
+    // Hardcoded English (billing copy is not localized yet, per the rollout plan).
+    { to: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCardIcon },
   ]
   // Each item is gated on its own capability, not on the tenant_admin role, so
   // the permission matrix stays the single source of truth (see auth/permissions).

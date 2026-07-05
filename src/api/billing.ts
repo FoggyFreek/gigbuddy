@@ -1,0 +1,87 @@
+import { request } from './_client.ts'
+
+export type BillingInterval = 'month' | 'year'
+
+export interface SubscriptionPlanEntitlements {
+  features: Record<string, boolean>
+  limits: Record<string, number | null>
+}
+
+// Raw plan-catalog row (snake_case, as the admin CRUD returns it).
+export interface SubscriptionPlan {
+  id: number
+  slug: string
+  name: string
+  monthly_price_cents: number | null
+  yearly_price_cents: number | null
+  entitlements: SubscriptionPlanEntitlements
+  is_active: boolean
+  is_fallback: boolean
+  sort_order: number
+}
+
+export interface PendingChange {
+  planId: number
+  kind: 'upgrade' | 'downgrade' | 'interval'
+  interval: BillingInterval
+  priceCents: number
+}
+
+export interface Subscription {
+  id: number
+  planId: number
+  planSlug: string
+  status: string
+  billingInterval: BillingInterval | null
+  priceCents: number
+  cancelAtPeriodEnd: boolean
+  currentPeriodEnd: string | null
+  trialEndsAt: string | null
+  isComplimentary: boolean
+  complimentaryExpiresAt: string | null
+  pendingChange: PendingChange | null
+  scheduleStale: boolean
+  repairNeeded: boolean
+}
+
+export interface BillingState {
+  subscription: Subscription | null
+  /** Active (non-archived) tenants this user owns — 0 means they only participate in others' bands. */
+  ownedTenantCount: number
+  plans: SubscriptionPlan[]
+}
+
+const api = <T = unknown>(path: string, options?: RequestInit) =>
+  request<T>(`/api/billing${path}`, options)
+
+export const getBillingState = () => api<BillingState>('/')
+
+export const subscribe = (planId: number, interval: BillingInterval) =>
+  api<{ checkoutUrl: string; trial: boolean }>('/subscribe', {
+    method: 'POST', body: JSON.stringify({ planId, interval }),
+  })
+
+export const changePlan = (planId: number, interval: BillingInterval) =>
+  api<{ changed: boolean; pending?: boolean; trial?: boolean }>('/change-plan', {
+    method: 'POST', body: JSON.stringify({ planId, interval }),
+  })
+
+export const downgrade = (planId: number, interval: BillingInterval, confirmation: string) =>
+  api<{ scheduled?: boolean }>('/downgrade', {
+    method: 'POST', body: JSON.stringify({ planId, interval, confirmation }),
+  })
+
+export const cancelSubscription = () =>
+  api<{ canceled?: boolean; atPeriodEnd?: boolean; alreadyScheduled?: boolean }>('/cancel', { method: 'POST' })
+
+export const resumeSubscription = () =>
+  api<{ resumed: boolean }>('/resume', { method: 'POST' })
+
+export const syncSubscription = () =>
+  api<{ subscription: Subscription | null }>('/sync', { method: 'POST' })
+
+// The interval price a plan charges, or null when that interval is unavailable
+// (plan_not_priced). Mirrors server billingShared.priceForInterval.
+export function priceForInterval(plan: SubscriptionPlan, interval: BillingInterval): number | null {
+  return interval === 'year' ? plan.yearly_price_cents : plan.monthly_price_cents
+}

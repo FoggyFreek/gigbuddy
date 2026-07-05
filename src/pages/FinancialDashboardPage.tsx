@@ -17,6 +17,7 @@ import { ChartsAxisHighlight } from '@mui/x-charts/ChartsAxisHighlight'
 import { ChartsGrid } from '@mui/x-charts/ChartsGrid'
 import ResultChartTooltip from '../components/financial/ResultChartTooltip.tsx'
 import PeriodPicker from '../components/shared/periodPicker.tsx'
+import FinanceReadOnlyBanner from '../components/FinanceReadOnlyBanner.tsx'
 import { getLedgerOverview, listLedgerPeriods } from '../api/ledger.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
@@ -168,6 +169,8 @@ export default function FinancialDashboardPage() {
         </Typography>
         <PeriodPicker availableDates={availableDates} value={period} onChange={setPeriod} />
       </Box>
+
+      <FinanceReadOnlyBanner />
 
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

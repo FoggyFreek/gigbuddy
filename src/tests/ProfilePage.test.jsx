@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../contexts/authContext.ts'
@@ -72,10 +73,28 @@ function wrap(ui, { user } = {}) {
   return render(
     <ThemeProvider theme={theme}>
       <AuthContext.Provider value={{ user, logout: vi.fn() }}>
-        {ui}
+        <MemoryRouter>{ui}</MemoryRouter>
       </AuthContext.Provider>
     </ThemeProvider>
   )
+}
+
+// A plan without the customization feature — the identity-card image upload
+// buttons should become diamond upsell links while editing.
+const lockedEntitlements = {
+  planSlug: 'free',
+  subscriptionStatus: null,
+  locked: false,
+  financeReadOnly: false,
+  flags: {
+    finance: false,
+    integrations: false,
+    customization: false,
+    song_files: false,
+    chordpro: false,
+    public_promotion: false,
+  },
+  limits: { storage_mb: 100, members: 5, bands: 1 },
 }
 
 describe('ProfilePage', () => {
@@ -204,6 +223,36 @@ describe('ProfilePage', () => {
     expect(screen.queryByLabelText(/iban/i)).toBeNull()
     expect(screen.queryByLabelText(/tax id/i)).toBeNull()
     expect(updateProfile).not.toHaveBeenCalled()
+  })
+
+  it('replaces the camera buttons with diamond upsell links when the plan lacks customization', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, {
+      user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin', entitlements: lockedEntitlements },
+    })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+    const editButtons = screen.getAllByRole('button', { name: /^edit$/i })
+    await user.click(editButtons[0]) // Band identity edit button
+
+    const diamonds = await screen.findAllByRole('link', { name: /premium feature/i })
+    expect(diamonds.length).toBeGreaterThan(0)
+    for (const diamond of diamonds) {
+      expect(diamond).toHaveAttribute('href', '/upgrade/customization')
+    }
+    expect(document.querySelector('[data-testid="CameraAltIcon"]')).toBeNull()
+  })
+
+  it('keeps the camera buttons when entitlements are unenforced', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin' } })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+    const editButtons = screen.getAllByRole('button', { name: /^edit$/i })
+    await user.click(editButtons[0])
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-testid="CameraAltIcon"]')).not.toBeNull(),
+    )
+    expect(screen.queryByRole('link', { name: /premium feature/i })).not.toBeInTheDocument()
   })
 
   it('rejects GIF logo uploads before sending them', async () => {

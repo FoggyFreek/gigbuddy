@@ -49,8 +49,10 @@ const VatReturnDetailPage = lazy(() => import('./pages/VatReturnDetailPage.tsx')
 const TenantSettingsPage = lazy(() => import('./pages/TenantSettingsPage.tsx'))
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage.tsx'))
 const PaymentThanksPage = lazy(() => import('./pages/PaymentThanksPage.tsx'))
+const LockedFeaturePage = lazy(() => import('./pages/LockedFeaturePage.tsx'))
 const TenantsPage = lazy(() => import('./pages/admin/TenantsPage.tsx'))
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage.tsx'))
+const SubscriptionsPage = lazy(() => import('./pages/admin/SubscriptionsPage.tsx'))
 
 export default function App() {
   return (
@@ -67,6 +69,8 @@ export default function App() {
             {/* Per-user settings — ungated like /profile (not tenant-admin /settings). */}
             <Route path="/account" element={<Navigate to="/account/notifications" replace />} />
             <Route path="/account/:section" element={<UserSettingsPage />} />
+            {/* Upsell landing for tier-locked features (diamond nav items). */}
+            <Route path="/upgrade/:feature" element={<LockedFeaturePage />} />
             <Route path="/gigs" element={<GigsPage />}>
               <Route path=":id" element={<GigDetailPage />} />
             </Route>
@@ -132,6 +136,7 @@ export default function App() {
             <Route element={<RequireSuperAdmin />}>
               <Route path="/admin/tenants" element={<TenantsPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
+              <Route path="/admin/subscriptions" element={<SubscriptionsPage />} />
             </Route>
           </Route>
         </Route>

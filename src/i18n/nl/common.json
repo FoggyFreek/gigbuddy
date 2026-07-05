@@ -32,6 +32,9 @@
   "confirmation": {
     "cannotUndo": "Dit kan niet ongedaan worden gemaakt."
   },
+  "premium": {
+    "tooltip": "Premiumfunctie — niet inbegrepen in je huidige abonnement. Bekijk upgrade-opties."
+  },
   "csvImport": {
     "chooseFile": "Kies CSV-bestand",
     "notMapped": "(niet gekoppeld)",

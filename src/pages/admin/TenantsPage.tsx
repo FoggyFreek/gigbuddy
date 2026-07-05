@@ -30,6 +30,7 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import ArchiveIcon from '@mui/icons-material/Archive'
+import KeyIcon from '@mui/icons-material/Key'
 import LoginIcon from '@mui/icons-material/Login'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import RefreshIcon from '@mui/icons-material/Refresh'
@@ -38,12 +39,14 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import {
   listTenants,
   createTenant,
+  updateTenant,
   archiveTenant,
   unarchiveTenant,
   grantMembership,
   deleteTenant,
 } from '../../api/tenants.ts'
 import { listAllUsers } from '../../api/adminUsers.ts'
+import type { AdminUser } from '../../api/adminUsers.ts'
 import { getAllStorageStats, refreshAllStorageStats } from '../../api/statistics.ts'
 import { formatBytes } from '../../utils/formatBytes.ts'
 import { useAuth } from '../../contexts/authContext.ts'
@@ -59,12 +62,6 @@ interface StorageStats {
   tenant_id?: Id
   storage_bytes?: number
   object_count?: number
-}
-
-interface AdminUser {
-  id?: Id
-  name?: string
-  email?: string
 }
 
 export default function TenantsPage() {
@@ -90,6 +87,22 @@ export default function TenantsPage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [ownerDialog, setOwnerDialog] = useState<{ open: boolean; tenant: TenantRow | null }>({ open: false, tenant: null })
+  const [ownerChoice, setOwnerChoice] = useState('') // user id as string; '' = no owner
+  const [ownerSubmitting, setOwnerSubmitting] = useState(false)
+  const [ownerError, setOwnerError] = useState('')
+
+  const ownerOf = (t: TenantRow) => users.find((u) => u.id === t.owner_user_id) ?? null
+  // Owner candidates: the tenant's approved members (+ the current owner, so a
+  // legacy assignment outside the member list still renders as a valid choice).
+  const ownerCandidates = (t: TenantRow | null) => {
+    if (!t) return []
+    const members = users.filter((u) =>
+      (u.memberships ?? []).some((m) => m.tenant_id === t.id && m.status === 'approved'))
+    const owner = ownerOf(t)
+    if (owner && !members.some((u) => u.id === owner.id)) members.unshift(owner)
+    return members
+  }
 
   const refresh = () => {
     setLoading(true)
@@ -178,6 +191,34 @@ export default function TenantsPage() {
     }
   }
 
+  const openOwnerDialog = (t: TenantRow) => {
+    setOwnerChoice(t.owner_user_id != null ? String(t.owner_user_id) : '')
+    setOwnerError('')
+    setOwnerDialog({ open: true, tenant: t })
+  }
+
+  const closeOwnerDialog = () => {
+    if (ownerSubmitting) return
+    setOwnerDialog({ open: false, tenant: null })
+  }
+
+  const handleAssignOwner = async () => {
+    if (!ownerDialog.tenant) return
+    setOwnerSubmitting(true)
+    setOwnerError('')
+    try {
+      await updateTenant(ownerDialog.tenant.id as Id, {
+        owner_user_id: ownerChoice === '' ? null : Number(ownerChoice),
+      })
+      setOwnerDialog({ open: false, tenant: null })
+      refresh()
+    } catch (err) {
+      setOwnerError(err instanceof Error ? err.message : 'Assign failed')
+    } finally {
+      setOwnerSubmitting(false)
+    }
+  }
+
   const openDeleteDialog = (tenant: TenantRow) => {
     if (!tenant.archived_at) return
     setDeleteConfirmation('')
@@ -252,6 +293,7 @@ export default function TenantsPage() {
               <TableCell>ID</TableCell>
               <TableCell>Slug</TableCell>
               <TableCell>Band name</TableCell>
+              <TableCell>Owner</TableCell>
               <TableCell align="right">Members</TableCell>
               <TableCell align="right">Storage</TableCell>
               <TableCell>Status</TableCell>
@@ -263,6 +305,7 @@ export default function TenantsPage() {
               const isActive = user?.activeTenantId === t.id
               const archived = !!t.archived_at
               const stats = storageByTenant[String(t.id)]
+              const owner = ownerOf(t)
               let switchTooltip: string
               if (archived) {
                 switchTooltip = 'Unarchive to switch in'
@@ -276,6 +319,17 @@ export default function TenantsPage() {
                   <TableCell>{t.id}</TableCell>
                   <TableCell>{t.slug}</TableCell>
                   <TableCell>{t.band_name}</TableCell>
+                  <TableCell>
+                    {owner ? (
+                      <Tooltip title={owner.email ?? ''}>
+                        <span>{owner.name || owner.email}</span>
+                      </Tooltip>
+                    ) : (
+                      <Typography component="span" variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                        Unassigned
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell align="right">{t.member_count}</TableCell>
                   <TableCell align="right">
                     <Tooltip title={stats ? `${stats.object_count} files` : ''}>
@@ -321,6 +375,15 @@ export default function TenantsPage() {
                           </IconButton>
                         </span>
                       </Tooltip>
+                      <Tooltip title="Assign owner">
+                        <IconButton
+                          size="small"
+                          onClick={() => openOwnerDialog(t)}
+                          aria-label={`assign owner for ${t.band_name}`}
+                        >
+                          <KeyIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title={archived ? 'Unarchive' : 'Archive'}>
                         <IconButton size="small" onClick={() => handleArchive(t)}>
                           {archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
@@ -354,6 +417,7 @@ export default function TenantsPage() {
           const isActive = user?.activeTenantId === t.id
           const archived = !!t.archived_at
           const stats = storageByTenant[String(t.id)]
+          const owner = ownerOf(t)
           let switchTooltip: string
           if (archived) {
             switchTooltip = 'Unarchive to switch in'
@@ -388,6 +452,9 @@ export default function TenantsPage() {
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
                   ID: {t.id} · Slug: {t.slug}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Owner: {owner ? (owner.name || owner.email) : 'Unassigned'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Members: {t.member_count}
@@ -424,6 +491,15 @@ export default function TenantsPage() {
                       <PersonAddIcon fontSize="small" />
                     </IconButton>
                   </span>
+                </Tooltip>
+                <Tooltip title="Assign owner">
+                  <IconButton
+                    size="small"
+                    onClick={() => openOwnerDialog(t)}
+                    aria-label={`assign owner for ${t.band_name}`}
+                  >
+                    <KeyIcon fontSize="small" />
+                  </IconButton>
                 </Tooltip>
                 <Tooltip title={archived ? 'Unarchive' : 'Archive'}>
                   <IconButton size="small" onClick={() => handleArchive(t)}>
@@ -542,6 +618,55 @@ export default function TenantsPage() {
             disabled={memberSubmitting || !memberUser}
           >
             Add
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={ownerDialog.open} onClose={closeOwnerDialog} fullWidth maxWidth="xs">
+        <DialogTitle>
+          Assign owner of {ownerDialog.tenant?.band_name || ''}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel id="owner-select-label">Owner</InputLabel>
+              <Select
+                labelId="owner-select-label"
+                label="Owner"
+                value={ownerChoice}
+                onChange={(e) => setOwnerChoice(e.target.value)}
+              >
+                <MenuItem value="">
+                  <em>No owner (no plan enforcement)</em>
+                </MenuItem>
+                {ownerCandidates(ownerDialog.tenant).map((u) => (
+                  <MenuItem key={String(u.id)} value={String(u.id)}>
+                    {u.name || u.email} ({u.email})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              The owner's subscription determines this band's plan and limits,
+              and the band counts toward the owner's band limit. Only approved
+              members can be assigned. Without an owner, no plan limits are
+              enforced (legacy mode).
+            </Typography>
+            {ownerError && (
+              <Typography color="error" variant="body2">
+                {ownerError}
+              </Typography>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeOwnerDialog} disabled={ownerSubmitting}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleAssignOwner}
+            disabled={ownerSubmitting}
+          >
+            Assign
           </Button>
         </DialogActions>
       </Dialog>

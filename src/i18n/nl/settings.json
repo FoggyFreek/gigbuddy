@@ -26,7 +26,10 @@
     "recomputeAria": "opslaggebruik opnieuw berekenen",
     "description": "Totale grootte van de geüploade bestanden van deze band (banners, bijlagen, foto's, logo's, facturen).",
     "fileCount_one": "{{count}} bestand",
-    "fileCount_other": "{{count}} bestanden"
+    "fileCount_other": "{{count}} bestanden",
+    "limitUsage": "{{used}} van {{limit}} gebruikt",
+    "usageAria": "opslaggebruik",
+    "upgrade": "Opslag upgraden"
   },
   "integrations": {
     "title": "Integraties",

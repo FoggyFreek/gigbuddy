@@ -14,6 +14,7 @@ import {
   deleteCleanupRow,
   bumpCleanupAttempts,
 } from '../repositories/storageCleanupRepository.js'
+import { BILLING_TASKS } from './billingTasks.js'
 import { logger } from '../utils/logger.js'
 
 const TICK_INTERVAL_MS = 15 * 60 * 1000
@@ -55,6 +56,14 @@ export async function runReconciliationTick() {
     if (!locked) return false
 
     logger.info('billing.reconcile', { jobName: 'tick' })
+    // Each task is isolated: one failure never starves the others.
+    for (const [jobName, task] of BILLING_TASKS) {
+      try {
+        await task()
+      } catch (err) {
+        logger.error('billing.reconcile_task_failed', { err, jobName })
+      }
+    }
     try {
       await drainStorageCleanupQueue(client)
     } catch (err) {

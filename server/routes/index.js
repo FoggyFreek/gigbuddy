@@ -28,6 +28,9 @@ import tenantsRouter from './tenants.js'
 import tenantsSelfRouter from './tenantsSelf.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
+import adminSubscriptionsRouter from './adminSubscriptions.js'
+import billingRouter from './billing.js'
+import publicBillingMollieRouter from './publicBillingMollie.js'
 import sharePhotosRouter from './sharePhotos.js'
 import filesRouter from './files.js'
 import geocodeRouter from './geocode.js'
@@ -112,6 +115,7 @@ router.get('/health', (_req, res) => {
 
 // Public unauthenticated routes — mounted before CSRF and auth middleware.
 router.use('/public/mollie', publicWebhookLimiter, publicMollieRouter)
+router.use('/public/billing', publicWebhookLimiter, publicBillingMollieRouter)
 router.use('/public/invoices', publicWebhookLimiter, publicInvoicesRouter)
 router.use('/public/calendar', publicWebhookLimiter, publicCalendarRouter)
 
@@ -144,9 +148,12 @@ const tenantManage = [...tenantMember, requirePermission(PERMISSIONS.TENANT_MANA
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 // Self-service owned tenants: user-level (no active-tenant resolution).
 router.use('/tenants', requireApproved, tenantsSelfRouter)
+// User-level billing (subscription owner acts regardless of active tenant).
+router.use('/billing', requireApproved, billingRouter)
 router.use('/admin/tenants', superAdmin, tenantsRouter)
 router.use('/admin/users', superAdmin, adminUsersRouter)
 router.use('/admin/plans', superAdmin, adminPlansRouter)
+router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
 router.use('/invites', membersManage, invitesAdminRouter)
 router.use('/users', membersManage, usersRouter)

@@ -4,6 +4,7 @@ import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import Tooltip from '@mui/material/Tooltip'
 import { alpha } from '@mui/material/styles'
+import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import type { SvgIconComponent } from '@mui/icons-material'
 import { isItemSelected } from './navSelection.ts'
 
@@ -11,6 +12,9 @@ interface NavItemDef {
   to: string
   label: string
   icon: SvgIconComponent
+  // Feature locked behind a higher plan: render a diamond instead of the real
+  // icon (the link already points at the upsell page). See project memory.
+  locked?: boolean
 }
 
 interface NavItemProps {
@@ -24,7 +28,7 @@ interface NavItemProps {
 
 export default function NavItem({ item, pathname, isNavCollapsed, indent, rail, onClick }: Readonly<NavItemProps>) {
   const selected = isItemSelected(item.to, pathname)
-  const Icon = item.icon
+  const Icon = item.locked ? DiamondOutlined : item.icon
   return (
     <Tooltip
       title={isNavCollapsed ? item.label : ''}
@@ -86,7 +90,7 @@ export default function NavItem({ item, pathname, isNavCollapsed, indent, rail, 
         }}
       >
         <ListItemIcon sx={{ minWidth: isNavCollapsed ? 0 : 36, justifyContent: 'center' }}>
-          <Icon fontSize="small" color={selected ? 'primary' : 'inherit'} />
+          <Icon fontSize="small" color={item.locked ? 'secondary' : selected ? 'primary' : 'inherit'} />
         </ListItemIcon>
         {!isNavCollapsed && <ListItemText primary={item.label} sx={{ ml: 1.5 }} />}
       </ListItemButton>

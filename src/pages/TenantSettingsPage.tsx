@@ -1,10 +1,12 @@
 ﻿import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
+import LinearProgress from '@mui/material/LinearProgress'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
@@ -13,11 +15,14 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
+import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import StorageIcon from '@mui/icons-material/Storage'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import { useAuth } from '../contexts/authContext.ts'
+import { useEntitlements } from '../hooks/useEntitlements.ts'
+import PremiumDiamond from '../components/PremiumDiamond.tsx'
 import { useProfile } from '../contexts/profileContext.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
@@ -81,9 +86,12 @@ export default function TenantSettingsPage() {
       </Typography>
 
       <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt: 2 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }} gutterBottom>
-          {t($ => $.accentColor.title)}
-        </Typography>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mb: 1 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+            {t($ => $.accentColor.title)}
+          </Typography>
+          <PremiumDiamond feature="customization" />
+        </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {t($ => $.accentColor.description)}
         </Typography>
@@ -175,9 +183,12 @@ export default function TenantSettingsPage() {
       {isAdmin && <StorageUsageSection />}
       {isAdmin && (
         <>
-          <Typography variant="h6" sx={{ mt: 4, mb: 0 }}>
-            {t($ => $.integrations.title)}
-          </Typography>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mt: 4 }}>
+            <Typography variant="h6">
+              {t($ => $.integrations.title)}
+            </Typography>
+            <PremiumDiamond feature="integrations" />
+          </Stack>
           <MollieKeySection />
           <ShopifyKeySection />
           <BandsintownKeySection />
@@ -196,9 +207,23 @@ interface StorageStats {
 
 function StorageUsageSection() {
   const { t } = useTranslation('settings')
+  const { limit } = useEntitlements()
+  const navigate = useNavigate()
   const [stats, setStats] = useState<StorageStats | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const compact = useCompactLayout()
+
+  // null = unlimited (or unenforced tenant): show plain usage, no bar/upsell.
+  const storageLimitMb = limit('storage_mb')
+  const limitBytes = storageLimitMb === null ? null : storageLimitMb * 1024 * 1024
+  const usedBytes = stats?.storage_bytes ?? 0
+  let usedPct = 0
+  if (limitBytes !== null) {
+    usedPct = limitBytes > 0 ? Math.min(100, (usedBytes / limitBytes) * 100) : 100
+  }
+  let barColor: 'primary' | 'warning' | 'error' = 'primary'
+  if (usedPct >= 100) barColor = 'error'
+  else if (usedPct >= 90) barColor = 'warning'
 
   useEffect(() => {
     getMyStorageStats().then((s) => setStats(s as unknown as StorageStats)).catch(() => {})
@@ -241,12 +266,37 @@ function StorageUsageSection() {
       {stats === null ? (
         <CircularProgress size={18} />
       ) : (
-        <Typography variant="body1" sx={{ fontWeight: 600 }}>
-          {formatBytes(stats.storage_bytes ?? 0)}
-          <Typography component="span" variant="body2" color="text.secondary">
-            {' · '}{t($ => $.storage.fileCount, { count: stats.object_count ?? 0 })}
+        <>
+          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+            {limitBytes === null
+              ? formatBytes(usedBytes)
+              : t($ => $.storage.limitUsage, { used: formatBytes(usedBytes), limit: formatBytes(limitBytes) })}
+            <Typography component="span" variant="body2" color="text.secondary">
+              {' · '}{t($ => $.storage.fileCount, { count: stats.object_count ?? 0 })}
+            </Typography>
           </Typography>
-        </Typography>
+          {limitBytes !== null && (
+            <>
+              <LinearProgress
+                variant="determinate"
+                value={usedPct}
+                color={barColor}
+                aria-label={t($ => $.storage.usageAria)}
+                sx={{ mt: 1.5, height: 8, borderRadius: 4 }}
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                color="secondary"
+                startIcon={<DiamondOutlined />}
+                onClick={() => navigate('/account/billing')}
+                sx={{ mt: 2 }}
+              >
+                {t($ => $.storage.upgrade)}
+              </Button>
+            </>
+          )}
+        </>
       )}
     </Paper>
   )

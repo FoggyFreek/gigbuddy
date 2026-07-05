@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router-dom'
 import type { ProfileForm } from './profileForm.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -16,9 +17,11 @@ import Stack from '@mui/material/Stack'
 import { alpha } from '@mui/material/styles'
 import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import CheckIcon from '@mui/icons-material/Check'
+import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import EditIcon from '@mui/icons-material/Edit'
 import PersonIcon from '@mui/icons-material/Person'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
+import { useEntitlements } from '../../hooks/useEntitlements.ts'
 
 // 820×360 stored; display 820×312 desktop, 640×360 compact
 const BANNER_ASPECT_DESKTOP = (312 / 820) * 100  // 38.05%
@@ -55,11 +58,41 @@ interface CameraButtonProps {
   onClick: (e: React.MouseEvent<HTMLButtonElement>) => void
   disabled?: boolean
   tooltipTitle: string
+  // Plan lacks customization: render a diamond linking to the upsell page
+  // instead of the camera uploader (same overlay slot and styling).
+  locked?: boolean
   sx?: object
   iconSize?: number
 }
 
-function CameraButton({ onClick, disabled, tooltipTitle, sx, iconSize = 16 }: Readonly<CameraButtonProps>) {
+const CAMERA_BUTTON_SX = {
+  bgcolor: 'rgba(0,0,0,0.5)',
+  color: '#fff',
+  width: 28,
+  height: 28,
+  '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
+  '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.5)' },
+} as const
+
+function CameraButton({ onClick, disabled, tooltipTitle, locked, sx, iconSize = 16 }: Readonly<CameraButtonProps>) {
+  const { t } = useTranslation('common')
+
+  if (locked) {
+    return (
+      <Tooltip title={t($ => $.premium.tooltip)}>
+        <IconButton
+          component={RouterLink}
+          to="/upgrade/customization"
+          size="small"
+          aria-label={t($ => $.premium.tooltip)}
+          sx={{ ...CAMERA_BUTTON_SX, ...sx }}
+        >
+          <DiamondOutlined sx={{ fontSize: iconSize }} />
+        </IconButton>
+      </Tooltip>
+    )
+  }
+
   return (
     <Tooltip title={tooltipTitle}>
       <span>
@@ -67,15 +100,7 @@ function CameraButton({ onClick, disabled, tooltipTitle, sx, iconSize = 16 }: Re
           size="small"
           onClick={onClick}
           disabled={disabled}
-          sx={{
-            bgcolor: 'rgba(0,0,0,0.5)',
-            color: '#fff',
-            width: 28,
-            height: 28,
-            '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
-            '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.5)' },
-            ...sx,
-          }}
+          sx={{ ...CAMERA_BUTTON_SX, ...sx }}
         >
           <CameraAltIcon sx={{ fontSize: iconSize }} />
         </IconButton>
@@ -109,7 +134,12 @@ export default function ProfileIdentityCard({
 }: Readonly<ProfileIdentityCardProps>) {
   const { t } = useTranslation(['profile', 'common'])
   const { mode } = useThemeMode()
+  const { has } = useEntitlements()
   const [logoMenuAnchor, setLogoMenuAnchor] = useState<HTMLElement | null>(null)
+
+  // Banner/logo/avatar uploads are part of the customization feature; without
+  // it the camera buttons become diamond links to the upgrade page.
+  const customizationLocked = !has('customization')
 
   // Theme-aware logo: dark variant in dark mode when available, else light logo
   const displayLogoPath = mode === 'dark' && logoDark.path ? logoDark.path : logo.path
@@ -147,6 +177,7 @@ export default function ProfileIdentityCard({
             tooltipTitle={t($ => $.identity.changeBanner)}
             onClick={banner.onUploadClick}
             disabled={banner.uploading}
+            locked={customizationLocked}
             sx={{ position: 'absolute', top: 8, right: 8 }}
             iconSize={18}
           />
@@ -169,6 +200,7 @@ export default function ProfileIdentityCard({
               tooltipTitle={t($ => $.identity.changeLogo)}
               onClick={(e) => setLogoMenuAnchor(e.currentTarget)}
               disabled={logoUploading}
+              locked={customizationLocked}
               sx={{ position: 'absolute', top: -10, right: -10 }}
             />
           )}
@@ -210,6 +242,7 @@ export default function ProfileIdentityCard({
               tooltipTitle={t($ => $.identity.changeAvatar)}
               onClick={avatar.onUploadClick}
               disabled={avatar.uploading}
+              locked={customizationLocked}
               sx={{ position: 'absolute', bottom: 6, right: 6 }}
             />
           )}
@@ -231,6 +264,7 @@ export default function ProfileIdentityCard({
                 tooltipTitle={t($ => $.identity.changeLogo)}
                 onClick={(e) => setLogoMenuAnchor(e.currentTarget)}
                 disabled={logoUploading}
+                locked={customizationLocked}
                 sx={{ position: 'absolute', top: -10, right: -10 }}
               />
             )}
@@ -303,6 +337,7 @@ export default function ProfileIdentityCard({
                 tooltipTitle={t($ => $.identity.changeAvatar)}
                 onClick={avatar.onUploadClick}
                 disabled={avatar.uploading}
+                locked={customizationLocked}
                 sx={{ position: 'absolute', bottom: 6, right: 6 }}
               />
             )}
