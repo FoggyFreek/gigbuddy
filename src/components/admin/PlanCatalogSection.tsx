@@ -246,7 +246,7 @@ export default function PlanCatalogSection({ plans, onChanged }: Readonly<PlanCa
                   {LIMIT_KEYS.map((k) => {
                     const value = plan.entitlements.limits[k]
                     return `${LIMIT_LABELS[k] ?? labelFor(k)}: ${value === null || value === undefined ? '∞' : value}`
-                  }).join(' · ')}
+                  }).join(', ')}
                 </TableCell>
                 <TableCell align="right">{plan.sort_order}</TableCell>
                 <TableCell align="right">

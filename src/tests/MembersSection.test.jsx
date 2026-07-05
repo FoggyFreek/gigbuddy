@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import theme from '../theme.ts'
-import MembersPage from '../pages/MembersPage.tsx'
+import MembersSection from '../components/settings/MembersSection.tsx'
 
 vi.mock('../api/users.ts', () => ({
   listMemberships: vi.fn(),
@@ -89,7 +89,7 @@ function wrap(ui) {
   )
 }
 
-describe('MembersPage', () => {
+describe('MembersSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useAuth.mockReturnValue({ user: ADMIN_USER, logout: vi.fn() })
@@ -98,14 +98,14 @@ describe('MembersPage', () => {
   })
 
   it('renders membership rows', async () => {
-    wrap(<MembersPage />)
+    wrap(<MembersSection />)
     await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     expect(screen.getAllByText('Approved User').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Admin').length).toBeGreaterThan(0)
   })
 
   it('renders status chips', async () => {
-    wrap(<MembersPage />)
+    wrap(<MembersSection />)
     await waitFor(() => expect(screen.getAllByText('pending').length).toBeGreaterThan(0))
     expect(screen.getAllByText('approved').length).toBeGreaterThan(0)
   })
@@ -114,7 +114,7 @@ describe('MembersPage', () => {
     const updated = { ...ROWS[0], status: 'approved' }
     updateMembership.mockResolvedValue(updated)
     const user = userEvent.setup()
-    wrap(<MembersPage />)
+    wrap(<MembersSection />)
     await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     await user.click(screen.getAllByText('Approve')[0])
     expect(updateMembership).toHaveBeenCalledWith(1, { status: 'approved' })
@@ -124,7 +124,7 @@ describe('MembersPage', () => {
     const updated = { ...ROWS[0], status: 'rejected' }
     updateMembership.mockResolvedValue(updated)
     const user = userEvent.setup()
-    wrap(<MembersPage />)
+    wrap(<MembersSection />)
     await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     const rejectButtons = screen.getAllByText('Reject')
     await user.click(rejectButtons[0])
@@ -134,7 +134,7 @@ describe('MembersPage', () => {
   it('removes a membership and drops the row', async () => {
     removeMembership.mockResolvedValue(null)
     const user = userEvent.setup()
-    wrap(<MembersPage />)
+    wrap(<MembersSection />)
     await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     const deleteButtons = screen.getAllByRole('button', { name: /remove member/i })
     await user.click(deleteButtons[0])
@@ -147,7 +147,7 @@ describe('MembersPage', () => {
     const updated = { ...ROWS[0], band_member_id: 10 }
     updateMembershipBandMember.mockResolvedValue(updated)
     const user = userEvent.setup()
-    wrap(<MembersPage />)
+    wrap(<MembersSection />)
     await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     const allCombos = screen.getAllByRole('combobox')
     // Each row contributes 2 selects (role, band_member). Band member is index 1 (desktop table comes first).
@@ -158,7 +158,7 @@ describe('MembersPage', () => {
 
   it('non-super admin can assign the new roles but not tenant_admin', async () => {
     const user = userEvent.setup()
-    wrap(<MembersPage />)
+    wrap(<MembersSection />)
     await waitFor(() => expect(screen.getAllByText('Pending User').length).toBeGreaterThan(0))
     // The role select itself is now enabled (tenant admins may assign the new
     // roles); only the tenant_admin option stays disabled for non-super callers.
@@ -174,7 +174,7 @@ describe('MembersPage', () => {
     const updated = { ...ROWS[1], role: 'tenant_admin' }
     updateMembership.mockResolvedValue(updated)
     const user = userEvent.setup()
-    wrap(<MembersPage />)
+    wrap(<MembersSection />)
     await waitFor(() => expect(screen.getAllByText('Approved User').length).toBeGreaterThan(0))
     const allCombos = screen.getAllByRole('combobox')
     // Approved User (row index 1) — role combobox at index 2 (row 0 has 2 selects in desktop table).

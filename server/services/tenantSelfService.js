@@ -5,7 +5,6 @@
 // (uncapped, ownerless creation) stays in tenantService.js.
 //
 // Ownership checks return 404, never 403, so tenant existence isn't leaked.
-import pool from '../db/index.js'
 import { validSlug } from '../validators/tenantValidators.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
 import {
@@ -27,14 +26,14 @@ function badRequest(error) {
 // Creates a tenant owned by the caller, who becomes its tenant_admin. The
 // band cap is checked under a user-row lock in the same transaction as the
 // insert, so two parallel creates can't both slip under the limit.
-export async function createOwnedTenant(userId, body) {
+export async function createOwnedTenant(db, userId, body) {
   const { slug, band_name } = body || {}
   if (!validSlug(slug)) return badRequest('Invalid slug')
   if (!band_name || typeof band_name !== 'string') {
     return badRequest('band_name is required')
   }
 
-  const client = await pool.connect()
+  const client = await db.connect()
   try {
     await client.query('BEGIN')
 
@@ -82,8 +81,8 @@ export async function archiveOwnedTenant(db, userId, tenantId) {
 // Unarchiving makes the tenant active again, so the band cap is re-checked —
 // archiving must not be a loophole to park bands above the limit and swap
 // them back in.
-export async function unarchiveOwnedTenant(userId, tenantId) {
-  const client = await pool.connect()
+export async function unarchiveOwnedTenant(db, userId, tenantId) {
+  const client = await db.connect()
   try {
     await client.query('BEGIN')
 

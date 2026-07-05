@@ -10,7 +10,6 @@ import DarkModeIcon from '@mui/icons-material/DarkMode'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import TranslateIcon from '@mui/icons-material/Translate'
 import ApartmentIcon from '@mui/icons-material/Apartment'
-import GroupIcon from '@mui/icons-material/Group'
 import SettingsIcon from '@mui/icons-material/Settings'
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt'
 import CreditCardIcon from '@mui/icons-material/CreditCard'
@@ -40,12 +39,10 @@ interface SettingsMenuProps {
   onClose: () => void
   mode: string
   onToggleTheme: () => void
-  canManageMembers?: boolean
-  canManageTenant?: boolean
   isSuperAdmin?: boolean
 }
 
-export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, canManageMembers, canManageTenant, isSuperAdmin }: Readonly<SettingsMenuProps>) {
+export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, isSuperAdmin }: Readonly<SettingsMenuProps>) {
   const { t, i18n } = useTranslation(['common', 'navigation'])
   const isDutch = i18n.resolvedLanguage === 'nl'
   const toggleLanguage = () => {
@@ -58,12 +55,13 @@ export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTh
     // Hardcoded English (billing copy is not localized yet, per the rollout plan).
     { to: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCardIcon },
   ]
-  // Each item is gated on its own capability, not on the tenant_admin role, so
-  // the permission matrix stays the single source of truth (see auth/permissions).
-  const adminNavItems: NavMenuItemDef[] = [
-    canManageMembers && { to: '/members', label: t($ => $.admin.members, { ns: 'navigation' }), icon: GroupIcon },
-    canManageTenant && { to: '/settings', label: t($ => $.admin.bandSettings, { ns: 'navigation' }), icon: SettingsIcon },
-  ].filter((item): item is NavMenuItemDef => Boolean(item))
+  // The unified settings page is reachable by every member; each section gates
+  // its own content by role, so this entry is not permission-gated.
+  const settingsNavItem: NavMenuItemDef = {
+    to: '/settings',
+    label: t($ => $.shell.settings, { ns: 'navigation' }),
+    icon: SettingsIcon,
+  }
 
   return (
     <Menu
@@ -85,13 +83,8 @@ export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTh
         </ListItemIcon>
         <ListItemText primary={isDutch ? t($ => $.language.switchToEnglish) : t($ => $.language.switchToDutch)} />
       </MenuItem>
-      {adminNavItems.length > 0 && [
-        <Divider key="tenant-admin-divider" />,
-        <ListSubheader key="tenant-admin-header" component="div" disableSticky>
-          {t($ => $.headers.tenantAdmin, { ns: 'navigation' })}
-        </ListSubheader>,
-        ...adminNavItems.map((item) => renderNavItem(item, onClose)),
-      ]}
+      <Divider />
+      {renderNavItem(settingsNavItem, onClose)}
       {isSuperAdmin && [
         <Divider key="super-admin-divider" />,
         <ListSubheader key="super-admin-header" component="div" disableSticky>

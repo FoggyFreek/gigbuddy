@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -110,5 +110,42 @@ describe('SubscriptionsPage complimentary grant', () => {
     await user.click(await within(await screen.findByRole('listbox')).findByText('Pro'))
     await user.click(screen.getByRole('button', { name: 'Grant' }))
     expect(grantComplimentary).not.toHaveBeenCalled()
+  })
+
+  it('does not let an older request overwrite the selected filter', async () => {
+    let resolveInitial
+    const initialRequest = new Promise((resolve) => { resolveInitial = resolve })
+    const attentionSubscription = {
+      id: 6, userId: 11, userName: 'Member Mia', userEmail: 'mia@test.local',
+      planId: 1, planSlug: 'pro', status: 'active', billingInterval: 'month',
+      priceCents: 500, cancelAtPeriodEnd: false, currentPeriodEnd: null,
+      trialEndsAt: null, isComplimentary: false, complimentaryExpiresAt: null,
+      pendingChange: null, scheduleStale: true, repairNeeded: false,
+      createdAt: '2026-07-01T00:00:00.000Z',
+    }
+    const regularSubscription = {
+      ...attentionSubscription,
+      id: 7,
+      userId: 10,
+      userName: 'Owner Olly',
+      userEmail: 'olly@test.local',
+      scheduleStale: false,
+    }
+    listSubscriptions
+      .mockImplementationOnce(() => initialRequest)
+      .mockResolvedValueOnce({ subscriptions: [attentionSubscription] })
+
+    const user = userEvent.setup()
+    wrap()
+    await user.click(screen.getByRole('switch', { name: 'Only needing attention' }))
+
+    expect(await screen.findByText('Member Mia')).toBeInTheDocument()
+    await act(async () => {
+      resolveInitial({ subscriptions: [regularSubscription] })
+      await initialRequest
+    })
+
+    expect(screen.getByText('Member Mia')).toBeInTheDocument()
+    expect(screen.queryByText('Owner Olly')).not.toBeInTheDocument()
   })
 })

@@ -1,7 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import theme from '../theme.ts'
 import { ThemeModeContext } from '../contexts/themeModeContext.ts'
@@ -17,7 +16,8 @@ vi.mock('../hooks/usePushNotifications.ts', () => ({
   usePushNotifications: () => ({ status: pushStatus, subscribe, unsubscribe }),
 }))
 
-import UserSettingsPage from '../pages/UserSettingsPage.tsx'
+import NotificationSettingsSection from '../components/account/NotificationSettingsSection.tsx'
+import ThemeSettingsSection from '../components/account/ThemeSettingsSection.tsx'
 import { getNotificationPrefs, updateNotificationPrefs } from '../api/notifications.ts'
 
 const PREFS = {
@@ -36,17 +36,11 @@ const PREFS = {
   ],
 }
 
-function wrap(mode = 'light') {
+function wrapNotifications() {
   return render(
-    <ThemeModeContext.Provider value={{ mode, toggleTheme: vi.fn(), variant: 'default', setVariant: vi.fn() }}>
-      <ThemeProvider theme={theme}>
-        <MemoryRouter initialEntries={['/account/notifications']}>
-          <Routes>
-            <Route path="/account/:section" element={<UserSettingsPage />} />
-          </Routes>
-        </MemoryRouter>
-      </ThemeProvider>
-    </ThemeModeContext.Provider>,
+    <ThemeProvider theme={theme}>
+      <NotificationSettingsSection />
+    </ThemeProvider>,
   )
 }
 
@@ -57,10 +51,10 @@ beforeEach(() => {
   updateNotificationPrefs.mockResolvedValue(PREFS)
 })
 
-describe('UserSettingsPage - notifications section', () => {
+describe('My preferences — notifications', () => {
   it('renders the browser push toggle and subscribes on enable', async () => {
     const user = userEvent.setup()
-    wrap()
+    wrapNotifications()
     const toggle = await screen.findByRole('switch', { name: 'Browser push notifications' })
     expect(toggle).not.toBeChecked()
     await user.click(toggle)
@@ -70,7 +64,7 @@ describe('UserSettingsPage - notifications section', () => {
   it('unsubscribes when push is already on', async () => {
     pushStatus = 'subscribed'
     const user = userEvent.setup()
-    wrap()
+    wrapNotifications()
     const toggle = await screen.findByRole('switch', { name: 'Browser push notifications' })
     expect(toggle).toBeChecked()
     await user.click(toggle)
@@ -79,7 +73,7 @@ describe('UserSettingsPage - notifications section', () => {
 
   it('disables the push toggle when the browser blocked notifications', async () => {
     pushStatus = 'denied'
-    wrap()
+    wrapNotifications()
     const toggle = await screen.findByRole('switch', { name: 'Browser push notifications' })
     expect(toggle).toBeDisabled()
     expect(screen.getByText('Notifications blocked in browser')).toBeInTheDocument()
@@ -87,7 +81,7 @@ describe('UserSettingsPage - notifications section', () => {
 
   it('renders the per-type switches from prefs and saves a toggle', async () => {
     const user = userEvent.setup()
-    wrap()
+    wrapNotifications()
 
     const gigNew = await screen.findByRole('switch', { name: 'New gig options' })
     expect(gigNew).toBeChecked()
@@ -103,7 +97,7 @@ describe('UserSettingsPage - notifications section', () => {
 
   it('renders the per-band switches and saves a toggle', async () => {
     const user = userEvent.setup()
-    wrap()
+    wrapNotifications()
 
     const beta = await screen.findByRole('switch', { name: 'Beta Band' })
     expect(beta).not.toBeChecked()
@@ -118,7 +112,7 @@ describe('UserSettingsPage - notifications section', () => {
   })
 
   it('shows the circular band profile picture and the fallback for bands without one', async () => {
-    const { container } = wrap('light')
+    const { container } = wrapNotifications()
     await screen.findByRole('switch', { name: 'Beta Band' })
     const srcs = [...container.querySelectorAll('img')].map((img) => img.getAttribute('src'))
     expect(srcs).toContain('/api/notifications/tenant-avatar/2')
@@ -133,23 +127,18 @@ describe('UserSettingsPage - notifications section', () => {
   })
 })
 
-describe('UserSettingsPage - theme section', () => {
-  it('lists the theme section and changes the device theme variant', async () => {
+describe('My preferences — theme', () => {
+  it('changes the device theme variant', async () => {
     const setVariant = vi.fn()
     const user = userEvent.setup()
     render(
       <ThemeModeContext.Provider value={{ mode: 'light', toggleTheme: vi.fn(), variant: 'default', setVariant }}>
         <ThemeProvider theme={theme}>
-          <MemoryRouter initialEntries={['/account/theme']}>
-            <Routes>
-              <Route path="/account/:section" element={<UserSettingsPage />} />
-            </Routes>
-          </MemoryRouter>
+          <ThemeSettingsSection />
         </ThemeProvider>
       </ThemeModeContext.Provider>,
     )
 
-    expect(screen.getByRole('button', { name: 'Theme' })).toHaveClass('Mui-selected')
     await user.click(screen.getByRole('button', { name: /warm/i }))
     expect(setVariant).toHaveBeenCalledWith('warm')
   })

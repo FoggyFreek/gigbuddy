@@ -7,7 +7,6 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import CheckIcon from '@mui/icons-material/Check'
 import LogoutIcon from '@mui/icons-material/Logout'
-import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import type { Id } from '../../types/entities.ts'
 
 interface ApprovedMembership {
@@ -58,12 +57,6 @@ export default function UserMenu({
         )),
         <Divider key="div" />,
       ]}
-      <MenuItem component={NavLink} to="/account" onClick={onClose}>
-        <ListItemIcon>
-          <ManageAccountsIcon fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Account settings" />
-      </MenuItem>
       <MenuItem onClick={onLogout}>
         <ListItemIcon>
           <LogoutIcon fontSize="small" />

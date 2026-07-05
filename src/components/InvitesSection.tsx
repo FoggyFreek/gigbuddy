@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Card from '@mui/material/Card'
+import CardActions from '@mui/material/CardActions'
+import CardContent from '@mui/material/CardContent'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
+import Divider from '@mui/material/Divider'
 import FormControl from '@mui/material/FormControl'
 import IconButton from '@mui/material/IconButton'
 import InputLabel from '@mui/material/InputLabel'
@@ -27,6 +31,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { listInvites, createInvite, revokeInvite } from '../api/invites.ts'
 import { ASSIGNABLE_ROLES, ROLES } from '../auth/permissions.ts'
+import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import type { Id } from '../types/entities.ts'
 
 interface Invite {
@@ -44,12 +49,116 @@ interface InvitesSectionProps {
   canIssueAdmin?: boolean
 }
 
-function inviteState(invite: Invite): { label: string; color: string } {
+function inviteState(invite: Invite): { label: string; color: 'default' | 'success' | 'warning' } {
   if (invite.used_at) return { label: 'used', color: 'default' }
   if (invite.expires_at && new Date(invite.expires_at) <= new Date()) {
     return { label: 'expired', color: 'warning' }
   }
   return { label: 'active', color: 'success' }
+}
+
+interface InviteActionsProps {
+  invite: Invite
+  isLive: boolean
+  copiedId: Id | null
+  onCopy: (invite: Invite) => void
+  onRevoke: (id: Id) => void
+}
+
+function InviteActions({ invite, isLive, copiedId, onCopy, onRevoke }: Readonly<InviteActionsProps>) {
+  return (
+    <>
+      <Tooltip title={copiedId === invite.id ? 'Copied!' : 'Copy invite URL'}>
+        <span>
+          <IconButton
+            size="small"
+            onClick={() => onCopy(invite)}
+            aria-label="copy invite URL"
+            disabled={!isLive}
+          >
+            <ContentCopyIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title={isLive ? 'Revoke invite' : 'Already inactive'}>
+        <span>
+          <IconButton
+            size="small"
+            color="error"
+            onClick={() => onRevoke(invite.id!)}
+            aria-label="revoke invite"
+            disabled={!isLive}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </>
+  )
+}
+
+interface InviteDetailRowProps {
+  label: string
+  value: string
+}
+
+function InviteDetailRow({ label, value }: Readonly<InviteDetailRowProps>) {
+  return (
+    <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+        {label}
+      </Typography>
+      <Typography variant="caption" sx={{ textAlign: 'right' }}>
+        {value}
+      </Typography>
+    </Stack>
+  )
+}
+
+interface InviteCardProps {
+  invite: Invite
+  copiedId: Id | null
+  onCopy: (invite: Invite) => void
+  onRevoke: (id: Id) => void
+}
+
+function InviteCard({ invite, copiedId, onCopy, onRevoke }: Readonly<InviteCardProps>) {
+  const state = inviteState(invite)
+  const isLive = state.label === 'active'
+  const created = invite.created_at ? new Date(invite.created_at).toLocaleDateString() : '—'
+  const createdBy = invite.created_by_name ? ` · ${invite.created_by_name}` : ''
+  const expires = invite.expires_at ? new Date(invite.expires_at).toLocaleDateString() : '—'
+  const usedBy =
+    invite.used_by_name && invite.used_at
+      ? `${invite.used_by_name} · ${new Date(invite.used_at).toLocaleDateString()}`
+      : null
+  return (
+    <Card variant="outlined">
+      <CardContent sx={{ pb: 1 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, flexGrow: 1, textTransform: 'capitalize' }}>
+            {invite.role}
+          </Typography>
+          <Chip size="small" label={state.label} color={state.color} />
+        </Stack>
+        <Stack spacing={0.5}>
+          <InviteDetailRow label="Created" value={`${created}${createdBy}`} />
+          <InviteDetailRow label="Expires" value={expires} />
+          {usedBy && <InviteDetailRow label="Used by" value={usedBy} />}
+        </Stack>
+      </CardContent>
+      <Divider />
+      <CardActions sx={{ justifyContent: 'flex-end', px: 1, py: 0.5, gap: 0.5 }}>
+        <InviteActions
+          invite={invite}
+          isLive={isLive}
+          copiedId={copiedId}
+          onCopy={onCopy}
+          onRevoke={onRevoke}
+        />
+      </CardActions>
+    </Card>
+  )
 }
 
 export default function InvitesSection({ canIssueAdmin = false }: Readonly<InvitesSectionProps>) {
@@ -61,6 +170,7 @@ export default function InvitesSection({ canIssueAdmin = false }: Readonly<Invit
   const [expiresInDays, setExpiresInDays] = useState('14')
   const [submitting, setSubmitting] = useState(false)
   const [copiedId, setCopiedId] = useState<Id | null>(null)
+  const isCompact = useCompactLayout()
 
   useEffect(() => {
     listInvites()
@@ -119,14 +229,12 @@ export default function InvitesSection({ canIssueAdmin = false }: Readonly<Invit
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-        <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
-          Invite codes are single-use. Send the URL to the person you want to invite.
-        </Typography>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setDialogOpen(true)}
+          fullWidth={isCompact}
         >
           New invite
         </Button>
@@ -137,96 +245,98 @@ export default function InvitesSection({ canIssueAdmin = false }: Readonly<Invit
         </Typography>
       )}
 
-      <Paper variant="outlined">
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Role</TableCell>
-              <TableCell>State</TableCell>
-              <TableCell>Created</TableCell>
-              <TableCell>Expires</TableCell>
-              <TableCell>Used by</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {invites.length === 0 && (
+      {isCompact ? (
+        <Stack spacing={1.5}>
+          {invites.length === 0 ? (
+            <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 3 }}>
+              No invites yet.
+            </Typography>
+          ) : (
+            invites.map((inv) => (
+              <InviteCard
+                key={String(inv.id)}
+                invite={inv}
+                copiedId={copiedId}
+                onCopy={handleCopy}
+                onRevoke={handleRevoke}
+              />
+            ))
+          )}
+          <Typography variant="body2" sx={{ color: 'text.secondary', m: 2 }}>
+            Invite codes are single-use. Send the URL to the person you want to invite.
+          </Typography>
+        </Stack>
+      ) : (
+        <Paper variant="outlined">
+          <Table size="small">
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={6} align="center">
-                  <Typography variant="body2" color="text.secondary">
-                    No invites yet.
-                  </Typography>
-                </TableCell>
+                <TableCell>Role</TableCell>
+                <TableCell>State</TableCell>
+                <TableCell>Created</TableCell>
+                <TableCell>Expires</TableCell>
+                <TableCell>Used by</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
-            )}
-            {invites.map((inv) => {
-              const state = inviteState(inv)
-              const isLive = state.label === 'active'
-              return (
-                <TableRow key={String(inv.id)}>
-                  <TableCell>{inv.role}</TableCell>
-                  <TableCell>
-                    <Chip size="small" label={state.label} color={state.color as 'default' | 'success' | 'warning'} />
-                  </TableCell>
-                  <TableCell>
-                    {inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '—'}
-                    {inv.created_by_name ? ` · ${inv.created_by_name}` : ''}
-                  </TableCell>
-                  <TableCell>
-                    {inv.expires_at
-                      ? new Date(inv.expires_at).toLocaleDateString()
-                      : '—'}
-                  </TableCell>
-                  <TableCell>
-                    {inv.used_by_name && inv.used_at
-                      ? `${inv.used_by_name} · ${new Date(inv.used_at).toLocaleDateString()}`
-                      : '—'}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack
-                      direction="row"
-                      spacing={0.5}
-                      sx={{ justifyContent: 'flex-end' }}
-                    >
-                      <Tooltip
-                        title={
-                          copiedId === inv.id ? 'Copied!' : 'Copy invite URL'
-                        }
-                      >
-                        <span>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleCopy(inv)}
-                            aria-label="copy invite URL"
-                            disabled={!isLive}
-                          >
-                            <ContentCopyIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip
-                        title={isLive ? 'Revoke invite' : 'Already inactive'}
-                      >
-                        <span>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleRevoke(inv.id!)}
-                            aria-label="revoke invite"
-                            disabled={!isLive}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </Stack>
+            </TableHead>
+            <TableBody>
+              {invites.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} align="center">
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      No invites yet.
+                    </Typography>
                   </TableCell>
                 </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </Paper>
+              )}
+              {invites.map((inv) => {
+                const state = inviteState(inv)
+                const isLive = state.label === 'active'
+                return (
+                  <TableRow key={String(inv.id)}>
+                    <TableCell>{inv.role}</TableCell>
+                    <TableCell>
+                      <Chip size="small" label={state.label} color={state.color} />
+                    </TableCell>
+                    <TableCell>
+                      {inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '—'}
+                      {inv.created_by_name ? ` · ${inv.created_by_name}` : ''}
+                    </TableCell>
+                    <TableCell>
+                      {inv.expires_at
+                        ? new Date(inv.expires_at).toLocaleDateString()
+                        : '—'}
+                    </TableCell>
+                    <TableCell>
+                      {inv.used_by_name && inv.used_at
+                        ? `${inv.used_by_name} · ${new Date(inv.used_at).toLocaleDateString()}`
+                        : '—'}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                        sx={{ justifyContent: 'flex-end' }}
+                      >
+                        <InviteActions
+                          invite={inv}
+                          isLive={isLive}
+                          copiedId={copiedId}
+                          onCopy={handleCopy}
+                          onRevoke={handleRevoke}
+                        />
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+          <Typography variant="body2" sx={{ color: 'text.secondary', flexGrow: 1, m: 2 }}>
+            Invite codes are single-use. Send the URL to the person you want to invite.
+          </Typography>
+        </Paper>
+      )}
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>New invite</DialogTitle>

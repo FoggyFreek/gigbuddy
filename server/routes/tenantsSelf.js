@@ -23,7 +23,7 @@ function parseId(val) {
 }
 
 router.post('/', async (req, res) => {
-  const result = await createOwnedTenant(req.user.id, req.body)
+  const result = await createOwnedTenant(pool, req.user.id, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, result.audit.action, result.audit.details)
   res.status(201).json(result.tenant)
@@ -45,7 +45,7 @@ router.post('/:id/archive', async (req, res) => {
 router.post('/:id/unarchive', async (req, res) => {
   const id = parseId(req.params.id)
   if (id === null) return res.status(400).json({ error: 'Invalid id' })
-  const result = await unarchiveOwnedTenant(req.user.id, id)
+  const result = await unarchiveOwnedTenant(pool, req.user.id, id)
   if (result.error) return sendError(res, result.error)
   if (result.audit) auditLog(req, result.audit.action, result.audit.details)
   res.json(result.tenant)

@@ -9,7 +9,7 @@ import { planFeatureKey } from '../utils/planFeatureKey.ts'
 
 // Upsell landing for a tier-locked feature. Reached from a diamond nav item.
 // Placeholder for now — the intent is to show feature screenshots here so users
-// can see what a higher plan unlocks. Always routes users toward /account/billing.
+// can see what a higher plan unlocks. Always routes users toward /settings/billing.
 export default function LockedFeaturePage() {
   const { t, i18n } = useTranslation('billing')
   const { feature } = useParams()
@@ -27,7 +27,7 @@ export default function LockedFeaturePage() {
         <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
           {t($ => $.locked.description, { feature: label.toLocaleLowerCase(i18n.resolvedLanguage) })}
         </Typography>
-        <Button variant="contained" onClick={() => navigate('/account/billing')}>
+        <Button variant="contained" onClick={() => navigate('/settings/billing')}>
           {t($ => $.locked.viewPlans)}
         </Button>
       </Paper>

@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
@@ -15,13 +14,11 @@ import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
-import Tab from '@mui/material/Tab'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
-import Tabs from '@mui/material/Tabs'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -30,12 +27,11 @@ import {
   updateMembership,
   updateMembershipBandMember,
   removeMembership,
-} from '../api/users.ts'
-import { listMembers } from '../api/bandMembers.ts'
-import { useAuth } from '../contexts/authContext.ts'
-import InvitesSection from '../components/InvitesSection.tsx'
-import { ASSIGNABLE_ROLES } from '../auth/permissions.ts'
-import type { Member, Id } from '../types/entities.ts'
+} from '../../api/users.ts'
+import { listMembers } from '../../api/bandMembers.ts'
+import { useAuth } from '../../contexts/authContext.ts'
+import { ASSIGNABLE_ROLES } from '../../auth/permissions.ts'
+import type { Member, Id } from '../../types/entities.ts'
 
 const STATUS_COLOR: Record<string, 'warning' | 'success' | 'error'> = {
   pending: 'warning',
@@ -312,9 +308,8 @@ interface MemberWithUser extends Member {
   user_id?: Id
 }
 
-export default function MembersPage() {
+export default function MembersSection() {
   const { user: currentUser } = useAuth()
-  const [tab, setTab] = useState('members')
   const [rows, setRows] = useState<MembershipRow[]>([])
   const [bandMembers, setBandMembers] = useState<MemberWithUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -385,37 +380,22 @@ export default function MembersPage() {
   const callerIsSuperAdmin = !!currentUser?.isSuperAdmin
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Typography variant="h5" sx={{ fontWeight: 700 }}>
-        Members
-      </Typography>
-      <Tabs value={tab} onChange={(_, v: string) => setTab(v)}>
-        <Tab value="members" label="Members" />
-        <Tab value="invites" label="Invites" />
-      </Tabs>
-      {error && tab === 'members' && (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {error && (
         <Typography color="error" variant="body2">
           {error}
         </Typography>
       )}
-      {tab === 'members' ? (
-        <MembersTable
-          rows={rows}
-          bandMembers={bandMembers}
-          currentUser={currentUser}
-          callerIsSuperAdmin={callerIsSuperAdmin}
-          onStatus={handleStatus}
-          onRole={handleRole}
-          onBandMember={handleBandMember}
-          onDelete={handleDelete}
-        />
-      ) : (
-        <InvitesSection canIssueAdmin={callerIsSuperAdmin} />
-      )}
+      <MembersTable
+        rows={rows}
+        bandMembers={bandMembers}
+        currentUser={currentUser}
+        callerIsSuperAdmin={callerIsSuperAdmin}
+        onStatus={handleStatus}
+        onRole={handleRole}
+        onBandMember={handleBandMember}
+        onDelete={handleDelete}
+      />
     </Box>
   )
 }
-
-// Satisfy TS: ReactNode is used in MemberRowActions return; we import it above.
- 
-type _ReactNode = ReactNode

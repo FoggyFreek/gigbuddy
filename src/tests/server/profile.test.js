@@ -129,6 +129,31 @@ describe('PATCH /api/profile — financial fields', () => {
   })
 })
 
+describe('PATCH /api/profile — accent color', () => {
+  it.each(['reader', 'contributor', 'financial_admin', 'member'])(
+    '%s cannot update the tenant accent color',
+    async (role) => {
+      await pool.query(
+        `UPDATE memberships SET role = $1
+         WHERE user_id = $2 AND tenant_id = $3`,
+        [role, seed.userA.id, seed.tenantA.id],
+      )
+
+      const res = await as(seed.userA.id, seed.tenantA.id)(
+        request(app).patch('/api/profile').send({ accent_color: '#ff0000' }),
+      ).expect(403)
+
+      expect(res.body.error).toBe('tenant_admin_required')
+
+      const stored = await pool.query(
+        'SELECT accent_color FROM tenants WHERE id = $1',
+        [seed.tenantA.id],
+      )
+      expect(stored.rows[0].accent_color).toBeNull()
+    },
+  )
+})
+
 describe('Shopify credential management', () => {
   // Stub secret in the real "shpss_" + 32-hex format — not a real credential.
   // Built by concatenation so the full token never appears as a literal in source

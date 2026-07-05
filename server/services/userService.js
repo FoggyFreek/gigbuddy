@@ -129,7 +129,7 @@ export async function patchMembership(db, tenantId, actingUser, userId, body) {
   // transaction under the tenant-row lock. Invite redemption (pending rows)
   // deliberately doesn't consume capacity — only approval does.
   if (status === 'approved' && existing.status !== 'approved') {
-    const client = await pool.connect()
+    const client = await db.connect()
     try {
       await client.query('BEGIN')
       const capError = await enforceMemberCap(client, tenantId, 'membership')

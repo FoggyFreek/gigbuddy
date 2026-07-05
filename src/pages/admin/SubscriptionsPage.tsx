@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import Alert from '@mui/material/Alert'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
@@ -18,7 +19,6 @@ import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { useToast } from '../../contexts/toastContext.ts'
-import { formatEur } from '../../utils/invoiceTotals.ts'
 import {
   listSubscriptions,
   grantComplimentary,
@@ -31,6 +31,7 @@ import type { AdminUser } from '../../api/adminUsers.ts'
 import type { SubscriptionPlan } from '../../api/billing.ts'
 import PlanCatalogSection from '../../components/admin/PlanCatalogSection.tsx'
 import DateEntryField from '../../components/DateEntryField.tsx'
+import MoneyCells, { MoneyHeaderCells } from '../../components/shared/MoneyCells.tsx'
 
 function periodEnd(r: AdminSubscription): string {
   const end = r.isComplimentary ? r.complimentaryExpiresAt : r.currentPeriodEnd
@@ -47,6 +48,8 @@ export default function SubscriptionsPage() {
   const [rows, setRows] = useState<AdminSubscription[]>([])
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [loading, setLoading] = useState(true)
+  const [rowsRevision, setRowsRevision] = useState(0)
+  const [plansRevision, setPlansRevision] = useState(0)
   const [repairOnly, setRepairOnly] = useState(false)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [grantUser, setGrantUser] = useState<AdminUser | null>(null)
@@ -54,29 +57,39 @@ export default function SubscriptionsPage() {
   const [grantExpiresAt, setGrantExpiresAt] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(() => {
+  const refreshRows = useCallback(() => setRowsRevision((revision) => revision + 1), [])
+  const refreshPlans = useCallback(() => setPlansRevision((revision) => revision + 1), [])
+
+  useEffect(() => {
+    let cancelled = false
     setLoading(true)
     listSubscriptions(repairOnly)
-      .then((data) => setRows(data.subscriptions))
-      .catch((e) => showToast?.(errMessage(e), 'error'))
-      .finally(() => setLoading(false))
-  }, [repairOnly, showToast])
+      .then((data) => { if (!cancelled) setRows(data.subscriptions) })
+      .catch((e: unknown) => { if (!cancelled) showToast?.(errMessage(e), 'error') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [repairOnly, rowsRevision, showToast])
 
-  const loadPlans = useCallback(() => {
-    listAdminPlans().then(setPlans).catch((e: unknown) => showToast?.(errMessage(e), 'error'))
+  useEffect(() => {
+    let cancelled = false
+    listAdminPlans()
+      .then((data) => { if (!cancelled) setPlans(data) })
+      .catch((e: unknown) => { if (!cancelled) showToast?.(errMessage(e), 'error') })
+    return () => { cancelled = true }
+  }, [plansRevision, showToast])
+
+  useEffect(() => {
+    let cancelled = false
+    listAllUsers()
+      .then((data) => { if (!cancelled) setUsers(data) })
+      .catch((e: unknown) => { if (!cancelled) showToast?.(errMessage(e), 'error') })
+    return () => { cancelled = true }
   }, [showToast])
 
-  const loadUsers = useCallback(() => {
-    listAllUsers().then(setUsers).catch((e: unknown) => showToast?.(errMessage(e), 'error'))
-  }, [showToast])
+  const attentionCount = rows.filter((row) => row.scheduleStale || row.repairNeeded).length
 
-  useEffect(load, [load])
-  useEffect(loadPlans, [loadPlans])
-  useEffect(loadUsers, [loadUsers])
-
-  const attention = rows.filter((r) => r.scheduleStale || r.repairNeeded)
-
-  const onGrant = async () => {
+  const handleGrant = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
     const userId = Number(grantUser?.id)
     const planId = Number(grantPlanId)
     if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(planId) || planId <= 0) {
@@ -90,7 +103,7 @@ export default function SubscriptionsPage() {
       setGrantUser(null)
       setGrantPlanId('')
       setGrantExpiresAt('')
-      load()
+      refreshRows()
     } catch (e) {
       showToast?.(errMessage(e), 'error')
     } finally {
@@ -98,12 +111,12 @@ export default function SubscriptionsPage() {
     }
   }
 
-  const onRevoke = async (userId: number) => {
+  const handleRevoke = async (userId: number) => {
     setBusy(true)
     try {
       await revokeComplimentary(userId)
       showToast?.('Complimentary subscription revoked.', 'success')
-      load()
+      refreshRows()
     } catch (e) {
       showToast?.(errMessage(e), 'error')
     } finally {
@@ -115,18 +128,24 @@ export default function SubscriptionsPage() {
     <Box>
       <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>Subscriptions</Typography>
 
-      {attention.length > 0 && (
+      {attentionCount > 0 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          {attention.length} subscription{attention.length > 1 ? 's need' : ' needs'} attention
+          {attentionCount} subscription{attentionCount > 1 ? 's need' : ' needs'} attention
           (schedule repair or billing repair in progress).
         </Alert>
       )}
 
-      <PlanCatalogSection plans={plans} onChanged={loadPlans} />
+      <PlanCatalogSection plans={plans} onChanged={refreshPlans} />
 
       <Paper elevation={0} sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" sx={{ mb: 1 }}>Grant complimentary access</Typography>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
+        <Stack
+          component="form"
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { sm: 'center' } }}
+          onSubmit={(event) => { void handleGrant(event) }}
+        >
           <Autocomplete
             size="small" sx={{ minWidth: 280 }}
             options={users}
@@ -146,7 +165,7 @@ export default function SubscriptionsPage() {
             size="small" label="Expires (optional)" value={grantExpiresAt}
             onChange={(e) => setGrantExpiresAt(e.target.value)} sx={{ width: 200 }}
           />
-          <Button variant="contained" onClick={() => { void onGrant() }} disabled={busy}>Grant</Button>
+          <Button type="submit" variant="contained" disabled={busy}>Grant</Button>
         </Stack>
       </Paper>
 
@@ -167,7 +186,7 @@ export default function SubscriptionsPage() {
                 <TableCell>Plan</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Interval</TableCell>
-                <TableCell align="right">Price</TableCell>
+                <MoneyHeaderCells label="Price" />
                 <TableCell>Period end</TableCell>
                 <TableCell>Flags</TableCell>
                 <TableCell />
@@ -186,7 +205,14 @@ export default function SubscriptionsPage() {
                     {r.isComplimentary && <Chip size="small" color="secondary" label="comp" sx={{ ml: 0.5 }} />}
                   </TableCell>
                   <TableCell>{r.billingInterval ?? '—'}</TableCell>
-                  <TableCell align="right">{r.isComplimentary ? '—' : formatEur(r.priceCents)}</TableCell>
+                  {r.isComplimentary ? (
+                    <>
+                      <TableCell />
+                      <TableCell align="right">—</TableCell>
+                    </>
+                  ) : (
+                    <MoneyCells cents={r.priceCents} />
+                  )}
                   <TableCell>{periodEnd(r)}</TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5}>
@@ -197,7 +223,7 @@ export default function SubscriptionsPage() {
                   </TableCell>
                   <TableCell align="right">
                     {r.isComplimentary && (
-                      <Button size="small" color="error" disabled={busy} onClick={() => { void onRevoke(r.userId) }}>
+                      <Button size="small" color="error" disabled={busy} onClick={() => { void handleRevoke(r.userId) }}>
                         Revoke
                       </Button>
                     )}
@@ -205,7 +231,7 @@ export default function SubscriptionsPage() {
                 </TableRow>
               ))}
               {rows.length === 0 && (
-                <TableRow><TableCell colSpan={8}>
+                <TableRow><TableCell colSpan={9}>
                   <Typography variant="body2" sx={{ color: 'text.secondary', py: 2, textAlign: 'center' }}>
                     No subscriptions.
                   </Typography>

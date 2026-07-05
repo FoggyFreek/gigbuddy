@@ -28,6 +28,7 @@ import {
 } from '../../api/billing.ts'
 import type { BillingInterval, BillingState, SubscriptionPlan, Subscription } from '../../api/billing.ts'
 import DowngradeDialog from './DowngradeDialog.tsx'
+import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 
 // API error codes with a user-facing translation under billing:errors. The
 // values are the i18n leaf keys; `as const` keeps the selector index literal.
@@ -71,7 +72,8 @@ export default function BillingSettingsSection() {
   const [interval, setInterval] = useState<BillingInterval>('month')
   const [busy, setBusy] = useState(false)
   const [downgradeTarget, setDowngradeTarget] = useState<SubscriptionPlan | null>(null)
-
+  const compact = useCompactLayout()
+  
   const errorMessage = useCallback((err: unknown): string => {
     const e = (err ?? {}) as { code?: string; message?: string; body?: { code?: string } }
     const code = e.code ?? e.body?.code
@@ -152,9 +154,10 @@ export default function BillingSettingsSection() {
     <Stack spacing={2}>
       <CurrentSubscriptionCard sub={sub} currentPlan={currentPlan} participantOnly={participantOnly} onCancel={onCancel} onResume={onResume} onSync={onSync} busy={busy} />
 
-      <Paper elevation={0} sx={{ p: 2 }}>
+      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>{t($ => $.plans.title)}</Typography>
+          
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1 }}>{t($ => $.plans.title)}</Typography>
           <ToggleButtonGroup
             size="small"
             exclusive
@@ -205,6 +208,7 @@ interface CurrentCardProps {
 
 function CurrentSubscriptionCard({ sub, currentPlan, participantOnly, onCancel, onResume, onSync, busy }: Readonly<CurrentCardProps>) {
   const { t } = useTranslation('billing')
+  const compact = useCompactLayout()
   const statusLabel = sub && sub.status in STATUS_KEYS
     ? t($ => $.status[STATUS_KEYS[sub.status as keyof typeof STATUS_KEYS]])
     : sub?.status
@@ -221,12 +225,12 @@ function CurrentSubscriptionCard({ sub, currentPlan, participantOnly, onCancel, 
     : ''
 
   return (
-    <Paper elevation={0} sx={{ p: 2 }}>
+     <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
         {sub && planLogoSrc(currentPlan?.slug) && (
           <Box component="img" src={planLogoSrc(currentPlan?.slug) ?? undefined} alt="" sx={{ height: 28, width: 'auto' }} />
         )}
-        <Typography variant="h6">
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1 }}>
           {participantOnly ? t($ => $.current.noSubscription) : currentPlan?.name ?? t($ => $.current.freePlanName)}
         </Typography>
         {sub && <Chip size="small" label={statusLabel} />}
@@ -297,7 +301,10 @@ function PlanCard({ plan, interval, sub, currentPlanSortOrder, busy, onSubscribe
   const { t } = useTranslation('billing')
   const price = priceForInterval(plan, interval)
   const unavailable = price === null && !plan.is_fallback
-  const isCurrent = sub ? sub.planId === plan.id && sub.billingInterval === interval
+  // Complimentary grants carry no billing interval, so match on plan id alone;
+  // otherwise the active plan is the one matching both id and the chosen interval.
+  const isCurrent = sub
+    ? sub.planId === plan.id && (sub.isComplimentary || sub.billingInterval === interval)
     : plan.is_fallback
   const enabledFeatures = Object.entries(plan.entitlements.features).filter(([, on]) => on).map(([f]) => f)
 
@@ -329,9 +336,24 @@ function PlanCard({ plan, interval, sub, currentPlanSortOrder, busy, onSubscribe
     ? t($ => $.plans.perYear, { price: formatEur(price) })
     : t($ => $.plans.perMonth, { price: formatEur(price) })
 
+  const logo = planLogoSrc(plan.slug)
+
   return (
-    <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1, borderColor: isCurrent ? 'primary.main' : undefined }}>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1,
+        // Highlight the active plan with a ring in the tenant/band accent colour
+        // (fed into the theme as primary.main by TenantThemeProvider).
+        borderColor: isCurrent ? 'primary.main' : undefined,
+        boxShadow: isCurrent ? (theme) => `0 0 0 2px ${theme.palette.primary.main}` : undefined,
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        {logo && <Box component="img" src={logo} alt="" sx={{ height: 24, width: 'auto' }} />}
         <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1 }}>{plan.name}</Typography>
         {isCurrent && <Chip size="small" color="primary" label={t($ => $.plans.current)} />}
       </Box>

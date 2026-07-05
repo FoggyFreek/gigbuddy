@@ -164,7 +164,7 @@ describe('AppShell tenant switcher', () => {
     expect(screen.queryByText('All Users')).not.toBeInTheDocument()
   })
 
-  it('shows Members nav link in the settings menu to tenant admins', async () => {
+  it('shows the unified Settings link in the settings menu', async () => {
     useAuth.mockReturnValue({
       user: { ...TWO_TENANT_USER, activeTenantRole: 'tenant_admin' },
       logout: vi.fn(),
@@ -174,8 +174,8 @@ describe('AppShell tenant switcher', () => {
     wrap(<AppShell />)
     await user.click(screen.getByLabelText('open settings menu'))
     const menu = screen.getByRole('menu')
-    expect(within(menu).getByText('Members')).toBeInTheDocument()
-    expect(within(menu).getByText('Band Settings')).toBeInTheDocument()
+    const settings = within(menu).getByRole('menuitem', { name: /^settings$/i })
+    expect(settings).toHaveAttribute('href', '/settings')
   })
 
   it('repopulates nav groups and items from the new tenant role and plan after switching', async () => {

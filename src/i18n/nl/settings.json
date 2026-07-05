@@ -1,5 +1,25 @@
 {
   "title": "Instellingen",
+  "nav": {
+    "accountSettings": "Accountinstellingen",
+    "bandSettings": "Bandinstellingen",
+    "backAria": "Terug naar instellingen",
+    "items": {
+      "preferences": "Mijn voorkeuren",
+      "billing": "Facturering",
+      "accent": "Accentkleur",
+      "members": "Leden",
+      "invites": "Uitnodigingen",
+      "storage": "Opslag",
+      "integrations": "Integraties",
+      "chartOfAccounts": "Grootboekschema",
+      "defaultAccounts": "Boekhoudinstellingen"
+    }
+  },
+  "subscription": {
+    "current": "Huidig abonnement",
+    "manage": "Abonnement beheren"
+  },
   "accentColor": {
     "title": "Accentkleur",
     "description": "Kies de primaire kleur die in de hele app voor deze band wordt gebruikt.",

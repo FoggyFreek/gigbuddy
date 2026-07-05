@@ -273,7 +273,7 @@ export default function ShopifyImportDialog({ products, onClose }: Readonly<Shop
             <Trans
               t={t}
               i18nKey={$ => $.shopify.notConnected}
-              components={{ settingsLink: <Link component={RouterLink} to="/settings" /> }}
+              components={{ settingsLink: <Link component={RouterLink} to="/settings/integrations" /> }}
             />
           </Alert>
         )}

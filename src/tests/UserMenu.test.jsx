@@ -28,7 +28,7 @@ describe('UserMenu', () => {
     expect(screen.queryByRole('menuitem', { name: /manage tenants/i })).not.toBeInTheDocument()
   })
 
-  it('links to the account settings page', () => {
+  it('links to the settings page', () => {
     wrap(
       <UserMenu
         anchorEl={document.body}
@@ -39,11 +39,11 @@ describe('UserMenu', () => {
         onLogout={vi.fn()}
       />,
     )
-    const link = screen.getByRole('menuitem', { name: /account settings/i })
-    expect(link).toHaveAttribute('href', '/account')
+    const link = screen.getByRole('menuitem', { name: /^settings$/i })
+    expect(link).toHaveAttribute('href', '/settings')
   })
 
-  it('closes the menu when the account settings link is clicked', () => {
+  it('closes the menu when the settings link is clicked', () => {
     const onClose = vi.fn()
     wrap(
       <UserMenu
@@ -55,7 +55,7 @@ describe('UserMenu', () => {
         onLogout={vi.fn()}
       />,
     )
-    screen.getByRole('menuitem', { name: /account settings/i }).click()
+    screen.getByRole('menuitem', { name: /^settings$/i }).click()
     expect(onClose).toHaveBeenCalled()
   })
 })

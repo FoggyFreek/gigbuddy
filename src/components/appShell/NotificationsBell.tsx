@@ -115,7 +115,7 @@ export default function NotificationsBell() {
 
   const openSettings = () => {
     setAnchorEl(null)
-    navigate('/account/notifications')
+    navigate('/settings/preferences')
   }
 
   return (

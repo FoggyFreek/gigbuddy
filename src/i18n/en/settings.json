@@ -1,5 +1,25 @@
 {
   "title": "Settings",
+  "nav": {
+    "accountSettings": "Account settings",
+    "bandSettings": "Band settings",
+    "backAria": "Back to settings",
+    "items": {
+      "preferences": "My preferences",
+      "billing": "Billing",
+      "accent": "Accent color",
+      "members": "Members",
+      "invites": "Invites",
+      "storage": "Storage",
+      "integrations": "Integrations",
+      "chartOfAccounts": "Chart of accounts",
+      "defaultAccounts": "Accounting Settings"
+    }
+  },
+  "subscription": {
+    "current": "Current plan",
+    "manage": "Manage subscription"
+  },
   "accentColor": {
     "title": "Accent color",
     "description": "Choose the primary color used throughout the app for this band.",

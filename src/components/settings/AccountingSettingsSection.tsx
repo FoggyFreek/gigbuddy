@@ -10,7 +10,6 @@ import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import DateEntryField from '../DateEntryField.tsx'
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet'
 import { listAccounts, getAccountingSettings, updateAccountingSettings } from '../../api/accounts.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import type { Account, AccountingSettings } from '../../types/entities.ts'
@@ -105,9 +104,8 @@ export default function AccountingSettingsSection() {
   }
 
   return (
-    <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt: 3 }}>
+    <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3}}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
-        <AccountBalanceWalletIcon fontSize="small" color="primary" />
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {t($ => $.accounting.title)}
         </Typography>

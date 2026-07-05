@@ -62,11 +62,13 @@ export async function getProfile(db, tenantId) {
   return { profile: { ...tenant, links } }
 }
 
-// `isAdmin` is computed by the route (tenant_admin or super admin); financial
-// fields are gated to admins.
+const ADMIN_ONLY_PROFILE_FIELDS = new Set([...FINANCIAL_FIELDS_SET, 'accent_color'])
+
+// `isAdmin` is computed by the route (tenant_admin or super admin); tenant-wide
+// financial and appearance settings are gated to admins.
 export async function patchProfile(db, tenantId, body, isAdmin) {
-  const touchesFinancial = Object.keys(body || {}).some((k) => FINANCIAL_FIELDS_SET.has(k))
-  if (touchesFinancial && !isAdmin) {
+  const touchesAdminOnlyField = Object.keys(body || {}).some((key) => ADMIN_ONLY_PROFILE_FIELDS.has(key))
+  if (touchesAdminOnlyField && !isAdmin) {
     return { error: { status: 403, body: { error: 'tenant_admin_required' } } }
   }
 

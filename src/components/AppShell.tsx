@@ -192,7 +192,7 @@ export default function AppShell() {
   }
 
   const isSuperAdmin = !!user?.isSuperAdmin
-  const { can, canManageMembers, canManageTenant } = usePermissions()
+  const { can } = usePermissions()
   const { has, financeReadOnly, planSlug, locked, unenforced } = useEntitlements()
 
   // Header logo reflects the active subscription tier; fallback-locked or
@@ -417,8 +417,6 @@ export default function AppShell() {
             onClose={() => setSettingsMenuAnchor(null)}
             mode={mode}
             onToggleTheme={() => { toggleTheme(); setSettingsMenuAnchor(null) }}
-            canManageMembers={canManageMembers}
-            canManageTenant={canManageTenant}
             isSuperAdmin={isSuperAdmin}
           />
           {user && (
