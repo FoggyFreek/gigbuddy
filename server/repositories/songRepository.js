@@ -326,6 +326,30 @@ export async function deleteSongChart(executor, chartId, songId, tenantId) {
   return rowCount > 0
 }
 
+// ---------- downgrade purge (whole-tenant deletes) ----------
+
+// Every stored song file object key of a tenant (documents + recordings),
+// collected before the rows are deleted so the objects can be queued for
+// storage cleanup.
+export async function listSongFileKeysForTenant(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT object_key FROM song_documents WHERE tenant_id = $1
+     UNION ALL
+     SELECT object_key FROM song_recordings WHERE tenant_id = $1`,
+    [tenantId],
+  )
+  return rows.map((r) => r.object_key)
+}
+
+export async function deleteSongFilesForTenant(executor, tenantId) {
+  await executor.query('DELETE FROM song_documents WHERE tenant_id = $1', [tenantId])
+  await executor.query('DELETE FROM song_recordings WHERE tenant_id = $1', [tenantId])
+}
+
+export async function deleteSongChartsForTenant(executor, tenantId) {
+  await executor.query('DELETE FROM song_chordpro_charts WHERE tenant_id = $1', [tenantId])
+}
+
 // ---------- import ----------
 
 // Lowercased (title, artist) keys of existing songs, used to dedupe an import.

@@ -868,7 +868,9 @@ export async function syncInvoicePaymentLink(pool, tenantId, invoiceId) {
     return { error: { status: 400, body: { error: 'no_payment_link' } } }
   }
 
-  const configured = await getMollieClientForTenant(pool, tenantId)
+  // Internal accessor: a retained key (post-integrations-purge, paid links
+  // outstanding) must keep sync working for those links.
+  const configured = await getMollieClientForTenant(pool, tenantId, { includeRetained: true })
   if (configured.error) return configured
   const { mollie } = configured
   const updated = await syncInvoicePaymentStatus(mollie, pool, invoice)

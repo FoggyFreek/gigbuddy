@@ -40,8 +40,29 @@ export interface Subscription {
   isComplimentary: boolean
   complimentaryExpiresAt: string | null
   pendingChange: PendingChange | null
+  /** A confirmed downgrade whose limits snapshot already binds capacity growth. */
+  downgradeScheduled: boolean
+  pendingLimitsSnapshot: Record<string, number | null> | null
   scheduleStale: boolean
   repairNeeded: boolean
+}
+
+/** One capacity conflict blocking a downgrade (tenantId null = the bands cap). */
+export interface DowngradeBlocker {
+  tenantId: number | null
+  tenantName: string | null
+  limit: string
+  current: number
+  target: number
+}
+
+export interface DowngradePreview {
+  isDowngrade: boolean
+  isFreeFallback: boolean
+  /** Purgeable features whose stored data the downgrade would delete. */
+  features: string[]
+  limitsSnapshot: Record<string, number | null>
+  blockers: DowngradeBlocker[]
 }
 
 export interface BillingState {
@@ -67,8 +88,13 @@ export const changePlan = (planId: number, interval: BillingInterval) =>
   })
 
 export const downgrade = (planId: number, interval: BillingInterval, confirmation: string) =>
-  api<{ scheduled?: boolean }>('/downgrade', {
+  api<{ scheduled?: boolean; immediate?: boolean }>('/downgrade', {
     method: 'POST', body: JSON.stringify({ planId, interval, confirmation }),
+  })
+
+export const downgradePreview = (planId: number, interval: BillingInterval) =>
+  api<DowngradePreview>('/downgrade/preview', {
+    method: 'POST', body: JSON.stringify({ planId, interval }),
   })
 
 export const cancelSubscription = () =>

@@ -8,6 +8,9 @@
     "not_implemented": "Downgrades are not available yet.",
     "no_mandate": "No valid payment method is on file.",
     "billing_not_configured": "Billing is not configured on this server.",
+    "over_target_limit": "Current usage exceeds the limits of the chosen plan. Reduce usage first.",
+    "confirmation_mismatch": "The confirmation phrase did not match.",
+    "not_a_downgrade": "The chosen plan is not a downgrade.",
     "generic": "Something went wrong."
   },
   "status": {
@@ -42,6 +45,7 @@
     "accessEnds": "Access ends {{date, datetime}}",
     "renews": "Renews {{date, datetime}}",
     "pendingChange": "A plan change is in progress. It applies once the payment is confirmed.",
+    "downgradePending": "A downgrade is scheduled. You can no longer add data beyond the new plan's limits.",
     "pastDue": "Your last payment failed. Please check your payment details — access ends soon.",
     "repairNeeded": "We are finishing setting up your billing schedule. No action is needed.",
     "resume": "Resume subscription",
@@ -77,7 +81,14 @@
     "paidLowerInfo": "At the end of your current period your account fallback-locks until the first {{plan}} payment settles. With iDEAL/SEPA that can take a few days, during which you have no paid access. Nothing is deleted until that payment is confirmed.",
     "confirmPrompt": "You will not be able to add data beyond the {{plan}} limits from now on. To confirm, type <mono>{{phrase}}</mono>.",
     "confirmAria": "downgrade confirmation phrase",
-    "confirm": "Downgrade"
+    "confirm": "Downgrade",
+    "previewLoading": "Checking what this downgrade affects…",
+    "previewError": "Could not load the downgrade preview. Try again later.",
+    "willDelete": "This permanently deletes the data of:",
+    "nothingDeleted": "No stored data needs to be deleted for this downgrade.",
+    "blockersTitle": "Reduce usage before you can downgrade:",
+    "blockerLine": "{{name}} — {{limit}}: {{current}} (allowed: {{target}})",
+    "blockerBands": "Bands you own"
   },
   "financeReadOnly": "Your current plan doesn't include finance. Your existing records stay available to view and export, but changes are disabled. Upgrade your plan to edit finance again.",
   "locked": {

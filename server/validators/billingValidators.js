@@ -19,6 +19,16 @@ export function parsePlanSelection(body) {
   return { planId, interval }
 }
 
+// { planId, interval, confirmation } for the downgrade endpoint. The
+// confirmation phrase is validated against the target plan by the service
+// (the plan slug isn't known here).
+export function parseDowngradeSelection(body) {
+  const parsed = parsePlanSelection(body)
+  if (parsed.error) return parsed
+  const confirmation = typeof body?.confirmation === 'string' ? body.confirmation : ''
+  return { ...parsed, confirmation }
+}
+
 // Admin complimentary grant: { userId, planId, expiresAt? }.
 export function parseComplimentaryBody(body) {
   const userId = parsePlanId(body?.userId)

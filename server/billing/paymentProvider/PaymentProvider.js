@@ -26,6 +26,9 @@
  * @property {string} id
  * @property {string} status                      a SUBSCRIPTION_STATUS value
  * @property {Date|null} nextPaymentDate
+ * @property {object|null} metadata               the metadata stamped at creation, echoed
+ *                                                back by the provider (attribution, e.g.
+ *                                                recognizing a downgrade replacement)
  */
 
 const NOT_IMPLEMENTED = 'PaymentProvider subclass must implement this method'

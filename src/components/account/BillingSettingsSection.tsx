@@ -41,6 +41,9 @@ const BILLING_ERROR_KEYS = {
   not_implemented: 'not_implemented',
   no_mandate: 'no_mandate',
   billing_not_configured: 'billing_not_configured',
+  over_target_limit: 'over_target_limit',
+  confirmation_mismatch: 'confirmation_mismatch',
+  not_a_downgrade: 'not_a_downgrade',
 } as const
 
 // Subscription statuses with a label under billing:status. `Subscription.status`
@@ -109,16 +112,20 @@ export default function BillingSettingsSection() {
   const participantOnly = !sub && (state?.ownedTenantCount ?? 0) === 0 && hasApprovedMembership
 
   // Run a billing mutation, refresh both the billing view and /auth/me (so
-  // entitlements/nav update), and surface errors as a toast.
-  const run = useCallback(async (fn: () => Promise<unknown>, successMsg?: string) => {
+  // entitlements/nav update), and surface errors as a toast. Returns whether
+  // the mutation succeeded, so callers (the downgrade dialog) can keep their
+  // UI open on a server-side rejection.
+  const run = useCallback(async (fn: () => Promise<unknown>, successMsg?: string): Promise<boolean> => {
     setBusy(true)
     try {
       await fn()
       if (successMsg) showToast?.(successMsg, 'success')
       await refreshUser().catch(() => {})
       load()
+      return true
     } catch (err) {
       showToast?.(errorMessage(err), 'error')
+      return false
     } finally {
       setBusy(false)
     }
@@ -136,10 +143,12 @@ export default function BillingSettingsSection() {
 
   const onDowngradeConfirm = async (confirmation: string) => {
     if (!downgradeTarget) return
-    await run(async () => {
+    // Close only on success: a server-side blocker or phrase mismatch keeps
+    // the dialog open next to its error toast.
+    const ok = await run(async () => {
       await apiDowngrade(downgradeTarget.id, interval, confirmation)
     }, t($ => $.toasts.downgradeScheduled))
-    setDowngradeTarget(null)
+    if (ok) setDowngradeTarget(null)
   }
 
   const onCancel = () => run(async () => { await apiCancel() }, t($ => $.toasts.cancellationScheduled))
@@ -188,6 +197,7 @@ export default function BillingSettingsSection() {
       <DowngradeDialog
         open={downgradeTarget !== null}
         plan={downgradeTarget}
+        interval={interval}
         isFreeFallback={Boolean(downgradeTarget?.is_fallback)}
         onClose={() => setDowngradeTarget(null)}
         onConfirm={onDowngradeConfirm}
@@ -257,8 +267,11 @@ function CurrentSubscriptionCard({ sub, currentPlan, participantOnly, onCancel, 
               {periodEndLine}{priceSuffix}
             </Typography>
           )}
-          {sub.pendingChange && (
+          {sub.pendingChange && !sub.downgradeScheduled && (
             <Alert severity="info">{t($ => $.current.pendingChange)}</Alert>
+          )}
+          {sub.downgradeScheduled && (
+            <Alert severity="info">{t($ => $.current.downgradePending)}</Alert>
           )}
           {sub.status === 'past_due' && (
             <Alert severity="warning">{t($ => $.current.pastDue)}</Alert>

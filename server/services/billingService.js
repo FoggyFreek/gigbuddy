@@ -26,6 +26,9 @@ import {
   clearCancelAtPeriodEnd,
   cancelSubscriptionNow,
   setScheduleStale,
+  setDowngradeCancel,
+  setDowngradePending,
+  setPurgeManifest,
 } from '../repositories/subscriptionRepository.js'
 import {
   upsertPaymentOutcome,
@@ -33,21 +36,39 @@ import {
   listNonterminalPaymentsForSubscription,
 } from '../repositories/subscriptionPaymentRepository.js'
 import { ingestProviderPayment } from './paymentIngestionService.js'
-import { countActiveOwnedTenants } from '../repositories/limitRepository.js'
+import {
+  countActiveOwnedTenants,
+  countRosterMembers,
+  countApprovedMemberships,
+  listOwnedTenants,
+  getTenantStorageBytes,
+  lockUserForCapCheck,
+  lockTenantForCapCheck,
+} from '../repositories/limitRepository.js'
 import {
   createMandateCheckout,
   chargePlanChange,
   cancelRemoteSubscription,
   repairSchedule,
+  scheduleDowngradeReplacement,
 } from './billingSaga.js'
+import { executeDowngradePurge } from './entitlementPurgeService.js'
+import { dispatchUserNotification, pushUserNotification } from './notificationService.js'
+import { BILLING_NOTIFICATION_TYPES } from './notificationTypes.js'
 import { priceForInterval, trialEndFrom, MANDATE_AMOUNT_CENTS } from './billingShared.js'
 import {
   isPlatformBillingConfigured,
   PaymentProviderError,
   PAYMENT_STATUS,
 } from '../billing/paymentProvider/index.js'
-import { FEATURE_KEYS, LIMIT_KEYS } from '../auth/entitlements.js'
-import { parsePlanSelection } from '../validators/billingValidators.js'
+import {
+  FEATURE_KEYS,
+  LIMIT_KEYS,
+  LIMITS,
+  mergeEntitlements,
+  featuresToPurge,
+} from '../auth/entitlements.js'
+import { parsePlanSelection, parseDowngradeSelection } from '../validators/billingValidators.js'
 import { logger } from '../utils/logger.js'
 
 function badRequest(error, code) {
@@ -289,8 +310,232 @@ export async function changePlan(db, user, body) {
 
 // ---- downgrade (phase 6) ----
 
-export async function downgrade() {
-  return { error: { status: 501, body: { error: 'Downgrade is not yet available', code: 'not_implemented' } } }
+const MB = 1024 * 1024
+
+// Capacity precheck against the TARGET plan's limits. With `lock: true` (the
+// confirm transaction) it acquires the exact lock set every capacity-growing
+// write takes — user row, then per owned tenant (id-ascending) the tenant row
+// + tenant advisory lock — so a member add / upload / band unarchive can't
+// slip past the check while the downgrade commits. Preview runs it lock-free.
+async function computeDowngradeBlockers(executor, userId, targetLimits, { lock = false } = {}) {
+  const blockers = []
+  if (lock) await lockUserForCapCheck(executor, userId)
+  // Archived tenants are checked against the per-tenant limits too — they can
+  // be unarchived onto the target plan. Only the band cap counts active ones
+  // (archiving is the documented way to satisfy it).
+  const tenants = await listOwnedTenants(executor, userId)
+
+  const bandsLimit = targetLimits[LIMITS.BANDS]
+  const activeCount = tenants.filter((t) => !t.archived_at).length
+  if (bandsLimit !== null && activeCount > bandsLimit) {
+    blockers.push({ tenantId: null, tenantName: null, limit: LIMITS.BANDS, current: activeCount, target: bandsLimit })
+  }
+
+  const membersLimit = targetLimits[LIMITS.MEMBERS]
+  const storageLimitMb = targetLimits[LIMITS.STORAGE_MB]
+  for (const tenant of tenants) {
+    if (lock) {
+      await lockTenantForCapCheck(executor, tenant.id)
+      await executor.query('SELECT pg_advisory_xact_lock($1)', [tenant.id])
+    }
+    if (membersLimit !== null) {
+      const current = Math.max(
+        await countRosterMembers(executor, tenant.id),
+        await countApprovedMemberships(executor, tenant.id),
+      )
+      if (current > membersLimit) {
+        blockers.push({ tenantId: tenant.id, tenantName: tenant.band_name, limit: LIMITS.MEMBERS, current, target: membersLimit })
+      }
+    }
+    if (storageLimitMb !== null) {
+      const bytes = await getTenantStorageBytes(executor, tenant.id)
+      if (bytes > storageLimitMb * MB) {
+        blockers.push({
+          tenantId: tenant.id, tenantName: tenant.band_name, limit: LIMITS.STORAGE_MB,
+          current: Math.ceil(bytes / MB), target: storageLimitMb,
+        })
+      }
+    }
+  }
+  return blockers
+}
+
+// Shared target-plan validation for preview + confirm. Fallback plans skip
+// pricing entirely (the 0/cancel path); any other target must carry a real
+// price for the chosen interval.
+async function loadDowngradeTarget(db, planId, interval) {
+  const targetPlan = await fetchPlan(db, planId)
+  if (!targetPlan || !targetPlan.is_active) {
+    return { error: { status: 404, body: { error: 'Plan not found' } } }
+  }
+  if (targetPlan.is_fallback) return { targetPlan, price: 0 }
+  const price = priceForInterval(targetPlan, interval)
+  if (price === null || price <= 0) {
+    return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
+  }
+  return { targetPlan, price }
+}
+
+async function notifyDowngradeScheduled(sub, body) {
+  const title = 'Downgrade scheduled'
+  const { inserted } = await dispatchUserNotification({
+    userId: sub.user_id,
+    type: BILLING_NOTIFICATION_TYPES.DOWNGRADE_SCHEDULED,
+    title, body, url: '/billing',
+    dedupeKey: `billing-downgrade-scheduled:${sub.id}`,
+  })
+  if (inserted) {
+    pushUserNotification(sub.user_id, {
+      type: BILLING_NOTIFICATION_TYPES.DOWNGRADE_SCHEDULED, title, body, url: '/billing',
+    })
+  }
+}
+
+// Read-only preview for the confirm dialog: what would be lost, the limit
+// snapshot that will bind immediately, and any capacity blockers.
+export async function previewDowngrade(db, user, body) {
+  if (!isPlatformBillingConfigured()) return NOT_CONFIGURED
+  const parsed = parsePlanSelection(body)
+  if (parsed.error) return badRequest(parsed.error)
+
+  const target = await loadDowngradeTarget(db, parsed.planId, parsed.interval)
+  if (target.error) return target
+  const { targetPlan } = target
+
+  const sub = await fetchLiveSubscriptionForUser(db, user.id)
+  if (!sub) return { error: { status: 404, body: { error: 'No subscription' } } }
+
+  // Effective entitlements on BOTH sides: per-subscription overrides survive
+  // the plan switch, so an override-granted feature is never previewed (or
+  // later purged) as lost.
+  const effCurrent = mergeEntitlements(sub.plan_entitlements, sub.entitlement_overrides)
+  const effTarget = mergeEntitlements(targetPlan.entitlements, sub.entitlement_overrides)
+  const blockers = await computeDowngradeBlockers(db, user.id, effTarget.limits)
+
+  return {
+    isDowngrade: isDowngrade(effCurrent, effTarget),
+    isFreeFallback: Boolean(targetPlan.is_fallback),
+    features: featuresToPurge(effCurrent, effTarget),
+    limitsSnapshot: effTarget.limits,
+    blockers,
+  }
+}
+
+// Confirmed downgrade. Three branches, all with informed consent (the typed
+// phrase) and NO data loss before the target plan is real:
+//  - free fallback (non-trial): cancel-at-period-end + manifest → the purge
+//    runs when the period-end cancel finalizes.
+//  - paid lower tier (non-trial): pending change + frozen manifest; at period
+//    end access fallback-locks until the replacement subscription's first
+//    charge is PAID (activation switches the plan and only then purges); a
+//    terminally failed replacement cancels WITHOUT purging.
+//  - trial: the target is real immediately (free switch or immediate cancel),
+//    so the manifest persists first and the purge runs right after commit.
+export async function downgrade(db, user, body) {
+  if (!isPlatformBillingConfigured()) return NOT_CONFIGURED
+  const parsed = parseDowngradeSelection(body)
+  if (parsed.error) return badRequest(parsed.error)
+  const { planId, interval, confirmation } = parsed
+
+  const target = await loadDowngradeTarget(db, planId, interval)
+  if (target.error) return target
+  const { targetPlan, price } = target
+
+  const client = await db.connect()
+  let after = null
+  try {
+    await client.query('BEGIN')
+    const sub = await fetchLiveSubscriptionForUpdate(client, user.id)
+    if (!sub) { await client.query('ROLLBACK'); return { error: { status: 404, body: { error: 'No subscription' } } } }
+    if (sub.is_complimentary) { await client.query('ROLLBACK'); return COMPLIMENTARY }
+    if (!sub.mollie_mandate_id) { await client.query('ROLLBACK'); return conflict('No valid payment mandate', 'no_mandate') }
+    if (sub.status === 'pending_mandate' || sub.status === 'pending_activation') {
+      await client.query('ROLLBACK'); return conflict('The subscription is not active yet', 'plan_change_in_progress')
+    }
+    if (sub.cancel_at_period_end) { await client.query('ROLLBACK'); return conflict('Resume the subscription before changing plans', 'plan_change_in_progress') }
+    if (sub.pending_plan_id) { await client.query('ROLLBACK'); return conflict('A plan change is in progress', 'plan_change_in_progress') }
+    if (targetPlan.id === sub.plan_id && interval === sub.billing_interval) {
+      await client.query('ROLLBACK'); return badRequest('Already on this plan')
+    }
+
+    const effCurrent = mergeEntitlements(sub.plan_entitlements, sub.entitlement_overrides)
+    const effTarget = mergeEntitlements(targetPlan.entitlements, sub.entitlement_overrides)
+    if (!isDowngrade(effCurrent, effTarget)) {
+      await client.query('ROLLBACK'); return badRequest('The chosen plan is not a downgrade', 'not_a_downgrade')
+    }
+
+    const expected = `downgrade to ${targetPlan.slug}`
+    if (confirmation.trim().toLowerCase() !== expected.toLowerCase()) {
+      await client.query('ROLLBACK')
+      return badRequest(`Type "${expected}" to confirm`, 'confirmation_mismatch')
+    }
+
+    // Capacity precheck under the full lock set; growth writes hold the same
+    // locks, so nothing can slip over the target limits while this commits.
+    const blockers = await computeDowngradeBlockers(client, user.id, effTarget.limits, { lock: true })
+    if (blockers.length) {
+      await client.query('ROLLBACK')
+      return { error: { status: 409, body: { error: 'Current usage exceeds the target plan limits', code: 'over_target_limit', blockers } } }
+    }
+
+    // Frozen at confirmation: the manifest can only SHRINK at execution.
+    const manifest = { features: featuresToPurge(effCurrent, effTarget) }
+    const snapshot = effTarget.limits
+
+    if (sub.status === 'trialing') {
+      // Manifest first, so the immediate post-commit purge has its scope even
+      // if the process dies in between (the scheduler safety net resumes it).
+      await setPurgeManifest(client, sub.id, { manifest, snapshot })
+      if (targetPlan.is_fallback) {
+        await cancelSubscriptionNow(client, sub.id, 'user_requested')
+        after = { kind: 'trial_fallback', sub }
+      } else {
+        await switchPlanTrial(client, sub.id, { planId, interval, priceCents: price })
+        after = { kind: 'trial_paid', sub }
+      }
+    } else if (targetPlan.is_fallback) {
+      await setDowngradeCancel(client, sub.id, { manifest, snapshot })
+      after = { kind: 'fallback', sub }
+    } else {
+      await setDowngradePending(client, sub.id, { planId, interval, priceCents: price, manifest, snapshot })
+      after = { kind: 'paid', sub }
+    }
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+
+  // Remote / follow-up work, all outside the transaction and all resumable:
+  // the durable markers (cancel_at_period_end, downgrade_schedule_pending,
+  // manifest) let the scheduler finish anything that fails here.
+  const { kind, sub } = after
+  if (kind === 'fallback' || kind === 'trial_fallback') {
+    await cancelRemoteSubscription(pool, sub).catch((err) =>
+      logger.error('billing.cancel_remote_failed', { err, subscriptionId: sub.id }))
+  }
+  if (kind === 'paid') {
+    await scheduleDowngradeReplacement(pool, sub.id).catch((err) =>
+      logger.error('billing.downgrade_schedule_failed', { err, subscriptionId: sub.id }))
+  }
+  if (kind === 'trial_paid') {
+    await repairSchedule(pool, sub.id).catch((err) =>
+      logger.error('billing.trial_change_repair_failed', { err, subscriptionId: sub.id }))
+  }
+  if (kind === 'trial_fallback' || kind === 'trial_paid') {
+    await executeDowngradePurge(pool, sub.id).catch((err) =>
+      logger.error('billing.purge_failed', { err, subscriptionId: sub.id }))
+  }
+
+  const immediate = kind === 'trial_fallback' || kind === 'trial_paid'
+  await notifyDowngradeScheduled(sub, immediate
+    ? `Your plan is now ${targetPlan.slug}.`
+    : `Your downgrade to ${targetPlan.slug} takes effect at the end of the current billing period.`)
+  logger.info('billing.downgrade_scheduled', { subscriptionId: sub.id, planId: targetPlan.id, planSlug: targetPlan.slug })
+
+  return { scheduled: true, immediate, targetPlanSlug: targetPlan.slug }
 }
 
 // ---- read model ----
@@ -312,6 +557,10 @@ export function serializeSubscription(sub) {
     pendingChange: sub.pending_plan_id
       ? { planId: sub.pending_plan_id, kind: sub.pending_change_kind, interval: sub.pending_billing_interval, priceCents: sub.pending_price_cents }
       : null,
+    // A confirmed downgrade (paid pending change OR fallback cancel) whose
+    // limits snapshot is already binding capacity growth.
+    downgradeScheduled: Boolean(sub.downgrade_confirmed_at),
+    pendingLimitsSnapshot: sub.pending_limits_snapshot ?? null,
     scheduleStale: sub.mollie_schedule_stale,
     repairNeeded: sub.billing_repair_needed,
   }

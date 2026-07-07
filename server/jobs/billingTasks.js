@@ -15,14 +15,27 @@ import {
   listPastDueExpired,
   listExpiredComplimentary,
   listTrialReminderDue,
+  listDowngradeSchedulePending,
+  listPendingActivationDowngrades,
+  listPendingDowngradesDue,
+  listPendingPurges,
   subscriptionHasNonterminalPayment,
   markTrialReminderSent,
   cancelSubscriptionNow,
+  clearPendingChange,
+  flipToPendingActivation,
+  fetchUserMollieCustomerId,
 } from '../repositories/subscriptionRepository.js'
 import { listStaleNonterminalPayments } from '../repositories/subscriptionPaymentRepository.js'
 import { listStalePendingOperations } from '../repositories/billingOperationRepository.js'
 import { ingestProviderPayment } from '../services/paymentIngestionService.js'
-import { repairSchedule, cancelRemoteSubscription } from '../services/billingSaga.js'
+import {
+  repairSchedule,
+  cancelRemoteSubscription,
+  scheduleDowngradeReplacement,
+} from '../services/billingSaga.js'
+import { executeDowngradePurge } from '../services/entitlementPurgeService.js'
+import { getPaymentProvider, SUBSCRIPTION_STATUS } from '../billing/paymentProvider/index.js'
 import { dispatchUserNotification, pushUserNotification } from '../services/notificationService.js'
 import { BILLING_NOTIFICATION_TYPES } from '../services/notificationTypes.js'
 import { logger } from '../utils/logger.js'
@@ -40,16 +53,46 @@ async function notifyUser(userId, type, title, body, dedupeKey) {
   if (inserted) pushUserNotification(userId, { type, title, body, url: '/billing' })
 }
 
+// Terminal downgrade failure: the replacement subscription will never pay
+// (retry window exhausted or the provider reports it canceled/completed).
+// Cancels the replacement remotely, clears EVERY piece of pending downgrade
+// state — pending change, schedule marker, superseded id, manifest, snapshot
+// — and terminally cancels the local row. NOTHING is purged: the customer
+// never got the lower tier, so their data stays (fallback-locked, PBI 11.9).
+export async function finalizeFailedDowngrade(db, sub) {
+  await cancelRemoteSubscription(db, sub).catch((err) =>
+    logger.error('billing.cancel_remote_failed', { err, subscriptionId: sub.id }))
+  if (sub.superseded_mollie_subscription_id
+      && sub.superseded_mollie_subscription_id !== sub.mollie_subscription_id) {
+    await cancelRemoteSubscription(db, sub, sub.superseded_mollie_subscription_id).catch((err) =>
+      logger.error('billing.cancel_remote_failed', { err, subscriptionId: sub.id }))
+  }
+  await clearPendingChange(db, sub.id)
+  await cancelSubscriptionNow(db, sub.id, 'payment_failed')
+  await notifyUser(sub.user_id, BILLING_NOTIFICATION_TYPES.CANCELED,
+    'Subscription canceled',
+    'Your downgrade could not be completed because the payment failed. Your subscription has ended; your data is kept.',
+    `billing-canceled:${sub.id}`)
+  logger.info('billing.downgrade_failed_finalized', { subscriptionId: sub.id })
+}
+
 // Task 1: abandon stale signups. A pending_mandate whose mandate never confirmed
 // within 24h is a dropped checkout; a pending_activation whose first real charge
-// never settled within 7d (and has nothing in flight) has lapsed.
+// never settled within 7d (aged from the flip into pending_activation, and with
+// nothing in flight — Mollie may still be retrying) has lapsed. A lapsed row
+// carrying a pending downgrade finalizes via finalizeFailedDowngrade: all
+// downgrade state cleared, nothing purged.
 export async function reconcileStaleSignups(db = pool) {
   for (const sub of await listStalePendingMandate(db, PENDING_MANDATE_STALE_MS)) {
     await cancelSubscriptionNow(db, sub.id, 'trial_abandoned')
     logger.info('billing.signup_abandoned', { subscriptionId: sub.id })
   }
   for (const sub of await listStalePendingActivation(db, PENDING_ACTIVATION_STALE_MS)) {
-    if (await subscriptionHasNonterminalPayment(db, sub.id)) continue // SEPA still settling
+    if (await subscriptionHasNonterminalPayment(db, sub.id)) continue // SEPA still settling / Mollie retrying
+    if (sub.pending_change_kind === 'downgrade') {
+      await finalizeFailedDowngrade(db, sub)
+      continue
+    }
     await cancelSubscriptionNow(db, sub.id, 'payment_failed')
     await cancelRemoteSubscription(db, sub).catch((err) =>
       logger.error('billing.cancel_remote_failed', { err, subscriptionId: sub.id }))
@@ -76,6 +119,59 @@ export async function reconcileScheduleRepairs(db = pool) {
   }
 }
 
+// Downgrade-schedule saga resume: rows whose durable cancel-old/create-
+// replacement marker is still set (the inline attempt failed or crashed), plus
+// the terminal poll — a replacement subscription the provider reports
+// canceled/completed while we wait in pending_activation will never pay, so
+// the downgrade fails WITHOUT purging.
+export async function reconcileDowngradeSchedules(db = pool) {
+  for (const sub of await listDowngradeSchedulePending(db)) {
+    await scheduleDowngradeReplacement(db, sub.id).catch((err) =>
+      logger.error('billing.downgrade_schedule_failed', { err, subscriptionId: sub.id }))
+  }
+  const provider = getPaymentProvider()
+  for (const sub of await listPendingActivationDowngrades(db)) {
+    if (await subscriptionHasNonterminalPayment(db, sub.id)) continue // a charge is still settling
+    try {
+      const customerId = await fetchUserMollieCustomerId(db, sub.user_id)
+      if (!customerId) continue
+      const remote = await provider.getSubscription({ customerId, subscriptionId: sub.mollie_subscription_id })
+      if (remote.status === SUBSCRIPTION_STATUS.CANCELED || remote.status === SUBSCRIPTION_STATUS.COMPLETED) {
+        await finalizeFailedDowngrade(db, sub)
+      }
+    } catch (err) {
+      logger.warn('billing.downgrade_replacement_poll_failed', { err, subscriptionId: sub.id })
+    }
+  }
+}
+
+// Task 7: a pending paid downgrade whose paid period has ended flips to
+// pending_activation (stamping pending_activation_at). Access fallback-locks
+// via the resolver; NOTHING is purged until the replacement's first charge is
+// authoritatively paid.
+export async function reconcilePendingDowngrades(db = pool) {
+  for (const sub of await listPendingDowngradesDue(db)) {
+    const flipped = await flipToPendingActivation(db, sub.id)
+    if (!flipped) continue
+    await notifyUser(sub.user_id, BILLING_NOTIFICATION_TYPES.DOWNGRADE_SCHEDULED,
+      'Downgrade pending payment',
+      'Your billing period has ended. The downgraded plan activates as soon as its first payment is confirmed.',
+      `billing-downgrade-pending:${sub.id}`)
+    logger.info('billing.downgrade_period_ended', { subscriptionId: sub.id })
+  }
+}
+
+// Purge safety net: manifests whose downgrade already took effect but whose
+// inline purge never ran (crash between the state change and the purge). The
+// per-subscription session lock inside executeDowngradePurge prevents any
+// overlap with an inline run.
+export async function reconcilePendingPurges(db = pool) {
+  for (const sub of await listPendingPurges(db)) {
+    await executeDowngradePurge(db, sub.id).catch((err) =>
+      logger.error('billing.purge_failed', { err, subscriptionId: sub.id }))
+  }
+}
+
 // Task 5: force-cancel subscriptions stuck past_due beyond the retry grace
 // (Mollie has exhausted its retries) on both sides.
 export async function reconcilePastDue(db = pool) {
@@ -90,13 +186,17 @@ export async function reconcilePastDue(db = pool) {
   }
 }
 
-// Task 6: finalize cancel-at-period-end once the paid period has passed.
-// (A pending purge manifest — the bronze-downgrade path — is executed here in
-// phase 6; no manifests exist yet.)
+// Task 6: finalize cancel-at-period-end once the paid period has passed. A
+// pending purge manifest (the free-fallback downgrade path) executes here —
+// the moment the fallback plan becomes the real plan.
 export async function reconcileCancelAtPeriodEnd(db = pool) {
   for (const sub of await listCancelAtPeriodEndDue(db)) {
     const reason = sub.cancel_reason ?? 'user_requested'
     await cancelSubscriptionNow(db, sub.id, reason)
+    if (sub.pending_purge_manifest) {
+      await executeDowngradePurge(db, sub.id).catch((err) =>
+        logger.error('billing.purge_failed', { err, subscriptionId: sub.id }))
+    }
     await notifyUser(sub.user_id, BILLING_NOTIFICATION_TYPES.CANCELED,
       'Subscription ended', 'Your subscription has ended.',
       `billing-canceled:${sub.id}`)
@@ -147,8 +247,11 @@ export const BILLING_TASKS = [
   ['stale_signups', reconcileStaleSignups],
   ['nonterminal_payments', reconcileNonterminalPayments],
   ['schedule_repairs', reconcileScheduleRepairs],
+  ['downgrade_schedules', reconcileDowngradeSchedules],
+  ['pending_downgrades', reconcilePendingDowngrades],
   ['past_due', reconcilePastDue],
   ['cancel_at_period_end', reconcileCancelAtPeriodEnd],
+  ['pending_purges', reconcilePendingPurges],
   ['trial_reminders', reconcileTrialReminders],
   ['orphan_operations', reconcileOrphanOperations],
   ['expired_complimentary', reconcileExpiredComplimentary],

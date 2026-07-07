@@ -8,6 +8,9 @@
     "not_implemented": "Downgrades zijn nog niet beschikbaar.",
     "no_mandate": "Er is geen geldige betaalmethode bekend.",
     "billing_not_configured": "Facturering is niet geconfigureerd op deze server.",
+    "over_target_limit": "Het huidige gebruik overschrijdt de limieten van het gekozen abonnement. Verminder eerst het gebruik.",
+    "confirmation_mismatch": "De bevestigingstekst kwam niet overeen.",
+    "not_a_downgrade": "Het gekozen abonnement is geen downgrade.",
     "generic": "Er is iets misgegaan."
   },
   "status": {
@@ -42,6 +45,7 @@
     "accessEnds": "Toegang eindigt {{date, datetime}}",
     "renews": "Verlengt op {{date, datetime}}",
     "pendingChange": "Er is een abonnementswijziging bezig. Deze gaat in zodra de betaling is bevestigd.",
+    "downgradePending": "Er staat een downgrade gepland. Je kunt geen gegevens meer toevoegen boven de limieten van het nieuwe abonnement.",
     "pastDue": "Je laatste betaling is mislukt. Controleer je betaalgegevens — de toegang eindigt binnenkort.",
     "repairNeeded": "We ronden het instellen van je betalingsschema af. Je hoeft niets te doen.",
     "resume": "Abonnement hervatten",
@@ -77,7 +81,14 @@
     "paidLowerInfo": "Aan het einde van je huidige periode wordt je account tijdelijk vergrendeld totdat de eerste {{plan}}-betaling is verwerkt. Met iDEAL/SEPA kan dat een paar dagen duren; in die periode heb je geen betaalde toegang. Er wordt niets verwijderd totdat die betaling is bevestigd.",
     "confirmPrompt": "Je kunt vanaf nu geen gegevens meer toevoegen boven de limieten van {{plan}}. Typ ter bevestiging <mono>{{phrase}}</mono>.",
     "confirmAria": "bevestigingszin voor downgrade",
-    "confirm": "Downgraden"
+    "confirm": "Downgraden",
+    "previewLoading": "Controleren wat deze downgrade beïnvloedt…",
+    "previewError": "Kon de downgrade-controle niet laden. Probeer het later opnieuw.",
+    "willDelete": "Dit verwijdert permanent de gegevens van:",
+    "nothingDeleted": "Voor deze downgrade hoeven geen opgeslagen gegevens te worden verwijderd.",
+    "blockersTitle": "Verminder eerst het gebruik voordat je kunt downgraden:",
+    "blockerLine": "{{name}} — {{limit}}: {{current}} (toegestaan: {{target}})",
+    "blockerBands": "Bands in jouw beheer"
   },
   "financeReadOnly": "Je huidige abonnement bevat geen financiën. Je bestaande administratie blijft beschikbaar om te bekijken en te exporteren, maar wijzigingen zijn uitgeschakeld. Upgrade je abonnement om je financiën weer te bewerken.",
   "locked": {

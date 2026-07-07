@@ -153,3 +153,25 @@ export async function setTenantImagePath(executor, tenantId, column, objectKey) 
   )
   return rows[0][col]
 }
+
+// Downgrade purge: nulls the accent color and every customization image
+// column, returning the previous object keys so they can be queued for
+// storage cleanup. Callers run this inside the tenant-lock transaction, so
+// the read-then-clear pair cannot race another write.
+export async function clearTenantCustomization(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT logo_path, banner_path, avatar_path, logo_dark_path FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  const keys = rows[0]
+    ? [rows[0].logo_path, rows[0].banner_path, rows[0].avatar_path, rows[0].logo_dark_path].filter(Boolean)
+    : []
+  await executor.query(
+    `UPDATE tenants
+        SET accent_color = NULL, logo_path = NULL, banner_path = NULL,
+            avatar_path = NULL, logo_dark_path = NULL, updated_at = NOW()
+      WHERE id = $1`,
+    [tenantId],
+  )
+  return keys
+}

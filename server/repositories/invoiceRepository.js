@@ -29,6 +29,27 @@ export async function listInvoices(executor, tenantId, period) {
   return rows
 }
 
+// Invoices that still carry a Mollie payment link — the integrations purge
+// enumerates these to remove unpaid links and decide key retention.
+export async function listInvoicesWithPaymentLink(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT * FROM invoices
+      WHERE tenant_id = $1 AND mollie_payment_link_id IS NOT NULL
+      ORDER BY id ASC`,
+    [tenantId],
+  )
+  return rows
+}
+
+export async function countInvoicesWithPaymentLink(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*)::int AS count FROM invoices
+      WHERE tenant_id = $1 AND mollie_payment_link_id IS NOT NULL`,
+    [tenantId],
+  )
+  return rows[0].count
+}
+
 // Global-search read: matches invoices on invoice number, customer name, or the
 // linked gig's event name (invoices.gig_id → gigs(id, tenant_id), nullable).
 // Exact invoice-number matches sort first, then most recent. Tenant-scoped.

@@ -1,13 +1,16 @@
 import { useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import Collapse from '@mui/material/Collapse'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { formatEur } from '../../utils/purchaseTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
 import type { MemberOutstanding, Purchase } from '../../types/entities.ts'
@@ -47,11 +50,21 @@ export default function MemberReimbursementCard({ member, expanded, purchases, o
             <Typography variant="body2" color="text.secondary">{t($ => $.noOutstandingPurchases)}</Typography>
           )}
           {purchases?.map((p) => (
-            <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', py: 0.25 }}>
+            <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', py: 0.25 }}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>#{p.receipt_number}</Typography>
               <Typography variant="caption" color="text.secondary">{formatShortDate(p.receipt_date)}</Typography>
               <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>{p.supplier_name}</Typography>
               <Typography variant="body2">{formatEur(p.total_cents)}</Typography>
+              <Tooltip title={t($ => $.aria.viewPurchase, { number: p.receipt_number })}>
+                <IconButton
+                  size="small"
+                  component={RouterLink}
+                  to={`/purchases/${p.id}`}
+                  aria-label={t($ => $.aria.viewPurchase, { number: p.receipt_number })}
+                >
+                  <OpenInNewIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </Box>
           ))}
         </Box>

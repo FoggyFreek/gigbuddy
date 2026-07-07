@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -7,9 +8,11 @@ import Collapse from '@mui/material/Collapse'
 import IconButton from '@mui/material/IconButton'
 import TableCell from '@mui/material/TableCell'
 import TableRow from '@mui/material/TableRow'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { formatEurParts } from '../../utils/invoiceTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
 import type { MemberOutstanding, Purchase } from '../../types/entities.ts'
@@ -58,13 +61,13 @@ export default function MemberReimbursementRow({ member, expanded, purchases, on
                 <Box
                   sx={{
                     display: 'grid',
-                    // Receipt · date · supplier (flexes) · € symbol · digits. The
+                    // Receipt · date · supplier (flexes) · € symbol · digits · link. The
                     // symbol gets its own column so it lines up vertically across
                     // rows while the digits stay right-aligned.
-                    gridTemplateColumns: 'auto auto minmax(0, 1fr) auto auto',
+                    gridTemplateColumns: 'auto auto minmax(0, 1fr) auto auto auto',
                     columnGap: 1.5,
                     rowGap: 0.25,
-                    alignItems: 'baseline',
+                    alignItems: 'center',
                   }}
                 >
                   {purchases.map((p) => {
@@ -78,6 +81,17 @@ export default function MemberReimbursementRow({ member, expanded, purchases, on
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>{symbol}</Typography>
                         <Typography variant="body2" sx={{ textAlign: 'right' }}>{value}</Typography>
+                        <Tooltip title={t($ => $.aria.viewPurchase, { number: p.receipt_number })}>
+                          <IconButton
+                            size="small"
+                            component={RouterLink}
+                            to={`/purchases/${p.id}`}
+                            aria-label={t($ => $.aria.viewPurchase, { number: p.receipt_number })}
+                            sx={{ alignSelf: 'center' }}
+                          >
+                            <OpenInNewIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       </Fragment>
                     )
                   })}

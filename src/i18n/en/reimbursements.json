@@ -18,7 +18,8 @@
   },
   "aria": {
     "expand": "expand",
-    "collapse": "collapse"
+    "collapse": "collapse",
+    "viewPurchase": "View purchase #{{number}}"
   },
   "actions": {
     "register": "Register",

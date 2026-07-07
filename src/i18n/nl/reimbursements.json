@@ -18,7 +18,8 @@
   },
   "aria": {
     "expand": "uitklappen",
-    "collapse": "inklappen"
+    "collapse": "inklappen",
+    "viewPurchase": "Bekijk aankoop #{{number}}"
   },
   "actions": {
     "register": "Registreren",

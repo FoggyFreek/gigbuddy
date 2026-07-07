@@ -46,3 +46,29 @@ export async function countActiveOwnedTenants(executor, userId) {
   )
   return rows[0].count
 }
+
+// ALL tenants a user owns — archived included — id-ordered so multi-tenant
+// lock acquisition (downgrade precheck) is deterministic and can't deadlock.
+// The downgrade blockers and the downgrade purge deliberately cover archived
+// tenants: an archived band can be unarchived later, so it must fit the
+// target plan's per-tenant limits and its gated data (and integration
+// secrets) is subject to the same purge promise. Only the band cap itself
+// counts active tenants (archiving is the documented way to satisfy it).
+export async function listOwnedTenants(executor, userId) {
+  const { rows } = await executor.query(
+    `SELECT id, band_name, archived_at FROM tenants
+      WHERE owner_user_id = $1
+      ORDER BY id ASC`,
+    [userId],
+  )
+  return rows
+}
+
+// Current storage meter reading (0 for a tenant without a stats row yet).
+export async function getTenantStorageBytes(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT COALESCE(storage_bytes, 0)::bigint AS storage_bytes FROM tenant_statistics WHERE tenant_id = $1',
+    [tenantId],
+  )
+  return Number(rows[0]?.storage_bytes ?? 0)
+}

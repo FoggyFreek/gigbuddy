@@ -111,11 +111,11 @@ Finance is built on an **immutable double-entry ledger** (`ledger_transactions` 
 
 ## Subscriptions, entitlements & platform billing
 
-Paid tiers (bronze/silver/gold) gate features and limits per tenant; billing runs on Mollie behind a provider port (migrations `100`–`104`). **Load the subscription-billing skill** before touching plans, entitlement gates, limits, tenant ownership, the billing lifecycle, or the gating UI. The invariants to never break:
+Paid tiers (bronze/silver/gold) gate features and limits per tenant; billing runs on Mollie behind a provider port (migrations `100`–`105`). **Load the subscription-billing skill** before touching plans, entitlement gates, limits, tenant ownership, the billing lifecycle (incl. the downgrade/purge flow — the one flow that deletes data), or the gating UI. The invariants to never break:
 
 - **Subscriptions are user-level; tenants inherit from `tenants.owner_user_id`.** An ownerless tenant skips enforcement entirely (legacy; deliberate, no backfill).
 - **`shared/entitlements.js` is the single source of truth** for features/limits (`null` limit = unlimited).
-- The entitlement resolver enforces all time bounds itself on read — the scheduler is repair-only; **access never depends on it running**. A lapsed subscription fallback-locks to the free plan; data is never deleted by a lapse.
+- The entitlement resolver enforces all time bounds itself on read — the scheduler is repair-only; **access never depends on it running**. A lapsed subscription fallback-locks to the free plan; data is never deleted by a lapse — only a confirmed downgrade purges, and only after the target plan is real (paid or period-end final).
 - **Never call the payment provider inside a DB transaction**, never import a concrete adapter (use `getPaymentProvider()`), and every remote mutation goes through the `billing_operations` outbox saga with a deterministic idempotency key.
 - Payment ingestion is one funnel (`applyPaymentOutcome`); the webhook payment id is a routing hint only — status is always re-fetched from the provider.
 - Entitlement gating in the frontend is presentation only; the API gate is the defense. Tier-locked nav stays visible (diamond → `/upgrade/:feature`); role-gated nav is hidden.

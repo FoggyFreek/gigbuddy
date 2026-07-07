@@ -22,7 +22,9 @@ import {
   setMandateLinkage,
   setScheduleStale,
   setBillingRepairNeeded,
+  applyDowngradeSchedule,
 } from '../repositories/subscriptionRepository.js'
+import { fetchPlan } from '../repositories/planRepository.js'
 import { billingWebhookUrl, billingRedirectUrl, billingMetadata, idemKeys, periodEndFrom } from './billingShared.js'
 import { logger } from '../utils/logger.js'
 
@@ -194,23 +196,116 @@ function computeScheduleStart(sub) {
   return new Date() // non-trial: charge immediately
 }
 
-// Cancel the remote subscription (idempotent at the provider). Used by
-// repairSchedule (replace) and the cancel/downgrade flows.
-export async function cancelRemoteSubscription(db, sub) {
-  if (!sub.mollie_subscription_id) return
+// Cancel a remote subscription (idempotent at the provider). Used by
+// repairSchedule (replace) and the cancel/downgrade flows. `providerSubId`
+// defaults to the row's current mollie_subscription_id; the downgrade saga
+// passes the immutable superseded id explicitly so a retry after the repoint
+// can never cancel the replacement.
+export async function cancelRemoteSubscription(db, sub, providerSubId = null) {
+  const subscriptionId = providerSubId ?? sub.mollie_subscription_id
+  if (!subscriptionId) return
   const provider = getPaymentProvider()
   const customerId = await fetchUserMollieCustomerId(db, sub.user_id)
   await runOp(
     db,
-    { userId: sub.user_id, subscriptionId: sub.id, opType: 'cancel_subscription', idempotencyKey: idemKeys.cancelSubscription(sub.id, sub.mollie_subscription_id) },
+    { userId: sub.user_id, subscriptionId: sub.id, opType: 'cancel_subscription', idempotencyKey: idemKeys.cancelSubscription(sub.id, subscriptionId) },
     async (idempotencyKey) => {
-      const status = await provider.getSubscription({ customerId, subscriptionId: sub.mollie_subscription_id })
+      // Skip the cancel call ONLY when the provider POSITIVELY reports the
+      // subscription canceled. A lookup failure must NOT read as canceled —
+      // that would mark this op succeeded while the old subscription keeps
+      // charging. On lookup error we proceed to the idempotent cancel: the
+      // adapter treats already-canceled as success, and any other failure
+      // surfaces as a retryable op for the scheduler.
+      const status = await provider.getSubscription({ customerId, subscriptionId })
         .then((s) => s.status)
         .catch(() => null)
-      if (status && status !== SUBSCRIPTION_STATUS.CANCELED) {
-        await provider.cancelSubscription({ customerId, subscriptionId: sub.mollie_subscription_id, idempotencyKey })
+      if (status !== SUBSCRIPTION_STATUS.CANCELED) {
+        await provider.cancelSubscription({ customerId, subscriptionId, idempotencyKey })
       }
-      return { resourceId: sub.mollie_subscription_id }
+      return { resourceId: subscriptionId }
     },
   )
+}
+
+// The paid-downgrade schedule saga: cancel the OLD provider subscription (the
+// immutable superseded id captured at confirmation) and create the
+// replacement at the pending lower amount, first charge at the current period
+// end; then one atomic UPDATE repoints mollie_subscription_id and clears the
+// durable downgrade_schedule_pending marker. Every step is an idempotent
+// outbox op, so a crash anywhere resumes cleanly from the scheduler.
+export async function scheduleDowngradeReplacement(db, subId) {
+  const sub = await fetchSubscriptionById(db, subId)
+  if (!sub || !sub.downgrade_schedule_pending || sub.status === 'canceled') return
+  if (sub.pending_change_kind !== 'downgrade' || !sub.pending_plan_id) return
+
+  const provider = getPaymentProvider()
+  const customerId = await fetchUserMollieCustomerId(db, sub.user_id)
+  if (!customerId || !sub.mollie_mandate_id) return
+
+  try {
+    if (sub.superseded_mollie_subscription_id) {
+      await cancelRemoteSubscription(db, sub, sub.superseded_mollie_subscription_id)
+    }
+
+    const pendingPlan = await fetchPlan(db, sub.pending_plan_id)
+    const periodEnd = sub.current_period_end ? new Date(sub.current_period_end) : null
+    // Mollie rejects a startDate in the past; an already-ended period charges
+    // immediately (access is fallback-locked anyway until that charge pays).
+    const startDate = periodEnd && periodEnd > new Date() ? periodEnd : new Date()
+    // The idempotency key uses the STABLE period end (never the clamped
+    // "now"), so a retry that crosses the period boundary still matches the
+    // original op instead of creating a second replacement.
+    const keyStartIso = periodEnd ? periodEnd.toISOString() : 'immediate'
+    const { skipped, resourceId, result } = await runOp(
+      db,
+      {
+        userId: sub.user_id,
+        subscriptionId: sub.id,
+        opType: 'create_subscription',
+        idempotencyKey: idemKeys.createSubscription(sub.id, sub.pending_price_cents, sub.pending_billing_interval, keyStartIso),
+      },
+      async (idempotencyKey) => {
+        const created = await provider.createSubscription({
+          customerId,
+          mandateId: sub.mollie_mandate_id,
+          amountCents: sub.pending_price_cents,
+          interval: sub.pending_billing_interval,
+          description: planDescription(pendingPlan.slug, sub.pending_billing_interval),
+          startDate,
+          webhookUrl: billingWebhookUrl(sub.id),
+          idempotencyKey,
+          metadata: billingMetadata(sub.id, 'downgrade'),
+        })
+        return { resourceId: created.id }
+      },
+    )
+    const replacementId = skipped ? resourceId : result.resourceId
+    if (replacementId) {
+      const applied = await applyDowngradeSchedule(db, sub.id, replacementId)
+      if (!applied) {
+        // The pending downgrade was cleared (user cancel / failed-downgrade
+        // finalize) — or its first charge already activated and repointed —
+        // while the remote calls were in flight. A row that doesn't own the
+        // replacement must not be charged by it.
+        const current = await fetchSubscriptionById(db, sub.id)
+        if (current?.mollie_subscription_id !== replacementId) {
+          try {
+            await cancelRemoteSubscription(db, current ?? sub, replacementId)
+          } catch (err) {
+            await setBillingRepairNeeded(db, sub.id, true)
+            throw err
+          }
+        }
+        return
+      }
+      await setBillingRepairNeeded(db, sub.id, false)
+    }
+  } catch (err) {
+    if (err instanceof PaymentProviderError && !err.retryable) {
+      await setBillingRepairNeeded(db, subId, true)
+      logger.error('billing.repair_needed', { err, subscriptionId: subId })
+      return
+    }
+    throw err // retryable: the scheduler's downgrade-schedule task tries again
+  }
 }

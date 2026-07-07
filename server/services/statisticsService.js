@@ -58,14 +58,19 @@ export async function refreshTenantStorage(tenantId) {
 // Atomically reserves `sizeBytes` of quota before an upload. Serialized with
 // refreshTenantStorage (same per-tenant advisory lock), so the check-then-
 // increment can't interleave with a recompute or another reservation. Returns
-// true when reserved; false when the reservation would exceed `limitBytes`
-// (pass null for no cap — the reservation still happens, keeping usage
-// accounting consistent).
-export async function reserveStorageUsage(tenantId, sizeBytes, limitBytes) {
+// true when reserved; false when the reservation would exceed the limit.
+// `limit` is either a byte cap (null for no cap — the reservation still
+// happens, keeping usage accounting consistent) or an async resolver
+// `(client) => limitBytes|null` invoked AFTER the advisory lock is held, so a
+// concurrent downgrade committing a lower snapshot can never be outrun: the
+// upload either resolves the old limit before the downgrade commits, or the
+// snapshot-bound limit after — never the old limit under a committed snapshot.
+export async function reserveStorageUsage(tenantId, sizeBytes, limit) {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
     await client.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
+    const limitBytes = typeof limit === 'function' ? await limit(client) : limit
     await client.query(
       'INSERT INTO tenant_statistics (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING',
       [tenantId],

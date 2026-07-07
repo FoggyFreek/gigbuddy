@@ -174,9 +174,14 @@ export async function setBillingRepairNeeded(executor, id, value) {
 
 // Guarded status flip (e.g. pending_mandate → trialing / pending_activation on
 // mandate confirmation). Returns the row when it moved, null otherwise.
+// Entering pending_activation stamps pending_activation_at so the stale-
+// activation scheduler ages from the flip, not from created_at.
 export async function setStatusGuarded(executor, id, newStatus, fromStatus) {
   const { rows } = await executor.query(
-    `UPDATE subscriptions SET status = $2, updated_at = NOW()
+    `UPDATE subscriptions
+     SET status = $2,
+         pending_activation_at = CASE WHEN $2 = 'pending_activation' THEN NOW() ELSE pending_activation_at END,
+         updated_at = NOW()
      WHERE id = $1 AND status = $3 RETURNING *`,
     [id, newStatus, fromStatus],
   )
@@ -207,7 +212,8 @@ export async function clearPendingChange(executor, id) {
      SET pending_plan_id = NULL, pending_change_kind = NULL, pending_billing_interval = NULL,
          pending_price_cents = NULL, pending_payment_id = NULL,
          pending_purge_manifest = NULL, pending_limits_snapshot = NULL,
-         downgrade_confirmed_at = NULL, updated_at = NOW()
+         downgrade_confirmed_at = NULL, downgrade_schedule_pending = FALSE,
+         superseded_mollie_subscription_id = NULL, updated_at = NOW()
      WHERE id = $1`,
     [id],
   )
@@ -231,6 +237,126 @@ export async function applyPlanChangeActivation(executor, id, { planId, interval
     [id, planId, interval, priceCents, periodStart, periodEnd],
   )
   return rows[0] ?? null
+}
+
+// ---- downgrade (phase 6) ----
+
+// Free-fallback downgrade: rides the cancel-at-period-end path (no
+// replacement subscription — honors cancel_xor_pending) with the purge
+// manifest and limits snapshot frozen at confirmation.
+export async function setDowngradeCancel(executor, id, { manifest, snapshot }) {
+  await executor.query(
+    `UPDATE subscriptions
+     SET cancel_at_period_end = TRUE, cancel_reason = 'user_requested',
+         pending_purge_manifest = $2, pending_limits_snapshot = $3,
+         downgrade_confirmed_at = NOW(), updated_at = NOW()
+     WHERE id = $1`,
+    [id, manifest, snapshot],
+  )
+}
+
+// Paid-lower downgrade confirmation: pending change + frozen manifest/snapshot,
+// the durable cancel-old/create-replacement marker, and the old provider
+// subscription id captured immutably so a resumed saga can never cancel the
+// replacement.
+export async function setDowngradePending(executor, id, { planId, interval, priceCents, manifest, snapshot }) {
+  await executor.query(
+    `UPDATE subscriptions
+     SET pending_plan_id = $2, pending_change_kind = 'downgrade',
+         pending_billing_interval = $3, pending_price_cents = $4,
+         pending_purge_manifest = $5, pending_limits_snapshot = $6,
+         downgrade_confirmed_at = NOW(), downgrade_schedule_pending = TRUE,
+         superseded_mollie_subscription_id = mollie_subscription_id,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [id, planId, interval, priceCents, manifest, snapshot],
+  )
+}
+
+// Trial downgrade: only the manifest/snapshot are persisted (the plan switch
+// or cancel happens separately in the same transaction) so the purge that
+// runs immediately after commit has its frozen scope.
+export async function setPurgeManifest(executor, id, { manifest, snapshot }) {
+  await executor.query(
+    `UPDATE subscriptions
+     SET pending_purge_manifest = $2, pending_limits_snapshot = $3,
+         downgrade_confirmed_at = NOW(), updated_at = NOW()
+     WHERE id = $1`,
+    [id, manifest, snapshot],
+  )
+}
+
+// Downgrade activation on the replacement subscription's first paid charge:
+// switch to the pending plan, set the paid period, clear the pending-change
+// bookkeeping — but KEEP the purge manifest (the post-commit purge consumes
+// and clears it) and do NOT flag the schedule stale (the replacement
+// subscription IS the correct schedule). `providerSubscriptionId` is the
+// verified replacement id the charge came from: when the charge beat the
+// saga's repoint, activating also repoints (a no-op after the repoint).
+export async function applyDowngradeActivation(executor, id, {
+  planId, interval, priceCents, periodStart, periodEnd, providerSubscriptionId = null,
+}) {
+  const { rows } = await executor.query(
+    `UPDATE subscriptions
+     SET plan_id = $2, billing_interval = $3, price_cents = $4,
+         current_period_start = $5, current_period_end = $6,
+         status = 'active', past_due_since = NULL,
+         mollie_subscription_id = COALESCE($7, mollie_subscription_id),
+         pending_plan_id = NULL, pending_change_kind = NULL, pending_billing_interval = NULL,
+         pending_price_cents = NULL, pending_payment_id = NULL,
+         pending_activation_at = NULL, downgrade_schedule_pending = FALSE,
+         superseded_mollie_subscription_id = NULL,
+         updated_at = NOW()
+     WHERE id = $1 RETURNING *`,
+    [id, planId, interval, priceCents, periodStart, periodEnd, providerSubscriptionId],
+  )
+  return rows[0] ?? null
+}
+
+// Period-end flip for a pending paid downgrade: access fallback-locks (the
+// resolver already denies an expired period) until the replacement's first
+// charge settles. Guarded so a concurrent activation/cancel wins.
+export async function flipToPendingActivation(executor, id) {
+  const { rows } = await executor.query(
+    `UPDATE subscriptions
+     SET status = 'pending_activation', pending_activation_at = NOW(), updated_at = NOW()
+     WHERE id = $1 AND status = 'active' AND pending_change_kind = 'downgrade'
+     RETURNING *`,
+    [id],
+  )
+  return rows[0] ?? null
+}
+
+// Consumes an executed purge manifest (guarded on presence so a replayed call
+// is a no-op). The limits snapshot goes with it — after activation the plan
+// itself carries the target limits.
+export async function clearPurgeManifest(executor, id) {
+  await executor.query(
+    `UPDATE subscriptions
+     SET pending_purge_manifest = NULL, pending_limits_snapshot = NULL,
+         downgrade_confirmed_at = NULL, updated_at = NOW()
+     WHERE id = $1 AND pending_purge_manifest IS NOT NULL`,
+    [id],
+  )
+}
+
+// Atomic saga repoint: the replacement provider subscription becomes current,
+// the durable schedule marker and the superseded id clear in the same
+// statement (a crash before this leaves both for the scheduler to resume).
+// Guarded on the marker and a live row: a cancellation/finalize (or an
+// activation that already repointed) landing while the saga's remote calls
+// were in flight wins, and the FALSE return tells the saga the replacement
+// is orphaned and must be canceled remotely.
+export async function applyDowngradeSchedule(executor, id, replacementSubscriptionId) {
+  const { rows } = await executor.query(
+    `UPDATE subscriptions
+     SET mollie_subscription_id = $2, downgrade_schedule_pending = FALSE,
+         superseded_mollie_subscription_id = NULL, updated_at = NOW()
+     WHERE id = $1 AND downgrade_schedule_pending = TRUE AND status <> 'canceled'
+     RETURNING id`,
+    [id, replacementSubscriptionId],
+  )
+  return rows.length > 0
 }
 
 // Cancel-at-period-end (resolver locks at period end on its own; scheduler
@@ -298,13 +424,65 @@ export async function listStalePendingMandate(executor, olderThanMs) {
 }
 
 // Stale pending_activation: mandate confirmed but the first real charge never
-// settled within the grace window (re-subscribe / trial-used path).
+// settled within the grace window (re-subscribe / trial-used / pending-
+// downgrade path). Ages from the moment the row ENTERED pending_activation
+// (falling back to created_at for pre-105 rows) so a long-lived subscription
+// that just flipped isn't force-canceled instantly.
 export async function listStalePendingActivation(executor, olderThanMs) {
   const { rows } = await executor.query(
     `SELECT * FROM subscriptions
      WHERE status = 'pending_activation'
-       AND created_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')`,
+       AND COALESCE(pending_activation_at, created_at) < NOW() - ($1::bigint * INTERVAL '1 millisecond')`,
     [olderThanMs],
+  )
+  return rows
+}
+
+// Downgrades whose cancel-old/create-replacement saga still needs to run (or
+// resume after a crash).
+export async function listDowngradeSchedulePending(executor) {
+  const { rows } = await executor.query(
+    `SELECT s.*, p.slug AS plan_slug FROM subscriptions s
+     JOIN subscription_plans p ON p.id = s.plan_id
+     WHERE s.downgrade_schedule_pending = TRUE AND s.status <> 'canceled'`,
+  )
+  return rows
+}
+
+// Pending paid downgrades whose paid period has ended → flip to
+// pending_activation (fallback-lock; NO purge until the replacement pays).
+export async function listPendingDowngradesDue(executor) {
+  const { rows } = await executor.query(
+    `SELECT * FROM subscriptions
+     WHERE status = 'active' AND pending_change_kind = 'downgrade'
+       AND current_period_end IS NOT NULL AND current_period_end < NOW()`,
+  )
+  return rows
+}
+
+// Downgrades waiting on their replacement subscription's first charge — the
+// scheduler polls the provider for a terminal (canceled/completed)
+// replacement, which fails the downgrade without purging.
+export async function listPendingActivationDowngrades(executor) {
+  const { rows } = await executor.query(
+    `SELECT * FROM subscriptions
+     WHERE status = 'pending_activation' AND pending_change_kind = 'downgrade'
+       AND downgrade_schedule_pending = FALSE AND mollie_subscription_id IS NOT NULL`,
+  )
+  return rows
+}
+
+// Safety net: manifests whose downgrade already took effect (no pending
+// change, no scheduled cancel — the target plan is real: switched, trial-
+// switched, or canceled to fallback) but whose purge never ran (crash between
+// activation/cancel and the inline purge).
+export async function listPendingPurges(executor) {
+  const { rows } = await executor.query(
+    `SELECT * FROM subscriptions
+     WHERE pending_purge_manifest IS NOT NULL
+       AND pending_plan_id IS NULL
+       AND cancel_at_period_end = FALSE
+       AND status IN ('active', 'trialing', 'canceled')`,
   )
   return rows
 }

@@ -7,6 +7,8 @@ export {
   LIMIT_KEYS,
   ENTITLEMENT_KEYS,
   UNLIMITED,
+  PURGEABLE_FEATURES,
+  featuresToPurge,
   isUnlimited,
   validateEntitlements,
   mergeEntitlements,

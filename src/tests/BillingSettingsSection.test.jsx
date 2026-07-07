@@ -87,6 +87,25 @@ describe('BillingSettingsSection — current plan tier logo', () => {
   })
 })
 
+describe('BillingSettingsSection — scheduled downgrade note', () => {
+  it('shows the pending-downgrade limits note when a downgrade is confirmed', async () => {
+    api.getBillingState.mockResolvedValue({
+      subscription: {
+        id: 1, planId: 2, planSlug: 'silver', status: 'active', billingInterval: 'month',
+        priceCents: 999, cancelAtPeriodEnd: true, currentPeriodEnd: '2026-08-01T00:00:00Z',
+        trialEndsAt: null, isComplimentary: false, complimentaryExpiresAt: null,
+        pendingChange: null, downgradeScheduled: true, pendingLimitsSnapshot: { storage_mb: 50 },
+        scheduleStale: false, repairNeeded: false,
+      },
+      ownedTenantCount: 1,
+      plans: PLANS,
+    })
+    wrap(<BillingSettingsSection />, participantUser)
+    expect(await screen.findByText(/A downgrade is scheduled/)).toBeInTheDocument()
+    expect(screen.getByText(/no longer add data beyond the new plan's limits/)).toBeInTheDocument()
+  })
+})
+
 describe('BillingSettingsSection — participant without a subscription', () => {
   it('explains there is no subscription and no payment due when the user owns no tenant', async () => {
     api.getBillingState.mockResolvedValue({ subscription: null, ownedTenantCount: 0, plans: PLANS })

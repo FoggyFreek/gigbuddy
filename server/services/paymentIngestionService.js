@@ -20,13 +20,15 @@ import {
   advanceSubscriptionPeriod,
   markSubscriptionPastDue,
   applyPlanChangeActivation,
+  applyDowngradeActivation,
   clearPendingChange,
 } from '../repositories/subscriptionRepository.js'
+import { executeDowngradePurge } from './entitlementPurgeService.js'
 import { upsertPaymentOutcome } from '../repositories/subscriptionPaymentRepository.js'
 import { dispatchUserNotification, pushUserNotification } from './notificationService.js'
 import { BILLING_NOTIFICATION_TYPES } from './notificationTypes.js'
 import { periodEndFrom } from './billingShared.js'
-import { getPaymentProvider, PAYMENT_STATUS } from '../billing/paymentProvider/index.js'
+import { getPaymentProvider, PaymentProviderError, PAYMENT_STATUS } from '../billing/paymentProvider/index.js'
 import { repairSchedule } from './billingSaga.js'
 import { logger } from '../utils/logger.js'
 
@@ -102,6 +104,43 @@ async function handlePaid(client, sub, payment, kind, ctx) {
       `billing-plan-changed:${sub.id}:${payment.id}`, ctx.pushes)
     return
   }
+  if (sub.pending_change_kind === 'downgrade') {
+    // Provenance guard: ONLY the replacement subscription's charge activates
+    // a pending downgrade. The superseded (old-schedule) id is always
+    // rejected. The replacement is recognized either by the local repoint
+    // (mollie_subscription_id) or — when its first charge beats the repoint —
+    // by the downgrade metadata the saga stamped at creation, verified
+    // against the provider (ctx.replacementSubscriptionId). Anything else is
+    // recorded only — it must not extend current_period_end or delay the
+    // fallback lock.
+    const fromReplacement = Boolean(payment.subscriptionId)
+      && payment.subscriptionId !== sub.superseded_mollie_subscription_id
+      && (payment.subscriptionId === sub.mollie_subscription_id
+        || payment.subscriptionId === ctx.replacementSubscriptionId)
+    if (!fromReplacement) return
+
+    // Activate the downgrade: the customer has paid the lower tier — switch
+    // now, keep the manifest for the post-commit purge, leave the schedule
+    // alone (the replacement subscription IS the schedule). Passing the
+    // charge's provider subscription id repoints a row the saga hasn't
+    // repointed yet (and is a no-op after the repoint).
+    const periodStart = payment.paidAt ?? new Date()
+    const periodEnd = ctx.periodEndHint ?? periodEndFrom(periodStart, sub.pending_billing_interval)
+    const activated = await applyDowngradeActivation(client, sub.id, {
+      planId: sub.pending_plan_id,
+      interval: sub.pending_billing_interval,
+      priceCents: sub.pending_price_cents,
+      periodStart,
+      periodEnd,
+      providerSubscriptionId: payment.subscriptionId,
+    })
+    if (activated) {
+      ctx.sagaHints.add('execute_purge')
+      await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.PLAN_CHANGED,
+        `billing-plan-changed:${sub.id}:${payment.id}`, ctx.pushes)
+    }
+    return
+  }
   // recurring: absolute period from paidAt; end from the provider hint (a
   // subscription-generated charge) or the interval fallback.
   const wasActive = sub.status === 'active'
@@ -130,6 +169,17 @@ async function handleUnpaid(client, sub, payment, kind, status, ctx) {
     // (task 1 cancels stale pending_mandate). Nothing to flip here.
     return
   }
+  if (failedTerminal && kind === 'recurring' && sub.pending_change_kind === 'downgrade') {
+    // A failed replacement charge is NOT terminal for the downgrade: Mollie
+    // retries eligible subscription payments (~daily, up to 5 attempts) and a
+    // later attempt may pay. Record + notify only — keep the status
+    // (pending_activation stays fallback-locked by the resolver) and the
+    // manifest; the scheduler decides terminal when the retry window is
+    // exhausted or the provider reports the replacement canceled.
+    await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.PAYMENT_FAILED,
+      `billing-payment-failed:${payment.id}`, ctx.pushes)
+    return
+  }
   // Recurring failure, or a chargeback/refund on any kind: an unpaid current
   // period drops to past_due; an older reversal is recorded only.
   if (isCurrentPeriodCharge(sub, payment)) {
@@ -143,9 +193,9 @@ async function handleUnpaid(client, sub, payment, kind, status, ctx) {
 // nextPaymentDate for a subscription-generated recurring charge, fetched by the
 // caller BEFORE this transaction (never a remote call inside the txn). Returns
 // { pushes, sagaHints } for the caller to execute post-commit.
-export async function applyPaymentOutcome(subId, payment, { periodEndHint = null } = {}) {
+export async function applyPaymentOutcome(subId, payment, { periodEndHint = null, replacementSubscriptionId = null } = {}) {
   const client = await pool.connect()
-  const ctx = { periodEndHint, pushes: [], sagaHints: new Set() }
+  const ctx = { periodEndHint, replacementSubscriptionId, pushes: [], sagaHints: new Set() }
   try {
     await client.query('BEGIN')
     const sub = await fetchSubscriptionByIdForUpdate(client, subId)
@@ -199,6 +249,12 @@ async function runPostCommit(subId, { pushes, sagaHints }) {
     await repairSchedule(pool, subId).catch((err) =>
       logger.error('billing.repair_schedule_failed', { err, subscriptionId: subId }))
   }
+  if (sagaHints.includes('execute_purge')) {
+    // Downgrade activated: the target plan is real now, run the frozen
+    // manifest. Best-effort — the scheduler safety net retries a failed run.
+    await executeDowngradePurge(pool, subId).catch((err) =>
+      logger.error('billing.purge_failed', { err, subscriptionId: subId }))
+  }
 }
 
 // Ingest a provider payment by (local subscription id, provider payment id).
@@ -221,14 +277,35 @@ export async function ingestProviderPayment(subId, providerPaymentId) {
   }
 
   let periodEndHint = null
+  let replacementSubscriptionId = null
   if (payment.subscriptionId && customerId) {
-    periodEndHint = await provider
+    const remote = await provider
       .getSubscription({ customerId, subscriptionId: payment.subscriptionId })
-      .then((s) => s.nextPaymentDate)
       .catch(() => null)
+    periodEndHint = remote?.nextPaymentDate ?? null
+    // Downgrade-replacement recognition: the saga stamps the replacement's
+    // metadata at creation, so its first charge is attributable even when it
+    // beats the local repoint (the provider echoes create-time metadata back).
+    if (remote?.metadata?.purpose === 'downgrade'
+        && remote.metadata.subscriptionId === String(subId)) {
+      replacementSubscriptionId = payment.subscriptionId
+    }
+    // A PAID charge of unknown provenance during a pending downgrade must not
+    // be recorded while the lookup that could attribute it has failed: once
+    // recorded, the transition predicate makes every replay of the paid
+    // outcome inert, permanently losing the activation. Fail the ingestion
+    // instead — nothing is persisted yet, so a later ingest starts fresh.
+    if (!remote && payment.status === PAYMENT_STATUS.PAID
+        && sub.pending_change_kind === 'downgrade'
+        && payment.subscriptionId !== sub.mollie_subscription_id
+        && payment.subscriptionId !== sub.superseded_mollie_subscription_id) {
+      throw new PaymentProviderError('subscription lookup failed while attributing a pending-downgrade charge', {
+        code: 'replacement_lookup_failed', retryable: true,
+      })
+    }
   }
 
-  const outcome = await applyPaymentOutcome(subId, payment, { periodEndHint })
+  const outcome = await applyPaymentOutcome(subId, payment, { periodEndHint, replacementSubscriptionId })
   await runPostCommit(subId, outcome)
   return outcome
 }

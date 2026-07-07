@@ -44,9 +44,43 @@ import {
   setIntegrationCredential,
 } from './integrationCredentialService.js'
 import { invalidateToken } from './shopifyTokenService.js'
+import { withFeatureWriteGuard, withIntegrationWriteLock } from './featureGuards.js'
+import { resolveTenantEntitlements } from './entitlementService.js'
+import { FEATURES } from '../auth/entitlements.js'
 
 function badRequest(error) {
   return { error: { status: 400, body: { error } } }
+}
+
+function entitlementRequired(feature) {
+  return {
+    error: {
+      status: 403,
+      body: { error: 'This feature is not included in the current subscription plan', code: 'entitlement_required', feature },
+    },
+  }
+}
+
+// Credential SETS run under the per-tenant integration-write session lock and
+// re-check the integrations entitlement inside it, so a set can never race the
+// integrations purge and leave a fresh secret behind after the feature is
+// gone. Clears/erasure stay unguarded (a lost feature must never trap
+// credentials) — the mollie clear still takes the lock so it serializes with
+// the purge's retain-vs-delete decision.
+async function guardedIntegrationWrite(db, tenantId, fn) {
+  return withIntegrationWriteLock(db, tenantId, async () => {
+    const resolved = await resolveTenantEntitlements(db, tenantId)
+    if (resolved !== null && resolved.entitlements.features[FEATURES.INTEGRATIONS] !== true) {
+      return entitlementRequired(FEATURES.INTEGRATIONS)
+    }
+    return fn()
+  })
+}
+
+async function setIntegrationCredentialGuarded(db, tenantId, type, plaintext) {
+  return guardedIntegrationWrite(db, tenantId, async () => ({
+    status: await setIntegrationCredential(db, tenantId, type, plaintext),
+  }))
 }
 
 function notFound(error) {
@@ -76,7 +110,13 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
   if (built.error) return badRequest(built.error)
   if (!built.fields.length) return badRequest('No valid fields to update')
 
-  const updated = await updateTenantFields(db, tenantId, built.fields, built.values)
+  // accent_color is customization data: the guarded write closes the race with
+  // a concurrent downgrade purge (route-level gate already covers the common
+  // case).
+  const updated = 'accent_color' in (body || {})
+    ? await withFeatureWriteGuard(db, tenantId, FEATURES.CUSTOMIZATION,
+        (client) => updateTenantFields(client, tenantId, built.fields, built.values))
+    : await updateTenantFields(db, tenantId, built.fields, built.values)
   if (!updated) return notFound('Profile not found')
   return { profile: updated }
 }
@@ -116,12 +156,13 @@ export async function getMollieKeyStatus(db, tenantId) {
 export async function setMollieKeyValue(db, tenantId, body) {
   const { key } = body || {}
   if (!isValidMollieKey(key)) return badRequest('invalid_mollie_key')
-  const status = await setIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY, key.trim())
-  return { status }
+  // Storing a new key also clears mollie_api_key_retained_at (repo layer).
+  return setIntegrationCredentialGuarded(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY, key.trim())
 }
 
 export async function clearMollieKeyValue(db, tenantId) {
-  return clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
+  return withIntegrationWriteLock(db, tenantId, () =>
+    clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY))
 }
 
 // ---------- bandsintown api key ----------
@@ -133,8 +174,7 @@ export async function getBandsintownKeyStatus(db, tenantId) {
 export async function setBandsintownKeyValue(db, tenantId, body) {
   const { key } = body || {}
   if (!isValidBandsintownAppId(key)) return badRequest('invalid_bandsintown_key')
-  const status = await setIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.BANDSINTOWN_APP_ID, key.trim())
-  return { status }
+  return setIntegrationCredentialGuarded(db, tenantId, CREDENTIAL_TYPES.BANDSINTOWN_APP_ID, key.trim())
 }
 
 export async function clearBandsintownKeyValue(db, tenantId) {
@@ -152,9 +192,11 @@ export async function getShopifyClientIdStatus(db, tenantId) {
 export async function setShopifyClientIdValue(db, tenantId, body) {
   const { clientId } = body || {}
   if (!isValidShopifyClientId(clientId)) return badRequest('invalid_shopify_client_id')
-  const stored = await setShopifyClientId(db, tenantId, clientId.trim())
-  invalidateToken(tenantId)
-  return { status: { clientId: stored } }
+  return guardedIntegrationWrite(db, tenantId, async () => {
+    const stored = await setShopifyClientId(db, tenantId, clientId.trim())
+    invalidateToken(tenantId)
+    return { status: { clientId: stored } }
+  })
 }
 
 export async function clearShopifyClientIdValue(db, tenantId) {
@@ -171,9 +213,9 @@ export async function getShopifySecretStatus(db, tenantId) {
 export async function setShopifySecretValue(db, tenantId, body) {
   const { secret } = body || {}
   if (!isValidShopifyClientSecret(secret)) return badRequest('invalid_shopify_client_secret')
-  const status = await setIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET, secret.trim())
+  const result = await setIntegrationCredentialGuarded(db, tenantId, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET, secret.trim())
   invalidateToken(tenantId)
-  return { status }
+  return result
 }
 
 export async function clearShopifySecretValue(db, tenantId) {
@@ -192,9 +234,11 @@ export async function getShopifyDomainStatus(db, tenantId) {
 export async function setShopifyDomainValue(db, tenantId, body) {
   const { domain } = body || {}
   if (!isValidShopifyDomain(domain)) return badRequest('invalid_shopify_domain')
-  const stored = await setShopifyDomain(db, tenantId, normalizeShopifyDomain(domain))
-  invalidateToken(tenantId)
-  return { status: { domain: stored } }
+  return guardedIntegrationWrite(db, tenantId, async () => {
+    const stored = await setShopifyDomain(db, tenantId, normalizeShopifyDomain(domain))
+    invalidateToken(tenantId)
+    return { status: { domain: stored } }
+  })
 }
 
 export async function clearShopifyDomainValue(db, tenantId) {
@@ -218,7 +262,12 @@ async function uploadTenantImage(db, tenantId, file, keyBuilder, column, process
 
   let updatedKey
   try {
-    updatedKey = await setTenantImagePath(db, tenantId, column, objectKey)
+    // Guarded write: aborts (403) if a downgrade purge turned customization
+    // off between the route gate and this persist; the uploaded object is
+    // queued for cleanup instead of being orphaned.
+    updatedKey = await withFeatureWriteGuard(db, tenantId, FEATURES.CUSTOMIZATION,
+      (client) => setTenantImagePath(client, tenantId, column, objectKey),
+      { orphanKey: objectKey })
   } catch (err) {
     removeObject(objectKey).catch(() => {})
     throw err

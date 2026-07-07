@@ -82,6 +82,9 @@ function normalizeSubscription(sub) {
     id: sub.id,
     status: MOLLIE_SUB_STATUS[sub.status] ?? SUBSCRIPTION_STATUS.CANCELED,
     nextPaymentDate: toDate(sub.nextPaymentDate),
+    // Mollie saves create-time metadata alongside the subscription and includes
+    // it whenever the subscription is fetched.
+    metadata: sub.metadata ?? null,
   }
 }
 

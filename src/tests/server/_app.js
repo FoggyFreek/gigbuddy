@@ -43,7 +43,12 @@ export function createTestApp() {
 
   app.use((err, _req, res, _next) => {
     if (process.env.DEBUG_TEST_ERRORS) console.error(err)
-    res.status(err.status || 500).json({ error: err.message || 'Internal error' })
+    // Mirror the production handler's 4xx shape: code/feature pass through.
+    res.status(err.status || 500).json({
+      error: err.message || 'Internal error',
+      ...(err.code ? { code: err.code } : {}),
+      ...(err.feature ? { feature: err.feature } : {}),
+    })
   })
 
   return app

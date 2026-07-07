@@ -62,19 +62,22 @@ export class FakeProvider {
     return { ...p }
   }
 
-  async createSubscription({ customerId, amountCents, interval }) {
+  async createSubscription({ customerId, amountCents, interval, metadata }) {
     this._maybeFail('createSubscription')
     const id = `sub_${++this.subSeq}`
-    this.subscriptions.set(id, { id, status: 'active', nextPaymentDate: null, customerId, amountCents, interval })
-    return { id, status: 'active', nextPaymentDate: null }
+    this.subscriptions.set(id, {
+      id, status: 'active', nextPaymentDate: null, customerId, amountCents, interval,
+      metadata: metadata ?? null,
+    })
+    return { id, status: 'active', nextPaymentDate: null, metadata: metadata ?? null }
   }
 
   async getSubscription({ subscriptionId }) {
     this._maybeFail('getSubscription')
     const s = this.subscriptions.get(subscriptionId)
     return s
-      ? { id: s.id, status: s.status, nextPaymentDate: s.nextPaymentDate }
-      : { id: subscriptionId, status: 'canceled', nextPaymentDate: null }
+      ? { id: s.id, status: s.status, nextPaymentDate: s.nextPaymentDate, metadata: s.metadata ?? null }
+      : { id: subscriptionId, status: 'canceled', nextPaymentDate: null, metadata: null }
   }
 
   async cancelSubscription({ subscriptionId }) {

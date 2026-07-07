@@ -17,6 +17,8 @@ import {
   songRecordingKey,
 } from './storageService.js'
 import { verifyDocumentContent, verifyAudioContent } from '../utils/verifyFileContent.js'
+import { withFeatureWriteGuard } from './featureGuards.js'
+import { FEATURES } from '../auth/entitlements.js'
 import {
   trimOrNull,
   toIntOrNull,
@@ -219,7 +221,15 @@ export async function createSongDocument(db, tenantId, songId, file) {
   await uploadObjectWithQuota(objectKey, file.buffer, file.size, file.mimetype)
 
   try {
-    return { document: await insertSongDocument(db, songId, tenantId, file, objectKey) }
+    // Guarded insert: aborts (403) if a downgrade purge turned song_files off
+    // between the route gate and this write; the uploaded object is then
+    // queued for cleanup instead of being orphaned.
+    const document = await withFeatureWriteGuard(
+      db, tenantId, FEATURES.SONG_FILES,
+      (client) => insertSongDocument(client, songId, tenantId, file, objectKey),
+      { orphanKey: objectKey },
+    )
+    return { document }
   } catch (err) {
     removeObject(objectKey).catch(() => {})
     throw err
@@ -247,7 +257,12 @@ export async function createSongRecording(db, tenantId, songId, file) {
   await uploadObjectWithQuota(objectKey, file.buffer, file.size, file.mimetype)
 
   try {
-    return { recording: await insertSongRecording(db, songId, tenantId, file, objectKey) }
+    const recording = await withFeatureWriteGuard(
+      db, tenantId, FEATURES.SONG_FILES,
+      (client) => insertSongRecording(client, songId, tenantId, file, objectKey),
+      { orphanKey: objectKey },
+    )
+    return { recording }
   } catch (err) {
     removeObject(objectKey).catch(() => {})
     throw err
@@ -273,7 +288,8 @@ export async function createSongChart(db, tenantId, songId, body) {
   if (source.length > CHART_SOURCE_MAX) return badRequest('source is too large')
   if (!isPlainTextChartSource(source)) return badRequest('File is not a valid ChordPro text file')
 
-  const chart = await insertSongChart(db, songId, tenantId, name, source)
+  const chart = await withFeatureWriteGuard(db, tenantId, FEATURES.CHORDPRO,
+    (client) => insertSongChart(client, songId, tenantId, name, source))
   if (!chart) return NOT_FOUND
   return { chart }
 }

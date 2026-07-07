@@ -107,11 +107,17 @@ export async function uploadObjectWithQuota(key, buffer, size, contentType) {
     return putObjectRaw(key, buffer, size, contentType)
   }
 
-  const resolved = await resolveTenantEntitlements(pool, tenantId)
-  const limitMb = resolved?.entitlements.limits[LIMITS.STORAGE_MB] ?? null
-  const limitBytes = limitMb === null ? null : limitMb * MB
+  // The limit resolves INSIDE the reservation's advisory-lock window (see
+  // reserveStorageUsage) so a downgrade committing a lower limits snapshot
+  // can't be outrun by an in-flight upload.
+  let limitMb = null
+  const resolveLimitBytes = async (client) => {
+    const resolved = await resolveTenantEntitlements(client, tenantId)
+    limitMb = resolved?.entitlements.limits[LIMITS.STORAGE_MB] ?? null
+    return limitMb === null ? null : limitMb * MB
+  }
 
-  if (!(await reserveStorageUsage(tenantId, size, limitBytes))) {
+  if (!(await reserveStorageUsage(tenantId, size, resolveLimitBytes))) {
     throw new StorageQuotaError(limitMb)
   }
 

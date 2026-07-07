@@ -66,8 +66,18 @@ app.use((err, _req, res, _next) => {
   // Only surface the specific message for client errors (4xx); for server
   // errors expose nothing beyond a generic string to avoid leaking internals
   // such as DB constraint names, file paths, or stack traces (OWASP A02).
-  const message = status < 500 ? (err.message || 'Bad request') : 'Internal error'
-  res.status(status).json({ error: message })
+  // Machine-readable `code`/`feature` (e.g. EntitlementRequiredError,
+  // StorageQuotaError) pass through on 4xx so thrown guards match the
+  // middleware denial shape the frontend already handles.
+  if (status < 500) {
+    res.status(status).json({
+      error: err.message || 'Bad request',
+      ...(err.code ? { code: err.code } : {}),
+      ...(err.feature ? { feature: err.feature } : {}),
+    })
+    return
+  }
+  res.status(status).json({ error: 'Internal error' })
 })
 
 await initOidc()

@@ -13,6 +13,7 @@ import {
   resumeSubscription,
   changePlan,
   downgrade,
+  previewDowngrade,
   syncOwnSubscription,
 } from '../services/billingService.js'
 
@@ -44,9 +45,18 @@ router.post('/change-plan', async (req, res) => {
   res.json(result)
 })
 
+// Read-only downgrade preview for the confirm dialog (features/data to be
+// removed, binding limit snapshot, capacity blockers).
+router.post('/downgrade/preview', async (req, res) => {
+  const result = await previewDowngrade(pool, req.user, req.body ?? {})
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
 router.post('/downgrade', async (req, res) => {
   const result = await downgrade(pool, req.user, req.body ?? {})
   if (result.error) return sendError(res, result.error)
+  auditLog(req, 'billing.downgrade_scheduled', { planId: req.body?.planId, interval: req.body?.interval })
   res.json(result)
 })
 

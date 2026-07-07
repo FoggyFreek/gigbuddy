@@ -33,6 +33,26 @@ export const ENTITLEMENT_KEYS = Object.freeze({
   limits: LIMIT_KEYS,
 })
 
+// Features whose stored data is deleted when a downgrade makes them durably
+// unavailable. `finance` is deliberately absent — financial records are never
+// purged (read-only mode instead); `public_promotion` is flag-only (no data).
+export const PURGEABLE_FEATURES = Object.freeze([
+  FEATURES.INTEGRATIONS,
+  FEATURES.CUSTOMIZATION,
+  FEATURES.SONG_FILES,
+  FEATURES.CHORDPRO,
+])
+
+// The purgeable features a move from `current` to `target` effective
+// entitlements turns off (true → false). Both sides must be EFFECTIVE
+// entitlements (plan merged with per-subscription overrides) so an
+// override-granted feature is never classified as lost.
+export function featuresToPurge(current, target) {
+  return PURGEABLE_FEATURES.filter(
+    (feature) => current.features[feature] === true && target.features[feature] === false,
+  )
+}
+
 // Limits use `null` as the unlimited sentinel (a real JSONB value, unlike
 // undefined, and unambiguous next to 0 which means "none allowed").
 export const UNLIMITED = null
