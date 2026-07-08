@@ -4,7 +4,13 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TenantsPage from '../pages/admin/TenantsPage.tsx'
-import { deleteTenant, listTenants, updateTenant } from '../api/tenants.ts'
+import {
+  deleteTenant,
+  getTenantOnboardingStatus,
+  listTenants,
+  updateTenant,
+  updateTenantOnboardingStatus,
+} from '../api/tenants.ts'
 import { listAllUsers } from '../api/adminUsers.ts'
 import theme from '../theme.ts'
 
@@ -16,6 +22,8 @@ vi.mock('../api/tenants.ts', () => ({
   unarchiveTenant: vi.fn(),
   grantMembership: vi.fn(),
   deleteTenant: vi.fn(),
+  getTenantOnboardingStatus: vi.fn(),
+  updateTenantOnboardingStatus: vi.fn(),
 }))
 vi.mock('../api/adminUsers.ts', () => ({ listAllUsers: vi.fn() }))
 vi.mock('../api/statistics.ts', () => ({
@@ -51,6 +59,7 @@ describe('TenantsPage owner assignment', () => {
     vi.clearAllMocks()
     listTenants.mockResolvedValue(tenants)
     listAllUsers.mockResolvedValue(users)
+    getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })
     updateTenant.mockResolvedValue({})
   })
 
@@ -99,6 +108,7 @@ describe('TenantsPage permanent deletion', () => {
     vi.clearAllMocks()
     listTenants.mockResolvedValue(tenants)
     listAllUsers.mockResolvedValue(users)
+    getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })
     deleteTenant.mockResolvedValue(undefined)
   })
 
@@ -140,5 +150,28 @@ describe('TenantsPage permanent deletion', () => {
     await user.click(screen.getByRole('button', { name: 'Delete permanently' }))
     expect(await screen.findByText('Failed to delete tenant storage')).toBeInTheDocument()
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+})
+
+describe('TenantsPage tenant onboarding setting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    listTenants.mockResolvedValue(tenants)
+    listAllUsers.mockResolvedValue(users)
+    getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })
+    updateTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: false })
+  })
+
+  it('loads and updates the onboarding toggle', async () => {
+    const user = userEvent.setup()
+    wrap()
+
+    const toggle = await screen.findByRole('switch', { name: /allow onboarding/i })
+    expect(toggle).toBeChecked()
+
+    await user.click(toggle)
+
+    await waitFor(() => expect(updateTenantOnboardingStatus).toHaveBeenCalledWith(false))
+    expect(toggle).not.toBeChecked()
   })
 })

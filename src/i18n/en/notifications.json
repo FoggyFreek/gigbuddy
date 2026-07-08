@@ -41,7 +41,8 @@
         "rehearsalConfirmed": "Confirmed rehearsals",
         "invoicePaid": "Paid invoices",
         "taskAssigned": "Tasks assigned to you",
-        "inviteRedeemed": "New members awaiting approval"
+        "inviteRedeemed": "New members awaiting approval",
+        "achievementUnlocked": "Unlocked achievements"
       }
     },
     "bands": {

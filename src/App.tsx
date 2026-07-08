@@ -6,6 +6,7 @@ import RequireSuperAdmin from './components/RequireSuperAdmin.tsx'
 import RequirePermission from './components/RequirePermission.tsx'
 import { PERMISSIONS } from './auth/permissions.ts'
 
+const AchievementsPage = lazy(() => import('./pages/AchievementsPage.tsx'))
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage.tsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.tsx'))
 const FinancialDashboardPage = lazy(() => import('./pages/FinancialDashboardPage.tsx'))
@@ -67,6 +68,8 @@ export default function App() {
           <Route path="/accept-terms" element={<AcceptTermsPage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardPage />} />
+            {/* No sidebar nav entry — reached via the dashboard card's Show all. */}
+            <Route path="/achievements" element={<AchievementsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             {/* Unified settings — reachable by every member; each section gates
                 its own content by role. Old /account and /members deep links

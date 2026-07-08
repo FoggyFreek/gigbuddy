@@ -1,0 +1,142 @@
+{
+  "title": "Achievements",
+  "summary": "{{earned}} / {{total}} cheers",
+  "showAll": "Show all",
+  "unlockedOn": "Unlocked on {{date}}",
+  "cheersAria_one": "{{count}} cheer",
+  "cheersAria_other": "{{count}} cheers",
+  "loadError": "Couldn't load achievements.",
+  "categories": {
+    "profile": "Profile",
+    "gigs": "Gigs and events",
+    "invoices": "Invoices",
+    "purchase": "Purchases",
+    "merchandise": "Merchandise",
+    "finance": "Finance",
+    "platform": "Platform",
+    "repertoire": "Repertoire",
+    "network": "Network"
+  },
+  "items": {
+    "logo_a_go_go": {
+      "title": "Logo A-Go-Go",
+      "description": "Set both a light and a dark band logo."
+    },
+    "now_were_photogenic": {
+      "title": "Now We’re Photogenic",
+      "description": "Set the band profile picture."
+    },
+    "big_banner_energy": {
+      "title": "Big Banner Energy",
+      "description": "Set a band banner."
+    },
+    "proper_band_honestly": {
+      "title": "Proper Band, Honestly",
+      "description": "Complete the band profile: name, bio, pictures, logos and a social link."
+    },
+    "three_chords_three_humans": {
+      "title": "Three Chords, Three Humans",
+      "description": "Add at least 3 band members."
+    },
+    "the_dep_list_deepens": {
+      "title": "The Dep List Deepens",
+      "description": "Add at least 1 optional and 1 sub band member."
+    },
+    "bring_your_own_bassist": {
+      "title": "Bring Your Own Bassist",
+      "description": "Successfully invite a new gigBuddy user to your band."
+    },
+    "fully_plugged_in": {
+      "title": "Fully Plugged In",
+      "description": "Earn every other profile achievement."
+    },
+    "first_rehearsal_last_excuse": {
+      "title": "First Rehearsal, Last Excuse",
+      "description": "Plan your first rehearsal."
+    },
+    "calendar_rock": {
+      "title": "Calendar Rock",
+      "description": "Plan your first band event."
+    },
+    "this_ones_actually_happening": {
+      "title": "This One’s Actually Happening",
+      "description": "Add your first non-option gig."
+    },
+    "ten_gigs_no_cry": {
+      "title": "Ten Gigs, No Cry",
+      "description": "Add 10 non-option gigs."
+    },
+    "fifty_shades_of_soundcheck": {
+      "title": "Fifty Shades of Soundcheck",
+      "description": "Add 50 non-option gigs."
+    },
+    "tour_bus_not_included": {
+      "title": "Tour Bus Not Included",
+      "description": "Add 150 gigs."
+    },
+    "five_city_shuffle": {
+      "title": "Five-City Shuffle",
+      "description": "Play in 5 different cities."
+    },
+    "the_van_has_opinions": {
+      "title": "The Van Has Opinions",
+      "description": "Play in 25 different cities."
+    },
+    "international_noise_complaint": {
+      "title": "International Noise Complaint",
+      "description": "Play in more than one country."
+    },
+    "please_pay_the_piper": {
+      "title": "Please Pay the Piper",
+      "description": "Send your first invoice."
+    },
+    "gear_acquisition_syndrome": {
+      "title": "Gear Acquisition Syndrome",
+      "description": "Book your first purchase."
+    },
+    "shirts_before_hits": {
+      "title": "Shirts Before Hits",
+      "description": "Add your first merchandise product."
+    },
+    "box_set_behavior": {
+      "title": "Box Set Behavior",
+      "description": "Purchase your first inventory order."
+    },
+    "cash_from_the_merch_pit": {
+      "title": "Cash from the Merch Pit",
+      "description": "Sell your first merchandise."
+    },
+    "black_ink_sabbath": {
+      "title": "Black Ink Sabbath",
+      "description": "Make money in any previous month."
+    },
+    "the_blues_ledger": {
+      "title": "The Blues Ledger",
+      "description": "Lose money in any previous month."
+    },
+    "welcome_to_the_giggle": {
+      "title": "Welcome to the Giggle",
+      "description": "Celebrate your arrival on gigBuddy."
+    },
+    "one_month_still_tuning": {
+      "title": "One Month, Still Tuning",
+      "description": "Celebrate your first month on gigBuddy."
+    },
+    "still_standing_still_loud": {
+      "title": "Still Standing, Still Loud",
+      "description": "Celebrate your first year on gigBuddy."
+    },
+    "five_songs_and_a_prayer": {
+      "title": "Five Songs and a Prayer",
+      "description": "Add your first 5 songs to the repertoire."
+    },
+    "setlist_match_fire": {
+      "title": "Setlist, Match, Fire",
+      "description": "Create your first setlist with 5 or more songs."
+    },
+    "fifty_people_who_might_answer": {
+      "title": "Fifty People Who Might Answer",
+      "description": "Have more than 50 contacts."
+    }
+  }
+}

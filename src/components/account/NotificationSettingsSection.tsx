@@ -18,6 +18,7 @@ type TypeLabelKey =
   | 'gigNew' | 'gigConfirmed' | 'gigImport'
   | 'rehearsalNew' | 'rehearsalConfirmed'
   | 'invoicePaid' | 'taskAssigned' | 'inviteRedeemed'
+  | 'achievementUnlocked'
 
 const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'gig-new': 'gigNew',
@@ -28,6 +29,7 @@ const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'invoice-paid': 'invoicePaid',
   'task-assigned': 'taskAssigned',
   'invite-redeemed': 'inviteRedeemed',
+  'achievement-unlocked': 'achievementUnlocked',
 }
 
 // Cross-tenant profile pictures use the membership-authorized notification

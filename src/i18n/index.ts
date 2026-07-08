@@ -6,6 +6,7 @@ import LanguageDetector from 'i18next-browser-languagedetector'
 // (see i18next.d.ts). Group strings by concern, one namespace per file. `common`
 // holds reused labels; `navigation` is the app-shell chrome; the rest are one
 // namespace per view/feature, seeded for now and filled as strings are extracted.
+import enAchievements from './en/achievements.json'
 import enCommon from './en/common.json'
 import enNavigation from './en/navigation.json'
 import enGlossary from './en/glossary.json'
@@ -38,6 +39,7 @@ import enNotifications from './en/notifications.json'
 import enBilling from './en/billing.json'
 import enOnboarding from './en/onboarding.json'
 
+import nlAchievements from './nl/achievements.json'
 import nlCommon from './nl/common.json'
 import nlNavigation from './nl/navigation.json'
 import nlGlossary from './nl/glossary.json'
@@ -73,6 +75,7 @@ import nlOnboarding from './nl/onboarding.json'
 export const defaultNS = 'common'
 
 const en = {
+  achievements: enAchievements,
   common: enCommon,
   navigation: enNavigation,
   glossary: enGlossary,
@@ -115,6 +118,7 @@ const en = {
 type DeepKeyShape<T> = { [K in keyof T]: T[K] extends string ? string : DeepKeyShape<T[K]> }
 
 const nl = {
+  achievements: nlAchievements,
   common: nlCommon,
   navigation: nlNavigation,
   glossary: nlGlossary,

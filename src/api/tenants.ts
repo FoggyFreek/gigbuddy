@@ -25,6 +25,19 @@ export const createOwnedTenant = (payload: CreateOwnedTenantPayload) =>
 
 export const listOwnedTenants = () => request<Tenant[]>('/api/tenants/owned')
 
+export interface TenantOnboardingStatus {
+  tenantOnboardingEnabled: boolean
+}
+
+export const getTenantOnboardingStatus = () =>
+  request<TenantOnboardingStatus>('/api/tenants/onboarding-status')
+
+export const updateTenantOnboardingStatus = (tenantOnboardingEnabled: boolean) =>
+  request<TenantOnboardingStatus>('/api/admin/platform-settings/tenant-onboarding', {
+    method: 'PATCH',
+    body: JSON.stringify({ tenantOnboardingEnabled }),
+  })
+
 export const listTenants = () => api<Tenant[]>('/')
 export const getTenant = (id: Id) => api<Tenant>(`/${id}`)
 export const createTenant = (payload: Partial<Tenant>) =>

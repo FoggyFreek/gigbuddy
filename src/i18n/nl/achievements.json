@@ -1,0 +1,142 @@
+{
+  "title": "Prestaties",
+  "summary": "{{earned}} / {{total}} cheers",
+  "showAll": "Toon alles",
+  "unlockedOn": "Behaald op {{date}}",
+  "cheersAria_one": "{{count}} cheer",
+  "cheersAria_other": "{{count}} cheers",
+  "loadError": "Prestaties konden niet worden geladen.",
+  "categories": {
+    "profile": "Profiel",
+    "gigs": "Optredens en evenementen",
+    "invoices": "Facturen",
+    "purchase": "Inkopen",
+    "merchandise": "Merchandise",
+    "finance": "Financiën",
+    "platform": "Platform",
+    "repertoire": "Repertoire",
+    "network": "Netwerk"
+  },
+  "items": {
+    "logo_a_go_go": {
+      "title": "Logo A-Go-Go",
+      "description": "Stel zowel een licht als een donker bandlogo in."
+    },
+    "now_were_photogenic": {
+      "title": "Now We’re Photogenic",
+      "description": "Stel de profielfoto van de band in."
+    },
+    "big_banner_energy": {
+      "title": "Big Banner Energy",
+      "description": "Stel een bandbanner in."
+    },
+    "proper_band_honestly": {
+      "title": "Proper Band, Honestly",
+      "description": "Maak het bandprofiel compleet: naam, bio, foto's, logo's en een sociale link."
+    },
+    "three_chords_three_humans": {
+      "title": "Three Chords, Three Humans",
+      "description": "Voeg minstens 3 bandleden toe."
+    },
+    "the_dep_list_deepens": {
+      "title": "The Dep List Deepens",
+      "description": "Voeg minstens 1 optioneel en 1 vervangend bandlid toe."
+    },
+    "bring_your_own_bassist": {
+      "title": "Bring Your Own Bassist",
+      "description": "Nodig met succes een nieuwe gigBuddy-gebruiker uit voor je band."
+    },
+    "fully_plugged_in": {
+      "title": "Fully Plugged In",
+      "description": "Behaal alle andere profielprestaties."
+    },
+    "first_rehearsal_last_excuse": {
+      "title": "First Rehearsal, Last Excuse",
+      "description": "Plan je eerste repetitie."
+    },
+    "calendar_rock": {
+      "title": "Calendar Rock",
+      "description": "Plan je eerste bandevenement."
+    },
+    "this_ones_actually_happening": {
+      "title": "This One’s Actually Happening",
+      "description": "Voeg je eerste niet-optionele optreden toe."
+    },
+    "ten_gigs_no_cry": {
+      "title": "Ten Gigs, No Cry",
+      "description": "Voeg 10 niet-optionele optredens toe."
+    },
+    "fifty_shades_of_soundcheck": {
+      "title": "Fifty Shades of Soundcheck",
+      "description": "Voeg 50 niet-optionele optredens toe."
+    },
+    "tour_bus_not_included": {
+      "title": "Tour Bus Not Included",
+      "description": "Voeg 150 optredens toe."
+    },
+    "five_city_shuffle": {
+      "title": "Five-City Shuffle",
+      "description": "Speel in 5 verschillende steden."
+    },
+    "the_van_has_opinions": {
+      "title": "The Van Has Opinions",
+      "description": "Speel in 25 verschillende steden."
+    },
+    "international_noise_complaint": {
+      "title": "International Noise Complaint",
+      "description": "Speel in meer dan één land."
+    },
+    "please_pay_the_piper": {
+      "title": "Please Pay the Piper",
+      "description": "Verstuur je eerste factuur."
+    },
+    "gear_acquisition_syndrome": {
+      "title": "Gear Acquisition Syndrome",
+      "description": "Boek je eerste inkoop."
+    },
+    "shirts_before_hits": {
+      "title": "Shirts Before Hits",
+      "description": "Voeg je eerste merchandiseproduct toe."
+    },
+    "box_set_behavior": {
+      "title": "Box Set Behavior",
+      "description": "Koop je eerste voorraadorder in."
+    },
+    "cash_from_the_merch_pit": {
+      "title": "Cash from the Merch Pit",
+      "description": "Verkoop je eerste merchandise."
+    },
+    "black_ink_sabbath": {
+      "title": "Black Ink Sabbath",
+      "description": "Maak winst in een eerdere maand."
+    },
+    "the_blues_ledger": {
+      "title": "The Blues Ledger",
+      "description": "Draai verlies in een eerdere maand."
+    },
+    "welcome_to_the_giggle": {
+      "title": "Welcome to the Giggle",
+      "description": "Vier je aankomst op gigBuddy."
+    },
+    "one_month_still_tuning": {
+      "title": "One Month, Still Tuning",
+      "description": "Vier je eerste maand op gigBuddy."
+    },
+    "still_standing_still_loud": {
+      "title": "Still Standing, Still Loud",
+      "description": "Vier je eerste jaar op gigBuddy."
+    },
+    "five_songs_and_a_prayer": {
+      "title": "Five Songs and a Prayer",
+      "description": "Voeg je eerste 5 nummers toe aan het repertoire."
+    },
+    "setlist_match_fire": {
+      "title": "Setlist, Match, Fire",
+      "description": "Maak je eerste setlist met 5 of meer nummers."
+    },
+    "fifty_people_who_might_answer": {
+      "title": "Fifty People Who Might Answer",
+      "description": "Heb meer dan 50 contacten."
+    }
+  }
+}

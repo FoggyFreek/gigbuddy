@@ -197,6 +197,7 @@ describe('requireCurrentTerms gate on tenant routes', () => {
 
   it('keeps onboarding bootstrap reads reachable before acceptance', async () => {
     await setUserTerms(seed.userA.id, { acceptedAt: null, version: null })
+    await asUserA(request(app).get('/api/tenants/onboarding-status')).expect(200)
     await asUserA(request(app).get('/api/tenants/owned')).expect(200)
     await asUserA(request(app).get('/api/billing')).expect(200)
   })

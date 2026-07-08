@@ -6,6 +6,7 @@ import profileRouter from './profile.js'
 import bandMembersRouter from './bandMembers.js'
 import availabilityRouter from './availability.js'
 import rehearsalsRouter from './rehearsals.js'
+import achievementsRouter from './achievements.js'
 import bandEventsRouter from './bandEvents.js'
 import emailTemplatesRouter from './emailTemplates.js'
 import venuesRouter from './venues.js'
@@ -26,6 +27,7 @@ import authRouter from './auth.js'
 import usersRouter from './users.js'
 import tenantsRouter from './tenants.js'
 import tenantsSelfRouter from './tenantsSelf.js'
+import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
 import adminSubscriptionsRouter from './adminSubscriptions.js'
@@ -153,6 +155,7 @@ router.use('/tenants', requireApproved, tenantsSelfRouter)
 // User-level billing (subscription owner acts regardless of active tenant).
 router.use('/billing', requireApproved, billingRouter)
 router.use('/admin/tenants', superAdmin, tenantsRouter)
+router.use('/admin/platform-settings', superAdmin, platformSettingsRouter)
 router.use('/admin/users', superAdmin, adminUsersRouter)
 router.use('/admin/plans', superAdmin, adminPlansRouter)
 router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
@@ -168,6 +171,7 @@ router.use('/profile', tenantMember, profileRouter)
 router.use('/band-members', tenantMember, bandMembersRouter)
 router.use('/availability', tenantMember, availabilityRouter)
 router.use('/rehearsals', tenantMember, rehearsalsRouter)
+router.use('/achievements', tenantMember, achievementsRouter)
 router.use('/band-events', tenantMember, bandEventsRouter)
 router.use('/email-templates', tenantMember, emailTemplatesRouter)
 router.use('/venues', tenantMember, venuesRouter)

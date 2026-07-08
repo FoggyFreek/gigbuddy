@@ -21,6 +21,7 @@ vi.mock('../api/billing.ts', async (importOriginal) => ({
 vi.mock('../api/tenants.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   createOwnedTenant: vi.fn(),
+  getTenantOnboardingStatus: vi.fn(),
   listOwnedTenants: vi.fn(),
 }))
 vi.mock('../api/profile.ts', async (importOriginal) => ({
@@ -33,7 +34,7 @@ vi.mock('../contexts/authContext.ts', () => ({
 
 import { acceptTerms, onboardingComplete } from '../api/auth.ts'
 import { getBillingState, subscribe, syncSubscription } from '../api/billing.ts'
-import { createOwnedTenant, listOwnedTenants } from '../api/tenants.ts'
+import { createOwnedTenant, getTenantOnboardingStatus, listOwnedTenants } from '../api/tenants.ts'
 import { uploadLogo } from '../api/profile.ts'
 import { useAuth } from '../contexts/authContext.ts'
 
@@ -101,6 +102,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockAuth()
   getBillingState.mockResolvedValue({ subscription: null, ownedTenantCount: 0, plans: PLANS })
+  getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })
   listOwnedTenants.mockResolvedValue([])
   acceptTerms.mockResolvedValue({ termsAcceptedAt: 'now', termsVersion: TERMS_VERSION })
   onboardingComplete.mockResolvedValue(undefined)
@@ -151,6 +153,17 @@ describe('OnboardingPage — welcome step', () => {
     expect(screen.getByRole('link', { name: /redeem your invite code/i })).toHaveAttribute(
       'href', '/redeem-invite',
     )
+  })
+
+  it('shows an invite-only message when new tenant onboarding is disabled', async () => {
+    getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: false })
+    wrap()
+
+    expect(await screen.findByText(/new tenant onboarding is currently disabled/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /redeem your invite code/i })).toHaveAttribute(
+      'href', '/redeem-invite',
+    )
+    expect(screen.queryByText('Silver')).not.toBeInTheDocument()
   })
 })
 
@@ -220,6 +233,20 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
     await waitFor(() => expect(subscribe).toHaveBeenCalledWith(2, 'month', 'onboarding'))
     expect(createOwnedTenant).not.toHaveBeenCalled()
     expect(auth.switchTenant).toHaveBeenCalledWith(42)
+  })
+
+  it('still resumes a pointer tenant when new tenant onboarding is disabled', async () => {
+    getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: false })
+    mockAuth({ onboardingTenantId: 42, termsVersion: TERMS_VERSION })
+    listOwnedTenants.mockResolvedValue([
+      { id: 42, slug: 'the-band', band_name: 'The Band', archived_at: null },
+    ])
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user, 'Bronze')
+    expect(await screen.findByLabelText('Band name')).toHaveValue('The Band')
+    expect(createOwnedTenant).not.toHaveBeenCalled()
   })
 
   it('waits for the resume lookup before the wizard becomes interactive', async () => {

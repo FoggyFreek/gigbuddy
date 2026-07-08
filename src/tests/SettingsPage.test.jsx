@@ -30,7 +30,6 @@ vi.mock('../api/profile.ts', () => ({
   setShopifyClientId: vi.fn(), clearShopifyClientId: vi.fn(),
   setShopifyDomain: vi.fn(), clearShopifyDomain: vi.fn(),
 }))
-
 const lockedEntitlements = {
   planSlug: 'free', locked: false, financeReadOnly: false,
   flags: { finance: false, integrations: false, customization: false },

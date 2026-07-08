@@ -118,6 +118,63 @@ describe('POST /api/tenants (self-service creation)', () => {
   })
 })
 
+describe('tenant onboarding platform setting', () => {
+  it('defaults to enabled', async () => {
+    const res = await asUserA(request(app).get('/api/tenants/onboarding-status')).expect(200)
+    expect(res.body).toEqual({ tenantOnboardingEnabled: true })
+  })
+
+  it('is super-admin managed', async () => {
+    await asUserA(
+      request(app)
+        .patch('/api/admin/platform-settings/tenant-onboarding')
+        .send({ tenantOnboardingEnabled: false }),
+    ).expect(403)
+
+    const disabled = await asSuper(
+      request(app)
+        .patch('/api/admin/platform-settings/tenant-onboarding')
+        .send({ tenantOnboardingEnabled: false }),
+    ).expect(200)
+    expect(disabled.body).toEqual({ tenantOnboardingEnabled: false })
+
+    const enabled = await asSuper(
+      request(app)
+        .patch('/api/admin/platform-settings/tenant-onboarding')
+        .send({ tenantOnboardingEnabled: true }),
+    ).expect(200)
+    expect(enabled.body).toEqual({ tenantOnboardingEnabled: true })
+  })
+
+  it('blocks self-service tenant creation without writing tenant data', async () => {
+    await asSuper(
+      request(app)
+        .patch('/api/admin/platform-settings/tenant-onboarding')
+        .send({ tenantOnboardingEnabled: false }),
+    ).expect(200)
+
+    const { rows: [before] } = await pool.query('SELECT COUNT(*)::int AS count FROM tenants')
+    const res = await asUserA(request(app).post('/api/tenants').send(createBody('blocked-band'))).expect(403)
+    expect(res.body.code).toBe('tenant_onboarding_disabled')
+
+    const { rows: [after] } = await pool.query('SELECT COUNT(*)::int AS count FROM tenants')
+    expect(after.count).toBe(before.count)
+  })
+
+  it('does not block super-admin tenant creation', async () => {
+    await asSuper(
+      request(app)
+        .patch('/api/admin/platform-settings/tenant-onboarding')
+        .send({ tenantOnboardingEnabled: false }),
+    ).expect(200)
+
+    const created = await asSuper(
+      request(app).post('/api/admin/tenants').send({ slug: 'admin-created', band_name: 'Admin Created' }),
+    ).expect(201)
+    expect(created.body.slug).toBe('admin-created')
+  })
+})
+
 describe('POST /api/tenants (server-generated slug)', () => {
   it('generates a slug from band_name when slug is omitted', async () => {
     const res = await asUserA(

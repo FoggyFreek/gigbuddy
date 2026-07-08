@@ -30,6 +30,11 @@
     "overdue": "Overdue",
     "upcoming": "Upcoming"
   },
+  "achievements": {
+    "title": "Recently unlocked achievements",
+    "empty": "No achievements unlocked yet",
+    "showAll": "Show all"
+  },
   "map": {
     "title": "Played here",
     "viewMap": "View map",

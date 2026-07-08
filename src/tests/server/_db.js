@@ -65,7 +65,9 @@ export async function truncateAll() {
       notifications, notification_type_prefs, notification_tenant_prefs,
       subscription_payments, billing_operations, subscriptions, storage_cleanup_queue,
       tenant_statistics,
+      tenant_achievements,
       tenants,
+      platform_settings,
       users
     RESTART IDENTITY CASCADE
   `)

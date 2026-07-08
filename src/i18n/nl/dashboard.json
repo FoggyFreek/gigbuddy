@@ -30,6 +30,11 @@
     "overdue": "Achterstallig",
     "upcoming": "Aankomend"
   },
+  "achievements": {
+    "title": "Recent behaalde prestaties",
+    "empty": "Nog geen prestaties behaald",
+    "showAll": "Toon alles"
+  },
   "map": {
     "title": "Hier gespeeld",
     "viewMap": "Kaart bekijken",

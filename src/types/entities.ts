@@ -153,6 +153,8 @@ export type NotificationType =
   | 'rehearsal-confirmed'
   | 'invoice-paid'
   | 'task-assigned'
+  | 'invite-redeemed'
+  | 'achievement-unlocked'
 
 export interface AppNotification {
   id: number
@@ -642,4 +644,59 @@ export interface ShopifyImportResult {
   imported: number
   skipped: number
   results: { shopify_line_id: string; status: string }[]
+}
+
+// ---------- Achievements ----------
+
+export type AchievementCategory =
+  | 'profile'
+  | 'gigs'
+  | 'invoices'
+  | 'purchase'
+  | 'merchandise'
+  | 'finance'
+  | 'platform'
+  | 'repertoire'
+  | 'network'
+
+// Keys mirror server/achievements/definitions.js and double as the i18n keys
+// under achievements.items.<key>. Never rename a shipped key — only add.
+export type AchievementKey =
+  | 'logo_a_go_go'
+  | 'now_were_photogenic'
+  | 'big_banner_energy'
+  | 'proper_band_honestly'
+  | 'three_chords_three_humans'
+  | 'the_dep_list_deepens'
+  | 'bring_your_own_bassist'
+  | 'fully_plugged_in'
+  | 'first_rehearsal_last_excuse'
+  | 'calendar_rock'
+  | 'this_ones_actually_happening'
+  | 'ten_gigs_no_cry'
+  | 'fifty_shades_of_soundcheck'
+  | 'tour_bus_not_included'
+  | 'five_city_shuffle'
+  | 'the_van_has_opinions'
+  | 'international_noise_complaint'
+  | 'please_pay_the_piper'
+  | 'gear_acquisition_syndrome'
+  | 'shirts_before_hits'
+  | 'box_set_behavior'
+  | 'cash_from_the_merch_pit'
+  | 'black_ink_sabbath'
+  | 'the_blues_ledger'
+  | 'welcome_to_the_giggle'
+  | 'one_month_still_tuning'
+  | 'still_standing_still_loud'
+  | 'five_songs_and_a_prayer'
+  | 'setlist_match_fire'
+  | 'fifty_people_who_might_answer'
+
+// GET /api/achievements row; unlocked_at is null while the goal is unmet.
+export interface Achievement {
+  key: AchievementKey
+  category: AchievementCategory
+  cheers: number
+  unlocked_at: string | null
 }

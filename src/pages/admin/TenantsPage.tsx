@@ -14,12 +14,14 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import FormControl from '@mui/material/FormControl'
+import FormControlLabel from '@mui/material/FormControlLabel'
 import IconButton from '@mui/material/IconButton'
 import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
+import Switch from '@mui/material/Switch'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
@@ -44,6 +46,8 @@ import {
   unarchiveTenant,
   grantMembership,
   deleteTenant,
+  getTenantOnboardingStatus,
+  updateTenantOnboardingStatus,
 } from '../../api/tenants.ts'
 import { listAllUsers } from '../../api/adminUsers.ts'
 import type { AdminUser } from '../../api/adminUsers.ts'
@@ -72,6 +76,9 @@ export default function TenantsPage() {
   const [storageByTenant, setStorageByTenant] = useState<Record<string, StorageStats>>({})
   const [recomputing, setRecomputing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [tenantOnboardingEnabled, setTenantOnboardingEnabled] = useState<boolean | null>(null)
+  const [tenantOnboardingSaving, setTenantOnboardingSaving] = useState(false)
+  const [tenantOnboardingError, setTenantOnboardingError] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [slug, setSlug] = useState('')
   const [bandName, setBandName] = useState('')
@@ -106,11 +113,12 @@ export default function TenantsPage() {
 
   const refresh = () => {
     setLoading(true)
-    Promise.all([listTenants(), listAllUsers(), getAllStorageStats()])
-      .then(([t, u, stats]) => {
+    Promise.all([listTenants(), listAllUsers(), getAllStorageStats(), getTenantOnboardingStatus()])
+      .then(([t, u, stats, onboardingStatus]) => {
         setTenants(t as TenantRow[])
         setUsers(u as AdminUser[])
         setStorageByTenant(Object.fromEntries((stats as StorageStats[]).map((s) => [String(s.tenant_id), s])))
+        setTenantOnboardingEnabled(onboardingStatus.tenantOnboardingEnabled)
       })
       .finally(() => setLoading(false))
   }
@@ -129,6 +137,22 @@ export default function TenantsPage() {
       setError(err instanceof Error ? err.message : 'Recompute failed')
     } finally {
       setRecomputing(false)
+    }
+  }
+
+  const handleTenantOnboardingChange = async (_event: unknown, checked: boolean) => {
+    const previous = tenantOnboardingEnabled
+    setTenantOnboardingEnabled(checked)
+    setTenantOnboardingSaving(true)
+    setTenantOnboardingError('')
+    try {
+      const status = await updateTenantOnboardingStatus(checked)
+      setTenantOnboardingEnabled(status.tenantOnboardingEnabled)
+    } catch (err) {
+      setTenantOnboardingEnabled(previous)
+      setTenantOnboardingError(err instanceof Error ? err.message : 'Update failed')
+    } finally {
+      setTenantOnboardingSaving(false)
     }
   }
 
@@ -284,6 +308,38 @@ export default function TenantsPage() {
           {error}
         </Typography>
       )}
+
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              New tenant onboarding
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Controls whether users can create new tenants through onboarding. Invite redemption and existing tenants stay available.
+            </Typography>
+            {tenantOnboardingError && (
+              <Typography color="error" variant="body2" sx={{ mt: 0.5 }}>
+                {tenantOnboardingError}
+              </Typography>
+            )}
+          </Box>
+          <FormControlLabel
+            control={(
+              <Switch
+                checked={tenantOnboardingEnabled === true}
+                onChange={handleTenantOnboardingChange}
+                disabled={tenantOnboardingEnabled === null || tenantOnboardingSaving}
+              />
+            )}
+            label="Allow onboarding"
+          />
+        </Stack>
+      </Paper>
 
       {/* Desktop table — hidden below 600 px */}
       <Paper variant="outlined" sx={{ display: { xs: 'none', sm: 'block' } }}>

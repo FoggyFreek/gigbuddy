@@ -15,6 +15,7 @@ vi.mock('../components/dashboard/GigMapTile.tsx', () => ({
   default: () => <div data-testid="gig-map-tile" />,
 }))
 vi.mock('../api/profile.ts', () => ({ getProfile: vi.fn() }))
+vi.mock('../api/achievements.ts', () => ({ listAchievements: vi.fn() }))
 
 import DashboardPage from '../pages/DashboardPage.tsx'
 import { listGigs } from '../api/gigs.ts'
@@ -22,6 +23,7 @@ import { getNextRehearsal } from '../api/rehearsals.ts'
 import { listBandEvents } from '../api/bandEvents.ts'
 import { listAllTasks } from '../api/tasks.ts'
 import { getProfile } from '../api/profile.ts'
+import { listAchievements } from '../api/achievements.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
 
@@ -60,12 +62,24 @@ const TASKS = [
   { id: 51, gig_id: 2, title: 'Confirm rider', done: false, due_date: '2026-06-01', assigned_to: 9, event_description: 'Jazz Night' },
   { id: 52, gig_id: 5, title: 'Book hotel', done: true, due_date: null, assigned_to: 7, event_description: 'Winter Tour' },
 ]
+// Five unlocked achievements (mixed order) plus a locked one; the card must show
+// the three most recent by unlocked_at and ignore locked entries.
+const ACHIEVEMENTS = [
+  { key: 'welcome_to_the_giggle', category: 'platform', cheers: 1, unlocked_at: '2026-01-01T10:00:00Z' },
+  { key: 'calendar_rock', category: 'gigs', cheers: 1, unlocked_at: '2026-05-20T10:00:00Z' },
+  { key: 'first_rehearsal_last_excuse', category: 'gigs', cheers: 1, unlocked_at: '2026-02-01T10:00:00Z' },
+  { key: 'three_chords_three_humans', category: 'profile', cheers: 2, unlocked_at: '2026-05-25T10:00:00Z' },
+  { key: 'now_were_photogenic', category: 'profile', cheers: 1, unlocked_at: '2026-04-01T10:00:00Z' },
+  { key: 'tour_bus_not_included', category: 'gigs', cheers: 10, unlocked_at: null },
+]
+
 function resolveAll() {
   listGigs.mockResolvedValue(GIGS)
   getNextRehearsal.mockResolvedValue(NEXT_REHEARSAL)
   listBandEvents.mockResolvedValue([])
   listAllTasks.mockResolvedValue(TASKS)
   getProfile.mockResolvedValue({ logo_path: null })
+  listAchievements.mockResolvedValue([])
 }
 
 describe('DashboardPage', () => {
@@ -174,6 +188,28 @@ describe('DashboardPage', () => {
     // Capped at 5 rendered rows.
     expect(screen.getByText('Task 0')).toBeInTheDocument()
     expect(screen.queryByText('Task 5')).not.toBeInTheDocument()
+  })
+
+  it('shows the 3 most recently unlocked achievements with a Show all link', async () => {
+    listAchievements.mockResolvedValue(ACHIEVEMENTS)
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Recently unlocked achievements')).toBeInTheDocument())
+    // Three most recent unlocks by unlocked_at:
+    expect(screen.getByText('Three Chords, Three Humans')).toBeInTheDocument()
+    expect(screen.getByText('Calendar Rock')).toBeInTheDocument()
+    expect(screen.getByText('Now We’re Photogenic')).toBeInTheDocument()
+    // Older unlocks and locked achievements stay off the card:
+    expect(screen.queryByText('Welcome to the Giggle')).not.toBeInTheDocument()
+    expect(screen.queryByText('First Rehearsal, Last Excuse')).not.toBeInTheDocument()
+    expect(screen.queryByText('Tour Bus Not Included')).not.toBeInTheDocument()
+    const showAll = screen.getByRole('link', { name: /show all/i })
+    expect(showAll).toHaveAttribute('href', '/achievements')
+  })
+
+  it('shows the achievements empty state when nothing is unlocked', async () => {
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Recently unlocked achievements')).toBeInTheDocument())
+    expect(screen.getByText('No achievements unlocked yet')).toBeInTheDocument()
   })
 
   it('shows a per-card error when one source fails, while the others still render', async () => {

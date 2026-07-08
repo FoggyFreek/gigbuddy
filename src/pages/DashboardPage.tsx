@@ -5,7 +5,6 @@ import { alpha, useTheme } from '@mui/material/styles'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import CircularProgress from '@mui/material/CircularProgress'
-import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
 import ListSubheader from '@mui/material/ListSubheader'
@@ -17,13 +16,17 @@ import Typography from '@mui/material/Typography'
 import EventIcon from '@mui/icons-material/Event'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
 import DashboardCard from '../components/dashboard/DashboardCard.tsx'
+import CheersBadge from '../components/achievements/CheersBadge.tsx'
+import { getAchievementIcon } from '../components/achievements/achievementIcons.ts'
 import GigMapTile from '../components/dashboard/GigMapTile.tsx'
 import { SOCIALS } from '../components/profile/profileForm.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { useSetWideContent } from '../contexts/contentWidthContext.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import type { ThemeMode } from '../contexts/themeModeContext.ts'
+import { listAchievements } from '../api/achievements.ts'
 import { listGigs } from '../api/gigs.ts'
 import { getNextRehearsal } from '../api/rehearsals.ts'
 import { listAllTasks } from '../api/tasks.ts'
@@ -31,7 +34,7 @@ import { listBandEvents } from '../api/bandEvents.ts'
 import { getProfile } from '../api/profile.ts'
 import { daysUntil, formatDueDate } from '../utils/dateFormat.ts'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
-import type { Gig, Rehearsal, BandEvent, Task } from '../types/entities.ts'
+import type { Achievement, Gig, Rehearsal, BandEvent, Task } from '../types/entities.ts'
 
 function logoSrc(logoPath: string | undefined | null) {
   return logoPath ? `/api/files/${logoPath}` : '/share/logo.png'
@@ -126,14 +129,15 @@ interface Sections {
   nextRehearsal: { status: 'ok' | 'error'; data: Rehearsal | null }
   shows: SectionData<Gig>
   tasks: TasksSection
+  achievements: SectionData<Achievement>
 }
 
 // Build the whole view-model in the effect (not in render) so render stays pure.
 function buildSections(
-  results: [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>],
+  results: [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>, PromiseSettledResult<Achievement[]>],
   bandMemberId: number | string | null | undefined,
 ): Sections {
-  const [gigsR, rehR, taskR, bandEventsR] = results
+  const [gigsR, rehR, taskR, bandEventsR, achievementsR] = results
   const today = todayStr()
 
   const gigsSettled = settle(gigsR)
@@ -157,6 +161,11 @@ function buildSections(
   // Sorted ascending (nulls last), so overdue rows come first and survive the cap.
   const visibleTasks = myTasks.slice(0, MAX_ROWS)
 
+  const achievementsSettled = settle(achievementsR)
+  const unlockedAchievements = achievementsSettled.data
+    .filter((a) => a.unlocked_at !== null)
+    .sort((a, b) => String(b.unlocked_at).localeCompare(String(a.unlocked_at)))
+
   return {
     nextGig: { status: gigsSettled.status, data: upcomingGigs[0] || null },
     nextBandEvent: { status: bandEventsSettled.status, data: upcomingBandEvents[0] || null },
@@ -167,6 +176,11 @@ function buildSections(
       total: myTasks.length,
       overdue: visibleTasks.filter((t) => t.__daysUntil != null && t.__daysUntil < 0),
       upcoming: visibleTasks.filter((t) => t.__daysUntil == null || t.__daysUntil >= 0),
+    },
+    achievements: {
+      status: achievementsSettled.status,
+      total: unlockedAchievements.length,
+      data: unlockedAchievements.slice(0, 3),
     },
   }
 }
@@ -181,6 +195,8 @@ interface ProfileData {
 
 export default function DashboardPage() {
   const { t, i18n } = useTranslation('dashboard')
+  // Achievement titles live in their own namespace, keyed by achievement key.
+  const { t: tAchievements } = useTranslation('achievements')
   const { user } = useAuth()
   const bandMemberId = user?.bandMemberId ?? null
   const navigate = useNavigate()
@@ -235,8 +251,9 @@ export default function DashboardPage() {
         getNextRehearsal(),
         listAllTasks() as Promise<Task[]>,
         listBandEvents(),
+        listAchievements(),
       ])
-      setSections(buildSections(results as [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>], bandMemberId))
+      setSections(buildSections(results as [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>, PromiseSettledResult<Achievement[]>], bandMemberId))
     } finally {
       setLoading(false)
     }
@@ -252,7 +269,7 @@ export default function DashboardPage() {
     )
   }
 
-  const { nextGig, nextBandEvent, nextRehearsal, shows, tasks } = sections
+  const { nextGig, nextBandEvent, nextRehearsal, shows, tasks, achievements } = sections
   const activeSocials = SOCIALS.filter(({ field, prefix }) => prefix && profile?.[field])
 
   // Shared with the tasks page: today / tomorrow / "in N days" within the coming
@@ -360,9 +377,18 @@ export default function DashboardPage() {
         )}
       </Box>
 
-      <Grid container spacing={3} sx={{ alignItems: 'stretch' }}>
+      <Box
+        sx={{
+          // Masonry: cards flow down each column slot, packing shorter cards
+          // together instead of leaving gaps under a row's tallest card
+          // (matches the tasks page layout in TasksTable).
+          columnWidth: 360,
+          columnGap: 3,
+          '& > *': { breakInside: 'avoid', mb: 3 },
+        }}
+      >
         {/* Next gig */}
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+        <Box>
           <DashboardCard
             title={t($ => $.nextGig.title)}
             icon={EventIcon}
@@ -423,9 +449,9 @@ export default function DashboardPage() {
               </Box>
             )}
           </DashboardCard>
-        </Grid>
+        </Box>
         {/* Next rehearsal */}
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+        <Box>
           <DashboardCard
             title={t($ => $.nextRehearsal.title)}
             icon={MusicNoteIcon}
@@ -469,9 +495,9 @@ export default function DashboardPage() {
               </Box>
             )}
           </DashboardCard>
-        </Grid>
+        </Box>
         {/* Next band event */}
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+        <Box>
           <DashboardCard
             title={t($ => $.nextBandEvent.title)}
             icon={EventIcon}
@@ -539,9 +565,9 @@ export default function DashboardPage() {
               </Box>
             )}
           </DashboardCard>
-        </Grid>
+        </Box>
         {/* Upcoming shows */}
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+        <Box>
           <DashboardCard
             title={t($ => $.upcomingShows.title)}
             icon={EventIcon}
@@ -592,9 +618,9 @@ export default function DashboardPage() {
               })}
             </List>
           </DashboardCard>
-        </Grid>
+        </Box>
         {/* My tasks */}
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+        <Box>
           <DashboardCard
             title={t($ => $.myTasks.title)}
             icon={ChecklistIcon}
@@ -609,14 +635,63 @@ export default function DashboardPage() {
               {renderTaskGroup(t($ => $.myTasks.upcoming), tasks.upcoming)}
             </List>
           </DashboardCard>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-          <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <GigMapTile />
-          </Box>
-        </Grid>
+        </Box>
+        <Box>
+          <GigMapTile />
+        </Box>
+        {/* Recently unlocked achievements */}
+        <Box>
+          <DashboardCard
+            title={t($ => $.achievements.title)}
+            icon={EmojiEventsIcon}
+            count={achievements.total}
+            viewAllTo="/achievements"
+            viewAllLabel={t($ => $.achievements.showAll)}
+            status={achievements.status}
+            isEmpty={achievements.data.length === 0}
+            emptyText={t($ => $.achievements.empty)}
+          >
+            <List dense disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {achievements.data.map((a) => {
+                const Icon = getAchievementIcon(a.key, a.category)
+                return (
+                  <Tooltip key={a.key} title={tAchievements($ => $.items[a.key].description)} arrow>
+                    <ListItemButton
+                      onClick={() => navigate('/achievements')}
+                      disableGutters
+                      sx={{
+                        borderRadius: '20px',
+                        px: 1.25,
+                        py: 1,
+                        gap: 1.5,
+                        alignItems: 'center',
+                        bgcolor: 'background.paper',
+                        border: 1,
+                        borderColor: 'divider',
+                        transition: 'box-shadow 120ms ease, transform 120ms ease',
+                        '&:hover': { boxShadow: 3, transform: 'translateY(-1px)' },
+                      }}
+                    >
+                      <Icon fontSize="small" sx={{ color: 'primary.main', flexShrink: 0 }} />
+                      <ListItemText
+                        primary={tAchievements($ => $.items[a.key].title)}
+                        secondary={tAchievements($ => $.unlockedOn, { date: new Date(a.unlocked_at!).toLocaleDateString(i18n.resolvedLanguage ?? 'en') })}
+                        slotProps={{
+                          primary: { variant: 'body2', sx: { fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } },
+                          secondary: { variant: 'caption' },
+                        }}
+                        sx={{ my: 0, minWidth: 0 }}
+                      />
+                      <CheersBadge cheers={a.cheers} size={28} />
+                    </ListItemButton>
+                  </Tooltip>
+                )
+              })}
+            </List>
+          </DashboardCard>
+        </Box>
 
-      </Grid>
+      </Box>
       </Box>
     </Box>
   )

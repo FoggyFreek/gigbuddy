@@ -10,6 +10,7 @@ export const NOTIFICATION_TYPES = Object.freeze([
   'invoice-paid',
   'task-assigned',
   'invite-redeemed',
+  'achievement-unlocked',
 ])
 
 // User-level billing notification types. Deliberately NOT in NOTIFICATION_TYPES:

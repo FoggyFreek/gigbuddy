@@ -19,6 +19,7 @@ import {
 } from '../repositories/tenantRepository.js'
 import { setOnboardingTenant } from '../repositories/authRepository.js'
 import { enforceBandCap } from './limitService.js'
+import { isTenantOnboardingEnabled } from './platformSettingsService.js'
 
 const NOT_FOUND = { error: { status: 404, body: { error: 'Tenant not found' } } }
 
@@ -57,6 +58,17 @@ export async function createOwnedTenant(db, userId, body) {
   if (hasSlug && !validSlug(slug)) return badRequest('Invalid slug')
   if (!band_name || typeof band_name !== 'string') {
     return badRequest('band_name is required')
+  }
+  if (!(await isTenantOnboardingEnabled(db))) {
+    return {
+      error: {
+        status: 403,
+        body: {
+          error: 'Tenant onboarding is disabled',
+          code: 'tenant_onboarding_disabled',
+        },
+      },
+    }
   }
 
   const client = await db.connect()

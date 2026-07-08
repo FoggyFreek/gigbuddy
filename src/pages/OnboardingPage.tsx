@@ -22,7 +22,7 @@ import {
   type BillingInterval,
   type SubscriptionPlan,
 } from '../api/billing.ts'
-import { createOwnedTenant, listOwnedTenants } from '../api/tenants.ts'
+import { createOwnedTenant, getTenantOnboardingStatus, listOwnedTenants } from '../api/tenants.ts'
 import { uploadLogo } from '../api/profile.ts'
 import type { Tenant } from '../types/entities.ts'
 import WelcomeStep from '../components/onboarding/WelcomeStep.tsx'
@@ -139,6 +139,7 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [capBlocked, setCapBlocked] = useState(false)
+  const [tenantOnboardingEnabled, setTenantOnboardingEnabled] = useState<boolean | null>(null)
   // Whether the resume-pointer lookup has settled. The wizard must not become
   // interactive before this: proceeding while it's still in flight would let
   // handleConfirm see a null onboardingTenant and create ANOTHER band —
@@ -153,6 +154,9 @@ export default function OnboardingPage() {
   useEffect(() => {
     if (checkoutReturn || loadedRef.current) return
     loadedRef.current = true
+    getTenantOnboardingStatus()
+      .then((status) => setTenantOnboardingEnabled(status.tenantOnboardingEnabled))
+      .catch(() => setLoadError(true))
     getBillingState()
       .then((state) => setPlans(state.plans.filter((p) => p.is_active)))
       .catch(() => setLoadError(true))
@@ -181,7 +185,8 @@ export default function OnboardingPage() {
   )
   // The wizard is interactive only once BOTH the plans and the resume-pointer
   // lookup have settled — otherwise a resume user could act on incomplete state.
-  const ready = plans !== null && resumeChecked
+  const ready = plans !== null && resumeChecked && tenantOnboardingEnabled !== null
+  const onboardingDisabled = tenantOnboardingEnabled === false && onboardingTenantId === null
   const selectedPlan = sortedPlans.find((p) => p.id === selectedPlanId) ?? null
 
   const stepLabels = [
@@ -223,6 +228,11 @@ export default function OnboardingPage() {
             // Without a resume pointer this user already owns an unrelated
             // band — never adopt it; onboarding isn't the place to manage it.
             setCapBlocked(true)
+            return
+          }
+          if (code === 'tenant_onboarding_disabled') {
+            setTenantOnboardingEnabled(false)
+            setActiveStep(0)
             return
           }
           throw err
@@ -327,6 +337,10 @@ export default function OnboardingPage() {
                 <Button variant="contained" onClick={() => navigate('/')}>
                   {t($ => $.checkout.enterApp)}
                 </Button>
+              </Stack>
+            ) : onboardingDisabled ? (
+              <Stack spacing={2}>
+                <Alert severity="info">{t($ => $.errors.onboardingDisabled)}</Alert>
               </Stack>
             ) : (
               <>

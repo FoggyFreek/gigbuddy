@@ -16,6 +16,7 @@ const CONTEXT_KEYS = new Set([
   'migrationNeeded', 'reEncryptionNeeded',
   'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
+  'achievementKey',
 ])
 
 function safeCode(value) {

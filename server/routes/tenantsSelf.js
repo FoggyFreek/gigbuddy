@@ -11,6 +11,7 @@ import {
   archiveOwnedTenant,
   unarchiveOwnedTenant,
 } from '../services/tenantSelfService.js'
+import { getTenantOnboardingStatus } from '../services/platformSettingsService.js'
 
 const router = Router()
 
@@ -28,6 +29,10 @@ router.post('/', requireCurrentTerms, async (req, res) => {
   if (result.error) return sendError(res, result.error)
   auditLog(req, result.audit.action, result.audit.details)
   res.status(201).json(result.tenant)
+})
+
+router.get('/onboarding-status', async (_req, res) => {
+  res.json(await getTenantOnboardingStatus(pool))
 })
 
 router.get('/owned', async (req, res) => {
