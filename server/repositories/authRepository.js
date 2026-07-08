@@ -35,21 +35,81 @@ export async function anySuperAdminExists(executor) {
   return rowCount > 0
 }
 
-// Upsert (by google_sub) the signing-in user, refreshing profile fields and
-// last_login_at. is_super_admin/status only apply on first insert.
-export async function upsertUserFromClaims(executor, claims, isSuperAdmin, status) {
+// The only two identity slots. Column names come from this map, never from
+// caller input — providers are code-defined, not user-defined.
+const PROVIDER_SUB_COLUMNS = {
+  google: 'google_sub',
+  microsoft: 'microsoft_sub',
+}
+
+function subColumn(provider) {
+  const column = PROVIDER_SUB_COLUMNS[provider]
+  if (!column) throw new Error(`Unknown OIDC provider: ${provider}`)
+  return column
+}
+
+// Refreshes profile fields for a returning user matched by provider sub.
+// Email is only refreshed from Google (verified claim); a Microsoft email
+// carries no verified assertion and never updates the account. An absent
+// picture claim (Microsoft has none) keeps the stored picture.
+export async function updateUserOnLogin(executor, provider, claims) {
+  const column = subColumn(provider)
+  const emailSet = provider === 'google' ? 'email = $4,' : ''
+  const params = [claims.sub, claims.name, claims.picture ?? null]
+  if (provider === 'google') params.push(claims.email)
   const { rows } = await executor.query(
-    `INSERT INTO users (google_sub, email, name, picture_url, is_super_admin, status, last_login_at)
-     VALUES ($1, $2, $3, $4, $5, $6, NOW())
-     ON CONFLICT (google_sub) DO UPDATE SET
-       email = EXCLUDED.email,
-       name = EXCLUDED.name,
-       picture_url = EXCLUDED.picture_url,
+    `UPDATE users SET
+       name = $2,
+       picture_url = COALESCE($3, picture_url),
+       ${emailSet}
        last_login_at = NOW()
+     WHERE ${column} = $1
      RETURNING *`,
-    [claims.sub, claims.email, claims.name, claims.picture, isSuperAdmin, status],
+    params,
+  )
+  return rows[0] || null
+}
+
+export async function emailExists(executor, email) {
+  const { rowCount } = await executor.query('SELECT 1 FROM users WHERE email = $1', [email])
+  return rowCount > 0
+}
+
+// First sign-in insert. is_super_admin/status are creation-time only. Raw
+// unique violations (email or sub race) propagate for the service to map.
+export async function insertUserFromClaims(executor, provider, claims, isSuperAdmin, status) {
+  const column = subColumn(provider)
+  const { rows } = await executor.query(
+    `INSERT INTO users (${column}, email, name, picture_url, is_super_admin, status, last_login_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     RETURNING *`,
+    [claims.sub, claims.email, claims.name, claims.picture ?? null, isSuperAdmin, status],
   )
   return rows[0]
+}
+
+// Fills an empty identity slot; 0 rows = slot already occupied (or unknown
+// user). A UNIQUE violation (sub linked to another user) propagates.
+export async function setProviderSub(executor, userId, provider, sub) {
+  const column = subColumn(provider)
+  const { rowCount } = await executor.query(
+    `UPDATE users SET ${column} = $2 WHERE id = $1 AND ${column} IS NULL`,
+    [userId, sub],
+  )
+  return rowCount > 0
+}
+
+// Clears an identity slot only while another sign-in method remains — a user
+// must never be locked out by unlinking their last provider.
+export async function clearProviderSub(executor, userId, provider) {
+  const column = subColumn(provider)
+  const others = Object.values(PROVIDER_SUB_COLUMNS).filter((c) => c !== column)
+  const remaining = others.map((c) => `${c} IS NOT NULL`).join(' OR ')
+  const { rowCount } = await executor.query(
+    `UPDATE users SET ${column} = NULL WHERE id = $1 AND ${column} IS NOT NULL AND (${remaining})`,
+    [userId],
+  )
+  return rowCount > 0
 }
 
 // Grants the bootstrap admin an approved tenant_admin membership in the seed

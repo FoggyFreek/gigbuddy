@@ -225,10 +225,14 @@ describe('customization gates', () => {
     await asUserA(request(app).patch('/api/profile').send({ band_name: 'Still Editable' })).expect(200)
   })
 
-  it('blocks profile image uploads', async () => {
+  it('blocks banner/avatar uploads but leaves both band logo uploads ungated', async () => {
     await lockTenantA()
-    expectEntitlementDenied(await asUserA(request(app).post('/api/profile/logo')), 'customization')
     expectEntitlementDenied(await asUserA(request(app).post('/api/profile/banner')), 'customization')
+    expectEntitlementDenied(await asUserA(request(app).post('/api/profile/avatar')), 'customization')
+    // Band logos (light + dark) are settable on every plan, including the
+    // fallback — the gate passes and the missing file is the next error.
+    expect((await asUserA(request(app).post('/api/profile/logo'))).status).toBe(400)
+    expect((await asUserA(request(app).post('/api/profile/logo-dark'))).status).toBe(400)
   })
 
   it('passes with gold (gate cleared; missing file is the next error)', async () => {

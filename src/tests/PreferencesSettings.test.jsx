@@ -29,6 +29,7 @@ const PREFS = {
     { type: 'rehearsal-confirmed', enabled: true },
     { type: 'invoice-paid', enabled: true },
     { type: 'task-assigned', enabled: true },
+    { type: 'invite-redeemed', enabled: true },
   ],
   tenants: [
     { tenantId: 1, tenantName: 'Alpha Band', avatarPath: null, enabled: true },
@@ -86,6 +87,7 @@ describe('My preferences — notifications', () => {
     const gigNew = await screen.findByRole('switch', { name: 'New gig options' })
     expect(gigNew).toBeChecked()
     expect(screen.getByRole('switch', { name: 'New rehearsal options' })).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: 'New members awaiting approval' })).toBeChecked()
 
     await user.click(gigNew)
     await waitFor(() =>

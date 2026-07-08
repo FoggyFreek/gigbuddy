@@ -25,6 +25,8 @@ export interface User {
   bandMemberId?: Id | null
   /** Resolved entitlements for the active tenant; null = ownerless tenant (no enforcement). */
   entitlements?: UserEntitlements | null
+  /** Which OIDC identities are linked to this account. */
+  providers?: { google: boolean; microsoft: boolean }
   memberships?: UserMembership[]
 }
 

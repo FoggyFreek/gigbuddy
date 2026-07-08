@@ -14,11 +14,11 @@ export default function RequireAuth() {
       </Box>
     )
   }
+  // No redirect stashing here: AuthContext's 401 handler owns that (it knows
+  // whether the user is logging out). Stashing in render would also fire on
+  // the intermediate logout render (user already null, location not yet
+  // /login), resurrecting the stash logout just cleared.
   if (user === null) {
-    const intended = location.pathname + location.search
-    if (intended !== '/login' && intended !== '/') {
-      localStorage.setItem('gigbuddy:redirectAfterLogin', intended)
-    }
     return <Navigate to="/login" replace />
   }
   if (user.status === 'rejected') return <Navigate to="/pending" replace />

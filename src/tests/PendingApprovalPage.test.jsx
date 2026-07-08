@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { ThemeProvider } from '@mui/material/styles'
+import { createTheme, ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import theme from '../theme.ts'
 import PendingApprovalPage from '../pages/PendingApprovalPage.tsx'
@@ -10,9 +10,9 @@ vi.mock('../contexts/authContext.ts', () => ({
 
 import { useAuth } from '../contexts/authContext.ts'
 
-function renderPage() {
+function renderPage(activeTheme = theme) {
   return render(
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={activeTheme}>
       <PendingApprovalPage />
     </ThemeProvider>,
   )
@@ -48,5 +48,24 @@ describe('PendingApprovalPage', () => {
 
     expect(screen.getByText('Access denied')).toBeInTheDocument()
     expect(screen.getByText(/Your access request was not approved/)).toBeInTheDocument()
+  })
+
+  it('uses the active theme colors', () => {
+    const customTheme = createTheme({
+      palette: {
+        background: { default: 'rgb(1, 2, 3)', paper: 'rgb(4, 5, 6)' },
+        divider: 'rgb(7, 8, 9)',
+      },
+    })
+
+    const { container } = renderPage(customTheme)
+    const page = container.firstElementChild
+    const card = container.querySelector('.MuiPaper-root')
+
+    expect(page).toHaveStyle({ backgroundColor: 'rgb(1, 2, 3)' })
+    expect(card).toHaveStyle({
+      backgroundColor: 'rgb(4, 5, 6)',
+      borderColor: 'rgb(7, 8, 9)',
+    })
   })
 })

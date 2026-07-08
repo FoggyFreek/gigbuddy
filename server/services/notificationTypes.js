@@ -9,6 +9,7 @@ export const NOTIFICATION_TYPES = Object.freeze([
   'rehearsal-confirmed',
   'invoice-paid',
   'task-assigned',
+  'invite-redeemed',
 ])
 
 // User-level billing notification types. Deliberately NOT in NOTIFICATION_TYPES:

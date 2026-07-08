@@ -230,8 +230,10 @@ router.delete('/shopify-domain', manageIntegration, noStore, async (req, res) =>
   res.json(status)
 })
 
-// Upload / replace band logo (tenant admin only)
-router.post('/logo', requirePermission(PERMISSIONS.TENANT_MANAGE), customization, logoUpload.single('logo'), async (req, res) =>
+// Upload / replace band logo (tenant admin only). The band logos (light +
+// dark) are deliberately NOT part of the customization entitlement — every
+// plan, including the fallback, may set them. Banner/avatar stay gated.
+router.post('/logo', requirePermission(PERMISSIONS.TENANT_MANAGE), logoUpload.single('logo'), async (req, res) =>
   handleImageUpload(req, res, uploadLogo, LOGO_ALLOWED_TYPES))
 
 // Upload / replace profile banner (tenant admin only)
@@ -242,8 +244,8 @@ router.post('/banner', requirePermission(PERMISSIONS.TENANT_MANAGE), customizati
 router.post('/avatar', requirePermission(PERMISSIONS.TENANT_MANAGE), customization, imageUpload.single('avatar'), async (req, res) =>
   handleImageUpload(req, res, uploadAvatar, JPEG_PNG))
 
-// Upload / replace dark-theme logo variant (tenant admin only)
-router.post('/logo-dark', requirePermission(PERMISSIONS.TENANT_MANAGE), customization, imageUpload.single('logo_dark'), async (req, res) =>
+// Upload / replace dark-theme logo variant (tenant admin only, ungated — see /logo)
+router.post('/logo-dark', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpload.single('logo_dark'), async (req, res) =>
   handleImageUpload(req, res, uploadLogoDark, LOGO_ALLOWED_TYPES))
 
 export default router

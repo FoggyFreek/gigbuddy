@@ -139,9 +139,9 @@ async function seedTenantData(tenantId) {
      VALUES ($1, $2, $3, 'r.mp3', 'audio/mpeg', 10)`,
     [song.id, tenantId, `tenants/${tenantId}/song_recordings/rec1.mp3`])
   await pool.query(
-    `UPDATE tenants SET accent_color = '#ff0000', logo_path = $2,
+    `UPDATE tenants SET accent_color = '#ff0000', logo_path = $2, banner_path = $3,
         mollie_api_key = 'test_dummykey1234567890', bandsintown_app_id = 'bit_app_id' WHERE id = $1`,
-    [tenantId, `tenants/${tenantId}/logo/logo1.png`])
+    [tenantId, `tenants/${tenantId}/logo/logo1.png`, `tenants/${tenantId}/banner/banner1.png`])
   return song.id
 }
 
@@ -316,11 +316,13 @@ describe('free-fallback (bronze) downgrade', () => {
 
     expect(await chartCount(seed.tenantA.id)).toBe(0)
     expect(await fileCount(seed.tenantA.id)).toBe(0)
-    expect(await cleanupCount(seed.tenantA.id)).toBe(3) // doc + recording + logo queued for S3
+    expect(await cleanupCount(seed.tenantA.id)).toBe(3) // doc + recording + banner queued for S3
     const { rows: [tenant] } = await pool.query(
-      'SELECT accent_color, logo_path, mollie_api_key, bandsintown_app_id FROM tenants WHERE id = $1', [seed.tenantA.id])
+      'SELECT accent_color, logo_path, banner_path, mollie_api_key, bandsintown_app_id FROM tenants WHERE id = $1', [seed.tenantA.id])
     expect(tenant.accent_color).toBeNull()
-    expect(tenant.logo_path).toBeNull()
+    expect(tenant.banner_path).toBeNull()
+    // Band logos are settable on every plan and are never purged.
+    expect(tenant.logo_path).toBe(`tenants/${seed.tenantA.id}/logo/logo1.png`)
     expect(tenant.mollie_api_key).toBeNull() // no payment links → key deleted
     expect(tenant.bandsintown_app_id).toBeNull()
 
@@ -347,8 +349,10 @@ describe('free-fallback (bronze) downgrade', () => {
     expect(await fileCount(seed.tenantB.id)).toBe(0)
     expect(await cleanupCount(seed.tenantB.id)).toBe(3)
     const { rows: [tenant] } = await pool.query(
-      'SELECT accent_color, logo_path, mollie_api_key, bandsintown_app_id FROM tenants WHERE id = $1', [seed.tenantB.id])
+      'SELECT accent_color, logo_path, banner_path, mollie_api_key, bandsintown_app_id FROM tenants WHERE id = $1', [seed.tenantB.id])
     expect(tenant.accent_color).toBeNull()
+    expect(tenant.banner_path).toBeNull()
+    expect(tenant.logo_path).toBe(`tenants/${seed.tenantB.id}/logo/logo1.png`) // logos survive the purge
     expect(tenant.mollie_api_key).toBeNull()
     expect(tenant.bandsintown_app_id).toBeNull()
   })

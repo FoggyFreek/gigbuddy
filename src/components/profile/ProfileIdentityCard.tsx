@@ -137,8 +137,9 @@ export default function ProfileIdentityCard({
   const { has } = useEntitlements()
   const [logoMenuAnchor, setLogoMenuAnchor] = useState<HTMLElement | null>(null)
 
-  // Banner/logo/avatar uploads are part of the customization feature; without
-  // it the camera buttons become diamond links to the upgrade page.
+  // Banner/avatar uploads are part of the customization feature; without it
+  // their camera buttons become diamond links to the upgrade page. The band
+  // logos (light + dark) are settable on every plan and stay unlocked.
   const customizationLocked = !has('customization')
 
   // Theme-aware logo: dark variant in dark mode when available, else light logo
@@ -200,7 +201,6 @@ export default function ProfileIdentityCard({
               tooltipTitle={t($ => $.identity.changeLogo)}
               onClick={(e) => setLogoMenuAnchor(e.currentTarget)}
               disabled={logoUploading}
-              locked={customizationLocked}
               sx={{ position: 'absolute', top: -10, right: -10 }}
             />
           )}
@@ -264,7 +264,6 @@ export default function ProfileIdentityCard({
                 tooltipTitle={t($ => $.identity.changeLogo)}
                 onClick={(e) => setLogoMenuAnchor(e.currentTarget)}
                 disabled={logoUploading}
-                locked={customizationLocked}
                 sx={{ position: 'absolute', top: -10, right: -10 }}
               />
             )}

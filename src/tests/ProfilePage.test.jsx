@@ -225,7 +225,7 @@ describe('ProfilePage', () => {
     expect(updateProfile).not.toHaveBeenCalled()
   })
 
-  it('replaces the camera buttons with diamond upsell links when the plan lacks customization', async () => {
+  it('locks banner/avatar uploads behind diamonds but keeps the logo cameras when the plan lacks customization', async () => {
     const user = userEvent.setup()
     wrap(<ProfilePage />, {
       user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin', entitlements: lockedEntitlements },
@@ -234,12 +234,14 @@ describe('ProfilePage', () => {
     const editButtons = screen.getAllByRole('button', { name: /^edit$/i })
     await user.click(editButtons[0]) // Band identity edit button
 
+    // Banner + avatar cameras become diamond upsell links…
     const diamonds = await screen.findAllByRole('link', { name: /premium feature/i })
     expect(diamonds.length).toBeGreaterThan(0)
     for (const diamond of diamonds) {
       expect(diamond).toHaveAttribute('href', '/upgrade/customization')
     }
-    expect(document.querySelector('[data-testid="CameraAltIcon"]')).toBeNull()
+    // …but the band logo (light + dark) stays uploadable on every plan.
+    expect(document.querySelector('[data-testid="CameraAltIcon"]')).not.toBeNull()
   })
 
   it('keeps the camera buttons when entitlements are unenforced', async () => {

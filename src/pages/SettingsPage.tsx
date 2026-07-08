@@ -16,6 +16,7 @@ import type { SvgIconComponent } from '@mui/icons-material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import TuneIcon from '@mui/icons-material/Tune'
 import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined'
+import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined'
 import GroupIcon from '@mui/icons-material/Group'
 import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined'
@@ -29,6 +30,7 @@ import SubscriptionSummaryCard from '../components/settings/SubscriptionSummaryC
 import NotificationSettingsSection from '../components/account/NotificationSettingsSection.tsx'
 import ThemeSettingsSection from '../components/account/ThemeSettingsSection.tsx'
 import BillingSettingsSection from '../components/account/BillingSettingsSection.tsx'
+import ConnectedAccountsSection from '../components/account/ConnectedAccountsSection.tsx'
 import AccentColorSection from '../components/settings/AccentColorSection.tsx'
 import StorageUsageSection from '../components/settings/StorageUsageSection.tsx'
 import IntegrationsSection from '../components/settings/IntegrationsSection.tsx'
@@ -43,14 +45,14 @@ import InvitesSection from '../components/InvitesSection.tsx'
 // with a back arrow. The nav is role-gated: band items appear only when the
 // active tenant role grants the matching permission (see BAND_ITEMS).
 type SectionId =
-  | 'preferences' | 'billing'
+  | 'preferences' | 'billing' | 'connected-accounts'
   | 'accent' | 'members' | 'invites' | 'storage'
   | 'integrations' | 'chart-of-accounts' | 'default-accounts'
 
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.
 type ItemLabelKey =
-  | 'preferences' | 'billing' | 'accent' | 'members' | 'invites'
+  | 'preferences' | 'billing' | 'connectedAccounts' | 'accent' | 'members' | 'invites'
   | 'storage' | 'integrations' | 'chartOfAccounts' | 'defaultAccounts'
 
 interface NavItemDef {
@@ -64,6 +66,7 @@ interface NavItemDef {
 const ACCOUNT_ITEMS: NavItemDef[] = [
   { id: 'preferences', labelKey: 'preferences', icon: TuneIcon },
   { id: 'billing', labelKey: 'billing', icon: CreditCardOutlinedIcon },
+  { id: 'connected-accounts', labelKey: 'connectedAccounts', icon: LinkOutlinedIcon },
 ]
 
 const BAND_ITEMS: NavItemDef[] = [
@@ -103,6 +106,8 @@ export default function SettingsPage() {
         )
       case 'billing':
         return <BillingSettingsSection />
+      case 'connected-accounts':
+        return <ConnectedAccountsSection />
       case 'accent':
         return <AccentColorSection />
       case 'members':

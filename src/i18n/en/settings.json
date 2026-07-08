@@ -7,6 +7,7 @@
     "items": {
       "preferences": "My preferences",
       "billing": "Billing",
+      "connectedAccounts": "Connected accounts",
       "accent": "Accent color",
       "members": "Members",
       "invites": "Invites",
@@ -19,6 +20,40 @@
   "subscription": {
     "current": "Current plan",
     "manage": "Manage subscription"
+  },
+  "connectedAccounts": {
+    "title": "Connected accounts",
+    "description": "Sign-in methods linked to your account. You can sign in with any linked method.",
+    "providers": {
+      "google": "Google",
+      "microsoft": "Microsoft"
+    },
+    "linked": "Linked",
+    "notLinked": "Not linked",
+    "link": "Link",
+    "unlink": "Unlink",
+    "onlyMethod": "Your only sign-in method cannot be removed",
+    "linkDialog": {
+      "title": "Link {{provider}} account?",
+      "body": "To confirm it's really you, you'll first sign in again with your current sign-in method. After that you'll sign in with {{provider}} to complete the link.",
+      "confirm": "Continue"
+    },
+    "unlinkDialog": {
+      "title": "Remove {{provider}} sign-in?",
+      "body": "You will no longer be able to sign in with {{provider}}.",
+      "confirm": "Remove"
+    },
+    "linkedSuccess": "{{provider}} account linked",
+    "unlinkFailed": "Removing the sign-in method failed. Please try again.",
+    "errors": {
+      "already_linked": "A sign-in method of this type is already linked to your account.",
+      "slot_occupied": "A sign-in method of this type is already linked to your account.",
+      "sub_taken": "That account is already linked to a different user.",
+      "no_primary": "No existing sign-in method is available to confirm your identity.",
+      "reauth_mismatch": "The confirmation sign-in didn't match your account. Nothing was linked.",
+      "expired": "The linking session expired. Please try again.",
+      "failed": "Linking failed. Please try again."
+    }
   },
   "accentColor": {
     "title": "Accent color",

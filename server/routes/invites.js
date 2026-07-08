@@ -7,6 +7,7 @@ import {
   createInvite,
   revokeInvite,
   redeemInvite,
+  notifyInviteRedeemed,
 } from '../services/inviteService.js'
 
 export const adminRouter = Router()
@@ -45,7 +46,10 @@ redeemRouter.post('/', async (req, res) => {
   const result = await redeemInvite(req.user, req.body)
   logAudit(req, result.audit)
   if (result.error) return sendError(res, result.error)
-  res.status(201).json(result.result)
+  // A same-user repeat is idempotent: 200 with the existing membership, and
+  // no `notify` — admins were already notified by the original redemption.
+  res.status(result.repeat ? 200 : 201).json(result.result)
+  if (result.notify) await notifyInviteRedeemed(result.notify)
 })
 
 export default { adminRouter, redeemRouter }

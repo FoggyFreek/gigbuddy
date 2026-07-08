@@ -124,6 +124,7 @@ router.use(csrf)
 
 router.use('/auth/login', authLimiter)
 router.use('/auth/callback', authLimiter)
+router.use('/auth/link', authLimiter)
 router.use('/auth', authRouter)
 
 const tenantMember = [requireApproved, resolveTenantId, requireTenantMember]

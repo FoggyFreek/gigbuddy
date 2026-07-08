@@ -251,7 +251,11 @@ export async function clearShopifyDomainValue(db, tenantId) {
 
 // Re-encodes the uploaded image, stores it under the given column, and removes
 // the previous object. Rolls the new object back if the DB update fails.
-async function uploadTenantImage(db, tenantId, file, keyBuilder, column, processingPreset) {
+// `guardFeature` (banner/avatar): the column is purgeable customization data,
+// so the persist runs under the feature write guard; the logos pass null —
+// they are settable on every plan and never purged, so there is no purge race
+// to close.
+async function uploadTenantImage(db, tenantId, file, keyBuilder, column, processingPreset, guardFeature = null) {
   const image = await validateAndReencodeImage(file.buffer, file.mimetype, processingPreset)
   const ext = extensionForImageMime(image.mimetype)
   const objectKey = keyBuilder(tenantId, randomUUID(), ext)
@@ -262,12 +266,14 @@ async function uploadTenantImage(db, tenantId, file, keyBuilder, column, process
 
   let updatedKey
   try {
-    // Guarded write: aborts (403) if a downgrade purge turned customization
+    // Guarded write: aborts (403) if a downgrade purge turned the feature
     // off between the route gate and this persist; the uploaded object is
     // queued for cleanup instead of being orphaned.
-    updatedKey = await withFeatureWriteGuard(db, tenantId, FEATURES.CUSTOMIZATION,
-      (client) => setTenantImagePath(client, tenantId, column, objectKey),
-      { orphanKey: objectKey })
+    updatedKey = guardFeature
+      ? await withFeatureWriteGuard(db, tenantId, guardFeature,
+          (client) => setTenantImagePath(client, tenantId, column, objectKey),
+          { orphanKey: objectKey })
+      : await setTenantImagePath(db, tenantId, column, objectKey)
   } catch (err) {
     removeObject(objectKey).catch(() => {})
     throw err
@@ -281,10 +287,10 @@ export const uploadLogo = (db, tenantId, file) =>
   uploadTenantImage(db, tenantId, file, bandLogoKey, 'logo_path', IMAGE_PROCESSING_PRESETS.logo)
 
 export const uploadBanner = (db, tenantId, file) =>
-  uploadTenantImage(db, tenantId, file, bandProfileBannerKey, 'banner_path', IMAGE_PROCESSING_PRESETS.banner)
+  uploadTenantImage(db, tenantId, file, bandProfileBannerKey, 'banner_path', IMAGE_PROCESSING_PRESETS.banner, FEATURES.CUSTOMIZATION)
 
 export const uploadAvatar = (db, tenantId, file) =>
-  uploadTenantImage(db, tenantId, file, bandAvatarKey, 'avatar_path', IMAGE_PROCESSING_PRESETS.avatar)
+  uploadTenantImage(db, tenantId, file, bandAvatarKey, 'avatar_path', IMAGE_PROCESSING_PRESETS.avatar, FEATURES.CUSTOMIZATION)
 
 export const uploadLogoDark = (db, tenantId, file) =>
   uploadTenantImage(db, tenantId, file, bandLogoDarkKey, 'logo_dark_path', IMAGE_PROCESSING_PRESETS.logo)

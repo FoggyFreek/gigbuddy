@@ -77,6 +77,7 @@
     "delete": "Lid verwijderen",
     "doneEditing": "Klaar met bewerken",
     "colorAria": "kleur {{color}}",
-    "gigbuddyUser": "gigBuddy-gebruiker"
+    "gigbuddyUser": "gigBuddy-gebruiker",
+    "inviteCta": "Uitnodigen voor gigBuddy"
   }
 }

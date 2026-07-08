@@ -1,6 +1,6 @@
 import './_envSetup.js'
 // @vitest-environment node
-import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
+import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
 import request from 'supertest'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
@@ -174,6 +174,33 @@ describe('/api/invites/redeem', () => {
     expect(rows[0].role).toBe('tenant_admin')
   })
 
+  it('re-redeeming by the same user returns the membership instead of a conflict', async () => {
+    const outsider = await createOutsider()
+    const invite = await newInvite(seed.tenantA.id)
+    await as(outsider.id, null)(
+      request(app).post('/api/invites/redeem').send({ code: invite.code }),
+    ).expect(201)
+
+    const res = await as(outsider.id, null)(
+      request(app).post('/api/invites/redeem').send({ code: invite.code }),
+    ).expect(200)
+    expect(res.body.tenant.id).toBe(seed.tenantA.id)
+    expect(res.body.status).toBe('pending')
+
+    const { rows } = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM memberships WHERE user_id = $1 AND tenant_id = $2',
+      [outsider.id, seed.tenantA.id],
+    )
+    expect(rows[0].n).toBe(1)
+
+    // Admins are notified once, on the original redemption only.
+    const { rows: notif } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM notifications WHERE type = 'invite-redeemed' AND user_id = $1`,
+      [seed.userA.id],
+    )
+    expect(notif[0].n).toBe(1)
+  })
+
   it('rejects already-used invites', async () => {
     const outsider1 = await createOutsider({ email: 'one@test.local' })
     const outsider2 = await createOutsider({ email: 'two@test.local' })
@@ -223,6 +250,63 @@ describe('/api/invites/redeem', () => {
     await as(seed.userA.id, null)(
       request(app).post('/api/invites/redeem').send({ code: invite.code }),
     ).expect(409)
+  })
+
+  it('notifies tenant admins that the redeemed invite awaits approval', async () => {
+    // A plain contributor in tenant A must NOT be notified (no members.manage).
+    const contrib = await createOutsider({ email: 'contrib@test.local', name: 'Contrib' })
+    await pool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
+       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+      [contrib.id, seed.tenantA.id],
+    )
+
+    const outsider = await createOutsider()
+    const invite = await newInvite(seed.tenantA.id)
+    await as(outsider.id, null)(
+      request(app).post('/api/invites/redeem').send({ code: invite.code }),
+    ).expect(201)
+
+    const rowsFor = async (userId) => {
+      const { rows } = await pool.query(
+        `SELECT * FROM notifications WHERE user_id = $1 AND type = 'invite-redeemed'`,
+        [userId],
+      )
+      return rows
+    }
+
+    // Dispatch runs after the response is sent, so poll for the rows.
+    await vi.waitFor(async () => {
+      expect(await rowsFor(seed.userA.id)).toHaveLength(1)
+      expect(await rowsFor(seed.superUser.id)).toHaveLength(1)
+    })
+    const [row] = await rowsFor(seed.userA.id)
+    expect(row).toMatchObject({
+      tenant_id: seed.tenantA.id,
+      type: 'invite-redeemed',
+      url: '/settings/members',
+      source_type: 'invite',
+      source_id: invite.id,
+    })
+    expect(row.body).toContain('Outside')
+
+    expect(await rowsFor(contrib.id)).toHaveLength(0)   // not an admin
+    expect(await rowsFor(seed.userB.id)).toHaveLength(0) // other tenant
+    expect(await rowsFor(outsider.id)).toHaveLength(0)   // the redeemer
+  })
+
+  it('does not notify on a failed redemption', async () => {
+    const outsider = await createOutsider()
+    await as(outsider.id, null)(
+      request(app).post('/api/invites/redeem').send({ code: 'no-such-code' }),
+    ).expect(404)
+
+    // Give any (wrongly) fired dispatch a beat to land before asserting.
+    await new Promise((r) => setTimeout(r, 50))
+    const { rows } = await pool.query(
+      `SELECT * FROM notifications WHERE type = 'invite-redeemed'`,
+    )
+    expect(rows).toHaveLength(0)
   })
 
   it('409s and aborts when the tenant is archived', async () => {
