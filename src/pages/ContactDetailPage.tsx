@@ -33,6 +33,7 @@ import {
 } from '../api/contacts.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import { venueHeadline } from '../utils/venueDisplay.ts'
 import { contactMatchesCategoryFilter, SUPPLIER_CATEGORY } from '../utils/contactCategories.ts'
@@ -206,6 +207,8 @@ export default function ContactDetailPage() {
           </>
         )}
       </Box>
+
+      <PlanningReadOnlyAlert canWrite={canWrite} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

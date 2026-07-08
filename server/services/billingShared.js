@@ -30,8 +30,12 @@ function appUrl() {
   return (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
 }
 
-export function billingRedirectUrl() {
-  return `${appUrl()}/billing?checkout=return`
+// Where the hosted checkout returns the browser. 'billing' is the settings
+// billing page (the old bare `/billing` was never a frontend route);
+// 'onboarding' resumes the onboarding stepper's processing state.
+export function billingRedirectUrl(target = 'billing') {
+  const path = target === 'onboarding' ? '/onboarding' : '/settings/billing'
+  return `${appUrl()}${path}?checkout=return`
 }
 
 // Webhook URL carries the local subscription id as a routing hint only — status

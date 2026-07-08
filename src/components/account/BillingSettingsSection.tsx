@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -98,6 +99,25 @@ export default function BillingSettingsSection() {
   }, [showToast, errorMessage])
 
   useEffect(load, [load])
+
+  // Returning from the hosted checkout (?checkout=return): re-ingest the
+  // payment now — with webhooks disabled (local dev) nothing else flips the
+  // subscription status — then refresh /auth/me and the billing view. The
+  // param is stripped so a reload doesn't re-sync.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const checkoutReturn = searchParams.get('checkout') === 'return'
+  useEffect(() => {
+    if (!checkoutReturn) return
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('checkout')
+      return next
+    }, { replace: true })
+    apiSync()
+      .catch(() => {}) // best-effort: the webhook/scheduler will catch up
+      .then(() => refreshUser().catch(() => {}))
+      .then(() => load())
+  }, [checkoutReturn, setSearchParams, refreshUser, load])
 
   const sub = state?.subscription ?? null
   const plans = useMemo(

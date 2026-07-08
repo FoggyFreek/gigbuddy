@@ -141,6 +141,32 @@ export async function firstApprovedTenantId(executor, userId) {
   return rows[0]?.tenant_id ?? null
 }
 
+// Records terms acceptance. A CASE expression (not a zero-row WHERE guard) so
+// the statement always returns a row: re-accepting the same version keeps the
+// original timestamp, a new version replaces both fields atomically.
+export async function setTermsAccepted(executor, userId, version) {
+  const { rows } = await executor.query(
+    `UPDATE users SET
+       terms_accepted_at = CASE WHEN terms_version IS DISTINCT FROM $2 THEN NOW() ELSE terms_accepted_at END,
+       terms_version = $2
+     WHERE id = $1
+     RETURNING terms_accepted_at, terms_version`,
+    [userId, version],
+  )
+  return rows[0] || null
+}
+
+// Clears the onboarding resume pointer once the flow finishes. Idempotent.
+export async function clearOnboardingTenant(executor, userId) {
+  await executor.query('UPDATE users SET onboarding_tenant_id = NULL WHERE id = $1', [userId])
+}
+
+// Marks the tenant created during onboarding as the flow's resume pointer;
+// runs inside the tenant-create transaction so the pointer can never dangle.
+export async function setOnboardingTenant(executor, userId, tenantId) {
+  await executor.query('UPDATE users SET onboarding_tenant_id = $2 WHERE id = $1', [userId, tenantId])
+}
+
 export async function isApprovedMember(executor, userId, tenantId) {
   const { rowCount } = await executor.query(
     `SELECT 1

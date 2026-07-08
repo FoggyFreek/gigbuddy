@@ -46,6 +46,7 @@ import {
 } from '../api/setlists.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 import { useToast } from '../contexts/toastContext.ts'
 import { formatDuration } from '../utils/formatDuration.ts'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
@@ -388,6 +389,7 @@ export default function SetlistEditorPage() {
 
   return (
     <Box>
+      <PlanningReadOnlyAlert canWrite={canWritePlanning} />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <IconButton onClick={handleBack} aria-label={t($ => $.aria.back, { ns: 'common' })}>
           <ArrowBackIcon />

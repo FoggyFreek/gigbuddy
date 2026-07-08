@@ -12,6 +12,7 @@ import theme from '../theme.ts'
 import { AuthProvider } from '../contexts/AuthContext.tsx'
 import RequireAuth from '../components/RequireAuth.tsx'
 import RedeemInvitePage from '../pages/RedeemInvitePage.tsx'
+import OnboardingPage from '../pages/OnboardingPage.tsx'
 
 vi.mock('../api/auth.ts', () => ({
   getCurrentUser: vi.fn(),
@@ -21,9 +22,17 @@ vi.mock('../api/auth.ts', () => ({
 vi.mock('../api/invites.ts', () => ({
   redeemInvite: vi.fn(),
 }))
+// OnboardingPage (the new default landing spot for a memberless user) loads
+// billing state on mount; stub it so the wizard settles without a real fetch.
+vi.mock('../api/billing.ts', () => ({
+  getBillingState: vi.fn(),
+  subscribe: vi.fn(),
+  syncSubscription: vi.fn(),
+}))
 
 import { getCurrentUser, logout as apiLogout } from '../api/auth.ts'
 import { redeemInvite } from '../api/invites.ts'
+import { getBillingState } from '../api/billing.ts'
 
 const STASH_KEY = 'gigbuddy:redirectAfterLogin'
 
@@ -58,6 +67,7 @@ function mountApp(initialEntry) {
               <Route element={<RequireAuth />}>
                 <Route path="/" element={<div>home</div>} />
                 <Route path="/redeem-invite" element={<RedeemInvitePage />} />
+                <Route path="/onboarding" element={<OnboardingPage />} />
               </Route>
             </Routes>
           </AuthProvider>
@@ -85,14 +95,19 @@ describe('invite redemption flows', () => {
     vi.clearAllMocks()
     localStorage.removeItem(STASH_KEY)
     apiLogout.mockResolvedValue(null)
+    getBillingState.mockResolvedValue({ subscription: null, ownedTenantCount: 0, plans: [] })
   })
 
-  it('scenario 1: memberless login lands on empty redeem page; logout leaves no stash', async () => {
+  it('scenario 1: memberless login lands on onboarding page; redeem link leads to empty code field; logout leaves no stash', async () => {
     getCurrentUser.mockResolvedValue(memberlessUser)
     const user = userEvent.setup()
     mountApp('/')
 
-    // RequireAuth's zero-membership redirect: redeem page, empty code field.
+    // RequireAuth's zero-membership redirect now lands on /onboarding, not
+    // /redeem-invite directly — the invite code page is reached via its link.
+    const inviteLink = await screen.findByRole('link', { name: /redeem your invite code/i })
+    await user.click(inviteLink)
+
     const input = await screen.findByLabelText(/invite code/i)
     expect(input).toHaveValue('')
 
@@ -106,6 +121,9 @@ describe('invite redemption flows', () => {
     redeemInvite.mockResolvedValue(redeemedBandA)
     const user = userEvent.setup()
     mountApp('/')
+
+    const inviteLink = await screen.findByRole('link', { name: /redeem your invite code/i })
+    await user.click(inviteLink)
 
     const input = await screen.findByLabelText(/invite code/i)
     await user.type(input, 'manual-code')

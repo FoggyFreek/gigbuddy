@@ -116,7 +116,10 @@ export interface Slot {
 
 export interface Tenant {
   id?: Id
+  slug?: string
   band_name?: string
+  /** Set when the tenant is archived (parked, not counting toward the band cap). */
+  archived_at?: string | null
   formal_name?: string
   logo_path?: string | null
   banner_path?: string | null

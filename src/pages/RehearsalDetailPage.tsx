@@ -26,6 +26,7 @@ import PastEventAlert from '../components/PastEventAlert.tsx'
 import RehearsalParticipantsSection from '../components/RehearsalParticipantsSection.tsx'
 import RehearsalSongsSection from '../components/RehearsalSongsSection.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
+import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Rehearsal, Member, Song, Id } from '../types/entities.ts'
@@ -107,6 +108,7 @@ export default function RehearsalDetailPage() {
   }, [rehearsalId])
 
   function handleChange(field: string, value: string | null) {
+    if (!canWritePlanning) return
     setForm((prev) => ({ ...prev, [field]: value ?? '' }))
     if (hasRequiredErrors({ ...form, [field]: value } as Record<string, unknown>, REQUIRED_FIELDS)) return
     schedule({ [field]: value || null } as Partial<RehearsalForm>)
@@ -185,6 +187,7 @@ export default function RehearsalDetailPage() {
       </Box>
 
       {!loading && <PastEventAlert date={rehearsal?.proposed_date} />}
+      <PlanningReadOnlyAlert canWrite={canWritePlanning} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -196,6 +199,7 @@ export default function RehearsalDetailPage() {
             form={form}
             onChange={handleChange}
             errors={getRequiredErrors(form as unknown as Record<string, unknown>, REQUIRED_FIELDS)}
+            readOnly={!canWritePlanning}
           />
           {rehearsal && (
             <>
@@ -227,6 +231,7 @@ export default function RehearsalDetailPage() {
                   minRows={3}
                   value={form.notes}
                   onChange={(e) => handleChange('notes', e.target.value)}
+                  slotProps={{ htmlInput: { readOnly: !canWritePlanning } }}
                 />
               </Grid>
             </>
@@ -234,9 +239,11 @@ export default function RehearsalDetailPage() {
         </Grid>
       )}
 
-      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <SaveStatusLabel status={saveStatus} />
-      </Box>
+      {canWritePlanning && (
+        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+          <SaveStatusLabel status={saveStatus} />
+        </Box>
+      )}
 
       {canWritePlanning && (
         <Box sx={{ mt: 4 }}>

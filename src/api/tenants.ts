@@ -10,6 +10,21 @@ interface MembershipPayload {
 const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/admin/tenants${path}`, options)
 
+// ---- self-service (user-level, /api/tenants) ----
+
+export interface CreateOwnedTenantPayload {
+  band_name: string
+  /** Omitted → the server generates a slug from band_name (deduped). */
+  slug?: string
+  /** Marks the tenant as the caller's onboarding resume pointer. */
+  onboarding?: boolean
+}
+
+export const createOwnedTenant = (payload: CreateOwnedTenantPayload) =>
+  request<Tenant>('/api/tenants', { method: 'POST', body: JSON.stringify(payload) })
+
+export const listOwnedTenants = () => request<Tenant[]>('/api/tenants/owned')
+
 export const listTenants = () => api<Tenant[]>('/')
 export const getTenant = (id: Id) => api<Tenant>(`/${id}`)
 export const createTenant = (payload: Partial<Tenant>) =>

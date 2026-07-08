@@ -42,6 +42,7 @@ interface ProfileIdentityCardProps {
   form: ProfileForm
   isAdmin?: boolean
   editing?: boolean
+  canEdit?: boolean
   onToggleEditing: () => void
   onChange: (field: keyof ProfileForm, value: string) => void
   logo: ImageSlot
@@ -129,7 +130,7 @@ function UploadOverlay({ show, borderRadius = '0' }: Readonly<UploadOverlayProps
 }
 
 export default function ProfileIdentityCard({
-  form, isAdmin, editing, onToggleEditing, onChange,
+  form, isAdmin, editing, canEdit = true, onToggleEditing, onChange,
   logo, logoDark, banner, avatar,
 }: Readonly<ProfileIdentityCardProps>) {
   const { t } = useTranslation(['profile', 'common'])
@@ -273,7 +274,7 @@ export default function ProfileIdentityCard({
         <Box sx={{ flex: 1 }} />
 
         {/* Edit button — right */}
-        <Box sx={{ flexShrink: 0, pb: 2 }}>
+        {canEdit && <Box sx={{ flexShrink: 0, pb: 2 }}>
           <Button
             size="small"
             startIcon={editing ? <CheckIcon /> : <EditIcon />}
@@ -282,7 +283,7 @@ export default function ProfileIdentityCard({
           >
             {editing ? t($ => $.actions.done, { ns: 'common' }) : t($ => $.actions.edit, { ns: 'common' })}
           </Button>
-        </Box>
+        </Box>}
       </Box>
 
       {/* Logo upload menu — shared by compact and desktop logo camera buttons */}
@@ -360,7 +361,7 @@ export default function ProfileIdentityCard({
           </Box>
 
           {/* Edit button — compact only */}
-          <Box sx={{ display: { xs: 'block', md: 'none' }, flexShrink: 0 }}>
+          {canEdit && <Box sx={{ display: { xs: 'block', md: 'none' }, flexShrink: 0 }}>
             <Button
               size="small"
               startIcon={editing ? <CheckIcon /> : <EditIcon />}
@@ -369,7 +370,7 @@ export default function ProfileIdentityCard({
             >
               {editing ? t($ => $.actions.done, { ns: 'common' }) : t($ => $.actions.edit, { ns: 'common' })}
             </Button>
-          </Box>
+          </Box>}
 
         </Box>
 

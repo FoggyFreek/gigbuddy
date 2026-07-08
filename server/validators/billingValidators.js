@@ -10,13 +10,21 @@ function parsePlanId(value) {
   return planId
 }
 
-// { planId, interval } for subscribe and change-plan.
+// Where the hosted checkout may send the user back to. Frontend paths only —
+// never a caller-supplied URL.
+const REDIRECT_TARGETS = ['billing', 'onboarding']
+
+// { planId, interval, redirect } for subscribe and change-plan. `redirect`
+// names a whitelisted return page for the mandate checkout (subscribe only;
+// change-plan/downgrade have no checkout page and ignore it).
 export function parsePlanSelection(body) {
   const planId = parsePlanId(body?.planId)
   if (planId === null) return { error: 'planId must be a positive integer' }
   const interval = body?.interval
   if (!INTERVALS.includes(interval)) return { error: "interval must be 'month' or 'year'" }
-  return { planId, interval }
+  const redirect = body?.redirect ?? 'billing'
+  if (!REDIRECT_TARGETS.includes(redirect)) return { error: "redirect must be 'billing' or 'onboarding'" }
+  return { planId, interval, redirect }
 }
 
 // { planId, interval, confirmation } for the downgrade endpoint. The

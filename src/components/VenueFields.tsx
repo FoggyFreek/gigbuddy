@@ -68,7 +68,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           onChange={(e) => onChange('name', e.target.value)}
           error={!!errors.name}
           helperText={errors.name}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
 
@@ -79,7 +79,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           value={form.title}
           onChange={(e) => onChange('title', e.target.value)}
           placeholder={t($ => $.placeholders.title)}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
       <Grid size={4}>
@@ -88,7 +88,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           fullWidth
           value={form.given_name}
           onChange={(e) => onChange('given_name', e.target.value)}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
       <Grid size={5}>
@@ -97,7 +97,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           fullWidth
           value={form.family_name}
           onChange={(e) => onChange('family_name', e.target.value)}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
 
@@ -107,7 +107,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           fullWidth
           value={form.organization_name}
           onChange={(e) => onChange('organization_name', e.target.value)}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
 
@@ -117,7 +117,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           fullWidth
           value={form.street_and_number}
           onChange={(e) => onChange('street_and_number', e.target.value)}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
       <Grid size={4}>
@@ -127,7 +127,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           value={form.postal_code}
           onChange={(e) => onChange('postal_code', e.target.value)}
           placeholder={t($ => $.placeholders.postalCode)}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
       <Grid size={12}>
@@ -137,7 +137,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           value={form.street_additional}
           onChange={(e) => onChange('street_additional', e.target.value)}
           placeholder={t($ => $.placeholders.streetAdditional)}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
 
@@ -147,7 +147,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           fullWidth
           value={form.city}
           onChange={(e) => onChange('city', e.target.value)}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
       <Grid size={4}>
@@ -157,7 +157,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           value={form.region}
           onChange={(e) => onChange('region', e.target.value)}
           placeholder={t($ => $.placeholders.region)}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
       <Grid size={3}>
@@ -166,9 +166,8 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           fullWidth
           value={form.country}
           onChange={(e) => onChange('country', e.target.value.slice(0, 2).toUpperCase())}
-          slotProps={{ htmlInput: { maxLength: 2 } }}
+          slotProps={{ htmlInput: { maxLength: 2, readOnly: disabled } }}
           placeholder={t($ => $.placeholders.country)}
-          disabled={disabled}
         />
       </Grid>
 
@@ -179,8 +178,8 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           value={form.website}
           onChange={(e) => onChange('website', e.target.value)}
           placeholder={t($ => $.placeholders.website)}
-          disabled={disabled}
           slotProps={{
+            htmlInput: { readOnly: disabled },
             input: {
               endAdornment: form.website ? (
                 <InputAdornment position="end">
@@ -209,8 +208,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           fullWidth
           value={form.phone}
           onChange={(e) => onChange('phone', e.target.value)}
-          slotProps={{ input: { endAdornment: <CopyAdornment value={form.phone as string} /> } }}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.phone as string} /> } }}
         />
       </Grid>
       <Grid size={6}>
@@ -220,8 +218,7 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           type="email"
           value={form.email}
           onChange={(e) => onChange('email', e.target.value)}
-          slotProps={{ input: { endAdornment: <CopyAdornment value={form.email as string} /> } }}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.email as string} /> } }}
         />
       </Grid>
     </>

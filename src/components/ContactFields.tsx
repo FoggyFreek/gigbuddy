@@ -45,7 +45,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
           onChange={(e) => onChange('name', e.target.value)}
           error={!!errors.name}
           helperText={errors.name}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
         />
       </Grid>
       <Grid size={6}>
@@ -55,8 +55,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
           type="email"
           value={form.email}
           onChange={(e) => onChange('email', e.target.value)}
-          slotProps={{ input: { endAdornment: <CopyAdornment value={form.email} /> } }}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.email} /> } }}
         />
       </Grid>
       <Grid size={6}>
@@ -65,8 +64,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
           fullWidth
           value={form.phone}
           onChange={(e) => onChange('phone', e.target.value)}
-          slotProps={{ input: { endAdornment: <CopyAdornment value={form.phone} /> } }}
-          disabled={disabled}
+          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.phone} /> } }}
         />
       </Grid>
     </>

@@ -47,6 +47,20 @@ export async function insertTenant(executor, slug, bandName, createdByUserId, ow
   return rows[0]
 }
 
+// Insert variant for server-generated slugs: a slug collision returns null
+// instead of raising 23505 (which would abort the caller's transaction), so
+// the service can try the next dedupe suffix within the same transaction.
+export async function insertTenantIfSlugFree(executor, slug, bandName, createdByUserId, ownerUserId = null) {
+  const { rows } = await executor.query(
+    `INSERT INTO tenants (slug, band_name, created_by_user_id, owner_user_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (slug) DO NOTHING
+     RETURNING ${tenantSafeProjection()}`,
+    [slug, bandName, createdByUserId, ownerUserId],
+  )
+  return rows[0] ?? null
+}
+
 // Tenants a user owns (self-service management list), newest first.
 export async function listOwnedTenants(executor, userId) {
   const { rows } = await executor.query(

@@ -26,3 +26,10 @@ export const setActiveTenant = (tenantId: Id) =>
     method: 'POST',
     body: JSON.stringify({ tenantId }),
   })
+export const acceptTerms = (version: string) =>
+  request<{ termsAcceptedAt: string; termsVersion: string }>('/api/auth/accept-terms', {
+    method: 'POST',
+    body: JSON.stringify({ version }),
+  })
+export const onboardingComplete = () =>
+  request<void>('/api/auth/onboarding-complete', { method: 'POST' })

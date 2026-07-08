@@ -10,7 +10,10 @@ import {
   unlinkProvider,
   startLinkContext,
   matchesProviderSub,
+  acceptTerms,
 } from '../services/authService.js'
+import { clearOnboardingTenant } from '../repositories/authRepository.js'
+import { requireCurrentTerms } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -157,7 +160,7 @@ router.get('/callback/microsoft', (req, res, next) => handleCallbackFor(req, res
 
 // Begins the explicit link flow (settings → "Link account"): a navigation
 // endpoint, so failures bounce back to the settings page with an error code.
-router.get('/link/:provider/start', async (req, res, next) => {
+router.get('/link/:provider/start', requireCurrentTerms, async (req, res, next) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
   const target = req.params.provider
   if (!oidc.isKnownProvider(target)) return res.status(404).json({ error: 'Not found' })
@@ -178,7 +181,7 @@ router.get('/link/:provider/start', async (req, res, next) => {
 })
 
 // Unsafe method on purpose: CSRF-protected, unlike the redirect GETs above.
-router.post('/link/:provider/unlink', async (req, res, next) => {
+router.post('/link/:provider/unlink', requireCurrentTerms, async (req, res, next) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
   const provider = req.params.provider
   if (!oidc.isKnownProvider(provider)) return res.status(404).json({ error: 'Not found' })
@@ -220,7 +223,33 @@ router.get('/me', async (req, res, next) => {
   }
 })
 
-router.post('/active-tenant', async (req, res, next) => {
+// Terms acceptance is user-level and pre-membership (a fresh onboarding user
+// has no tenant yet), so a session is the only gate — like /me.
+router.post('/accept-terms', async (req, res, next) => {
+  if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
+  try {
+    const result = await acceptTerms(pool, req.session.userId, req.body?.version)
+    if (result.error) return res.status(result.error.status).json(result.error.body)
+    auditLog(req, 'auth.terms_accept', { userId: req.session.userId })
+    res.json({ termsAcceptedAt: result.termsAcceptedAt, termsVersion: result.termsVersion })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// Ends the onboarding flow: clears the resume pointer so a later /onboarding
+// visit can never adopt (and overwrite) the now-established band. Idempotent.
+router.post('/onboarding-complete', requireCurrentTerms, async (req, res, next) => {
+  if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
+  try {
+    await clearOnboardingTenant(pool, req.session.userId)
+    res.status(204).end()
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/active-tenant', requireCurrentTerms, async (req, res, next) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
   const tenantId = Number(req.body?.tenantId)
   if (!Number.isInteger(tenantId) || tenantId <= 0) {

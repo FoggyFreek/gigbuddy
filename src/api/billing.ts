@@ -77,9 +77,12 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
 
 export const getBillingState = () => api<BillingState>('/')
 
-export const subscribe = (planId: number, interval: BillingInterval) =>
+/** Where the hosted checkout returns the browser (server-side whitelist). */
+export type CheckoutRedirect = 'billing' | 'onboarding'
+
+export const subscribe = (planId: number, interval: BillingInterval, redirect?: CheckoutRedirect) =>
   api<{ checkoutUrl: string; trial: boolean }>('/subscribe', {
-    method: 'POST', body: JSON.stringify({ planId, interval }),
+    method: 'POST', body: JSON.stringify({ planId, interval, ...(redirect ? { redirect } : {}) }),
   })
 
 export const changePlan = (planId: number, interval: BillingInterval) =>

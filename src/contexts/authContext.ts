@@ -27,6 +27,11 @@ export interface User {
   entitlements?: UserEntitlements | null
   /** Which OIDC identities are linked to this account. */
   providers?: { google: boolean; microsoft: boolean }
+  /** When (and which version of) the terms were accepted; null = never. */
+  termsAcceptedAt?: string | null
+  termsVersion?: string | null
+  /** Tenant created mid-onboarding (resume pointer); null once onboarding completed. */
+  onboardingTenantId?: Id | null
   memberships?: UserMembership[]
 }
 

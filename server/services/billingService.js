@@ -102,7 +102,7 @@ export async function subscribe(db, user, body) {
   if (!isPlatformBillingConfigured()) return NOT_CONFIGURED
   const parsed = parsePlanSelection(body)
   if (parsed.error) return badRequest(parsed.error)
-  const { planId, interval } = parsed
+  const { planId, interval, redirect } = parsed
 
   const plan = await fetchPlan(db, planId)
   if (!plan || !plan.is_active) return { error: { status: 404, body: { error: 'Plan not found' } } }
@@ -111,7 +111,18 @@ export async function subscribe(db, user, body) {
   if (price === null) return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
   if (price <= 0) return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
 
-  if (await fetchLiveSubscriptionForUser(db, user.id)) {
+  const existing = await fetchLiveSubscriptionForUser(db, user.id)
+  if (existing) {
+    // An interrupted signup for THIS exact plan/interval left a pending_mandate
+    // row: the mandate checkout was created but the browser never returned (lost
+    // response), or the provider call errored before we could hand back a URL.
+    // Resume it instead of 409ing the user into the 24h stale-signup cleanup —
+    // createMandateCheckout is idempotent (it recovers the URL from the still-
+    // open payment, or re-issues one after a failed attempt). A DIFFERENT plan
+    // is a real conflict (one live subscription per user).
+    if (existing.status === 'pending_mandate' && existing.plan_id === planId && existing.billing_interval === interval) {
+      return startMandateCheckout(db, existing, user, redirect, existing.trial_ends_at !== null)
+    }
     return conflict('You already have an active subscription', 'already_subscribed')
   }
 
@@ -131,11 +142,18 @@ export async function subscribe(db, user, body) {
     throw err
   }
 
-  // Remote, local-state-already-committed. A failure here leaves a
-  // pending_mandate row for the scheduler to abandon after the grace window.
+  return startMandateCheckout(db, sub, user, redirect, trialEligible)
+}
+
+// Create (or resume) the €0.01 mandate checkout for a committed pending_mandate
+// row and mirror the open payment locally. Remote work runs with local state
+// already committed, so a failure here just leaves the pending_mandate row for
+// the scheduler (or a later resume) to finish. Idempotent: re-recording the
+// same still-open payment is inert.
+async function startMandateCheckout(db, sub, user, redirect, trialEligible) {
   try {
     const { paymentId, checkoutUrl } = await createMandateCheckout(db, sub, {
-      email: user.email, name: user.name, amountCents: MANDATE_AMOUNT_CENTS,
+      email: user.email, name: user.name, amountCents: MANDATE_AMOUNT_CENTS, redirect,
     })
     await upsertPaymentOutcome(db, {
       subscriptionId: sub.id,

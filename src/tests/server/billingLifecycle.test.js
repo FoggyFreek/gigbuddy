@@ -106,6 +106,47 @@ describe('subscribe', () => {
     expect(res.error.status).toBe(409)
     expect(res.error.body.code).toBe('already_subscribed')
   })
+
+  it('resumes an interrupted signup: re-subscribing the same plan recovers the checkout', async () => {
+    const first = await billingSvc.subscribe(pool, userA(), { planId: await planId('silver'), interval: 'month' })
+    const mandateId = await paymentIdOf(first.subscriptionId, 'mandate_verification')
+
+    // The browser never returned from checkout; the user retries the same plan.
+    const second = await billingSvc.subscribe(pool, userA(), { planId: await planId('silver'), interval: 'month' })
+    expect(second.error).toBeUndefined()
+    expect(second.subscriptionId).toBe(first.subscriptionId)
+    expect(second.checkoutUrl).toMatch(/^https:\/\/pay\.test\//)
+    // The SAME open payment is recovered — no duplicate mandate row, still one sub.
+    expect(await paymentIdOf(first.subscriptionId, 'mandate_verification')).toBe(mandateId)
+    const { rows } = await pool.query('SELECT COUNT(*)::int n FROM subscriptions WHERE user_id = $1', [seed.userA.id])
+    expect(rows[0].n).toBe(1)
+  })
+
+  it('still 409s a re-subscribe to a DIFFERENT plan while pending_mandate', async () => {
+    await billingSvc.subscribe(pool, userA(), { planId: await planId('silver'), interval: 'month' })
+    const res = await billingSvc.subscribe(pool, userA(), { planId: await planId('silver'), interval: 'year' })
+    expect(res.error.status).toBe(409)
+    expect(res.error.body.code).toBe('already_subscribed')
+  })
+
+  it('defaults the checkout return URL to the settings billing page', async () => {
+    await billingSvc.subscribe(pool, userA(), { planId: await planId('silver'), interval: 'month' })
+    expect(fake.lastMandatePaymentArgs.redirectUrl).toMatch(/\/settings\/billing\?checkout=return$/)
+  })
+
+  it("redirect: 'onboarding' returns the checkout to /onboarding", async () => {
+    await billingSvc.subscribe(pool, userA(), {
+      planId: await planId('silver'), interval: 'month', redirect: 'onboarding',
+    })
+    expect(fake.lastMandatePaymentArgs.redirectUrl).toMatch(/\/onboarding\?checkout=return$/)
+  })
+
+  it('rejects an unknown redirect target', async () => {
+    const res = await billingSvc.subscribe(pool, userA(), {
+      planId: await planId('silver'), interval: 'month', redirect: 'https://evil.example',
+    })
+    expect(res.error.status).toBe(400)
+  })
 })
 
 describe('mandate confirmation', () => {

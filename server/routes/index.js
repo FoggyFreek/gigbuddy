@@ -41,7 +41,7 @@ import publicMollieRouter from './publicMollie.js'
 import publicInvoicesRouter from './publicInvoices.js'
 import publicCalendarRouter from './publicCalendar.js'
 import calendarFeedRouter from './calendarFeed.js'
-import { loadUser, requireApproved } from '../middleware/auth.js'
+import { loadUser, requireApproved, requireCurrentTerms } from '../middleware/auth.js'
 import {
   resolveTenantId,
   requireTenantMember,
@@ -127,8 +127,9 @@ router.use('/auth/callback', authLimiter)
 router.use('/auth/link', authLimiter)
 router.use('/auth', authRouter)
 
-const tenantMember = [requireApproved, resolveTenantId, requireTenantMember]
+const tenantMember = [requireApproved, resolveTenantId, requireTenantMember, requireCurrentTerms]
 const superAdmin = [requireApproved, requireSuperAdmin]
+const currentTermsUser = [requireApproved, requireCurrentTerms]
 // Finance surfaces: any read/export requires finance.view; routers gate their
 // own mutations/side-effects with requirePermission(finance.manage) internally.
 // The entitlement write gate is the finance read-only mode: when the owner's
@@ -188,7 +189,7 @@ router.use('/vat-returns', financeView, vatReturnsRouter)
 router.use('/push', tenantMember, pushRouter)
 // User-scoped, deliberately cross-tenant (the bell aggregates all bands) —
 // requireApproved only, no resolveTenantId. See migration 097.
-router.use('/notifications', requireApproved, notificationsRouter)
+router.use('/notifications', currentTermsUser, notificationsRouter)
 // Not entitlement-gated at the mount: describing and revoking a feed token
 // must stay possible after a downgrade (bearer-token erasure); only creating/
 // rotating a token requires the integrations feature (gated in the router).

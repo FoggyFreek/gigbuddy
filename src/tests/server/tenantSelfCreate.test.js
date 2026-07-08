@@ -118,6 +118,72 @@ describe('POST /api/tenants (self-service creation)', () => {
   })
 })
 
+describe('POST /api/tenants (server-generated slug)', () => {
+  it('generates a slug from band_name when slug is omitted', async () => {
+    const res = await asUserA(
+      request(app).post('/api/tenants').send({ band_name: 'Thé Bänd!!' }),
+    ).expect(201)
+    expect(res.body.slug).toBe('the-band')
+    expect(res.body.band_name).toBe('Thé Bänd!!')
+  })
+
+  it('suffixes -2 when the generated slug is taken', async () => {
+    await asUserA(request(app).post('/api/tenants').send({ band_name: 'The Band' })).expect(201)
+    // Different user (bronze bands:1 caps userA at one band).
+    const res = await asUserB(
+      request(app).post('/api/tenants').send({ band_name: 'The Band' }),
+    ).expect(201)
+    expect(res.body.slug).toBe('the-band-2')
+  })
+
+  it('two users creating the same name concurrently get distinct slugs', async () => {
+    const [a, b] = await Promise.all([
+      asUserA(request(app).post('/api/tenants').send({ band_name: 'Race Band' })),
+      asUserB(request(app).post('/api/tenants').send({ band_name: 'Race Band' })),
+    ])
+    expect(a.status).toBe(201)
+    expect(b.status).toBe(201)
+    expect([a.body.slug, b.body.slug].sort()).toEqual(['race-band', 'race-band-2'])
+  })
+
+  it('truncates a long band name so the suffixed slug stays valid', async () => {
+    const longName = 'X'.repeat(80)
+    const first = await asUserA(request(app).post('/api/tenants').send({ band_name: longName })).expect(201)
+    expect(first.body.slug.length).toBeLessThanOrEqual(64)
+    const second = await asUserB(request(app).post('/api/tenants').send({ band_name: longName })).expect(201)
+    expect(second.body.slug.length).toBeLessThanOrEqual(64)
+    expect(second.body.slug).toMatch(/-2$/)
+  })
+
+  it('an all-symbols band name falls back to "band"', async () => {
+    const res = await asUserA(
+      request(app).post('/api/tenants').send({ band_name: '!!! ***' }),
+    ).expect(201)
+    expect(res.body.slug).toBe('band')
+  })
+
+  it('a supplied slug is still validated and still conflicts', async () => {
+    await asUserA(request(app).post('/api/tenants').send({ slug: 'Bad Slug!', band_name: 'X' })).expect(400)
+    await asUserA(request(app).post('/api/tenants').send({ slug: 'alpha', band_name: 'X' })).expect(409)
+  })
+
+  it('onboarding: true records the onboarding tenant pointer; a plain create does not', async () => {
+    const res = await asUserA(
+      request(app).post('/api/tenants').send({ band_name: 'Onboard Band', onboarding: true }),
+    ).expect(201)
+    const { rows: [rowA] } = await pool.query(
+      'SELECT onboarding_tenant_id FROM users WHERE id = $1', [seed.userA.id],
+    )
+    expect(rowA.onboarding_tenant_id).toBe(res.body.id)
+
+    await asUserB(request(app).post('/api/tenants').send({ band_name: 'Plain Band' })).expect(201)
+    const { rows: [rowB] } = await pool.query(
+      'SELECT onboarding_tenant_id FROM users WHERE id = $1', [seed.userB.id],
+    )
+    expect(rowB.onboarding_tenant_id).toBeNull()
+  })
+})
+
 describe('GET /api/tenants/owned', () => {
   it('lists only the tenants the caller owns', async () => {
     const created = await asUserA(request(app).post('/api/tenants').send(createBody())).expect(201)

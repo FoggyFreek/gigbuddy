@@ -70,9 +70,14 @@ import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '.
 import { compressLogo } from '../utils/compressImage.ts'
 
 function wrap(ui, { user } = {}) {
+  const activeUser = user ?? {
+    isSuperAdmin: false,
+    activeTenantRole: 'contributor',
+    permissions: ['app.view', 'planning.write', 'purchase.create'],
+  }
   return render(
     <ThemeProvider theme={theme}>
-      <AuthContext.Provider value={{ user, logout: vi.fn() }}>
+      <AuthContext.Provider value={{ user: activeUser, logout: vi.fn() }}>
         <MemoryRouter>{ui}</MemoryRouter>
       </AuthContext.Provider>
     </ThemeProvider>
@@ -165,6 +170,22 @@ describe('ProfilePage', () => {
   it('renders BandMembersSection', async () => {
     wrap(<ProfilePage />)
     await waitFor(() => expect(screen.getByText(/band members/i)).toBeInTheDocument())
+  })
+
+  it('shows a reader the profile without edit controls', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, {
+      user: { isSuperAdmin: false, activeTenantRole: 'reader', permissions: ['app.view'] },
+    })
+
+    expect(await screen.findByText(/you have read-only access/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /links/i }))
+    expect(await screen.findByText('EPK')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /delete link/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add link/i })).not.toBeInTheDocument()
+    expect(updateProfile).not.toHaveBeenCalled()
   })
 
   it('deletes a link', async () => {

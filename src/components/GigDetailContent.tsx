@@ -40,6 +40,7 @@ import GigParticipantsSection from './GigParticipantsSection.tsx'
 import GigContactsSection from './GigContactsSection.tsx'
 import GigStatusIcon from './GigStatusIcon.tsx'
 import ImageCropDialog from './ImageCropDialog.tsx'
+import PlanningReadOnlyAlert from './PlanningReadOnlyAlert.tsx'
 import _VenuePickerRaw from './VenuePicker.tsx'
 interface VenuePickerProps {
   categoryFilter?: string
@@ -620,6 +621,8 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       </Box>
 
       {/* ── Event ──────────────────────────────────────────────────────── */}
+      <PlanningReadOnlyAlert canWrite={canWrite} />
+
       <Box sx={{ display: activeTab === 'event' ? 'block' : 'none' }}>
         <Grid container spacing={2}>
           <Grid size={12}>
@@ -632,7 +635,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               label={t($ => $.detail.date)}
               fullWidth
               required
-              disabled={!canWrite}
+              readOnly={!canWrite}
               value={form.event_date}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('event_date', e.target.value)}
               error={!!requiredErrors.event_date}
@@ -643,7 +646,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             <TimePicker
               label={t($ => $.detail.startTime)}
               ampm={false}
-              disabled={!canWrite}
+              readOnly={!canWrite}
               value={timeStringToDayjs(form.start_time)}
               onChange={(v) => handleChange('start_time', dayjsToTimeString(v))}
               slotProps={{ textField: { fullWidth: true } }}
@@ -653,7 +656,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             <TimePicker
               label={t($ => $.detail.endTime)}
               ampm={false}
-              disabled={!canWrite}
+              readOnly={!canWrite}
               value={timeStringToDayjs(form.end_time)}
               onChange={(v) => handleChange('end_time', dayjsToTimeString(v))}
               slotProps={{ textField: { fullWidth: true } }}
@@ -678,11 +681,11 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               label={t($ => $.detail.eventDescription)}
               fullWidth
               required
-              disabled={!canWrite}
               value={form.event_description}
               onChange={(e) => handleChange('event_description', e.target.value)}
               error={!!requiredErrors.event_description}
               helperText={requiredErrors.event_description}
+              slotProps={{ htmlInput: { readOnly: !canWrite } }}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
@@ -712,10 +715,10 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               label={t($ => $.detail.eventLink)}
               type="url"
               fullWidth
-              disabled={!canWrite}
               value={form.event_link}
               onChange={(e) => handleChange('event_link', e.target.value)}
               slotProps={{
+                htmlInput: { readOnly: !canWrite },
                 input: {
                   endAdornment: form.event_link ? (
                     <InputAdornment position="end">
@@ -787,11 +790,11 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             <TextField
               label={t($ => $.detail.guaranteedFee)}
               fullWidth
-              disabled={!canWrite}
               value={form.booking_fee}
               onChange={(e) => handleChange('booking_fee', e.target.value)}
               placeholder="0.00"
               slotProps={{
+                htmlInput: { readOnly: !canWrite },
                 input: {
                   startAdornment: <InputAdornment position="start">€</InputAdornment>,
                 },
@@ -803,13 +806,12 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               label={t($ => $.detail.merchandiseCut)}
               type="number"
               fullWidth
-              disabled={!canWrite}
               value={form.merchandise_cut}
               onChange={(e) => handleChange('merchandise_cut', e.target.value)}
               placeholder="0"
               sx={NO_NUMBER_SPINNER_SX}
               slotProps={{
-                htmlInput: { min: 0, max: 100, step: 0.5 },
+                htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !canWrite },
                 input: {
                   endAdornment: <InputAdornment position="end">%</InputAdornment>,
                 },
@@ -822,13 +824,12 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                 label={t($ => $.detail.percentageOfNetSales)}
                 type="number"
                 fullWidth
-                disabled={!canWrite}
                 value={form.percentage_of_sales}
                 onChange={(e) => handleChange('percentage_of_sales', e.target.value)}
                 placeholder="0"
                 sx={NO_NUMBER_SPINNER_SX}
                 slotProps={{
-                  htmlInput: { min: 0, max: 100, step: 0.5 },
+                  htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !canWrite },
                   input: {
                     endAdornment: <InputAdornment position="end">%</InputAdornment>,
                   },
@@ -842,10 +843,10 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                 label={t($ => $.detail.ticketLink)}
                 type="url"
                 fullWidth
-                disabled={!canWrite}
                 value={form.ticket_link}
                 onChange={(e) => handleChange('ticket_link', e.target.value)}
                 slotProps={{
+                  htmlInput: { readOnly: !canWrite },
                   input: {
                     endAdornment: form.ticket_link ? (
                       <InputAdornment position="end">
@@ -995,10 +996,10 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
               fullWidth
               multiline
               minRows={3}
-              disabled={!canWrite}
               value={form.notes}
               onChange={(e) => handleChange('notes', e.target.value)}
               sx={{ my: 2 }}
+              slotProps={{ htmlInput: { readOnly: !canWrite } }}
             />
           </Grid>
         </Grid>

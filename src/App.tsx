@@ -26,6 +26,8 @@ const LoginPage = lazy(() => import('./pages/LoginPage.tsx'))
 const PendingApprovalPage = lazy(() => import('./pages/PendingApprovalPage.tsx'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage.tsx'))
 const RedeemInvitePage = lazy(() => import('./pages/RedeemInvitePage.tsx'))
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage.tsx'))
+const AcceptTermsPage = lazy(() => import('./pages/AcceptTermsPage.tsx'))
 const RehearsalDetailPage = lazy(() => import('./pages/RehearsalDetailPage.tsx'))
 const RehearsalsPage = lazy(() => import('./pages/RehearsalsPage.tsx'))
 const TasksPage = lazy(() => import('./pages/TasksPage.tsx'))
@@ -61,6 +63,8 @@ export default function App() {
         <Route path="/payment/thanks" element={<PaymentThanksPage />} />
         <Route element={<RequireAuth />}>
           <Route path="/redeem-invite" element={<RedeemInvitePage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/accept-terms" element={<AcceptTermsPage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />

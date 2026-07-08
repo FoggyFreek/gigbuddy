@@ -5,6 +5,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { auditLog } from '../utils/auditLog.js'
+import { requireCurrentTerms } from '../middleware/auth.js'
 import { listPlans } from '../services/planService.js'
 import {
   getBillingState,
@@ -31,14 +32,14 @@ router.get('/', async (req, res) => {
   res.json({ ...state, plans: plans.filter((p) => p.is_active) })
 })
 
-router.post('/subscribe', async (req, res) => {
+router.post('/subscribe', requireCurrentTerms, async (req, res) => {
   const result = await subscribe(pool, req.user, req.body ?? {})
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'billing.subscribe', { subscriptionId: result.subscriptionId })
   res.status(201).json({ checkoutUrl: result.checkoutUrl, trial: result.trial })
 })
 
-router.post('/change-plan', async (req, res) => {
+router.post('/change-plan', requireCurrentTerms, async (req, res) => {
   const result = await changePlan(pool, req.user, req.body ?? {})
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'billing.plan_change', { interval: req.body?.interval })
@@ -47,27 +48,27 @@ router.post('/change-plan', async (req, res) => {
 
 // Read-only downgrade preview for the confirm dialog (features/data to be
 // removed, binding limit snapshot, capacity blockers).
-router.post('/downgrade/preview', async (req, res) => {
+router.post('/downgrade/preview', requireCurrentTerms, async (req, res) => {
   const result = await previewDowngrade(pool, req.user, req.body ?? {})
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })
 
-router.post('/downgrade', async (req, res) => {
+router.post('/downgrade', requireCurrentTerms, async (req, res) => {
   const result = await downgrade(pool, req.user, req.body ?? {})
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'billing.downgrade_scheduled', { planId: req.body?.planId, interval: req.body?.interval })
   res.json(result)
 })
 
-router.post('/cancel', async (req, res) => {
+router.post('/cancel', requireCurrentTerms, async (req, res) => {
   const result = await cancelSubscription(pool, req.user.id)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'billing.cancel', {})
   res.json(result)
 })
 
-router.post('/resume', async (req, res) => {
+router.post('/resume', requireCurrentTerms, async (req, res) => {
   const result = await resumeSubscription(pool, req.user.id)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'billing.resume', {})
@@ -75,7 +76,7 @@ router.post('/resume', async (req, res) => {
 })
 
 // Manual reconcile (dev, when webhooks are disabled).
-router.post('/sync', async (req, res) => {
+router.post('/sync', requireCurrentTerms, async (req, res) => {
   res.json(await syncOwnSubscription(pool, req.user.id))
 })
 

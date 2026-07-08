@@ -21,6 +21,76 @@
     "current": "Huidig abonnement",
     "manage": "Abonnement beheren"
   },
+  "members": {
+    "columns": {
+      "name": "Naam",
+      "email": "E-mail",
+      "status": "Status",
+      "role": "Rol",
+      "bandMember": "Bandlid",
+      "actions": "Acties"
+    },
+    "superChip": "super",
+    "noneOption": "— geen —",
+    "legacyMemberOption": "member (legacy)",
+    "approve": "Goedkeuren",
+    "reject": "Afwijzen",
+    "status": {
+      "pending": "in afwachting",
+      "approved": "goedgekeurd",
+      "rejected": "afgewezen"
+    },
+    "tooltips": {
+      "cannotRemoveSelf": "Je kunt jezelf niet verwijderen",
+      "cannotRemoveSuperAdmin": "Een super admin kan niet worden verwijderd",
+      "onlySuperAdminRemoveTenantAdmin": "Alleen super admins kunnen een tenant admin verwijderen",
+      "removeFromTenant": "Verwijder uit deze band",
+      "onlySuperAdminApproveTenantAdmin": "Alleen super admins kunnen een tenant_admin-lidmaatschap goedkeuren"
+    },
+    "aria": {
+      "removeMember": "lid verwijderen"
+    },
+    "errors": {
+      "updateFailed": "Bijwerken mislukt",
+      "deleteFailed": "Verwijderen mislukt"
+    }
+  },
+  "invites": {
+    "newInvite": "Nieuwe uitnodiging",
+    "create": "Aanmaken",
+    "role": "Rol",
+    "expiresInDays": "Verloopt over (dagen)",
+    "expiresHelper": "Laat leeg voor geen vervaldatum. Max 365.",
+    "superAdminOnly": " (alleen super admin)",
+    "noInvitesYet": "Nog geen uitnodigingen.",
+    "singleUseHint": "Uitnodigingscodes zijn eenmalig te gebruiken. Stuur de URL naar de persoon die je wilt uitnodigen.",
+    "columns": {
+      "state": "Status",
+      "created": "Aangemaakt",
+      "expires": "Verloopt",
+      "usedBy": "Gebruikt door",
+      "actions": "Acties"
+    },
+    "status": {
+      "active": "actief",
+      "expired": "verlopen",
+      "used": "gebruikt"
+    },
+    "copyTooltip": "Kopieer uitnodigings-URL",
+    "copiedTooltip": "Gekopieerd!",
+    "revokeTooltip": "Uitnodiging intrekken",
+    "alreadyInactiveTooltip": "Al inactief",
+    "aria": {
+      "copyUrl": "kopieer uitnodigings-URL",
+      "revoke": "uitnodiging intrekken"
+    },
+    "errors": {
+      "loadFailed": "Uitnodigingen laden mislukt",
+      "createFailed": "Aanmaken mislukt",
+      "revokeFailed": "Intrekken mislukt",
+      "copyFailed": "Kopiëren naar klembord mislukt"
+    }
+  },
   "connectedAccounts": {
     "title": "Gekoppelde accounts",
     "description": "Inlogmethoden die aan je account zijn gekoppeld. Je kunt inloggen met elke gekoppelde methode.",

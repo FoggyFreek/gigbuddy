@@ -72,7 +72,7 @@ export async function ensureCustomerForUser(db, { userId, email, name }) {
 // Create the €0.01 mandate-establishing first payment and return its checkout
 // URL. On a resumed call (op already succeeded) the URL is recovered by
 // re-fetching the still-open payment from the provider.
-export async function createMandateCheckout(db, sub, { email, name, amountCents }) {
+export async function createMandateCheckout(db, sub, { email, name, amountCents, redirect = 'billing' }) {
   const provider = getPaymentProvider()
   const customerId = await ensureCustomerForUser(db, { userId: sub.user_id, email, name })
 
@@ -88,7 +88,7 @@ export async function createMandateCheckout(db, sub, { email, name, amountCents 
       amountCents,
       description: 'GigBuddy mandate verification',
       idempotencyKey,
-      redirectUrl: billingRedirectUrl(),
+      redirectUrl: billingRedirectUrl(redirect),
       webhookUrl: billingWebhookUrl(sub.id),
       metadata: billingMetadata(sub.id, 'mandate'),
     })

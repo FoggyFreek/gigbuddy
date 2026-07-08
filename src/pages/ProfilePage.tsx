@@ -26,6 +26,8 @@ import ProfileLinksTab from '../components/profile/ProfileLinksTab.tsx'
 import ProfileFinancialsTab from '../components/profile/ProfileFinancialsTab.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import type { Id } from '../types/entities.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
+import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 
 interface ProfileLink {
   id?: Id
@@ -37,6 +39,7 @@ interface ProfileLink {
 export default function ProfilePage() {
   const { t } = useTranslation('profile')
   const { user } = useAuth()
+  const { canWritePlanning } = usePermissions()
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM)
@@ -108,12 +111,14 @@ export default function ProfilePage() {
   }, [])
 
   function handleChange(field: string, value: unknown) {
+    if (!canWritePlanning) return
     setForm((prev) => ({ ...prev, [field]: value }))
     if (field === 'band_name') setBandName(String(value))
     schedule({ [field]: value } as Partial<ProfileForm>)
   }
 
   async function handleAddLink() {
+    if (!canWritePlanning) return
     if (!newLink.label.trim() || !newLink.url.trim() || adding) return
     setAdding(true)
     try {
@@ -126,6 +131,7 @@ export default function ProfilePage() {
   }
 
   async function handleDeleteLink(id: Id) {
+    if (!canWritePlanning) return
     await deleteLink(id)
     setLinks((prev) => prev.filter((l) => l.id !== id))
   }
@@ -146,8 +152,10 @@ export default function ProfilePage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>{t($ => $.title)}</Typography>
-        <SaveStatusLabel status={saveStatus} />
+        {canWritePlanning && <SaveStatusLabel status={saveStatus} />}
       </Box>
+
+      <PlanningReadOnlyAlert canWrite={canWritePlanning} />
 
       <Grid container spacing={3} sx={{ mb: 3, alignItems: 'flex-start' }}>
         <Grid size={{ xs: 12, lg: 8 }}>
@@ -166,7 +174,8 @@ export default function ProfilePage() {
           <ProfileIdentityCard
             form={form}
             isAdmin={isAdmin}
-            editing={editingIdentity}
+            editing={canWritePlanning && editingIdentity}
+            canEdit={canWritePlanning}
             onToggleEditing={() => setEditingIdentity((v) => !v)}
             onChange={handleChange}
             logo={logo.cardProps}
@@ -198,7 +207,8 @@ export default function ProfilePage() {
             {activeTab === 'socials' && (
               <ProfileSocialsTab
                 form={form}
-                editing={editingSocials}
+                editing={canWritePlanning && editingSocials}
+                canEdit={canWritePlanning}
                 onToggleEditing={() => setEditingSocials((v) => !v)}
                 onChange={handleChange}
                 copiedField={copiedField ?? undefined}
@@ -215,6 +225,7 @@ export default function ProfilePage() {
                 onAdd={handleAddLink}
                 onLinkChange={handleLinkChange}
                 onDeleteLink={handleDeleteLink}
+                canEdit={canWritePlanning}
               />
             )}
 

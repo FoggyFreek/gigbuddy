@@ -256,13 +256,15 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
     updateGig.mockClear()
   })
 
-  it('disables the editable fields', async () => {
+  it('keeps text fields readable but read-only', async () => {
     wrap(<GigDetailContent gigId={1} canWrite={false} />)
     await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
-    expect(screen.getByLabelText(/event description/i)).toBeDisabled()
+    expect(screen.getByLabelText(/event description/i)).toHaveAttribute('readonly')
+    expect(screen.getByLabelText(/event description/i)).not.toBeDisabled()
     expect(screen.getByLabelText(/paid admission/i)).toBeDisabled()
-    expect(screen.getByLabelText(/guaranteed fee/i)).toBeDisabled()
-    expect(screen.getByLabelText(/notes/i)).toBeDisabled()
+    expect(screen.getByLabelText(/guaranteed fee/i)).toHaveAttribute('readonly')
+    expect(screen.getByLabelText(/notes/i)).toHaveAttribute('readonly')
+    expect(screen.getByText(/you have read-only access/i)).toBeInTheDocument()
   })
 
   it('hides the banner upload control', async () => {

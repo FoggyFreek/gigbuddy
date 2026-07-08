@@ -30,9 +30,10 @@ interface ProfileLinkRowProps {
   link: ProfileLink
   onChange: (patch: Partial<ProfileLink>) => void
   onDelete: () => void
+  canEdit: boolean
 }
 
-function ProfileLinkRow({ link, onChange, onDelete }: Readonly<ProfileLinkRowProps>) {
+function ProfileLinkRow({ link, onChange, onDelete, canEdit }: Readonly<ProfileLinkRowProps>) {
   const { t } = useTranslation('profile')
   const [editing, setEditing] = useState(false)
   const saveFn = useCallback(
@@ -46,7 +47,7 @@ function ProfileLinkRow({ link, onChange, onDelete }: Readonly<ProfileLinkRowPro
     schedule({ [field]: value })
   }
 
-  if (!editing) {
+  if (!editing || !canEdit) {
     return (
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <Box sx={{ display: 'grid', placeItems: 'center' }}>
@@ -72,16 +73,16 @@ function ProfileLinkRow({ link, onChange, onDelete }: Readonly<ProfileLinkRowPro
             </Box>
           </IconButton>
         </Tooltip>
-        <Tooltip title={t($ => $.links.edit)}>
+        {canEdit && <Tooltip title={t($ => $.links.edit)}>
           <IconButton size="small" onClick={() => setEditing(true)}>
             <EditIcon fontSize="small" />
           </IconButton>
-        </Tooltip>
-        <Tooltip title={t($ => $.links.delete)}>
+        </Tooltip>}
+        {canEdit && <Tooltip title={t($ => $.links.delete)}>
           <IconButton onClick={onDelete} color="error" size="small">
             <DeleteIcon fontSize="small" />
           </IconButton>
-        </Tooltip>
+        </Tooltip>}
       </Stack>
     )
   }
@@ -148,9 +149,10 @@ interface ProfileLinksTabProps {
   onAdd: () => void
   onLinkChange: (id: Id, patch: Partial<ProfileLink>) => void
   onDeleteLink: (id: Id) => void
+  canEdit?: boolean
 }
 
-export default function ProfileLinksTab({ links, newLink, setNewLink, adding, onAdd, onLinkChange, onDeleteLink }: Readonly<ProfileLinksTabProps>) {
+export default function ProfileLinksTab({ links, newLink, setNewLink, adding, onAdd, onLinkChange, onDeleteLink, canEdit = true }: Readonly<ProfileLinksTabProps>) {
   const { t } = useTranslation('profile')
   return (
     <Box sx={{ p: 3 }}>
@@ -161,6 +163,7 @@ export default function ProfileLinksTab({ links, newLink, setNewLink, adding, on
             link={link}
             onChange={(patch) => onLinkChange(link.id!, patch)}
             onDelete={() => onDeleteLink(link.id!)}
+            canEdit={canEdit}
           />
         ))}
 
@@ -170,9 +173,9 @@ export default function ProfileLinksTab({ links, newLink, setNewLink, adding, on
           </Typography>
         )}
 
-        <Divider />
+        {canEdit && <Divider />}
 
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+        {canEdit && <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
           <TextField
             label={t($ => $.links.label)}
             size="small"
@@ -197,7 +200,7 @@ export default function ProfileLinksTab({ links, newLink, setNewLink, adding, on
           >
             {t($ => $.links.add)}
           </Button>
-        </Stack>
+        </Stack>}
       </Stack>
     </Box>
   )

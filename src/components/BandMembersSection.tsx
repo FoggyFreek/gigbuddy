@@ -47,7 +47,7 @@ interface BandMemberRowProps {
 export default function BandMembersSection() {
   const { t } = useTranslation(['profile', 'common'])
   const navigate = useNavigate()
-  const { canManageMembers } = usePermissions()
+  const { canManageMembers, canWritePlanning } = usePermissions()
   const [members, setMembers] = useState<MemberWithRole[]>([])
   const [newMember, setNewMember] = useState<{ name: string; role: string; position: string }>({ name: '', role: '', position: 'lead' })
   const [adding, setAdding] = useState(false)
@@ -58,6 +58,7 @@ export default function BandMembersSection() {
   }, [])
 
   async function handleAdd() {
+    if (!canWritePlanning) return
     if (!newMember.name.trim() || adding) return
     setAdding(true)
     try {
@@ -70,6 +71,7 @@ export default function BandMembersSection() {
   }
 
   async function handleDelete(id: MemberWithRole['id']) {
+    if (!canWritePlanning) return
     if (id === undefined) return
     await deleteMember(id)
     setMembers((prev) => prev.filter((m) => m.id !== id))
@@ -88,7 +90,7 @@ export default function BandMembersSection() {
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {t($ => $.members.title)}
         </Typography>
-        <Button
+        {canWritePlanning && <Button
           size="small"
           startIcon={editing ? <CheckIcon /> : <EditIcon />}
           onClick={() => setEditing((v) => !v)}
@@ -96,7 +98,7 @@ export default function BandMembersSection() {
           sx={{ ml: 2 }}
         >
           {editing ? t($ => $.actions.done, { ns: 'common' }) : t($ => $.actions.edit, { ns: 'common' })}
-        </Button>
+        </Button>}
       </Stack>
 
       <Stack spacing={2}>

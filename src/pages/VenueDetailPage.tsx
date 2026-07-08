@@ -33,6 +33,7 @@ import {
 } from '../api/venues.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import ContactPicker from '../components/ContactPicker.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
@@ -232,6 +233,8 @@ export default function VenueDetailPage() {
           </>
         )}
       </Box>
+
+      <PlanningReadOnlyAlert canWrite={canWrite} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

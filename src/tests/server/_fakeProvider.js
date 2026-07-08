@@ -34,8 +34,9 @@ export class FakeProvider {
     return existingCustomerId || `cst_${++this.custSeq}`
   }
 
-  async createMandatePayment({ customerId, amountCents }) {
+  async createMandatePayment({ customerId, amountCents, ...rest }) {
     this._maybeFail('createMandatePayment')
+    this.lastMandatePaymentArgs = { customerId, amountCents, ...rest }
     const id = `tr_${++this.paySeq}`
     this.payments.set(id, {
       id, status: 'open', amountCents, paidAt: null, createdAt: new Date(),

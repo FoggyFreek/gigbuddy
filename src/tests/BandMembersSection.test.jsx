@@ -19,7 +19,7 @@ vi.mock('../api/bandMembers.ts', () => ({
 import { createMember, deleteMember, listMembers, updateMember } from '../api/bandMembers.ts'
 
 const memberAuth = {
-  user: { id: 7, activeTenantRole: 'member', permissions: [] },
+  user: { id: 7, activeTenantRole: 'member', permissions: ['app.view', 'planning.write', 'purchase.create'] },
   setUser: () => {},
   logout: async () => {},
   switchTenant: async () => undefined,
@@ -28,7 +28,7 @@ const memberAuth = {
 
 const adminAuth = {
   ...memberAuth,
-  user: { id: 7, activeTenantRole: 'tenant_admin', permissions: ['members.manage'] },
+  user: { id: 7, activeTenantRole: 'tenant_admin', permissions: ['app.view', 'planning.write', 'members.manage'] },
 }
 
 function wrap(ui, { auth = memberAuth } = {}) {
@@ -58,6 +58,14 @@ describe('BandMembersSection', () => {
     wrap(<BandMembersSection />)
     await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
     expect(screen.getByText('(Guitar)')).toBeInTheDocument()
+  })
+
+  it('keeps the member list view-only for a reader', async () => {
+    wrap(<BandMembersSection />, {
+      auth: { ...memberAuth, user: { id: 7, activeTenantRole: 'reader', permissions: ['app.view'] } },
+    })
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
   })
 
   it('adds a new member', async () => {

@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -36,7 +37,7 @@ const PLANS = [
   },
 ]
 
-function wrap(ui, user) {
+function wrap(ui, user, { initialEntry = '/settings/billing' } = {}) {
   const auth = {
     user,
     setUser: () => {},
@@ -45,9 +46,11 @@ function wrap(ui, user) {
     refreshUser: vi.fn().mockResolvedValue(user),
   }
   return render(
-    <ThemeProvider theme={theme}>
-      <AuthContext.Provider value={auth}>{ui}</AuthContext.Provider>
-    </ThemeProvider>,
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <ThemeProvider theme={theme}>
+        <AuthContext.Provider value={auth}>{ui}</AuthContext.Provider>
+      </ThemeProvider>
+    </MemoryRouter>,
   )
 }
 
@@ -84,6 +87,24 @@ describe('BillingSettingsSection — current plan tier logo', () => {
     // render their own tier logos, so a container-wide query would false-positive.
     const currentCard = (await screen.findByText(/You are on the free plan/)).closest('.MuiPaper-root')
     expect(currentCard?.querySelector('img[src^="/icons/gb_"]')).toBeNull()
+  })
+})
+
+describe('BillingSettingsSection — checkout return', () => {
+  it('syncs the subscription when arriving with ?checkout=return', async () => {
+    api.getBillingState.mockResolvedValue({ subscription: null, ownedTenantCount: 1, plans: PLANS })
+    api.syncSubscription.mockResolvedValue({ subscription: null })
+    wrap(<BillingSettingsSection />, participantUser, {
+      initialEntry: '/settings/billing?checkout=return',
+    })
+    await waitFor(() => expect(api.syncSubscription).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not sync on a normal visit', async () => {
+    api.getBillingState.mockResolvedValue({ subscription: null, ownedTenantCount: 1, plans: PLANS })
+    wrap(<BillingSettingsSection />, participantUser)
+    await screen.findByText(/You are on the free plan/)
+    expect(api.syncSubscription).not.toHaveBeenCalled()
   })
 })
 

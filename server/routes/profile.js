@@ -76,6 +76,7 @@ function sendError(res, error) {
 // remove stored secrets (GDPR erasure; a lost feature must never trap
 // credentials). Only setting/changing a credential (PUT) needs the feature.
 const manageIntegration = requirePermission(PERMISSIONS.TENANT_MANAGE)
+const writeProfile = requirePermission(PERMISSIONS.PLANNING_WRITE)
 const setIntegration = [manageIntegration, requireEntitlement(FEATURES.INTEGRATIONS)]
 const customization = requireEntitlement(FEATURES.CUSTOMIZATION)
 function noStore(_req, res, next) {
@@ -91,7 +92,7 @@ router.get('/', async (req, res) => {
 })
 
 // Update tenant profile (partial)
-router.patch('/', async (req, res) => {
+router.patch('/', writeProfile, async (req, res) => {
   // accent_color is part of the customization feature; the rest of the profile
   // stays editable on any plan, so the gate is field-level, not route-level.
   if ('accent_color' in (req.body ?? {}) && !(await hasEntitledFeature(req, FEATURES.CUSTOMIZATION))) {
@@ -108,14 +109,14 @@ router.patch('/', async (req, res) => {
 })
 
 // Create link
-router.post('/links', async (req, res) => {
+router.post('/links', writeProfile, async (req, res) => {
   const result = await createLink(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.link)
 })
 
 // Update link (partial)
-router.patch('/links/:linkId', async (req, res) => {
+router.patch('/links/:linkId', writeProfile, async (req, res) => {
   const linkId = requireLinkId(req, res); if (linkId === null) return
   const result = await patchLink(pool, req.tenantId, linkId, req.body)
   if (result.error) return sendError(res, result.error)
@@ -123,7 +124,7 @@ router.patch('/links/:linkId', async (req, res) => {
 })
 
 // Delete link
-router.delete('/links/:linkId', async (req, res) => {
+router.delete('/links/:linkId', writeProfile, async (req, res) => {
   const linkId = requireLinkId(req, res); if (linkId === null) return
   const result = await deleteLink(pool, req.tenantId, linkId)
   if (result.error) return sendError(res, result.error)

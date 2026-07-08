@@ -14,9 +14,11 @@ import {
   upsertSeedAdminMembership,
   firstApprovedTenantId,
   isApprovedMember,
+  setTermsAccepted,
 } from '../repositories/authRepository.js'
 import { permissionsForRole } from '../auth/permissions.js'
 import { resolveTenantEntitlements } from './entitlementService.js'
+import { TERMS_VERSION } from '../../shared/termsVersion.js'
 
 // Builds the /me payload for a user, resolving the active tenant. The session's
 // preferred active tenant wins when it's still an approved membership, else the
@@ -78,6 +80,9 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
         google: user.google_sub != null,
         microsoft: user.microsoft_sub != null,
       },
+      termsAcceptedAt: user.terms_accepted_at ?? null,
+      termsVersion: user.terms_version ?? null,
+      onboardingTenantId: user.onboarding_tenant_id ?? null,
       memberships: memberships.map((m) => ({
         tenantId: m.tenant_id,
         tenantName: m.tenant_name,
@@ -204,4 +209,15 @@ export async function unlinkProvider(db, userId, provider) {
 
 export async function canUseTenant(db, userId, tenantId) {
   return isApprovedMember(db, userId, tenantId)
+}
+
+// Records acceptance of the CURRENT terms version only — any other value is a
+// stale or forged client. Idempotent per the repository's CASE semantics.
+export async function acceptTerms(db, userId, version) {
+  if (version !== TERMS_VERSION) {
+    return { error: { status: 400, body: { error: 'Unknown terms version', code: 'terms_version_mismatch' } } }
+  }
+  const row = await setTermsAccepted(db, userId, version)
+  if (!row) return { error: { status: 401, body: { error: 'Unauthorized' } } }
+  return { termsAcceptedAt: row.terms_accepted_at, termsVersion: row.terms_version }
 }

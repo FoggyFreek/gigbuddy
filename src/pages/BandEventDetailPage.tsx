@@ -23,6 +23,7 @@ import BandEventFields from '../components/BandEventFields.tsx'
 import PastEventAlert from '../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 
 const REQUIRED_FIELDS = ['title', 'start_date']
 
@@ -97,6 +98,7 @@ export default function BandEventDetailPage() {
   }, [bandEventId])
 
   function handleChange(field: string, value: string | boolean | null) {
+    if (!canWritePlanning) return
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
     if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
@@ -129,6 +131,7 @@ export default function BandEventDetailPage() {
       </Box>
 
       {!loading && <PastEventAlert date={form.end_date || form.start_date} />}
+      <PlanningReadOnlyAlert canWrite={canWritePlanning} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -140,13 +143,16 @@ export default function BandEventDetailPage() {
             form={form}
             onChange={handleChange}
             errors={{ ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors }}
+            readOnly={!canWritePlanning}
           />
         </Grid>
       )}
 
-      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <SaveStatusLabel status={saveStatus} />
-      </Box>
+      {canWritePlanning && (
+        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+          <SaveStatusLabel status={saveStatus} />
+        </Box>
+      )}
 
       {canWritePlanning && (
         <Box sx={{ mt: 4 }}>

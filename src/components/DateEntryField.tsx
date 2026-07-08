@@ -17,6 +17,7 @@ interface DateEntryFieldProps {
   }
   sx?: SxProps<Theme>
   disabled?: boolean
+  readOnly?: boolean
   onFocus?: React.FocusEventHandler<HTMLInputElement | HTMLTextAreaElement>
   onBlur?: React.FocusEventHandler<HTMLInputElement | HTMLTextAreaElement>
   [key: string]: unknown
@@ -30,6 +31,7 @@ export default function DateEntryField({
   slotProps = {},
   sx,
   disabled = false,
+  readOnly = false,
   onFocus,
   onBlur,
   ...textFieldProps
@@ -38,7 +40,7 @@ export default function DateEntryField({
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   function openDatePicker() {
-    if (disabled) return
+    if (disabled || readOnly) return
     inputRef.current?.focus()
     ;(inputRef.current as HTMLInputElement & { showPicker?: () => void })?.showPicker?.()
   }
@@ -46,6 +48,7 @@ export default function DateEntryField({
   const htmlInputSlotProps = {
     ...slotProps.htmlInput,
     ref: inputRef,
+    readOnly,
   }
   const inputSlotProps = {
     ...slotProps.input,
@@ -57,7 +60,7 @@ export default function DateEntryField({
             edge="end"
             size="small"
             aria-label={openPickerLabel}
-            disabled={disabled}
+            disabled={disabled || readOnly}
             onMouseDown={(e) => e.preventDefault()}
             onClick={openDatePicker}
           >

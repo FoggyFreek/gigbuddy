@@ -20,9 +20,10 @@ interface RehearsalFieldsProps {
   form: RehearsalForm
   onChange: (field: string, value: string | null) => void
   errors?: Record<string, string | undefined>
+  readOnly?: boolean
 }
 
-export default function RehearsalFields({ form, onChange, errors = {} }: Readonly<RehearsalFieldsProps>) {
+export default function RehearsalFields({ form, onChange, errors = {}, readOnly = false }: Readonly<RehearsalFieldsProps>) {
   const { t } = useTranslation('rehearsals')
   return (
     <>
@@ -35,6 +36,7 @@ export default function RehearsalFields({ form, onChange, errors = {} }: Readonl
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange('proposed_date', e.target.value)}
           error={!!errors.proposed_date}
           helperText={errors.proposed_date}
+          readOnly={readOnly}
         />
       </Grid>
       <Grid size={{ xs: 12, sm: 6 }}>
@@ -43,12 +45,14 @@ export default function RehearsalFields({ form, onChange, errors = {} }: Readonl
           fullWidth
           value={form.location}
           onChange={(e) => onChange('location', e.target.value)}
+          slotProps={{ htmlInput: { readOnly } }}
         />
       </Grid>
       <Grid size={{ xs: 6, sm: 4 }}>
         <TimePicker
           label={t($ => $.form.startTime)}
           ampm={false}
+          readOnly={readOnly}
           value={timeStringToDayjs(form.start_time)}
           onChange={(v) => onChange('start_time', dayjsToTimeString(v))}
           slotProps={{ textField: { fullWidth: true } }}
@@ -58,6 +62,7 @@ export default function RehearsalFields({ form, onChange, errors = {} }: Readonl
         <TimePicker
           label={t($ => $.form.endTime)}
           ampm={false}
+          readOnly={readOnly}
           value={timeStringToDayjs(form.end_time)}
           onChange={(v) => onChange('end_time', dayjsToTimeString(v))}
           slotProps={{ textField: { fullWidth: true } }}
