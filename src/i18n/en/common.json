@@ -32,6 +32,12 @@
   "confirmation": {
     "cannotUndo": "This cannot be undone."
   },
+  "readOnly": {
+    "planning": "You have read-only access. You can view this information, but you can't edit it."
+  },
+  "premium": {
+    "tooltip": "Premium feature — not included in your current plan. View upgrade options."
+  },
   "csvImport": {
     "chooseFile": "Choose CSV file",
     "notMapped": "(not mapped)",

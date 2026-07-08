@@ -1,11 +1,19 @@
 import { request } from './_client.ts'
 import type { Id } from '../types/entities.ts'
 
-interface AdminUser {
+export interface AdminUserMembership {
+  tenant_id?: Id
+  tenant_slug?: string
+  role?: string
+  status?: string
+}
+
+export interface AdminUser {
   id?: Id
   name?: string
   email?: string
   is_super_admin?: boolean
+  memberships?: AdminUserMembership[]
 }
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>

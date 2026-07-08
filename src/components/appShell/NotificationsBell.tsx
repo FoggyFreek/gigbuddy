@@ -33,7 +33,9 @@ const POLL_INTERVAL_MS = 60_000
 // Cross-tenant profile pictures go through the membership-authorized notifications
 // endpoint — the generic /api/files route only serves the *active* tenant.
 function avatarSrc(n: AppNotification): string {
-  return n.tenantAvatarPath ? `/api/notifications/tenant-avatar/${n.tenantId}` : '/share/logo.png'
+  return n.tenantAvatarPath && n.tenantId != null
+    ? `/api/notifications/tenant-avatar/${n.tenantId}`
+    : '/share/logo.png'
 }
 
 export default function NotificationsBell() {
@@ -100,7 +102,8 @@ export default function NotificationsBell() {
       setUnreadCount((count) => Math.max(0, count - 1))
       markRead(n.id).catch(() => { refresh() })
     }
-    if (n.tenantId !== activeTenantId) {
+    // User-level (billing) notifications carry no tenant — never switch bands.
+    if (n.tenantId !== null && n.tenantId !== activeTenantId) {
       try {
         await switchTenant(n.tenantId)
       } catch {
@@ -112,7 +115,7 @@ export default function NotificationsBell() {
 
   const openSettings = () => {
     setAnchorEl(null)
-    navigate('/account/notifications')
+    navigate('/settings/preferences')
   }
 
   return (
@@ -167,7 +170,7 @@ export default function NotificationsBell() {
                 >
                   <ListItemButton onClick={() => { void handleItemClick(n) }} sx={{ pr: 6 }}>
                     <ListItemAvatar>
-                      <Avatar src={avatarSrc(n)} alt={n.tenantName} sx={{ width: 36, height: 36 }} />
+                      <Avatar src={avatarSrc(n)} alt={n.tenantName ?? ''} sx={{ width: 36, height: 36 }} />
                     </ListItemAvatar>
                     <ListItemText
                       primary={

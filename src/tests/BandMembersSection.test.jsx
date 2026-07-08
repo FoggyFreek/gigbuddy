@@ -1,8 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import BandMembersSection from '../components/BandMembersSection.tsx'
+import { AuthContext } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
 
 vi.mock('../api/bandMembers.ts', () => ({
@@ -16,8 +18,32 @@ vi.mock('../api/bandMembers.ts', () => ({
 
 import { createMember, deleteMember, listMembers, updateMember } from '../api/bandMembers.ts'
 
-function wrap(ui) {
-  return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
+const memberAuth = {
+  user: { id: 7, activeTenantRole: 'member', permissions: ['app.view', 'planning.write', 'purchase.create'] },
+  setUser: () => {},
+  logout: async () => {},
+  switchTenant: async () => undefined,
+  refreshUser: async () => undefined,
+}
+
+const adminAuth = {
+  ...memberAuth,
+  user: { id: 7, activeTenantRole: 'tenant_admin', permissions: ['app.view', 'planning.write', 'members.manage'] },
+}
+
+function wrap(ui, { auth = memberAuth } = {}) {
+  return render(
+    <ThemeProvider theme={theme}>
+      <AuthContext.Provider value={auth}>
+        <MemoryRouter initialEntries={['/profile']}>
+          <Routes>
+            <Route path="/profile" element={ui} />
+            <Route path="/settings/invites" element={<div>Invites page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    </ThemeProvider>
+  )
 }
 
 describe('BandMembersSection', () => {
@@ -32,6 +58,14 @@ describe('BandMembersSection', () => {
     wrap(<BandMembersSection />)
     await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
     expect(screen.getByText('(Guitar)')).toBeInTheDocument()
+  })
+
+  it('keeps the member list view-only for a reader', async () => {
+    wrap(<BandMembersSection />, {
+      auth: { ...memberAuth, user: { id: 7, activeTenantRole: 'reader', permissions: ['app.view'] } },
+    })
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
   })
 
   it('adds a new member', async () => {
@@ -90,6 +124,40 @@ describe('BandMembersSection', () => {
 
     const badges = screen.getAllByAltText('gigBuddy user')
     expect(badges).toHaveLength(1)
+  })
+
+  it('shows an invite button to tenant admins when a lead member is not a gigBuddy user', async () => {
+    const user = userEvent.setup()
+    listMembers.mockResolvedValueOnce([
+      { id: 1, name: 'Alice', role: 'Guitar', color: '#e53935', sort_order: 0, position: 'lead', user_id: 42 },
+      { id: 2, name: 'Bob', role: 'Drums', color: '#1e88e5', sort_order: 1, position: 'lead', user_id: null },
+    ])
+    wrap(<BandMembersSection />, { auth: adminAuth })
+    await waitFor(() => screen.getByText('Alice'))
+
+    await user.click(screen.getByRole('button', { name: /invite to gigbuddy/i }))
+    expect(screen.getByText('Invites page')).toBeInTheDocument()
+  })
+
+  it('hides the invite button when all lead members are gigBuddy users', async () => {
+    listMembers.mockResolvedValueOnce([
+      { id: 1, name: 'Alice', role: 'Guitar', color: '#e53935', sort_order: 0, position: 'lead', user_id: 42 },
+      { id: 2, name: 'Bob', role: 'Drums', color: '#1e88e5', sort_order: 1, position: 'sub', user_id: null },
+    ])
+    wrap(<BandMembersSection />, { auth: adminAuth })
+    await waitFor(() => screen.getByText('Alice'))
+
+    expect(screen.queryByRole('button', { name: /invite to gigbuddy/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the invite button from non-admin members', async () => {
+    listMembers.mockResolvedValueOnce([
+      { id: 2, name: 'Bob', role: 'Drums', color: '#1e88e5', sort_order: 1, position: 'lead', user_id: null },
+    ])
+    wrap(<BandMembersSection />)
+    await waitFor(() => screen.getByText('Bob'))
+
+    expect(screen.queryByRole('button', { name: /invite to gigbuddy/i })).not.toBeInTheDocument()
   })
 
   it('clicking a color swatch saves color immediately', async () => {

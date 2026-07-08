@@ -116,7 +116,10 @@ export interface Slot {
 
 export interface Tenant {
   id?: Id
+  slug?: string
   band_name?: string
+  /** Set when the tenant is archived (parked, not counting toward the band cap). */
+  archived_at?: string | null
   formal_name?: string
   logo_path?: string | null
   banner_path?: string | null
@@ -135,6 +138,8 @@ export interface Tenant {
   instagram_handle?: string
   facebook_handle?: string
   tiktok_handle?: string
+  /** Subscription owner; null = ownerless (no plan enforcement). */
+  owner_user_id?: Id | null
 }
 
 // In-app notification shown under the bell. Deliberately user-scoped and
@@ -151,8 +156,10 @@ export type NotificationType =
 
 export interface AppNotification {
   id: number
-  tenantId: number
-  tenantName: string
+  // null for user-level (billing) notifications — they belong to the user, not
+  // a band; the bell skips tenant switching for these.
+  tenantId: number | null
+  tenantName: string | null
   tenantAvatarPath: string | null
   type: string
   title: string

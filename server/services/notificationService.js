@@ -7,7 +7,7 @@
 // with — a caller's transaction. Persistence is awaited (the durable part);
 // web-push delivery stays fire-and-forget.
 import pool from '../db/index.js'
-import { sendPushToUsers } from '../utils/sendPush.js'
+import { sendPushToUsers, sendPushToUser } from '../utils/sendPush.js'
 import { logger } from '../utils/logger.js'
 import { ALL_ROLES, hasPermission } from '../auth/permissions.js'
 import { NOTIFICATION_TYPES } from './notificationTypes.js'
@@ -20,6 +20,7 @@ import {
   markAllRead,
   deleteForUser,
   insertForUsers,
+  insertForUserDeduped,
   pruneOldForUsers,
   pruneOldGlobal,
   resolveAudience,
@@ -97,6 +98,32 @@ export async function dispatchNotification({
   // whether the user's browser holds a subscription. Delivery is best-effort.
   sendPushToUsers(userIds, tenantId, { title, body, tag: type, url })
     .catch((err) => logger.error('push.send_to_users_failed', { err, tenantId }))
+}
+
+// User-level (billing) notification dispatch. Unlike dispatchNotification, this
+// targets one user directly (the subscription owner) with no tenant fan-out and
+// no audience prefs — a payment-failed or plan-changed notice is transactional
+// and must reach the owner. The in-app row is inserted on the CALLER'S tx
+// client (`client`) so it commits atomically with the billing state change;
+// dedupeKey makes replays (webhook + reconcile) land exactly one row. Web push
+// is fired only after commit, by the caller, using the returned `inserted`
+// flag — never inside the transaction. Returns { inserted }.
+export async function dispatchUserNotification({
+  userId, type, title, body = '', url, dedupeKey = null, client,
+}) {
+  const executor = client ?? pool
+  const inserted = await insertForUserDeduped(executor, {
+    userId, tenantId: null, type, title, body, url, dedupeKey,
+  })
+  return { inserted }
+}
+
+// Post-commit best-effort web push for a user-level notification. Call this
+// AFTER the transaction commits, and only when dispatchUserNotification
+// reported a fresh insert, so a rolled-back transition sends no push.
+export function pushUserNotification(userId, { type, title, body = '', url }) {
+  sendPushToUser(userId, { title, body, tag: type, url })
+    .catch((err) => logger.error('push.send_to_user_failed', { err }))
 }
 
 // ---------- reads ----------

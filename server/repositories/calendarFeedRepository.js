@@ -28,6 +28,16 @@ export async function upsertToken(executor, userId, tenantId, token) {
   return rows[0]
 }
 
+// Revokes every feed token of a tenant at once — used when the integrations
+// entitlement is purged (downgrade/cancellation).
+export async function deleteAllTokensForTenant(executor, tenantId) {
+  const { rowCount } = await executor.query(
+    'DELETE FROM ical_feed_tokens WHERE tenant_id = $1',
+    [tenantId],
+  )
+  return rowCount
+}
+
 export async function deleteToken(executor, userId, tenantId) {
   const { rowCount } = await executor.query(
     'DELETE FROM ical_feed_tokens WHERE user_id = $1 AND tenant_id = $2',

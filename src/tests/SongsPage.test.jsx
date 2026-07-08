@@ -60,11 +60,11 @@ const SONG_2 = {
   lyrics_html: '<p>This is what you get</p>',
 }
 
-function wrapWithRoutes({ initialEntries }) {
+function wrapWithRoutes({ initialEntries, auth = writerAuth }) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
-        <AuthContext.Provider value={writerAuth}>
+        <AuthContext.Provider value={auth}>
           <Routes>
             <Route path="/songs" element={<SongsPage />}>
               <Route path=":id" element={<SongDetailPage />} />
@@ -74,6 +74,24 @@ function wrapWithRoutes({ initialEntries }) {
       </ThemeProvider>
     </MemoryRouter>,
   )
+}
+
+// A plan that locks every feature — the chords/documents/recordings sections
+// should carry premium diamonds pointing at their upsell pages.
+const lockedEntitlements = {
+  planSlug: 'free',
+  subscriptionStatus: null,
+  locked: false,
+  financeReadOnly: false,
+  flags: {
+    finance: false,
+    integrations: false,
+    customization: false,
+    song_files: false,
+    chordpro: false,
+    public_promotion: false,
+  },
+  limits: { storage_mb: 100, members: 5, bands: 1 },
 }
 
 describe('SongsPage — split-view detail', () => {
@@ -136,6 +154,39 @@ describe('SongsPage — split-view detail', () => {
     await waitFor(() => expect(screen.getByDisplayValue('Karma Police')).toBeInTheDocument())
     expect(screen.getByText('This is what you get')).toBeInTheDocument()
     expect(screen.queryByText('But I am a creep')).not.toBeInTheDocument()
+  })
+
+  it('marks gated sections with diamonds when the plan lacks them', async () => {
+    wrapWithRoutes({
+      initialEntries: ['/songs/1'],
+      auth: { user: { ...writerAuth.user, entitlements: lockedEntitlements } },
+    })
+
+    await waitFor(() => expect(screen.getByDisplayValue('Creep')).toBeInTheDocument())
+
+    // Chords: diamond next to the section heading.
+    const diamonds = screen.getAllByRole('link', { name: /premium feature/i })
+    expect(diamonds).toHaveLength(1)
+    expect(diamonds[0]).toHaveAttribute('href', '/upgrade/chordpro')
+
+    // Documents/recordings: the add buttons become diamond links to the upsell.
+    const addPdf = screen.getByRole('link', { name: /add pdf/i })
+    expect(addPdf).toHaveAttribute('href', '/upgrade/song_files')
+    expect(within(addPdf).getByTestId('DiamondOutlinedIcon')).toBeInTheDocument()
+    const addMp3 = screen.getByRole('link', { name: /add mp3/i })
+    expect(addMp3).toHaveAttribute('href', '/upgrade/song_files')
+    expect(within(addMp3).getByTestId('DiamondOutlinedIcon')).toBeInTheDocument()
+  })
+
+  it('shows no premium diamonds when entitlements are unenforced', async () => {
+    wrapWithRoutes({ initialEntries: ['/songs/1'] })
+
+    await waitFor(() => expect(screen.getByDisplayValue('Creep')).toBeInTheDocument())
+    expect(screen.queryByRole('link', { name: /premium feature/i })).not.toBeInTheDocument()
+    // The add buttons stay real upload buttons with the attachment icon.
+    const addPdf = screen.getByRole('button', { name: /add pdf/i })
+    expect(within(addPdf).getByTestId('AttachFileIcon')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /add mp3/i })).toBeInTheDocument()
   })
 
   it('removes a song from the list after deleting it in detail', async () => {

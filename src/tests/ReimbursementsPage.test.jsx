@@ -70,6 +70,9 @@ describe('ReimbursementsPage — outstanding', () => {
 
     await waitFor(() => expect(api.listMemberPurchases).toHaveBeenCalledWith(1))
     expect(await screen.findByText(/Strings/)).toBeInTheDocument()
+    const purchaseLink = screen.getByRole('link', { name: /view purchase #5/i })
+    expect(purchaseLink).toHaveAttribute('href', '/purchases/10')
+    expect(within(purchaseLink).getByTestId('OpenInNewIcon')).toBeInTheDocument()
   })
 
   it('marks a member fully reimbursed', async () => {
@@ -91,6 +94,18 @@ describe('ReimbursementsPage — outstanding', () => {
 
     await user.click(screen.getAllByRole('button', { name: /mark reimbursed/i })[0])
     await waitFor(() => expect(api.reimburseMemberFull).toHaveBeenCalledWith(1, {}))
+  })
+
+  it('links each purchase in an expanded compact member card to its original purchase', async () => {
+    const user = userEvent.setup()
+    wrap(<ReimbursementsPage />, { compact: true })
+
+    await screen.findByText('Alice')
+    await user.click(screen.getAllByRole('button', { name: /expand/i })[0])
+
+    const purchaseLink = await screen.findByRole('link', { name: /view purchase #5/i })
+    expect(purchaseLink).toHaveAttribute('href', '/purchases/10')
+    expect(within(purchaseLink).getByTestId('OpenInNewIcon')).toBeInTheDocument()
   })
 
   it('does not render tabs — history lives in the ledger', async () => {

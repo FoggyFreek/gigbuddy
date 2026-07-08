@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -15,13 +15,11 @@ import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
-import Tab from '@mui/material/Tab'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
-import Tabs from '@mui/material/Tabs'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -30,12 +28,11 @@ import {
   updateMembership,
   updateMembershipBandMember,
   removeMembership,
-} from '../api/users.ts'
-import { listMembers } from '../api/bandMembers.ts'
-import { useAuth } from '../contexts/authContext.ts'
-import InvitesSection from '../components/InvitesSection.tsx'
-import { ASSIGNABLE_ROLES } from '../auth/permissions.ts'
-import type { Member, Id } from '../types/entities.ts'
+} from '../../api/users.ts'
+import { listMembers } from '../../api/bandMembers.ts'
+import { useAuth } from '../../contexts/authContext.ts'
+import { ASSIGNABLE_ROLES } from '../../auth/permissions.ts'
+import type { Member, Id } from '../../types/entities.ts'
 
 const STATUS_COLOR: Record<string, 'warning' | 'success' | 'error'> = {
   pending: 'warning',
@@ -43,12 +40,14 @@ const STATUS_COLOR: Record<string, 'warning' | 'success' | 'error'> = {
   rejected: 'error',
 }
 
+type MembershipStatus = 'pending' | 'approved' | 'rejected'
+
 interface MembershipRow {
   user_id?: Id
   name?: string
   email?: string
   picture_url?: string
-  status?: string
+  status?: MembershipStatus
   role?: string
   is_super_admin?: boolean
   band_member_id?: Id | null
@@ -64,40 +63,41 @@ interface MemberRowActionsProps {
 }
 
 function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatus, onDelete }: Readonly<MemberRowActionsProps>) {
+  const { t } = useTranslation('settings')
   let removeTooltip: string
   if (isSelf) {
-    removeTooltip = 'Cannot remove yourself'
+    removeTooltip = t($ => $.members.tooltips.cannotRemoveSelf)
   } else if (r.is_super_admin) {
-    removeTooltip = 'Cannot remove a super admin'
+    removeTooltip = t($ => $.members.tooltips.cannotRemoveSuperAdmin)
   } else if (r.role === 'tenant_admin' && !callerIsSuperAdmin) {
-    removeTooltip = 'Only super admins can remove a tenant admin'
+    removeTooltip = t($ => $.members.tooltips.onlySuperAdminRemoveTenantAdmin)
   } else {
-    removeTooltip = 'Remove from this tenant'
+    removeTooltip = t($ => $.members.tooltips.removeFromTenant)
   }
   return (
     <>
       {r.status !== 'approved' && !(r.role === 'tenant_admin' && !callerIsSuperAdmin) && (
         <Button size="small" variant="contained" color="success" onClick={() => r.user_id != null && onStatus(r.user_id, 'approved')}>
-          Approve
+          {t($ => $.members.approve)}
         </Button>
       )}
       {r.status !== 'approved' && r.role === 'tenant_admin' && !callerIsSuperAdmin && (
-        <Tooltip title="Only super admins can approve a tenant_admin membership">
+        <Tooltip title={t($ => $.members.tooltips.onlySuperAdminApproveTenantAdmin)}>
           <span>
-            <Button size="small" variant="contained" color="success" disabled>Approve</Button>
+            <Button size="small" variant="contained" color="success" disabled>{t($ => $.members.approve)}</Button>
           </span>
         </Tooltip>
       )}
       {r.status !== 'rejected' && !isSelf && !r.is_super_admin && (
         <Button size="small" variant="outlined" color="error" onClick={() => r.user_id != null && onStatus(r.user_id, 'rejected')}>
-          Reject
+          {t($ => $.members.reject)}
         </Button>
       )}
       <Tooltip
         title={removeTooltip}
       >
         <span>
-          <IconButton size="small" color="error" disabled={cannotDelete} aria-label="remove member" onClick={() => r.user_id != null && onDelete(r.user_id)}>
+          <IconButton size="small" color="error" disabled={cannotDelete} aria-label={t($ => $.members.aria.removeMember)} onClick={() => r.user_id != null && onDelete(r.user_id)}>
             <DeleteIcon fontSize="small" />
           </IconButton>
         </span>
@@ -119,6 +119,7 @@ interface RoleSelectProps {
 }
 
 function RoleSelect({ r, callerIsSuperAdmin, isSelf, onRole }: Readonly<RoleSelectProps>) {
+  const { t } = useTranslation('settings')
   // Non-super callers cannot touch a tenant_admin's role, nor grant tenant_admin.
   const cannotDemoteAdmin = r.role === 'tenant_admin' && !callerIsSuperAdmin && !isSelf
   const cannotPromote = !callerIsSuperAdmin
@@ -129,7 +130,7 @@ function RoleSelect({ r, callerIsSuperAdmin, isSelf, onRole }: Readonly<RoleSele
         disabled={cannotDemoteAdmin}
         onChange={(e) => r.user_id != null && onRole(r.user_id, e.target.value)}
       >
-        {r.role === 'member' && <MenuItem value="member">member (legacy)</MenuItem>}
+        {r.role === 'member' && <MenuItem value="member">{t($ => $.members.legacyMemberOption)}</MenuItem>}
         {ASSIGNABLE_ROLE_OPTIONS.map((role) => (
           <MenuItem key={role} value={role}>{role}</MenuItem>
         ))}
@@ -153,6 +154,7 @@ interface MembersTableProps {
 }
 
 function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onStatus, onRole, onBandMember, onDelete }: Readonly<MembersTableProps>) {
+  const { t } = useTranslation('settings')
   return (
     <>
       {/* Desktop table — hidden below 600 px */}
@@ -161,12 +163,12 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
           <TableHead>
             <TableRow>
               <TableCell />
-              <TableCell>Name</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Role</TableCell>
-              <TableCell>Band member</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell>{t($ => $.members.columns.name)}</TableCell>
+              <TableCell>{t($ => $.members.columns.email)}</TableCell>
+              <TableCell>{t($ => $.members.columns.status)}</TableCell>
+              <TableCell>{t($ => $.members.columns.role)}</TableCell>
+              <TableCell>{t($ => $.members.columns.bandMember)}</TableCell>
+              <TableCell align="right">{t($ => $.members.columns.actions)}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -180,6 +182,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                 isSelf ||
                 r.is_super_admin ||
                 (r.role === 'tenant_admin' && !callerIsSuperAdmin)
+              const status = r.status
               return (
                 <TableRow key={String(r.user_id)}>
                   <TableCell sx={{ width: 48 }}>
@@ -190,12 +193,12 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                   <TableCell>
                     {r.name}
                     {r.is_super_admin && (
-                      <Chip size="small" label="super" color="primary" sx={{ ml: 1 }} />
+                      <Chip size="small" label={t($ => $.members.superChip)} color="primary" sx={{ ml: 1 }} />
                     )}
                   </TableCell>
                   <TableCell>{r.email}</TableCell>
                   <TableCell>
-                    <Chip label={r.status} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
+                    <Chip label={status ? t($ => $.members.status[status]) : ''} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
                   </TableCell>
                   <TableCell sx={{ minWidth: 140 }}>
                     <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} onRole={onRole} />
@@ -207,7 +210,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                         displayEmpty
                         onChange={(e) => r.user_id != null && onBandMember(r.user_id, (e.target.value as Id) || null)}
                       >
-                        <MenuItem value="">— none —</MenuItem>
+                        <MenuItem value="">{t($ => $.members.noneOption)}</MenuItem>
                         {availableMembers.map((bm) => (
                           <MenuItem key={String(bm.id)} value={bm.id as unknown as string}>{bm.name}</MenuItem>
                         ))}
@@ -246,6 +249,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
             (bm) => !(bm as MemberWithUser).user_id || (bm as MemberWithUser).user_id === r.user_id,
           )
           const cannotDelete = isSelf || r.is_super_admin || (r.role === 'tenant_admin' && !callerIsSuperAdmin)
+          const status = r.status
           return (
             <Card key={String(r.user_id)} variant="outlined">
               <CardContent sx={{ pb: 1 }}>
@@ -264,13 +268,13 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                       sx={{ alignItems: 'center', flexWrap: 'wrap' }}
                     >
                       <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{r.name}</Typography>
-                      {r.is_super_admin && <Chip size="small" label="super" color="primary" />}
+                      {r.is_super_admin && <Chip size="small" label={t($ => $.members.superChip)} color="primary" />}
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {r.email}
                     </Typography>
                   </Box>
-                  <Chip label={r.status} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
+                  <Chip label={status ? t($ => $.members.status[status]) : ''} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
                 </Stack>
                 <Stack spacing={1}>
                   <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} onRole={onRole} />
@@ -280,7 +284,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                       displayEmpty
                       onChange={(e) => r.user_id != null && onBandMember(r.user_id, (e.target.value as Id) || null)}
                     >
-                      <MenuItem value="">— none —</MenuItem>
+                      <MenuItem value="">{t($ => $.members.noneOption)}</MenuItem>
                       {availableMembers.map((bm) => (
                         <MenuItem key={String(bm.id)} value={bm.id as unknown as string}>{bm.name}</MenuItem>
                       ))}
@@ -312,9 +316,9 @@ interface MemberWithUser extends Member {
   user_id?: Id
 }
 
-export default function MembersPage() {
+export default function MembersSection() {
+  const { t } = useTranslation('settings')
   const { user: currentUser } = useAuth()
-  const [tab, setTab] = useState('members')
   const [rows, setRows] = useState<MembershipRow[]>([])
   const [bandMembers, setBandMembers] = useState<MemberWithUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -338,7 +342,7 @@ export default function MembersPage() {
       const updated = await updateMembership(userId, { status })
       replaceRow(updated as MembershipRow)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Update failed')
+      setError(err instanceof Error ? err.message : t($ => $.members.errors.updateFailed))
     }
   }
 
@@ -348,7 +352,7 @@ export default function MembersPage() {
       const updated = await updateMembership(userId, { role })
       replaceRow(updated as MembershipRow)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Update failed')
+      setError(err instanceof Error ? err.message : t($ => $.members.errors.updateFailed))
     }
   }
 
@@ -360,7 +364,7 @@ export default function MembersPage() {
       const refreshed = await listMembers()
       setBandMembers(refreshed as MemberWithUser[])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Update failed')
+      setError(err instanceof Error ? err.message : t($ => $.members.errors.updateFailed))
     }
   }
 
@@ -370,7 +374,7 @@ export default function MembersPage() {
       await removeMembership(userId)
       setRows((prev) => prev.filter((r) => r.user_id !== userId))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed')
+      setError(err instanceof Error ? err.message : t($ => $.members.errors.deleteFailed))
     }
   }
 
@@ -385,37 +389,22 @@ export default function MembersPage() {
   const callerIsSuperAdmin = !!currentUser?.isSuperAdmin
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Typography variant="h5" sx={{ fontWeight: 700 }}>
-        Members
-      </Typography>
-      <Tabs value={tab} onChange={(_, v: string) => setTab(v)}>
-        <Tab value="members" label="Members" />
-        <Tab value="invites" label="Invites" />
-      </Tabs>
-      {error && tab === 'members' && (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {error && (
         <Typography color="error" variant="body2">
           {error}
         </Typography>
       )}
-      {tab === 'members' ? (
-        <MembersTable
-          rows={rows}
-          bandMembers={bandMembers}
-          currentUser={currentUser}
-          callerIsSuperAdmin={callerIsSuperAdmin}
-          onStatus={handleStatus}
-          onRole={handleRole}
-          onBandMember={handleBandMember}
-          onDelete={handleDelete}
-        />
-      ) : (
-        <InvitesSection canIssueAdmin={callerIsSuperAdmin} />
-      )}
+      <MembersTable
+        rows={rows}
+        bandMembers={bandMembers}
+        currentUser={currentUser}
+        callerIsSuperAdmin={callerIsSuperAdmin}
+        onStatus={handleStatus}
+        onRole={handleRole}
+        onBandMember={handleBandMember}
+        onDelete={handleDelete}
+      />
     </Box>
   )
 }
-
-// Satisfy TS: ReactNode is used in MemberRowActions return; we import it above.
- 
-type _ReactNode = ReactNode

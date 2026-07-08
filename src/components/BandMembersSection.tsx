@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -11,12 +12,14 @@ import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
+import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import type { Member } from '../types/entities.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { createMember, deleteMember, listMembers, updateMember } from '../api/bandMembers.ts'
 
 const POSITIONS = ['lead', 'optional', 'sub'] as const
@@ -43,6 +46,8 @@ interface BandMemberRowProps {
 
 export default function BandMembersSection() {
   const { t } = useTranslation(['profile', 'common'])
+  const navigate = useNavigate()
+  const { canManageMembers, canWritePlanning } = usePermissions()
   const [members, setMembers] = useState<MemberWithRole[]>([])
   const [newMember, setNewMember] = useState<{ name: string; role: string; position: string }>({ name: '', role: '', position: 'lead' })
   const [adding, setAdding] = useState(false)
@@ -53,6 +58,7 @@ export default function BandMembersSection() {
   }, [])
 
   async function handleAdd() {
+    if (!canWritePlanning) return
     if (!newMember.name.trim() || adding) return
     setAdding(true)
     try {
@@ -65,6 +71,7 @@ export default function BandMembersSection() {
   }
 
   async function handleDelete(id: MemberWithRole['id']) {
+    if (!canWritePlanning) return
     if (id === undefined) return
     await deleteMember(id)
     setMembers((prev) => prev.filter((m) => m.id !== id))
@@ -74,13 +81,16 @@ export default function BandMembersSection() {
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)))
   }
 
+  const leads = members.filter((m) => m.position === 'lead')
+  const showInviteCta = canManageMembers && leads.length > 0 && leads.some((m) => m.user_id == null)
+
   return (
     <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
       <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {t($ => $.members.title)}
         </Typography>
-        <Button
+        {canWritePlanning && <Button
           size="small"
           startIcon={editing ? <CheckIcon /> : <EditIcon />}
           onClick={() => setEditing((v) => !v)}
@@ -88,7 +98,7 @@ export default function BandMembersSection() {
           sx={{ ml: 2 }}
         >
           {editing ? t($ => $.actions.done, { ns: 'common' }) : t($ => $.actions.edit, { ns: 'common' })}
-        </Button>
+        </Button>}
       </Stack>
 
       <Stack spacing={2}>
@@ -120,6 +130,19 @@ export default function BandMembersSection() {
             </Box>
           )
         })}
+
+        {showInviteCta && !editing && (
+          <Box>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<GroupAddOutlinedIcon />}
+              onClick={() => navigate('/settings/invites')}
+            >
+              {t($ => $.members.inviteCta)}
+            </Button>
+          </Box>
+        )}
 
         {editing && (
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>

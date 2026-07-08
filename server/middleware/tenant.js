@@ -7,7 +7,8 @@ async function fetchMembership(userId, tenantId) {
     `SELECT m.*,
             t.slug AS tenant_slug,
             t.band_name AS tenant_name,
-            t.archived_at AS tenant_archived_at
+            t.archived_at AS tenant_archived_at,
+            t.owner_user_id AS tenant_owner_user_id
      FROM memberships m
      JOIN tenants t ON t.id = m.tenant_id
      WHERE m.user_id = $1 AND m.tenant_id = $2`,
@@ -34,6 +35,8 @@ export async function resolveTenantId(req, res, next) {
       }
       req.tenantId = tenantId
       req.membership = membership
+      // For the entitlement gates: null = ownerless tenant, enforcement skipped.
+      req.tenantOwnerUserId = membership.tenant_owner_user_id ?? null
       setContextField('tenantId', tenantId)
       next()
     } catch (e) {

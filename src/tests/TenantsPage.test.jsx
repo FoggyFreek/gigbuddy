@@ -1,21 +1,23 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TenantsPage from '../pages/admin/TenantsPage.tsx'
-import { deleteTenant, listTenants } from '../api/tenants.ts'
+import { deleteTenant, listTenants, updateTenant } from '../api/tenants.ts'
+import { listAllUsers } from '../api/adminUsers.ts'
 import theme from '../theme.ts'
 
 vi.mock('../api/tenants.ts', () => ({
   listTenants: vi.fn(),
   createTenant: vi.fn(),
+  updateTenant: vi.fn(),
   archiveTenant: vi.fn(),
   unarchiveTenant: vi.fn(),
   grantMembership: vi.fn(),
   deleteTenant: vi.fn(),
 }))
-vi.mock('../api/adminUsers.ts', () => ({ listAllUsers: vi.fn().mockResolvedValue([]) }))
+vi.mock('../api/adminUsers.ts', () => ({ listAllUsers: vi.fn() }))
 vi.mock('../api/statistics.ts', () => ({
   getAllStorageStats: vi.fn().mockResolvedValue([]),
   refreshAllStorageStats: vi.fn(),
@@ -25,8 +27,15 @@ vi.mock('../contexts/authContext.ts', () => ({
 }))
 
 const tenants = [
-  { id: 1, slug: 'active-band', band_name: 'Active Band', archived_at: null, member_count: 2 },
-  { id: 2, slug: 'old-band', band_name: 'Old Band', archived_at: '2026-07-01T00:00:00Z', member_count: 1 },
+  { id: 1, slug: 'active-band', band_name: 'Active Band', archived_at: null, member_count: 2, owner_user_id: 10 },
+  { id: 2, slug: 'old-band', band_name: 'Old Band', archived_at: '2026-07-01T00:00:00Z', member_count: 1, owner_user_id: null },
+]
+
+const users = [
+  { id: 10, name: 'Owner Olly', email: 'olly@test.local', memberships: [{ tenant_id: 1, role: 'tenant_admin', status: 'approved' }] },
+  { id: 11, name: 'Member Mia', email: 'mia@test.local', memberships: [{ tenant_id: 1, role: 'member', status: 'approved' }] },
+  { id: 12, name: 'Pending Pete', email: 'pete@test.local', memberships: [{ tenant_id: 1, role: 'member', status: 'pending' }] },
+  { id: 13, name: 'Beta Bob', email: 'bob@test.local', memberships: [{ tenant_id: 2, role: 'member', status: 'approved' }] },
 ]
 
 function wrap() {
@@ -37,10 +46,59 @@ function wrap() {
   )
 }
 
+describe('TenantsPage owner assignment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    listTenants.mockResolvedValue(tenants)
+    listAllUsers.mockResolvedValue(users)
+    updateTenant.mockResolvedValue({})
+  })
+
+  it('shows the current owner, or Unassigned when there is none', async () => {
+    wrap()
+    await screen.findAllByText('Active Band')
+    expect(screen.getAllByText('Owner Olly').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Unassigned').length).toBeGreaterThan(0)
+  })
+
+  it('offers only the tenant\'s approved members plus "No owner" and saves the choice', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findAllByText('Old Band')
+    await user.click(screen.getAllByRole('button', { name: 'assign owner for Old Band' })[0])
+
+    await user.click(screen.getByRole('combobox', { name: 'Owner' }))
+    const listbox = await screen.findByRole('listbox')
+    // Only Old Band's approved member + the "No owner" option.
+    expect(within(listbox).getByText(/Beta Bob/)).toBeInTheDocument()
+    expect(within(listbox).queryByText(/Owner Olly/)).not.toBeInTheDocument()
+    expect(within(listbox).queryByText(/Pending Pete/)).not.toBeInTheDocument()
+    expect(within(listbox).getByText(/No owner/)).toBeInTheDocument()
+
+    await user.click(within(listbox).getByText(/Beta Bob/))
+    await user.click(screen.getByRole('button', { name: 'Assign' }))
+    await waitFor(() => expect(updateTenant).toHaveBeenCalledWith(2, { owner_user_id: 13 }))
+    await waitFor(() => expect(listTenants).toHaveBeenCalledTimes(2))
+  })
+
+  it('detaches the owner with the "No owner" option', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findAllByText('Active Band')
+    await user.click(screen.getAllByRole('button', { name: 'assign owner for Active Band' })[0])
+
+    await user.click(screen.getByRole('combobox', { name: 'Owner' }))
+    await user.click(within(await screen.findByRole('listbox')).getByText(/No owner/))
+    await user.click(screen.getByRole('button', { name: 'Assign' }))
+    await waitFor(() => expect(updateTenant).toHaveBeenCalledWith(1, { owner_user_id: null }))
+  })
+})
+
 describe('TenantsPage permanent deletion', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     listTenants.mockResolvedValue(tenants)
+    listAllUsers.mockResolvedValue(users)
     deleteTenant.mockResolvedValue(undefined)
   })
 

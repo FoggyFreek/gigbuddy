@@ -32,6 +32,12 @@
   "confirmation": {
     "cannotUndo": "Dit kan niet ongedaan worden gemaakt."
   },
+  "readOnly": {
+    "planning": "Je hebt alleen-lezen toegang. Je kunt deze informatie bekijken, maar niet bewerken."
+  },
+  "premium": {
+    "tooltip": "Premiumfunctie — niet inbegrepen in je huidige abonnement. Bekijk upgrade-opties."
+  },
   "csvImport": {
     "chooseFile": "Kies CSV-bestand",
     "notMapped": "(niet gekoppeld)",

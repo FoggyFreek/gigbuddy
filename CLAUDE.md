@@ -109,6 +109,17 @@ Finance is built on an **immutable double-entry ledger** (`ledger_transactions` 
 - Display classification of `(source_type, source_event)` lives in `server/services/ledgerEntryTypes.js` with a frontend mirror in `src/utils/ledgerEntryType.js` — **keep both in sync** when adding events.
 - Best reference tests: `src/tests/server/ledger.test.js` (posting invariants), `ledgerCompliance.test.js` (period close, audit, settings guard), `ledgerBrowser.test.js` (read side).
 
+## Subscriptions, entitlements & platform billing
+
+Paid tiers (bronze/silver/gold) gate features and limits per tenant; billing runs on Mollie behind a provider port (migrations `100`–`105`). **Load the subscription-billing skill** before touching plans, entitlement gates, limits, tenant ownership, the billing lifecycle (incl. the downgrade/purge flow — the one flow that deletes data), or the gating UI. The invariants to never break:
+
+- **Subscriptions are user-level; tenants inherit from `tenants.owner_user_id`.** An ownerless tenant skips enforcement entirely (legacy; deliberate, no backfill).
+- **`shared/entitlements.js` is the single source of truth** for features/limits (`null` limit = unlimited).
+- The entitlement resolver enforces all time bounds itself on read — the scheduler is repair-only; **access never depends on it running**. A lapsed subscription fallback-locks to the free plan; data is never deleted by a lapse — only a confirmed downgrade purges, and only after the target plan is real (paid or period-end final).
+- **Never call the payment provider inside a DB transaction**, never import a concrete adapter (use `getPaymentProvider()`), and every remote mutation goes through the `billing_operations` outbox saga with a deterministic idempotency key.
+- Payment ingestion is one funnel (`applyPaymentOutcome`); the webhook payment id is a routing hint only — status is always re-fetched from the provider.
+- Entitlement gating in the frontend is presentation only; the API gate is the defense. Tier-locked nav stays visible (diamond → `/upgrade/:feature`); role-gated nav is hidden.
+
 ## Backend layering: route → service → repository
 
 Backend resources follow a route → service → repository → validator split. **The rehearsals stack is the canonical example** — `server/routes/rehearsals.js`, `server/services/rehearsalService.js`, `server/repositories/rehearsalRepository.js`, `server/validators/rehearsalValidators.js`. New routes and refactors must follow it. Load the **backend-layering** skill for the full layer responsibilities, error contract, and refactoring playbook.

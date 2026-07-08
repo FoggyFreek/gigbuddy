@@ -11,7 +11,8 @@
     "title": "Account settings",
     "sections": {
       "notifications": "Notifications",
-      "theme": "Theme"
+      "theme": "Theme",
+      "billing": "Billing"
     },
     "theme": {
       "title": "Theme",
@@ -39,7 +40,8 @@
         "rehearsalNew": "New rehearsal options",
         "rehearsalConfirmed": "Confirmed rehearsals",
         "invoicePaid": "Paid invoices",
-        "taskAssigned": "Tasks assigned to you"
+        "taskAssigned": "Tasks assigned to you",
+        "inviteRedeemed": "New members awaiting approval"
       }
     },
     "bands": {

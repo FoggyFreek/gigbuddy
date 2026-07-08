@@ -12,6 +12,21 @@ import {
 export async function loadIntegrationCredential(executor, tenantId, type) {
   const record = await fetchCredentialRecord(executor, tenantId, type)
   if (!record) return null
+  // A retained credential (kept alive after an integrations purge solely for
+  // paid payment links) reads as absent through the public accessor.
+  if (record.retained_at) return null
+  return decryptRecord(record, tenantId, type)
+}
+
+// Internal accessor for the payment-link webhook/sync path ONLY: still
+// decrypts a credential whose value is retained after an integrations purge.
+export async function loadRetainedIntegrationCredential(executor, tenantId, type) {
+  const record = await fetchCredentialRecord(executor, tenantId, type)
+  if (!record) return null
+  return decryptRecord(record, tenantId, type)
+}
+
+function decryptRecord(record, tenantId, type) {
   if (record.encrypted_value !== null && record.legacy_value !== null) {
     throw new Error('integration_secret_mixed_state')
   }

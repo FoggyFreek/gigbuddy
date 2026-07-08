@@ -55,12 +55,17 @@ export async function claimInvite(executor, code, userId) {
   return rows[0] || null
 }
 
-export async function inviteExists(executor, code) {
-  const { rowCount } = await executor.query(
-    'SELECT 1 FROM tenant_invites WHERE code = $1',
+// Fetches an invite (used or not) with its tenant, so the service can tell a
+// same-user repeat redemption apart from a genuine conflict.
+export async function getInviteWithTenant(executor, code) {
+  const { rows } = await executor.query(
+    `SELECT i.*, t.slug AS tenant_slug, t.band_name AS tenant_name, t.archived_at AS tenant_archived_at
+       FROM tenant_invites i
+       JOIN tenants t ON t.id = i.tenant_id
+      WHERE i.code = $1`,
     [code],
   )
-  return rowCount > 0
+  return rows[0] || null
 }
 
 export async function getMembership(executor, userId, tenantId) {

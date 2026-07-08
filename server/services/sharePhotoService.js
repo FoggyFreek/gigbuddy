@@ -3,7 +3,7 @@
 // { error: { status, body } }; success returns a domain payload.
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { uploadObject, removeObject, safeRemove, sharePhotoKey } from './storageService.js'
+import { uploadObjectWithQuota, removeObject, safeRemove, sharePhotoKey } from './storageService.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage } from '../utils/imageProcess.js'
 import {
   listSharePhotos,
@@ -28,7 +28,7 @@ export async function createPhoto(db, tenantId, file) {
   const label = path.basename(file.originalname, ext) || 'Photo'
   const sortOrder = await nextSortOrder(db, tenantId)
 
-  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
+  await uploadObjectWithQuota(objectKey, image.buffer, image.size, image.mimetype)
 
   try {
     const photo = await insertSharePhoto(db, tenantId, {

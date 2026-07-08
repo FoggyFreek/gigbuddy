@@ -37,14 +37,51 @@ export async function userExists(executor, userId) {
   return rowCount > 0
 }
 
-export async function insertTenant(executor, slug, bandName, createdByUserId) {
+export async function insertTenant(executor, slug, bandName, createdByUserId, ownerUserId = null) {
   const { rows } = await executor.query(
-    `INSERT INTO tenants (slug, band_name, created_by_user_id)
-     VALUES ($1, $2, $3)
+    `INSERT INTO tenants (slug, band_name, created_by_user_id, owner_user_id)
+     VALUES ($1, $2, $3, $4)
      RETURNING ${tenantSafeProjection()}`,
-    [slug, bandName, createdByUserId],
+    [slug, bandName, createdByUserId, ownerUserId],
   )
   return rows[0]
+}
+
+// Insert variant for server-generated slugs: a slug collision returns null
+// instead of raising 23505 (which would abort the caller's transaction), so
+// the service can try the next dedupe suffix within the same transaction.
+export async function insertTenantIfSlugFree(executor, slug, bandName, createdByUserId, ownerUserId = null) {
+  const { rows } = await executor.query(
+    `INSERT INTO tenants (slug, band_name, created_by_user_id, owner_user_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (slug) DO NOTHING
+     RETURNING ${tenantSafeProjection()}`,
+    [slug, bandName, createdByUserId, ownerUserId],
+  )
+  return rows[0] ?? null
+}
+
+// Tenants a user owns (self-service management list), newest first.
+export async function listOwnedTenants(executor, userId) {
+  const { rows } = await executor.query(
+    `SELECT ${tenantSafeProjection('t')},
+            (SELECT COUNT(*)::int FROM memberships m
+               WHERE m.tenant_id = t.id AND m.status = 'approved') AS member_count
+       FROM tenants t
+      WHERE t.owner_user_id = $1
+      ORDER BY t.created_at DESC, t.id DESC`,
+    [userId],
+  )
+  return rows
+}
+
+// Owner-scoped fetch — non-owners get null (surfaces as 404, not 403).
+export async function fetchOwnedTenant(executor, tenantId, ownerUserId) {
+  const { rows } = await executor.query(
+    `SELECT ${tenantSafeProjection()} FROM tenants WHERE id = $1 AND owner_user_id = $2`,
+    [tenantId, ownerUserId],
+  )
+  return rows[0] || null
 }
 
 // Ensures the new tenant always has a stats row (reads also COALESCE as a
@@ -77,6 +114,14 @@ export async function updateTenantFields(executor, tenantId, fields, values) {
     [...values, tenantId],
   )
   return rows[0] || null
+}
+
+export async function fetchMembershipStatus(executor, userId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT status FROM memberships WHERE user_id = $1 AND tenant_id = $2',
+    [userId, tenantId],
+  )
+  return rows[0]?.status ?? null
 }
 
 // Upsert an approved tenant_admin membership (grant or promote).

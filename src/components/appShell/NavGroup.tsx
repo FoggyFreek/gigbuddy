@@ -9,6 +9,7 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { alpha, darken, lighten } from '@mui/material/styles'
 import type { Theme } from '@mui/material/styles'
+import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import type { SvgIconComponent } from '@mui/icons-material'
 import NavItem from './NavItem.tsx'
 import { isItemSelected } from './navSelection.ts'
@@ -22,9 +23,13 @@ const groupSelectedSx = {
 }
 
 interface NavChildDef {
+  // Stable identity for React keys — `to` is not unique: every locked item
+  // points at the same upsell route (see AppShell's visibleGroups).
+  key: string
   to: string
   label: string
   icon: SvgIconComponent
+  locked?: boolean
 }
 
 interface NavGroupDef {
@@ -50,10 +55,10 @@ function CollapsedFlyout({ group, pathname, onNavClick }: Readonly<CollapsedFlyo
       </Typography>
       <List dense disablePadding>
         {group.children.map((child) => {
-          const Icon = child.icon
+          const Icon = child.locked ? DiamondOutlined : child.icon
           return (
             <ListItemButton
-              key={child.to}
+              key={child.key}
               component={NavLink}
               to={child.to}
               onClick={onNavClick}
@@ -174,7 +179,7 @@ export default function NavGroup({ group, ariaLabel, pathname, isNavCollapsed, e
         {expanded &&
           group.children.map((child) => (
             <NavItem
-              key={child.to}
+              key={child.key}
               item={child}
               pathname={pathname}
               isNavCollapsed
@@ -193,7 +198,7 @@ export default function NavGroup({ group, ariaLabel, pathname, isNavCollapsed, e
         <List disablePadding>
           {group.children.map((child) => (
             <NavItem
-              key={child.to}
+              key={child.key}
               item={child}
               pathname={pathname}
               indent

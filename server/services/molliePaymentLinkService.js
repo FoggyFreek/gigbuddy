@@ -18,7 +18,8 @@ import {
 } from '../repositories/invoiceRepository.js'
 import { postInvoiceSent, postInvoicePaid } from './ledgerService.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
-import { loadIntegrationCredential } from './integrationCredentialService.js'
+import { loadIntegrationCredential, loadRetainedIntegrationCredential } from './integrationCredentialService.js'
+import { withIntegrationWriteLock } from './featureGuards.js'
 import { logger } from '../utils/logger.js'
 
 export function isMollieWebhookDisabled() {
@@ -29,10 +30,16 @@ function mollieStatusCode(err) {
   return err?.statusCode ?? err?.status ?? null
 }
 
-export async function getMollieClientForTenant(executor, tenantId) {
+// `includeRetained` opts into the internal accessor that still decrypts a key
+// whose value is retained after an integrations purge (paid links needing
+// webhook/sync). Creation flows must NOT pass it — a retained key reads as
+// "not configured" so no new links can be minted with it.
+export async function getMollieClientForTenant(executor, tenantId, { includeRetained = false } = {}) {
   let apiKey
   try {
-    apiKey = await loadIntegrationCredential(executor, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
+    apiKey = includeRetained
+      ? await loadRetainedIntegrationCredential(executor, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
+      : await loadIntegrationCredential(executor, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
   } catch (err) {
     logger.error('mollie.credential_decryption_failed', { err, tenantId })
     return { error: { status: 503, body: { error: 'mollie_credential_unavailable' } } }
@@ -70,28 +77,34 @@ function buildPaymentLinkPayload({ tenant, invoice, invoiceId, opts }) {
 
 // Creates the Mollie payment link and stores it on the invoice with an atomic
 // guard against concurrent creation. Returns { error } | { invoice }.
+// The whole remote+local workflow runs under the per-tenant integration-write
+// session lock so it can't interleave with the integrations purge: purge-first
+// leaves the key deleted/retained → the credential load here fails cleanly;
+// create-first → the purge's remote phase sees and removes the new link.
 export async function createMolliePaymentLink({ pool, tenant, invoice, tenantId, invoiceId, opts }) {
-  const configured = await getMollieClientForTenant(pool, tenantId)
-  if (configured.error) return configured
-  const { mollie } = configured
-  const payload = buildPaymentLinkPayload({ tenant, invoice, invoiceId, opts })
-  const paymentLink = await mollie.paymentLinks.create(payload)
+  return withIntegrationWriteLock(pool, tenantId, async () => {
+    const configured = await getMollieClientForTenant(pool, tenantId)
+    if (configured.error) return configured
+    const { mollie } = configured
+    const payload = buildPaymentLinkPayload({ tenant, invoice, invoiceId, opts })
+    const paymentLink = await mollie.paymentLinks.create(payload)
 
-  const checkoutUrl = paymentLink._links?.paymentLink?.href
-  if (!checkoutUrl) return { error: { status: 502, body: { error: 'mollie_payment_link_url_missing' } } }
+    const checkoutUrl = paymentLink._links?.paymentLink?.href
+    if (!checkoutUrl) return { error: { status: 502, body: { error: 'mollie_payment_link_url_missing' } } }
 
-  // A link orphaned by losing the concurrent-creation race carries no charge
-  // until used.
-  const updated = await setInvoicePaymentLink(pool, tenantId, invoiceId, {
-    linkId: paymentLink.id,
-    url: checkoutUrl,
-    expiresAt: opts.expiresAt,
+    // A link orphaned by losing the concurrent-creation race carries no charge
+    // until used.
+    const updated = await setInvoicePaymentLink(pool, tenantId, invoiceId, {
+      linkId: paymentLink.id,
+      url: checkoutUrl,
+      expiresAt: opts.expiresAt,
+    })
+
+    if (!updated) {
+      return { invoice: await fetchInvoice(pool, tenantId, invoiceId) }
+    }
+    return { invoice: updated }
   })
-
-  if (!updated) {
-    return { invoice: await fetchInvoice(pool, tenantId, invoiceId) }
-  }
-  return { invoice: updated }
 }
 
 // Removes the Mollie payment link from an invoice: deletes it at Mollie when it
@@ -106,7 +119,7 @@ export async function createMolliePaymentLink({ pool, tenant, invoice, tenantId,
 // on the settings advisory lock the caller already holds).
 export async function removeMolliePaymentLink({ pool, tenant: _tenant, invoice, tenantId, invoiceId, client = null }) {
   const executor = client ?? pool
-  const configured = await getMollieClientForTenant(executor, tenantId)
+  const configured = await getMollieClientForTenant(executor, tenantId, { includeRetained: true })
   if (configured.error) return configured
   const { mollie } = configured
   const linkId = invoice.mollie_payment_link_id
@@ -211,7 +224,7 @@ export async function handlePaymentWebhook(db, invoiceId) {
   const invoice = await fetchPublicMollieInvoice(db, invoiceId)
   if (!invoice) return {}
 
-  const configured = await getMollieClientForTenant(db, invoice.tenant_id)
+  const configured = await getMollieClientForTenant(db, invoice.tenant_id, { includeRetained: true })
   if (configured.error) return {}
   const { mollie } = configured
   const updated = await syncInvoicePaymentStatus(mollie, db, invoice)

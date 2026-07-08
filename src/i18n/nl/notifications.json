@@ -11,7 +11,8 @@
     "title": "Accountinstellingen",
     "sections": {
       "notifications": "Meldingen",
-      "theme": "Thema"
+      "theme": "Thema",
+      "billing": "Abonnement"
     },
     "theme": {
       "title": "Thema",
@@ -39,7 +40,8 @@
         "rehearsalNew": "Nieuwe repetitie-opties",
         "rehearsalConfirmed": "Bevestigde repetities",
         "invoicePaid": "Betaalde facturen",
-        "taskAssigned": "Aan jou toegewezen taken"
+        "taskAssigned": "Aan jou toegewezen taken",
+        "inviteRedeemed": "Nieuwe leden in afwachting van goedkeuring"
       }
     },
     "bands": {

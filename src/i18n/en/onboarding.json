@@ -1,0 +1,69 @@
+{
+  "steps": {
+    "welcome": "Welcome",
+    "band": "Your band",
+    "summary": "Summary"
+  },
+  "nextStep": "Next",
+  "welcome": {
+    "title": "Welcome to GigBuddy",
+    "subtitle": "Everything your band needs in one place: gigs, rehearsals, setlists and finances.",
+    "trialPitch": "Try any paid plan free for 7 days. Cancel during the trial and you pay nothing.",
+    "choosePlan": "Choose your plan",
+    "haveInvite": "Joining an existing band? Redeem your invite code",
+    "startTrial": "Start trial",
+    "startFree": "Start free",
+    "selected": "Selected",
+    "free": "Free"
+  },
+  "terms": {
+    "agreeLabel": "I agree to the <termsLink>Terms & Conditions</termsLink>",
+    "read": "Read the Terms & Conditions",
+    "close": "Close",
+    "mustAgree": "Please agree to the terms to continue."
+  },
+  "acceptTerms": {
+    "title": "Updated Terms & Conditions",
+    "subtitle": "We've updated our Terms & Conditions. Please review and accept them to continue.",
+    "agree": "I have read and agree to the Terms & Conditions",
+    "accept": "Accept and continue"
+  },
+  "band": {
+    "title": "Set up your band",
+    "nameLabel": "Band name",
+    "nameRequired": "Enter your band name to continue.",
+    "logoLabel": "Band logo (optional)",
+    "uploadLogo": "Upload logo",
+    "removeLogo": "Remove",
+    "slugPreview": "Your band's web address name: {{slug}}",
+    "slugCaveat": "If this name is taken, a number is added automatically (e.g. {{slug}}-2)."
+  },
+  "summary": {
+    "title": "Almost there",
+    "plan": "Plan",
+    "interval": "Billing",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "band": "Band",
+    "slug": "Web address name",
+    "logo": "Logo",
+    "noLogo": "No logo",
+    "paymentNote": "You'll choose your payment method on our payment provider's secure page. A one-time €0.01 verification charge starts your trial.",
+    "freeNote": "The free plan needs no payment details.",
+    "confirmPaid": "Continue to payment",
+    "confirmFree": "Create my band",
+    "resumeNote": "Your band \"{{name}}\" was already created — we'll pick up where you left off."
+  },
+  "checkout": {
+    "processing": "Confirming your payment…",
+    "success": "Your subscription is active. Have fun!",
+    "timeout": "Your payment is still being processed. You can enter the app — your plan activates automatically once the payment is confirmed.",
+    "enterApp": "Enter GigBuddy"
+  },
+  "errors": {
+    "loadFailed": "Could not load the subscription plans. Please try again.",
+    "bandCapNoPointer": "You already own a band, so onboarding isn't needed. You can manage plans in Settings.",
+    "logoUploadFailed": "The logo could not be uploaded — you can add it later under Profile.",
+    "generic": "Something went wrong. Please try again."
+  }
+}

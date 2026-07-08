@@ -5,13 +5,16 @@
 // { action, details } the route logs via auditLog(req, ...).
 import { randomBytes } from 'node:crypto'
 import pool from '../db/index.js'
+import { logger } from '../utils/logger.js'
+import { PERMISSIONS } from '../auth/permissions.js'
+import { dispatchNotification } from './notificationService.js'
 import { ALLOWED_ROLES, parseExpiresInDays } from '../validators/inviteValidators.js'
 import {
   listInvitesWithNames,
   insertInvite,
   revokeInvite as revokeInviteRow,
   claimInvite,
-  inviteExists,
+  getInviteWithTenant,
   getMembership,
   insertPendingMembership,
 } from '../repositories/inviteRepository.js'
@@ -91,6 +94,23 @@ export async function revokeInvite(db, tenantId, inviteId) {
   return { audit: { action: 'invite.revoke', details: { inviteId } } }
 }
 
+// Tells the tenant's admins a redeemed invite is awaiting membership approval.
+// The audience is members holding members.manage (tenant admins + super
+// admins) — the only roles that can approve. Returns the dispatch promise so
+// the route can await persistence without a failure reaching the HTTP response.
+export function notifyInviteRedeemed({ tenantId, inviteId, userName, role }) {
+  return dispatchNotification({
+    tenantId,
+    type: 'invite-redeemed',
+    title: 'New member awaiting approval',
+    body: [userName, role].filter(Boolean).join(' · '),
+    url: '/settings/members',
+    sourceType: 'invite',
+    sourceId: inviteId,
+    requiredPermission: PERMISSIONS.MEMBERS_MANAGE,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
+}
+
 // ---------- redeem ----------
 
 // Atomically claims an invite and creates a pending membership. Each failure
@@ -108,11 +128,31 @@ export async function redeemInvite(user, body) {
 
     const invite = await claimInvite(client, code, user.id)
     if (!invite) {
-      const exists = await inviteExists(client, code)
+      const spent = await getInviteWithTenant(client, code)
       await client.query('ROLLBACK')
-      return exists
-        ? { error: conflict('Invite already used'), audit: denied('already_used') }
-        : { error: notFound('Invite not found'), audit: denied('not_found') }
+      if (!spent) return { error: notFound('Invite not found'), audit: denied('not_found') }
+
+      // Same user re-posting the code they already redeemed (double-click,
+      // page revisit, replayed deep link): idempotent — report the membership
+      // the first redemption created instead of a conflict.
+      if (spent.used_by_user_id === user.id && !spent.tenant_archived_at) {
+        const membership = await getMembership(pool, user.id, spent.tenant_id)
+        if (membership) {
+          return {
+            result: {
+              tenant: { id: spent.tenant_id, slug: spent.tenant_slug, name: spent.tenant_name },
+              role: membership.role,
+              status: membership.status,
+            },
+            repeat: true,
+            audit: {
+              action: 'invite.redeem.repeat',
+              details: { tenantId: spent.tenant_id, inviteId: spent.id },
+            },
+          }
+        }
+      }
+      return { error: conflict('Invite already used'), audit: denied('already_used') }
     }
 
     const inviteRef = { tenantId: invite.tenant_id, inviteId: invite.id }
@@ -143,6 +183,12 @@ export async function redeemInvite(user, body) {
         tenant: { id: invite.tenant_id, slug: invite.tenant_slug, name: invite.tenant_name },
         role: invite.role,
         status: 'pending',
+      },
+      notify: {
+        tenantId: invite.tenant_id,
+        inviteId: invite.id,
+        userName: user.name || user.email,
+        role: invite.role,
       },
       audit: { action: 'invite.redeem', details: { ...inviteRef, role: invite.role } },
     }

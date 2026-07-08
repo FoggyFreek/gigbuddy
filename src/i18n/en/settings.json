@@ -1,5 +1,130 @@
 {
   "title": "Settings",
+  "nav": {
+    "accountSettings": "Account settings",
+    "bandSettings": "Band settings",
+    "backAria": "Back to settings",
+    "items": {
+      "preferences": "My preferences",
+      "billing": "Billing",
+      "connectedAccounts": "Connected accounts",
+      "accent": "Accent color",
+      "members": "Members",
+      "invites": "Invites",
+      "storage": "Storage",
+      "integrations": "Integrations",
+      "chartOfAccounts": "Chart of accounts",
+      "defaultAccounts": "Accounting Settings"
+    }
+  },
+  "subscription": {
+    "current": "Current plan",
+    "manage": "Manage subscription"
+  },
+  "members": {
+    "columns": {
+      "name": "Name",
+      "email": "Email",
+      "status": "Status",
+      "role": "Role",
+      "bandMember": "Band member",
+      "actions": "Actions"
+    },
+    "superChip": "super",
+    "noneOption": "— none —",
+    "legacyMemberOption": "member (legacy)",
+    "approve": "Approve",
+    "reject": "Reject",
+    "status": {
+      "pending": "pending",
+      "approved": "approved",
+      "rejected": "rejected"
+    },
+    "tooltips": {
+      "cannotRemoveSelf": "Cannot remove yourself",
+      "cannotRemoveSuperAdmin": "Cannot remove a super admin",
+      "onlySuperAdminRemoveTenantAdmin": "Only super admins can remove a tenant admin",
+      "removeFromTenant": "Remove from this tenant",
+      "onlySuperAdminApproveTenantAdmin": "Only super admins can approve a tenant_admin membership"
+    },
+    "aria": {
+      "removeMember": "remove member"
+    },
+    "errors": {
+      "updateFailed": "Update failed",
+      "deleteFailed": "Delete failed"
+    }
+  },
+  "invites": {
+    "newInvite": "New invite",
+    "create": "Create",
+    "role": "Role",
+    "expiresInDays": "Expires in (days)",
+    "expiresHelper": "Leave blank for no expiry. Max 365.",
+    "superAdminOnly": " (super admin only)",
+    "noInvitesYet": "No invites yet.",
+    "singleUseHint": "Invite codes are single-use. Send the URL to the person you want to invite.",
+    "columns": {
+      "state": "State",
+      "created": "Created",
+      "expires": "Expires",
+      "usedBy": "Used by",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "active",
+      "expired": "expired",
+      "used": "used"
+    },
+    "copyTooltip": "Copy invite URL",
+    "copiedTooltip": "Copied!",
+    "revokeTooltip": "Revoke invite",
+    "alreadyInactiveTooltip": "Already inactive",
+    "aria": {
+      "copyUrl": "copy invite URL",
+      "revoke": "revoke invite"
+    },
+    "errors": {
+      "loadFailed": "Failed to load invites",
+      "createFailed": "Create failed",
+      "revokeFailed": "Revoke failed",
+      "copyFailed": "Could not copy to clipboard"
+    }
+  },
+  "connectedAccounts": {
+    "title": "Connected accounts",
+    "description": "Sign-in methods linked to your account. You can sign in with any linked method.",
+    "providers": {
+      "google": "Google",
+      "microsoft": "Microsoft"
+    },
+    "linked": "Linked",
+    "notLinked": "Not linked",
+    "link": "Link",
+    "unlink": "Unlink",
+    "onlyMethod": "Your only sign-in method cannot be removed",
+    "linkDialog": {
+      "title": "Link {{provider}} account?",
+      "body": "To confirm it's really you, you'll first sign in again with your current sign-in method. After that you'll sign in with {{provider}} to complete the link.",
+      "confirm": "Continue"
+    },
+    "unlinkDialog": {
+      "title": "Remove {{provider}} sign-in?",
+      "body": "You will no longer be able to sign in with {{provider}}.",
+      "confirm": "Remove"
+    },
+    "linkedSuccess": "{{provider}} account linked",
+    "unlinkFailed": "Removing the sign-in method failed. Please try again.",
+    "errors": {
+      "already_linked": "A sign-in method of this type is already linked to your account.",
+      "slot_occupied": "A sign-in method of this type is already linked to your account.",
+      "sub_taken": "That account is already linked to a different user.",
+      "no_primary": "No existing sign-in method is available to confirm your identity.",
+      "reauth_mismatch": "The confirmation sign-in didn't match your account. Nothing was linked.",
+      "expired": "The linking session expired. Please try again.",
+      "failed": "Linking failed. Please try again."
+    }
+  },
   "accentColor": {
     "title": "Accent color",
     "description": "Choose the primary color used throughout the app for this band.",
@@ -26,7 +151,10 @@
     "recomputeAria": "recompute storage usage",
     "description": "Total size of this band's uploaded files (banners, attachments, photos, logos, invoices).",
     "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files"
+    "fileCount_other": "{{count}} files",
+    "limitUsage": "{{used}} of {{limit}} used",
+    "usageAria": "storage usage",
+    "upgrade": "Upgrade storage"
   },
   "integrations": {
     "title": "Integrations",

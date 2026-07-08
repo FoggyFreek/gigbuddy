@@ -186,7 +186,7 @@ describe('NotificationsBell', () => {
     await openBell(user)
     await user.click(await screen.findByLabelText('Notification settings'))
     await waitFor(() =>
-      expect(screen.getByTestId('pathname')).toHaveTextContent('/account/notifications'),
+      expect(screen.getByTestId('pathname')).toHaveTextContent('/settings/preferences'),
     )
   })
 })

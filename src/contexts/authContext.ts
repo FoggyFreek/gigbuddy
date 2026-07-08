@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { Id } from '../types/entities.ts'
+import type { UserEntitlements } from '../auth/entitlements.ts'
 
 export interface UserMembership {
   tenantId?: Id
@@ -22,6 +23,15 @@ export interface User {
   /** Permission keys for the active tenant, sent by /auth/me (see src/auth/permissions.ts). */
   permissions?: string[]
   bandMemberId?: Id | null
+  /** Resolved entitlements for the active tenant; null = ownerless tenant (no enforcement). */
+  entitlements?: UserEntitlements | null
+  /** Which OIDC identities are linked to this account. */
+  providers?: { google: boolean; microsoft: boolean }
+  /** When (and which version of) the terms were accepted; null = never. */
+  termsAcceptedAt?: string | null
+  termsVersion?: string | null
+  /** Tenant created mid-onboarding (resume pointer); null once onboarding completed. */
+  onboardingTenantId?: Id | null
   memberships?: UserMembership[]
 }
 

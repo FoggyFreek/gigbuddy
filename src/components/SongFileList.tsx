@@ -1,6 +1,8 @@
 import type { SongFile, Id } from '../types/entities.ts'
+import type { Feature } from '../auth/entitlements.ts'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -13,9 +15,12 @@ import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
 import DeleteIcon from '@mui/icons-material/Delete'
+import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
+import { useEntitlements } from '../hooks/useEntitlements.ts'
 import { formatBytes } from '../utils/formatBytes.ts'
 
 // Generic uploaded-file list for a song: used for PDF documents and mp3
@@ -31,6 +36,9 @@ interface SongFileListProps {
   isAudio?: boolean
   addLabel?: string
   canWrite?: boolean
+  // Plan feature gating uploads: when the current plan lacks it, the add button
+  // becomes a diamond link to the feature's upsell page instead of an uploader.
+  premiumFeature?: Feature
 }
 
 export default function SongFileList({
@@ -43,8 +51,11 @@ export default function SongFileList({
   isAudio = false,
   addLabel,
   canWrite = true,
+  premiumFeature,
 }: Readonly<SongFileListProps>) {
   const { t } = useTranslation(['songs', 'common'])
+  const { has } = useEntitlements()
+  const upsellTo = premiumFeature && !has(premiumFeature) ? `/upgrade/${premiumFeature}` : null
   const [files, setFiles] = useState<SongFile[]>(initialFiles)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -138,7 +149,24 @@ export default function SongFileList({
         </Box>
       ))}
 
-      {canWrite && (
+      {canWrite && upsellTo && (
+        <Box>
+          <Tooltip title={t($ => $.common.premium.tooltip)} describeChild>
+            <Button
+              size="small"
+              variant="outlined"
+              color="secondary"
+              component={RouterLink}
+              to={upsellTo}
+              startIcon={<DiamondOutlined />}
+            >
+              {addLabel ?? t($ => $.common.actions.add)}
+            </Button>
+          </Tooltip>
+        </Box>
+      )}
+
+      {canWrite && !upsellTo && (
         <Box>
           <input
             ref={inputRef}

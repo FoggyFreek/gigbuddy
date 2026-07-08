@@ -179,13 +179,14 @@ function BandsintownFetchButton({ artistId, onChange }: Readonly<BandsintownFetc
 interface ProfileSocialsTabProps {
   form: ProfileForm
   editing?: boolean
+  canEdit?: boolean
   onToggleEditing: () => void
   onChange: (field: string, value: string) => void
   copiedField?: string
   onCopy: (field: string, url: string) => void
 }
 
-export default function ProfileSocialsTab({ form, editing, onToggleEditing, onChange, copiedField, onCopy }: Readonly<ProfileSocialsTabProps>) {
+export default function ProfileSocialsTab({ form, editing, canEdit = true, onToggleEditing, onChange, copiedField, onCopy }: Readonly<ProfileSocialsTabProps>) {
   const { t } = useTranslation('common')
   return (
     <Box sx={{ p: 3 }}>
@@ -207,7 +208,7 @@ export default function ProfileSocialsTab({ form, editing, onToggleEditing, onCh
           )
         })}
       </Grid>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+      {canEdit && <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
         <Button
           size="small"
           startIcon={editing ? <CheckIcon /> : <EditIcon />}
@@ -216,7 +217,7 @@ export default function ProfileSocialsTab({ form, editing, onToggleEditing, onCh
         >
           {editing ? t($ => $.actions.done) : t($ => $.actions.edit)}
         </Button>
-      </Box>
+      </Box>}
     </Box>
   )
 }

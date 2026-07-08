@@ -3,6 +3,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import pool from '../../../server/db/index.js'
 import { seedTenantAccounting } from '../../../server/db/defaultChartOfAccounts.js'
+import { TERMS_VERSION } from '../../../shared/termsVersion.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const migrationsDir = join(__dirname, '../../../server/db/migrations')
@@ -29,6 +30,21 @@ export async function runMigrations() {
     await pool.query(sql)
     await pool.query('INSERT INTO migrations (filename) VALUES ($1)', [file])
   }
+
+  // Test-only fixture accommodation: the terms-enforcement gate
+  // (requireCurrentTerms) blocks any tenant-route request whose user hasn't
+  // accepted the CURRENT terms version. Real users start with NULL terms and
+  // accept via /auth/accept-terms, but the vast majority of backend tests
+  // create approved users only to exercise other features. Defaulting the
+  // terms columns to "current, accepted now" lets every such user through the
+  // gate without per-test boilerplate; a test that needs a stale/blocked user
+  // (see authTerms.test.js) clears these columns explicitly. Column DEFAULTs
+  // don't take bind params, but TERMS_VERSION is our own constant date string.
+  await pool.query(
+    `ALTER TABLE users
+       ALTER COLUMN terms_accepted_at SET DEFAULT NOW(),
+       ALTER COLUMN terms_version SET DEFAULT '${TERMS_VERSION}'`,
+  )
 }
 
 // Wipe all test-relevant data. Preserves the schema and the `migrations` table.
@@ -47,6 +63,7 @@ export async function truncateAll() {
       tenant_invites,
       push_subscriptions,
       notifications, notification_type_prefs, notification_tenant_prefs,
+      subscription_payments, billing_operations, subscriptions, storage_cleanup_queue,
       tenant_statistics,
       tenants,
       users

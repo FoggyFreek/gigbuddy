@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "server": "node server/index.js",
     "server:dev": "nodemon server/index.js",
+    "server:debug": "nodemon --inspect-brk server/index.js",
     "migrate": "node server/db/migrate.js",
     "migrate:integration-secrets": "node server/scripts/migrateIntegrationSecrets.js",
     "test": "vitest --exclude src/tests/server",

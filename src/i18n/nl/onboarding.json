@@ -1,0 +1,69 @@
+{
+  "steps": {
+    "welcome": "Welkom",
+    "band": "Je band",
+    "summary": "Overzicht"
+  },
+  "nextStep": "Volgende",
+  "welcome": {
+    "title": "Welkom bij GigBuddy",
+    "subtitle": "Alles wat je band nodig heeft op één plek: optredens, repetities, setlists en financiën.",
+    "trialPitch": "Probeer elk betaald abonnement 7 dagen gratis. Zeg je op tijdens de proefperiode, dan betaal je niets.",
+    "choosePlan": "Kies je abonnement",
+    "haveInvite": "Sluit je aan bij een bestaande band? Verzilver je uitnodigingscode",
+    "startTrial": "Start proefperiode",
+    "startFree": "Start gratis",
+    "selected": "Geselecteerd",
+    "free": "Gratis"
+  },
+  "terms": {
+    "agreeLabel": "Ik ga akkoord met de <termsLink>algemene voorwaarden</termsLink>",
+    "read": "Lees de algemene voorwaarden",
+    "close": "Sluiten",
+    "mustAgree": "Ga akkoord met de voorwaarden om verder te gaan."
+  },
+  "acceptTerms": {
+    "title": "Bijgewerkte algemene voorwaarden",
+    "subtitle": "We hebben onze algemene voorwaarden bijgewerkt. Lees ze door en ga akkoord om verder te gaan.",
+    "agree": "Ik heb de algemene voorwaarden gelezen en ga ermee akkoord",
+    "accept": "Akkoord en doorgaan"
+  },
+  "band": {
+    "title": "Stel je band in",
+    "nameLabel": "Bandnaam",
+    "nameRequired": "Vul je bandnaam in om verder te gaan.",
+    "logoLabel": "Bandlogo (optioneel)",
+    "uploadLogo": "Logo uploaden",
+    "removeLogo": "Verwijderen",
+    "slugPreview": "De webadresnaam van je band: {{slug}}",
+    "slugCaveat": "Als deze naam bezet is, wordt er automatisch een nummer toegevoegd (bijv. {{slug}}-2)."
+  },
+  "summary": {
+    "title": "Bijna klaar",
+    "plan": "Abonnement",
+    "interval": "Facturering",
+    "monthly": "Maandelijks",
+    "yearly": "Jaarlijks",
+    "band": "Band",
+    "slug": "Webadresnaam",
+    "logo": "Logo",
+    "noLogo": "Geen logo",
+    "paymentNote": "Je kiest je betaalmethode op de beveiligde pagina van onze betaalprovider. Een eenmalige verificatiebetaling van € 0,01 start je proefperiode.",
+    "freeNote": "Voor het gratis abonnement zijn geen betaalgegevens nodig.",
+    "confirmPaid": "Doorgaan naar betaling",
+    "confirmFree": "Maak mijn band aan",
+    "resumeNote": "Je band \"{{name}}\" was al aangemaakt — we gaan verder waar je gebleven was."
+  },
+  "checkout": {
+    "processing": "Je betaling wordt bevestigd…",
+    "success": "Je abonnement is actief. Veel plezier!",
+    "timeout": "Je betaling wordt nog verwerkt. Je kunt de app in — je abonnement wordt automatisch geactiveerd zodra de betaling is bevestigd.",
+    "enterApp": "Naar GigBuddy"
+  },
+  "errors": {
+    "loadFailed": "De abonnementen konden niet worden geladen. Probeer het opnieuw.",
+    "bandCapNoPointer": "Je hebt al een band, dus onboarding is niet nodig. Abonnementen beheer je via Instellingen.",
+    "logoUploadFailed": "Het logo kon niet worden geüpload — je kunt het later toevoegen via Profiel.",
+    "generic": "Er ging iets mis. Probeer het opnieuw."
+  }
+}

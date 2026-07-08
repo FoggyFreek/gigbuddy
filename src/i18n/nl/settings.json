@@ -1,5 +1,130 @@
 {
   "title": "Instellingen",
+  "nav": {
+    "accountSettings": "Accountinstellingen",
+    "bandSettings": "Bandinstellingen",
+    "backAria": "Terug naar instellingen",
+    "items": {
+      "preferences": "Mijn voorkeuren",
+      "billing": "Facturering",
+      "connectedAccounts": "Gekoppelde accounts",
+      "accent": "Accentkleur",
+      "members": "Leden",
+      "invites": "Uitnodigingen",
+      "storage": "Opslag",
+      "integrations": "Integraties",
+      "chartOfAccounts": "Grootboekschema",
+      "defaultAccounts": "Boekhoudinstellingen"
+    }
+  },
+  "subscription": {
+    "current": "Huidig abonnement",
+    "manage": "Abonnement beheren"
+  },
+  "members": {
+    "columns": {
+      "name": "Naam",
+      "email": "E-mail",
+      "status": "Status",
+      "role": "Rol",
+      "bandMember": "Bandlid",
+      "actions": "Acties"
+    },
+    "superChip": "super",
+    "noneOption": "— geen —",
+    "legacyMemberOption": "member (legacy)",
+    "approve": "Goedkeuren",
+    "reject": "Afwijzen",
+    "status": {
+      "pending": "in afwachting",
+      "approved": "goedgekeurd",
+      "rejected": "afgewezen"
+    },
+    "tooltips": {
+      "cannotRemoveSelf": "Je kunt jezelf niet verwijderen",
+      "cannotRemoveSuperAdmin": "Een super admin kan niet worden verwijderd",
+      "onlySuperAdminRemoveTenantAdmin": "Alleen super admins kunnen een tenant admin verwijderen",
+      "removeFromTenant": "Verwijder uit deze band",
+      "onlySuperAdminApproveTenantAdmin": "Alleen super admins kunnen een tenant_admin-lidmaatschap goedkeuren"
+    },
+    "aria": {
+      "removeMember": "lid verwijderen"
+    },
+    "errors": {
+      "updateFailed": "Bijwerken mislukt",
+      "deleteFailed": "Verwijderen mislukt"
+    }
+  },
+  "invites": {
+    "newInvite": "Nieuwe uitnodiging",
+    "create": "Aanmaken",
+    "role": "Rol",
+    "expiresInDays": "Verloopt over (dagen)",
+    "expiresHelper": "Laat leeg voor geen vervaldatum. Max 365.",
+    "superAdminOnly": " (alleen super admin)",
+    "noInvitesYet": "Nog geen uitnodigingen.",
+    "singleUseHint": "Uitnodigingscodes zijn eenmalig te gebruiken. Stuur de URL naar de persoon die je wilt uitnodigen.",
+    "columns": {
+      "state": "Status",
+      "created": "Aangemaakt",
+      "expires": "Verloopt",
+      "usedBy": "Gebruikt door",
+      "actions": "Acties"
+    },
+    "status": {
+      "active": "actief",
+      "expired": "verlopen",
+      "used": "gebruikt"
+    },
+    "copyTooltip": "Kopieer uitnodigings-URL",
+    "copiedTooltip": "Gekopieerd!",
+    "revokeTooltip": "Uitnodiging intrekken",
+    "alreadyInactiveTooltip": "Al inactief",
+    "aria": {
+      "copyUrl": "kopieer uitnodigings-URL",
+      "revoke": "uitnodiging intrekken"
+    },
+    "errors": {
+      "loadFailed": "Uitnodigingen laden mislukt",
+      "createFailed": "Aanmaken mislukt",
+      "revokeFailed": "Intrekken mislukt",
+      "copyFailed": "Kopiëren naar klembord mislukt"
+    }
+  },
+  "connectedAccounts": {
+    "title": "Gekoppelde accounts",
+    "description": "Inlogmethoden die aan je account zijn gekoppeld. Je kunt inloggen met elke gekoppelde methode.",
+    "providers": {
+      "google": "Google",
+      "microsoft": "Microsoft"
+    },
+    "linked": "Gekoppeld",
+    "notLinked": "Niet gekoppeld",
+    "link": "Koppelen",
+    "unlink": "Ontkoppelen",
+    "onlyMethod": "Je enige inlogmethode kan niet worden verwijderd",
+    "linkDialog": {
+      "title": "{{provider}}-account koppelen?",
+      "body": "Om te bevestigen dat jij het echt bent, log je eerst opnieuw in met je huidige inlogmethode. Daarna log je in met {{provider}} om de koppeling te voltooien.",
+      "confirm": "Doorgaan"
+    },
+    "unlinkDialog": {
+      "title": "{{provider}}-inlogmethode verwijderen?",
+      "body": "Je kunt daarna niet meer inloggen met {{provider}}.",
+      "confirm": "Verwijderen"
+    },
+    "linkedSuccess": "{{provider}}-account gekoppeld",
+    "unlinkFailed": "Het verwijderen van de inlogmethode is mislukt. Probeer het opnieuw.",
+    "errors": {
+      "already_linked": "Er is al een inlogmethode van dit type aan je account gekoppeld.",
+      "slot_occupied": "Er is al een inlogmethode van dit type aan je account gekoppeld.",
+      "sub_taken": "Dat account is al aan een andere gebruiker gekoppeld.",
+      "no_primary": "Er is geen bestaande inlogmethode beschikbaar om je identiteit te bevestigen.",
+      "reauth_mismatch": "De bevestigingslogin kwam niet overeen met je account. Er is niets gekoppeld.",
+      "expired": "De koppelsessie is verlopen. Probeer het opnieuw.",
+      "failed": "Koppelen is mislukt. Probeer het opnieuw."
+    }
+  },
   "accentColor": {
     "title": "Accentkleur",
     "description": "Kies de primaire kleur die in de hele app voor deze band wordt gebruikt.",
@@ -26,7 +151,10 @@
     "recomputeAria": "opslaggebruik opnieuw berekenen",
     "description": "Totale grootte van de geüploade bestanden van deze band (banners, bijlagen, foto's, logo's, facturen).",
     "fileCount_one": "{{count}} bestand",
-    "fileCount_other": "{{count}} bestanden"
+    "fileCount_other": "{{count}} bestanden",
+    "limitUsage": "{{used}} van {{limit}} gebruikt",
+    "usageAria": "opslaggebruik",
+    "upgrade": "Opslag upgraden"
   },
   "integrations": {
     "title": "Integraties",

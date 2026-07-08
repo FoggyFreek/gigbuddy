@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Avatar from '@mui/material/Avatar'
 import Divider from '@mui/material/Divider'
-import Chip from '@mui/material/Chip'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Paper from '@mui/material/Paper'
 import Switch from '@mui/material/Switch'
@@ -11,13 +10,14 @@ import Typography from '@mui/material/Typography'
 import { usePushNotifications } from '../../hooks/usePushNotifications.ts'
 import { getNotificationPrefs, updateNotificationPrefs } from '../../api/notifications.ts'
 import type { NotificationPrefs } from '../../types/entities.ts'
+import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 
 // Maps the server's dash-cased notification types onto the camelCase i18n leaf
 // keys so the typed selector index stays compile-checked (nav-items pattern).
 type TypeLabelKey =
   | 'gigNew' | 'gigConfirmed' | 'gigImport'
   | 'rehearsalNew' | 'rehearsalConfirmed'
-  | 'invoicePaid' | 'taskAssigned'
+  | 'invoicePaid' | 'taskAssigned' | 'inviteRedeemed'
 
 const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'gig-new': 'gigNew',
@@ -27,6 +27,7 @@ const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'rehearsal-confirmed': 'rehearsalConfirmed',
   'invoice-paid': 'invoicePaid',
   'task-assigned': 'taskAssigned',
+  'invite-redeemed': 'inviteRedeemed',
 }
 
 // Cross-tenant profile pictures use the membership-authorized notification
@@ -43,6 +44,7 @@ export default function NotificationSettingsSection() {
   const { t } = useTranslation('notifications')
   const { status: pushStatus, subscribe, unsubscribe } = usePushNotifications()
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null)
+  const compact = useCompactLayout()
 
   useEffect(() => {
     getNotificationPrefs().then(setPrefs).catch(() => { })
@@ -77,8 +79,10 @@ export default function NotificationSettingsSection() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Paper elevation={0} sx={{ p: 2 }}>
-        <Divider sx={{ mb: 2 }}><Chip label={t($ => $.settings.push.title)} /></Divider>
+      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+          {t($ => $.settings.push.title)}
+        </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
           {t($ => $.settings.push.description)}
         </Typography>
@@ -105,8 +109,12 @@ export default function NotificationSettingsSection() {
             </Typography>
           )}
         </Box>
+      </Paper>
 
-        <Divider sx={{ mb: 2 }}><Chip label={t($ => $.settings.types.title)} /></Divider>
+      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+          {t($ => $.settings.types.title)}
+        </Typography>
 
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
           {t($ => $.settings.types.description)}
@@ -130,8 +138,12 @@ export default function NotificationSettingsSection() {
             )
           })}
         </Box>
+      </Paper>
 
-        <Divider sx={{ mb: 2 }}><Chip label={t($ => $.settings.bands.title)} /></Divider>
+      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+          {t($ => $.settings.bands.title)}
+        </Typography>
 
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
           {t($ => $.settings.bands.description)}

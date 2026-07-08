@@ -1,8 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
-import Divider from '@mui/material/Divider'
-import Chip from '@mui/material/Chip'
 import Typography from '@mui/material/Typography'
 import CheckIcon from '@mui/icons-material/Check'
 import { useProfile } from '../../contexts/profileContext.ts'
@@ -21,9 +19,10 @@ export default function ThemeSettingsSection() {
   const compact = useCompactLayout()
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Paper elevation={0} sx={{ p: 2 }}>
-      <Divider sx={{ mb: 2 }}><Chip label={t($ => $.settings.theme.title)} /></Divider>
+    <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+        {t($ => $.settings.theme.title)}
+      </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         {t($ => $.settings.theme.description)}
       </Typography>
@@ -99,6 +98,5 @@ export default function ThemeSettingsSection() {
         })}
       </Box>
     </Paper>
-    </Box>
   )
 }

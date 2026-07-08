@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -11,39 +11,14 @@ import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
-import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
-import RefreshIcon from '@mui/icons-material/Refresh'
-import StorageIcon from '@mui/icons-material/Storage'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
-import { useAuth } from '../contexts/authContext.ts'
-import { useProfile } from '../contexts/profileContext.ts'
-import { useThemeMode } from '../contexts/themeModeContext.ts'
-import { useCompactLayout } from '../hooks/useCompactLayout.ts'
-import { clearMollieKey, getMollieKey, setMollieKey, clearBandsintownKey, getBandsintownKey, setBandsintownKey, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain, updateProfile } from '../api/profile.ts'
-import { getMyStorageStats, refreshMyStorageStats } from '../api/statistics.ts'
-import { formatBytes } from '../utils/formatBytes.ts'
-import ChartOfAccountsSection from '../components/settings/ChartOfAccountsSection.tsx'
-import AccountingSettingsSection from '../components/settings/AccountingSettingsSection.tsx'
-
-// `label` keys the i18n preset names under settings.accentColor.presets.
-const PRESET_COLORS = [
-  { hex: '#6750A4', label: 'purple' },
-  { hex: '#1565C0', label: 'blue' },
-  { hex: '#0277BD', label: 'lightBlue' },
-  { hex: '#00838F', label: 'teal' },
-  { hex: '#2E7D32', label: 'green' },
-  { hex: '#558B2F', label: 'olive' },
-  { hex: '#F57F17', label: 'amber' },
-  { hex: '#E65100', label: 'deepOrange' },
-  { hex: '#C62828', label: 'red' },
-  { hex: '#AD1457', label: 'pink' },
-  { hex: '#6A1B9A', label: 'deepPurple' },
-  { hex: '#4527A0', label: 'indigo' },
-] as const
-
-const DEFAULT_COLOR = '#6750A4'
+import PremiumDiamond from '../PremiumDiamond.tsx'
+import { useThemeMode } from '../../contexts/themeModeContext.ts'
+import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
+import { clearMollieKey, getMollieKey, setMollieKey, clearBandsintownKey, getBandsintownKey, setBandsintownKey, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain } from '../../api/profile.ts'
+import Divider from '@mui/material/Divider'
 
 // Shopify client ids aren't secret but are long; collapse the middle so the
 // display value doesn't eat the card's horizontal space.
@@ -52,202 +27,23 @@ function shortenClientId(value: string): string {
   return `${value.slice(0, 6)}…${value.slice(-4)}`
 }
 
-export default function TenantSettingsPage() {
+// Renders the Integrations heading (with premium diamond) plus every
+// third-party integration card. Tenant-admin gated by the settings page.
+export default function IntegrationsSection() {
   const { t } = useTranslation('settings')
-  const { user } = useAuth()
-  const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
-  const { accentColor, setAccentColor } = useProfile()
-  const [saving, setSaving] = useState(false)
-  const colorInputRef = useRef<HTMLInputElement>(null)
   const compact = useCompactLayout()
 
-  const current = accentColor || DEFAULT_COLOR
-
-  async function applyColor(hex: string) {
-    if (hex === current) return
-    setSaving(true)
-    try {
-      await updateProfile({ accent_color: hex === DEFAULT_COLOR ? null : hex })
-      setAccentColor(hex === DEFAULT_COLOR ? null : hex)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', p: compact ? 0.5 : 1 }}>
-      <Typography variant="h5" gutterBottom>
-        {t($ => $.title)}
-      </Typography>
-
-      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt: 2 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }} gutterBottom>
-          {t($ => $.accentColor.title)}
+     <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          {t($ => $.integrations.title)}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {t($ => $.accentColor.description)}
-        </Typography>
-
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 2 }}>
-          {PRESET_COLORS.map(({ hex, label }) => {
-            const isActive = current.toLowerCase() === hex.toLowerCase()
-            return (
-              <Tooltip key={hex} title={t($ => $.accentColor.presets[label])} placement="top">
-                <Box
-                  component="button"
-                  onClick={() => applyColor(hex)}
-                  disabled={saving}
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '50%',
-                    border: isActive ? '3px solid' : '2px solid transparent',
-                    borderColor: isActive ? 'text.primary' : 'transparent',
-                    bgcolor: hex,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    outline: 'none',
-                    p: 0,
-                    transition: 'transform 0.1s',
-                    '&:hover': { transform: 'scale(1.15)' },
-                    '&:disabled': { opacity: 0.5, cursor: 'not-allowed' },
-                  }}
-                >
-                  {isActive && (
-                    <CheckIcon sx={{ color: '#fff', fontSize: 18, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.5))' }} />
-                  )}
-                </Box>
-              </Tooltip>
-            )
-          })}
-
-          <Tooltip title={t($ => $.accentColor.custom)} placement="top">
-            <Box
-              component="button"
-              onClick={() => colorInputRef.current?.click()}
-              disabled={saving}
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                border: '2px dashed',
-                borderColor: 'divider',
-                bgcolor: 'transparent',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                outline: 'none',
-                p: 0,
-                fontSize: 20,
-                color: 'text.secondary',
-                transition: 'transform 0.1s',
-                '&:hover': { transform: 'scale(1.15)' },
-                '&:disabled': { opacity: 0.5, cursor: 'not-allowed' },
-              }}
-            >
-              <span>+</span>
-              <input
-                ref={colorInputRef}
-                type="color"
-                defaultValue={current}
-                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
-                onChange={(e) => applyColor(e.target.value)}
-              />
-            </Box>
-          </Tooltip>
-        </Box>
-
-        {accentColor && (
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => applyColor(DEFAULT_COLOR)}
-            disabled={saving}
-          >
-            {t($ => $.accentColor.reset)}
-          </Button>
-        )}
-      </Paper>
-
-      {isAdmin && <StorageUsageSection />}
-      {isAdmin && (
-        <>
-          <Typography variant="h6" sx={{ mt: 4, mb: 0 }}>
-            {t($ => $.integrations.title)}
-          </Typography>
-          <MollieKeySection />
-          <ShopifyKeySection />
-          <BandsintownKeySection />
-        </>
-      )}
-      {isAdmin && <ChartOfAccountsSection />}
-      {isAdmin && <AccountingSettingsSection />}
-    </Box>
-  )
-}
-
-interface StorageStats {
-  storage_bytes?: number
-  object_count?: number
-}
-
-function StorageUsageSection() {
-  const { t } = useTranslation('settings')
-  const [stats, setStats] = useState<StorageStats | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
-  const compact = useCompactLayout()
-
-  useEffect(() => {
-    getMyStorageStats().then((s) => setStats(s as unknown as StorageStats)).catch(() => {})
-  }, [])
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    try {
-      setStats(await refreshMyStorageStats() as unknown as StorageStats)
-    } catch {
-      // best-effort; leave the previous value in place
-    } finally {
-      setRefreshing(false)
-    }
-  }
-
-  return (
-    <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt: 3 }}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-        <StorageIcon fontSize="small" color="primary" />
-        <Typography variant="subtitle1" sx={{ fontWeight: 600,  flexGrow: 1  }}>
-          {t($ => $.storage.title)}
-        </Typography>
-        <Tooltip title={t($ => $.storage.recompute)}>
-          <span>
-            <IconButton
-              size="small"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              aria-label={t($ => $.storage.recomputeAria)}
-            >
-              {refreshing ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
-            </IconButton>
-          </span>
-        </Tooltip>
+        <PremiumDiamond feature="integrations" />
       </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        {t($ => $.storage.description)}
-      </Typography>
-      {stats === null ? (
-        <CircularProgress size={18} />
-      ) : (
-        <Typography variant="body1" sx={{ fontWeight: 600 }}>
-          {formatBytes(stats.storage_bytes ?? 0)}
-          <Typography component="span" variant="body2" color="text.secondary">
-            {' · '}{t($ => $.storage.fileCount, { count: stats.object_count ?? 0 })}
-          </Typography>
-        </Typography>
-      )}
+      <MollieKeySection />
+      <ShopifyKeySection />
+      <BandsintownKeySection />
     </Paper>
   )
 }
@@ -285,14 +81,14 @@ function IntegrationCard({ logoLight, logoDark, alt, title, description, configu
 
   if (!expanded) {
     return (
-      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt }}>
+      <Box sx={{ p: compact ? 1.5 : 3, mt:2 }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box sx={{ flex: 1, display: 'flex' }}>{logo}</Box>
           <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setManuallyExpanded(true)}>
             {t($ => $.integrations.add)}
           </Button>
         </Stack>
-      </Paper>
+      </Box>
     )
   }
 
@@ -870,7 +666,7 @@ function BandsintownKeySection() {
       title={t($ => $.bandsintown.title)}
       description={t($ => $.bandsintown.description)}
       configured={!!status?.isSet}
-      mt={3}
+      mt={2}
     >
       {editing ? (
         <Stack spacing={1.5}>

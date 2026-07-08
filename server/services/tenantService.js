@@ -13,6 +13,7 @@ import {
   listTenantsWithMemberCount,
   fetchTenant,
   fetchTenantArchiveState,
+  fetchMembershipStatus,
   userExists,
   insertTenant,
   ensureTenantStatistics,
@@ -27,6 +28,7 @@ import {
   deleteTenantRow,
 } from '../repositories/tenantRepository.js'
 import { deleteTenantObjects } from './storageService.js'
+import { enforceMemberCap } from './limitService.js'
 import { logger } from '../utils/logger.js'
 
 function badRequest(error) {
@@ -99,15 +101,66 @@ export async function createTenant(createdByUserId, body) {
 export async function patchTenant(db, tenantId, body) {
   const built = buildTenantUpdateFields(body)
   if (built.error) return badRequest(built.error)
+
+  // Owner assignment (super-admin only route): migrates legacy tenants into
+  // the subscription model. null detaches the owner (back to no enforcement).
+  const hasOwnerField = body && Object.hasOwn(body, 'owner_user_id')
+  if (hasOwnerField) {
+    const ownerUserId = body.owner_user_id
+    if (ownerUserId !== null) {
+      if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) {
+        return badRequest('owner_user_id must be an integer or null')
+      }
+      if (!(await userExists(db, ownerUserId))) {
+        return badRequest('owner_user_id references a non-existent user')
+      }
+    }
+    built.fields.push(`owner_user_id = $${built.values.length + 1}`)
+    built.values.push(ownerUserId)
+  }
+
   if (!built.fields.length) return badRequest('Nothing to update')
 
   try {
     const tenant = await updateTenantFields(db, tenantId, built.fields, built.values)
     if (!tenant) return notFound('Tenant not found')
-    return { tenant }
+    const result = { tenant }
+    if (hasOwnerField) {
+      result.audit = {
+        action: 'tenant.owner_assigned',
+        details: { tenantId, ownerUserId: body.owner_user_id },
+      }
+    }
+    return result
   } catch (err) {
     if (err.code === '23505') return conflict('Slug already in use')
     throw err
+  }
+}
+
+// Upserts an approved membership inside a transaction, enforcing the member
+// cap when the grant creates a NEW approved membership (a promote/role change
+// of an already-approved member consumes no extra capacity).
+async function grantApprovedMembership(db, tenantId, userId, upsertFn) {
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+    const existingStatus = await fetchMembershipStatus(client, userId, tenantId)
+    if (existingStatus !== 'approved') {
+      const capError = await enforceMemberCap(client, tenantId, 'membership')
+      if (capError) {
+        await client.query('ROLLBACK')
+        return capError
+      }
+    }
+    const membership = await upsertFn(client)
+    await client.query('COMMIT')
+    return { membership }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
   }
 }
 
@@ -118,7 +171,8 @@ export async function addAdmin(db, tenantId, body, actingUserId) {
   if (!(await fetchTenant(db, tenantId))) return notFound('Tenant not found')
   if (!(await userExists(db, userId))) return notFound('User not found')
 
-  return { membership: await upsertTenantAdmin(db, userId, tenantId, actingUserId) }
+  return grantApprovedMembership(db, tenantId, userId, (client) =>
+    upsertTenantAdmin(client, userId, tenantId, actingUserId))
 }
 
 // Super-admin direct grant: upsert an approved membership in any tenant without
@@ -134,7 +188,8 @@ export async function addMembership(db, tenantId, body, actingUserId) {
   if (tenant.archived_at) return conflict('Tenant is archived')
   if (!(await userExists(db, userId))) return notFound('User not found')
 
-  return { membership: await upsertMembership(db, userId, tenantId, role, actingUserId) }
+  return grantApprovedMembership(db, tenantId, userId, (client) =>
+    upsertMembership(client, userId, tenantId, role, actingUserId))
 }
 
 export async function removeAdmin(db, tenantId, userId) {

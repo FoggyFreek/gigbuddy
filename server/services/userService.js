@@ -18,6 +18,7 @@ import {
   clearUserBandMember,
   assignBandMember,
 } from '../repositories/userRepository.js'
+import { enforceMemberCap } from './limitService.js'
 
 function badRequest(error) {
   return { status: 400, body: { error } }
@@ -123,7 +124,30 @@ export async function patchMembership(db, tenantId, actingUser, userId, body) {
   if (denial) return denial
 
   const { sets, values } = buildMembershipUpdate({ status, role, approverUserId: actingUser.id })
-  await updateMembership(db, tenantId, userId, sets, values)
+
+  // Approving a membership consumes plan capacity: cap check + update in one
+  // transaction under the tenant-row lock. Invite redemption (pending rows)
+  // deliberately doesn't consume capacity — only approval does.
+  if (status === 'approved' && existing.status !== 'approved') {
+    const client = await db.connect()
+    try {
+      await client.query('BEGIN')
+      const capError = await enforceMemberCap(client, tenantId, 'membership')
+      if (capError) {
+        await client.query('ROLLBACK')
+        return capError
+      }
+      await updateMembership(client, tenantId, userId, sets, values)
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+  } else {
+    await updateMembership(db, tenantId, userId, sets, values)
+  }
 
   const updated = await readMembershipRow(db, tenantId, userId)
   return {

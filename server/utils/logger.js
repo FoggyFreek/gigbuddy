@@ -12,9 +12,10 @@ const CONTEXT_KEYS = new Set([
   'operation', 'status', 'method', 'path', 'durationMs', 'endpointHost',
   'mode', 'migrated', 'reEncrypted', 'plaintextRemaining', 'port',
   'filename', 'aborted',
-  // server/scripts/migrateIntegrationSecrets.js's --check/--apply summary counts.
   'tenants', 'plaintext', 'encrypted', 'conflicts', 'corrupt',
   'migrationNeeded', 'reEncryptionNeeded',
+  'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
+  'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
 ])
 
 function safeCode(value) {
@@ -31,8 +32,7 @@ function sanitizeFields(fields) {
   )
 }
 
-// Deliberately never includes err.message or err.stack, in any environment —
-// see CLAUDE.md / the plan doc for why this is not env-gated.
+// Deliberately never includes err.message or err.stack, in any environment
 function redactErr(err) {
   return {
     errorName: safeCode(err?.name) || 'Error',

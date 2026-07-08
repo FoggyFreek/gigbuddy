@@ -1,0 +1,100 @@
+{
+  "errors": {
+    "plan_change_in_progress": "A plan change is already in progress. Please wait for it to finish.",
+    "complimentary_managed_by_admin": "Your subscription is managed by an administrator.",
+    "plan_not_priced": "That plan is not available for the selected billing interval.",
+    "already_subscribed": "You already have an active subscription.",
+    "use_downgrade_endpoint": "Use the downgrade option for a lower tier.",
+    "not_implemented": "Downgrades are not available yet.",
+    "no_mandate": "No valid payment method is on file.",
+    "billing_not_configured": "Billing is not configured on this server.",
+    "over_target_limit": "Current usage exceeds the limits of the chosen plan. Reduce usage first.",
+    "confirmation_mismatch": "The confirmation phrase did not match.",
+    "not_a_downgrade": "The chosen plan is not a downgrade.",
+    "generic": "Something went wrong."
+  },
+  "status": {
+    "pending_mandate": "Awaiting payment confirmation",
+    "pending_activation": "Awaiting first payment",
+    "trialing": "Trial",
+    "active": "Active",
+    "past_due": "Payment overdue",
+    "canceled": "Canceled"
+  },
+  "features": {
+    "finance": "Finance & accounting",
+    "integrations": "Integrations",
+    "song_files": "Song files",
+    "chordpro": "Chord charts",
+    "customization": "Custom branding",
+    "public_promotion": "Public promotion"
+  },
+  "limits": {
+    "storage_mb": "Storage (MB)",
+    "members": "Members",
+    "bands": "Bands",
+    "unlimited": "unlimited"
+  },
+  "current": {
+    "noSubscription": "No subscription",
+    "freePlanName": "Free",
+    "complimentary": "Complimentary",
+    "participantOnly": "You don't have a subscription, and there is nothing for you to pay. You're taking part in your band(s) under another member's plan. You can still subscribe if you want a plan of your own — that starts with creating your own band. Bands where you only participate don't count toward a plan's band limit.",
+    "freePlan": "You are on the free plan. Choose a plan below to unlock more features.",
+    "trialEnds": "Trial ends {{date, datetime}}.",
+    "accessEnds": "Access ends {{date, datetime}}",
+    "renews": "Renews {{date, datetime}}",
+    "pendingChange": "A plan change is in progress. It applies once the payment is confirmed.",
+    "downgradePending": "A downgrade is scheduled. You can no longer add data beyond the new plan's limits.",
+    "pastDue": "Your last payment failed. Please check your payment details — access ends soon.",
+    "repairNeeded": "We are finishing setting up your billing schedule. No action is needed.",
+    "resume": "Resume subscription",
+    "cancel": "Cancel subscription",
+    "sync": "Refresh from provider"
+  },
+  "plans": {
+    "title": "Plans",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "current": "Current",
+    "free": "Free",
+    "perMonth": "{{price}}/mo",
+    "perYear": "{{price}}/yr",
+    "notAvailable": "Not available for this interval",
+    "subscribe": "Subscribe",
+    "upgrade": "Upgrade",
+    "downgrade": "Downgrade",
+    "switchToYearly": "Switch to yearly",
+    "switchToMonthly": "Switch to monthly"
+  },
+  "toasts": {
+    "paymentStarted": "Payment started — your plan updates once it is confirmed.",
+    "planUpdated": "Plan updated.",
+    "downgradeScheduled": "Downgrade scheduled.",
+    "cancellationScheduled": "Cancellation scheduled for the end of your period.",
+    "resumed": "Subscription resumed.",
+    "synced": "Synced."
+  },
+  "downgrade": {
+    "title": "Downgrade to {{plan}}",
+    "freeFallbackWarning": "At the end of your current period your subscription ends and data tied to the features you lose (integrations, song files, custom branding, and so on) is permanently deleted. Your finance records are always kept.",
+    "paidLowerInfo": "At the end of your current period your account fallback-locks until the first {{plan}} payment settles. With iDEAL/SEPA that can take a few days, during which you have no paid access. Nothing is deleted until that payment is confirmed.",
+    "confirmPrompt": "You will not be able to add data beyond the {{plan}} limits from now on. To confirm, type <mono>{{phrase}}</mono>.",
+    "confirmAria": "downgrade confirmation phrase",
+    "confirm": "Downgrade",
+    "previewLoading": "Checking what this downgrade affects…",
+    "previewError": "Could not load the downgrade preview. Try again later.",
+    "willDelete": "This permanently deletes the data of:",
+    "nothingDeleted": "No stored data needs to be deleted for this downgrade.",
+    "blockersTitle": "Reduce usage before you can downgrade:",
+    "blockerLine": "{{name}} — {{limit}}: {{current}} (allowed: {{target}})",
+    "blockerBands": "Bands you own"
+  },
+  "financeReadOnly": "Your current plan doesn't include finance. Your existing records stay available to view and export, but changes are disabled. Upgrade your plan to edit finance again.",
+  "locked": {
+    "title": "{{feature}} is a premium feature",
+    "description": "Upgrade your plan to unlock {{feature}} for your band. A preview of what you get is coming here soon.",
+    "fallbackFeature": "This feature",
+    "viewPlans": "View plans"
+  }
+}

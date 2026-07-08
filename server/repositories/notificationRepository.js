@@ -13,7 +13,7 @@ export async function listForUser(executor, userId, limit) {
             n.source_type, n.source_id, n.read_at, n.created_at,
             t.band_name AS tenant_name, t.avatar_path AS tenant_avatar_path
      FROM notifications n
-     JOIN tenants t ON t.id = n.tenant_id
+     LEFT JOIN tenants t ON t.id = n.tenant_id
      WHERE n.user_id = $1
      ORDER BY n.created_at DESC, n.id DESC
      LIMIT $2`,
@@ -61,6 +61,23 @@ export async function insertForUsers(executor, userIds, notification) {
      SELECT uid, $2, $3, $4, $5, $6, $7, $8 FROM unnest($1::int[]) AS uid`,
     [userIds, tenantId, type, title, body, url, sourceType, sourceId],
   )
+}
+
+// Transactional single-user insert for user-level (billing) notifications.
+// Runs on the CALLER'S executor (a tx client) so the row commits atomically
+// with the state change that produced it; dedupe_key + ON CONFLICT DO NOTHING
+// makes it replay-safe. tenant_id is typically null for these. Returns true
+// when a row was actually inserted (false = deduped), so the caller only fires
+// best-effort push on a genuinely new notification.
+export async function insertForUserDeduped(executor, notification) {
+  const { userId, tenantId = null, type, title, body = '', url, dedupeKey = null } = notification
+  const { rowCount } = await executor.query(
+    `INSERT INTO notifications (user_id, tenant_id, type, title, body, url, dedupe_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING`,
+    [userId, tenantId, type, title, body, url, dedupeKey],
+  )
+  return rowCount > 0
 }
 
 export async function pruneOldForUsers(executor, userIds) {

@@ -109,19 +109,27 @@ interface RichTextEditorProps {
   initialHtml?: string
   onChange: (html: string) => void
   minHeight?: number
+  readOnly?: boolean
 }
 
-export default function RichTextEditor({ initialHtml = '', onChange, minHeight = 180 }: Readonly<RichTextEditorProps>) {
+export default function RichTextEditor({ initialHtml = '', onChange, minHeight = 180, readOnly = false }: Readonly<RichTextEditorProps>) {
   const onChangeRef = useRef(onChange)
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
 
   const editor = useEditor({
     extensions: [StarterKit.configure({ link: { openOnClick: false, autolink: true } })],
     content: initialHtml,
+    editable: !readOnly,
     onUpdate({ editor: e }) {
       onChangeRef.current?.(e.getHTML())
     },
   })
+
+  useEffect(() => {
+    if (editor && editor.isEditable !== !readOnly) {
+      editor.setEditable(!readOnly, false)
+    }
+  }, [editor, readOnly])
 
   return (
     <Paper
@@ -141,7 +149,7 @@ export default function RichTextEditor({ initialHtml = '', onChange, minHeight =
         },
       }}
     >
-      <EditorToolbar editor={editor} />
+      {!readOnly && <EditorToolbar editor={editor} />}
       <EditorContent editor={editor} />
     </Paper>
   )

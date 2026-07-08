@@ -83,6 +83,18 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body.bio).toBe('Member-edited bio')
   })
 
+  it('reader cannot patch non-financial profile fields', async () => {
+    await pool.query(
+      `UPDATE memberships SET role = 'reader'
+       WHERE user_id = $1 AND tenant_id = $2`,
+      [seed.userA.id, seed.tenantA.id],
+    )
+
+    await as(seed.userA.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ bio: 'Reader edit' }),
+    ).expect(403)
+  })
+
   it('rejects an invalid kvk_number with 400 invalid_kvk_number', async () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ kvk_number: '123' }),
@@ -127,6 +139,31 @@ describe('PATCH /api/profile — financial fields', () => {
     ).expect(400)
     expect(res.body.error).toBe('No valid fields to update')
   })
+})
+
+describe('PATCH /api/profile — accent color', () => {
+  it.each(['reader', 'contributor', 'financial_admin', 'member'])(
+    '%s cannot update the tenant accent color',
+    async (role) => {
+      await pool.query(
+        `UPDATE memberships SET role = $1
+         WHERE user_id = $2 AND tenant_id = $3`,
+        [role, seed.userA.id, seed.tenantA.id],
+      )
+
+      const res = await as(seed.userA.id, seed.tenantA.id)(
+        request(app).patch('/api/profile').send({ accent_color: '#ff0000' }),
+      ).expect(403)
+
+      expect(res.body.error).toBe(role === 'reader' ? 'Forbidden' : 'tenant_admin_required')
+
+      const stored = await pool.query(
+        'SELECT accent_color FROM tenants WHERE id = $1',
+        [seed.tenantA.id],
+      )
+      expect(stored.rows[0].accent_color).toBeNull()
+    },
+  )
 })
 
 describe('Shopify credential management', () => {

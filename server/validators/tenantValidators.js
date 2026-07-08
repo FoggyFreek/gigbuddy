@@ -6,6 +6,25 @@ export function validSlug(slug) {
   return typeof slug === 'string' && SLUG_RE.test(slug)
 }
 
+// Room for a dedupe suffix ("-2".."-25" or "-xxxxxx") within the 64-char slug
+// limit enforced by SLUG_RE.
+const SLUG_BASE_MAX = 56
+
+// Derives a slug base from a band name: strip diacritics, lowercase,
+// non-alphanumerics collapse to single hyphens. Deterministic and pure —
+// uniqueness is the caller's job (dedupe suffixes in tenantSelfService).
+export function slugFromBandName(name) {
+  const base = String(name ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, SLUG_BASE_MAX)
+    .replace(/-+$/, '')
+  return base || 'band'
+}
+
 export const PATCHABLE = [
   'slug',
   'band_name',

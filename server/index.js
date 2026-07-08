@@ -12,6 +12,7 @@ import { securityHeaders } from './middleware/securityHeaders.js'
 import { validateIntegrationSecretsConfig } from './security/integrationSecrets.js'
 import { logger } from './utils/logger.js'
 import { requestContext, requestLogger } from './middleware/requestContext.js'
+import { startBillingReconciliation } from './jobs/billingReconciliation.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -65,8 +66,18 @@ app.use((err, _req, res, _next) => {
   // Only surface the specific message for client errors (4xx); for server
   // errors expose nothing beyond a generic string to avoid leaking internals
   // such as DB constraint names, file paths, or stack traces (OWASP A02).
-  const message = status < 500 ? (err.message || 'Bad request') : 'Internal error'
-  res.status(status).json({ error: message })
+  // Machine-readable `code`/`feature` (e.g. EntitlementRequiredError,
+  // StorageQuotaError) pass through on 4xx so thrown guards match the
+  // middleware denial shape the frontend already handles.
+  if (status < 500) {
+    res.status(status).json({
+      error: err.message || 'Bad request',
+      ...(err.code ? { code: err.code } : {}),
+      ...(err.feature ? { feature: err.feature } : {}),
+    })
+    return
+  }
+  res.status(status).json({ error: 'Internal error' })
 })
 
 await initOidc()
@@ -74,5 +85,7 @@ await initOidc()
 app.listen(PORT, () => {
   logger.info('server.started', { port: PORT })
 })
+
+startBillingReconciliation()
 
 export default app

@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import pool from '../db/index.js'
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
-import { uploadObject, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
+import { uploadObjectWithQuota, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { dispatchNotification } from './notificationService.js'
@@ -426,7 +426,7 @@ export async function replaceGigBanner(db, tenantId, gigId, file) {
   const ext = extensionForImageMime(image.mimetype)
   const objectKey = gigBannerKey(tenantId, randomUUID(), ext)
 
-  await uploadObject(objectKey, image.buffer, image.size, image.mimetype)
+  await uploadObjectWithQuota(objectKey, image.buffer, image.size, image.mimetype)
 
   let updatedKey
   try {
@@ -465,7 +465,7 @@ export async function createGigAttachment(db, tenantId, gigId, file) {
   const ext = path.extname(file.originalname).toLowerCase()
   const objectKey = gigAttachmentKey(tenantId, randomUUID(), ext)
 
-  await uploadObject(objectKey, file.buffer, file.size, file.mimetype)
+  await uploadObjectWithQuota(objectKey, file.buffer, file.size, file.mimetype)
 
   try {
     const attachment = await insertGigAttachment(db, tenantId, gigId, file, objectKey)

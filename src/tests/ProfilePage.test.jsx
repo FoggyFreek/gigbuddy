@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../contexts/authContext.ts'
@@ -69,13 +70,36 @@ import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '.
 import { compressLogo } from '../utils/compressImage.ts'
 
 function wrap(ui, { user } = {}) {
+  const activeUser = user ?? {
+    isSuperAdmin: false,
+    activeTenantRole: 'contributor',
+    permissions: ['app.view', 'planning.write', 'purchase.create'],
+  }
   return render(
     <ThemeProvider theme={theme}>
-      <AuthContext.Provider value={{ user, logout: vi.fn() }}>
-        {ui}
+      <AuthContext.Provider value={{ user: activeUser, logout: vi.fn() }}>
+        <MemoryRouter>{ui}</MemoryRouter>
       </AuthContext.Provider>
     </ThemeProvider>
   )
+}
+
+// A plan without the customization feature — the identity-card image upload
+// buttons should become diamond upsell links while editing.
+const lockedEntitlements = {
+  planSlug: 'free',
+  subscriptionStatus: null,
+  locked: false,
+  financeReadOnly: false,
+  flags: {
+    finance: false,
+    integrations: false,
+    customization: false,
+    song_files: false,
+    chordpro: false,
+    public_promotion: false,
+  },
+  limits: { storage_mb: 100, members: 5, bands: 1 },
 }
 
 describe('ProfilePage', () => {
@@ -148,6 +172,22 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(screen.getByText(/band members/i)).toBeInTheDocument())
   })
 
+  it('shows a reader the profile without edit controls', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, {
+      user: { isSuperAdmin: false, activeTenantRole: 'reader', permissions: ['app.view'] },
+    })
+
+    expect(await screen.findByText(/you have read-only access/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /links/i }))
+    expect(await screen.findByText('EPK')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /delete link/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add link/i })).not.toBeInTheDocument()
+    expect(updateProfile).not.toHaveBeenCalled()
+  })
+
   it('deletes a link', async () => {
     const user = userEvent.setup()
     wrap(<ProfilePage />)
@@ -204,6 +244,38 @@ describe('ProfilePage', () => {
     expect(screen.queryByLabelText(/iban/i)).toBeNull()
     expect(screen.queryByLabelText(/tax id/i)).toBeNull()
     expect(updateProfile).not.toHaveBeenCalled()
+  })
+
+  it('locks banner/avatar uploads behind diamonds but keeps the logo cameras when the plan lacks customization', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, {
+      user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin', entitlements: lockedEntitlements },
+    })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+    const editButtons = screen.getAllByRole('button', { name: /^edit$/i })
+    await user.click(editButtons[0]) // Band identity edit button
+
+    // Banner + avatar cameras become diamond upsell links…
+    const diamonds = await screen.findAllByRole('link', { name: /premium feature/i })
+    expect(diamonds.length).toBeGreaterThan(0)
+    for (const diamond of diamonds) {
+      expect(diamond).toHaveAttribute('href', '/upgrade/customization')
+    }
+    // …but the band logo (light + dark) stays uploadable on every plan.
+    expect(document.querySelector('[data-testid="CameraAltIcon"]')).not.toBeNull()
+  })
+
+  it('keeps the camera buttons when entitlements are unenforced', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin' } })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+    const editButtons = screen.getAllByRole('button', { name: /^edit$/i })
+    await user.click(editButtons[0])
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-testid="CameraAltIcon"]')).not.toBeNull(),
+    )
+    expect(screen.queryByRole('link', { name: /premium feature/i })).not.toBeInTheDocument()
   })
 
   it('rejects GIF logo uploads before sending them', async () => {

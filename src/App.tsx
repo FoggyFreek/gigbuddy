@@ -23,10 +23,11 @@ const GigDetailPage = lazy(() => import('./pages/GigDetailPage.tsx'))
 const GigMapPage = lazy(() => import('./pages/GigMapPage.tsx'))
 const GigsPage = lazy(() => import('./pages/GigsPage.tsx'))
 const LoginPage = lazy(() => import('./pages/LoginPage.tsx'))
-const MembersPage = lazy(() => import('./pages/MembersPage.tsx'))
 const PendingApprovalPage = lazy(() => import('./pages/PendingApprovalPage.tsx'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage.tsx'))
 const RedeemInvitePage = lazy(() => import('./pages/RedeemInvitePage.tsx'))
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage.tsx'))
+const AcceptTermsPage = lazy(() => import('./pages/AcceptTermsPage.tsx'))
 const RehearsalDetailPage = lazy(() => import('./pages/RehearsalDetailPage.tsx'))
 const RehearsalsPage = lazy(() => import('./pages/RehearsalsPage.tsx'))
 const TasksPage = lazy(() => import('./pages/TasksPage.tsx'))
@@ -46,11 +47,12 @@ const ReportsPage = lazy(() => import('./pages/ReportsPage.tsx'))
 const ReimbursementsPage = lazy(() => import('./pages/ReimbursementsPage.tsx'))
 const VatReturnsPage = lazy(() => import('./pages/VatReturnsPage.tsx'))
 const VatReturnDetailPage = lazy(() => import('./pages/VatReturnDetailPage.tsx'))
-const TenantSettingsPage = lazy(() => import('./pages/TenantSettingsPage.tsx'))
-const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage.tsx'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage.tsx'))
 const PaymentThanksPage = lazy(() => import('./pages/PaymentThanksPage.tsx'))
+const LockedFeaturePage = lazy(() => import('./pages/LockedFeaturePage.tsx'))
 const TenantsPage = lazy(() => import('./pages/admin/TenantsPage.tsx'))
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage.tsx'))
+const SubscriptionsPage = lazy(() => import('./pages/admin/SubscriptionsPage.tsx'))
 
 export default function App() {
   return (
@@ -61,12 +63,22 @@ export default function App() {
         <Route path="/payment/thanks" element={<PaymentThanksPage />} />
         <Route element={<RequireAuth />}>
           <Route path="/redeem-invite" element={<RedeemInvitePage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/accept-terms" element={<AcceptTermsPage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            {/* Per-user settings — ungated like /profile (not tenant-admin /settings). */}
-            <Route path="/account" element={<Navigate to="/account/notifications" replace />} />
-            <Route path="/account/:section" element={<UserSettingsPage />} />
+            {/* Unified settings — reachable by every member; each section gates
+                its own content by role. Old /account and /members deep links
+                redirect here so existing bookmarks keep working. */}
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/:section" element={<SettingsPage />} />
+            <Route path="/account" element={<Navigate to="/settings" replace />} />
+            <Route path="/account/billing" element={<Navigate to="/settings/billing" replace />} />
+            <Route path="/account/:section" element={<Navigate to="/settings/preferences" replace />} />
+            <Route path="/members" element={<Navigate to="/settings/members" replace />} />
+            {/* Upsell landing for tier-locked features (diamond nav items). */}
+            <Route path="/upgrade/:feature" element={<LockedFeaturePage />} />
             <Route path="/gigs" element={<GigsPage />}>
               <Route path=":id" element={<GigDetailPage />} />
             </Route>
@@ -123,15 +135,10 @@ export default function App() {
               <Route path="events/:id" element={<BandEventDetailPage />} />
             </Route>
             <Route path="/email-templates" element={<EmailTemplatesPage />} />
-            <Route element={<RequirePermission permission={PERMISSIONS.MEMBERS_MANAGE} />}>
-              <Route path="/members" element={<MembersPage />} />
-            </Route>
-            <Route element={<RequirePermission permission={PERMISSIONS.TENANT_MANAGE} />}>
-              <Route path="/settings" element={<TenantSettingsPage />} />
-            </Route>
             <Route element={<RequireSuperAdmin />}>
               <Route path="/admin/tenants" element={<TenantsPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
+              <Route path="/admin/subscriptions" element={<SubscriptionsPage />} />
             </Route>
           </Route>
         </Route>

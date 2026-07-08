@@ -96,6 +96,19 @@ export async function sendPushToUsers(userIds, tenantId, payload) {
   await fanOut(rows, { ...payload, tenantId, tenantSlug: slug })
 }
 
+// Fan out to a single user's own devices, with NO membership join — billing
+// notifications belong to the user (subscription owner), not to any tenant, so
+// the tenant-scoped variants above don't apply. Post-commit, best-effort.
+export async function sendPushToUser(userId, payload) {
+  if (!configured) return
+  const { rows } = await pool.query(
+    `SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1`,
+    [userId],
+  )
+  if (!rows.length) return
+  await fanOut(rows, payload)
+}
+
 export async function sendPushToMember(bandMemberId, tenantId, payload) {
   if (!configured) return
   const { rows: members } = await pool.query(

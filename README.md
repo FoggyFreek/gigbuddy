@@ -41,7 +41,7 @@ GigBuddy hosts multiple bands on one instance with strict data isolation:
 
 ## Authentication
 
-Login is via Google OAuth (OpenID Connect). The first user whose email matches `ADMIN_EMAIL` is bootstrapped as super admin and tenant admin of the seed tenant on first login. All other accounts require an invite to join a tenant.
+Login is via Google OAuth (OpenID Connect), with optional Microsoft (personal accounts) sign-in when `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET` are set. The first user whose email matches `ADMIN_EMAIL` is bootstrapped as super admin and tenant admin of the seed tenant on first login. All other accounts require an invite to join a tenant.
 
 ## Tech stack
 
@@ -49,7 +49,7 @@ Login is via Google OAuth (OpenID Connect). The first user whose email matches `
 |---|---|
 | Frontend | React 19, MUI v9, Vite, react-router v7, TipTap, dayjs |
 | Backend | Express 5, PostgreSQL (`pg`), `web-push` |
-| Auth | OpenID Connect (Google), `express-session`, `connect-pg-simple` |
+| Auth | OpenID Connect (Google, Microsoft), `express-session`, `connect-pg-simple` |
 | Storage | MinIO-compatible object store (RustFS) for logos, banners, share photos |
 | PWA | Service worker, Web Push (VAPID), installable manifest |
 
@@ -100,6 +100,7 @@ npm run lint
 |---|---|
 | `PGHOST` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` / `PGPORT` | PostgreSQL connection |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `OIDC_REDIRECT_URI` | Google OAuth |
+| `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` / `MICROSOFT_REDIRECT_URI` | Microsoft OAuth (personal accounts; optional, disables Microsoft sign-in when unset) |
 | `SESSION_SECRET` | express-session signing key |
 | `APP_URL` / `CLIENT_ORIGIN` | Frontend URL (CORS, OIDC redirect, invite URLs) |
 | `MOLLIE_WEBHOOK_BASE_URL` / `MOLLIE_DISABLE_WEBHOOK` | Public API URL for Mollie webhooks; set disable flag to `true` only for local/testing payment links without webhook callbacks |

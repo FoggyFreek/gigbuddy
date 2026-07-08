@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -17,16 +17,18 @@ export default function RedeemInvitePage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<{ tenant: { name: string } } | null>(null)
+  // Guards the auto-redeem against StrictMode's double effect invocation: a
+  // second POST would 409 ("already used") and shadow the successful first one.
+  const autoRedeemedRef = useRef(false)
 
   // If code is in the URL, attempt redemption immediately on first render.
   useEffect(() => {
     const initial = params.get('code')
-    if (!initial) return
-    let cancelled = false
+    if (!initial || autoRedeemedRef.current) return
+    autoRedeemedRef.current = true
     setSubmitting(true)
     redeemInvite(initial)
       .then(async (res) => {
-        if (cancelled) return
         setResult(res as { tenant: { name: string } })
         await refreshUser()
         const next = new URLSearchParams(params)
@@ -34,15 +36,11 @@ export default function RedeemInvitePage() {
         setParams(next, { replace: true })
       })
       .catch((err: unknown) => {
-        if (cancelled) return
         setError((err instanceof Error ? err.message : null) || 'Failed to redeem invite')
       })
       .finally(() => {
-        if (!cancelled) setSubmitting(false)
+        setSubmitting(false)
       })
-    return () => {
-      cancelled = true
-    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -19,7 +19,7 @@ export default function PendingApprovalPage() {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        bgcolor: '#F4F1FB',
+        bgcolor: 'background.default',
         px: 2,
       }}
     >
@@ -34,9 +34,9 @@ export default function PendingApprovalPage() {
           maxWidth: 400,
           width: '100%',
           border: '1px solid',
-          borderColor: 'rgba(0,0,0,0.08)',
+          borderColor: 'divider',
           borderRadius: 3,
-          bgcolor: '#FFFFFF',
+          bgcolor: 'background.paper',
         }}
       >
         <Box

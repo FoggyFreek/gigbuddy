@@ -119,6 +119,15 @@ export async function clearShopifyDomain(executor, tenantId) {
   )
 }
 
+// Clears the Bandsintown integration configuration (non-secret, but part of
+// the integration surface purged when the entitlement is lost).
+export async function clearBandsintownArtist(executor, tenantId) {
+  await executor.query(
+    'UPDATE tenants SET bandsintown_artist_name = NULL, bandsintown_artist_id = NULL, updated_at = NOW() WHERE id = $1',
+    [tenantId],
+  )
+}
+
 // ---------- tenant image paths (logo, banner, avatar, logo_dark) ----------
 
 const IMAGE_COLUMNS = Object.freeze({
@@ -143,4 +152,28 @@ export async function setTenantImagePath(executor, tenantId, column, objectKey) 
     [objectKey, tenantId],
   )
   return rows[0][col]
+}
+
+// Downgrade purge: nulls the accent color and the gated customization images
+// (banner, avatar), returning the previous object keys so they can be queued
+// for storage cleanup. The band logos (light + dark) are settable on every
+// plan — they are not customization data and must survive the purge. Callers
+// run this inside the tenant-lock transaction, so the read-then-clear pair
+// cannot race another write.
+export async function clearTenantCustomization(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT banner_path, avatar_path FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  const keys = rows[0]
+    ? [rows[0].banner_path, rows[0].avatar_path].filter(Boolean)
+    : []
+  await executor.query(
+    `UPDATE tenants
+        SET accent_color = NULL, banner_path = NULL, avatar_path = NULL,
+            updated_at = NOW()
+      WHERE id = $1`,
+    [tenantId],
+  )
+  return keys
 }

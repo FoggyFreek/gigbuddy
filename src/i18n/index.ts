@@ -35,6 +35,8 @@ import enReports from './en/reports.json'
 import enSettings from './en/settings.json'
 import enAuth from './en/auth.json'
 import enNotifications from './en/notifications.json'
+import enBilling from './en/billing.json'
+import enOnboarding from './en/onboarding.json'
 
 import nlCommon from './nl/common.json'
 import nlNavigation from './nl/navigation.json'
@@ -65,6 +67,8 @@ import nlReports from './nl/reports.json'
 import nlSettings from './nl/settings.json'
 import nlAuth from './nl/auth.json'
 import nlNotifications from './nl/notifications.json'
+import nlBilling from './nl/billing.json'
+import nlOnboarding from './nl/onboarding.json'
 
 export const defaultNS = 'common'
 
@@ -98,6 +102,8 @@ const en = {
   settings: enSettings,
   auth: enAuth,
   notifications: enNotifications,
+  billing: enBilling,
+  onboarding: enOnboarding,
 } as const
 
 // Compile-time Dutch parity guard. `DeepKeyShape` turns the canonical English
@@ -138,6 +144,8 @@ const nl = {
   settings: nlSettings,
   auth: nlAuth,
   notifications: nlNotifications,
+  billing: nlBilling,
+  onboarding: nlOnboarding,
 } satisfies DeepKeyShape<typeof en>
 
 export const resources = { en, nl } as const

@@ -17,6 +17,8 @@ import {
 import { listGigsWithTaskCounts } from '../repositories/gigRepository.js'
 import { listRehearsals, loadParticipants } from '../repositories/rehearsalRepository.js'
 import { listBandEvents } from '../repositories/bandEventRepository.js'
+import { resolveTenantEntitlements } from './entitlementService.js'
+import { FEATURES } from '../auth/entitlements.js'
 
 const PROD_ID = '-//GigBuddy//EN'
 
@@ -136,6 +138,11 @@ export async function buildFeed(pool, token) {
   if (ctx.tenant_archived_at) return notFound
 
   const tenantId = ctx.tenant_id
+
+  // Feed access follows the integrations entitlement; 404 (like every other
+  // failure here) so neither token validity nor plan state is leaked.
+  const resolved = await resolveTenantEntitlements(pool, tenantId)
+  if (resolved && !resolved.entitlements.features[FEATURES.INTEGRATIONS]) return notFound
   const base = appBase()
 
   const [gigs, rehearsals, bandEvents] = await Promise.all([

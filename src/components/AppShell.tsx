@@ -54,7 +54,10 @@ import QueueMusicOutlined from '@mui/icons-material/QueueMusicOutlined'
 import { useProfile } from '../contexts/profileContext.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import { useEntitlements } from '../hooks/useEntitlements.ts'
+import { planLogoSrc } from '../utils/planLogo.ts'
 import { PERMISSIONS, type Permission } from '../auth/permissions.ts'
+import { FEATURES, type Feature } from '../auth/entitlements.ts'
 import { useTenantQuerySync } from '../hooks/useTenantQuerySync.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import { ContentWidthContext } from '../contexts/contentWidthContext.ts'
@@ -83,6 +86,10 @@ interface NavChildEntry {
   i18nKey: NavItemKey
   icon: SvgIconComponent
   permission?: Permission
+  // Entitlement feature this surface needs. When the active plan lacks it, the
+  // item stays VISIBLE but renders a diamond icon and links to the upsell page
+  // (it is NOT hidden — that's what permission does). See project memory.
+  feature?: Feature
 }
 
 interface NavGroupEntry {
@@ -102,7 +109,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
     icon: SpaceDashboardTwoTone,
     children: [
       { to: '/', i18nKey: 'dashboard', icon: DashboardOutlined },
-      { to: '/financial', i18nKey: 'financial', icon: QueryStatsOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/financial', i18nKey: 'financial', icon: QueryStatsOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
       { to: '/profile', i18nKey: 'profile', icon: PersonOutlined },
     ],
   },
@@ -139,21 +146,21 @@ const NAV_GROUPS: NavGroupEntry[] = [
     key: 'financial',
     icon: PaymentsTwoTone,
     children: [
-      { to: '/invoices', i18nKey: 'invoices', icon: ReceiptLongOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/purchases', i18nKey: 'purchases', icon: ShoppingCartOutlined, permission: PERMISSIONS.PURCHASE_CREATE },
-      { to: '/merch', i18nKey: 'merch', icon: SellOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/reimbursements', i18nKey: 'reimbursements', icon: VolunteerActivismOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/invoices', i18nKey: 'invoices', icon: ReceiptLongOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
+      { to: '/purchases', i18nKey: 'purchases', icon: ShoppingCartOutlined, permission: PERMISSIONS.PURCHASE_CREATE, feature: FEATURES.FINANCE },
+      { to: '/merch', i18nKey: 'merch', icon: SellOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
+      { to: '/reimbursements', i18nKey: 'reimbursements', icon: VolunteerActivismOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
     ],
   },
   {
     key: 'accounting',
     icon: AccountBalanceTwoTone,
     children: [
-      { to: '/journal', i18nKey: 'journal', icon: MenuBookOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/ledger', i18nKey: 'ledger', icon: ListAltOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/ledger-entries', i18nKey: 'ledgerEntries', icon: ManageSearchOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/vat-returns', i18nKey: 'vatReturns', icon: AccountBalanceOutlined, permission: PERMISSIONS.FINANCE_VIEW },
-      { to: '/reports', i18nKey: 'reports', icon: AssessmentOutlined, permission: PERMISSIONS.FINANCE_VIEW },
+      { to: '/journal', i18nKey: 'journal', icon: MenuBookOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
+      { to: '/ledger', i18nKey: 'ledger', icon: ListAltOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
+      { to: '/ledger-entries', i18nKey: 'ledgerEntries', icon: ManageSearchOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
+      { to: '/vat-returns', i18nKey: 'vatReturns', icon: AccountBalanceOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
+      { to: '/reports', i18nKey: 'reports', icon: AssessmentOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
     ],
   },
 
@@ -185,11 +192,31 @@ export default function AppShell() {
   }
 
   const isSuperAdmin = !!user?.isSuperAdmin
-  const { can, canManageMembers, canManageTenant } = usePermissions()
+  const { can } = usePermissions()
+  const { has, financeReadOnly, planSlug, locked, unenforced } = useEntitlements()
+
+  // Header logo reflects the active subscription tier; fallback-locked or
+  // unenforced (ownerless) tenants keep the standard logo.
+  const tierLogo = !locked && !unenforced ? planLogoSrc(planSlug) : null
+
+  // Whether the active plan grants a nav item's feature. Finance is special:
+  // reads survive a downgrade (financeReadOnly), so a grandfathered tenant still
+  // reaches finance normally; only a tenant that never had finance sees it
+  // locked. Everything else keys straight off `has`.
+  const featureAccessible = useCallback(
+    (feature?: Feature) => {
+      if (!feature) return true
+      if (feature === FEATURES.FINANCE) return has(FEATURES.FINANCE) || financeReadOnly
+      return has(feature)
+    },
+    [has, financeReadOnly],
+  )
 
   // Nav items carrying a `permission` are hidden unless the active role grants
-  // it; the matching routes sit behind RequirePermission and the API behind the
-  // matching gate, so this is presentation, not the defense.
+  // it (role, not tier). Items carrying a `feature` the plan lacks stay VISIBLE
+  // but render locked: a diamond icon and a link to the upsell page. Routes sit
+  // behind RequirePermission and the API behind the matching gate — this is
+  // presentation, not the defense.
   const visibleGroups = useMemo(
     () =>
       NAV_GROUPS
@@ -199,10 +226,22 @@ export default function AppShell() {
           label: t($ => $.groups[g.key]),
           children: g.children
             .filter((c) => !c.permission || can(c.permission))
-            .map((c) => ({ to: c.to, icon: c.icon, label: t($ => $.items[c.i18nKey]) })),
+            .map((c) => {
+              const locked = !featureAccessible(c.feature)
+              return {
+                // Stable per-item identity for React keys. `to` can't serve:
+                // every locked item shares the same upsell route, and duplicate
+                // keys duplicate items when a tenant switch relocks/unlocks.
+                key: c.i18nKey,
+                to: locked ? `/upgrade/${c.feature}` : c.to,
+                icon: c.icon,
+                label: t($ => $.items[c.i18nKey]),
+                locked,
+              }
+            }),
         }))
         .filter((g) => g.children.length > 0),
-    [can, t],
+    [can, featureAccessible, t],
   )
 
   // Single-open accordion: the group containing the active route auto-expands,
@@ -300,7 +339,19 @@ export default function AppShell() {
               <MenuIcon />
             </IconButton>
           )}
-          <Box component="img" src="/icons/gigbuddy_logo_pick.png" alt="gigBuddy" sx={{ height: 32, width: 'auto', mr: 1, filter: theme.palette.mode === 'dark' ? 'invert(1)' : 'none' }} />
+          <Box
+            component="img"
+            src={tierLogo ?? '/icons/gigbuddy_logo_pick.png'}
+            alt="gigBuddy"
+            sx={{
+              height: 32,
+              width: 'auto',
+              mr: 1,
+              // The tier logos are full-color; only the monochrome default logo
+              // inverts in dark mode.
+              filter: !tierLogo && theme.palette.mode === 'dark' ? 'invert(1)' : 'none',
+            }}
+          />
           <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.1 }}>
               gigBuddy
@@ -366,8 +417,6 @@ export default function AppShell() {
             onClose={() => setSettingsMenuAnchor(null)}
             mode={mode}
             onToggleTheme={() => { toggleTheme(); setSettingsMenuAnchor(null) }}
-            canManageMembers={canManageMembers}
-            canManageTenant={canManageTenant}
             isSuperAdmin={isSuperAdmin}
           />
           {user && (

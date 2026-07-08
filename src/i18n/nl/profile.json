@@ -27,7 +27,7 @@
     "copy": "URL kopiëren",
     "copied": "Gekopieerd",
     "copyAria": "{{label}}-URL kopiëren",
-    "handlePlaceholder": "jouwnaam",
+    "handlePlaceholder": "jouw ID/handle",
     "bandsintownFetch": "Ophalen van Bandsintown",
     "bandsintownFetchHint": "Vul hieronder je Bandsintown artiest-ID in om je artiestennaam en sociale links op te halen.",
     "bandsintownFetchFailed": "Artiestgegevens ophalen van Bandsintown is mislukt"
@@ -35,7 +35,7 @@
   "links": {
     "label": "Label",
     "url": "URL",
-    "empty": "Nog geen links. Voeg er hieronder een toe — bijv. een Google Drive-map met je EPK.",
+    "empty": "Nog geen links. Voeg er hieronder een toe — bijv. een OneDrive of Google Drive-map met je rider, foto's, etc.",
     "openInNewTab": "Openen in nieuw tabblad",
     "edit": "Link bewerken",
     "delete": "Link verwijderen",
@@ -77,6 +77,7 @@
     "delete": "Lid verwijderen",
     "doneEditing": "Klaar met bewerken",
     "colorAria": "kleur {{color}}",
-    "gigbuddyUser": "gigBuddy-gebruiker"
+    "gigbuddyUser": "gigBuddy-gebruiker",
+    "inviteCta": "Uitnodigen voor gigBuddy"
   }
 }

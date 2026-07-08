@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -44,6 +45,25 @@ describe('RedeemInvitePage', () => {
     wrap(<RedeemInvitePage />, '/redeem-invite?code=abc123')
     await waitFor(() => expect(redeemInvite).toHaveBeenCalledWith('abc123'))
     await waitFor(() => expect(screen.getByText(/Band A/)).toBeInTheDocument())
+  })
+
+  it('auto-redeems exactly once under StrictMode double-effects', async () => {
+    redeemInvite.mockResolvedValue({
+      tenant: { id: 1, slug: 'a', name: 'Band A' },
+      role: 'member',
+      status: 'pending',
+    })
+    render(
+      <StrictMode>
+        <ThemeProvider theme={theme}>
+          <MemoryRouter initialEntries={['/redeem-invite?code=abc123']}>
+            <RedeemInvitePage />
+          </MemoryRouter>
+        </ThemeProvider>
+      </StrictMode>,
+    )
+    await waitFor(() => expect(screen.getByText(/Band A/)).toBeInTheDocument())
+    expect(redeemInvite).toHaveBeenCalledTimes(1)
   })
 
   it('submits manually when no code in URL', async () => {
