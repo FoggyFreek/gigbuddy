@@ -24,9 +24,20 @@ function MasonryItem({ gapPx, children }: Readonly<MasonryItemProps>) {
     }
     measure()
     if (typeof ResizeObserver === 'undefined') return undefined
-    const observer = new ResizeObserver(measure)
+    // Defer the re-measure out of the observer callback: writing gridRowEnd can
+    // reshuffle grid auto-placement and resize siblings, so a synchronous write
+    // feeds back into the observer and trips "ResizeObserver loop completed with
+    // undelivered notifications". A rAF breaks that same-frame chain.
+    let raf = 0
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(measure)
+    })
     observer.observe(el)
-    return () => observer.disconnect()
+    return () => {
+      cancelAnimationFrame(raf)
+      observer.disconnect()
+    }
   }, [gapPx])
 
   return <div ref={ref}>{children}</div>

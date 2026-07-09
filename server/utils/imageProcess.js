@@ -34,6 +34,7 @@ export const IMAGE_PROCESSING_PRESETS = Object.freeze({
   logo: Object.freeze({ maxDimension: 800, quality: 90 }),
   avatar: Object.freeze({ maxDimension: 720, quality: 85 }),
   banner: Object.freeze({ maxDimension: 1600, quality: 82 }),
+  memory: Object.freeze({ maxDimension: 1600, quality: 82 }),
   sharePhoto: Object.freeze({ maxDimension: 1200, quality: 82 }),
   invoiceLogo: Object.freeze({ maxDimension: 800, quality: 90 }),
   purchaseReceipt: Object.freeze({ maxDimension: 2000, quality: 85 }),

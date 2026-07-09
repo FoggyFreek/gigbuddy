@@ -31,6 +31,9 @@ export const bandAvatarKey = (tenantId, uuid, ext) =>
 export const bandLogoDarkKey = (tenantId, uuid, ext) =>
   `tenants/${tenantId}/logo-dark/${uuid}${ext}`
 
+export const bandMemoryImageKey = (tenantId, uuid, ext) =>
+  `tenants/${tenantId}/memory/${uuid}${ext}`
+
 export const sharePhotoKey = (tenantId, uuid, ext) =>
   `tenants/${tenantId}/share/${uuid}${ext}`
 

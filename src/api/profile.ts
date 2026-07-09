@@ -76,6 +76,12 @@ export function uploadLogoDark(file: File) {
   return requestForm<{ logo_dark_path: string | null }>('/api/profile/logo-dark', fd)
 }
 
+export function uploadMemoryImage(file: File) {
+  const fd = new FormData()
+  fd.append('memory', file)
+  return requestForm<{ memory_image_path: string | null }>('/api/profile/memory-image', fd)
+}
+
 export const getBandsintownKey = () => api<IntegrationSecretStatus>('/bandsintown-key')
 export const setBandsintownKey = (key: string) =>
   api<IntegrationSecretStatus>('/bandsintown-key', { method: 'PUT', body: JSON.stringify({ key }) })

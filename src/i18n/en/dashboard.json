@@ -31,14 +31,30 @@
     "upcoming": "Upcoming"
   },
   "achievements": {
-    "title": "Recently unlocked achievements",
+    "title": "Achievements",
     "empty": "No achievements unlocked yet",
-    "showAll": "Show all"
+    "showAll": "Show all",
+    "newlyUnlocked": "New achievement unlocked!"
   },
   "map": {
     "title": "Played here",
     "viewMap": "View map",
     "empty": "No past gigs yet",
     "openAria": "Open the gig world map"
+  },
+  "memory": {
+    "title": "Memory",
+    "empty": "Add a photo to celebrate a favourite moment",
+    "imageAlt": "Band memory photo",
+    "captionPlaceholder": "Add a caption…",
+    "captionLabel": "Caption",
+    "gigLabel": "Link a past gig",
+    "gigNone": "No gig linked",
+    "changePhoto": "Change photo",
+    "addPhoto": "Add photo",
+    "edit": "Edit memory",
+    "done": "Done",
+    "cropTitle": "Crop memory photo",
+    "uploadError": "Couldn't upload the image"
   }
 }

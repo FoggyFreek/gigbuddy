@@ -5,6 +5,7 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import DashboardCard from '../components/dashboard/DashboardCard.tsx'
+import MasonryLayout from '../components/shared/MasonryLayout.tsx'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import AddOutlined from '@mui/icons-material/AddOutlined'
@@ -18,6 +19,7 @@ import { ChartsGrid } from '@mui/x-charts/ChartsGrid'
 import ResultChartTooltip from '../components/financial/ResultChartTooltip.tsx'
 import PeriodPicker from '../components/shared/periodPicker.tsx'
 import FinanceReadOnlyBanner from '../components/FinanceReadOnlyBanner.tsx'
+import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { getLedgerOverview, listLedgerPeriods } from '../api/ledger.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
@@ -120,6 +122,7 @@ const formatCompactChartValue = (value: number | null | undefined) => compactEur
 
 export default function FinancialDashboardPage() {
   const { t } = useTranslation('financialDashboard')
+  const isCompact = useCompactLayout()
   const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
@@ -182,42 +185,18 @@ export default function FinancialDashboardPage() {
       )}
 
       {!loading && !error && data && (
-        <Box
-          sx={{
-            display: 'grid',
-            gap: 2,
-            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-          }}
-        >
-          <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1' } }}>
-            <ResultChartCard currency={data.currency} months={data.months} totals={data.totals} />
-          </Box>
-          <Box
-            sx={{
-              gridColumn: { xs: 'auto', md: '1 / -1' },
-              display: 'grid',
-              gap: 2,
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-              alignItems: 'stretch',
-            }}
-          >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: isCompact ? 1.5 : 2 }}>
+          {/* The result chart stays full-width above the masonry — it's a wide
+              time-series that would be cramped inside a single column. */}
+          <ResultChartCard currency={data.currency} months={data.months} totals={data.totals} />
+          <MasonryLayout columnWidth={360} spacing={isCompact ? 1.5 : 2}>
             <OverviewCard totals={data.totals} bank={data.bank} />
             <ResultsTrendCard currency={data.currency} annualResults={data.annual_results} />
             <InvoicesCard invoices={data.invoices} />
-          </Box>
-          <Box
-            sx={{
-              gridColumn: { xs: 'auto', md: '1 / -1' },
-              display: 'grid',
-              gap: 2,
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-              alignItems: 'stretch',
-            }}
-          >
             <VatCard vat={data.vat} />
             <UpcomingFeesCard fees={data.upcoming_fees} />
             {data.merch && <MerchCard merch={data.merch} totals={data.totals} />}
-          </Box>
+          </MasonryLayout>
         </Box>
       )}
     </Box>

@@ -135,7 +135,19 @@ const IMAGE_COLUMNS = Object.freeze({
   banner_path: 'banner_path',
   avatar_path: 'avatar_path',
   logo_dark_path: 'logo_dark_path',
+  memory_image_path: 'memory_image_path',
 })
+
+// True when `gigId` belongs to `tenantId`. Used to tenant-scope the dashboard
+// memory tile's gig reference before it is stored (the FK alone only enforces
+// existence, not ownership).
+export async function gigBelongsToTenant(executor, tenantId, gigId) {
+  const { rows } = await executor.query(
+    'SELECT 1 FROM gigs WHERE id = $1 AND tenant_id = $2',
+    [gigId, tenantId],
+  )
+  return rows.length > 0
+}
 
 export async function getTenantImagePath(executor, tenantId, column) {
   const col = IMAGE_COLUMNS[column]
@@ -154,23 +166,25 @@ export async function setTenantImagePath(executor, tenantId, column, objectKey) 
   return rows[0][col]
 }
 
-// Downgrade purge: nulls the accent color and the gated customization images
-// (banner, avatar), returning the previous object keys so they can be queued
-// for storage cleanup. The band logos (light + dark) are settable on every
+// Downgrade purge: nulls the accent color, the gated customization images
+// (banner, avatar) and the dashboard memory tile (image + caption + gig ref),
+// returning the previous object keys so they can be queued for storage cleanup.
+// The band logos (light + dark) are settable on every
 // plan — they are not customization data and must survive the purge. Callers
 // run this inside the tenant-lock transaction, so the read-then-clear pair
 // cannot race another write.
 export async function clearTenantCustomization(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT banner_path, avatar_path FROM tenants WHERE id = $1',
+    'SELECT banner_path, avatar_path, memory_image_path FROM tenants WHERE id = $1',
     [tenantId],
   )
   const keys = rows[0]
-    ? [rows[0].banner_path, rows[0].avatar_path].filter(Boolean)
+    ? [rows[0].banner_path, rows[0].avatar_path, rows[0].memory_image_path].filter(Boolean)
     : []
   await executor.query(
     `UPDATE tenants
         SET accent_color = NULL, banner_path = NULL, avatar_path = NULL,
+            memory_image_path = NULL, memory_caption = NULL, memory_gig_id = NULL,
             updated_at = NOW()
       WHERE id = $1`,
     [tenantId],

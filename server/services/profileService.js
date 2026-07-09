@@ -5,11 +5,12 @@
 import { randomUUID } from 'node:crypto'
 import {
   uploadObjectWithQuota, removeObject, safeRemove,
-  bandLogoKey, bandProfileBannerKey, bandAvatarKey, bandLogoDarkKey,
+  bandLogoKey, bandProfileBannerKey, bandAvatarKey, bandLogoDarkKey, bandMemoryImageKey,
 } from './storageService.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import {
   FINANCIAL_FIELDS_SET,
+  MEMORY_FIELDS,
   isValidMollieKey,
   isValidBandsintownAppId,
   isValidShopifyClientId,
@@ -36,6 +37,7 @@ import {
   clearShopifyDomain,
   getTenantImagePath,
   setTenantImagePath,
+  gigBelongsToTenant,
 } from '../repositories/profileRepository.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import {
@@ -98,6 +100,12 @@ export async function getProfile(db, tenantId) {
 
 const ADMIN_ONLY_PROFILE_FIELDS = new Set([...FINANCIAL_FIELDS_SET, 'accent_color'])
 
+// Customization-feature fields settable through PATCH /profile. The memory tile
+// (unlike accent_color) is NOT admin-only — any member with planning write may
+// edit it — but it is still customization data, so its write takes the same
+// purge-race guard.
+const CUSTOMIZATION_PROFILE_FIELDS = new Set(['accent_color', ...MEMORY_FIELDS])
+
 // `isAdmin` is computed by the route (tenant_admin or super admin); tenant-wide
 // financial and appearance settings are gated to admins.
 export async function patchProfile(db, tenantId, body, isAdmin) {
@@ -106,14 +114,23 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
     return { error: { status: 403, body: { error: 'tenant_admin_required' } } }
   }
 
+  // A memory tile can only point at one of THIS tenant's gigs. Verify ownership
+  // before the write (the FK alone enforces existence, not tenancy); a missing /
+  // cross-tenant gig 404s so existence isn't leaked. Clearing (null) is exempt.
+  const memoryGigId = body?.memory_gig_id
+  if (memoryGigId !== null && memoryGigId !== undefined && memoryGigId !== '') {
+    if (!(await gigBelongsToTenant(db, tenantId, memoryGigId))) return notFound('Gig not found')
+  }
+
   const built = buildProfileUpdate(body || {})
   if (built.error) return badRequest(built.error)
   if (!built.fields.length) return badRequest('No valid fields to update')
 
-  // accent_color is customization data: the guarded write closes the race with
-  // a concurrent downgrade purge (route-level gate already covers the common
-  // case).
-  const updated = 'accent_color' in (body || {})
+  // accent_color and the memory tile are customization data: the guarded write
+  // closes the race with a concurrent downgrade purge (route-level gate already
+  // covers the common case).
+  const touchesCustomization = Object.keys(body || {}).some((key) => CUSTOMIZATION_PROFILE_FIELDS.has(key))
+  const updated = touchesCustomization
     ? await withFeatureWriteGuard(db, tenantId, FEATURES.CUSTOMIZATION,
         (client) => updateTenantFields(client, tenantId, built.fields, built.values))
     : await updateTenantFields(db, tenantId, built.fields, built.values)
@@ -294,3 +311,6 @@ export const uploadAvatar = (db, tenantId, file) =>
 
 export const uploadLogoDark = (db, tenantId, file) =>
   uploadTenantImage(db, tenantId, file, bandLogoDarkKey, 'logo_dark_path', IMAGE_PROCESSING_PRESETS.logo)
+
+export const uploadMemoryImage = (db, tenantId, file) =>
+  uploadTenantImage(db, tenantId, file, bandMemoryImageKey, 'memory_image_path', IMAGE_PROCESSING_PRESETS.memory, FEATURES.CUSTOMIZATION)

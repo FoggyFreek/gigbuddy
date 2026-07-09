@@ -32,6 +32,7 @@ import {
   uploadBanner,
   uploadAvatar,
   uploadLogoDark,
+  uploadMemoryImage,
 } from '../services/profileService.js'
 
 const router = Router()
@@ -93,9 +94,11 @@ router.get('/', async (req, res) => {
 
 // Update tenant profile (partial)
 router.patch('/', writeProfile, async (req, res) => {
-  // accent_color is part of the customization feature; the rest of the profile
-  // stays editable on any plan, so the gate is field-level, not route-level.
-  if ('accent_color' in (req.body ?? {}) && !(await hasEntitledFeature(req, FEATURES.CUSTOMIZATION))) {
+  // accent_color and the dashboard memory tile are part of the customization
+  // feature; the rest of the profile stays editable on any plan, so the gate is
+  // field-level, not route-level.
+  const customizationBodyFields = ['accent_color', 'memory_caption', 'memory_gig_id']
+  if (customizationBodyFields.some((f) => f in (req.body ?? {})) && !(await hasEntitledFeature(req, FEATURES.CUSTOMIZATION))) {
     return res.status(403).json({
       error: 'This feature is not included in the current subscription plan',
       code: 'entitlement_required',
@@ -248,5 +251,11 @@ router.post('/avatar', requirePermission(PERMISSIONS.TENANT_MANAGE), customizati
 // Upload / replace dark-theme logo variant (tenant admin only, ungated — see /logo)
 router.post('/logo-dark', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpload.single('logo_dark'), async (req, res) =>
   handleImageUpload(req, res, uploadLogoDark, LOGO_ALLOWED_TYPES))
+
+// Upload / replace the dashboard memory-tile image. Unlike banner/avatar this is
+// NOT tenant-admin-only — any member with planning write may set the band's
+// memory photo (the tile is for the whole band). Still gated by customization.
+router.post('/memory-image', writeProfile, customization, imageUpload.single('memory'), async (req, res) =>
+  handleImageUpload(req, res, uploadMemoryImage, JPEG_PNG))
 
 export default router

@@ -118,13 +118,15 @@ export interface Tenant {
   id?: Id
   slug?: string
   band_name?: string
-  /** Set when the tenant is archived (parked, not counting toward the band cap). */
   archived_at?: string | null
   formal_name?: string
   logo_path?: string | null
   banner_path?: string | null
   avatar_path?: string | null
   logo_dark_path?: string | null
+  memory_image_path?: string | null
+  memory_caption?: string | null
+  memory_gig_id?: Id | null
   applies_kor?: boolean
   tax_percentage?: number | string
   address_street?: string

@@ -14,7 +14,11 @@ vi.mock('../contexts/authContext.ts', () => ({ useAuth: vi.fn() }))
 vi.mock('../components/dashboard/GigMapTile.tsx', () => ({
   default: () => <div data-testid="gig-map-tile" />,
 }))
-vi.mock('../api/profile.ts', () => ({ getProfile: vi.fn() }))
+vi.mock('../api/profile.ts', () => ({
+  getProfile: vi.fn(),
+  updateProfile: vi.fn(),
+  uploadMemoryImage: vi.fn(),
+}))
 vi.mock('../api/achievements.ts', () => ({ listAchievements: vi.fn() }))
 
 import DashboardPage from '../pages/DashboardPage.tsx'
@@ -22,7 +26,7 @@ import { listGigs } from '../api/gigs.ts'
 import { getNextRehearsal } from '../api/rehearsals.ts'
 import { listBandEvents } from '../api/bandEvents.ts'
 import { listAllTasks } from '../api/tasks.ts'
-import { getProfile } from '../api/profile.ts'
+import { getProfile, updateProfile } from '../api/profile.ts'
 import { listAchievements } from '../api/achievements.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
@@ -193,7 +197,7 @@ describe('DashboardPage', () => {
   it('shows the 3 most recently unlocked achievements with a Show all link', async () => {
     listAchievements.mockResolvedValue(ACHIEVEMENTS)
     wrap(<DashboardPage />)
-    await waitFor(() => expect(screen.getByText('Recently unlocked achievements')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Achievements')).toBeInTheDocument())
     // Three most recent unlocks by unlocked_at:
     expect(screen.getByText('Three Chords, Three Humans')).toBeInTheDocument()
     expect(screen.getByText('Calendar Rock')).toBeInTheDocument()
@@ -208,8 +212,45 @@ describe('DashboardPage', () => {
 
   it('shows the achievements empty state when nothing is unlocked', async () => {
     wrap(<DashboardPage />)
-    await waitFor(() => expect(screen.getByText('Recently unlocked achievements')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Achievements')).toBeInTheDocument())
     expect(screen.getByText('No achievements unlocked yet')).toBeInTheDocument()
+  })
+
+  it('renders the memory tile image, caption and linked past gig (read-only)', async () => {
+    getProfile.mockResolvedValue({
+      logo_path: null,
+      memory_image_path: 'tenants/1/memory/x.png',
+      memory_caption: 'Best night ever',
+      memory_gig_id: 1,
+    })
+    const { container } = wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Best night ever')).toBeInTheDocument())
+    expect(container.querySelector('img[src="/api/files/tenants/1/memory/x.png"]')).not.toBeNull()
+    // The linked past gig shows as a chip; the same gig is excluded from upcoming shows.
+    expect(screen.getByText(/Past Show/)).toBeInTheDocument()
+    // A non-writer sees no edit affordance.
+    expect(screen.queryByRole('button', { name: /edit memory/i })).not.toBeInTheDocument()
+  })
+
+  it('does not render the memory tile for a read-only member with no memory set', async () => {
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+    expect(screen.queryByText('Memory')).not.toBeInTheDocument()
+  })
+
+  it('lets an editor add a caption, persisting it via updateProfile', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, bandMemberId: 7, isSuperAdmin: true } })
+    updateProfile.mockResolvedValue({})
+    const user = userEvent.setup()
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Memory')).toBeInTheDocument())
+    // Empty + editable: the add-photo affordance is offered.
+    expect(screen.getByRole('button', { name: /add photo/i })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /edit memory/i }))
+    const field = screen.getByLabelText('Caption')
+    await user.type(field, 'Hello')
+    await user.tab() // blur flushes the debounced save immediately
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ memory_caption: 'Hello' }))
   })
 
   it('shows a per-card error when one source fails, while the others still render', async () => {

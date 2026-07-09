@@ -24,13 +24,24 @@ class FakeResizeObserver {
 describe('MasonryLayout', () => {
   let offsetHeight
 
+  let rafSpy
+
   beforeEach(() => {
     roCallbacks = []
     offsetHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(100)
+    // The ResizeObserver callback defers its re-measure to requestAnimationFrame;
+    // run it synchronously so tests can observe the result without a real frame.
+    rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      cb()
+      return 0
+    })
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {})
   })
 
   afterEach(() => {
     offsetHeight.mockRestore()
+    rafSpy.mockRestore()
+    vi.restoreAllMocks()
     delete globalThis.ResizeObserver
   })
 
