@@ -12,6 +12,7 @@ import { securityHeaders } from './middleware/securityHeaders.js'
 import { validateIntegrationSecretsConfig } from './security/integrationSecrets.js'
 import { logger } from './utils/logger.js'
 import { requestContext, requestLogger } from './middleware/requestContext.js'
+import { metricsMiddleware, metricsHandler } from './metrics.js'
 import { startBillingReconciliation } from './jobs/billingReconciliation.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -28,8 +29,15 @@ app.disable('x-powered-by')
 app.set('trust proxy', 1)
 
 app.use(requestContext)
+// Instruments the whole request lifecycle; internally skips /metrics itself.
+app.use(metricsMiddleware)
 app.use('/api', requestLogger)
 app.use(securityHeaders())
+
+// Prometheus scrape endpoint. Mounted before the static/SPA-catch-all block
+// below (which would otherwise answer GET /metrics with index.html) and
+// outside the /api rate limiter so 60s scrapes are never throttled.
+app.get('/metrics', metricsHandler)
 
 const PgSession = connectPgSimple(session)
 

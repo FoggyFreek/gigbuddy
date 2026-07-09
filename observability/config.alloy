@@ -1,0 +1,125 @@
+// Grafana Alloy pipeline for GigBuddy.
+//
+// Ships to Grafana Cloud:
+//   * application metrics       — scraped from the Node app's /metrics
+//   * Docker container metrics  — via the in-process cAdvisor exporter
+//   * container logs            — every service except Alloy itself
+//
+// All configuration comes from the process environment (see the `alloy`
+// service in docker-compose.yml, which loads them from .env). Nothing here is
+// secret at rest; the write token lives only in GCLOUD_RW_API_KEY.
+//
+// Validate locally (no secrets needed) with:
+//   docker run --rm -v "$PWD/observability/config.alloy:/c.alloy:ro" \
+//     grafana/alloy:v1.16.1 validate /c.alloy
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// ---------------------------------------------------------------------------
+// Metrics: remote-write sink (Grafana Cloud Prometheus)
+// ---------------------------------------------------------------------------
+prometheus.remote_write "gcloud" {
+  external_labels = {
+    deployment  = "gigbuddy",
+    environment = "production",
+  }
+
+  endpoint {
+    url = sys.env("GCLOUD_HOSTED_METRICS_URL")
+    basic_auth {
+      username = sys.env("GCLOUD_HOSTED_METRICS_ID")
+      password = sys.env("GCLOUD_RW_API_KEY")
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Metrics: application (Node /metrics)
+// ---------------------------------------------------------------------------
+prometheus.scrape "app" {
+  // service_name is a stable Compose service label, not a container id.
+  targets = [
+    { "__address__" = "app:3002", "service_name" = "app" },
+  ]
+  metrics_path    = "/metrics"
+  scrape_interval = sys.env("GCLOUD_SCRAPE_INTERVAL")
+  forward_to      = [prometheus.remote_write.gcloud.receiver]
+}
+
+// ---------------------------------------------------------------------------
+// Metrics: Docker container resources (cAdvisor, in-process — no sidecar)
+// ---------------------------------------------------------------------------
+prometheus.exporter.cadvisor "docker" {
+  docker_host      = "unix:///var/run/docker.sock"
+  storage_duration = "5m"
+}
+
+// Derive a stable service_name from the Compose service label cAdvisor exports
+// as container_label_com_docker_compose_service.
+prometheus.relabel "cadvisor" {
+  rule {
+    source_labels = ["container_label_com_docker_compose_service"]
+    target_label  = "service_name"
+  }
+  forward_to = [prometheus.remote_write.gcloud.receiver]
+}
+
+prometheus.scrape "cadvisor" {
+  targets         = prometheus.exporter.cadvisor.docker.targets
+  scrape_interval = sys.env("GCLOUD_SCRAPE_INTERVAL")
+  forward_to      = [prometheus.relabel.cadvisor.receiver]
+}
+
+// ---------------------------------------------------------------------------
+// Logs: remote-write sink (Grafana Cloud Loki)
+// ---------------------------------------------------------------------------
+loki.write "gcloud" {
+  endpoint {
+    url = sys.env("GCLOUD_HOSTED_LOGS_URL")
+    basic_auth {
+      username = sys.env("GCLOUD_HOSTED_LOGS_ID")
+      password = sys.env("GCLOUD_RW_API_KEY")
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Logs: Docker container discovery + shipping
+// ---------------------------------------------------------------------------
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  // Stable service_name from the Compose service label.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service_name"
+  }
+
+  // Drop Alloy's own logs: shipping them would create a shipping-error
+  // feedback loop.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "alloy"
+    action        = "drop"
+  }
+}
+
+// No pipeline stages: the app already emits one JSON object per line, and we
+// forward it byte-for-byte so `| json` works in LogQL. Static deployment /
+// environment labels are attached here; service_name rides in from relabel.
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.write.gcloud.receiver]
+  labels     = {
+    deployment  = "gigbuddy",
+    environment = "production",
+  }
+}

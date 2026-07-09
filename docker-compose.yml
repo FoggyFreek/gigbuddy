@@ -85,6 +85,33 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Observability agent — ships app/container metrics + logs to Grafana Cloud.
+  # Guarded by a Compose profile so `docker compose up` for local dev never
+  # starts it (it would try to authenticate to Grafana Cloud). Enable on the
+  # VPS with `docker compose --profile observability up -d alloy`.
+  # No published port: the Alloy UI (:12345) stays on the internal network.
+  # `privileged` + the host mounts below are required by the in-process
+  # cAdvisor exporter; the Docker socket drives log/metric discovery.
+  # ARCH intentionally unset — Docker selects the matching Alloy image.
+  alloy:
+    image: grafana/alloy:v1.16.1
+    profiles: ["observability"]
+    restart: unless-stopped
+    privileged: true
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    env_file: .env
+    volumes:
+      - ./observability/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
 volumes:
   postgres_data:
   rustfs_data:
+  alloy_data:

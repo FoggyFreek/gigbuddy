@@ -57,10 +57,26 @@ jobs:
             INTEGRATION_SECRETS_KEYS=${{ secrets.INTEGRATION_SECRETS_KEYS }}
             INTEGRATION_SECRETS_ACTIVE_KEY_ID=${{ secrets.INTEGRATION_SECRETS_ACTIVE_KEY_ID }}
             NODE_ENV=production
-            LOG_LEVEL=warn
+            # info (not warn) so http.request + info lines actually reach
+            # stdout and get shipped to Loki. At warn the app emits almost
+            # nothing; lower to warn only if log volume/cost becomes an issue.
+            LOG_LEVEL=info
+            # Grafana Cloud observability (shipped by the alloy service).
+            GCLOUD_HOSTED_METRICS_URL=${{ secrets.GCLOUD_HOSTED_METRICS_URL }}
+            GCLOUD_HOSTED_METRICS_ID=${{ secrets.GCLOUD_HOSTED_METRICS_ID }}
+            GCLOUD_HOSTED_LOGS_URL=${{ secrets.GCLOUD_HOSTED_LOGS_URL }}
+            GCLOUD_HOSTED_LOGS_ID=${{ secrets.GCLOUD_HOSTED_LOGS_ID }}
+            GCLOUD_RW_API_KEY=${{ secrets.GCLOUD_RW_API_KEY }}
+            GCLOUD_SCRAPE_INTERVAL=60s
             EOF
             chmod 600 .env
             docker compose build
+            # Start the observability agent first so it is already discovering
+            # containers before the rest of the stack comes up. (One-shot
+            # containers like `migrate` are short-lived; their logs are
+            # best-effort — Docker log discovery may miss a container that
+            # exits within its refresh window.)
+            docker compose --profile observability up -d alloy
             docker compose up -d postgres rustfs rustfs_init
             docker compose run --rm migrate
             docker compose up -d app
