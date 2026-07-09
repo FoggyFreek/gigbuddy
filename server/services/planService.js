@@ -31,7 +31,30 @@ function badRequest(error) {
   return { status: 400, body: { error } }
 }
 
-const PRICE_FIELDS = ['monthly_price_cents', 'yearly_price_cents']
+function validateRenameField(valid, isFallback, invalidMessage) {
+  if (isFallback) return 'The fallback plan cannot be renamed'
+  return valid ? null : invalidMessage
+}
+
+function validateActiveField(isActive, isFallback) {
+  if (typeof isActive !== 'boolean') return 'is_active must be a boolean'
+  if (isFallback && !isActive) return 'The fallback plan cannot be deactivated'
+  return null
+}
+
+function validatePriceField(field, value, isFallback) {
+  if (!isValidPriceCents(value)) {
+    return `${field} must be null (unavailable) or a non-negative integer in cents`
+  }
+  if (isFallback && value !== 0) return 'The fallback plan must remain free (price 0)'
+  if (!isFallback && value === 0) return 'Only the fallback plan may have a price of 0'
+  return null
+}
+
+function validateEntitlementsField(entitlements) {
+  const errors = validateEntitlements(entitlements)
+  return errors.length > 0 ? `Invalid entitlements: ${errors.join('; ')}` : null
+}
 
 // Validates the fields present in `body`. `plan` is the existing row on
 // update (null on create) — fallback plans get the stricter integrity rules.
@@ -41,40 +64,23 @@ function validatePlanFields(body, plan) {
   if ('is_fallback' in body) {
     return badRequest('The fallback designation cannot be changed')
   }
-  if ('slug' in body) {
-    if (isFallback) return badRequest('The fallback plan cannot be renamed')
-    if (!isValidSlug(body.slug)) {
-      return badRequest('Invalid slug: use lowercase letters, digits, and hyphens')
-    }
+  // Checked in insertion order; only fields present in `body` are validated.
+  const checks = {
+    slug: () => validateRenameField(
+      isValidSlug(body.slug), isFallback,
+      'Invalid slug: use lowercase letters, digits, and hyphens',
+    ),
+    name: () => validateRenameField(isValidName(body.name), isFallback, 'Name is required'),
+    is_active: () => validateActiveField(body.is_active, isFallback),
+    sort_order: () => (Number.isInteger(body.sort_order) ? null : 'sort_order must be an integer'),
+    monthly_price_cents: () => validatePriceField('monthly_price_cents', body.monthly_price_cents, isFallback),
+    yearly_price_cents: () => validatePriceField('yearly_price_cents', body.yearly_price_cents, isFallback),
+    entitlements: () => validateEntitlementsField(body.entitlements),
   }
-  if ('name' in body) {
-    if (isFallback) return badRequest('The fallback plan cannot be renamed')
-    if (!isValidName(body.name)) return badRequest('Name is required')
-  }
-  if ('is_active' in body) {
-    if (typeof body.is_active !== 'boolean') return badRequest('is_active must be a boolean')
-    if (isFallback && !body.is_active) {
-      return badRequest('The fallback plan cannot be deactivated')
-    }
-  }
-  if ('sort_order' in body && !Number.isInteger(body.sort_order)) {
-    return badRequest('sort_order must be an integer')
-  }
-  for (const field of PRICE_FIELDS) {
+  for (const [field, check] of Object.entries(checks)) {
     if (!(field in body)) continue
-    if (!isValidPriceCents(body[field])) {
-      return badRequest(`${field} must be null (unavailable) or a non-negative integer in cents`)
-    }
-    if (isFallback && body[field] !== 0) {
-      return badRequest('The fallback plan must remain free (price 0)')
-    }
-    if (!isFallback && body[field] === 0) {
-      return badRequest('Only the fallback plan may have a price of 0')
-    }
-  }
-  if ('entitlements' in body) {
-    const errors = validateEntitlements(body.entitlements)
-    if (errors.length > 0) return badRequest(`Invalid entitlements: ${errors.join('; ')}`)
+    const error = check()
+    if (error) return badRequest(error)
   }
   return null
 }

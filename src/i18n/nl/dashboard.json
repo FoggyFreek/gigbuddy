@@ -31,14 +31,30 @@
     "upcoming": "Aankomend"
   },
   "achievements": {
-    "title": "Recent behaalde prestaties",
+    "title": "Prestaties",
     "empty": "Nog geen prestaties behaald",
-    "showAll": "Toon alles"
+    "showAll": "Toon alles",
+    "newlyUnlocked": "Nieuwe prestatie behaald!"
   },
   "map": {
     "title": "Hier gespeeld",
     "viewMap": "Kaart bekijken",
     "empty": "Nog geen eerdere optredens",
     "openAria": "Open de wereldkaart met optredens"
+  },
+  "memory": {
+    "title": "In Beeld",
+    "empty": "Voeg een foto toe om een favoriet moment te vieren",
+    "imageAlt": "Herinneringsfoto van de band",
+    "captionPlaceholder": "Voeg een bijschrift toe…",
+    "captionLabel": "Bijschrift",
+    "gigLabel": "Koppel een eerder optreden",
+    "gigNone": "Geen optreden gekoppeld",
+    "changePhoto": "Foto wijzigen",
+    "addPhoto": "Foto toevoegen",
+    "edit": "Herinnering bewerken",
+    "done": "Klaar",
+    "cropTitle": "Herinneringsfoto bijsnijden",
+    "uploadError": "Kon de afbeelding niet uploaden"
   }
 }

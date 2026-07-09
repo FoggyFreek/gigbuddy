@@ -12,7 +12,7 @@ import Typography from '@mui/material/Typography'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import PersonIcon from '@mui/icons-material/Person'
-import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import MasonryLayout from './shared/MasonryLayout.tsx'
 import { formatDueDate } from '../utils/dateFormat.ts'
 import type { Id, Task } from '../types/entities.ts'
 
@@ -224,7 +224,6 @@ interface TasksTableProps {
 
 export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenGig, onEditTask }: Readonly<TasksTableProps>) {
   const { t } = useTranslation('tasks')
-  const isCompact = useCompactLayout()
 
   if (tasks.length === 0) {
     return (
@@ -237,17 +236,7 @@ export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenG
   const groups = groupTasks(tasks)
 
   return (
-    <Box
-      sx={isCompact
-        ? { display: 'flex', flexDirection: 'column', gap: 1.5 }
-        : {
-            // Masonry: cards flow down each column slot, packing shorter cards
-            // together instead of leaving gaps under a row's tallest card.
-            columnWidth: 280,
-            columnGap: 1.5,
-            '& > *': { breakInside: 'avoid', mb: 1.5 },
-          }}
-    >
+    <MasonryLayout columnWidth={280} spacing={1.5}>
       {groups.map((group, index) => group.kind === 'gig' ? (
         <GigTaskCard
           key={`gig-${String(group.gigId)}`}
@@ -267,6 +256,6 @@ export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenG
           onEditTask={onEditTask}
         />
       ))}
-    </Box>
+    </MasonryLayout>
   )
 }

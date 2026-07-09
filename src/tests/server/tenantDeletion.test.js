@@ -72,6 +72,19 @@ describe('DELETE /api/admin/tenants/:id', () => {
     expect(tenantBRows.rowCount).toBeGreaterThan(0)
   })
 
+  it('includes the dashboard memory-tile image among the purged object keys', async () => {
+    const memoryKey = `tenants/${seed.tenantA.id}/memory/deadbeef.jpg`
+    await pool.query(
+      'UPDATE tenants SET archived_at = NOW(), memory_image_path = $2 WHERE id = $1',
+      [seed.tenantA.id, memoryKey],
+    )
+    await asSuper(remove(seed.tenantA)).expect(204)
+    expect(deleteTenantObjects).toHaveBeenCalledWith(
+      seed.tenantA.id,
+      expect.arrayContaining([memoryKey]),
+    )
+  })
+
   it('keeps the archived tenant when RustFS cleanup fails so deletion can be retried', async () => {
     await pool.query('UPDATE tenants SET archived_at = NOW() WHERE id = $1', [seed.tenantA.id])
     deleteTenantObjects.mockRejectedValueOnce(new Error('storage unavailable'))

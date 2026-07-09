@@ -113,6 +113,45 @@ export function notifyInviteRedeemed({ tenantId, inviteId, userName, role }) {
 
 // ---------- redeem ----------
 
+// The claim failed: the code doesn't exist or is already used. Same user
+// re-posting the code they already redeemed (double-click, page revisit,
+// replayed deep link) is idempotent — report the membership the first
+// redemption created instead of a conflict.
+async function resolveSpentInvite(spent, user) {
+  if (!spent) return { error: notFound('Invite not found'), audit: denied('not_found') }
+
+  if (spent.used_by_user_id === user.id && !spent.tenant_archived_at) {
+    const membership = await getMembership(pool, user.id, spent.tenant_id)
+    if (membership) {
+      return {
+        result: {
+          tenant: { id: spent.tenant_id, slug: spent.tenant_slug, name: spent.tenant_name },
+          role: membership.role,
+          status: membership.status,
+        },
+        repeat: true,
+        audit: {
+          action: 'invite.redeem.repeat',
+          details: { tenantId: spent.tenant_id, inviteId: spent.id },
+        },
+      }
+    }
+  }
+  return { error: conflict('Invite already used'), audit: denied('already_used') }
+}
+
+// Validity checks on a freshly claimed invite. Pure: returns the error result
+// or null; the caller owns the rollback.
+function claimedInviteError(invite, inviteRef) {
+  if (invite.expires_at && new Date(invite.expires_at) <= new Date()) {
+    return { error: { status: 410, body: { error: 'Invite has expired' } }, audit: denied('expired', inviteRef) }
+  }
+  if (invite.tenant_archived_at) {
+    return { error: conflict('Tenant is archived'), audit: denied('tenant_archived', inviteRef) }
+  }
+  return null
+}
+
 // Atomically claims an invite and creates a pending membership. Each failure
 // path rolls back the claim and returns an audit descriptor describing why.
 export async function redeemInvite(user, body) {
@@ -130,40 +169,15 @@ export async function redeemInvite(user, body) {
     if (!invite) {
       const spent = await getInviteWithTenant(client, code)
       await client.query('ROLLBACK')
-      if (!spent) return { error: notFound('Invite not found'), audit: denied('not_found') }
-
-      // Same user re-posting the code they already redeemed (double-click,
-      // page revisit, replayed deep link): idempotent — report the membership
-      // the first redemption created instead of a conflict.
-      if (spent.used_by_user_id === user.id && !spent.tenant_archived_at) {
-        const membership = await getMembership(pool, user.id, spent.tenant_id)
-        if (membership) {
-          return {
-            result: {
-              tenant: { id: spent.tenant_id, slug: spent.tenant_slug, name: spent.tenant_name },
-              role: membership.role,
-              status: membership.status,
-            },
-            repeat: true,
-            audit: {
-              action: 'invite.redeem.repeat',
-              details: { tenantId: spent.tenant_id, inviteId: spent.id },
-            },
-          }
-        }
-      }
-      return { error: conflict('Invite already used'), audit: denied('already_used') }
+      return resolveSpentInvite(spent, user)
     }
 
     const inviteRef = { tenantId: invite.tenant_id, inviteId: invite.id }
 
-    if (invite.expires_at && new Date(invite.expires_at) <= new Date()) {
+    const invalid = claimedInviteError(invite, inviteRef)
+    if (invalid) {
       await client.query('ROLLBACK')
-      return { error: { status: 410, body: { error: 'Invite has expired' } }, audit: denied('expired', inviteRef) }
-    }
-    if (invite.tenant_archived_at) {
-      await client.query('ROLLBACK')
-      return { error: conflict('Tenant is archived'), audit: denied('tenant_archived', inviteRef) }
+      return invalid
     }
 
     const existing = await getMembership(client, user.id, invite.tenant_id)

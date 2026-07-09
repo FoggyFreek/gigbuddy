@@ -99,10 +99,52 @@ const QUALITY_RANK = new Map<string, number>([
   ['maj7(b5)', 11], ['maj7(#5)', 11], ['m9b5', 11], ['m7(#5)', 11],
 ])
 
+// One picker per slot (see the stacked-thirds model above): each claims the
+// single tone its slot may explain, in preference order.
+type HasInterval = (n: number) => boolean
+
+function pickThird(has: HasInterval): Third | null {
+  if (has(4)) return 'maj'
+  if (has(3)) return 'min'
+  if (has(5)) return 'sus4'
+  if (has(2)) return 'sus2'
+  return null
+}
+
+function pickFifth(has: HasInterval): Fifth | null {
+  if (has(7)) return 'perfect'
+  if (has(6)) return 'dim'
+  if (has(8)) return 'aug'
+  return null
+}
+
+function pickSeventh(has: HasInterval, third: Third, fifth: Fifth | null): Seventh | null {
+  if (has(11)) return 'maj7'
+  if (has(10)) return 'b7'
+  if (has(9)) return third === 'min' && fifth === 'dim' ? 'dim7' : '6'
+  return null
+}
+
+function pickNinths(has: HasInterval, third: Third): Ninth[] {
+  const ninths: Ninth[] = []
+  if (has(1)) ninths.push('b9')
+  if (has(2) && third !== 'sus2') ninths.push('9')
+  if (has(3) && third === 'maj') ninths.push('#9') // a m3 over a major 3rd is #9
+  return ninths
+}
+
+function consumedIntervals(third: Third, fifth: Fifth | null, seventh: Seventh | null, ninths: Ninth[]): Set<number> {
+  const consumed = new Set<number>([0, THIRD_INTERVAL[third]])
+  if (fifth) consumed.add(FIFTH_INTERVAL[fifth])
+  if (seventh) consumed.add(SEVENTH_INTERVAL[seventh])
+  for (const t of ninths) consumed.add(NINTH_INTERVAL[t])
+  return consumed
+}
+
 // Read an interval set (relative to a candidate root, including 0) into a spec,
 // or null when there is no nameable chord here (no third, and not a power chord).
 function decompose(intervals: Set<number>): ChordSpec | null {
-  const has = (n: number): boolean => intervals.has(n)
+  const has: HasInterval = (n) => intervals.has(n)
 
   // The one accepted two-note chord: root + perfect fifth.
   if (intervals.size === 2 && has(0) && has(7)) {
@@ -111,32 +153,13 @@ function decompose(intervals: Set<number>): ChordSpec | null {
   // Everything else needs at least a triad's worth of tones.
   if (intervals.size < 3) return null
 
-  let third: Third | null = null
-  if (has(4)) third = 'maj'
-  else if (has(3)) third = 'min'
-  else if (has(5)) third = 'sus4'
-  else if (has(2)) third = 'sus2'
+  const third = pickThird(has)
   if (third === null) return null
 
-  let fifth: Fifth | null = null
-  if (has(7)) fifth = 'perfect'
-  else if (has(6)) fifth = 'dim'
-  else if (has(8)) fifth = 'aug'
-
-  let seventh: Seventh | null = null
-  if (has(11)) seventh = 'maj7'
-  else if (has(10)) seventh = 'b7'
-  else if (has(9)) seventh = third === 'min' && fifth === 'dim' ? 'dim7' : '6'
-
-  const ninths: Ninth[] = []
-  if (has(1)) ninths.push('b9')
-  if (has(2) && third !== 'sus2') ninths.push('9')
-  if (has(3) && third === 'maj') ninths.push('#9') // a m3 over a major 3rd is #9
-
-  const consumed = new Set<number>([0, THIRD_INTERVAL[third]])
-  if (fifth) consumed.add(FIFTH_INTERVAL[fifth])
-  if (seventh) consumed.add(SEVENTH_INTERVAL[seventh])
-  for (const t of ninths) consumed.add(NINTH_INTERVAL[t])
+  const fifth = pickFifth(has)
+  const seventh = pickSeventh(has, third, fifth)
+  const ninths = pickNinths(has, third)
+  const consumed = consumedIntervals(third, fifth, seventh, ninths)
 
   return {
     third,
@@ -190,30 +213,38 @@ function diminishedStem(seventh: Seventh | null, nat9: boolean): string {
   }
 }
 
+// The structural core symbol per chord family, plus the fifth alteration that
+// (unlike the structural b5 of the diminished family) must appear as a
+// parenthesized tag ahead of any altered ninths.
+function qualityCore(spec: ChordSpec, nat9: boolean): { core: string; fifthAlt: string | null } {
+  const { third, fifth, seventh } = spec
+  if (third === 'sus2' || third === 'sus4') {
+    let fifthAlt: string | null = null
+    if (fifth === 'dim') fifthAlt = 'b5'
+    else if (fifth === 'aug') fifthAlt = '#5'
+    return { core: susStem(third, seventh, nat9), fifthAlt }
+  }
+  if (third === 'min' && fifth === 'dim') {
+    return { core: diminishedStem(seventh, nat9), fifthAlt: null }
+  }
+  if (third === 'maj' && fifth === 'aug') {
+    if (seventh === null && !nat9) return { core: 'aug', fifthAlt: null }
+    return { core: majorStem(seventh, nat9), fifthAlt: '#5' }
+  }
+  if (third === 'min') {
+    return { core: minorStem(seventh, nat9), fifthAlt: fifth === 'aug' ? '#5' : null }
+  }
+  return { core: majorStem(seventh, nat9), fifthAlt: fifth === 'dim' ? 'b5' : null }
+}
+
 // Assemble the conventional symbol (without root or slash) from a spec.
 function formatQuality(spec: ChordSpec): string {
   if (spec.power) return '5'
-  const { third, fifth, seventh } = spec
   const nat9 = spec.ninths.includes('9')
   const alts = spec.ninths.filter((t) => t !== '9') as string[] // b9 / #9
 
-  let core: string
-  if (third === 'sus2' || third === 'sus4') {
-    core = susStem(third, seventh, nat9)
-    if (fifth === 'dim') alts.unshift('b5')
-    else if (fifth === 'aug') alts.unshift('#5')
-  } else if (third === 'min' && fifth === 'dim') {
-    core = diminishedStem(seventh, nat9)
-  } else if (third === 'maj' && fifth === 'aug') {
-    if (seventh === null && !nat9) core = 'aug'
-    else { core = majorStem(seventh, nat9); alts.unshift('#5') }
-  } else if (third === 'min') {
-    core = minorStem(seventh, nat9)
-    if (fifth === 'aug') alts.unshift('#5')
-  } else {
-    core = majorStem(seventh, nat9)
-    if (fifth === 'dim') alts.unshift('b5')
-  }
+  const { core, fifthAlt } = qualityCore(spec, nat9)
+  if (fifthAlt) alts.unshift(fifthAlt)
 
   return alts.length ? `${core}(${alts.join(',')})` : core
 }

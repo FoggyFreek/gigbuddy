@@ -242,6 +242,38 @@ describe('customization gates', () => {
     const logo = await asUserA(request(app).post('/api/profile/logo'))
     expect(logo.status).toBe(400) // gate passed, no file uploaded
   })
+
+  it('gates the dashboard memory tile (image, caption, gig ref) behind customization', async () => {
+    await lockTenantA()
+    expectEntitlementDenied(await asUserA(request(app).post('/api/profile/memory-image')), 'customization')
+    expectEntitlementDenied(
+      await asUserA(request(app).patch('/api/profile').send({ memory_caption: 'Best night' })),
+      'customization',
+    )
+    expectEntitlementDenied(
+      await asUserA(request(app).patch('/api/profile').send({ memory_gig_id: 1 })),
+      'customization',
+    )
+  })
+
+  it('rejects a cross-tenant gig reference on the memory tile with 404, but accepts an own gig', async () => {
+    await goldTenantA()
+    const { rows: [gigB] } = await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description) VALUES ($1, '2026-01-01', 'B show') RETURNING id`,
+      [seed.tenantB.id],
+    )
+    // Another tenant's gig must not leak — a cross-tenant reference 404s.
+    const cross = await asUserA(request(app).patch('/api/profile').send({ memory_gig_id: gigB.id }))
+    expect(cross.status).toBe(404)
+
+    const { rows: [gigA] } = await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description) VALUES ($1, '2026-02-02', 'A show') RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const own = await asUserA(request(app).patch('/api/profile').send({ memory_gig_id: gigA.id }))
+    expect(own.status).toBe(200)
+    expect(own.body.memory_gig_id).toBe(gigA.id)
+  })
 })
 
 describe('song files and chordpro gates', () => {

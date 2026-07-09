@@ -47,6 +47,32 @@ interface PaymentLinkPanelProps {
   onUpdated: (patch: Partial<Invoice>) => void
 }
 
+function PaymentStatusChip({ status }: Readonly<{ status: string | undefined }>) {
+  const { t } = useTranslation('invoices')
+  let label: string
+  if (status === 'paid') label = t($ => $.rawStatus.paid)
+  else if (isPaymentStatus(status)) label = t($ => $.paymentLink.status[status as Exclude<PaymentStatus, 'paid'>])
+  else label = status || t($ => $.paymentLink.status.open)
+  return (
+    <Chip
+      size="small"
+      label={label}
+      color={isPaymentStatus(status) ? MOLLIE_STATUS_COLOR[status] : 'default'}
+    />
+  )
+}
+
+// Why the create button is disabled; null when it isn't.
+function CreateDisabledReason({ isVoid, isSaved, hasAmount }: Readonly<{ isVoid: boolean; isSaved: boolean; hasAmount: boolean }>) {
+  const { t } = useTranslation('invoices')
+  if (!isVoid && isSaved && hasAmount) return null
+  let reason: string
+  if (isVoid) reason = t($ => $.paymentLink.invoiceVoid)
+  else if (!isSaved) reason = t($ => $.paymentLink.notSaved)
+  else reason = t($ => $.paymentLink.amountRequired)
+  return <Typography variant="caption" sx={{ color: 'text.secondary' }}>{reason}</Typography>
+}
+
 export default function PaymentLinkPanel({ invoice, onUpdated }: Readonly<PaymentLinkPanelProps>) {
   const { t } = useTranslation('invoices')
   const [busy, setBusy] = useState(false)
@@ -146,28 +172,12 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: Readonly<Paymen
           >
             {t($ => $.paymentLink.create)}
           </Button>
-          {(isVoid || !isSaved || !hasAmount) && (
-            <Typography variant="caption" color="text.secondary">
-              {isVoid
-                ? t($ => $.paymentLink.invoiceVoid)
-                : !isSaved
-                  ? t($ => $.paymentLink.notSaved)
-                  : t($ => $.paymentLink.amountRequired)}
-            </Typography>
-          )}
+          <CreateDisabledReason isVoid={isVoid} isSaved={isSaved} hasAmount={hasAmount} />
         </Stack>
       ) : (
         <Stack spacing={1}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Chip
-              size="small"
-              label={paymentStatus === 'paid'
-                ? t($ => $.rawStatus.paid)
-                : isPaymentStatus(paymentStatus)
-                  ? t($ => $.paymentLink.status[paymentStatus as Exclude<PaymentStatus, 'paid'>])
-                  : (paymentStatus || t($ => $.paymentLink.status.open))}
-              color={isPaymentStatus(paymentStatus) ? MOLLIE_STATUS_COLOR[paymentStatus] : 'default'}
-            />
+            <PaymentStatusChip status={paymentStatus} />
             <Typography
               variant="body2"
               sx={{ fontFamily: 'monospace', wordBreak: 'break-all', flex: 1, minWidth: 0 }}

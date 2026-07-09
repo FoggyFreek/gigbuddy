@@ -18,11 +18,17 @@ import ChecklistIcon from '@mui/icons-material/Checklist'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
 import DashboardCard from '../components/dashboard/DashboardCard.tsx'
+import MasonryLayout from '../components/shared/MasonryLayout.tsx'
 import CheersBadge from '../components/achievements/CheersBadge.tsx'
+import AchievementConfetti, { RECENT_WINDOW_MS } from '../components/achievements/AchievementConfetti.tsx'
 import { getAchievementIcon } from '../components/achievements/achievementIcons.ts'
 import GigMapTile from '../components/dashboard/GigMapTile.tsx'
+import MemoryTile, { type MemoryPatch } from '../components/dashboard/MemoryTile.tsx'
 import { SOCIALS } from '../components/profile/profileForm.ts'
 import { useAuth } from '../contexts/authContext.ts'
+import { useEntitlements } from '../hooks/useEntitlements.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
+import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { useSetWideContent } from '../contexts/contentWidthContext.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import type { ThemeMode } from '../contexts/themeModeContext.ts'
@@ -129,7 +135,7 @@ interface Sections {
   nextRehearsal: { status: 'ok' | 'error'; data: Rehearsal | null }
   shows: SectionData<Gig>
   tasks: TasksSection
-  achievements: SectionData<Achievement>
+  achievements: SectionData<Achievement> & { latestUnlockedAt: string | null; recentKeys: string[] }
 }
 
 // Build the whole view-model in the effect (not in render) so render stays pure.
@@ -165,6 +171,15 @@ function buildSections(
   const unlockedAchievements = achievementsSettled.data
     .filter((a) => a.unlocked_at !== null)
     .sort((a, b) => String(b.unlocked_at).localeCompare(String(a.unlocked_at)))
+  // Keys unlocked within the recency window at load time — highlighted with a
+  // one-off entrance animation. Computed here (not in render) so render is pure.
+  const nowMs = Date.now()
+  const recentKeys = unlockedAchievements
+    .filter((a) => {
+      const age = nowMs - Date.parse(String(a.unlocked_at))
+      return age >= 0 && age < RECENT_WINDOW_MS
+    })
+    .map((a) => a.key)
 
   return {
     nextGig: { status: gigsSettled.status, data: upcomingGigs[0] || null },
@@ -181,6 +196,9 @@ function buildSections(
       status: achievementsSettled.status,
       total: unlockedAchievements.length,
       data: unlockedAchievements.slice(0, 3),
+      // Sorted unlocked-desc, so the head is the most recent unlock (if any).
+      latestUnlockedAt: unlockedAchievements[0]?.unlocked_at ?? null,
+      recentKeys,
     },
   }
 }
@@ -189,6 +207,9 @@ interface ProfileData {
   logo_path?: string | null
   logo_dark_path?: string | null
   avatar_path?: string | null
+  memory_image_path?: string | null
+  memory_caption?: string | null
+  memory_gig_id?: number | string | null
   bandsintown_artist_name?: string
   [key: string]: unknown
 }
@@ -201,8 +222,12 @@ export default function DashboardPage() {
   const bandMemberId = user?.bandMemberId ?? null
   const navigate = useNavigate()
   const theme = useTheme()
+  const isCompact = useCompactLayout()
+  const { has } = useEntitlements()
+  const { canWritePlanning } = usePermissions()
   const [loading, setLoading] = useState(true)
   const [sections, setSections] = useState<Sections | null>(null)
+  const [allGigs, setAllGigs] = useState<Gig[]>([])
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
   // Chosen once per mount so it stays stable across re-renders, then re-picked
@@ -253,6 +278,8 @@ export default function DashboardPage() {
         listBandEvents(),
         listAchievements(),
       ])
+      const gigsR = results[0]
+      setAllGigs(gigsR.status === 'fulfilled' ? gigsR.value || [] : [])
       setSections(buildSections(results as [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>, PromiseSettledResult<Achievement[]>], bandMemberId))
     } finally {
       setLoading(false)
@@ -329,6 +356,9 @@ export default function DashboardPage() {
     )
   }
 
+  const handleMemorySaved = (patch: MemoryPatch) =>
+    setProfile((prev) => (prev ? { ...prev, ...patch } : prev))
+
   return (
     <Box sx={{ ...backgroundSx, p: 3, position: 'relative' }}>
       {/* Theme-aware fade: the background image dissolves into the page colour
@@ -377,16 +407,7 @@ export default function DashboardPage() {
         )}
       </Box>
 
-      <Box
-        sx={{
-          // Masonry: cards flow down each column slot, packing shorter cards
-          // together instead of leaving gaps under a row's tallest card
-          // (matches the tasks page layout in TasksTable).
-          columnWidth: 360,
-          columnGap: 3,
-          '& > *': { breakInside: 'avoid', mb: 3 },
-        }}
-      >
+      <MasonryLayout columnWidth={360} spacing={isCompact ? 1.5 : 3}>
         {/* Next gig */}
         <Box>
           <DashboardCard
@@ -639,8 +660,25 @@ export default function DashboardPage() {
         <Box>
           <GigMapTile />
         </Box>
+        {/* Band memory tile — celebratory photo (customization feature). */}
+        {has('customization') && (
+          <Box>
+            <MemoryTile
+              imagePath={profile?.memory_image_path ?? null}
+              caption={profile?.memory_caption ?? null}
+              gigId={profile?.memory_gig_id ?? null}
+              gigs={allGigs}
+              canEdit={canWritePlanning}
+              onSaved={handleMemorySaved}
+            />
+          </Box>
+        )}
         {/* Recently unlocked achievements */}
-        <Box>
+        <Box sx={{ position: 'relative' }}>
+          <AchievementConfetti
+            recentUnlockAt={achievements.latestUnlockedAt}
+            announcement={t($ => $.achievements.newlyUnlocked)}
+          />
           <DashboardCard
             title={t($ => $.achievements.title)}
             icon={EmojiEventsIcon}
@@ -654,6 +692,7 @@ export default function DashboardPage() {
             <List dense disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {achievements.data.map((a) => {
                 const Icon = getAchievementIcon(a.key, a.category)
+                const isNew = achievements.recentKeys.includes(a.key)
                 return (
                   <Tooltip key={a.key} title={tAchievements($ => $.items[a.key].description)} arrow>
                     <ListItemButton
@@ -670,6 +709,22 @@ export default function DashboardPage() {
                         borderColor: 'divider',
                         transition: 'box-shadow 120ms ease, transform 120ms ease',
                         '&:hover': { boxShadow: 3, transform: 'translateY(-1px)' },
+                        // A newly unlocked row gently pulses its border/background
+                        // from a primary highlight back to the resting colours.
+                        ...(isNew && {
+                          '@keyframes achievementUnlockPulse': {
+                            '0%, 100%': {
+                              borderColor: theme.palette.divider,
+                              backgroundColor: theme.palette.background.paper,
+                            },
+                            '35%': {
+                              borderColor: theme.palette.primary.main,
+                              backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                            },
+                          },
+                          animation: 'achievementUnlockPulse 2s ease-in-out 2',
+                          '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+                        }),
                       }}
                     >
                       <Icon fontSize="small" sx={{ color: 'primary.main', flexShrink: 0 }} />
@@ -691,7 +746,7 @@ export default function DashboardPage() {
           </DashboardCard>
         </Box>
 
-      </Box>
+      </MasonryLayout>
       </Box>
     </Box>
   )

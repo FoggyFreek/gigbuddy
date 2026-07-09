@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -107,6 +107,222 @@ function IntegrationCard({ logoLight, logoDark, alt, title, description, configu
 interface ShopifyKeyStatus {
   isSet?: boolean
   changedAt?: string | null
+}
+
+interface ShopifyClientIdBlockProps {
+  clientId: string
+  savedClientId: string | null
+  editing: boolean
+  saving: boolean
+  error: string | null
+  onChange: (value: string) => void
+  onStartEdit: () => void
+  onCancel: () => void
+  onSave: () => void
+  onClear: () => void
+}
+
+function ShopifyClientIdBlock({ clientId, savedClientId, editing, saving, error, onChange, onStartEdit, onCancel, onSave, onClear }: Readonly<ShopifyClientIdBlockProps>) {
+  const { t } = useTranslation(['settings', 'common'])
+  return (
+    <>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+        {t($ => $.shopify.clientId.label)}
+      </Typography>
+      {editing ? (
+        <Stack spacing={1.5} sx={{ mb: 3 }}>
+          <TextField
+            label={t($ => $.shopify.clientId.label)}
+            fullWidth
+            size="small"
+            value={clientId}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={t($ => $.shopify.clientId.placeholder)}
+            error={!!error}
+            helperText={error || t($ => $.shopify.clientId.helper)}
+            autoComplete="off"
+            slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'none' } }}
+          />
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={onSave}
+              disabled={!clientId.trim() || saving}
+              startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
+            >
+              {t($ => $.actions.save, { ns: 'common' })}
+            </Button>
+            <Button size="small" onClick={onCancel} disabled={saving}>
+              {t($ => $.actions.cancel, { ns: 'common' })}
+            </Button>
+          </Stack>
+        </Stack>
+      ) : (
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 3 }}>
+          <Box sx={{ flex: 1 }}>
+            {savedClientId ? (
+              <Tooltip title={savedClientId}>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                  {shortenClientId(savedClientId)}
+                </Typography>
+              </Tooltip>
+            ) : (
+              <Typography variant="body2" color="text.disabled">{t($ => $.integrations.notConfigured)}</Typography>
+            )}
+          </Box>
+          <Button size="small" variant="outlined" onClick={onStartEdit} disabled={saving}>
+            {savedClientId ? t($ => $.shopify.clientId.replace) : t($ => $.integrations.configure)}
+          </Button>
+          {savedClientId && (
+            <Tooltip title={t($ => $.shopify.clientId.remove)}>
+              <span>
+                <IconButton size="small" color="error" onClick={onClear} disabled={saving}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+        </Stack>
+      )}
+    </>
+  )
+}
+
+interface ShopifySecretBlockProps {
+  status: ShopifyKeyStatus | null
+  inputKey: string
+  editing: boolean
+  showKey: boolean
+  saving: boolean
+  error: string | null
+  onChange: (value: string) => void
+  onToggleShowKey: () => void
+  onStartEdit: () => void
+  onCancel: () => void
+  onSave: () => void
+  onClear: () => void
+}
+
+function ShopifySecretBlock({ status, inputKey, editing, showKey, saving, error, onChange, onToggleShowKey, onStartEdit, onCancel, onSave, onClear }: Readonly<ShopifySecretBlockProps>) {
+  const { t } = useTranslation(['settings', 'common'])
+  return (
+    <>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+        {t($ => $.shopify.secret.label)}
+      </Typography>
+      {editing ? (
+        <Stack spacing={1.5}>
+          <TextField
+            label={t($ => $.shopify.secret.label)}
+            fullWidth
+            size="small"
+            value={inputKey}
+            onChange={(e) => onChange(e.target.value)}
+            type={showKey ? 'text' : 'password'}
+            placeholder={t($ => $.shopify.secret.placeholder)}
+            error={!!error}
+            helperText={error || t($ => $.shopify.secret.helper)}
+            autoComplete="off"
+            slotProps={{
+              htmlInput: { spellCheck: false },
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={onToggleShowKey}
+                      edge="end"
+                      aria-label={showKey ? t($ => $.integrations.hideKey) : t($ => $.integrations.showKey)}
+                    >
+                      {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={onSave}
+              disabled={!inputKey.trim() || saving}
+              startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
+            >
+              {t($ => $.actions.save, { ns: 'common' })}
+            </Button>
+            <Button size="small" onClick={onCancel} disabled={saving}>
+              {t($ => $.actions.cancel, { ns: 'common' })}
+            </Button>
+          </Stack>
+        </Stack>
+      ) : (
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Box sx={{ flex: 1 }}>
+            <KeyStatusDisplay status={status} />
+          </Box>
+          <Button size="small" variant="outlined" onClick={onStartEdit} disabled={saving}>
+            {status?.isSet ? t($ => $.shopify.secret.replace) : t($ => $.integrations.configure)}
+          </Button>
+          {status?.isSet && (
+            <Tooltip title={t($ => $.shopify.secret.remove)}>
+              <span>
+                <IconButton size="small" color="error" onClick={onClear} disabled={saving}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+        </Stack>
+      )}
+    </>
+  )
+}
+
+interface ShopifyDomainBlockProps {
+  domain: string
+  savedDomain: string | null
+  saving: boolean
+  error: string | null
+  onChange: (value: string) => void
+  onSave: () => void
+}
+
+function ShopifyDomainBlock({ domain, savedDomain, saving, error, onChange, onSave }: Readonly<ShopifyDomainBlockProps>) {
+  const { t } = useTranslation(['settings', 'common'])
+  return (
+    <Box sx={{ mt: 3 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+        {t($ => $.shopify.domain.label)}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        {t($ => $.shopify.domain.description)}
+      </Typography>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+        <TextField
+          size="small"
+          fullWidth
+          value={domain}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={t($ => $.shopify.domain.placeholder)}
+          error={!!error}
+          helperText={error || undefined}
+          autoComplete="off"
+          slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'none' } }}
+        />
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={onSave}
+          disabled={saving || !domain.trim() || domain.trim() === savedDomain}
+          startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
+        >
+          {t($ => $.actions.save, { ns: 'common' })}
+        </Button>
+      </Stack>
+    </Box>
+  )
 }
 
 function ShopifyKeySection() {
@@ -242,19 +458,6 @@ function ShopifyKeySection() {
 
   const configured = !!(savedClientId || status?.isSet || savedDomain)
 
-  let secretStatusNode: ReactNode
-  if (status === null) {
-    secretStatusNode = <CircularProgress size={18} />
-  } else if (status.isSet) {
-    secretStatusNode = (
-      <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-        {t($ => $.integrations.configured)}
-      </Typography>
-    )
-  } else {
-    secretStatusNode = <Typography variant="body2" color="text.disabled">{t($ => $.integrations.notConfigured)}</Typography>
-  }
-
   return (
     <IntegrationCard
       logoLight="/share/shopify/shopify_logo_black.png"
@@ -265,165 +468,40 @@ function ShopifyKeySection() {
       configured={configured}
       mt={2}
     >
-      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-        {t($ => $.shopify.clientId.label)}
-      </Typography>
-      {clientIdEditing ? (
-        <Stack spacing={1.5} sx={{ mb: 3 }}>
-          <TextField
-            label={t($ => $.shopify.clientId.label)}
-            fullWidth
-            size="small"
-            value={clientId}
-            onChange={(e) => { setClientIdInput(e.target.value); setClientIdError(null) }}
-            placeholder={t($ => $.shopify.clientId.placeholder)}
-            error={!!clientIdError}
-            helperText={clientIdError || t($ => $.shopify.clientId.helper)}
-            autoComplete="off"
-            slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'none' } }}
-          />
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={handleSaveClientId}
-              disabled={!clientId.trim() || clientIdSaving}
-              startIcon={clientIdSaving ? <CircularProgress size={14} color="inherit" /> : null}
-            >
-              {t($ => $.actions.save, { ns: 'common' })}
-            </Button>
-            <Button size="small" onClick={cancelEditingClientId} disabled={clientIdSaving}>
-              {t($ => $.actions.cancel, { ns: 'common' })}
-            </Button>
-          </Stack>
-        </Stack>
-      ) : (
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 3 }}>
-          <Box sx={{ flex: 1 }}>
-            {savedClientId ? (
-              <Tooltip title={savedClientId}>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                  {shortenClientId(savedClientId)}
-                </Typography>
-              </Tooltip>
-            ) : (
-              <Typography variant="body2" color="text.disabled">{t($ => $.integrations.notConfigured)}</Typography>
-            )}
-          </Box>
-          <Button size="small" variant="outlined" onClick={startEditingClientId} disabled={clientIdSaving}>
-            {savedClientId ? t($ => $.shopify.clientId.replace) : t($ => $.integrations.configure)}
-          </Button>
-          {savedClientId && (
-            <Tooltip title={t($ => $.shopify.clientId.remove)}>
-              <span>
-                <IconButton size="small" color="error" onClick={handleClearClientId} disabled={clientIdSaving}>
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-          )}
-        </Stack>
-      )}
-
-      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-        {t($ => $.shopify.secret.label)}
-      </Typography>
-      {editing ? (
-        <Stack spacing={1.5}>
-          <TextField
-            label={t($ => $.shopify.secret.label)}
-            fullWidth
-            size="small"
-            value={inputKey}
-            onChange={(e) => { setInputKey(e.target.value); setError(null) }}
-            type={showKey ? 'text' : 'password'}
-            placeholder={t($ => $.shopify.secret.placeholder)}
-            error={!!error}
-            helperText={error || t($ => $.shopify.secret.helper)}
-            autoComplete="off"
-            slotProps={{
-              htmlInput: { spellCheck: false },
-              input: {
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      onClick={() => setShowKey((v) => !v)}
-                      edge="end"
-                      aria-label={showKey ? t($ => $.integrations.hideKey) : t($ => $.integrations.showKey)}
-                    >
-                      {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={handleSave}
-              disabled={!inputKey.trim() || saving}
-              startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
-            >
-              {t($ => $.actions.save, { ns: 'common' })}
-            </Button>
-            <Button size="small" onClick={cancelEditing} disabled={saving}>
-              {t($ => $.actions.cancel, { ns: 'common' })}
-            </Button>
-          </Stack>
-        </Stack>
-      ) : (
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-          <Box sx={{ flex: 1 }}>
-            {secretStatusNode}
-          </Box>
-          <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
-            {status?.isSet ? t($ => $.shopify.secret.replace) : t($ => $.integrations.configure)}
-          </Button>
-          {status?.isSet && (
-            <Tooltip title={t($ => $.shopify.secret.remove)}>
-              <span>
-                <IconButton size="small" color="error" onClick={handleClear} disabled={saving}>
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-          )}
-        </Stack>
-      )}
-
-      <Box sx={{ mt: 3 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-          {t($ => $.shopify.domain.label)}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          {t($ => $.shopify.domain.description)}
-        </Typography>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-          <TextField
-            size="small"
-            fullWidth
-            value={domain}
-            onChange={(e) => { setDomainInput(e.target.value); setDomainError(null) }}
-            placeholder={t($ => $.shopify.domain.placeholder)}
-            error={!!domainError}
-            helperText={domainError || undefined}
-            autoComplete="off"
-            slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'none' } }}
-          />
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={handleSaveDomain}
-            disabled={domainSaving || !domain.trim() || domain.trim() === savedDomain}
-            startIcon={domainSaving ? <CircularProgress size={14} color="inherit" /> : null}
-          >
-            {t($ => $.actions.save, { ns: 'common' })}
-          </Button>
-        </Stack>
-      </Box>
+      <ShopifyClientIdBlock
+        clientId={clientId}
+        savedClientId={savedClientId}
+        editing={clientIdEditing}
+        saving={clientIdSaving}
+        error={clientIdError}
+        onChange={(value) => { setClientIdInput(value); setClientIdError(null) }}
+        onStartEdit={startEditingClientId}
+        onCancel={cancelEditingClientId}
+        onSave={handleSaveClientId}
+        onClear={handleClearClientId}
+      />
+      <ShopifySecretBlock
+        status={status}
+        inputKey={inputKey}
+        editing={editing}
+        showKey={showKey}
+        saving={saving}
+        error={error}
+        onChange={(value) => { setInputKey(value); setError(null) }}
+        onToggleShowKey={() => setShowKey((v) => !v)}
+        onStartEdit={startEditing}
+        onCancel={cancelEditing}
+        onSave={handleSave}
+        onClear={handleClear}
+      />
+      <ShopifyDomainBlock
+        domain={domain}
+        savedDomain={savedDomain}
+        saving={domainSaving}
+        error={domainError}
+        onChange={(value) => { setDomainInput(value); setDomainError(null) }}
+        onSave={handleSaveDomain}
+      />
     </IntegrationCard>
   )
 }
@@ -433,7 +511,8 @@ interface MollieKeyStatus {
   changedAt?: string | null
 }
 
-function MollieKeyStatusDisplay({ status }: Readonly<{ status: MollieKeyStatus | null }>) {
+// Shared by the Mollie, Bandsintown, and Shopify-secret blocks.
+function KeyStatusDisplay({ status }: Readonly<{ status: MollieKeyStatus | null }>) {
   const { t } = useTranslation('settings')
   if (status === null) return <CircularProgress size={18} />
   if (status.isSet) {
@@ -587,7 +666,7 @@ function MollieKeySection() {
       ) : (
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box sx={{ flex: 1 }}>
-            <MollieKeyStatusDisplay status={status} />
+            <KeyStatusDisplay status={status} />
           </Box>
           <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
             {status?.isSet ? t($ => $.mollie.replace) : t($ => $.integrations.configure)}
@@ -717,7 +796,7 @@ function BandsintownKeySection() {
       ) : (
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box sx={{ flex: 1 }}>
-            <MollieKeyStatusDisplay status={status} />
+            <KeyStatusDisplay status={status} />
           </Box>
           <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
             {status?.isSet ? t($ => $.bandsintown.replace) : t($ => $.integrations.configure)}

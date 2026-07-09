@@ -55,6 +55,31 @@ export const PROFILE_FIELDS = [
   'accent_color',
 ]
 
+// Dashboard memory tile (customization data). The caption is free text; the gig
+// reference is a gig id (tenant ownership is verified in the service, not here).
+export const MEMORY_FIELDS = ['memory_caption', 'memory_gig_id']
+
+const MEMORY_CAPTION_MAX = 500
+
+function validateMemoryCaption(raw) {
+  if (raw === null || raw === undefined || raw === '') return { value: null }
+  if (typeof raw !== 'string') return { error: 'invalid_memory_caption' }
+  if (raw.length > MEMORY_CAPTION_MAX) return { error: 'invalid_memory_caption' }
+  return { value: raw }
+}
+
+function validateMemoryGigId(raw) {
+  if (raw === null || raw === undefined || raw === '') return { value: null }
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n <= 0) return { error: 'invalid_memory_gig_id' }
+  return { value: n }
+}
+
+const MEMORY_VALIDATORS = {
+  memory_caption: validateMemoryCaption,
+  memory_gig_id: validateMemoryGigId,
+}
+
 export const FINANCIAL_FIELDS = [
   'formal_name',
   'address_street',
@@ -166,6 +191,14 @@ export function buildProfileUpdate(body) {
     const result = normalizeFinancialValue(key, body[key])
     if (result.error) return { error: result.error }
     if (result.skip) continue
+    fields.push(`${key} = $${idx++}`)
+    values.push(result.value)
+  }
+
+  for (const key of MEMORY_FIELDS) {
+    if (!(key in body)) continue
+    const result = MEMORY_VALIDATORS[key](body[key])
+    if (result.error) return { error: result.error }
     fields.push(`${key} = $${idx++}`)
     values.push(result.value)
   }

@@ -262,6 +262,88 @@ async function createImportVenue(client, tenantId, row, venuesByKey, summary) {
   return created
 }
 
+function parseImportRows(items) {
+  const rows = []
+  for (const item of items) {
+    const parsed = normalizeImportEventRow(item)
+    if (parsed.error) return { error: parsed.error }
+    rows.push(parsed.row)
+  }
+  return { rows }
+}
+
+// Everything one import batch shares: lead members, dedupe state (updated as
+// rows import so later rows dedupe against earlier ones), and the summary.
+async function loadImportContext(client, tenantId) {
+  const venues = await listVenuesForMatching(client, tenantId)
+  const existingGigs = await listGigsForDuplicateCheck(client, tenantId)
+  const leadIds = await getLeadMemberIds(client, tenantId)
+  return {
+    leadIds,
+    existingGigs,
+    existingEventIds: collectExistingEventIds(existingGigs),
+    venuesByKey: new Map(
+      venues.map((v) => [venueImportKey(v.name ?? '', v.city ?? ''), v]),
+    ),
+    summary: { created: 0, skipped: 0, venues_created: 0 },
+  }
+}
+
+async function createImportGig(client, tenantId, userId, row, venue, ctx) {
+  const isFestival = venue?.category === 'festival'
+  const gigId = await insertGigForImport(client, tenantId, {
+    event_date: row.event_date,
+    event_description: row.event_description,
+    venueId: isFestival ? null : (venue?.id ?? null),
+    festivalId: isFestival ? venue.id : null,
+    start_time: row.start_time,
+    end_time: row.end_time,
+    status: row.status,
+    admission: row.admission,
+    event_link: row.event_link,
+    ticket_link: row.ticket_link,
+  })
+  for (const memberId of ctx.leadIds) {
+    await insertGigParticipant(client, tenantId, gigId, memberId, userId)
+  }
+
+  // Make later rows in this batch dedupe against what we just created.
+  ctx.existingGigs.push({
+    id: gigId,
+    event_date: row.event_date,
+    event_link: row.event_link,
+    venue_id: isFestival ? null : (venue?.id ?? null),
+    festival_id: isFestival ? venue.id : null,
+    place_name: venue?.name ?? null,
+    place_city: venue?.city ?? null,
+  })
+  const eventId = row.bandsintown_event_id || extractEventIdFromLink(row.event_link)
+  if (eventId) ctx.existingEventIds.add(String(eventId))
+}
+
+// Imports one parsed row inside the batch transaction. Returns { error } on a
+// bad venue reference (caller rolls back), else {} after updating ctx.summary.
+async function importEventRow(client, tenantId, userId, row, ctx) {
+  // Duplicate check runs against the looked-up (not yet created) venue so
+  // a skipped event never leaves an orphan venue behind.
+  const resolved = await lookupImportVenue(client, tenantId, row, ctx.venuesByKey)
+  if (resolved.error) return { error: resolved.error }
+  let venue = resolved.venue
+
+  if (isDuplicateOfExisting(row, venue?.id ?? null, ctx.existingGigs, ctx.existingEventIds)) {
+    ctx.summary.skipped++
+    return {}
+  }
+
+  if (venue === null && row.venue.name) {
+    venue = await createImportVenue(client, tenantId, row, ctx.venuesByKey, ctx.summary)
+  }
+
+  await createImportGig(client, tenantId, userId, row, venue, ctx)
+  ctx.summary.created++
+  return {}
+}
+
 // Imports selected Bandsintown events: creates venues/festivals that don't
 // exist yet, skips duplicates (same Bandsintown event or same date + place),
 // inserts gigs with lead members as participants — all in one transaction.
@@ -275,80 +357,24 @@ export async function importEvents(tenantId, userId, body) {
     return badRequest('Maximum 200 events per import')
   }
 
-  const rows = []
-  for (const item of items) {
-    const parsed = normalizeImportEventRow(item)
-    if (parsed.error) return badRequest(parsed.error)
-    rows.push(parsed.row)
-  }
+  const parsed = parseImportRows(items)
+  if (parsed.error) return badRequest(parsed.error)
 
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    const ctx = await loadImportContext(client, tenantId)
 
-    const venues = await listVenuesForMatching(client, tenantId)
-    const existingGigs = await listGigsForDuplicateCheck(client, tenantId)
-    const leadIds = await getLeadMemberIds(client, tenantId)
-    const existingEventIds = collectExistingEventIds(existingGigs)
-    const venuesByKey = new Map(
-      venues.map((v) => [venueImportKey(v.name ?? '', v.city ?? ''), v]),
-    )
-
-    const summary = { created: 0, skipped: 0, venues_created: 0 }
-
-    for (const row of rows) {
-      // Duplicate check runs against the looked-up (not yet created) venue so
-      // a skipped event never leaves an orphan venue behind.
-      const resolved = await lookupImportVenue(client, tenantId, row, venuesByKey)
-      if (resolved.error) {
+    for (const row of parsed.rows) {
+      const result = await importEventRow(client, tenantId, userId, row, ctx)
+      if (result.error) {
         await client.query('ROLLBACK')
-        return badRequest(resolved.error)
+        return badRequest(result.error)
       }
-      let venue = resolved.venue
-
-      if (isDuplicateOfExisting(row, venue?.id ?? null, existingGigs, existingEventIds)) {
-        summary.skipped++
-        continue
-      }
-
-      if (venue === null && row.venue.name) {
-        venue = await createImportVenue(client, tenantId, row, venuesByKey, summary)
-      }
-
-      const isFestival = venue?.category === 'festival'
-      const gigId = await insertGigForImport(client, tenantId, {
-        event_date: row.event_date,
-        event_description: row.event_description,
-        venueId: isFestival ? null : (venue?.id ?? null),
-        festivalId: isFestival ? venue.id : null,
-        start_time: row.start_time,
-        end_time: row.end_time,
-        status: row.status,
-        admission: row.admission,
-        event_link: row.event_link,
-        ticket_link: row.ticket_link,
-      })
-      for (const memberId of leadIds) {
-        await insertGigParticipant(client, tenantId, gigId, memberId, userId)
-      }
-
-      // Make later rows in this batch dedupe against what we just created.
-      existingGigs.push({
-        id: gigId,
-        event_date: row.event_date,
-        event_link: row.event_link,
-        venue_id: isFestival ? null : (venue?.id ?? null),
-        festival_id: isFestival ? venue.id : null,
-        place_name: venue?.name ?? null,
-        place_city: venue?.city ?? null,
-      })
-      const eventId = row.bandsintown_event_id || extractEventIdFromLink(row.event_link)
-      if (eventId) existingEventIds.add(String(eventId))
-      summary.created++
     }
 
     await client.query('COMMIT')
-    return summary
+    return ctx.summary
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     throw err

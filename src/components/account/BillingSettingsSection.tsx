@@ -236,23 +236,52 @@ interface CurrentCardProps {
   busy: boolean
 }
 
+// Period/trial lines and status alerts for an existing subscription.
+function SubscriptionDetails({ sub }: Readonly<{ sub: Subscription }>) {
+  const { t } = useTranslation('billing')
+  const periodEndLine = sub.cancelAtPeriodEnd
+    ? t($ => $.current.accessEnds, { date: new Date(sub.currentPeriodEnd ?? 0) })
+    : t($ => $.current.renews, { date: new Date(sub.currentPeriodEnd ?? 0) })
+  const priceSuffix = sub.isComplimentary
+    ? ''
+    : ` · ${sub.billingInterval === 'year'
+      ? t($ => $.plans.perYear, { price: formatEur(sub.priceCents) })
+      : t($ => $.plans.perMonth, { price: formatEur(sub.priceCents) })}`
+
+  return (
+    <Stack spacing={1}>
+      {sub.trialEndsAt && sub.status === 'trialing' && (
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {t($ => $.current.trialEnds, { date: new Date(sub.trialEndsAt) })}
+        </Typography>
+      )}
+      {sub.currentPeriodEnd && (
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {periodEndLine}{priceSuffix}
+        </Typography>
+      )}
+      {sub.pendingChange && !sub.downgradeScheduled && (
+        <Alert severity="info">{t($ => $.current.pendingChange)}</Alert>
+      )}
+      {sub.downgradeScheduled && (
+        <Alert severity="info">{t($ => $.current.downgradePending)}</Alert>
+      )}
+      {sub.status === 'past_due' && (
+        <Alert severity="warning">{t($ => $.current.pastDue)}</Alert>
+      )}
+      {sub.repairNeeded && (
+        <Alert severity="warning">{t($ => $.current.repairNeeded)}</Alert>
+      )}
+    </Stack>
+  )
+}
+
 function CurrentSubscriptionCard({ sub, currentPlan, participantOnly, onCancel, onResume, onSync, busy }: Readonly<CurrentCardProps>) {
   const { t } = useTranslation('billing')
   const compact = useCompactLayout()
   const statusLabel = sub && sub.status in STATUS_KEYS
     ? t($ => $.status[STATUS_KEYS[sub.status as keyof typeof STATUS_KEYS]])
     : sub?.status
-
-  const periodEndLine = sub?.currentPeriodEnd && (
-    sub.cancelAtPeriodEnd
-      ? t($ => $.current.accessEnds, { date: new Date(sub.currentPeriodEnd) })
-      : t($ => $.current.renews, { date: new Date(sub.currentPeriodEnd) })
-  )
-  const priceSuffix = sub && !sub.isComplimentary
-    ? ` · ${sub.billingInterval === 'year'
-      ? t($ => $.plans.perYear, { price: formatEur(sub.priceCents) })
-      : t($ => $.plans.perMonth, { price: formatEur(sub.priceCents) })}`
-    : ''
 
   return (
      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
@@ -275,32 +304,7 @@ function CurrentSubscriptionCard({ sub, currentPlan, participantOnly, onCancel, 
         </Typography>
       ))}
 
-      {sub && (
-        <Stack spacing={1}>
-          {sub.trialEndsAt && sub.status === 'trialing' && (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {t($ => $.current.trialEnds, { date: new Date(sub.trialEndsAt) })}
-            </Typography>
-          )}
-          {sub.currentPeriodEnd && (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {periodEndLine}{priceSuffix}
-            </Typography>
-          )}
-          {sub.pendingChange && !sub.downgradeScheduled && (
-            <Alert severity="info">{t($ => $.current.pendingChange)}</Alert>
-          )}
-          {sub.downgradeScheduled && (
-            <Alert severity="info">{t($ => $.current.downgradePending)}</Alert>
-          )}
-          {sub.status === 'past_due' && (
-            <Alert severity="warning">{t($ => $.current.pastDue)}</Alert>
-          )}
-          {sub.repairNeeded && (
-            <Alert severity="warning">{t($ => $.current.repairNeeded)}</Alert>
-          )}
-        </Stack>
-      )}
+      {sub && <SubscriptionDetails sub={sub} />}
 
       {sub && !sub.isComplimentary && (
         <>
@@ -330,15 +334,52 @@ interface PlanCardProps {
   onDowngrade: () => void
 }
 
+// Complimentary grants carry no billing interval, so match on plan id alone;
+// otherwise the active plan is the one matching both id and the chosen interval.
+function isCurrentPlan(sub: Subscription | null, plan: SubscriptionPlan, interval: BillingInterval): boolean {
+  if (!sub) return plan.is_fallback
+  return sub.planId === plan.id && (sub.isComplimentary || sub.billingInterval === interval)
+}
+
+// Which action the card offers relative to the current plan: tier order decides
+// upgrade vs downgrade; the same tier switches the interval.
+function planActionKind(
+  plan: SubscriptionPlan,
+  sub: Subscription | null,
+  isCurrent: boolean,
+  currentPlanSortOrder: number,
+): 'subscribe' | 'upgrade' | 'downgrade' | 'switch' | null {
+  if (isCurrent) return null
+  if (!sub) return plan.is_fallback ? null : 'subscribe'
+  if (plan.sort_order > currentPlanSortOrder) return 'upgrade'
+  if (plan.sort_order < currentPlanSortOrder) return 'downgrade'
+  return 'switch'
+}
+
+interface PlanCardAction {
+  label: string
+  onClick: () => void
+  color?: 'error'
+}
+
+function PlanCardFooter({ unavailable, action, busy }: Readonly<{ unavailable: boolean; action: PlanCardAction | null; busy: boolean }>) {
+  const { t } = useTranslation('billing')
+  if (unavailable) {
+    return <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t($ => $.plans.notAvailable)}</Typography>
+  }
+  if (!action) return null
+  return (
+    <Button size="small" variant="contained" color={action.color} disabled={busy} onClick={action.onClick}>
+      {action.label}
+    </Button>
+  )
+}
+
 function PlanCard({ plan, interval, sub, currentPlanSortOrder, busy, onSubscribe, onUpgrade, onDowngrade }: Readonly<PlanCardProps>) {
   const { t } = useTranslation('billing')
   const price = priceForInterval(plan, interval)
   const unavailable = price === null && !plan.is_fallback
-  // Complimentary grants carry no billing interval, so match on plan id alone;
-  // otherwise the active plan is the one matching both id and the chosen interval.
-  const isCurrent = sub
-    ? sub.planId === plan.id && (sub.isComplimentary || sub.billingInterval === interval)
-    : plan.is_fallback
+  const isCurrent = isCurrentPlan(sub, plan, interval)
   const enabledFeatures = Object.entries(plan.entitlements.features).filter(([, on]) => on).map(([f]) => f)
 
   const featureLabel = (f: string) => {
@@ -346,25 +387,21 @@ function PlanCard({ plan, interval, sub, currentPlanSortOrder, busy, onSubscribe
     return key ? t($ => $.features[key]) : f.replace(/_/g, ' ')
   }
 
-  let action: { label: string; onClick: () => void; color?: 'error' } | null = null
-  if (isCurrent) action = null
-  else if (!sub) {
-    action = plan.is_fallback ? null : { label: t($ => $.plans.subscribe), onClick: onSubscribe }
-  } else if (plan.sort_order > currentPlanSortOrder) {
-    action = { label: t($ => $.plans.upgrade), onClick: onUpgrade }
-  } else if (plan.sort_order < currentPlanSortOrder) {
-    action = { label: t($ => $.plans.downgrade), onClick: onDowngrade, color: 'error' }
-  } else {
-    // Same tier, different interval.
-    action = {
+  const actionByKind: Record<'subscribe' | 'upgrade' | 'downgrade' | 'switch', PlanCardAction> = {
+    subscribe: { label: t($ => $.plans.subscribe), onClick: onSubscribe },
+    upgrade: { label: t($ => $.plans.upgrade), onClick: onUpgrade },
+    downgrade: { label: t($ => $.plans.downgrade), onClick: onDowngrade, color: 'error' },
+    switch: {
       label: interval === 'year' ? t($ => $.plans.switchToYearly) : t($ => $.plans.switchToMonthly),
       onClick: onUpgrade,
-    }
+    },
   }
+  const kind = planActionKind(plan, sub, isCurrent, currentPlanSortOrder)
+  const action = kind ? actionByKind[kind] : null
 
   let priceLabel: string
   if (plan.is_fallback) priceLabel = t($ => $.plans.free)
-  else if (unavailable || price === null) priceLabel = '—'
+  else if (price === null) priceLabel = '—'
   else priceLabel = interval === 'year'
     ? t($ => $.plans.perYear, { price: formatEur(price) })
     : t($ => $.plans.perMonth, { price: formatEur(price) })
@@ -400,13 +437,7 @@ function PlanCard({ plan, interval, sub, currentPlanSortOrder, busy, onSubscribe
         {enabledFeatures.map((f) => <Chip key={f} size="small" variant="outlined" label={featureLabel(f)} />)}
       </Box>
       <Box sx={{ flexGrow: 1 }} />
-      {unavailable ? (
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t($ => $.plans.notAvailable)}</Typography>
-      ) : action ? (
-        <Button size="small" variant="contained" color={action.color} disabled={busy} onClick={action.onClick}>
-          {action.label}
-        </Button>
-      ) : null}
+      <PlanCardFooter unavailable={unavailable} action={action} busy={busy} />
     </Paper>
   )
 }

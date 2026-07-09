@@ -36,7 +36,7 @@ export default function CheersBadge({ cheers, size = 40 }: Readonly<CheersBadgeP
         src={mode === 'dark' ? '/icons/clap_light.png' : '/icons/clap_dark.png'}
         alt=""
         aria-hidden="true"
-        sx={{ width: size * 0.8, height: 'auto', mr: '20px', display: 'block' }}
+        sx={{ width: size, height: 'auto', mr: '20px', display: 'block' }}
       />
     </Box>
   )
