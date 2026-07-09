@@ -1,12 +1,10 @@
 // Input parsing and validation for rehearsal routes. No DB access here.
+import { parsePositiveId as parseId } from './common.js'
 
 export const VALID_STATUSES = new Set(['option', 'planned'])
 export const VALID_VOTES = new Set(['yes', 'no'])
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 // Builds SET fragments ($1..$N) from the allowed PATCH fields. Status validity
 // is checked by the service before this runs.

@@ -6,7 +6,8 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { buildPeriodWhere, resolvePeriodRange } from '../utils/periodQuery.js'
-import { parseId, parseAccountCodes } from '../validators/ledgerValidators.js'
+import { parseAccountCodes } from '../validators/ledgerValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   getLedgerList,
   searchLedgerTransactions,
@@ -109,8 +110,7 @@ router.get('/report/export', async (req, res) => {
 
 // ---------- detail ----------
 router.get('/:id', async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const detail = await getLedgerEntryDetail(pool, req.tenantId, id)
   if (!detail) return res.status(404).json({ error: 'Not found' })
   res.json(detail)
@@ -118,19 +118,17 @@ router.get('/:id', async (req, res) => {
 
 // ---------- void (open period: hidden + excluded from reports) ----------
 router.post('/:id/void', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await voidLedgerTransaction(pool, req.tenantId, id, req.user.id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json({ id: result.transactionId })
 })
 
 // ---------- reverse (closed period: visible corrections-forward entry) ----------
 router.post('/:id/reverse', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await reverseLedgerTransaction(pool, req.tenantId, id, req.user.id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json({ id: result.transactionId })
 })
 

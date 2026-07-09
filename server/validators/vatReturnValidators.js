@@ -1,9 +1,7 @@
+import { parsePositiveId as parseId } from './common.js'
 import { isValidCalendarDate } from './accountValidators.js'
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 // Quarterly periods only (NL convention). Year bounds keep obvious typos out.
 export function parseYearQuarter(input = {}) {

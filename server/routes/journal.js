@@ -2,7 +2,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
-import { parseId } from '../validators/journalValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listJournals,
   getJournal,
@@ -14,15 +14,6 @@ import {
 } from '../services/journalService.js'
 
 const router = Router()
-
-function requireId(req, res) {
-  const id = parseId(req.params.id)
-  if (id === null) {
-    res.status(400).json({ error: 'Invalid id' })
-    return null
-  }
-  return id
-}
 
 // ---------- list ----------
 router.get('/', async (req, res) => {
@@ -41,41 +32,41 @@ router.post('/approve', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (re
 // ---------- create ----------
 router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const result = await createJournal(pool, req.tenantId, req.body || {}, req.user.id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   const { journal } = await getJournal(pool, req.tenantId, result.journalId)
   res.status(201).json(journal)
 })
 
 // ---------- single ----------
 router.get('/:id', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await getJournal(pool, req.tenantId, id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json(result.journal)
 })
 
 // ---------- patch (draft only) ----------
 router.patch('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await updateJournal(pool, req.tenantId, id, req.body || {})
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   const { journal } = await getJournal(pool, req.tenantId, id)
   res.json(journal)
 })
 
 // ---------- delete (draft only) ----------
 router.delete('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteJournal(pool, req.tenantId, id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })
 
 // ---------- approve single ----------
 router.post('/:id/approve', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await approveJournal(pool, req.tenantId, id, req.user.id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   const { journal } = await getJournal(pool, req.tenantId, id)
   res.json(journal)
 })

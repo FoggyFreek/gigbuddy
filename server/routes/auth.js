@@ -14,6 +14,7 @@ import {
 } from '../services/authService.js'
 import { clearOnboardingTenant } from '../repositories/authRepository.js'
 import { requireCurrentTerms } from '../middleware/auth.js'
+import { sendError } from './routeHelpers.js'
 
 const router = Router()
 
@@ -187,7 +188,7 @@ router.post('/link/:provider/unlink', requireCurrentTerms, async (req, res, next
   if (!oidc.isKnownProvider(provider)) return res.status(404).json({ error: 'Not found' })
   try {
     const result = await unlinkProvider(pool, req.session.userId, provider)
-    if (result.error) return res.status(result.error.status).json(result.error.body)
+    if (result.error) return sendError(res, result.error)
     auditLog(req, `auth.unlink.${provider}`, { userId: req.session.userId })
     res.status(204).end()
   } catch (err) {
@@ -229,7 +230,7 @@ router.post('/accept-terms', async (req, res, next) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
   try {
     const result = await acceptTerms(pool, req.session.userId, req.body?.version)
-    if (result.error) return res.status(result.error.status).json(result.error.body)
+    if (result.error) return sendError(res, result.error)
     auditLog(req, 'auth.terms_accept', { userId: req.session.userId })
     res.json({ termsAcceptedAt: result.termsAcceptedAt, termsVersion: result.termsVersion })
   } catch (err) {

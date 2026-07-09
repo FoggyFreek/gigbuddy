@@ -3,7 +3,7 @@ import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission, can } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
-import { parseId } from '../validators/purchaseValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   createPurchase,
   applyPurchasePatch,
@@ -24,19 +24,6 @@ const attachmentUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
 })
-
-function requireParam(req, res, name, label = name) {
-  const id = parseId(req.params[name])
-  if (id === null) {
-    res.status(400).json({ error: `Invalid ${label}` })
-    return null
-  }
-  return id
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 // ---------- self-scoped list (own purchases for reimbursement) ----------
 // Declared before /:id so "mine" isn't parsed as an id. Open to anyone who can

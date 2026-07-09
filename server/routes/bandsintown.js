@@ -2,6 +2,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
+import { sendError } from './routeHelpers.js'
 import {
   fetchArtistById,
   fetchArtistEvents,
@@ -10,10 +11,6 @@ import {
 import { notifyGigsImported } from '../services/gigService.js'
 
 const router = Router()
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 // Look up a Bandsintown artist by numeric id — name, images and social links.
 router.get('/artist/:artistId', async (req, res) => {

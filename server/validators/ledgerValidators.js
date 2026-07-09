@@ -1,18 +1,7 @@
 // Pure request/query validation for ledger routes. No DB access here.
+import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
-
-// Clamp a requested search result limit to a sane range (default 10, max 25).
-export function parseSearchLimit(value) {
-  const parsedLimit = Number.parseInt(value, 10)
-  return Math.max(
-    1,
-    Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),
-  )
-}
+export { parseId, parseSearchLimit }
 
 // Parse the `accounts` query param (comma-separated account codes) into a
 // deduped list of valid codes. Anything malformed is dropped; missing/blank

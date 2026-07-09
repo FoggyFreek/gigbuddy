@@ -3,6 +3,7 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/rehearsalValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listRehearsals,
   getRehearsal,
@@ -20,19 +21,6 @@ import {
 } from '../services/rehearsalService.js'
 
 const router = Router()
-
-function requireParam(req, res, name, label = name) {
-  const id = parseId(req.params[name])
-  if (id === null) {
-    res.status(400).json({ error: `Invalid ${label}` })
-    return null
-  }
-  return id
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 // List all rehearsals with participants
 router.get('/', async (req, res) => {

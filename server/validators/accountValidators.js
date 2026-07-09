@@ -1,3 +1,5 @@
+import { parsePositiveId as parseId } from './common.js'
+
 const CODE_RE = /^\d{4,6}$/
 const CURRENCY_RE = /^[A-Z]{3}$/
 
@@ -25,10 +27,7 @@ export const SETTINGS_TYPE_MAP = {
 
 export const SETTINGS_CODE_FIELDS = Object.keys(SETTINGS_TYPE_MAP)
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 export function validateAccountCreate(body) {
   const code = String(body.code ?? '').trim()

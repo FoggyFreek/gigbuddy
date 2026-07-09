@@ -5,7 +5,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { statObject, getObject } from '../services/storageService.js'
 import { logger } from '../utils/logger.js'
-import { parseId } from '../validators/notificationValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listNotifications,
   markNotificationRead,
@@ -17,19 +17,6 @@ import {
 } from '../services/notificationService.js'
 
 const router = Router()
-
-function requireParam(req, res, name, label = name) {
-  const id = parseId(req.params[name])
-  if (id === null) {
-    res.status(400).json({ error: `Invalid ${label}` })
-    return null
-  }
-  return id
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 router.get('/', async (req, res) => {
   res.json(await listNotifications(pool, req.user.id))

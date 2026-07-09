@@ -2,7 +2,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
-import { parseId } from '../validators/contactValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listContacts,
   searchContacts,
@@ -19,19 +19,6 @@ import {
 } from '../services/contactService.js'
 
 const router = Router()
-
-function requireParam(req, res, name, label = name) {
-  const id = parseId(req.params[name])
-  if (id === null) {
-    res.status(400).json({ error: `Invalid ${label}` })
-    return null
-  }
-  return id
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 router.get('/', async (req, res) => {
   const result = await listContacts(pool, req.tenantId, req.query)

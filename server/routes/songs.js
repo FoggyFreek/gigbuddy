@@ -5,8 +5,8 @@ import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireEntitlement } from '../middleware/entitlements.js'
 import { FEATURES } from '../auth/entitlements.js'
-import { parseId } from '../validators/songValidators.js'
 import { decodeUploadedText } from '../utils/decodeText.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listSongs,
   searchSongs,
@@ -50,19 +50,6 @@ const chartUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 512 * 1024 },
 })
-
-function requireParam(req, res, name, label = name) {
-  const id = parseId(req.params[name])
-  if (id === null) {
-    res.status(400).json({ error: `Invalid ${label}` })
-    return null
-  }
-  return id
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 // ---------- songs ----------
 

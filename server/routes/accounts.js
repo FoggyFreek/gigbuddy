@@ -2,7 +2,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
-import { parseId } from '../validators/accountValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   getSettings,
   patchSettings,
@@ -13,19 +13,6 @@ import {
 } from '../services/accountService.js'
 
 const router = Router()
-
-function requireParam(req, res, name) {
-  const id = parseId(req.params[name])
-  if (id === null) {
-    res.status(400).json({ error: 'invalid_id' })
-    return null
-  }
-  return id
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 // ---------- GET /api/accounts/settings ----------
 // Must be declared before /:id so Express doesn't treat "settings" as an id.
@@ -71,7 +58,7 @@ router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res,
 
 // ---------- PATCH /api/accounts/:id ----------
 router.patch('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
-  const id = requireParam(req, res, 'id'); if (id === null) return
+  const id = requireParam(req, res, 'id', { error: 'invalid_id' }); if (id === null) return
   try {
     const result = await patchAccount(pool, req.tenantId, id, req.body || {})
     if (result.error) return sendError(res, result.error)
@@ -83,7 +70,7 @@ router.patch('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, 
 
 // ---------- DELETE /api/accounts/:id ----------
 router.delete('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
-  const id = requireParam(req, res, 'id'); if (id === null) return
+  const id = requireParam(req, res, 'id', { error: 'invalid_id' }); if (id === null) return
   try {
     const result = await deleteAccount(pool, req.tenantId, id)
     if (result.error) return sendError(res, result.error)

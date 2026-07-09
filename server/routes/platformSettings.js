@@ -2,12 +2,9 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { setTenantOnboardingEnabled } from '../services/platformSettingsService.js'
 import { auditLog } from '../utils/auditLog.js'
+import { sendError } from './routeHelpers.js'
 
 const router = Router()
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 router.patch('/tenant-onboarding', async (req, res) => {
   const result = await setTenantOnboardingEnabled(pool, req.body, req.user.id)

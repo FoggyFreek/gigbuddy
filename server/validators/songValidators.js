@@ -1,20 +1,13 @@
 // Input parsing and validation for song routes. No DB access here.
+import { parsePositiveId as parseId, trimOrNull } from './common.js'
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId, trimOrNull }
 
 // Coerce a body value to a non-negative integer or null.
 export function toIntOrNull(val) {
   if (val === null || val === undefined || val === '') return null
   const n = Number(val)
   return Number.isInteger(n) && n >= 0 ? n : null
-}
-
-export function trimOrNull(val) {
-  const s = String(val ?? '').trim()
-  return s || null
 }
 
 const TEXT_FIELDS = ['artist', 'song_key', 'lyrics_html', 'notes']

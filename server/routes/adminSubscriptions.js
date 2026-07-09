@@ -4,6 +4,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { auditLog } from '../utils/auditLog.js'
+import { sendError } from './routeHelpers.js'
 import {
   listSubscriptions,
   grantComplimentary,
@@ -11,10 +12,6 @@ import {
 } from '../services/adminSubscriptionService.js'
 
 const router = Router()
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 router.get('/', async (req, res) => {
   res.json(await listSubscriptions(pool, { repairOnly: req.query?.repair === '1' }))

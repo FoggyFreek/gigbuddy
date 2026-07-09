@@ -1,12 +1,10 @@
 // Input parsing and validation for notification routes. No DB access here.
+import { parsePositiveId as parseId } from './common.js'
 import { NOTIFICATION_TYPES } from '../services/notificationTypes.js'
 
 const VALID_TYPES = new Set(NOTIFICATION_TYPES)
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 // Parses a preferences PUT body of shape
 //   { types?: [{ type, enabled }], tenants?: [{ tenantId, enabled }] }

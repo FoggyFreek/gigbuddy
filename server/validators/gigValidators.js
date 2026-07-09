@@ -1,5 +1,6 @@
 // Pure request/parameter validation and update-field construction for gig
 // routes. No DB or IO here.
+import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
 
 export const VALID_STATUSES = ['option', 'confirmed', 'announced']
 export const VALID_VOTES = ['yes', 'no']
@@ -29,19 +30,7 @@ function normalizePercent(key, raw) {
 
 export const GIG_TASK_PATCH_FIELDS = ['title', 'done', 'due_date', 'assigned_to']
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
-
-// Clamp a requested search result limit to a sane range (default 10, max 25).
-export function parseSearchLimit(value) {
-  const parsedLimit = Number.parseInt(value, 10)
-  return Math.max(
-    1,
-    Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),
-  )
-}
+export { parseId, parseSearchLimit }
 
 export function toDateStr(val) {
   if (!val) return null

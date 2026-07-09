@@ -1,13 +1,11 @@
 // Input parsing and validation for invite routes. No DB access here.
+import { parseIntegerId as parseId } from './common.js'
 import { WRITE_ROLES } from '../auth/permissions.js'
 
 export const ALLOWED_ROLES = WRITE_ROLES
 
 // Invite ids only need to be integers (the route never enforced > 0).
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) ? n : null
-}
+export { parseId }
 
 // Parses the optional expiry window. Returns { error } when out of range, or
 // { expiresAt } (a Date, or null when no expiry was requested).

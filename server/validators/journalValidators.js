@@ -1,18 +1,11 @@
 // Pure request/parameter validation for journal routes. No DB or IO here.
+import { isValidIsoDate, parsePositiveId as parseId } from './common.js'
 import { ALLOWED_TAX_RATES } from './purchaseValidators.js'
 
 const ALLOWED_VAT_RATES_SET = new Set(ALLOWED_TAX_RATES)
 export const SIDES = new Set(['debit', 'credit'])
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
-
-export function isValidIsoDate(value) {
-  if (typeof value !== 'string') return false
-  return !Number.isNaN(Date.parse(value))
-}
+export { isValidIsoDate, parseId }
 
 function snapVatRate(raw) {
   const n = Number(raw)

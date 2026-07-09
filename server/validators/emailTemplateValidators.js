@@ -1,11 +1,9 @@
 // Input parsing and validation for email-template routes. No DB access here.
+import { parsePositiveId as parseId } from './common.js'
 
 export const EDITABLE_FIELDS = ['name', 'subject', 'body_html']
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 export function buildTemplateUpdateFields(body) {
   const fields = []

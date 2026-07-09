@@ -1,12 +1,9 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
+import { sendError } from './routeHelpers.js'
 import { subscribe, unsubscribe, resubscribe } from '../services/pushService.js'
 
 const router = Router()
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 router.get('/vapid-public-key', (_req, res) => {
   if (!process.env.VAPID_PUBLIC_KEY) {

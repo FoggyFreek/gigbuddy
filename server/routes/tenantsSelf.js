@@ -5,6 +5,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { auditLog } from '../utils/auditLog.js'
 import { requireCurrentTerms } from '../middleware/auth.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   createOwnedTenant,
   listOwnedTenants,
@@ -14,15 +15,6 @@ import {
 import { getTenantOnboardingStatus } from '../services/platformSettingsService.js'
 
 const router = Router()
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
-
-function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
 
 router.post('/', requireCurrentTerms, async (req, res) => {
   const result = await createOwnedTenant(pool, req.user.id, req.body)
@@ -40,8 +32,7 @@ router.get('/owned', async (req, res) => {
 })
 
 router.post('/:id/archive', requireCurrentTerms, async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await archiveOwnedTenant(pool, req.user.id, id)
   if (result.error) return sendError(res, result.error)
   if (result.audit) auditLog(req, result.audit.action, result.audit.details)
@@ -49,8 +40,7 @@ router.post('/:id/archive', requireCurrentTerms, async (req, res) => {
 })
 
 router.post('/:id/unarchive', requireCurrentTerms, async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await unarchiveOwnedTenant(pool, req.user.id, id)
   if (result.error) return sendError(res, result.error)
   if (result.audit) auditLog(req, result.audit.action, result.audit.details)

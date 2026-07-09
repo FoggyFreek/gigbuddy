@@ -2,7 +2,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
-import { parseId } from '../validators/bandEventValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listEvents,
   getEvent,
@@ -13,25 +13,12 @@ import {
 
 const router = Router()
 
-function requireId(req, res) {
-  const id = parseId(req.params.id)
-  if (id === null) {
-    res.status(400).json({ error: 'Invalid id' })
-    return null
-  }
-  return id
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
-
 router.get('/', async (req, res) => {
   res.json(await listEvents(pool, req.tenantId))
 })
 
 router.get('/:id', async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await getEvent(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
   res.json(result.event)
@@ -44,14 +31,14 @@ router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res)
 })
 
 router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchEvent(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.event)
 })
 
 router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteEvent(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
   res.status(204).end()

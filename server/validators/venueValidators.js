@@ -1,4 +1,5 @@
 // Input parsing and validation for venue routes. No DB access here.
+import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
 import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../utils/urls.js'
 
 export const VALID_CATEGORIES = new Set(['venue', 'festival'])
@@ -22,18 +23,7 @@ export const EDITABLE_FIELDS = [
   'email',
 ]
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
-
-export function parseSearchLimit(value) {
-  const parsedLimit = Number.parseInt(value, 10)
-  return Math.max(
-    1,
-    Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),
-  )
-}
+export { parseId, parseSearchLimit }
 
 function normalizeInsertWebsite(body) {
   try {

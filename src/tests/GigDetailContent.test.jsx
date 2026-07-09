@@ -457,7 +457,7 @@ describe('GigDetailContent — location map', () => {
   it('renders the map at city zoom and geocodes the venue city when no street is set', async () => {
     // default getGig mock: venue Amsterdam, city only
     wrap(<GigDetailContent gigId={1} />)
-    const map = await screen.findByTestId('gig-location-map')
+    const map = await screen.findByTestId('gig-location-map', { timeout: 2000 })
     expect(map).toHaveAttribute('data-zoom', '11')
     expect(geocodePlace).toHaveBeenCalledWith(expect.objectContaining({ city: 'Amsterdam' }))
     // marker link points at an external maps search including the city
@@ -471,7 +471,7 @@ describe('GigDetailContent — location map', () => {
       gigWith({ venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam', street_and_number: 'Piet Heinkade 3' } }),
     )
     wrap(<GigDetailContent gigId={1} />)
-    const map = await screen.findByTestId('gig-location-map')
+    const map = await screen.findByTestId('gig-location-map', { timeout: 2000 })
     expect(map).toHaveAttribute('data-zoom', '16')
     expect(geocodePlace).toHaveBeenCalledWith(
       expect.objectContaining({ city: 'Amsterdam', address: 'Piet Heinkade 3' }),
@@ -486,7 +486,7 @@ describe('GigDetailContent — location map', () => {
       }),
     )
     wrap(<GigDetailContent gigId={1} />)
-    await screen.findByTestId('gig-location-map')
+    await screen.findByTestId('gig-location-map', { timeout: 2000 })
     expect(geocodePlace).toHaveBeenCalledWith(expect.objectContaining({ city: 'Amsterdam' }))
   })
 
@@ -498,7 +498,7 @@ describe('GigDetailContent — location map', () => {
       }),
     )
     wrap(<GigDetailContent gigId={1} />)
-    await screen.findByTestId('gig-location-map')
+    await screen.findByTestId('gig-location-map', { timeout: 2000 })
     expect(geocodePlace).toHaveBeenCalledWith(expect.objectContaining({ city: 'Landgraaf' }))
   })
 

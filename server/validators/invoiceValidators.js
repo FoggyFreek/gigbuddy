@@ -1,4 +1,5 @@
 // Pure request/parameter validation for invoice routes. No DB or IO here.
+import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
 
 export const CONTENT_FIELDS = [
   'gig_id',
@@ -50,19 +51,7 @@ export const SUPPORTED_PAYMENT_METHODS = new Set([
   'eps', 'ideal', 'kbc', 'paypal', 'paysafecard', 'przelewy24',
 ])
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
-
-// Clamp a requested search result limit to a sane range (default 10, max 25).
-export function parseSearchLimit(value) {
-  const parsedLimit = Number.parseInt(value, 10)
-  return Math.max(
-    1,
-    Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),
-  )
-}
+export { parseId, parseSearchLimit }
 
 function pad4(n) { return String(n).padStart(4, '0') }
 

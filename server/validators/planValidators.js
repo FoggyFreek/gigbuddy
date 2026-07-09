@@ -1,11 +1,9 @@
 // Input parsing and validation for subscription plan routes. No DB access here.
+import { parsePositiveId as parseId } from './common.js'
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 export function isValidSlug(value) {
   return typeof value === 'string' && SLUG_PATTERN.test(value)

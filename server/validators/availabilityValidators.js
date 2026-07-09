@@ -1,12 +1,10 @@
 // Input parsing and validation for availability routes. No DB access here.
+import { parsePositiveId as parseId } from './common.js'
 
 export const SLOT_FIELDS = ['band_member_id', 'start_date', 'end_date', 'status', 'reason']
 export const VALID_STATUSES = new Set(['available', 'unavailable'])
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 // Cross-field slot validation. Returns an error string, or null when valid.
 export function validateSlot({ start_date, end_date, status }) {

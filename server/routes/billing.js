@@ -6,6 +6,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { auditLog } from '../utils/auditLog.js'
 import { requireCurrentTerms } from '../middleware/auth.js'
+import { sendError } from './routeHelpers.js'
 import { listPlans } from '../services/planService.js'
 import {
   getBillingState,
@@ -19,10 +20,6 @@ import {
 } from '../services/billingService.js'
 
 const router = Router()
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 router.get('/', async (req, res) => {
   const [state, plans] = await Promise.all([

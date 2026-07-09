@@ -1,4 +1,5 @@
 // Input parsing and validation for profile routes. No DB access here.
+import { parsePositiveId as parseId } from './common.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 
 // Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
@@ -109,10 +110,7 @@ const KVK_RE = /^\d{8}$/
 const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/
 const TAX_ID_RE = /^NL\d{9}B\d{2}$/
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 export function normalizeRequiredProfileUrl(value) {
   const url = normalizeOptionalUrl(value, { allowedProtocols: PROFILE_LINK_PROTOCOLS })

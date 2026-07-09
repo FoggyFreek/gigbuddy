@@ -3,11 +3,11 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import {
-  parseId,
   parseYearQuarter,
   validateReturnCreate,
   validatePayment,
 } from '../validators/vatReturnValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   previewVatReturn,
   createVatReturn,
@@ -26,7 +26,7 @@ router.get('/preview', async (req, res, next) => {
   if (period.error) return res.status(400).json({ error: period.error })
   try {
     const result = await previewVatReturn(pool, req.tenantId, period)
-    if (result.error) return res.status(result.error.status).json(result.error.body)
+    if (result.error) return sendError(res, result.error)
     res.json(result.preview)
   } catch (err) {
     next(err)
@@ -46,7 +46,7 @@ router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res,
   if (body.error) return res.status(400).json({ error: body.error })
   try {
     const result = await createVatReturn(pool, req.tenantId, body, req.user.id)
-    if (result.error) return res.status(result.error.status).json(result.error.body)
+    if (result.error) return sendError(res, result.error)
     res.status(201).json(result.vatReturn)
   } catch (err) {
     next(err)
@@ -54,8 +54,7 @@ router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res,
 })
 
 router.get('/:id', async (req, res, next) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
   try {
     const vatReturn = await getVatReturn(pool, req.tenantId, id)
     if (!vatReturn) return res.status(404).json({ error: 'Not found' })
@@ -66,13 +65,12 @@ router.get('/:id', async (req, res, next) => {
 })
 
 router.post('/:id/payments', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const payment = validatePayment(req.body || {})
   if (payment.error) return res.status(400).json({ error: payment.error })
   try {
     const result = await recordVatPayment(pool, req.tenantId, id, payment, req.user.id)
-    if (result.error) return res.status(result.error.status).json(result.error.body)
+    if (result.error) return sendError(res, result.error)
     res.status(201).json(result.payment)
   } catch (err) {
     next(err)

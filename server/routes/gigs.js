@@ -4,6 +4,7 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/gigValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listGigs,
   searchGigs,
@@ -52,19 +53,6 @@ const attachmentUpload = multer({
 })
 
 const router = Router()
-
-function requireParam(req, res, name, label = name) {
-  const id = parseId(req.params[name])
-  if (id === null) {
-    res.status(400).json({ error: `Invalid ${label}` })
-    return null
-  }
-  return id
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 // List all gigs with open task count and member availability
 router.get('/', async (req, res) => {

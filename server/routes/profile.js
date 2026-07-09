@@ -6,7 +6,7 @@ import { PERMISSIONS } from '../auth/permissions.js'
 import { requireEntitlement, hasEntitledFeature } from '../middleware/entitlements.js'
 import { FEATURES } from '../auth/entitlements.js'
 import { auditLog } from '../utils/auditLog.js'
-import { parseId } from '../validators/profileValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   getProfile,
   patchProfile,
@@ -58,19 +58,6 @@ async function handleImageUpload(req, res, uploadFn, allowedTypes) {
   res.json(await uploadFn(pool, req.tenantId, req.file))
 }
 
-function requireLinkId(req, res) {
-  const linkId = parseId(req.params.linkId)
-  if (linkId === null) {
-    res.status(400).json({ error: 'Invalid linkId' })
-    return null
-  }
-  return linkId
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
-
 // Credential endpoints need the tenant.manage permission. Status reads (GET)
 // and erasure (DELETE) deliberately do NOT require the integrations
 // entitlement — after a downgrade an admin must still be able to see and
@@ -120,7 +107,7 @@ router.post('/links', writeProfile, async (req, res) => {
 
 // Update link (partial)
 router.patch('/links/:linkId', writeProfile, async (req, res) => {
-  const linkId = requireLinkId(req, res); if (linkId === null) return
+  const linkId = requireParam(req, res, 'linkId'); if (linkId === null) return
   const result = await patchLink(pool, req.tenantId, linkId, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.link)
@@ -128,7 +115,7 @@ router.patch('/links/:linkId', writeProfile, async (req, res) => {
 
 // Delete link
 router.delete('/links/:linkId', writeProfile, async (req, res) => {
-  const linkId = requireLinkId(req, res); if (linkId === null) return
+  const linkId = requireParam(req, res, 'linkId'); if (linkId === null) return
   const result = await deleteLink(pool, req.tenantId, linkId)
   if (result.error) return sendError(res, result.error)
   res.status(204).end()

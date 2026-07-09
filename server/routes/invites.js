@@ -2,6 +2,7 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { auditLog } from '../utils/auditLog.js'
 import { parseId } from '../validators/inviteValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listInvites,
   createInvite,
@@ -12,10 +13,6 @@ import {
 
 export const adminRouter = Router()
 export const redeemRouter = Router()
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 // Emit any audit event the service produced, then translate the result.
 function logAudit(req, audit) {
@@ -34,8 +31,7 @@ adminRouter.post('/', async (req, res) => {
 })
 
 adminRouter.delete('/:id', async (req, res) => {
-  const id = parseId(req.params.id)
-  if (id === null) return res.status(400).json({ error: 'Invalid id' })
+  const id = requireParam(req, res, 'id', { parse: parseId }); if (id === null) return
   const result = await revokeInvite(pool, req.tenantId, id)
   logAudit(req, result.audit)
   if (result.error) return sendError(res, result.error)

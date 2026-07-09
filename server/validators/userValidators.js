@@ -1,13 +1,11 @@
 // Input parsing and validation for user/membership routes. No DB access here.
+import { parsePositiveId as parseId } from './common.js'
 import { WRITE_ROLES } from '../auth/permissions.js'
 
 export const ALLOWED_STATUS = new Set(['pending', 'approved', 'rejected'])
 export const ALLOWED_ROLE = WRITE_ROLES
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 // Validates the membership PATCH body. Returns { error: { status, body } } or {}.
 export function validateMembershipPatch(status, role) {

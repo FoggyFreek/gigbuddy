@@ -1,6 +1,4 @@
 // Input parsing and validation for share-photo routes. No DB access here.
+import { parsePositiveId as parseId } from './common.js'
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n >= 1 ? n : null
-}
+export { parseId }

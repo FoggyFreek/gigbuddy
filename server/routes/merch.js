@@ -4,7 +4,7 @@ import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireEntitlement } from '../middleware/entitlements.js'
 import { FEATURES } from '../auth/entitlements.js'
-import { parseId } from '../validators/purchaseValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listProducts,
   createProduct,
@@ -21,15 +21,6 @@ import { importShopifyOrders } from '../services/merchShopifyService.js'
 
 const router = Router()
 
-function requireId(req, res) {
-  const id = parseId(req.params.id)
-  if (id === null) {
-    res.status(400).json({ error: 'Invalid id' })
-    return null
-  }
-  return id
-}
-
 // ---------- products ----------
 
 router.get('/products', async (req, res) => {
@@ -39,22 +30,22 @@ router.get('/products', async (req, res) => {
 
 router.post('/products', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const result = await createProduct(pool, req.tenantId, req.body || {})
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.status(201).json(result.product)
 })
 
 router.patch('/products/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await updateProduct(pool, req.tenantId, id, req.body || {})
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json(result.product)
 })
 
 // Archive, not delete: sales and purchase lines keep referencing the product.
 router.delete('/products/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await archiveProduct(pool, req.tenantId, id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json(result.product)
 })
 
@@ -63,7 +54,7 @@ router.delete('/products/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), as
 // Per-product totals for the selected period (master list).
 router.get('/sales/summary', async (req, res) => {
   const result = await merchSalesSummary(pool, req.tenantId, req.query)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json(result.rows)
 })
 
@@ -74,20 +65,20 @@ router.get('/sales/periods', async (req, res) => {
 
 router.get('/sales', async (req, res) => {
   const result = await listMerchSales(pool, req.tenantId, req.query)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json(result.sales)
 })
 
 router.post('/sales', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const result = await recordMerchSale(pool, req.tenantId, req.body || {}, req.user.id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.status(201).json({ id: result.saleId })
 })
 
 router.post('/sales/:id/void', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
-  const id = requireId(req, res); if (id === null) return
+  const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await voidMerchSale(pool, req.tenantId, id, req.user.id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json({})
 })
 
@@ -101,14 +92,14 @@ router.post('/sales/:id/void', requirePermission(PERMISSIONS.FINANCE_MANAGE), as
 // finance gate doesn't cover it).
 router.get('/shopify/orders', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
   const result = await fetchRecentOrders(pool, req.tenantId, { cursor: req.query.cursor, limit: req.query.limit })
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json({ orders: result.orders, nextCursor: result.nextCursor })
 })
 
 // Import selected order lines (ids + mappings only; amounts re-fetched server-side).
 router.post('/shopify/import', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
   const result = await importShopifyOrders(pool, req.tenantId, req.body || {}, req.user.id)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
   res.json(result)
 })
 

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { buildFeed } from '../services/calendarFeedService.js'
+import { sendError } from './routeHelpers.js'
 
 const router = Router()
 
@@ -11,7 +12,7 @@ const router = Router()
 // explicitly uncacheable by shared/proxy/browser caches.
 router.get('/:token/feed.ics', async (req, res) => {
   const result = await buildFeed(pool, req.params.token)
-  if (result.error) return res.status(result.error.status).json(result.error.body)
+  if (result.error) return sendError(res, result.error)
 
   res.type('text/calendar; charset=utf-8')
   res.set('Content-Disposition', 'inline; filename="gigbuddy.ics"')

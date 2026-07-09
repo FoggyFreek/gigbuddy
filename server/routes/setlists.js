@@ -3,10 +3,10 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import {
-  parseId,
   parseOrderedSetIds,
   parseReorderItemsPayload,
 } from '../validators/setlistValidators.js'
+import { requireParam, sendError } from './routeHelpers.js'
 import {
   listSetlists,
   searchSetlists,
@@ -26,19 +26,6 @@ import {
 } from '../services/setlistService.js'
 
 const router = Router()
-
-function requireParam(req, res, name) {
-  const id = parseId(req.params[name])
-  if (id === null) {
-    res.status(400).json({ error: `Invalid ${name}` })
-    return null
-  }
-  return id
-}
-
-function sendError(res, error) {
-  res.status(error.status).json(error.body)
-}
 
 // ---------- setlists ----------
 

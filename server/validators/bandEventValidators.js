@@ -1,11 +1,9 @@
 // Input parsing and validation for band-event routes. No DB access here.
+import { parsePositiveId as parseId } from './common.js'
 
 export const EDITABLE_FIELDS = ['title', 'start_date', 'end_date', 'start_time', 'end_time', 'location', 'notes']
 
-export function parseId(val) {
-  const n = Number(val)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+export { parseId }
 
 export function buildEventUpdateFields(body) {
   const fields = []
