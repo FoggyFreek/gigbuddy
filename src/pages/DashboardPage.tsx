@@ -18,11 +18,13 @@ import ChecklistIcon from '@mui/icons-material/Checklist'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
 import DashboardCard from '../components/dashboard/DashboardCard.tsx'
+import MasonryLayout from '../components/shared/MasonryLayout.tsx'
 import CheersBadge from '../components/achievements/CheersBadge.tsx'
 import { getAchievementIcon } from '../components/achievements/achievementIcons.ts'
 import GigMapTile from '../components/dashboard/GigMapTile.tsx'
 import { SOCIALS } from '../components/profile/profileForm.ts'
 import { useAuth } from '../contexts/authContext.ts'
+import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { useSetWideContent } from '../contexts/contentWidthContext.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import type { ThemeMode } from '../contexts/themeModeContext.ts'
@@ -201,6 +203,7 @@ export default function DashboardPage() {
   const bandMemberId = user?.bandMemberId ?? null
   const navigate = useNavigate()
   const theme = useTheme()
+  const isCompact = useCompactLayout()
   const [loading, setLoading] = useState(true)
   const [sections, setSections] = useState<Sections | null>(null)
   const [profile, setProfile] = useState<ProfileData | null>(null)
@@ -377,16 +380,7 @@ export default function DashboardPage() {
         )}
       </Box>
 
-      <Box
-        sx={{
-          // Masonry: cards flow down each column slot, packing shorter cards
-          // together instead of leaving gaps under a row's tallest card
-          // (matches the tasks page layout in TasksTable).
-          columnWidth: 360,
-          columnGap: 3,
-          '& > *': { breakInside: 'avoid', mb: 3 },
-        }}
-      >
+      <MasonryLayout columnWidth={360} spacing={isCompact ? 1.5 : 3}>
         {/* Next gig */}
         <Box>
           <DashboardCard
@@ -691,7 +685,7 @@ export default function DashboardPage() {
           </DashboardCard>
         </Box>
 
-      </Box>
+      </MasonryLayout>
       </Box>
     </Box>
   )

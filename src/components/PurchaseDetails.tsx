@@ -211,6 +211,65 @@ function PurchaseDetailsLoading({ embedded, onClose }: Readonly<PurchaseDetailsL
   )
 }
 
+interface PurchaseCardTitleProps {
+  purchase: Purchase | null
+  receiptNumber: number | null | undefined
+  canEditNumber: boolean
+  onReceiptNumberChange: (value: number | null) => void
+}
+
+function PurchaseCardTitle({ purchase, receiptNumber, canEditNumber, onReceiptNumberChange }: Readonly<PurchaseCardTitleProps>) {
+  const { t } = useTranslation(['purchases', 'common'])
+  const [editingNumber, setEditingNumber] = useState(false)
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+      {editingNumber ? (
+        <TextField
+          size="small"
+          type="number"
+          autoFocus
+          value={receiptNumber ?? ''}
+          onChange={(e) => onReceiptNumberChange(Number(e.target.value) || null)}
+          onBlur={() => setEditingNumber(false)}
+          slotProps={{ htmlInput: { min: 1, step: 1 } }}
+          sx={{ width: 120 }}
+        />
+      ) : (
+        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+          {t($ => $.detail.heading, { number: purchase?.receipt_number ?? '' })}
+        </Typography>
+      )}
+      {canEditNumber && !editingNumber && (
+        <IconButton size="small" onClick={() => setEditingNumber(true)} aria-label={t($ => $.detail.editReceiptNumber)}>
+          <EditOutlinedIcon fontSize="small" />
+        </IconButton>
+      )}
+      {purchase && (
+        <Chip size="small" color={purchaseStatusColor(purchase.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} label={purchase.status ? t($ => $.rawStatus[purchase.status as PurchaseStatus]) : ''} />
+      )}
+    </Box>
+  )
+}
+
+// Receipt preview left of the form on desktop, stacked full-width in compact layout.
+function embeddedRowSx(isCompact: boolean) {
+  return {
+    display: 'flex',
+    flexDirection: isCompact ? 'column' : 'row',
+    gap: 3,
+    alignItems: isCompact ? 'flex-start' : 'stretch',
+  } as const
+}
+
+function embeddedColumnSx(isCompact: boolean, desktopFlex: string) {
+  return {
+    flex: isCompact ? '0 0 auto' : desktopFlex,
+    minWidth: 0,
+    width: isCompact ? '100%' : 'auto',
+  } as const
+}
+
 interface PurchaseDetailsProps {
   mode: 'create' | 'edit'
   purchaseId?: Id
@@ -224,41 +283,19 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
   // usePurchaseFormState always expects a purchaseId; in practice mode='create'
   // always pairs with a real id from NewPurchaseDialog.
   const s: UsePurchaseFormStateResult = usePurchaseFormState({ purchaseId: purchaseId!, onClose, onPurchaseUpdate })
-  const [editingNumber, setEditingNumber] = useState(false)
   const isCompact = useCompactLayout()
 
   if (s.loading) return <PurchaseDetailsLoading embedded={embedded} onClose={onClose} />
 
   const canRegister = s.purchase?.status === 'approved'
-  const canEditNumber = !s.readOnly
 
   const cardTitle = (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-      {editingNumber ? (
-        <TextField
-          size="small"
-          type="number"
-          autoFocus
-          value={s.form?.receipt_number ?? ''}
-          onChange={(e) => s.patchForm({ receipt_number: Number(e.target.value) || null })}
-          onBlur={() => setEditingNumber(false)}
-          slotProps={{ htmlInput: { min: 1, step: 1 } }}
-          sx={{ width: 120 }}
-        />
-      ) : (
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          {t($ => $.detail.heading, { number: s.purchase?.receipt_number ?? '' })}
-        </Typography>
-      )}
-      {canEditNumber && !editingNumber && (
-        <IconButton size="small" onClick={() => setEditingNumber(true)} aria-label={t($ => $.detail.editReceiptNumber)}>
-          <EditOutlinedIcon fontSize="small" />
-        </IconButton>
-      )}
-      {s.purchase && (
-        <Chip size="small" color={purchaseStatusColor(s.purchase.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} label={s.purchase.status ? t($ => $.rawStatus[s.purchase!.status as PurchaseStatus]) : ''} />
-      )}
-    </Box>
+    <PurchaseCardTitle
+      purchase={s.purchase}
+      receiptNumber={s.form?.receipt_number}
+      canEditNumber={!s.readOnly}
+      onReceiptNumberChange={(value) => s.patchForm({ receipt_number: value })}
+    />
   )
 
   const registerPaymentButton = !s.isPaid && canRegister && (
@@ -375,11 +412,11 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
   if (embedded) {
     return (
       <>
-        <Box sx={{ display: 'flex', flexDirection: isCompact ? 'column' : 'row', gap: 3, alignItems: isCompact ? 'flex-start' : 'stretch' }}>
-          <Box sx={{ flex: isCompact ? '0 0 auto' : '1 1 45%', minWidth: 0, width: isCompact ? '100%' : 'auto' }}>
+        <Box sx={embeddedRowSx(isCompact)}>
+          <Box sx={embeddedColumnSx(isCompact, '1 1 45%')}>
             {attachmentsPanel}
           </Box>
-          <Box sx={{ flex: isCompact ? '0 0 auto' : '1 1 55%', minWidth: 0, width: isCompact ? '100%' : 'auto' }}>
+          <Box sx={embeddedColumnSx(isCompact, '1 1 55%')}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, mb: 2 }}>
               {registerPaymentButton}
               {saveActions}

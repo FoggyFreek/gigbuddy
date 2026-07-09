@@ -35,6 +35,65 @@ function emptyCounts(tenantCount) {
   }
 }
 
+function scanEncryptedCredential(row, credential, envelope, config, counts, operations) {
+  try {
+    const value = decryptIntegrationSecret(envelope, row.id, credential.type, config)
+    if (envelope.kid !== config.activeKeyId) {
+      counts.reEncryptionNeeded += 1
+      operations.push({ kind: 'reencrypt', row, credential, value })
+    }
+  } catch {
+    counts.corrupt += 1
+  }
+}
+
+function scanCredential(row, credential, config, counts, operations) {
+  const plaintext = row[credential.legacy]
+  const envelope = row[credential.encrypted]
+  if (plaintext !== null) counts.plaintext += 1
+  if (envelope !== null) counts.encrypted += 1
+  if (plaintext !== null && envelope !== null) {
+    counts.conflicts += 1
+    return
+  }
+  if (envelope !== null) {
+    scanEncryptedCredential(row, credential, envelope, config, counts, operations)
+  } else if (plaintext !== null) {
+    counts.migrationNeeded += 1
+    operations.push({ kind: 'migrate', row, credential, value: plaintext })
+  }
+}
+
+async function applyOperation(executor, operation, config) {
+  const { row, credential, value, kind } = operation
+  const envelope = encryptIntegrationSecret(value, row.id, credential.type, config)
+  decryptIntegrationSecret(envelope, row.id, credential.type, config)
+  await executor.query(
+    `UPDATE tenants
+        SET ${credential.encrypted} = $1::jsonb,
+            ${credential.legacy} = NULL,
+            ${credential.changedAt} = ${kind === 'migrate' ? 'COALESCE(' + credential.changedAt + ', NOW())' : credential.changedAt},
+            updated_at = NOW()
+      WHERE id = $2`,
+    [JSON.stringify(envelope), row.id],
+  )
+}
+
+async function applyOperations(executor, operations, config, counts) {
+  for (const operation of operations) {
+    await applyOperation(executor, operation, config)
+    if (operation.kind === 'migrate') counts.migrated += 1
+    else counts.reEncrypted += 1
+  }
+  const { rows: [remaining] } = await executor.query(
+    `SELECT ((COUNT(*) FILTER (WHERE mollie_api_key IS NOT NULL))
+            + (COUNT(*) FILTER (WHERE shopify_client_secret IS NOT NULL)))::int AS count
+       FROM tenants`,
+  )
+  counts.plaintextRemaining = remaining.count
+  if (counts.plaintextRemaining !== 0) throw new Error('integration_secret_plaintext_remaining')
+}
+
 export async function migrateIntegrationSecrets(executor, { apply = false } = {}) {
   const config = parseIntegrationSecretsConfig()
   await executor.query('BEGIN')
@@ -47,31 +106,9 @@ export async function migrateIntegrationSecrets(executor, { apply = false } = {}
     )
     const counts = emptyCounts(rows.length)
     const operations = []
-
     for (const row of rows) {
       for (const credential of CREDENTIALS) {
-        const plaintext = row[credential.legacy]
-        const envelope = row[credential.encrypted]
-        if (plaintext !== null) counts.plaintext += 1
-        if (envelope !== null) counts.encrypted += 1
-        if (plaintext !== null && envelope !== null) {
-          counts.conflicts += 1
-          continue
-        }
-        if (envelope !== null) {
-          try {
-            const value = decryptIntegrationSecret(envelope, row.id, credential.type, config)
-            if (envelope.kid !== config.activeKeyId) {
-              counts.reEncryptionNeeded += 1
-              operations.push({ kind: 'reencrypt', row, credential, value })
-            }
-          } catch {
-            counts.corrupt += 1
-          }
-        } else if (plaintext !== null) {
-          counts.migrationNeeded += 1
-          operations.push({ kind: 'migrate', row, credential, value: plaintext })
-        }
+        scanCredential(row, credential, config, counts, operations)
       }
     }
 
@@ -81,29 +118,7 @@ export async function migrateIntegrationSecrets(executor, { apply = false } = {}
     }
 
     if (apply) {
-      for (const operation of operations) {
-        const { row, credential, value, kind } = operation
-        const envelope = encryptIntegrationSecret(value, row.id, credential.type, config)
-        decryptIntegrationSecret(envelope, row.id, credential.type, config)
-        await executor.query(
-          `UPDATE tenants
-              SET ${credential.encrypted} = $1::jsonb,
-                  ${credential.legacy} = NULL,
-                  ${credential.changedAt} = ${kind === 'migrate' ? 'COALESCE(' + credential.changedAt + ', NOW())' : credential.changedAt},
-                  updated_at = NOW()
-            WHERE id = $2`,
-          [JSON.stringify(envelope), row.id],
-        )
-        if (kind === 'migrate') counts.migrated += 1
-        else counts.reEncrypted += 1
-      }
-      const { rows: [remaining] } = await executor.query(
-        `SELECT ((COUNT(*) FILTER (WHERE mollie_api_key IS NOT NULL))
-                + (COUNT(*) FILTER (WHERE shopify_client_secret IS NOT NULL)))::int AS count
-           FROM tenants`,
-      )
-      counts.plaintextRemaining = remaining.count
-      if (counts.plaintextRemaining !== 0) throw new Error('integration_secret_plaintext_remaining')
+      await applyOperations(executor, operations, config, counts)
       await executor.query('COMMIT')
     } else {
       await executor.query('ROLLBACK')

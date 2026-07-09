@@ -109,6 +109,125 @@ function CheckoutReturn() {
   )
 }
 
+interface StepContentProps {
+  activeStep: number
+  ready: boolean
+  loadError: boolean
+  plans: SubscriptionPlan[]
+  interval: BillingInterval
+  onIntervalChange: (interval: BillingInterval) => void
+  selectedPlanId: number | null
+  onSelectPlan: (id: number | null) => void
+  selectedPlan: SubscriptionPlan | null
+  termsAgreed: boolean
+  onTermsAgreedChange: (agreed: boolean) => void
+  onOpenTerms: () => void
+  bandName: string
+  onBandNameChange: (name: string) => void
+  onboardingTenant: Tenant | null
+  logo: { file: File; previewUrl: string } | null
+  onLogoFileChange: (file: File | null) => void
+}
+
+// The active wizard step (or the loading spinner before the wizard is ready).
+function StepContent({
+  activeStep, ready, loadError, plans, interval, onIntervalChange, selectedPlanId, onSelectPlan,
+  selectedPlan, termsAgreed, onTermsAgreedChange, onOpenTerms, bandName, onBandNameChange,
+  onboardingTenant, logo, onLogoFileChange,
+}: Readonly<StepContentProps>) {
+  if (!ready) {
+    if (loadError) return null
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress />
+      </Box>
+    )
+  }
+  if (activeStep === 0) {
+    return (
+      <WelcomeStep
+        plans={plans}
+        interval={interval}
+        onIntervalChange={onIntervalChange}
+        selectedPlanId={selectedPlanId}
+        onSelectPlan={onSelectPlan}
+        termsAgreed={termsAgreed}
+        onTermsAgreedChange={onTermsAgreedChange}
+        onOpenTerms={onOpenTerms}
+      />
+    )
+  }
+  if (activeStep === 1) {
+    return (
+      <BandStep
+        bandName={bandName}
+        onBandNameChange={onBandNameChange}
+        resumedSlug={onboardingTenant?.slug ?? null}
+        logoFile={logo?.file ?? null}
+        logoPreviewUrl={logo?.previewUrl ?? null}
+        onLogoFileChange={onLogoFileChange}
+      />
+    )
+  }
+  if (!selectedPlan) return null
+  return (
+    <SummaryStep
+      plan={selectedPlan}
+      interval={interval}
+      bandName={bandName}
+      resumedSlug={onboardingTenant?.slug ?? null}
+      resumedBandName={onboardingTenant?.band_name ?? null}
+      logoFileName={logo?.file.name ?? null}
+    />
+  )
+}
+
+interface WizardControlsProps {
+  activeStep: number
+  busy: boolean
+  termsAgreed: boolean
+  bandName: string
+  selectedPlan: SubscriptionPlan | null
+  onBack: () => void
+  onWelcomeNext: () => void
+  onGoSummary: () => void
+  onConfirm: () => void
+}
+
+// Back/next row: per-step next label, gating, and dispatch.
+function WizardControls({ activeStep, busy, termsAgreed, bandName, selectedPlan, onBack, onWelcomeNext, onGoSummary, onConfirm }: Readonly<WizardControlsProps>) {
+  const { t } = useTranslation(['onboarding', 'common'])
+  const paidSelected = Boolean(selectedPlan && !selectedPlan.is_fallback)
+
+  const nextDisabled =
+    busy ||
+    (activeStep === 0 && (!termsAgreed || !selectedPlan)) ||
+    (activeStep === 1 && bandName.trim() === '')
+
+  const handleNext = () => {
+    if (activeStep === 0) onWelcomeNext()
+    else if (activeStep === 1) onGoSummary()
+    else onConfirm()
+  }
+
+  const nextLabel = [
+    paidSelected ? t($ => $.welcome.startTrial) : t($ => $.welcome.startFree),
+    t($ => $.nextStep),
+    paidSelected ? t($ => $.summary.confirmPaid) : t($ => $.summary.confirmFree),
+  ][Math.min(activeStep, 2)]
+
+  return (
+    <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+      <Button disabled={busy || activeStep === 0} onClick={onBack}>
+        {t($ => $.common.actions.back)}
+      </Button>
+      <Button variant="contained" disabled={nextDisabled} onClick={handleNext}>
+        {nextLabel}
+      </Button>
+    </Stack>
+  )
+}
+
 export default function OnboardingPage() {
   const { t } = useTranslation(['onboarding', 'common'])
   const navigate = useNavigate()
@@ -212,32 +331,38 @@ export default function OnboardingPage() {
     }
   }, [termsAgreed, selectedPlan, user?.termsVersion, t])
 
+  // Create the onboarding band unless one was already created/resumed. Returns
+  // null when a handled dead end (band cap / onboarding disabled) was shown.
+  const ensureOnboardingTenant = useCallback(async (): Promise<Tenant | null> => {
+    if (onboardingTenant) return onboardingTenant
+    try {
+      const tenant = await createOwnedTenant({ band_name: bandName.trim(), onboarding: true })
+      setOnboardingTenant(tenant)
+      return tenant
+    } catch (err) {
+      const code = (err as { code?: string }).code
+      if (code === 'band_limit_reached') {
+        // Without a resume pointer this user already owns an unrelated
+        // band — never adopt it; onboarding isn't the place to manage it.
+        setCapBlocked(true)
+        return null
+      }
+      if (code === 'tenant_onboarding_disabled') {
+        setTenantOnboardingEnabled(false)
+        setActiveStep(0)
+        return null
+      }
+      throw err
+    }
+  }, [onboardingTenant, bandName])
+
   const handleConfirm = useCallback(async () => {
     if (!selectedPlan) return
     setBusy(true)
     setError(null)
     try {
-      let tenant = onboardingTenant
-      if (!tenant) {
-        try {
-          tenant = await createOwnedTenant({ band_name: bandName.trim(), onboarding: true })
-          setOnboardingTenant(tenant)
-        } catch (err) {
-          const code = (err as { code?: string }).code
-          if (code === 'band_limit_reached') {
-            // Without a resume pointer this user already owns an unrelated
-            // band — never adopt it; onboarding isn't the place to manage it.
-            setCapBlocked(true)
-            return
-          }
-          if (code === 'tenant_onboarding_disabled') {
-            setTenantOnboardingEnabled(false)
-            setActiveStep(0)
-            return
-          }
-          throw err
-        }
-      }
+      const tenant = await ensureOnboardingTenant()
+      if (!tenant) return
       if (tenant.id !== undefined) await switchTenant(tenant.id)
       if (logo) {
         try {
@@ -264,31 +389,7 @@ export default function OnboardingPage() {
     } finally {
       setBusy(false)
     }
-  }, [selectedPlan, onboardingTenant, bandName, logo, interval, switchTenant, refreshUser, navigate, t])
-
-  const nextDisabled =
-    busy ||
-    (activeStep === 0 && (!termsAgreed || !selectedPlan)) ||
-    (activeStep === 1 && bandName.trim() === '')
-
-  const handleNext = () => {
-    if (activeStep === 0) void handleWelcomeNext()
-    else if (activeStep === 1) setActiveStep(2)
-    else void handleConfirm()
-  }
-
-  let nextLabel: string
-  if (activeStep === 0) {
-    nextLabel = selectedPlan && !selectedPlan.is_fallback
-      ? t($ => $.welcome.startTrial)
-      : t($ => $.welcome.startFree)
-  } else if (activeStep === 1) {
-    nextLabel = t($ => $.nextStep)
-  } else {
-    nextLabel = selectedPlan && !selectedPlan.is_fallback
-      ? t($ => $.summary.confirmPaid)
-      : t($ => $.summary.confirmFree)
-  }
+  }, [selectedPlan, ensureOnboardingTenant, logo, interval, switchTenant, refreshUser, navigate, t])
 
   return (
     <Box
@@ -344,59 +445,40 @@ export default function OnboardingPage() {
               </Stack>
             ) : (
               <>
-                {!ready && !loadError && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress />
-                  </Box>
-                )}
-
-                {ready && activeStep === 0 && (
-                  <WelcomeStep
-                    plans={sortedPlans}
-                    interval={interval}
-                    onIntervalChange={setInterval}
-                    selectedPlanId={selectedPlanId}
-                    onSelectPlan={setSelectedPlanId}
-                    termsAgreed={termsAgreed}
-                    onTermsAgreedChange={setTermsAgreed}
-                    onOpenTerms={() => setTermsOpen(true)}
-                  />
-                )}
-                {ready && activeStep === 1 && (
-                  <BandStep
-                    bandName={bandName}
-                    onBandNameChange={setBandName}
-                    resumedSlug={onboardingTenant?.slug ?? null}
-                    logoFile={logo?.file ?? null}
-                    logoPreviewUrl={logo?.previewUrl ?? null}
-                    onLogoFileChange={handleLogoFileChange}
-                  />
-                )}
-                {ready && activeStep === 2 && selectedPlan && (
-                  <SummaryStep
-                    plan={selectedPlan}
-                    interval={interval}
-                    bandName={bandName}
-                    resumedSlug={onboardingTenant?.slug ?? null}
-                    resumedBandName={onboardingTenant?.band_name ?? null}
-                    logoFileName={logo?.file.name ?? null}
-                  />
-                )}
+                <StepContent
+                  activeStep={activeStep}
+                  ready={ready}
+                  loadError={loadError}
+                  plans={sortedPlans}
+                  interval={interval}
+                  onIntervalChange={setInterval}
+                  selectedPlanId={selectedPlanId}
+                  onSelectPlan={setSelectedPlanId}
+                  selectedPlan={selectedPlan}
+                  termsAgreed={termsAgreed}
+                  onTermsAgreedChange={setTermsAgreed}
+                  onOpenTerms={() => setTermsOpen(true)}
+                  bandName={bandName}
+                  onBandNameChange={setBandName}
+                  onboardingTenant={onboardingTenant}
+                  logo={logo}
+                  onLogoFileChange={handleLogoFileChange}
+                />
 
                 {error && <Alert severity="error">{error}</Alert>}
 
                 {ready && (
-                  <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
-                    <Button
-                      disabled={busy || activeStep === 0}
-                      onClick={() => setActiveStep((s) => Math.max(0, s - 1))}
-                    >
-                      {t($ => $.common.actions.back)}
-                    </Button>
-                    <Button variant="contained" disabled={nextDisabled} onClick={handleNext}>
-                      {nextLabel}
-                    </Button>
-                  </Stack>
+                  <WizardControls
+                    activeStep={activeStep}
+                    busy={busy}
+                    termsAgreed={termsAgreed}
+                    bandName={bandName}
+                    selectedPlan={selectedPlan}
+                    onBack={() => setActiveStep((s) => Math.max(0, s - 1))}
+                    onWelcomeNext={() => { void handleWelcomeNext() }}
+                    onGoSummary={() => setActiveStep(2)}
+                    onConfirm={() => { void handleConfirm() }}
+                  />
                 )}
               </>
             )}

@@ -98,6 +98,20 @@ export async function createTenant(createdByUserId, body) {
   }
 }
 
+// Owner assignment validation: null (detach) is always allowed; a non-null id
+// must be a positive integer referencing an existing user. Returns the error
+// message or null.
+async function ownerFieldError(db, ownerUserId) {
+  if (ownerUserId === null) return null
+  if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) {
+    return 'owner_user_id must be an integer or null'
+  }
+  if (!(await userExists(db, ownerUserId))) {
+    return 'owner_user_id references a non-existent user'
+  }
+  return null
+}
+
 export async function patchTenant(db, tenantId, body) {
   const built = buildTenantUpdateFields(body)
   if (built.error) return badRequest(built.error)
@@ -106,17 +120,10 @@ export async function patchTenant(db, tenantId, body) {
   // the subscription model. null detaches the owner (back to no enforcement).
   const hasOwnerField = body && Object.hasOwn(body, 'owner_user_id')
   if (hasOwnerField) {
-    const ownerUserId = body.owner_user_id
-    if (ownerUserId !== null) {
-      if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) {
-        return badRequest('owner_user_id must be an integer or null')
-      }
-      if (!(await userExists(db, ownerUserId))) {
-        return badRequest('owner_user_id references a non-existent user')
-      }
-    }
+    const error = await ownerFieldError(db, body.owner_user_id)
+    if (error) return badRequest(error)
     built.fields.push(`owner_user_id = $${built.values.length + 1}`)
-    built.values.push(ownerUserId)
+    built.values.push(body.owner_user_id)
   }
 
   if (!built.fields.length) return badRequest('Nothing to update')

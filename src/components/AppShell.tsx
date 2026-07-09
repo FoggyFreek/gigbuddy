@@ -212,11 +212,30 @@ export default function AppShell() {
     [has, financeReadOnly],
   )
 
+  // Shape one nav entry for rendering. Items carrying a `feature` the plan
+  // lacks stay VISIBLE but render locked: a diamond icon and a link to the
+  // upsell page.
+  const toNavChild = useCallback(
+    (c: NavChildEntry) => {
+      const locked = !featureAccessible(c.feature)
+      return {
+        // Stable per-item identity for React keys. `to` can't serve:
+        // every locked item shares the same upsell route, and duplicate
+        // keys duplicate items when a tenant switch relocks/unlocks.
+        key: c.i18nKey,
+        to: locked ? `/upgrade/${c.feature}` : c.to,
+        icon: c.icon,
+        label: t($ => $.items[c.i18nKey]),
+        locked,
+      }
+    },
+    [featureAccessible, t],
+  )
+
   // Nav items carrying a `permission` are hidden unless the active role grants
-  // it (role, not tier). Items carrying a `feature` the plan lacks stay VISIBLE
-  // but render locked: a diamond icon and a link to the upsell page. Routes sit
-  // behind RequirePermission and the API behind the matching gate — this is
-  // presentation, not the defense.
+  // it (role, not tier); feature-locked items stay visible (see toNavChild).
+  // Routes sit behind RequirePermission and the API behind the matching gate —
+  // this is presentation, not the defense.
   const visibleGroups = useMemo(
     () =>
       NAV_GROUPS
@@ -226,22 +245,10 @@ export default function AppShell() {
           label: t($ => $.groups[g.key]),
           children: g.children
             .filter((c) => !c.permission || can(c.permission))
-            .map((c) => {
-              const locked = !featureAccessible(c.feature)
-              return {
-                // Stable per-item identity for React keys. `to` can't serve:
-                // every locked item shares the same upsell route, and duplicate
-                // keys duplicate items when a tenant switch relocks/unlocks.
-                key: c.i18nKey,
-                to: locked ? `/upgrade/${c.feature}` : c.to,
-                icon: c.icon,
-                label: t($ => $.items[c.i18nKey]),
-                locked,
-              }
-            }),
+            .map(toNavChild),
         }))
         .filter((g) => g.children.length > 0),
-    [can, featureAccessible, t],
+    [can, toNavChild, t],
   )
 
   // Single-open accordion: the group containing the active route auto-expands,

@@ -54,6 +54,25 @@ async function notifyUnlocked(tenantId, insertedRows) {
   }
 }
 
+// Evaluate the still-locked definitions against fresh facts and persist any
+// new unlocks, updating unlockedAtByKey in place.
+async function unlockNewAchievements(db, tenantId, unlockedAtByKey, isBaselinePass) {
+  const facts = await buildFacts(db, tenantId)
+  const unlockedKeys = new Set(unlockedAtByKey.keys())
+  const newKeys = []
+  for (const definition of ACHIEVEMENT_DEFINITIONS) {
+    if (unlockedKeys.has(definition.key)) continue
+    if (safeTest(definition, facts, unlockedKeys)) {
+      unlockedKeys.add(definition.key)
+      newKeys.push(definition.key)
+    }
+  }
+  if (!newKeys.length) return
+  const inserted = await insertUnlocked(db, tenantId, newKeys)
+  for (const row of inserted) unlockedAtByKey.set(row.achievement_key, row.unlocked_at)
+  if (!isBaselinePass) await notifyUnlocked(tenantId, inserted)
+}
+
 export async function listAchievements(db, tenantId) {
   const cached = fullyUnlockedCache.get(tenantId)
   if (cached) return cached
@@ -67,21 +86,7 @@ export async function listAchievements(db, tenantId) {
   const isBaselinePass = unlockedRows.length === 0
 
   if (unlockedAtByKey.size < ACHIEVEMENT_DEFINITIONS.length) {
-    const facts = await buildFacts(db, tenantId)
-    const unlockedKeys = new Set(unlockedAtByKey.keys())
-    const newKeys = []
-    for (const definition of ACHIEVEMENT_DEFINITIONS) {
-      if (unlockedKeys.has(definition.key)) continue
-      if (safeTest(definition, facts, unlockedKeys)) {
-        unlockedKeys.add(definition.key)
-        newKeys.push(definition.key)
-      }
-    }
-    if (newKeys.length) {
-      const inserted = await insertUnlocked(db, tenantId, newKeys)
-      for (const row of inserted) unlockedAtByKey.set(row.achievement_key, row.unlocked_at)
-      if (!isBaselinePass) await notifyUnlocked(tenantId, inserted)
-    }
+    await unlockNewAchievements(db, tenantId, unlockedAtByKey, isBaselinePass)
   }
 
   const payload = buildPayload(unlockedAtByKey)
