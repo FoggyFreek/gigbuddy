@@ -681,11 +681,14 @@ export type AchievementKey =
   | 'five_city_shuffle'
   | 'the_van_has_opinions'
   | 'international_noise_complaint'
+  | 'took_this_band_to_town'
   | 'please_pay_the_piper'
+  | 'power_to_the_payments'
   | 'gear_acquisition_syndrome'
   | 'shirts_before_hits'
   | 'box_set_behavior'
   | 'cash_from_the_merch_pit'
+  | 'sync_that_chop_shop'
   | 'black_ink_sabbath'
   | 'the_blues_ledger'
   | 'welcome_to_the_giggle'
@@ -693,6 +696,7 @@ export type AchievementKey =
   | 'still_standing_still_loud'
   | 'five_songs_and_a_prayer'
   | 'setlist_match_fire'
+  | 'my_personal_high_note'
   | 'fifty_people_who_might_answer'
 
 // GET /api/achievements row; unlocked_at is null while the goal is unmet.

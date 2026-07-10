@@ -112,6 +112,25 @@ async function postApprovedJournal(overrides) {
   return create.body
 }
 
+async function addPersonalSetlistNote(tenantId, userId) {
+  await pool.query(
+    `WITH song AS (
+       INSERT INTO songs (tenant_id, title) VALUES ($1, 'High Note') RETURNING id
+     ), setlist AS (
+       INSERT INTO setlists (tenant_id, name) VALUES ($1, 'Achievement Set') RETURNING id
+     ), set_group AS (
+       INSERT INTO setlist_sets (setlist_id, tenant_id, name)
+       SELECT id, $1, 'Set 1' FROM setlist RETURNING id
+     ), item AS (
+       INSERT INTO setlist_items (set_id, tenant_id, item_type, song_id)
+       SELECT set_group.id, $1, 'song', song.id FROM set_group, song RETURNING id
+     )
+     INSERT INTO setlist_item_notes (setlist_item_id, tenant_id, user_id, note)
+     SELECT id, $1, $2, 'Watch the bridge' FROM item`,
+    [tenantId, userId],
+  )
+}
+
 // ============================================================
 
 describe('GET /api/achievements', () => {
@@ -218,6 +237,60 @@ describe('GET /api/achievements', () => {
     expect(byKey(list, 'black_ink_sabbath').unlocked_at).not.toBeNull()
   })
 
+  it('unlocks the personal-note and configured-integration achievements', async () => {
+    await getAchievements() // baseline
+    await addPersonalSetlistNote(seed.tenantA.id, seed.userA.id)
+    await pool.query(
+      `UPDATE tenants SET
+         bandsintown_app_id_encrypted = '{}'::jsonb,
+         shopify_client_id = 'client-id',
+         mollie_api_key_encrypted = '{}'::jsonb
+       WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+
+    let list = await getAchievements()
+    expect(byKey(list, 'my_personal_high_note').unlocked_at).not.toBeNull()
+    expect(byKey(list, 'took_this_band_to_town').unlocked_at).not.toBeNull()
+    expect(byKey(list, 'power_to_the_payments').unlocked_at).not.toBeNull()
+    // A single Shopify field does not make the integration usable.
+    expect(byKey(list, 'sync_that_chop_shop').unlocked_at).toBeNull()
+
+    await pool.query(
+      `UPDATE tenants SET
+         shopify_client_secret_encrypted = '{}'::jsonb,
+         shopify_shop_domain = 'achievement.myshopify.com'
+       WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+    list = await getAchievements()
+    expect(byKey(list, 'sync_that_chop_shop').unlocked_at).not.toBeNull()
+  })
+
+  it('does not unlock note or integration achievements from another tenant\'s data', async () => {
+    await addPersonalSetlistNote(seed.tenantA.id, seed.userA.id)
+    await pool.query(
+      `UPDATE tenants SET
+         bandsintown_app_id_encrypted = '{}'::jsonb,
+         shopify_client_id = 'client-id',
+         shopify_client_secret_encrypted = '{}'::jsonb,
+         shopify_shop_domain = 'achievement.myshopify.com',
+         mollie_api_key_encrypted = '{}'::jsonb
+       WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+
+    const list = await getAchievements(asUserB)
+    for (const key of [
+      'my_personal_high_note',
+      'took_this_band_to_town',
+      'sync_that_chop_shop',
+      'power_to_the_payments',
+    ]) {
+      expect(byKey(list, key).unlocked_at, key).toBeNull()
+    }
+  })
+
   it('suppresses notifications on the baseline pass but notifies later unlocks', async () => {
     await getAchievements() // baseline: unlocks welcome/rehearsal/event, no pings
     let { rows } = await pool.query(
@@ -245,6 +318,20 @@ describe('GET /api/achievements', () => {
 })
 
 describe('achievement definitions registry', () => {
+  it('defines the new achievements with their canonical titles and cheers', () => {
+    expect(ACHIEVEMENT_DEFINITIONS.filter((d) => [
+      'my_personal_high_note',
+      'took_this_band_to_town',
+      'sync_that_chop_shop',
+      'power_to_the_payments',
+    ].includes(d.key)).map(({ key, title, cheers }) => ({ key, title, cheers }))).toEqual([
+      { key: 'took_this_band_to_town', title: 'Took This Band to Town', cheers: 3 },
+      { key: 'power_to_the_payments', title: 'Power to the Payments', cheers: 3 },
+      { key: 'sync_that_chop_shop', title: 'Sync That Chop Shop', cheers: 3 },
+      { key: 'my_personal_high_note', title: 'My Personal High Note', cheers: 1 },
+    ])
+  })
+
   it('has unique keys, valid categories, and cheers between 1 and 10', () => {
     const keys = ACHIEVEMENT_DEFINITIONS.map((d) => d.key)
     expect(new Set(keys).size).toBe(keys.length)

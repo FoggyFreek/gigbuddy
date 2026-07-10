@@ -12,6 +12,15 @@ async function tenantFacts(db, tenantId) {
   const { rows } = await db.query(
     `SELECT band_name, bio, logo_path, logo_dark_path, avatar_path, banner_path,
             instagram_handle, facebook_handle, tiktok_handle, youtube_handle, spotify_handle,
+            (bandsintown_app_id_encrypted IS NOT NULL OR
+              NULLIF(BTRIM(bandsintown_app_id), '') IS NOT NULL) AS bandsintown_configured,
+            (NULLIF(BTRIM(shopify_client_id), '') IS NOT NULL AND
+              (shopify_client_secret_encrypted IS NOT NULL OR
+                NULLIF(BTRIM(shopify_client_secret), '') IS NOT NULL) AND
+              NULLIF(BTRIM(shopify_shop_domain), '') IS NOT NULL) AS shopify_configured,
+            (mollie_api_key_retained_at IS NULL AND
+              (mollie_api_key_encrypted IS NOT NULL OR
+                NULLIF(BTRIM(mollie_api_key), '') IS NOT NULL)) AS mollie_configured,
             created_at
        FROM tenants
       WHERE id = $1`,
@@ -37,6 +46,11 @@ async function tenantFacts(db, tenantId) {
       hasAvatar: nonBlank(t.avatar_path),
       hasBanner: nonBlank(t.banner_path),
       socialsCount,
+    },
+    integrations: {
+      bandsintownConfigured: t.bandsintown_configured,
+      shopifyConfigured: t.shopify_configured,
+      mollieConfigured: t.mollie_configured,
     },
     tenant: { ageDays },
   }
@@ -155,11 +169,23 @@ async function repertoireFacts(db, tenantId) {
                 JOIN setlist_sets ss ON ss.id = si.set_id AND ss.tenant_id = si.tenant_id
                WHERE si.tenant_id = $1 AND si.item_type = 'song'
                GROUP BY ss.setlist_id
-            ) counts), 0)::int AS max_setlist_songs`,
+            ) counts), 0)::int AS max_setlist_songs,
+            EXISTS (
+              SELECT 1
+                FROM setlist_item_notes sin
+                JOIN setlist_items si
+                  ON si.id = sin.setlist_item_id AND si.tenant_id = sin.tenant_id
+               WHERE sin.tenant_id = $1 AND si.item_type = 'song'
+                 AND BTRIM(sin.note) <> ''
+            ) AS has_personal_setlist_note`,
     [tenantId],
   )
   return {
-    repertoire: { songs: rows[0].songs, maxSetlistSongs: rows[0].max_setlist_songs },
+    repertoire: {
+      songs: rows[0].songs,
+      maxSetlistSongs: rows[0].max_setlist_songs,
+      hasPersonalSetlistNote: rows[0].has_personal_setlist_note,
+    },
   }
 }
 

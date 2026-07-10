@@ -30,6 +30,10 @@ import LibraryMusicOutlinedIcon from '@mui/icons-material/LibraryMusicOutlined'
 import QueueMusicOutlinedIcon from '@mui/icons-material/QueueMusicOutlined'
 import ContactsOutlinedIcon from '@mui/icons-material/ContactsOutlined'
 import EmojiEventsOutlinedIcon from '@mui/icons-material/EmojiEventsOutlined'
+import EditNoteOutlinedIcon from '@mui/icons-material/EditNoteOutlined'
+import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined'
+import SyncOutlinedIcon from '@mui/icons-material/SyncOutlined'
+import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined'
 import type { AchievementCategory, AchievementKey } from '../../types/entities.ts'
 
 export const ACHIEVEMENT_KEY_ICONS: Partial<Record<AchievementKey, SvgIconComponent>> = {
@@ -50,11 +54,14 @@ export const ACHIEVEMENT_KEY_ICONS: Partial<Record<AchievementKey, SvgIconCompon
   five_city_shuffle: LocationCityOutlinedIcon,
   the_van_has_opinions: MapOutlinedIcon,
   international_noise_complaint: PublicOutlinedIcon,
+  took_this_band_to_town: TravelExploreOutlinedIcon,
   please_pay_the_piper: ReceiptLongOutlinedIcon,
+  power_to_the_payments: PaymentsOutlinedIcon,
   gear_acquisition_syndrome: ShoppingCartOutlinedIcon,
   shirts_before_hits: CheckroomOutlinedIcon,
   box_set_behavior: Inventory2OutlinedIcon,
   cash_from_the_merch_pit: PointOfSaleOutlinedIcon,
+  sync_that_chop_shop: SyncOutlinedIcon,
   black_ink_sabbath: TrendingUpOutlinedIcon,
   the_blues_ledger: TrendingDownOutlinedIcon,
   welcome_to_the_giggle: WavingHandOutlinedIcon,
@@ -62,6 +69,7 @@ export const ACHIEVEMENT_KEY_ICONS: Partial<Record<AchievementKey, SvgIconCompon
   still_standing_still_loud: MilitaryTechOutlinedIcon,
   five_songs_and_a_prayer: LibraryMusicOutlinedIcon,
   setlist_match_fire: QueueMusicOutlinedIcon,
+  my_personal_high_note: EditNoteOutlinedIcon,
   fifty_people_who_might_answer: ContactsOutlinedIcon,
 }
 

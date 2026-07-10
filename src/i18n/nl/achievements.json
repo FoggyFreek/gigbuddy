@@ -86,9 +86,17 @@
       "title": "International Noise Complaint",
       "description": "Speel in meer dan één land."
     },
+    "took_this_band_to_town": {
+      "title": "Took This Band to Town",
+      "description": "Configureer de Bandsintown-integratie."
+    },
     "please_pay_the_piper": {
       "title": "Please Pay the Piper",
       "description": "Verstuur je eerste factuur."
+    },
+    "power_to_the_payments": {
+      "title": "Power to the Payments",
+      "description": "Configureer de Mollie-integratie."
     },
     "gear_acquisition_syndrome": {
       "title": "Gear Acquisition Syndrome",
@@ -105,6 +113,10 @@
     "cash_from_the_merch_pit": {
       "title": "Cash from the Merch Pit",
       "description": "Verkoop je eerste merchandise."
+    },
+    "sync_that_chop_shop": {
+      "title": "Sync That Chop Shop",
+      "description": "Configureer de Shopify-integratie."
     },
     "black_ink_sabbath": {
       "title": "Black Ink Sabbath",
@@ -133,6 +145,10 @@
     "setlist_match_fire": {
       "title": "Setlist, Match, Fire",
       "description": "Maak je eerste setlist met 5 of meer nummers."
+    },
+    "my_personal_high_note": {
+      "title": "My Personal High Note",
+      "description": "Voeg een notitie toe aan een nummer op een setlist."
     },
     "fifty_people_who_might_answer": {
       "title": "Fifty People Who Might Answer",

@@ -124,6 +124,10 @@ Paid tiers (bronze/silver/gold) gate features and limits per tenant; billing run
 
 Backend resources follow a route → service → repository → validator split. **The rehearsals stack is the canonical example** — `server/routes/rehearsals.js`, `server/services/rehearsalService.js`, `server/repositories/rehearsalRepository.js`, `server/validators/rehearsalValidators.js`. New routes and refactors must follow it. Load the **backend-layering** skill for the full layer responsibilities, error contract, and refactoring playbook.
 
+## Achievements
+
+Per-tenant gamification badges, evaluated **lazily on read, no scheduler** — `server/achievements/definitions.js` is the single registry (stable snake_case `key`, `category`, `cheers` worth, pure `test(facts, unlockedKeys)` predicate; **never rename a shipped key**, it's persisted in `tenant_achievements` and doubles as the frontend i18n/icon key). `factsBuilder.js` owns all the SQL, producing a flat primitive facts object so predicates stay pure and I/O-free. `achievementService.listAchievements()` re-tests still-locked definitions against fresh facts on every `GET /api/achievements`, persists new unlocks (insert-only, `ON CONFLICT DO NOTHING`), and fires a notification — except on a tenant's first-ever evaluation ("baseline pass"), which suppresses notifications to avoid a burst from pre-existing history. Once every definition is unlocked for a tenant the payload is cached indefinitely (unlocks are permanent); a deploy restarts the process and clears it. Meta-achievements read `unlockedKeys` and must be declared after their prerequisites so they unlock in the same pass as the last one.
+
 ## Migrations
 
 New migrations go in `server/db/migrations/` as `NNN_name.sql` and run on the next `migrate`. The runner sorts alphabetically, so **numeric prefixes must stay monotonic** and zero-padded. They run automatically; don't hand-apply SQL.

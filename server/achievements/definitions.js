@@ -175,6 +175,13 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
     title: 'International Noise Complaint',
     test: (f) => f.gigs.playedCountries >= 2,
   },
+  {
+    key: 'took_this_band_to_town',
+    category: 'gigs',
+    cheers: 3,
+    title: 'Took This Band to Town',
+    test: (f) => f.integrations.bandsintownConfigured,
+  },
 
   // ---- invoices ----
   {
@@ -183,6 +190,13 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
     cheers: 3,
     title: 'Please Pay the Piper',
     test: (f) => f.invoices.sent >= 1,
+  },
+  {
+    key: 'power_to_the_payments',
+    category: 'invoices',
+    cheers: 3,
+    title: 'Power to the Payments',
+    test: (f) => f.integrations.mollieConfigured,
   },
 
   // ---- purchase ----
@@ -215,6 +229,13 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
     cheers: 4,
     title: 'Cash from the Merch Pit',
     test: (f) => f.merch.sales >= 1,
+  },
+  {
+    key: 'sync_that_chop_shop',
+    category: 'merchandise',
+    cheers: 3,
+    title: 'Sync That Chop Shop',
+    test: (f) => f.integrations.shopifyConfigured,
   },
 
   // ---- finance ----
@@ -270,6 +291,13 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
     cheers: 3,
     title: 'Setlist, Match, Fire',
     test: (f) => f.repertoire.maxSetlistSongs >= 5,
+  },
+  {
+    key: 'my_personal_high_note',
+    category: 'repertoire',
+    cheers: 1,
+    title: 'My Personal High Note',
+    test: (f) => f.repertoire.hasPersonalSetlistNote,
   },
 
   // ---- network ----
