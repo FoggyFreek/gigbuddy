@@ -3,7 +3,8 @@
 // A file can contain multiple statements. Each statement is validated and
 // parsed independently before same-account/same-currency statements are
 // combined into the importer's normalized statement shape.
-import { amountToCents, oppositeDirection, normalizeIban, meaningfulRef, BankStatementParseError } from './index.js'
+import { normalizeIban } from '../../utils/normalizeIban.js'
+import { amountToCents, oppositeDirection, meaningfulRef, BankStatementParseError } from './index.js'
 
 // Value date, optional entry date, D/C mark, optional funds code, amount,
 // mandatory four-character transaction type, owner reference and bank ref.

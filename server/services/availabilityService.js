@@ -6,11 +6,11 @@ import {
   listSlotsInRange,
   listSlotsOnDate,
   listBandMembers,
-  bandMemberExists,
   insertSlot,
   updateSlotFields,
   deleteSlot as deleteSlotRow,
 } from '../repositories/availabilityRepository.js'
+import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 
 const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
 
@@ -63,7 +63,7 @@ export async function createSlot(db, tenantId, body) {
   const err = validateSlot({ start_date, end_date, status })
   if (err) return badRequest(err)
 
-  if (band_member_id != null && !(await bandMemberExists(db, band_member_id, tenantId))) {
+  if (band_member_id != null && !(await bandMemberExistsInTenant(db, band_member_id, tenantId))) {
     return badRequest('band_member_id not found')
   }
 
@@ -81,7 +81,7 @@ export async function patchSlot(db, tenantId, slotId, body) {
   const err = validateSlot(body)
   if (err) return badRequest(err)
 
-  if (body.band_member_id != null && !(await bandMemberExists(db, body.band_member_id, tenantId))) {
+  if (body.band_member_id != null && !(await bandMemberExistsInTenant(db, body.band_member_id, tenantId))) {
     return badRequest('band_member_id not found')
   }
 

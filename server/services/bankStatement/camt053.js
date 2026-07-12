@@ -5,7 +5,8 @@
 // multi-detail entry only when every detail has an amount in the booked currency
 // and those amounts add up exactly to Ntry/Amt; otherwise it remains one line.
 import { XMLParser } from 'fast-xml-parser'
-import { amountToCents, normalizeIban, meaningfulRef, BankStatementParseError } from './index.js'
+import { normalizeIban } from '../../utils/normalizeIban.js'
+import { amountToCents, meaningfulRef, BankStatementParseError } from './index.js'
 
 // removeNSPrefix strips the camt namespace prefix; nodes that may repeat are
 // coerced to arrays so single/multiple cases share one code path.

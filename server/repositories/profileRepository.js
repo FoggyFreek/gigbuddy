@@ -3,14 +3,6 @@
 // `executor` (a pool or transaction client) so callers control transactions.
 import { tenantSafeProjection } from './tenantSafeProjection.js'
 
-export async function fetchTenant(executor, tenantId) {
-  const { rows } = await executor.query(
-    `SELECT ${tenantSafeProjection()} FROM tenants WHERE id = $1`,
-    [tenantId],
-  )
-  return rows[0] || null
-}
-
 export async function listProfileLinks(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM profile_links WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',

@@ -9,8 +9,8 @@ import {
   parseSearchLimit,
   buildContactUpdateFields,
   normalizeImportRow,
-  normalizeIban,
 } from '../validators/contactValidators.js'
+import { normalizeIban } from '../utils/normalizeIban.js'
 import {
   listContacts as listContactRows,
   searchContacts as searchContactRows,

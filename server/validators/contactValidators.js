@@ -1,20 +1,12 @@
 // Input parsing and validation for contact routes. No DB access here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
+import { normalizeIban } from '../utils/normalizeIban.js'
 
 export const VALID_CATEGORIES = new Set([
   'press', 'radio & tv', 'booker', 'promotion', 'network', 'supplier',
 ])
 
 export { parseId, parseSearchLimit }
-
-// Canonical IBAN form for storage/matching: no spaces, upper-case. Returns null
-// for blank input. Not validated as a real IBAN — banks send canonical values
-// and a wrong user entry simply won't match a statement counterparty.
-export function normalizeIban(value) {
-  if (value == null) return null
-  const cleaned = String(value).replace(/\s+/g, '').toUpperCase()
-  return cleaned === '' ? null : cleaned
-}
 
 // Normalizes a category query filter. Returns null (no filter), false (invalid
 // value → 400 in the service), or the validated category string.

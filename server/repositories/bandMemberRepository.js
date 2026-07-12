@@ -10,6 +10,14 @@ export async function listBandMembers(executor, tenantId) {
   return rows
 }
 
+export async function bandMemberExistsInTenant(executor, memberId, tenantId) {
+  const { rowCount } = await executor.query(
+    'SELECT 1 FROM band_members WHERE id = $1 AND tenant_id = $2',
+    [memberId, tenantId],
+  )
+  return rowCount > 0
+}
+
 export async function nextSortOrder(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM band_members WHERE tenant_id = $1',

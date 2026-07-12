@@ -16,8 +16,6 @@ import {
   fetchRehearsal,
   fetchNextRehearsal,
   rehearsalExistsInTenant,
-  memberExistsInTenant,
-  songExistsInTenant,
   loadParticipants,
   loadSongs,
   getBandMemberIdForUser,
@@ -36,6 +34,8 @@ import {
   insertRehearsalSong,
   deleteRehearsalSong,
 } from '../repositories/rehearsalRepository.js'
+import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
+import { songExistsInTenant } from '../repositories/songRepository.js'
 
 const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
 
@@ -191,7 +191,7 @@ export async function deleteRehearsal(db, tenantId, rehearsalId) {
 // ---------- participants ----------
 
 export async function addParticipant(db, tenantId, userId, rehearsalId, memberId) {
-  if (!(await memberExistsInTenant(db, memberId, tenantId))) {
+  if (!(await bandMemberExistsInTenant(db, memberId, tenantId))) {
     return { error: { status: 404, body: { error: 'band_member not found' } } }
   }
   if (!(await rehearsalExistsInTenant(db, rehearsalId, tenantId))) return NOT_FOUND

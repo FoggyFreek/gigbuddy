@@ -23,7 +23,6 @@ import {
 } from '../validators/gigValidators.js'
 import {
   assertVenueInTenant,
-  memberExistsInTenant,
   gigExistsInTenant,
   summarizeGigMerchSalesByVatRate,
   searchGigs as searchGigRows,
@@ -56,6 +55,7 @@ import {
   deleteGigContact,
   updateGigFields,
 } from '../repositories/gigRepository.js'
+import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { getTaskById } from '../repositories/taskRepository.js'
 
 const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
@@ -371,7 +371,7 @@ export async function deleteGigTask(db, tenantId, gigId, taskId) {
 // ---------- participants ----------
 
 export async function addParticipant(db, tenantId, userId, gigId, memberId) {
-  if (!(await memberExistsInTenant(db, memberId, tenantId))) {
+  if (!(await bandMemberExistsInTenant(db, memberId, tenantId))) {
     return { error: { status: 404, body: { error: 'band_member not found' } } }
   }
   if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND

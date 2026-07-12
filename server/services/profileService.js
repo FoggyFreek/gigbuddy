@@ -22,7 +22,6 @@ import {
   buildLinkUpdate,
 } from '../validators/profileValidators.js'
 import {
-  fetchTenant,
   listProfileLinks,
   updateTenantFields,
   nextLinkSortOrder,
@@ -39,6 +38,7 @@ import {
   setTenantImagePath,
   gigBelongsToTenant,
 } from '../repositories/profileRepository.js'
+import { fetchTenant } from '../repositories/tenantRepository.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import {
   clearIntegrationCredential,

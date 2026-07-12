@@ -46,14 +46,6 @@ export function oppositeDirection(direction) {
   return direction === 'credit' ? 'debit' : 'credit'
 }
 
-// Canonical IBAN/account form: no whitespace, upper-case. Keeps parsed account
-// ids consistent with how contacts store them so IBAN matching succeeds.
-export function normalizeIban(value) {
-  if (value == null) return null
-  const cleaned = String(value).replace(/\s+/g, '').toUpperCase()
-  return cleaned === '' ? null : cleaned
-}
-
 // Bank references that carry no real identity — never a duplicate signal.
 const SENTINEL_REFS = new Set(['NONREF', 'NOTPROVIDED', 'NULL', 'NA', 'N/A'])
 export function meaningfulRef(value) {

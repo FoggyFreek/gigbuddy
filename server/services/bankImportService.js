@@ -20,7 +20,7 @@ import {
   insertContact,
   contactExistsInTenant,
 } from '../repositories/contactRepository.js'
-import { normalizeIban } from '../validators/contactValidators.js'
+import { normalizeIban } from '../utils/normalizeIban.js'
 import { clearInvoicePaymentLink, markInvoicePaid } from '../repositories/invoiceRepository.js'
 import { deactivateMolliePaymentLink } from './molliePaymentLinkService.js'
 import {

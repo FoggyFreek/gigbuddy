@@ -24,7 +24,6 @@ import {
   insertSetGuarded,
   updateSetFields,
   deleteSet as deleteSetRow,
-  songExistsInTenant,
   itemSortNext,
   insertSetlistItem,
   loadSongEnrichment,
@@ -40,6 +39,7 @@ import {
   upsertItemNote,
   deleteItemNote,
 } from '../repositories/setlistRepository.js'
+import { songExistsInTenant } from '../repositories/songRepository.js'
 
 const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
 

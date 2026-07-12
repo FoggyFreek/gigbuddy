@@ -47,14 +47,6 @@ export async function assertVenueInTenant(executor, venueId, tenantId, expectedC
   }
 }
 
-export async function memberExistsInTenant(executor, memberId, tenantId) {
-  const { rowCount } = await executor.query(
-    'SELECT 1 FROM band_members WHERE id = $1 AND tenant_id = $2',
-    [memberId, tenantId],
-  )
-  return rowCount > 0
-}
-
 export async function gigExistsInTenant(executor, gigId, tenantId) {
   const { rowCount } = await executor.query(
     'SELECT 1 FROM gigs WHERE id = $1 AND tenant_id = $2',

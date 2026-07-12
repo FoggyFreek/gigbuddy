@@ -22,7 +22,6 @@ import { logger } from '../utils/logger.js'
 import {
   acquireSessionLock,
   releaseSessionLock,
-  fetchTenant,
   fetchInvoice,
   lockInvoice,
   lockInvoiceTotalsState,
@@ -45,6 +44,7 @@ import {
   setCustomLogoPath,
   fetchPublicInvoiceLogoPath,
 } from '../repositories/invoiceRepository.js'
+import { fetchTenant } from '../repositories/tenantRepository.js'
 import {
   SIMPLE_PATCH_FIELDS,
   CONTENT_FIELDS_SET,

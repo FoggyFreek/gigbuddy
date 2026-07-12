@@ -12,10 +12,10 @@ import {
 } from '../repositories/taskRepository.js'
 import {
   gigExistsInTenant,
-  memberExistsInTenant,
   getBandMemberIdForUser,
   getGigDescription,
 } from '../repositories/gigRepository.js'
+import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { parseId, buildGigTaskUpdateFields } from '../validators/gigValidators.js'
 import { dispatchNotification } from './notificationService.js'
@@ -54,7 +54,7 @@ async function resolveAssignee(db, tenantId, body) {
   if (!('assigned_to' in body) || body.assigned_to === null) return { body }
   const assignedTo = parseId(body.assigned_to)
   if (assignedTo === null) return { error: { status: 400, body: { error: 'Invalid assigned_to' } } }
-  if (!(await memberExistsInTenant(db, assignedTo, tenantId))) {
+  if (!(await bandMemberExistsInTenant(db, assignedTo, tenantId))) {
     return { error: { status: 404, body: { error: 'assigned_to not found' } } }
   }
   return { body: { ...body, assigned_to: assignedTo } }

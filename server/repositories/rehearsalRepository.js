@@ -33,22 +33,6 @@ export async function rehearsalExistsInTenant(executor, rehearsalId, tenantId) {
   return rowCount > 0
 }
 
-export async function memberExistsInTenant(executor, memberId, tenantId) {
-  const { rowCount } = await executor.query(
-    'SELECT 1 FROM band_members WHERE id = $1 AND tenant_id = $2',
-    [memberId, tenantId],
-  )
-  return rowCount > 0
-}
-
-export async function songExistsInTenant(executor, songId, tenantId) {
-  const { rowCount } = await executor.query(
-    'SELECT 1 FROM songs WHERE id = $1 AND tenant_id = $2',
-    [songId, tenantId],
-  )
-  return rowCount > 0
-}
-
 export async function loadParticipants(executor, rehearsalIds, tenantId) {
   if (!rehearsalIds.length) return new Map()
   const { rows } = await executor.query(

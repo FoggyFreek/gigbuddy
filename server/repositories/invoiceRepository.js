@@ -1,7 +1,6 @@
 // Data-access helpers for invoices. Each takes an `executor` (a pool or a
 // transaction client) so callers control transaction boundaries.
 import { formatInvoiceNumber } from '../validators/invoiceValidators.js'
-import { tenantSafeProjection } from './tenantSafeProjection.js'
 import { invoiceProjection } from './invoiceProjection.js'
 
 export async function acquireSessionLock(executor, namespace, resourceId) {
@@ -10,14 +9,6 @@ export async function acquireSessionLock(executor, namespace, resourceId) {
 
 export async function releaseSessionLock(executor, namespace, resourceId) {
   await executor.query('SELECT pg_advisory_unlock($1, $2)', [namespace, resourceId])
-}
-
-export async function fetchTenant(executor, tenantId) {
-  const { rows } = await executor.query(
-    `SELECT ${tenantSafeProjection()} FROM tenants WHERE id = $1`,
-    [tenantId],
-  )
-  return rows[0] || null
 }
 
 // `period` is the { sql, values } pair from buildPeriodWhere(query, 'issue_date').
