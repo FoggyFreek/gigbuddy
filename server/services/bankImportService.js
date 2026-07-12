@@ -22,6 +22,7 @@ import {
   contactExistsInTenant,
 } from '../repositories/contactRepository.js'
 import { normalizeIban } from '../utils/normalizeIban.js'
+import { badRequest } from './serviceErrors.js'
 import { clearInvoicePaymentLink, markInvoicePaid } from '../repositories/invoiceRepository.js'
 import { deactivateMolliePaymentLink } from './molliePaymentLinkService.js'
 import {
@@ -65,10 +66,6 @@ const MAX_BYTES = 10 * 1024 * 1024
 // a staged import can always be committed in one request.
 const MAX_LINES = 1000
 
-function badRequest(error, code) {
-  return { error: { status: 400, body: code ? { error, code } : { error } } }
-}
-
 async function tenantCurrency(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT currency FROM tenant_accounting_settings WHERE tenant_id = $1',
@@ -102,12 +99,12 @@ export async function parseAndStage(db, tenantId, file, userId) {
   try {
     parsed = parseBankStatement(file.buffer)
   } catch (err) {
-    if (err instanceof BankStatementParseError) return badRequest(err.message, 'parse_failed')
+    if (err instanceof BankStatementParseError) return badRequest(err.message, { code: 'parse_failed' })
     throw err
   }
-  if (!parsed.lines.length) return badRequest('Statement has no transactions', 'empty_statement')
+  if (!parsed.lines.length) return badRequest('Statement has no transactions', { code: 'empty_statement' })
   if (parsed.lines.length > MAX_LINES) {
-    return badRequest(`Statement has too many transactions (max ${MAX_LINES})`, 'too_many_lines')
+    return badRequest(`Statement has too many transactions (max ${MAX_LINES})`, { code: 'too_many_lines' })
   }
 
   const currency = await tenantCurrency(db, tenantId)

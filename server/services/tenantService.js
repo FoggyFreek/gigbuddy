@@ -30,18 +30,7 @@ import {
 import { deleteTenantObjects } from './storageService.js'
 import { enforceMemberCap } from './limitService.js'
 import { logger } from '../utils/logger.js'
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
-
-function notFound(error) {
-  return { error: { status: 404, body: { error } } }
-}
-
-function conflict(error) {
-  return { error: { status: 409, body: { error } } }
-}
+import { badRequest, conflict, notFound } from './serviceErrors.js'
 
 // ---------- reads ----------
 

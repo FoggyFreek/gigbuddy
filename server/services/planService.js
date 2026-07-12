@@ -24,12 +24,9 @@ import {
   isValidPriceCents,
   buildPlanUpdateFields,
 } from '../validators/planValidators.js'
+import { badRequest, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { status: 404, body: { error: 'Plan not found' } }
-
-function badRequest(error) {
-  return { status: 400, body: { error } }
-}
+const NOT_FOUND = notFound('Plan not found')
 
 function validateRenameField(valid, isFallback, invalidMessage) {
   if (isFallback) return 'The fallback plan cannot be renamed'
@@ -91,7 +88,7 @@ export async function listPlans(db) {
 
 export async function createPlan(db, body) {
   if ('is_fallback' in body) {
-    return { error: badRequest('The fallback designation cannot be changed') }
+    return badRequest('The fallback designation cannot be changed')
   }
   // Every key is present in the candidate, so validatePlanFields also acts as
   // the required-field check (slug, name, and complete entitlements).
@@ -105,7 +102,7 @@ export async function createPlan(db, body) {
     sort_order: body.sort_order ?? 0,
   }
   const error = validatePlanFields(plan, null)
-  if (error) return { error }
+  if (error) return error
 
   try {
     const created = await insertPlan(db, plan)
@@ -121,17 +118,17 @@ export async function createPlan(db, body) {
 
 export async function updatePlan(db, planId, body) {
   const existing = await fetchPlan(db, planId)
-  if (!existing) return { error: NOT_FOUND }
+  if (!existing) return NOT_FOUND
 
   const error = validatePlanFields(body, existing)
-  if (error) return { error }
+  if (error) return error
 
   const { fields, values } = buildPlanUpdateFields(body)
   if (fields.length === 0) return { plan: existing }
 
   try {
     const plan = await updatePlanFields(db, planId, fields, values)
-    if (!plan) return { error: NOT_FOUND }
+    if (!plan) return NOT_FOUND
     invalidatePlanCache()
     return { plan }
   } catch (err) {
@@ -144,9 +141,9 @@ export async function updatePlan(db, planId, body) {
 
 export async function deletePlan(db, planId) {
   const existing = await fetchPlan(db, planId)
-  if (!existing) return { error: NOT_FOUND }
+  if (!existing) return NOT_FOUND
   if (existing.is_fallback) {
-    return { error: badRequest('The fallback plan cannot be deleted') }
+    return badRequest('The fallback plan cannot be deleted')
   }
   try {
     await deletePlanRow(db, planId)

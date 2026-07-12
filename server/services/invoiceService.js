@@ -65,6 +65,7 @@ import {
   ACCOUNTING_SETTINGS_LOCK_NAMESPACE,
 } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
+import { notFound } from './serviceErrors.js'
 
 // Holds a session-level per-tenant accounting-settings advisory lock for the
 // duration of `fn`, which receives the lock-holding client. Session and
@@ -416,7 +417,7 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
 
 // ---------- route-facing operations ----------
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
+const NOT_FOUND = notFound('Not found')
 
 export async function listInvoices(pool, tenantId, query) {
   const period = buildPeriodWhere(query, 'issue_date')

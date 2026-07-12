@@ -66,12 +66,9 @@ import {
   loadExistingSongKeys,
   insertImportSong,
 } from '../repositories/songRepository.js'
+import { badRequest, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+const NOT_FOUND = notFound('Not found')
 
 // ---------- reads ----------
 

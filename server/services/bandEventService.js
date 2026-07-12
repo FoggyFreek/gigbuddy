@@ -9,12 +9,9 @@ import {
   updateBandEventFields,
   deleteBandEvent as deleteBandEventRow,
 } from '../repositories/bandEventRepository.js'
+import { badRequest, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+const NOT_FOUND = notFound('Not found')
 
 export async function listEvents(db, tenantId) {
   return listBandEvents(db, tenantId)

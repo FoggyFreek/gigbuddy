@@ -19,22 +19,7 @@ import {
   getMembership,
   insertPendingMembership,
 } from '../repositories/inviteRepository.js'
-
-function badRequest(error) {
-  return { status: 400, body: { error } }
-}
-
-function forbidden(error) {
-  return { status: 403, body: { error } }
-}
-
-function notFound(error) {
-  return { status: 404, body: { error } }
-}
-
-function conflict(error, extra = {}) {
-  return { status: 409, body: { error, ...extra } }
-}
+import { badRequest, conflict, forbidden, notFound } from './serviceErrors.js'
 
 function generateCode() {
   return randomBytes(24).toString('base64url')
@@ -75,12 +60,12 @@ export async function listInvites(db, tenantId) {
 
 export async function createInvite(db, tenantId, user, body) {
   const role = body?.role ?? 'contributor'
-  if (!ALLOWED_ROLES.includes(role)) return { error: badRequest('Invalid role') }
+  if (!ALLOWED_ROLES.includes(role)) return badRequest('Invalid role')
   if (role === 'tenant_admin' && !user?.is_super_admin) {
-    return { error: forbidden('Only super admins can issue tenant_admin invites') }
+    return forbidden('Only super admins can issue tenant_admin invites')
   }
   const parsed = parseExpiresInDays(body?.expiresInDays)
-  if (parsed.error) return { error: badRequest(parsed.error) }
+  if (parsed.error) return badRequest(parsed.error)
 
   const row = await insertInvite(db, generateCode(), tenantId, role, user.id, parsed.expiresAt)
   return {
@@ -91,7 +76,7 @@ export async function createInvite(db, tenantId, user, body) {
 
 export async function revokeInvite(db, tenantId, inviteId) {
   const revoked = await revokeInviteRow(db, inviteId, tenantId)
-  if (!revoked) return { error: notFound('Invite not found') }
+  if (!revoked) return notFound('Invite not found')
   return { audit: { action: 'invite.revoke', details: { inviteId } } }
 }
 
@@ -119,7 +104,7 @@ export function notifyInviteRedeemed({ tenantId, inviteId, userName, role }) {
 // replayed deep link) is idempotent — report the membership the first
 // redemption created instead of a conflict.
 async function resolveSpentInvite(spent, user) {
-  if (!spent) return { error: notFound('Invite not found'), audit: denied('not_found') }
+  if (!spent) return { ...notFound('Invite not found'), audit: denied('not_found') }
 
   if (spent.used_by_user_id === user.id && !spent.tenant_archived_at) {
     const membership = await getMembership(pool, user.id, spent.tenant_id)
@@ -138,7 +123,7 @@ async function resolveSpentInvite(spent, user) {
       }
     }
   }
-  return { error: conflict('Invite already used'), audit: denied('already_used') }
+  return { ...conflict('Invite already used'), audit: denied('already_used') }
 }
 
 // Validity checks on a freshly claimed invite. Pure: returns the error result
@@ -148,7 +133,7 @@ function claimedInviteError(invite, inviteRef) {
     return { error: { status: 410, body: { error: 'Invite has expired' } }, audit: denied('expired', inviteRef) }
   }
   if (invite.tenant_archived_at) {
-    return { error: conflict('Tenant is archived'), audit: denied('tenant_archived', inviteRef) }
+    return { ...conflict('Tenant is archived'), audit: denied('tenant_archived', inviteRef) }
   }
   return null
 }
@@ -157,9 +142,9 @@ function claimedInviteError(invite, inviteRef) {
 // path rolls back the claim and returns an audit descriptor describing why.
 export async function redeemInvite(user, body) {
   const code = typeof body?.code === 'string' ? body.code.trim() : ''
-  if (!code) return { error: badRequest('code is required'), audit: denied('missing_code') }
+  if (!code) return { ...badRequest('code is required'), audit: denied('missing_code') }
   if (user?.status === 'rejected') {
-    return { error: forbidden('Account is not allowed to redeem invites'), audit: denied('rejected_user') }
+    return { ...forbidden('Account is not allowed to redeem invites'), audit: denied('rejected_user') }
   }
 
   return withTransaction(async (client) => {
@@ -177,7 +162,7 @@ export async function redeemInvite(user, body) {
     const existing = await getMembership(client, user.id, invite.tenant_id)
     if (existing) {
       abortTransaction({
-        error: conflict('Already a member of this tenant', { membership: existing }),
+        ...conflict('Already a member of this tenant', { membership: existing }),
         audit: denied('already_member', inviteRef),
       })
     }

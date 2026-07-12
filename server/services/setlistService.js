@@ -40,12 +40,9 @@ import {
   deleteItemNote,
 } from '../repositories/setlistRepository.js'
 import { songExistsInTenant } from '../repositories/songRepository.js'
+import { badRequest, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+const NOT_FOUND = notFound('Not found')
 
 // Enrich a song item with its title/artist/key/tempo/duration + first tag so the
 // client can render the 2-row card without a refetch. Non-song items pass through

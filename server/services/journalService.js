@@ -31,8 +31,9 @@ import {
 } from '../validators/journalValidators.js'
 import { ledgerErrorResult, postUserJournal } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
+import { notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { status: 404, body: { error: 'Not found' } }
+const NOT_FOUND = notFound('Not found')
 const APPROVED_LOCKED = { status: 409, body: { error: 'Approved journals cannot be edited', code: 'journal_approved' } }
 const ALREADY_APPROVED = { status: 409, body: { error: 'Journal already approved', code: 'already_approved' } }
 
@@ -62,7 +63,7 @@ export async function listJournals(pool, tenantId) {
 
 export async function getJournal(pool, tenantId, id) {
   const journal = await fetchJournal(pool, tenantId, id)
-  if (!journal) return { error: NOT_FOUND }
+  if (!journal) return NOT_FOUND
   const lines = await fetchJournalLines(pool, id, tenantId)
   return { journal: { ...journal, lines } }
 }
@@ -91,7 +92,7 @@ export async function createJournal(pool, tenantId, body, actorUserId = null) {
 
 export async function updateJournal(pool, tenantId, id, body) {
   const existing = await fetchJournal(pool, tenantId, id)
-  if (!existing) return { error: NOT_FOUND }
+  if (!existing) return NOT_FOUND
   if (existing.status === 'approved') return { error: APPROVED_LOCKED }
 
   let entryDate = existing.entry_date
@@ -121,7 +122,7 @@ export async function updateJournal(pool, tenantId, id, body) {
 
 export async function deleteJournal(pool, tenantId, id) {
   const existing = await fetchJournal(pool, tenantId, id)
-  if (!existing) return { error: NOT_FOUND }
+  if (!existing) return NOT_FOUND
   if (existing.status === 'approved') return { error: APPROVED_LOCKED }
   await deleteJournalRepo(pool, tenantId, id)
   return {}
@@ -136,7 +137,7 @@ export async function deleteJournal(pool, tenantId, id) {
 export async function approveJournal(pool, tenantId, id, actorUserId = null) {
   return withTransaction(async (client) => {
     const journal = await lockJournalForApprove(client, tenantId, id)
-    if (!journal) abortTransaction({ error: NOT_FOUND })
+    if (!journal) abortTransaction(NOT_FOUND)
     if (journal.status === 'approved') abortTransaction({ error: ALREADY_APPROVED })
 
     const lines = await fetchJournalLines(client, id, tenantId)

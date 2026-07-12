@@ -17,10 +17,7 @@ import { parseComplimentaryBody } from '../validators/billingValidators.js'
 import { dispatchUserNotification, pushUserNotification } from './notificationService.js'
 import { BILLING_NOTIFICATION_TYPES } from '../domain/notificationTypes.js'
 import { logger } from '../utils/logger.js'
-
-function badRequest(error, code) {
-  return { error: { status: 400, body: { error, ...(code ? { code } : {}) } } }
-}
+import { badRequest } from './serviceErrors.js'
 
 // Best-effort: the grant itself must not fail because a notification couldn't
 // be written or pushed.

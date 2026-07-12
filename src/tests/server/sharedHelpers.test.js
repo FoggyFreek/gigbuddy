@@ -8,6 +8,13 @@ import {
   trimOrNull,
 } from '../../../server/validators/common.js'
 import { requireParam, sendError } from '../../../server/routes/routeHelpers.js'
+import {
+  badRequest,
+  conflict,
+  forbidden,
+  notFound,
+  serviceError,
+} from '../../../server/services/serviceErrors.js'
 
 function responseDouble() {
   const res = {
@@ -98,5 +105,41 @@ describe('route helpers', () => {
 
     expect(res.status).toHaveBeenCalledWith(409)
     expect(res.json).toHaveBeenCalledWith(error.body)
+  })
+})
+
+describe('service error factories', () => {
+  it('builds the canonical service error result for any status', () => {
+    expect(serviceError(503, 'Temporarily unavailable', { code: 'unavailable' })).toEqual({
+      error: {
+        status: 503,
+        body: { error: 'Temporarily unavailable', code: 'unavailable' },
+      },
+    })
+  })
+
+  it.each([
+    { factory: badRequest, status: 400, message: 'Invalid request' },
+    { factory: forbidden, status: 403, message: 'Forbidden' },
+    { factory: notFound, status: 404, message: 'Not found' },
+    { factory: conflict, status: 409, message: 'Already exists' },
+  ])('builds the named service result for status $status', ({ factory, status, message }) => {
+    expect(factory(message)).toEqual({ error: { status, body: { error: message } } })
+  })
+
+  it('preserves structured response details', () => {
+    expect(conflict('Category change affects gigs', {
+      code: 'category_change',
+      affected_gigs: [{ id: 7 }],
+    })).toEqual({
+      error: {
+        status: 409,
+        body: {
+          error: 'Category change affects gigs',
+          code: 'category_change',
+          affected_gigs: [{ id: 7 }],
+        },
+      },
+    })
   })
 })

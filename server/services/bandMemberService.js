@@ -11,12 +11,9 @@ import {
 } from '../repositories/bandMemberRepository.js'
 import { enforceMemberCap } from './limitService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
+import { badRequest, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+const NOT_FOUND = notFound('Not found')
 
 export async function listMembers(db, tenantId) {
   return listBandMembers(db, tenantId)

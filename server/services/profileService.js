@@ -49,10 +49,7 @@ import { invalidateToken } from './shopifyTokenService.js'
 import { withFeatureWriteGuard, withIntegrationWriteLock } from './featureGuards.js'
 import { resolveTenantEntitlements } from './entitlementService.js'
 import { FEATURES } from '../auth/entitlements.js'
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+import { badRequest, notFound } from './serviceErrors.js'
 
 function entitlementRequired(feature) {
   return {
@@ -83,10 +80,6 @@ async function setIntegrationCredentialGuarded(db, tenantId, type, plaintext) {
   return guardedIntegrationWrite(db, tenantId, async () => ({
     status: await setIntegrationCredential(db, tenantId, type, plaintext),
   }))
-}
-
-function notFound(error) {
-  return { error: { status: 404, body: { error } } }
 }
 
 // ---------- profile ----------

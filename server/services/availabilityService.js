@@ -11,12 +11,9 @@ import {
   deleteSlot as deleteSlotRow,
 } from '../repositories/availabilityRepository.js'
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
+import { badRequest, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+const NOT_FOUND = notFound('Not found')
 
 export async function listRange(db, tenantId, query) {
   const { from, to } = query

@@ -17,6 +17,7 @@ import {
   countryToIso2,
 } from '../validators/bandsintownValidators.js'
 import { venueImportKey } from '../domain/venue.js'
+import { badRequest } from './serviceErrors.js'
 import { insertVenue } from '../repositories/venueRepository.js'
 import {
   getLeadMemberIds,
@@ -43,10 +44,6 @@ const UPSTREAM_FAILED = {
 async function loadAppId(db, tenantId) {
   const value = await loadIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.BANDSINTOWN_APP_ID)
   return (value || '').trim() || null
-}
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
 }
 
 async function bandsintownGet(path, appId, fetchImpl) {

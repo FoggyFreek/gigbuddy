@@ -7,10 +7,7 @@ import {
   deleteSubscription,
   rotateEndpoint,
 } from '../repositories/pushRepository.js'
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+import { badRequest } from './serviceErrors.js'
 
 export async function subscribe(db, userId, body) {
   const parsed = parseSubscription(body)

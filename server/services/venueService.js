@@ -33,16 +33,9 @@ import {
   deleteVenueContact,
   loadExistingImportKeys,
 } from '../repositories/venueRepository.js'
+import { badRequest, conflict, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
-
-function conflict(error, extra = {}) {
-  return { error: { status: 409, body: { error, ...extra } } }
-}
+const NOT_FOUND = notFound('Not found')
 
 function validateNoFestivalName(body) {
   return 'festival_name' in body

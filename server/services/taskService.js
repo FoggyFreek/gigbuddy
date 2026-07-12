@@ -20,8 +20,9 @@ import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { parseId, buildGigTaskUpdateFields } from '../validators/gigValidators.js'
 import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
+import { notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
+const NOT_FOUND = notFound('Not found')
 
 // ---------- notifications ----------
 

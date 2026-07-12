@@ -71,13 +71,7 @@ import {
 } from '../auth/entitlements.js'
 import { parsePlanSelection, parseDowngradeSelection } from '../validators/billingValidators.js'
 import { logger } from '../utils/logger.js'
-
-function badRequest(error, code) {
-  return { error: { status: 400, body: { error, ...(code ? { code } : {}) } } }
-}
-function conflict(error, code) {
-  return { error: { status: 409, body: { error, ...(code ? { code } : {}) } } }
-}
+import { badRequest, conflict } from './serviceErrors.js'
 const NOT_CONFIGURED = { error: { status: 503, body: { error: 'Billing is not configured', code: 'billing_not_configured' } } }
 const PROVIDER_ERROR = { error: { status: 502, body: { error: 'Payment provider error', code: 'provider_error' } } }
 const COMPLIMENTARY = { error: { status: 409, body: { error: 'This subscription is managed by an administrator', code: 'complimentary_managed_by_admin' } } }
@@ -109,8 +103,8 @@ export async function subscribe(db, user, body) {
   if (!plan || !plan.is_active) return { error: { status: 404, body: { error: 'Plan not found' } } }
   if (plan.is_fallback) return badRequest('The free plan needs no subscription')
   const price = priceForInterval(plan, interval)
-  if (price === null) return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
-  if (price <= 0) return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
+  if (price === null) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
+  if (price <= 0) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
 
   const existing = await fetchLiveSubscriptionForUser(db, user.id)
   if (existing) {
@@ -124,7 +118,7 @@ export async function subscribe(db, user, body) {
     if (existing.status === 'pending_mandate' && existing.plan_id === planId && existing.billing_interval === interval) {
       return startMandateCheckout(db, existing, user, redirect, existing.trial_ends_at !== null)
     }
-    return conflict('You already have an active subscription', 'already_subscribed')
+    return conflict('You already have an active subscription', { code: 'already_subscribed' })
   }
 
   const trialEligible = !(await hasUsedTrial(db, user.id))
@@ -139,7 +133,7 @@ export async function subscribe(db, user, body) {
       trial_ends_at: trialEligible ? trialEndFrom() : null,
     })
   } catch (err) {
-    if (err.code === '23505') return conflict('You already have an active subscription', 'already_subscribed')
+    if (err.code === '23505') return conflict('You already have an active subscription', { code: 'already_subscribed' })
     throw err
   }
 
@@ -184,7 +178,7 @@ export async function cancelSubscription(db, userId) {
     // settling charge would take money for a subscription about to cancel).
     if (sub.pending_plan_id && sub.pending_change_kind !== 'downgrade') {
       const inFlight = sub.mollie_schedule_stale || (await isPendingChargeNonterminal(client, sub))
-      if (inFlight) abortTransaction(conflict('A plan change is in progress', 'plan_change_in_progress'))
+      if (inFlight) abortTransaction(conflict('A plan change is in progress', { code: 'plan_change_in_progress' }))
     }
     // A pending downgrade is safely clearable (its replacement hasn't charged).
     if (sub.pending_plan_id) await clearPendingChange(client, sub.id)
@@ -222,7 +216,7 @@ export async function resumeSubscription(db, userId) {
     if (sub.is_complimentary) abortTransaction(COMPLIMENTARY)
     if (!sub.cancel_at_period_end) abortTransaction(badRequest('Nothing to resume'))
     if (sub.current_period_end && new Date(sub.current_period_end) <= new Date()) {
-      abortTransaction(conflict('The subscription period has already ended', 'already_ended'))
+      abortTransaction(conflict('The subscription period has already ended', { code: 'already_ended' }))
     }
     await clearCancelAtPeriodEnd(client, sub.id)
     await setScheduleStale(client, sub.id, true) // recreate the provider schedule
@@ -243,9 +237,9 @@ export async function resumeSubscription(db, userId) {
 function planChangeGuardError(sub) {
   if (!sub) return { error: { status: 404, body: { error: 'No subscription' } } }
   if (sub.is_complimentary) return COMPLIMENTARY
-  if (!sub.mollie_mandate_id) return conflict('No valid payment mandate', 'no_mandate')
-  if (sub.pending_plan_id) return conflict('A plan change is in progress', 'plan_change_in_progress')
-  if (sub.cancel_at_period_end) return conflict('Resume the subscription before changing plans', 'plan_change_in_progress')
+  if (!sub.mollie_mandate_id) return conflict('No valid payment mandate', { code: 'no_mandate' })
+  if (sub.pending_plan_id) return conflict('A plan change is in progress', { code: 'plan_change_in_progress' })
+  if (sub.cancel_at_period_end) return conflict('Resume the subscription before changing plans', { code: 'plan_change_in_progress' })
   return null
 }
 
@@ -287,9 +281,9 @@ export async function changePlan(db, user, body) {
 
   const targetPlan = await fetchPlan(db, planId)
   if (!targetPlan || !targetPlan.is_active) return { error: { status: 404, body: { error: 'Plan not found' } } }
-  if (targetPlan.is_fallback) return badRequest('Use downgrade to move to the free plan', 'use_downgrade_endpoint')
+  if (targetPlan.is_fallback) return badRequest('Use downgrade to move to the free plan', { code: 'use_downgrade_endpoint' })
   const price = priceForInterval(targetPlan, interval)
-  if (price === null || price <= 0) return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
+  if (price === null || price <= 0) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
 
   const outcome = await withTransaction(async (client) => {
     const sub = await fetchLiveSubscriptionForUpdate(client, user.id)
@@ -298,7 +292,7 @@ export async function changePlan(db, user, body) {
 
     const kind = classifyPlanChange(sub, targetPlan, interval)
     if (kind === 'same') abortTransaction(badRequest('Already on this plan'))
-    if (kind === 'downgrade') abortTransaction(badRequest('Use the downgrade endpoint for a lower tier', 'use_downgrade_endpoint'))
+    if (kind === 'downgrade') abortTransaction(badRequest('Use the downgrade endpoint for a lower tier', { code: 'use_downgrade_endpoint' }))
 
     if (sub.status === 'trialing') {
       // Trial is free: switch immediately, recreate the schedule at the new
@@ -393,7 +387,7 @@ async function loadDowngradeTarget(db, planId, interval) {
   if (targetPlan.is_fallback) return { targetPlan, price: 0 }
   const price = priceForInterval(targetPlan, interval)
   if (price === null || price <= 0) {
-    return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
+    return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
   }
   return { targetPlan, price }
 }
@@ -458,12 +452,12 @@ export async function previewDowngrade(db, user, body) {
 function downgradeGuardError(sub, targetPlan, interval) {
   if (!sub) return { error: { status: 404, body: { error: 'No subscription' } } }
   if (sub.is_complimentary) return COMPLIMENTARY
-  if (!sub.mollie_mandate_id) return conflict('No valid payment mandate', 'no_mandate')
+  if (!sub.mollie_mandate_id) return conflict('No valid payment mandate', { code: 'no_mandate' })
   if (sub.status === 'pending_mandate' || sub.status === 'pending_activation') {
-    return conflict('The subscription is not active yet', 'plan_change_in_progress')
+    return conflict('The subscription is not active yet', { code: 'plan_change_in_progress' })
   }
-  if (sub.cancel_at_period_end) return conflict('Resume the subscription before changing plans', 'plan_change_in_progress')
-  if (sub.pending_plan_id) return conflict('A plan change is in progress', 'plan_change_in_progress')
+  if (sub.cancel_at_period_end) return conflict('Resume the subscription before changing plans', { code: 'plan_change_in_progress' })
+  if (sub.pending_plan_id) return conflict('A plan change is in progress', { code: 'plan_change_in_progress' })
   if (targetPlan.id === sub.plan_id && interval === sub.billing_interval) {
     return badRequest('Already on this plan')
   }
@@ -532,12 +526,12 @@ export async function downgrade(db, user, body) {
     const effCurrent = mergeEntitlements(sub.plan_entitlements, sub.entitlement_overrides)
     const effTarget = mergeEntitlements(targetPlan.entitlements, sub.entitlement_overrides)
     if (!isDowngrade(effCurrent, effTarget)) {
-      abortTransaction(badRequest('The chosen plan is not a downgrade', 'not_a_downgrade'))
+      abortTransaction(badRequest('The chosen plan is not a downgrade', { code: 'not_a_downgrade' }))
     }
 
     const expected = `downgrade to ${targetPlan.slug}`
     if (confirmation.trim().toLowerCase() !== expected.toLowerCase()) {
-      abortTransaction(badRequest(`Type "${expected}" to confirm`, 'confirmation_mismatch'))
+      abortTransaction(badRequest(`Type "${expected}" to confirm`, { code: 'confirmation_mismatch' }))
     }
 
     // Capacity precheck under the full lock set; growth writes hold the same

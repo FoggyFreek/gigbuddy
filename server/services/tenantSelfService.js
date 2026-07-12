@@ -21,12 +21,9 @@ import {
 import { setOnboardingTenant } from '../repositories/authRepository.js'
 import { enforceBandCap } from './limitService.js'
 import { isTenantOnboardingEnabled } from './platformSettingsService.js'
+import { badRequest, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Tenant not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+const NOT_FOUND = notFound('Tenant not found')
 
 // How many "-2".."-N" suffixes to try for a generated slug before falling
 // back to a random suffix (a pathological hot name, still one insert).

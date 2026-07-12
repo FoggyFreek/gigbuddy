@@ -11,6 +11,7 @@ import { sendPushToUsers, sendPushToUser } from '../utils/sendPush.js'
 import { logger } from '../utils/logger.js'
 import { ALL_ROLES, hasPermission } from '../auth/permissions.js'
 import { NOTIFICATION_TYPES } from '../domain/notificationTypes.js'
+import { notFound } from './serviceErrors.js'
 import { parsePrefsBody } from '../validators/notificationValidators.js'
 import { isApprovedMember } from '../repositories/authRepository.js'
 import {
@@ -33,7 +34,7 @@ import {
   getTenantAvatarPath,
 } from '../repositories/notificationRepository.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
+const NOT_FOUND = notFound('Not found')
 const LIST_LIMIT = 50
 const GLOBAL_PRUNE_INTERVAL_MS = 60 * 60 * 1000
 
