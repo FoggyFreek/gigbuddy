@@ -208,6 +208,9 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice, { client: pr
       // idempotent per (invoice, event). System posting: no actor, and a closed
       // period clamps the entry date instead of rejecting — Mollie holds the
       // cash either way, so the receipt must always be booked.
+      //
+      // This is the same paid posting that invoiceService.settleInvoice() owns for
+      // the manual-PATCH and bank-import channels. Keep this pair in sync with settleInvoice.
       const opts = { actorUserId: null, clampToOpenPeriod: true }
       await postInvoiceSent(client, invoice.tenant_id, updated, opts)
       await postInvoicePaid(client, invoice.tenant_id, updated, opts)

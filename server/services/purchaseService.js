@@ -25,7 +25,16 @@ import {
   listImportedPaymentCandidates,
   lockImportedPaymentCandidate,
   lockPurchase,
+  markPurchasePaid,
+  fetchPurchaseOwner,
+  insertPurchaseAttachment,
+  lockProductStock,
+  setProductStock,
+  insertPurchase,
+  updatePurchase,
 } from '../repositories/purchaseRepository.js'
+import { markLineResult } from '../repositories/bankImportRepository.js'
+import { getTransactionBySource } from '../repositories/ledgerRepository.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import {
   CONTENT_FIELDS_SET,
@@ -55,13 +64,10 @@ const ATTACHMENT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
 // share-photo security path (magic bytes + sharp re-encode, which strips
 // EXIF/metadata); PDFs are magic-byte verified and stored as-is.
 export async function createPurchaseAttachment({ db, tenantId, purchaseId, file, requireCreatedByUserId = null }) {
-  const { rows } = await db.query(
-    'SELECT id, created_by_user_id FROM purchases WHERE id = $1 AND tenant_id = $2',
-    [purchaseId, tenantId],
-  )
-  if (!rows.length) return { error: { status: 404, body: { error: 'Not found' } } }
+  const purchase = await fetchPurchaseOwner(db, tenantId, purchaseId)
+  if (!purchase) return { error: { status: 404, body: { error: 'Not found' } } }
   // Self-scoped callers may only attach to their own purchase (hide as 404).
-  if (requireCreatedByUserId != null && rows[0].created_by_user_id !== requireCreatedByUserId) {
+  if (requireCreatedByUserId != null && purchase.created_by_user_id !== requireCreatedByUserId) {
     return { error: { status: 404, body: { error: 'Not found' } } }
   }
 
@@ -90,13 +96,13 @@ export async function createPurchaseAttachment({ db, tenantId, purchaseId, file,
   await uploadObjectWithQuota(objectKey, buffer, size, file.mimetype)
 
   try {
-    const { rows: inserted } = await db.query(
-      `INSERT INTO purchase_attachments (purchase_id, tenant_id, object_key, original_filename, content_type, file_size)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at`,
-      [purchaseId, tenantId, objectKey, file.originalname, file.mimetype, size],
-    )
-    return { attachment: inserted[0] }
+    const attachment = await insertPurchaseAttachment(db, tenantId, purchaseId, {
+      objectKey,
+      originalFilename: file.originalname,
+      contentType: file.mimetype,
+      fileSize: size,
+    })
+    return { attachment }
   } catch (err) {
     removeObject(objectKey).catch(() => {})
     throw err
@@ -145,21 +151,13 @@ async function applyPurchaseStockIn(client, tenantId, lines) {
   for (const line of lines) {
     if (!line.product_id) continue
     const { netCents } = computePurchaseLineTotals(line)
-    const { rows } = await client.query(
-      'SELECT quantity_on_hand, unit_cost_cents FROM products WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
-      [line.product_id, tenantId],
-    )
-    const product = rows[0]
+    const product = await lockProductStock(client, tenantId, line.product_id)
     if (!product) continue // validated up front; the composite FK is the backstop
     const newQty = product.quantity_on_hand + line.quantity
     const newCost = Math.round(
       (product.quantity_on_hand * product.unit_cost_cents + netCents) / newQty,
     )
-    await client.query(
-      `UPDATE products SET quantity_on_hand = $1, unit_cost_cents = $2, updated_at = NOW()
-        WHERE id = $3 AND tenant_id = $4`,
-      [newQty, newCost, line.product_id, tenantId],
-    )
+    await setProductStock(client, tenantId, line.product_id, newQty, newCost)
   }
 }
 
@@ -251,12 +249,10 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
   try {
     await client.query('BEGIN')
     const receiptNumber = await nextPurchaseNumber(client, tenantId)
-    const { text, values } = buildCreatePurchaseInsert({
+    purchaseId = await insertPurchase(client, tenantId, buildCreatePurchaseData({
       status, tenantId, receiptNumber, supplierName, supplierContactId,
       receiptDate, dueDate, currency, memo: body.memo || null, totals, actorUserId,
-    })
-    const { rows } = await client.query(text, values)
-    purchaseId = rows[0].id
+    }))
     await insertPurchaseLines(client, purchaseId, tenantId, lines)
 
     // Approving a bill accrues the expense + payable. Draft bills post nothing.
@@ -301,30 +297,25 @@ function resolveCreateStatus(body, { canManageFinance = false } = {}) {
   return { status }
 }
 
-function buildCreatePurchaseInsert({
+function buildCreatePurchaseData({
   status, tenantId, receiptNumber, supplierName, supplierContactId,
   receiptDate, dueDate, currency, memo, totals, actorUserId,
 }) {
-  const text = `INSERT INTO purchases (
-       tenant_id, receipt_number, supplier_name, supplier_contact_id,
-       receipt_date, due_date, currency, memo,
-       subtotal_cents, tax_cents, total_cents,
-       status, finalized_at,
-       created_by_user_id, approved_by_user_id
-     ) VALUES (
-       $1, $2, $3, $4,
-       $5, $6, $7, $8,
-       $9, $10, $11,
-       $12, ${status === 'approved' ? 'NOW()' : 'NULL'},
-       $13, ${status === 'approved' ? '$13' : 'NULL'}
-     ) RETURNING id`
-  const values = [
-    tenantId, receiptNumber, supplierName, supplierContactId,
-    receiptDate, dueDate, currency, memo,
-    totals.subtotalCents, totals.taxCents, totals.totalCents,
-    status, actorUserId,
-  ]
-  return { text, values }
+  return {
+    tenantId,
+    receiptNumber,
+    supplierName,
+    supplierContactId,
+    receiptDate,
+    dueDate,
+    currency,
+    memo,
+    subtotalCents: totals.subtotalCents,
+    taxCents: totals.taxCents,
+    totalCents: totals.totalCents,
+    status,
+    actorUserId,
+  }
 }
 
 function buildAccruedPurchaseRow({ purchaseId, receiptNumber, supplierName, supplierContactId, receiptDate, totals }) {
@@ -342,19 +333,18 @@ function buildAccruedPurchaseRow({ purchaseId, receiptNumber, supplierName, supp
 // ---------- patch ----------
 
 function buildSimpleSet(body, supplierContactIdOverride) {
-  const assignments = []
-  let idx = 1
+  const fields = {}
   for (const key of SIMPLE_PATCH_FIELDS) {
     if (!(key in body)) continue
     let value = body[key]
     if (key === 'supplier_contact_id') value = supplierContactIdOverride
     else if (key === 'supplier_name') value = String(value ?? '').trim()
-    assignments.push({ col: key, value, idx: idx++ })
+    fields[key] = value
   }
   // memo is editable even after finalization, so it is not in CONTENT_FIELDS;
   // patch it through explicitly when present.
-  if ('memo' in body) assignments.push({ col: 'memo', value: body.memo || null, idx: idx++ })
-  return { assignments, nextIdx: idx }
+  if ('memo' in body) fields.memo = body.memo || null
+  return fields
 }
 
 export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId = null) {
@@ -383,28 +373,26 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
       await replacePurchaseLines(client, id, tenantId, lines)
     }
 
-    const { assignments, nextIdx } = buildSimpleSet(body, supplierContactId)
-    const setClauses = assignments.map((a) => `${a.col} = $${a.idx}`)
-    const values = assignments.map((a) => a.value)
-    let idx = nextIdx
+    const fields = buildSimpleSet(body, supplierContactId)
+    let totals = null
 
     if (contentChanged) {
-      idx = await appendTotalsSetClauses(client, id, tenantId, { setClauses, values, idx })
+      totals = await computePatchedTotals(client, id, tenantId)
     }
 
-    if (body.status !== undefined) {
-      idx = appendStatusSetClauses({ setClauses, values, idx }, existing, body, actorUserId)
-    }
-
-    if (!setClauses.length) {
+    if (!Object.keys(fields).length && !totals && body.status === undefined) {
       await client.query('ROLLBACK')
       return { error: { status: 400, body: { error: 'No valid fields to update' } } }
     }
 
-    setClauses.push('updated_at = NOW()')
-    const sql = `UPDATE purchases SET ${setClauses.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`
-    values.push(id, tenantId)
-    await client.query(sql, values)
+    await updatePurchase(client, tenantId, id, {
+      fields,
+      totals,
+      status: body.status,
+      finalize: body.status !== undefined && body.status !== 'draft' && existing.finalized_at === null,
+      setApprovedBy: body.status === 'approved' && existing.status !== 'approved',
+      approvedByUserId: actorUserId,
+    })
 
     // Transitioning a draft to approved accrues the expense + payable.
     if (body.status === 'approved' && existing.status !== 'approved') {
@@ -490,28 +478,9 @@ async function runPatchPreflightValidations(pool, tenantId, id, existing, body) 
   return null
 }
 
-function appendStatusSetClauses(state, existing, body, actorUserId) {
-  const { setClauses, values } = state
-  let { idx } = state
-  setClauses.push(`status = $${idx++}`); values.push(body.status)
-  if (body.status !== 'draft' && existing.finalized_at === null) {
-    setClauses.push('finalized_at = NOW()')
-  }
-  if (body.status === 'approved' && existing.status !== 'approved') {
-    setClauses.push(`approved_by_user_id = $${idx++}`); values.push(actorUserId)
-  }
-  return idx
-}
-
-async function appendTotalsSetClauses(client, id, tenantId, state) {
-  const { setClauses, values } = state
-  let { idx } = state
+async function computePatchedTotals(client, id, tenantId) {
   const currentLines = await fetchPurchaseLines(client, id, tenantId)
-  const totals = computePurchaseTotals({ lines: currentLines })
-  setClauses.push(`subtotal_cents = $${idx++}`); values.push(totals.subtotalCents)
-  setClauses.push(`tax_cents = $${idx++}`); values.push(totals.taxCents)
-  setClauses.push(`total_cents = $${idx++}`); values.push(totals.totalCents)
-  return idx
+  return computePurchaseTotals({ lines: currentLines })
 }
 
 function mapPatchError(err) {
@@ -529,6 +498,22 @@ export async function listPaymentCandidates(pool, tenantId, id) {
   const preconditionErr = validatePaymentPreconditions(purchase)
   if (preconditionErr) return preconditionErr
   return { candidates: await listImportedPaymentCandidates(pool, tenantId, purchase) }
+}
+
+// Domain operation owning the purchase paid transition: flip the bill to paid and
+// post the bill-paid journal together, so the manual payment endpoint and the
+// bank-statement importer share one path (attribution, accounting fields, period
+// handling). Executor-aware — the caller owns the transaction. The tenant-scoped
+// `markPurchasePaid` (UPDATE … RETURNING) is the safety confirmation: a zero-row
+// update (foreign/stale id) returns 404 and posts nothing, and the journal is
+// posted from the returned row, never a caller-supplied object.
+export async function settlePurchase(executor, tenantId, purchaseId, { paidOn, method, paidByBandMemberId = null, registeredByUserId = null, clampToOpenPeriod = false }) {
+  const updated = await markPurchasePaid(executor, tenantId, purchaseId, {
+    paidOn, method, paidByBandMemberId, registeredByUserId,
+  })
+  if (!updated) return { error: { status: 404, body: { error: 'Not found' } } }
+  const posted = await postBillPaid(executor, tenantId, updated, { actorUserId: registeredByUserId, clampToOpenPeriod })
+  return { posted }
 }
 
 export async function registerPayment(pool, tenantId, id, body, actorUserId = null) {
@@ -590,36 +575,25 @@ export async function registerPayment(pool, tenantId, id, body, actorUserId = nu
         return corrected
       }
     }
-    await client.query(
-      `UPDATE purchases
-          SET status = 'paid',
-              paid_at = $1,
-              payment_method = $2,
-              paid_by_band_member_id = $3,
-              payment_registered_by_user_id = $4,
-              updated_at = NOW()
-        WHERE id = $5 AND tenant_id = $6`,
-      [effectivePaidOn, method, paidByBandMemberId, actorUserId, id, tenantId],
-    )
-    await postBillPaid(client, tenantId, {
-      ...lockedPurchase,
-      paid_at: effectivePaidOn,
-      payment_method: method,
-      paid_by_band_member_id: paidByBandMemberId,
-    }, { actorUserId, clampToOpenPeriod: bankLineId != null })
+    const result = await settlePurchase(client, tenantId, id, {
+      paidOn: effectivePaidOn,
+      method,
+      paidByBandMemberId,
+      registeredByUserId: actorUserId,
+      clampToOpenPeriod: bankLineId != null,
+    })
+    if (result.error) {
+      await client.query('ROLLBACK')
+      return result
+    }
     if (candidate) {
-      const { rows: [paymentTxn] } = await client.query(
-        `SELECT id FROM ledger_transactions
-          WHERE tenant_id = $1 AND source_type = 'purchase' AND source_id = $2 AND source_event = 'paid'`,
-        [tenantId, id],
-      )
-      await client.query(
-        `UPDATE bank_statement_lines
-            SET status = 'reconciled_purchase', ledger_transaction_id = $1,
-                matched_source_type = 'purchase', matched_source_id = $2
-          WHERE id = $3 AND tenant_id = $4`,
-        [paymentTxn.id, id, candidate.id, tenantId],
-      )
+      const paymentTxn = await getTransactionBySource(client, tenantId, 'purchase', id, 'paid')
+      await markLineResult(client, tenantId, candidate.id, {
+        status: 'reconciled_purchase',
+        ledgerTransactionId: paymentTxn.id,
+        matchedSourceType: 'purchase',
+        matchedSourceId: id,
+      })
     }
     await client.query('COMMIT')
     return {}

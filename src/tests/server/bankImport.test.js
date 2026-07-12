@@ -5,6 +5,10 @@ import request from 'supertest'
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { settleInvoice } from '../../../server/services/invoiceService.js'
+import { settlePurchase } from '../../../server/services/purchaseService.js'
+import { markInvoicePaid } from '../../../server/repositories/invoiceRepository.js'
+import { markPurchasePaid } from '../../../server/repositories/purchaseRepository.js'
 
 // Stub MinIO (invoice PDF path is a no-op; we assert DB/ledger state).
 vi.mock('../../../server/utils/storage.js', () => ({
@@ -610,6 +614,36 @@ describe('bank-import tenant isolation', () => {
       { line_id: line.id, action: 'skip' },
     ])
     expect(res.status).toBe(404)
+  })
+
+  // The settle domain ops are called directly (not via a route) with a foreign
+  // tenant id: a route can't reach this — its own tenant-scoping 404s first — but
+  // the ops are the reusable primitive, so they must be safe on their own. A
+  // zero-row scoped confirmation must never be followed by a ledger journal (there
+  // is no FK from ledger_transactions.source_id back to the document).
+  it('settleInvoice on a foreign tenant 404s, leaves status, and posts no journal', async () => {
+    const inv = await insertInvoice(seed.tenantA.id, { number: 'INV-X', total: 60000 })
+    const result = await settleInvoice(pool, seed.tenantB.id, inv.id, {
+      entryDate: '2026-02-05', actorUserId: seed.userB.id, clampToOpenPeriod: true,
+    })
+    expect(result.error?.status).toBe(404)
+    expect(await journalsFor(seed.tenantA.id, 'invoice', inv.id)).toHaveLength(0)
+    const { rows: [after] } = await pool.query('SELECT status FROM invoices WHERE id = $1', [inv.id])
+    expect(after.status).toBe('sent')
+    // The scoped status write also refuses the foreign tenant.
+    expect(await markInvoicePaid(pool, seed.tenantB.id, inv.id)).toBeNull()
+  })
+
+  it('settlePurchase on a foreign tenant 404s, leaves status, and posts no journal', async () => {
+    const bill = await insertPurchase(seed.tenantA.id, { receipt: 5100, total: 12050 })
+    const result = await settlePurchase(pool, seed.tenantB.id, bill.id, {
+      paidOn: '2026-02-05', method: 'bank', registeredByUserId: seed.userB.id, clampToOpenPeriod: true,
+    })
+    expect(result.error?.status).toBe(404)
+    expect(await journalsFor(seed.tenantA.id, 'purchase', bill.id)).toHaveLength(0)
+    const { rows: [after] } = await pool.query('SELECT status, paid_at FROM purchases WHERE id = $1', [bill.id])
+    expect(after).toMatchObject({ status: 'approved', paid_at: null })
+    expect(await markPurchasePaid(pool, seed.tenantB.id, bill.id, { paidOn: '2026-02-05', method: 'bank' })).toBeNull()
   })
 })
 

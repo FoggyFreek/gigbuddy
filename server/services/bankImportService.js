@@ -8,12 +8,11 @@ import crypto from 'node:crypto'
 import { parseBankStatement, BankStatementParseError } from './bankStatement/index.js'
 import {
   postBankStatementLine,
-  postInvoiceSent,
-  postInvoicePaid,
-  postBillPaid,
   postOpeningBalance,
   ledgerErrorResult,
 } from './ledgerService.js'
+import { settleInvoice } from './invoiceService.js'
+import { settlePurchase } from './purchaseService.js'
 import { hasOpeningBalance } from '../repositories/ledgerRepository.js'
 import { accountExistsOfType } from '../repositories/accountRepository.js'
 import {
@@ -22,7 +21,7 @@ import {
   contactExistsInTenant,
 } from '../repositories/contactRepository.js'
 import { normalizeIban } from '../validators/contactValidators.js'
-import { clearInvoicePaymentLink } from '../repositories/invoiceRepository.js'
+import { clearInvoicePaymentLink, markInvoicePaid } from '../repositories/invoiceRepository.js'
 import { deactivateMolliePaymentLink } from './molliePaymentLinkService.js'
 import {
   findImportByHash,
@@ -41,9 +40,7 @@ import {
   listOpenInvoices,
   listOpenPurchases,
   lockInvoice,
-  markInvoicePaid,
   lockPurchase,
-  markPurchasePaid,
   reserveMollieReconciliation,
   fetchMollieReconciliation,
   markMollieReconciliation,
@@ -471,10 +468,14 @@ async function finalizeLinkedInvoiceReconciliation(db, tenantId, importId, decis
       await client.query('COMMIT')
       return 'skipped_mollie_reconciliation_conflict'
     }
-    await postReconciledInvoice(client, tenantId, line, cleared, userId)
+    const status = await postReconciledInvoice(client, tenantId, line, cleared, userId)
+    if (status !== 'reconciled_invoice') {
+      await client.query('ROLLBACK')
+      return status
+    }
     await markMollieReconciliation(client, tenantId, operation.id, 'completed')
     await client.query('COMMIT')
-    return 'reconciled_invoice'
+    return status
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     const mapped = ledgerErrorResult(err)
@@ -548,19 +549,23 @@ async function reconcileInvoice(client, tenantId, line, decision, userId) {
   if (invoice.mollie_payment_link_id != null) return 'skipped_invoice_has_link'
   if (invoice.total_cents !== line.amount_cents) return 'skipped_amount_mismatch'
 
-  await postReconciledInvoice(client, tenantId, line, invoice, userId)
-  return 'reconciled_invoice'
+  return postReconciledInvoice(client, tenantId, line, invoice, userId)
 }
 
+// Flips the invoice to paid and posts the paid journal via settleInvoice (the
+// invoice-domain owner), then links the statement line to the posted transaction.
 async function postReconciledInvoice(client, tenantId, line, invoice, userId) {
-  await markInvoicePaid(client, tenantId, invoice.id)
-  const opts = SYSTEM_OPTS(userId)
-  await postInvoiceSent(client, tenantId, invoice, opts) // idempotent if already sent
-  const posted = await postInvoicePaid(client, tenantId, invoice, { ...opts, entryDate: line.booking_date })
+  const updated = await markInvoicePaid(client, tenantId, invoice.id)
+  if (!updated) return 'skipped_not_found'
+  const result = await settleInvoice(client, tenantId, invoice.id, {
+    entryDate: line.booking_date, actorUserId: userId, clampToOpenPeriod: true,
+  })
+  if (result.error) return 'skipped_not_found'
   await markLineResult(client, tenantId, line.id, {
-    status: 'reconciled_invoice', ledgerTransactionId: posted.transactionId ?? null,
+    status: 'reconciled_invoice', ledgerTransactionId: result.posted.transactionId ?? null,
     matchedSourceType: 'invoice', matchedSourceId: invoice.id,
   })
+  return 'reconciled_invoice'
 }
 
 async function reconcilePurchase(client, tenantId, line, decision, userId) {
@@ -570,14 +575,12 @@ async function reconcilePurchase(client, tenantId, line, decision, userId) {
   if (purchase.status !== 'approved' || purchase.paid_at != null) return 'skipped_bill_not_open'
   if (purchase.total_cents !== line.amount_cents) return 'skipped_amount_mismatch'
 
-  await markPurchasePaid(client, tenantId, purchase.id, line.booking_date, userId)
-  const posted = await postBillPaid(
-    client, tenantId,
-    { ...purchase, paid_at: line.booking_date, payment_method: 'bank' },
-    SYSTEM_OPTS(userId),
-  )
+  const result = await settlePurchase(client, tenantId, purchase.id, {
+    paidOn: line.booking_date, method: 'bank', registeredByUserId: userId, clampToOpenPeriod: true,
+  })
+  if (result.error) return 'skipped_not_found'
   await markLineResult(client, tenantId, line.id, {
-    status: 'reconciled_purchase', ledgerTransactionId: posted.transactionId ?? null,
+    status: 'reconciled_purchase', ledgerTransactionId: result.posted.transactionId ?? null,
     matchedSourceType: 'purchase', matchedSourceId: purchase.id,
   })
   return 'reconciled_purchase'

@@ -4,6 +4,14 @@ import { formatInvoiceNumber } from '../validators/invoiceValidators.js'
 import { tenantSafeProjection } from './tenantSafeProjection.js'
 import { invoiceProjection } from './invoiceProjection.js'
 
+export async function acquireSessionLock(executor, namespace, resourceId) {
+  await executor.query('SELECT pg_advisory_lock($1, $2)', [namespace, resourceId])
+}
+
+export async function releaseSessionLock(executor, namespace, resourceId) {
+  await executor.query('SELECT pg_advisory_unlock($1, $2)', [namespace, resourceId])
+}
+
 export async function fetchTenant(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT ${tenantSafeProjection()} FROM tenants WHERE id = $1`,
@@ -119,6 +127,60 @@ export async function fetchVenue(executor, tenantId, venueId) {
 export async function fetchInvoice(executor, tenantId, invoiceId) {
   const { rows } = await executor.query(
     `SELECT ${invoiceProjection()} FROM invoices WHERE id = $1 AND tenant_id = $2`,
+    [invoiceId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function lockInvoice(executor, tenantId, invoiceId) {
+  const { rows } = await executor.query(
+    `SELECT ${invoiceProjection()} FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+    [invoiceId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function lockInvoiceTotalsState(executor, tenantId, invoiceId) {
+  const { rows } = await executor.query(
+    `SELECT tax_inclusive, discount_type, discount_pct, discount_cents, finalized_at
+       FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+    [invoiceId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function updateInvoiceFields(executor, tenantId, invoiceId, { columns, finalize }) {
+  const assignments = []
+  const values = []
+  let index = 1
+  for (const { column, value } of columns) {
+    assignments.push(`${column} = $${index++}`)
+    values.push(value)
+  }
+  if (finalize) assignments.push('finalized_at = NOW()')
+  assignments.push('updated_at = NOW()')
+  values.push(invoiceId, tenantId)
+  await executor.query(
+    `UPDATE invoices SET ${assignments.join(', ')} WHERE id = $${index} AND tenant_id = $${index + 1}`,
+    values,
+  )
+}
+
+export async function setInvoicePdfPath(executor, tenantId, invoiceId, pdfPath) {
+  await executor.query(
+    'UPDATE invoices SET pdf_path = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3',
+    [pdfPath, invoiceId, tenantId],
+  )
+}
+
+export async function finalizeInvoiceForPaymentLink(executor, tenantId, invoiceId) {
+  const { rows } = await executor.query(
+    `UPDATE invoices
+        SET status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END,
+            finalized_at = COALESCE(finalized_at, NOW()),
+            updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2
+    RETURNING ${invoiceProjection()}`,
     [invoiceId, tenantId],
   )
   return rows[0] || null
@@ -320,6 +382,19 @@ export async function updateInvoicePaymentState(executor, tenantId, invoiceId, {
     [mollieStatus, paymentId, paidAt, invoiceStatus, invoiceId, tenantId],
   )
   return rows[0]
+}
+
+// Flips an invoice to paid (status only), tenant-scoped. Returns the updated row
+// (or null when no row matched) so a caller can confirm exactly one row changed
+// before posting the ledger journal — used by the bank-statement importer.
+export async function markInvoicePaid(executor, tenantId, invoiceId) {
+  const { rows } = await executor.query(
+    `UPDATE invoices SET status = 'paid', updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2
+      RETURNING ${invoiceProjection()}`,
+    [invoiceId, tenantId],
+  )
+  return rows[0] || null
 }
 
 // Count + gross total of open invoices per dashboard bucket: overdue (sent,

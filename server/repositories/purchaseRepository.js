@@ -17,10 +17,120 @@ export async function fetchPurchase(executor, tenantId, purchaseId) {
   return rows[0] || null
 }
 
+export async function fetchPurchaseOwner(executor, tenantId, purchaseId) {
+  const { rows } = await executor.query(
+    'SELECT id, created_by_user_id FROM purchases WHERE id = $1 AND tenant_id = $2',
+    [purchaseId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function insertPurchaseAttachment(executor, tenantId, purchaseId, attachment) {
+  const { rows } = await executor.query(
+    `INSERT INTO purchase_attachments (purchase_id, tenant_id, object_key, original_filename, content_type, file_size)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at`,
+    [purchaseId, tenantId, attachment.objectKey, attachment.originalFilename,
+      attachment.contentType, attachment.fileSize],
+  )
+  return rows[0]
+}
+
+export async function lockProductStock(executor, tenantId, productId) {
+  const { rows } = await executor.query(
+    'SELECT quantity_on_hand, unit_cost_cents FROM products WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+    [productId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function setProductStock(executor, tenantId, productId, quantity, unitCostCents) {
+  await executor.query(
+    `UPDATE products SET quantity_on_hand = $1, unit_cost_cents = $2, updated_at = NOW()
+      WHERE id = $3 AND tenant_id = $4`,
+    [quantity, unitCostCents, productId, tenantId],
+  )
+}
+
+export async function insertPurchase(executor, tenantId, purchase) {
+  const approved = purchase.status === 'approved'
+  const { rows } = await executor.query(
+    `INSERT INTO purchases (
+       tenant_id, receipt_number, supplier_name, supplier_contact_id,
+       receipt_date, due_date, currency, memo,
+       subtotal_cents, tax_cents, total_cents,
+       status, finalized_at,
+       created_by_user_id, approved_by_user_id
+     ) VALUES (
+       $1, $2, $3, $4,
+       $5, $6, $7, $8,
+       $9, $10, $11,
+       $12, ${approved ? 'NOW()' : 'NULL'},
+       $13, ${approved ? '$13' : 'NULL'}
+     ) RETURNING id`,
+    [tenantId, purchase.receiptNumber, purchase.supplierName, purchase.supplierContactId,
+      purchase.receiptDate, purchase.dueDate, purchase.currency, purchase.memo,
+      purchase.subtotalCents, purchase.taxCents, purchase.totalCents,
+      purchase.status, purchase.actorUserId],
+  )
+  return rows[0].id
+}
+
+export async function updatePurchase(executor, tenantId, purchaseId, patch) {
+  const assignments = []
+  const values = []
+  let index = 1
+  for (const [column, value] of Object.entries(patch.fields)) {
+    assignments.push(`${column} = $${index++}`)
+    values.push(value)
+  }
+  if (patch.totals) {
+    for (const [column, value] of Object.entries({
+      subtotal_cents: patch.totals.subtotalCents,
+      tax_cents: patch.totals.taxCents,
+      total_cents: patch.totals.totalCents,
+    })) {
+      assignments.push(`${column} = $${index++}`)
+      values.push(value)
+    }
+  }
+  if (patch.status !== undefined) {
+    assignments.push(`status = $${index++}`)
+    values.push(patch.status)
+    if (patch.finalize) assignments.push('finalized_at = NOW()')
+    if (patch.setApprovedBy) {
+      assignments.push(`approved_by_user_id = $${index++}`)
+      values.push(patch.approvedByUserId)
+    }
+  }
+  assignments.push('updated_at = NOW()')
+  values.push(purchaseId, tenantId)
+  await executor.query(
+    `UPDATE purchases SET ${assignments.join(', ')} WHERE id = $${index} AND tenant_id = $${index + 1}`,
+    values,
+  )
+}
+
 export async function lockPurchase(executor, tenantId, purchaseId) {
   const { rows } = await executor.query(
     'SELECT * FROM purchases WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
     [purchaseId, tenantId],
+  )
+  return rows[0] || null
+}
+
+// Flips a purchase to paid, tenant-scoped. Returns the updated row (or null when
+// no row matched) so the caller can confirm exactly one row changed before it
+// posts the ledger journal — see settlePurchase.
+export async function markPurchasePaid(executor, tenantId, purchaseId, { paidOn, method, paidByBandMemberId = null, registeredByUserId = null }) {
+  const { rows } = await executor.query(
+    `UPDATE purchases
+        SET status = 'paid', paid_at = $1, payment_method = $2,
+            paid_by_band_member_id = $3, payment_registered_by_user_id = $4,
+            updated_at = NOW()
+      WHERE id = $5 AND tenant_id = $6
+      RETURNING *`,
+    [paidOn, method, paidByBandMemberId, registeredByUserId, purchaseId, tenantId],
   )
   return rows[0] || null
 }

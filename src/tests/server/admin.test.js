@@ -309,6 +309,27 @@ describe('/api/admin/tenants — super admin only', () => {
     await asUserA(request(app).get('/api/admin/tenants')).expect(403)
   })
 
+  it.each([
+    ['get', '/api/admin/tenants/not-a-number'],
+    ['patch', '/api/admin/tenants/not-a-number'],
+    ['post', '/api/admin/tenants/not-a-number/admins'],
+    ['post', '/api/admin/tenants/not-a-number/memberships'],
+    ['delete', '/api/admin/tenants/not-a-number/admins/1'],
+    ['post', '/api/admin/tenants/not-a-number/archive'],
+    ['post', '/api/admin/tenants/not-a-number/unarchive'],
+    ['delete', '/api/admin/tenants/not-a-number'],
+  ])('%s %s rejects an invalid tenant id', async (method, path) => {
+    const res = await asSuper(request(app)[method](path)).expect(400)
+    expect(res.body).toEqual({ error: 'Invalid id' })
+  })
+
+  it('DELETE /:id/admins/:userId rejects an invalid user id', async () => {
+    const res = await asSuper(
+      request(app).delete(`/api/admin/tenants/${seed.tenantA.id}/admins/not-a-number`),
+    ).expect(400)
+    expect(res.body).toEqual({ error: 'Invalid userId' })
+  })
+
   it('never returns plaintext or encrypted credential fields', async () => {
     await pool.query(
       `UPDATE tenants SET mollie_api_key = $1, shopify_client_secret = $2,

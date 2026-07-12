@@ -15,6 +15,21 @@ import { isValidCalendarDate } from '../validators/accountValidators.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import { validateGigIdForTenant } from '../repositories/invoiceRepository.js'
 import { isAccountAtOrBelow } from '../repositories/accountRepository.js'
+import {
+  listProducts as listProductRows,
+  insertProduct,
+  updateProduct as updateProductRow,
+  archiveProduct as archiveProductRow,
+  listSales,
+  summarizeSales,
+  listSaleDates,
+  lockProduct,
+  insertSale,
+  decrementProductStock,
+  lockSaleWithProduct,
+  markSaleVoided,
+  setProductStock,
+} from '../repositories/merchRepository.js'
 import { getSettings } from './accountService.js'
 import {
   ledgerErrorResult,
@@ -36,9 +51,6 @@ function parsePositiveInt(val) {
 }
 
 // ---------- products ----------
-
-const PRODUCT_COLUMNS = `id, name, unit_cost_cents, default_price_incl_cents,
-  vat_rate, quantity_on_hand, revenue_account_code, archived_at, created_at, updated_at`
 
 // A product may book its merch revenue to the band's merch revenue account
 // (merch_revenue_account_code) or any hierarchical descendant of it. Returns
@@ -72,13 +84,7 @@ async function resolveProductRevenueAccount(executor, tenantId, raw) {
 }
 
 export async function listProducts(executor, tenantId) {
-  const { rows } = await executor.query(
-    `SELECT ${PRODUCT_COLUMNS} FROM products
-      WHERE tenant_id = $1
-      ORDER BY archived_at IS NOT NULL, name ASC`,
-    [tenantId],
-  )
-  return { products: rows }
+  return { products: await listProductRows(executor, tenantId) }
 }
 
 // For a full create every field is set; for a partial (PATCH) only fields
@@ -121,13 +127,8 @@ export async function createProduct(executor, tenantId, body) {
   const v = validated.values
   const revenue = await resolveProductRevenueAccount(executor, tenantId, body.revenue_account_code)
   if (revenue.error) return revenue
-  const { rows } = await executor.query(
-    `INSERT INTO products (tenant_id, name, unit_cost_cents, default_price_incl_cents, vat_rate, revenue_account_code)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING ${PRODUCT_COLUMNS}`,
-    [tenantId, v.name, v.unit_cost_cents, v.default_price_incl_cents, v.vat_rate, revenue.value],
-  )
-  return { product: rows[0] }
+  const product = await insertProduct(executor, tenantId, { ...v, revenue_account_code: revenue.value })
+  return { product }
 }
 
 export async function updateProduct(executor, tenantId, id, body) {
@@ -139,43 +140,21 @@ export async function updateProduct(executor, tenantId, id, body) {
     if (revenue.error) return revenue
     values.revenue_account_code = revenue.value
   }
-  const entries = Object.entries(values)
-  if (!entries.length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
-
-  const setClauses = entries.map(([k], i) => `${k} = $${i + 1}`)
-  setClauses.push('updated_at = NOW()')
-  const params = entries.map(([, v]) => v)
-  params.push(id, tenantId)
-
-  const { rows } = await executor.query(
-    `UPDATE products SET ${setClauses.join(', ')}
-      WHERE id = $${params.length - 1} AND tenant_id = $${params.length}
-      RETURNING ${PRODUCT_COLUMNS}`,
-    params,
-  )
-  if (!rows[0]) return { error: { status: 404, body: { error: 'Not found' } } }
-  return { product: rows[0] }
+  if (!Object.keys(values).length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
+  const product = await updateProductRow(executor, tenantId, id, values)
+  if (!product) return { error: { status: 404, body: { error: 'Not found' } } }
+  return { product }
 }
 
 // Products are archived, never deleted: purchase lines and sales reference
 // them (composite FKs RESTRICT) and the history must stay readable.
 export async function archiveProduct(executor, tenantId, id) {
-  const { rows } = await executor.query(
-    `UPDATE products SET archived_at = NOW(), updated_at = NOW()
-      WHERE id = $1 AND tenant_id = $2 AND archived_at IS NULL
-      RETURNING ${PRODUCT_COLUMNS}`,
-    [id, tenantId],
-  )
-  if (!rows[0]) return { error: { status: 404, body: { error: 'Not found' } } }
-  return { product: rows[0] }
+  const product = await archiveProductRow(executor, tenantId, id)
+  if (!product) return { error: { status: 404, body: { error: 'Not found' } } }
+  return { product }
 }
 
 // ---------- sales ----------
-
-const SALE_COLUMNS = `s.id, s.product_id, p.name AS product_name, s.gig_id,
-  to_char(s.sale_date, 'YYYY-MM-DD') AS sale_date,
-  s.quantity, s.unit_price_incl_cents, s.gross_incl_cents, s.vat_rate, s.unit_cost_cents,
-  s.payment_method, s.revenue_account_code, s.status, s.voided_at, s.created_at`
 
 // Lists individual sales for the detail pane. Optional period (sale_date) and
 // product_id filters; returns all statuses so voided rows still show greyed.
@@ -183,25 +162,12 @@ export async function listMerchSales(executor, tenantId, query = {}) {
   const period = buildPeriodWhere(query, 's.sale_date')
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
 
-  let productSql = ''
-  const params = [tenantId, ...period.values]
+  let productId = null
   if (query.product_id !== undefined && query.product_id !== null && String(query.product_id) !== '') {
-    const productId = parsePositiveInt(query.product_id)
+    productId = parsePositiveInt(query.product_id)
     if (!productId) return { error: { status: 400, body: { error: 'Invalid product_id' } } }
-    params.push(productId)
-    productSql = ` AND s.product_id = $${params.length}`
   }
-
-  const { rows } = await executor.query(
-    `SELECT ${SALE_COLUMNS}
-       FROM merch_sales s
-       JOIN products p ON p.id = s.product_id AND p.tenant_id = s.tenant_id
-      WHERE s.tenant_id = $1
-        ${period.sql}${productSql}
-      ORDER BY s.sale_date DESC, s.id DESC`,
-    params,
-  )
-  return { sales: rows }
+  return { sales: await listSales(executor, tenantId, period.sql, period.values, productId) }
 }
 
 // Per-product summary for the master list. Lists one row per product that had
@@ -212,41 +178,13 @@ export async function merchSalesSummary(executor, tenantId, query = {}) {
   const period = buildPeriodWhere(query, 's.sale_date')
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
 
-  const { rows } = await executor.query(
-    `SELECT s.product_id,
-            p.name AS product_name,
-            COALESCE(p.revenue_account_code, tas.merch_revenue_account_code) AS revenue_account_code,
-            coa.name AS revenue_account_name,
-            SUM(s.quantity)::int AS total_qty,
-            SUM(COALESCE(s.gross_incl_cents, s.quantity * s.unit_price_incl_cents))::int AS total_amount_cents
-       FROM merch_sales s
-       JOIN products p ON p.id = s.product_id AND p.tenant_id = s.tenant_id
-       JOIN tenant_accounting_settings tas ON tas.tenant_id = s.tenant_id
-       LEFT JOIN chart_of_accounts coa
-         ON coa.tenant_id = s.tenant_id
-        AND coa.code = COALESCE(p.revenue_account_code, tas.merch_revenue_account_code)
-      WHERE s.tenant_id = $1
-        AND s.status = 'recorded'
-        ${period.sql}
-      GROUP BY s.product_id, p.name,
-               COALESCE(p.revenue_account_code, tas.merch_revenue_account_code), coa.name
-      ORDER BY total_amount_cents DESC, p.name ASC`,
-    [tenantId, ...period.values],
-  )
-  return { rows }
+  return { rows: await summarizeSales(executor, tenantId, period.sql, period.values) }
 }
 
 // Distinct sale dates (recorded only, matching the summary) feeding the period
 // picker so it never offers a period whose sales are all voided.
 export async function merchSalesPeriods(executor, tenantId) {
-  const { rows } = await executor.query(
-    `SELECT DISTINCT to_char(sale_date, 'YYYY-MM-DD') AS date
-       FROM merch_sales
-      WHERE tenant_id = $1 AND status = 'recorded'
-      ORDER BY date DESC`,
-    [tenantId],
-  )
-  return rows.map((row) => row.date)
+  return listSaleDates(executor, tenantId)
 }
 
 // Core of recording one sale, operating on a caller-supplied in-transaction
@@ -281,11 +219,7 @@ export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = 
 
   // Lock the product row: serializes concurrent sales of the same product so
   // the stock check below can't race (CHECK quantity_on_hand >= 0 backstops).
-  const { rows: productRows } = await client.query(
-    'SELECT * FROM products WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
-    [productId, tenantId],
-  )
-  const product = productRows[0]
+  const product = await lockProduct(client, tenantId, productId)
   if (!product) return { error: { status: 400, body: { error: 'Invalid product_id' } } }
   if (product.archived_at) {
     return { error: { status: 400, body: { error: 'Product is archived', code: 'product_archived' } } }
@@ -319,24 +253,13 @@ export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = 
   // so a later void reverses to the exact same account.
   const revenueAccountCode = product.revenue_account_code ?? null
 
-  const { rows: inserted } = await client.query(
-    `INSERT INTO merch_sales
-       (tenant_id, product_id, gig_id, sale_date, quantity,
-        unit_price_incl_cents, gross_incl_cents, vat_rate, unit_cost_cents, payment_method,
-        revenue_account_code, created_by_user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-     RETURNING id`,
-    [tenantId, productId, gigId, saleDate, quantity,
-      unitPriceInclCents, grossInclCents, vatRate, product.unit_cost_cents, paymentMethod,
-      revenueAccountCode, actorUserId],
-  )
-  const saleId = inserted[0].id
+  const saleId = await insertSale(client, tenantId, {
+    productId, gigId, saleDate, quantity, unitPriceInclCents, grossInclCents,
+    vatRate, unitCostCents: product.unit_cost_cents, paymentMethod,
+    revenueAccountCode, actorUserId,
+  })
 
-  await client.query(
-    `UPDATE products SET quantity_on_hand = quantity_on_hand - $1, updated_at = NOW()
-      WHERE id = $2 AND tenant_id = $3`,
-    [quantity, productId, tenantId],
-  )
+  await decrementProductStock(client, tenantId, productId, quantity)
 
   await postMerchSaleRecorded(client, tenantId, {
     id: saleId,
@@ -379,17 +302,7 @@ export async function voidMerchSale(pool, tenantId, id, actorUserId = null) {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    const { rows } = await client.query(
-      `SELECT s.*, p.name AS product_name,
-              p.quantity_on_hand AS product_quantity_on_hand,
-              p.unit_cost_cents AS product_unit_cost_cents
-         FROM merch_sales s
-         JOIN products p ON p.id = s.product_id AND p.tenant_id = s.tenant_id
-        WHERE s.id = $1 AND s.tenant_id = $2
-        FOR UPDATE OF s, p`,
-      [id, tenantId],
-    )
-    const sale = rows[0]
+    const sale = await lockSaleWithProduct(client, tenantId, id)
     if (!sale) {
       await client.query('ROLLBACK')
       return { error: { status: 404, body: { error: 'Not found' } } }
@@ -399,11 +312,7 @@ export async function voidMerchSale(pool, tenantId, id, actorUserId = null) {
       return { error: { status: 409, body: { error: 'Sale is already voided', code: 'already_voided' } } }
     }
 
-    await client.query(
-      `UPDATE merch_sales SET status = 'voided', voided_at = NOW()
-        WHERE id = $1 AND tenant_id = $2`,
-      [id, tenantId],
-    )
+    await markSaleVoided(client, tenantId, id)
     // The units come back on hand at their snapshotted cost (what the reversal
     // journal puts back into inventory), so the moving average re-absorbs them.
     const newQty = sale.product_quantity_on_hand + sale.quantity
@@ -411,11 +320,7 @@ export async function voidMerchSale(pool, tenantId, id, actorUserId = null) {
       (sale.product_quantity_on_hand * sale.product_unit_cost_cents
         + sale.quantity * sale.unit_cost_cents) / newQty,
     )
-    await client.query(
-      `UPDATE products SET quantity_on_hand = $1, unit_cost_cents = $2, updated_at = NOW()
-        WHERE id = $3 AND tenant_id = $4`,
-      [newQty, newCost, sale.product_id, tenantId],
-    )
+    await setProductStock(client, tenantId, sale.product_id, newQty, newCost)
 
     await postMerchSaleVoided(client, tenantId, sale, { actorUserId })
 

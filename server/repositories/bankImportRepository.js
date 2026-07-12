@@ -205,14 +205,6 @@ export async function lockInvoice(executor, tenantId, invoiceId) {
   return rows[0] || null
 }
 
-export async function markInvoicePaid(executor, tenantId, invoiceId) {
-  await executor.query(
-    `UPDATE invoices SET status = 'paid', updated_at = NOW()
-      WHERE id = $1 AND tenant_id = $2`,
-    [invoiceId, tenantId],
-  )
-}
-
 // Durable Mollie bridge. The unique line key makes reservation and retry
 // idempotent; service code still revalidates the snapshotted invoice/link.
 export async function reserveMollieReconciliation(executor, tenantId, lineId, invoiceId, actorUserId) {
@@ -264,14 +256,4 @@ export async function lockPurchase(executor, tenantId, purchaseId) {
     [purchaseId, tenantId],
   )
   return rows[0] || null
-}
-
-export async function markPurchasePaid(executor, tenantId, purchaseId, paidOn, actorUserId) {
-  await executor.query(
-    `UPDATE purchases
-        SET status = 'paid', paid_at = $1, payment_method = 'bank',
-            payment_registered_by_user_id = $2, updated_at = NOW()
-      WHERE id = $3 AND tenant_id = $4`,
-    [paidOn, actorUserId ?? null, purchaseId, tenantId],
-  )
 }
