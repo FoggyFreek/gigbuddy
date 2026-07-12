@@ -10,6 +10,7 @@
 //   2. per-covered-period notification dedupe keys,
 //   3. the period-advance IS DISTINCT guard.
 import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   fetchSubscriptionById,
   fetchSubscriptionByIdForUpdate,
@@ -26,7 +27,7 @@ import {
 import { executeDowngradePurge } from './entitlementPurgeService.js'
 import { upsertPaymentOutcome } from '../repositories/subscriptionPaymentRepository.js'
 import { dispatchUserNotification, pushUserNotification } from './notificationService.js'
-import { BILLING_NOTIFICATION_TYPES } from './notificationTypes.js'
+import { BILLING_NOTIFICATION_TYPES } from '../domain/notificationTypes.js'
 import { periodEndFrom } from './billingShared.js'
 import { getPaymentProvider, PaymentProviderError, PAYMENT_STATUS } from '../billing/paymentProvider/index.js'
 import { repairSchedule } from './billingSaga.js'
@@ -194,14 +195,11 @@ async function handleUnpaid(client, sub, payment, kind, status, ctx) {
 // caller BEFORE this transaction (never a remote call inside the txn). Returns
 // { pushes, sagaHints } for the caller to execute post-commit.
 export async function applyPaymentOutcome(subId, payment, { periodEndHint = null, replacementSubscriptionId = null } = {}) {
-  const client = await pool.connect()
   const ctx = { periodEndHint, replacementSubscriptionId, pushes: [], sagaHints: new Set() }
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const sub = await fetchSubscriptionByIdForUpdate(client, subId)
     if (!sub || sub.is_complimentary) {
-      await client.query('ROLLBACK')
-      return { pushes: [], sagaHints: [] }
+      abortTransaction({ pushes: [], sagaHints: [] })
     }
 
     const kind = classifyKind(sub, payment)
@@ -215,8 +213,7 @@ export async function applyPaymentOutcome(subId, payment, { periodEndHint = null
       mollieCreatedAt: payment.createdAt,
     })
     if (!row) {
-      // Inert transition (illegal/regressive/duplicate) — no effect.
-      await client.query('COMMIT')
+      // Inert transition (illegal/regressive/duplicate) — commit (no effect).
       return { pushes: [], sagaHints: [] }
     }
 
@@ -231,14 +228,8 @@ export async function applyPaymentOutcome(subId, payment, { periodEndHint = null
       await handleUnpaid(client, sub, payment, kind, row.status, ctx)
     }
 
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
-  return { pushes: ctx.pushes, sagaHints: [...ctx.sagaHints] }
+    return { pushes: ctx.pushes, sagaHints: [...ctx.sagaHints] }
+  })
 }
 
 // Post-commit side effects: best-effort push for freshly-inserted notifications,

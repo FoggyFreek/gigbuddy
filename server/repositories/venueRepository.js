@@ -1,12 +1,12 @@
 // Data-access helpers for venues. Each query takes an `executor` (a pool or
 // transaction client) so callers control transactions.
 import {
-  VALID_CATEGORIES,
-  EDITABLE_FIELDS,
-  buildInsertValues,
-} from '../validators/venueValidators.js'
+  VALID_VENUE_CATEGORIES,
+  VENUE_EDITABLE_FIELDS,
+  buildVenueInsertValues,
+} from '../domain/venue.js'
 
-const INSERT_COLUMNS = ['tenant_id', ...EDITABLE_FIELDS]
+const INSERT_COLUMNS = ['tenant_id', ...VENUE_EDITABLE_FIELDS]
 const INSERT_SQL = `INSERT INTO venues (${INSERT_COLUMNS.join(', ')})
      VALUES (${INSERT_COLUMNS.map((_, i) => `$${i + 1}`).join(', ')})
      RETURNING *`
@@ -47,7 +47,7 @@ export async function listVenues(executor, tenantId) {
 
 export async function searchVenues(executor, tenantId, { like, limit, category }) {
   const params = [tenantId, like, limit]
-  const categoryClause = VALID_CATEGORIES.has(category)
+  const categoryClause = VALID_VENUE_CATEGORIES.has(category)
     ? `AND category = $${params.push(category)}`
     : ''
   const { rows } = await executor.query(
@@ -94,7 +94,7 @@ export async function getVenueCategory(executor, venueId, tenantId) {
 }
 
 export async function insertVenue(executor, tenantId, body) {
-  const { rows } = await executor.query(INSERT_SQL, buildInsertValues(tenantId, body))
+  const { rows } = await executor.query(INSERT_SQL, buildVenueInsertValues(tenantId, body))
   return rows[0]
 }
 

@@ -1,4 +1,5 @@
 import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
 import { logger } from '../utils/logger.js'
 import {
@@ -45,19 +46,11 @@ export function computeTenantStorage(tenantId) {
 // out of order and overwrite the newer total: the second caller blocks at the
 // lock until the first commits, then re-lists fresh.
 export async function refreshTenantStorage(tenantId) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  await withTransaction(async (client) => {
     await lockTenantStatistics(client, tenantId)
     const { storageBytes, objectCount } = await computeTenantStorage(tenantId)
     await upsertTenantStatistics(client, tenantId, storageBytes, objectCount)
-    await client.query('COMMIT')
-  } catch (e) {
-    await client.query('ROLLBACK')
-    throw e
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // Atomically reserves `sizeBytes` of quota before an upload. Serialized with
@@ -71,43 +64,26 @@ export async function refreshTenantStorage(tenantId) {
 // upload either resolves the old limit before the downgrade commits, or the
 // snapshot-bound limit after — never the old limit under a committed snapshot.
 export async function reserveStorageUsage(tenantId, sizeBytes, limit) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     await lockTenantStatistics(client, tenantId)
     const limitBytes = typeof limit === 'function' ? await limit(client) : limit
     await ensureTenantStatistics(client, tenantId)
     const storageBytes = await getStorageBytes(client, tenantId)
     if (limitBytes !== null && storageBytes + sizeBytes > limitBytes) {
-      await client.query('ROLLBACK')
-      return false
+      abortTransaction(false)
     }
     await incrementStorageUsage(client, tenantId, sizeBytes)
-    await client.query('COMMIT')
     return true
-  } catch (e) {
-    await client.query('ROLLBACK')
-    throw e
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // Releases a reservation after a failed upload once the object is confirmed
 // absent. Clamped at zero so a duplicate release can't corrupt the counter.
 export async function releaseStorageUsage(tenantId, sizeBytes) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  await withTransaction(async (client) => {
     await lockTenantStatistics(client, tenantId)
     await decrementStorageUsage(client, tenantId, sizeBytes)
-    await client.query('COMMIT')
-  } catch (e) {
-    await client.query('ROLLBACK')
-    throw e
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // Best-effort refresh triggered by a storage mutation. Never throws (a stats

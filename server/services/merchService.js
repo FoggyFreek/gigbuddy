@@ -36,6 +36,7 @@ import {
   postMerchSaleRecorded,
   postMerchSaleVoided,
 } from './ledgerService.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 
 const ALLOWED_TAX_RATES_SET = new Set(ALLOWED_TAX_RATES)
 const PAYMENT_METHODS = new Set(['bank', 'cash'])
@@ -278,38 +279,19 @@ export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = 
 }
 
 export async function recordMerchSale(pool, tenantId, body, actorUserId = null) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const result = await recordMerchSaleTx(client, tenantId, body, { actorUserId })
-    if (result.error) {
-      await client.query('ROLLBACK')
-      return result
-    }
-    await client.query('COMMIT')
+    if (result.error) abortTransaction(result)
     return { saleId: result.saleId }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db: pool, mapError: ledgerErrorResult })
 }
 
 export async function voidMerchSale(pool, tenantId, id, actorUserId = null) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const sale = await lockSaleWithProduct(client, tenantId, id)
-    if (!sale) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'Not found' } } }
-    }
+    if (!sale) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
     if (sale.status === 'voided') {
-      await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'Sale is already voided', code: 'already_voided' } } }
+      abortTransaction({ error: { status: 409, body: { error: 'Sale is already voided', code: 'already_voided' } } })
     }
 
     await markSaleVoided(client, tenantId, id)
@@ -324,14 +306,6 @@ export async function voidMerchSale(pool, tenantId, id, actorUserId = null) {
 
     await postMerchSaleVoided(client, tenantId, sale, { actorUserId })
 
-    await client.query('COMMIT')
     return {}
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db: pool, mapError: ledgerErrorResult })
 }

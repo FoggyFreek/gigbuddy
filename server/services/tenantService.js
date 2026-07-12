@@ -1,7 +1,7 @@
 // Tenant domain logic (global super-admin management). Route handlers stay thin
 // and delegate here. Functions that can fail with a specific HTTP outcome return
 // { error: { status, body } }; success returns a domain payload.
-import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { WRITE_ROLES } from '../auth/permissions.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
 import {
@@ -70,13 +70,9 @@ export async function createTenant(createdByUserId, body) {
   if (resolved.error) return badRequest(resolved.error)
   const { adminUserId } = resolved
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     if (adminUserId && !(await userExists(client, adminUserId))) {
-      await client.query('ROLLBACK')
-      return badRequest('adminUserId references a non-existent user')
+      abortTransaction(badRequest('adminUserId references a non-existent user'))
     }
 
     const tenant = await insertTenant(client, slug, band_name, createdByUserId)
@@ -87,15 +83,10 @@ export async function createTenant(createdByUserId, body) {
       await insertTenantAdminMembership(client, adminUserId, tenant.id, createdByUserId)
     }
 
-    await client.query('COMMIT')
     return { tenant }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    if (err.code === '23505') return conflict('Slug already in use')
-    throw err
-  } finally {
-    client.release()
-  }
+  }, {
+    mapError: (err) => (err.code === '23505' ? conflict('Slug already in use') : null),
+  })
 }
 
 // Owner assignment validation: null (detach) is always allowed; a non-null id
@@ -149,26 +140,14 @@ export async function patchTenant(db, tenantId, body) {
 // cap when the grant creates a NEW approved membership (a promote/role change
 // of an already-approved member consumes no extra capacity).
 async function grantApprovedMembership(db, tenantId, userId, upsertFn) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const existingStatus = await fetchMembershipStatus(client, userId, tenantId)
     if (existingStatus !== 'approved') {
       const capError = await enforceMemberCap(client, tenantId, 'membership')
-      if (capError) {
-        await client.query('ROLLBACK')
-        return capError
-      }
+      if (capError) abortTransaction(capError)
     }
-    const membership = await upsertFn(client)
-    await client.query('COMMIT')
-    return { membership }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+    return { membership: await upsertFn(client) }
+  }, { db })
 }
 
 export async function addAdmin(db, tenantId, body, actingUserId) {
@@ -212,39 +191,21 @@ export async function setArchived(db, tenantId, archived) {
 }
 
 export async function deleteTenant(db, tenantId, confirmationSlug) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const tenant = await fetchTenantForDeletion(client, tenantId)
-    if (!tenant) {
-      await client.query('ROLLBACK')
-      return notFound('Tenant not found')
-    }
-    if (!tenant.archived_at) {
-      await client.query('ROLLBACK')
-      return conflict('Tenant must be archived before deletion')
-    }
-    if (confirmationSlug !== tenant.slug) {
-      await client.query('ROLLBACK')
-      return badRequest('Confirmation slug does not match')
-    }
+    if (!tenant) abortTransaction(notFound('Tenant not found'))
+    if (!tenant.archived_at) abortTransaction(conflict('Tenant must be archived before deletion'))
+    if (confirmationSlug !== tenant.slug) abortTransaction(badRequest('Confirmation slug does not match'))
 
     const assetKeys = await fetchTenantAssetKeys(client, tenantId)
     try {
       await deleteTenantObjects(tenantId, assetKeys)
     } catch (err) {
-      await client.query('ROLLBACK')
       logger.error('tenant.delete_storage_failed', { err, tenantId })
-      return { error: { status: 502, body: { error: 'Failed to delete tenant storage' } } }
+      abortTransaction({ error: { status: 502, body: { error: 'Failed to delete tenant storage' } } })
     }
 
     await deleteTenantRow(client, tenantId)
-    await client.query('COMMIT')
     return { audit: { action: 'tenant.delete', details: { tenantId } } }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db })
 }

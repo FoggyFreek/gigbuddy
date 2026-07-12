@@ -1,51 +1,21 @@
 // Input parsing and validation for venue routes. No DB access here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
 import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../utils/urls.js'
+import {
+  VALID_VENUE_CATEGORIES,
+  VENUE_EDITABLE_FIELDS,
+  buildVenueInsertValues,
+  venueImportKey,
+} from '../domain/venue.js'
 
-export const VALID_CATEGORIES = new Set(['venue', 'festival'])
+export const VALID_CATEGORIES = VALID_VENUE_CATEGORIES
 export const VALID_GIG_ACTIONS = new Set(['migrate', 'remove'])
 
-export const EDITABLE_FIELDS = [
-  'category',
-  'name',
-  'title',
-  'given_name',
-  'family_name',
-  'organization_name',
-  'street_and_number',
-  'street_additional',
-  'postal_code',
-  'city',
-  'region',
-  'country',
-  'website',
-  'phone',
-  'email',
-]
+export const EDITABLE_FIELDS = VENUE_EDITABLE_FIELDS
 
 export { parseId, parseSearchLimit }
 
-function normalizeInsertWebsite(body) {
-  try {
-    return normalizeOptionalUrl(body.website, { allowedProtocols: WEB_URL_PROTOCOLS })
-  } catch {
-    return null
-  }
-}
-
-function normalizeInsertField(key, body) {
-  if (key === 'category') return VALID_CATEGORIES.has(body.category) ? body.category : 'venue'
-  if (key === 'name') return String(body.name).trim()
-  if (key === 'website') return normalizeInsertWebsite(body)
-  return body[key] || null
-}
-
-export function buildInsertValues(tenantId, body) {
-  return [
-    tenantId,
-    ...EDITABLE_FIELDS.map((key) => normalizeInsertField(key, body)),
-  ]
-}
+export const buildInsertValues = buildVenueInsertValues
 
 function normalizePatchField(key, value) {
   if (key === 'country') return value || null
@@ -82,9 +52,7 @@ export function normalizeImportCity(row) {
   return row.city ? String(row.city).trim() : ''
 }
 
-export function venueImportKey(name, city) {
-  return `${name.toLowerCase()} ${city.toLowerCase()}`
-}
+export { venueImportKey }
 
 export function collectIncomingNames(rows) {
   return [

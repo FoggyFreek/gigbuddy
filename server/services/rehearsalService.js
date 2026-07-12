@@ -2,6 +2,7 @@
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function).
 import pool from '../db/index.js'
+import { withTransaction } from '../db/withTransaction.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
@@ -124,12 +125,8 @@ export async function createRehearsal(tenantId, userId, body) {
   }
   const extras = normalizeExtraMemberIds(body.extra_member_ids)
 
-  const client = await pool.connect()
-  let rehearsal
-  try {
-    await client.query('BEGIN')
-
-    rehearsal = await insertRehearsal(client, tenantId, body, userId)
+  const rehearsal = await withTransaction(async (client) => {
+    const created = await insertRehearsal(client, tenantId, body, userId)
 
     const leadIds = await getLeadMemberIds(client, tenantId)
     const extraIds = await filterMemberIdsInTenant(client, extras, tenantId)
@@ -139,17 +136,12 @@ export async function createRehearsal(tenantId, userId, body) {
     for (const mid of memberIds) {
       const vote = mid === creatorMemberId ? 'yes' : null
       const updatedBy = mid === creatorMemberId ? userId : null
-      await insertParticipant(client, tenantId, rehearsal.id, mid, vote, updatedBy)
+      await insertParticipant(client, tenantId, created.id, mid, vote, updatedBy)
     }
+    return created
+  })
 
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
-
+  // Post-commit read (on the pool): the created rehearsal with its participants.
   return { rehearsal: await withParticipants(pool, rehearsal, tenantId) }
 }
 

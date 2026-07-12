@@ -22,6 +22,7 @@ import {
   ledgerErrorResult,
   postReimbursementPaid,
 } from './ledgerService.js'
+import { withTransaction } from '../db/withTransaction.js'
 
 // Sentinel thrown inside the transaction when a concurrent settlement claimed a
 // purchase first, so the whole reimbursement rolls back.
@@ -93,9 +94,7 @@ export async function createReimbursement(pool, tenantId, body, actorUserId = nu
   if (selected.some((p) => !p)) return notOutstanding()
   const amountCents = selected.reduce((sum, p) => sum + p.total_cents, 0)
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const reimbursement = await insertReimbursement(client, tenantId, {
       band_member_id: member.id,
       amount_cents: amountCents,
@@ -110,17 +109,16 @@ export async function createReimbursement(pool, tenantId, body, actorUserId = nu
       throw conflict
     }
     await postReimbursementPaid(client, tenantId, reimbursement, { actorUserId })
-    await client.query('COMMIT')
     return { reimbursement }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    if (err.code === RACE_CONFLICT) return notOutstanding()
-    throw err
-  } finally {
-    client.release()
-  }
+  }, {
+    db: pool,
+    mapError: (err) => {
+      const mapped = ledgerErrorResult(err)
+      if (mapped) return mapped
+      if (err.code === RACE_CONFLICT) return notOutstanding()
+      return null
+    },
+  })
 }
 
 // Reimburses a member's entire outstanding balance in one go.

@@ -9,6 +9,7 @@
 // Core invariant: Assets & Expenses increase with Debits; Liabilities, Equity &
 // Revenue increase with Credits. Every journal balances (Σ debits == Σ credits).
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { classify, describe, receiptFor } from './ledgerEntryTypes.js'
 import { parseSearchLimit } from '../validators/ledgerValidators.js'
 import {
@@ -441,41 +442,21 @@ function correctionPeriodConflict(mode, isClosed, closedThrough) {
 }
 
 async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const row = await getTransaction(client, tenantId, transactionId)
-    if (!row) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'Not found' } } }
-    }
+    if (!row) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
     const rowConflict = correctionRowConflict(row)
-    if (rowConflict) {
-      await client.query('ROLLBACK')
-      return { error: rowConflict }
-    }
+    if (rowConflict) abortTransaction({ error: rowConflict })
 
     const closedThrough = await fetchBooksClosedThrough(client, tenantId)
     const isClosed = Boolean(closedThrough && row.entry_date <= closedThrough)
     const periodConflict = correctionPeriodConflict(mode, isClosed, closedThrough)
-    if (periodConflict) {
-      await client.query('ROLLBACK')
-      return { error: periodConflict }
-    }
+    if (periodConflict) abortTransaction({ error: periodConflict })
 
-    let result
-    try {
-      result = await postReversingJournal(client, tenantId, row, mode, actorUserId)
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
-      const mapped = ledgerErrorResult(err)
-      if (mapped) return mapped
-      throw err
-    }
+    const result = await postReversingJournal(client, tenantId, row, mode, actorUserId)
     if (!result.posted) {
-      await client.query('ROLLBACK')
       const code = mode === 'void' ? 'already_voided' : 'already_reversed'
-      return { error: { status: 409, body: { error: 'Entry already corrected', code } } }
+      abortTransaction({ error: { status: 409, body: { error: 'Entry already corrected', code } } })
     }
 
     // Mark the original. The compensating ledger_transaction/void is excluded
@@ -486,14 +467,8 @@ async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode)
       await markReversed(client, tenantId, transactionId, result.transactionId)
     }
 
-    await client.query('COMMIT')
     return { transactionId: result.transactionId }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db: pool, mapError: ledgerErrorResult })
 }
 
 // Transaction-scoped correction used by domain workflows that must combine a

@@ -10,7 +10,7 @@ import pool from '../db/index.js'
 import { sendPushToUsers, sendPushToUser } from '../utils/sendPush.js'
 import { logger } from '../utils/logger.js'
 import { ALL_ROLES, hasPermission } from '../auth/permissions.js'
-import { NOTIFICATION_TYPES } from './notificationTypes.js'
+import { NOTIFICATION_TYPES } from '../domain/notificationTypes.js'
 import { parsePrefsBody } from '../validators/notificationValidators.js'
 import { isApprovedMember } from '../repositories/authRepository.js'
 import {

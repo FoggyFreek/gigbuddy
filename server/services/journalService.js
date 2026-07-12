@@ -30,6 +30,7 @@ import {
   findUnpostableLine,
 } from '../validators/journalValidators.js'
 import { ledgerErrorResult, postUserJournal } from './ledgerService.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 
 const NOT_FOUND = { status: 404, body: { error: 'Not found' } }
 const APPROVED_LOCKED = { status: 409, body: { error: 'Approved journals cannot be edited', code: 'journal_approved' } }
@@ -76,22 +77,14 @@ export async function createJournal(pool, tenantId, body, actorUserId = null) {
   const codeErr = await validateDraftCodes(pool, tenantId, lines)
   if (codeErr) return codeErr
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const id = await createJournalRepo(client, tenantId, {
       entryDate, description: body.description?.trim() || null,
       createdByUserId: actorUserId,
     })
     if (lines.length) await replaceJournalLines(client, id, tenantId, lines)
-    await client.query('COMMIT')
     return { journalId: id }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db: pool })
 }
 
 // ---------- patch (draft only) ----------
@@ -114,22 +107,14 @@ export async function updateJournal(pool, tenantId, id, body) {
     if (codeErr) return codeErr
   }
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     await updateJournalHeader(client, tenantId, id, {
       entryDate,
       description: 'description' in body ? (body.description?.trim() || null) : existing.description,
     })
     if (lines !== null) await replaceJournalLines(client, id, tenantId, lines)
-    await client.query('COMMIT')
     return {}
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db: pool })
 }
 
 // ---------- delete (draft only) ----------
@@ -149,39 +134,26 @@ export async function deleteJournal(pool, tenantId, id) {
 // and a duplicate ledger post is recovered to its existing transaction id so the
 // header always ends up with a real posted_transaction_id.
 export async function approveJournal(pool, tenantId, id, actorUserId = null) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const journal = await lockJournalForApprove(client, tenantId, id)
-    if (!journal) { await client.query('ROLLBACK'); return { error: NOT_FOUND } }
-    if (journal.status === 'approved') { await client.query('ROLLBACK'); return { error: ALREADY_APPROVED } }
+    if (!journal) abortTransaction({ error: NOT_FOUND })
+    if (journal.status === 'approved') abortTransaction({ error: ALREADY_APPROVED })
 
     const lines = await fetchJournalLines(client, id, tenantId)
     if (lines.length < 1) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'Journal has no lines', code: 'no_lines' } } }
+      abortTransaction({ error: { status: 400, body: { error: 'Journal has no lines', code: 'no_lines' } } })
     }
 
     const codes = lines.flatMap((l) => [l.account_code, l.balancing_account_code]).filter(Boolean)
     const activeCodes = await fetchActiveAccountCodes(client, tenantId, codes)
     const bad = findUnpostableLine(lines, activeCodes)
     if (bad) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: `Line ${bad.index} is not postable (${bad.reason})`, code: bad.code, line: bad.index } } }
+      abortTransaction({ error: { status: 400, body: { error: `Line ${bad.index} is not postable (${bad.reason})`, code: bad.code, line: bad.index } } })
     }
 
-    let result
-    try {
-      result = await postUserJournal(client, tenantId, journal, lines, { actorUserId })
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
-      const mapped = ledgerErrorResult(err)
-      if (mapped) return mapped
-      if (err.message?.startsWith('ledger:')) {
-        return { error: { status: 400, body: { error: err.message, code: 'unbalanced_journal' } } }
-      }
-      throw err
-    }
+    // A ledger-post failure (unbalanced / closed period / misconfigured) is
+    // translated by mapError below into its HTTP shape after the rollback.
+    const result = await postUserJournal(client, tenantId, journal, lines, { actorUserId })
 
     // postJournal returns { posted: false } if this (source_type, source_id,
     // source_event) was already posted (double-click / retry). Recover the
@@ -196,21 +168,24 @@ export async function approveJournal(pool, tenantId, id, actorUserId = null) {
       transactionId = rows[0]?.id
     }
     if (!transactionId) {
-      await client.query('ROLLBACK')
-      return { error: { status: 500, body: { error: 'Failed to post journal' } } }
+      abortTransaction({ error: { status: 500, body: { error: 'Failed to post journal' } } })
     }
 
     const updated = await setApproved(client, tenantId, id, transactionId, actorUserId)
-    if (!updated) { await client.query('ROLLBACK'); return { error: ALREADY_APPROVED } }
+    if (!updated) abortTransaction({ error: ALREADY_APPROVED })
 
-    await client.query('COMMIT')
     return { journal: updated }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  }, {
+    db: pool,
+    mapError: (err) => {
+      const mapped = ledgerErrorResult(err)
+      if (mapped) return mapped
+      if (err.message?.startsWith('ledger:')) {
+        return { error: { status: 400, body: { error: err.message, code: 'unbalanced_journal' } } }
+      }
+      return null
+    },
+  })
 }
 
 // Approves multiple drafts (powers "Approve all"). De-duplicates ids; each is its

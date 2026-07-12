@@ -5,6 +5,7 @@
 // { action, details } the route logs via auditLog(req, ...).
 import { randomBytes } from 'node:crypto'
 import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { logger } from '../utils/logger.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { dispatchNotification } from './notificationService.js'
@@ -161,36 +162,27 @@ export async function redeemInvite(user, body) {
     return { error: forbidden('Account is not allowed to redeem invites'), audit: denied('rejected_user') }
   }
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const invite = await claimInvite(client, code, user.id)
     if (!invite) {
       const spent = await getInviteWithTenant(client, code)
-      await client.query('ROLLBACK')
-      return resolveSpentInvite(spent, user)
+      abortTransaction(resolveSpentInvite(spent, user))
     }
 
     const inviteRef = { tenantId: invite.tenant_id, inviteId: invite.id }
 
     const invalid = claimedInviteError(invite, inviteRef)
-    if (invalid) {
-      await client.query('ROLLBACK')
-      return invalid
-    }
+    if (invalid) abortTransaction(invalid)
 
     const existing = await getMembership(client, user.id, invite.tenant_id)
     if (existing) {
-      await client.query('ROLLBACK')
-      return {
+      abortTransaction({
         error: conflict('Already a member of this tenant', { membership: existing }),
         audit: denied('already_member', inviteRef),
-      }
+      })
     }
 
     await insertPendingMembership(client, user.id, invite.tenant_id, invite.role)
-    await client.query('COMMIT')
 
     return {
       result: {
@@ -206,10 +198,5 @@ export async function redeemInvite(user, body) {
       },
       audit: { action: 'invite.redeem', details: { ...inviteRef, role: invite.role } },
     }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }

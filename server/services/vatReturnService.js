@@ -15,6 +15,7 @@ import {
   assertPeriodOpen,
   AccountingNotConfiguredError,
 } from './ledgerService.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { vatAccountBalances } from '../repositories/ledgerRepository.js'
 import {
   vatReturnExists,
@@ -144,9 +145,7 @@ export async function createVatReturn(pool, tenantId, { year, quarter, notes }, 
     return { error: { status: 400, body: { error: 'The quarter has not ended yet', code: 'period_not_ended' } } }
   }
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const settings = await loadAccountingSettings(client, tenantId)
     const inputCode = requireCode(settings, 'input_vat_account_code')
     const outputCode = requireCode(settings, 'output_vat_account_code')
@@ -156,8 +155,7 @@ export async function createVatReturn(pool, tenantId, { year, quarter, notes }, 
     // check: refiling a settled quarter should say "already filed", not
     // "period closed".
     if (await vatReturnExists(client, tenantId, year, quarter)) {
-      await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'This quarter is already filed', code: 'already_filed' } } }
+      abortTransaction({ error: { status: 409, body: { error: 'This quarter is already filed', code: 'already_filed' } } })
     }
 
     // Quarters file in order: the settlement journal is dated period_to, so a
@@ -167,8 +165,7 @@ export async function createVatReturn(pool, tenantId, { year, quarter, notes }, 
 
     const { output_cents, input_cents } = await vatAccountBalances(client, tenantId, { asOf: range.period_to })
     if (output_cents === 0 && input_cents === 0) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'No VAT to settle in this period', code: 'nothing_to_settle' } } }
+      abortTransaction({ error: { status: 400, body: { error: 'No VAT to settle in this period', code: 'nothing_to_settle' } } })
     }
 
     const net = output_cents - input_cents
@@ -219,65 +216,56 @@ export async function createVatReturn(pool, tenantId, { year, quarter, notes }, 
     // final, and anything posted later flows into the next quarter's return.
     await closeBooksThrough(client, tenantId, range.period_to)
 
-    await client.query('COMMIT')
     return { vatReturn: withStatus({ ...row, paid_cents: 0 }) }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    if (err.code === '23505') {
-      return { error: { status: 409, body: { error: 'This quarter is already filed', code: 'already_filed' } } }
-    }
-    throw err
-  } finally {
-    client.release()
-  }
+  }, {
+    db: pool,
+    mapError: (err) => {
+      const mapped = ledgerErrorResult(err)
+      if (mapped) return mapped
+      if (err.code === '23505') {
+        return { error: { status: 409, body: { error: 'This quarter is already filed', code: 'already_filed' } } }
+      }
+      return null
+    },
+  })
 }
 
 // Records one (partial) payment/refund against a filed return and posts the
 // cash journal. The return row is locked FOR UPDATE so concurrent payments
 // serialize and the overpay check cannot race.
 export async function recordVatPayment(pool, tenantId, vatReturnId, payment, actorUserId = null) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const settings = await loadAccountingSettings(client, tenantId)
 
     const ret = await lockVatReturn(client, tenantId, vatReturnId)
-    if (!ret) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'Not found' } } }
-    }
+    if (!ret) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
 
     let required = null
     if (ret.direction === 'payable') required = 'payment'
     else if (ret.direction === 'receivable') required = 'refund'
     if (payment.direction !== required) {
-      await client.query('ROLLBACK')
-      return {
+      abortTransaction({
         error: {
           status: 400,
           body: { error: `This return does not take a ${payment.direction}`, code: 'direction_mismatch' },
         },
-      }
+      })
     }
 
     const paid_cents = await sumVatReturnPayments(client, tenantId, vatReturnId)
     const outstanding = Math.abs(ret.net_cents) - paid_cents
     if (payment.amount_cents > outstanding) {
-      await client.query('ROLLBACK')
-      return {
+      abortTransaction({
         error: {
           status: 400,
           body: { error: 'Amount exceeds the outstanding balance', code: 'overpayment', outstanding_cents: outstanding },
         },
-      }
+      })
     }
 
     const bankCode = payment.bank_account_code ?? requireCode(settings, 'primary_checking_account_code')
     if (await getAccountType(client, tenantId, bankCode) !== 'asset') {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'Bank account must be an asset account', code: 'invalid_bank_account' } } }
+      abortTransaction({ error: { status: 400, body: { error: 'Bank account must be an asset account', code: 'invalid_bank_account' } } })
     }
 
     const row = await insertVatReturnPayment(client, tenantId, vatReturnId, {
@@ -308,16 +296,8 @@ export async function recordVatPayment(pool, tenantId, vatReturnId, payment, act
       actorUserId,
     })
 
-    await client.query('COMMIT')
     return { payment: row }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db: pool, mapError: ledgerErrorResult })
 }
 
 export async function listVatReturns(executor, tenantId) {

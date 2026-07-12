@@ -53,6 +53,7 @@ import {
   postBillPaid,
   correctLedgerTransaction,
 } from './ledgerService.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { randomUUID } from 'node:crypto'
 import { purchaseAttachmentKey, uploadObjectWithQuota, removeObject, safeRemove } from './storageService.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
@@ -244,12 +245,9 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
     if (approvalErr) return approvalErr
   }
 
-  const client = await pool.connect()
-  let purchaseId
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const receiptNumber = await nextPurchaseNumber(client, tenantId)
-    purchaseId = await insertPurchase(client, tenantId, buildCreatePurchaseData({
+    const purchaseId = await insertPurchase(client, tenantId, buildCreatePurchaseData({
       status, tenantId, receiptNumber, supplierName, supplierContactId,
       receiptDate, dueDate, currency, memo: body.memo || null, totals, actorUserId,
     }))
@@ -265,17 +263,8 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
       await applyPurchaseStockIn(client, tenantId, lines)
     }
 
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    throw err
-  } finally {
-    client.release()
-  }
-
-  return { purchaseId }
+    return { purchaseId }
+  }, { db: pool, mapError: ledgerErrorResult })
 }
 
 function resolveCreateStatus(body, { canManageFinance = false } = {}) {
@@ -360,15 +349,11 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
 
   const contentChanged = Object.keys(body).some((k) => CONTENT_FIELDS_SET.has(k))
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     if ('lines' in body) {
       const lines = normalizeLines(body.lines)
       if (!lines.length) {
-        await client.query('ROLLBACK')
-        return { error: { status: 400, body: { error: 'At least one line is required' } } }
+        abortTransaction({ error: { status: 400, body: { error: 'At least one line is required' } } })
       }
       await replacePurchaseLines(client, id, tenantId, lines)
     }
@@ -381,8 +366,7 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
     }
 
     if (!Object.keys(fields).length && !totals && body.status === undefined) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'No valid fields to update' } } }
+      abortTransaction({ error: { status: 400, body: { error: 'No valid fields to update' } } })
     }
 
     await updatePurchase(client, tenantId, id, {
@@ -402,14 +386,8 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
       await applyPurchaseStockIn(client, tenantId, currentLines)
     }
 
-    await client.query('COMMIT')
     return {}
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    return mapPatchError(err)
-  } finally {
-    client.release()
-  }
+  }, { db: pool, mapError: mapPatchError })
 }
 
 function validateStatusTransition(existing, body) {
@@ -538,19 +516,11 @@ export async function registerPayment(pool, tenantId, id, body, actorUserId = nu
     return { error: { status: 400, body: { error: 'Imported payments require bank method', code: 'invalid_payment_method' } } }
   }
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const lockedPurchase = await lockPurchase(client, tenantId, id)
-    if (!lockedPurchase) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'Not found' } } }
-    }
+    if (!lockedPurchase) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
     const lockedPreconditionErr = validatePaymentPreconditions(lockedPurchase)
-    if (lockedPreconditionErr) {
-      await client.query('ROLLBACK')
-      return lockedPreconditionErr
-    }
+    if (lockedPreconditionErr) abortTransaction(lockedPreconditionErr)
     let effectivePaidOn = paidOn
     let candidate = null
     if (bankLineId != null) {
@@ -565,15 +535,11 @@ export async function registerPayment(pool, tenantId, id, body, actorUserId = nu
         || candidate.voided_at != null
         || candidate.reversed_by_transaction_id != null
       if (invalid) {
-        await client.query('ROLLBACK')
-        return { error: { status: 409, body: { error: 'Imported payment is no longer eligible', code: 'bank_payment_not_eligible' } } }
+        abortTransaction({ error: { status: 409, body: { error: 'Imported payment is no longer eligible', code: 'bank_payment_not_eligible' } } })
       }
       effectivePaidOn = candidate.booking_date.toISOString?.().slice(0, 10) ?? String(candidate.booking_date).slice(0, 10)
       const corrected = await correctLedgerTransaction(client, tenantId, candidate.ledger_transaction_id, actorUserId)
-      if (corrected.error) {
-        await client.query('ROLLBACK')
-        return corrected
-      }
+      if (corrected.error) abortTransaction(corrected)
     }
     const result = await settlePurchase(client, tenantId, id, {
       paidOn: effectivePaidOn,
@@ -582,10 +548,7 @@ export async function registerPayment(pool, tenantId, id, body, actorUserId = nu
       registeredByUserId: actorUserId,
       clampToOpenPeriod: bankLineId != null,
     })
-    if (result.error) {
-      await client.query('ROLLBACK')
-      return result
-    }
+    if (result.error) abortTransaction(result)
     if (candidate) {
       const paymentTxn = await getTransactionBySource(client, tenantId, 'purchase', id, 'paid')
       await markLineResult(client, tenantId, candidate.id, {
@@ -595,16 +558,8 @@ export async function registerPayment(pool, tenantId, id, body, actorUserId = nu
         matchedSourceId: id,
       })
     }
-    await client.query('COMMIT')
     return {}
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db: pool, mapError: ledgerErrorResult })
 }
 
 function validatePaymentPreconditions(existing) {

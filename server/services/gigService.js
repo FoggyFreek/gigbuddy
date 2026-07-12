@@ -3,7 +3,7 @@
 // success returns a domain payload (see each function).
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import { uploadObjectWithQuota, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
@@ -220,10 +220,7 @@ export async function importGigs(tenantId, userId, body) {
     return { error: { status: 400, body: { error: 'Maximum 200 gigs per import' } } }
   }
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const leadIds = await getLeadMemberIds(client, tenantId)
 
     let created = 0
@@ -232,8 +229,7 @@ export async function importGigs(tenantId, userId, body) {
     for (const item of body) {
       const parsed = normalizeImportRow(item)
       if (parsed.error) {
-        await client.query('ROLLBACK')
-        return { error: { status: 400, body: { error: parsed.error } } }
+        abortTransaction({ error: { status: 400, body: { error: parsed.error } } })
       }
       if (parsed.skip) { skipped++; continue }
       const row = parsed.data
@@ -242,8 +238,7 @@ export async function importGigs(tenantId, userId, body) {
         client, { venue_id: row.venueId, festival_id: row.festivalId }, tenantId,
       )
       if (venueCheck.error) {
-        await client.query('ROLLBACK')
-        return { error: { status: 400, body: { error: venueCheck.error } } }
+        abortTransaction({ error: { status: 400, body: { error: venueCheck.error } } })
       }
 
       const gigId = await insertGigForImport(client, tenantId, row)
@@ -253,14 +248,8 @@ export async function importGigs(tenantId, userId, body) {
       created++
     }
 
-    await client.query('COMMIT')
     return { created, skipped }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // Creates a gig plus its initial lead-member participants in one transaction.
@@ -279,16 +268,12 @@ export async function createGig(tenantId, userId, body) {
   const festivalId = refs.body.festival_id ?? null
   const finalStatus = VALID_STATUSES.includes(status) ? status : 'option'
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const venueCheck = await validateVenueAndFestivalForTenant(
       client, { venue_id: venueId, festival_id: festivalId }, tenantId,
     )
     if (venueCheck.error) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: venueCheck.error } } }
+      abortTransaction({ error: { status: 400, body: { error: venueCheck.error } } })
     }
 
     const gig = await insertGigWithRelations(client, tenantId, {
@@ -302,14 +287,8 @@ export async function createGig(tenantId, userId, body) {
       await insertGigParticipant(client, tenantId, gig.id, memberId, userId)
     }
 
-    await client.query('COMMIT')
     return { gig }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // Validates and applies a gig PATCH. Returns { error } or { gig, confirmed } —
@@ -510,32 +489,20 @@ export async function addGigContact(db, tenantId, gigId, contactId) {
 // Toggles a contact's primary flag inside a transaction; at most one contact
 // per gig can be primary, so making one primary first clears the others.
 export async function setGigContactPrimary(tenantId, gigId, contactId, makePrimary) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const linkedIds = await lockGigContacts(client, gigId, tenantId)
-    if (!linkedIds.includes(contactId)) {
-      await client.query('ROLLBACK')
-      return NOT_FOUND
-    }
+    if (!linkedIds.includes(contactId)) abortTransaction(NOT_FOUND)
 
     if (makePrimary) {
       await clearPrimaryGigContact(client, gigId, tenantId)
     }
 
-    const link = await setGigContactPrimaryRow(client, gigId, contactId, makePrimary, tenantId)
-    await client.query('COMMIT')
-    return { link }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    if (err.code === '23505') {
-      return { error: { status: 409, body: { error: 'Another contact is already primary' } } }
-    }
-    throw err
-  } finally {
-    client.release()
-  }
+    return { link: await setGigContactPrimaryRow(client, gigId, contactId, makePrimary, tenantId) }
+  }, {
+    mapError: (err) => (err.code === '23505'
+      ? { error: { status: 409, body: { error: 'Another contact is already primary' } } }
+      : null),
+  })
 }
 
 export async function removeGigContact(db, tenantId, gigId, contactId) {

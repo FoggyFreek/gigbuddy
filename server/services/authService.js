@@ -16,6 +16,7 @@ import {
   isApprovedMember,
   setTermsAccepted,
   listDismissedTutorials,
+  clearOnboardingTenant,
 } from '../repositories/authRepository.js'
 import { permissionsForRole } from '../auth/permissions.js'
 import { resolveTenantEntitlements } from './entitlementService.js'
@@ -212,6 +213,11 @@ export async function unlinkProvider(db, userId, provider) {
 
 export async function canUseTenant(db, userId, tenantId) {
   return isApprovedMember(db, userId, tenantId)
+}
+
+// Ends the onboarding flow by clearing its resume pointer. Idempotent.
+export async function completeOnboarding(db, userId) {
+  await clearOnboardingTenant(db, userId)
 }
 
 // Records acceptance of the CURRENT terms version only — any other value is a

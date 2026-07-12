@@ -1,6 +1,6 @@
 // Data-access helpers for invoices. Each takes an `executor` (a pool or a
 // transaction client) so callers control transaction boundaries.
-import { formatInvoiceNumber } from '../validators/invoiceValidators.js'
+import { formatInvoiceNumber } from '../domain/invoice.js'
 import { invoiceProjection } from './invoiceProjection.js'
 
 export async function acquireSessionLock(executor, namespace, resourceId) {

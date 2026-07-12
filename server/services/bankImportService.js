@@ -11,6 +11,7 @@ import {
   postOpeningBalance,
   ledgerErrorResult,
 } from './ledgerService.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { settleInvoice } from './invoiceService.js'
 import { settlePurchase } from './purchaseService.js'
 import { hasOpeningBalance } from '../repositories/ledgerRepository.js'
@@ -111,10 +112,8 @@ export async function parseAndStage(db, tenantId, file, userId) {
 
   const currency = await tenantCurrency(db, tenantId)
 
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
-    let imp = await insertImport(client, tenantId, {
+  const imp = await withTransaction(async (client) => {
+    let staged = await insertImport(client, tenantId, {
       filename: file.originalname || 'statement',
       format: parsed.format,
       currency: parsed.currency,
@@ -133,21 +132,24 @@ export async function parseAndStage(db, tenantId, file, userId) {
       // history is preserved but they never reach the ledger.
       const status = lineCurrency && lineCurrency !== currency ? 'skipped_currency' : 'pending'
       if (status === 'pending') pendingCount++
-      await insertLine(client, tenantId, imp.id, i, line, status)
+      await insertLine(client, tenantId, staged.id, i, line, status)
     }
-    if (pendingCount === 0) imp = await markImportCommitted(client, tenantId, imp.id)
-    await client.query('COMMIT')
-    return decorateImport(db, tenantId, imp)
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    if (err.code === '23505' && err.constraint === 'bank_statement_imports_tenant_id_file_hash_key') {
-      const winner = await findImportByHash(db, tenantId, fileHash)
-      if (winner) return decorateImport(db, tenantId, winner)
-    }
-    throw err
-  } finally {
-    client.release()
-  }
+    if (pendingCount === 0) staged = await markImportCommitted(client, tenantId, staged.id)
+    return staged
+  }, {
+    db,
+    // Exact re-upload of a file (unique file_hash) resolves to the existing
+    // import row instead of erroring; decorated post-commit below like a success.
+    mapError: async (err) => {
+      if (err.code === '23505' && err.constraint === 'bank_statement_imports_tenant_id_file_hash_key') {
+        return (await findImportByHash(db, tenantId, fileHash)) ?? null
+      }
+      return null
+    },
+  })
+
+  // Post-commit read: decorate the staged (or already-existing) import.
+  return decorateImport(db, tenantId, imp)
 }
 
 // Attaches per-line reconciliation/supplier suggestions and a soft duplicate
@@ -254,17 +256,11 @@ export async function getImport(db, tenantId, importId) {
 }
 
 export async function cancelImport(db, tenantId, importId) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const imp = await lockImport(client, tenantId, importId)
-    if (!imp) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'Not found' } } }
-    }
+    if (!imp) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
     if (await importHasCommittedLines(client, tenantId, importId)) {
-      await client.query('ROLLBACK')
-      return {
+      abortTransaction({
         error: {
           status: 409,
           body: {
@@ -272,17 +268,11 @@ export async function cancelImport(db, tenantId, importId) {
             code: 'bank_import_has_committed_lines',
           },
         },
-      }
+      })
     }
     await deleteImport(client, tenantId, importId)
-    await client.query('COMMIT')
     return {}
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db })
 }
 
 // Posts the opening balance from a staged import's own opening-balance value
@@ -290,36 +280,21 @@ export async function cancelImport(db, tenantId, importId) {
 // via postOpeningBalance; a second attempt (or a tenant that already has one)
 // 409s opening_balance_exists.
 export async function setOpeningBalanceFromImport(db, tenantId, importId, userId) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const imp = await lockImport(client, tenantId, importId)
-    if (!imp) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'Not found' } } }
-    }
+    if (!imp) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
     if (imp.opening_balance_cents == null) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'This statement has no opening balance', code: 'no_opening_balance' } } }
+      abortTransaction({ error: { status: 400, body: { error: 'This statement has no opening balance', code: 'no_opening_balance' } } })
     }
     const result = await postOpeningBalance(client, tenantId, {
       signedAmountCents: imp.opening_balance_cents,
       entryDate: toDateOnly(imp.opening_balance_date),
     }, { actorUserId: userId })
     if (!result.posted) {
-      await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'Opening balance already set', code: 'opening_balance_exists' } } }
+      abortTransaction({ error: { status: 409, body: { error: 'Opening balance already set', code: 'opening_balance_exists' } } })
     }
-    await client.query('COMMIT')
     return { posted: true, transactionId: result.transactionId }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db, mapError: ledgerErrorResult })
 }
 
 // ---------- commit ----------
@@ -407,47 +382,33 @@ async function withMollieReconciliationLock(db, operationId, fn) {
 // Short local reservation transaction. A null result means the invoice has no
 // active link and should use the ordinary reconciliation path.
 async function reserveLinkedInvoiceReconciliation(db, tenantId, importId, decision, userId) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const imp = await lockImport(client, tenantId, importId)
-    if (!imp) { await client.query('ROLLBACK'); return 'skipped_not_found' }
+    if (!imp) abortTransaction('skipped_not_found')
     const line = await lockLine(client, tenantId, importId, decision.lineId)
     const invoice = await lockInvoice(client, tenantId, decision.invoiceId)
-    if (!line || !invoice) { await client.query('ROLLBACK'); return 'skipped_not_found' }
-    if (line.status !== 'pending') { await client.query('ROLLBACK'); return 'skipped_already_committed' }
-    if (line.direction !== 'credit') { await client.query('ROLLBACK'); return 'skipped_direction_mismatch' }
-    if (invoice.status !== 'sent') { await client.query('ROLLBACK'); return 'skipped_invoice_not_open' }
-    if (invoice.total_cents !== line.amount_cents) { await client.query('ROLLBACK'); return 'skipped_amount_mismatch' }
-    if (!invoice.mollie_payment_link_id) { await client.query('ROLLBACK'); return null }
+    if (!line || !invoice) abortTransaction('skipped_not_found')
+    if (line.status !== 'pending') abortTransaction('skipped_already_committed')
+    if (line.direction !== 'credit') abortTransaction('skipped_direction_mismatch')
+    if (invoice.status !== 'sent') abortTransaction('skipped_invoice_not_open')
+    if (invoice.total_cents !== line.amount_cents) abortTransaction('skipped_amount_mismatch')
+    if (!invoice.mollie_payment_link_id) abortTransaction(null)
 
     const operation = await reserveMollieReconciliation(
       client, tenantId, line.id, invoice.id, userId,
     )
     if (!operation || operation.invoice_id !== invoice.id
         || operation.mollie_payment_link_id !== invoice.mollie_payment_link_id) {
-      await client.query('ROLLBACK')
-      return 'skipped_mollie_reconciliation_conflict'
+      abortTransaction('skipped_mollie_reconciliation_conflict')
     }
-    await client.query('COMMIT')
     return { operation, invoice }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db })
 }
 
 async function finalizeLinkedInvoiceReconciliation(db, tenantId, importId, decision, userId, operationId) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const operation = await lockMollieReconciliation(client, tenantId, operationId)
-    if (operation?.status === 'completed') {
-      await client.query('COMMIT')
-      return 'reconciled_invoice'
-    }
+    if (operation?.status === 'completed') return 'reconciled_invoice'
     const line = await lockLine(client, tenantId, importId, decision.lineId)
     const invoice = await lockInvoice(client, tenantId, decision.invoiceId)
     const invalid = !operation || operation.status !== 'deactivated'
@@ -455,8 +416,8 @@ async function finalizeLinkedInvoiceReconciliation(db, tenantId, importId, decis
       || !invoice || invoice.status !== 'sent' || invoice.total_cents !== line.amount_cents
       || invoice.mollie_payment_link_id !== operation.mollie_payment_link_id
     if (invalid) {
+      // Persist the conflict marker (a write) — commit, don't roll back.
       if (operation) await markMollieReconciliation(client, tenantId, operation.id, 'conflict', 'state_changed')
-      await client.query('COMMIT')
       return 'skipped_mollie_reconciliation_conflict'
     }
 
@@ -465,61 +426,54 @@ async function finalizeLinkedInvoiceReconciliation(db, tenantId, importId, decis
     )
     if (!cleared) {
       await markMollieReconciliation(client, tenantId, operation.id, 'conflict', 'link_changed')
-      await client.query('COMMIT')
       return 'skipped_mollie_reconciliation_conflict'
     }
     const status = await postReconciledInvoice(client, tenantId, line, cleared, userId)
-    if (status !== 'reconciled_invoice') {
-      await client.query('ROLLBACK')
-      return status
-    }
+    // A non-reconciled status means the post backed out — roll back and report it.
+    if (status !== 'reconciled_invoice') abortTransaction(status)
     await markMollieReconciliation(client, tenantId, operation.id, 'completed')
-    await client.query('COMMIT')
     return status
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped?.error.body.code === 'period_closed') return 'skipped_closed_period'
-    if (mapped?.error.body.code === 'accounting_not_configured') return 'skipped_accounting_not_configured'
-    throw err
-  } finally {
-    client.release()
-  }
+  }, {
+    db,
+    mapError: (err) => {
+      const mapped = ledgerErrorResult(err)
+      if (mapped?.error.body.code === 'period_closed') return 'skipped_closed_period'
+      if (mapped?.error.body.code === 'accounting_not_configured') return 'skipped_accounting_not_configured'
+      return null
+    },
+  })
 }
 
 // Commits one decision in its own transaction. Maps ledger guard errors to skip
 // statuses so the rest of the import proceeds.
 async function commitLine(db, tenantId, importId, decision, userId) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const imp = await lockImport(client, tenantId, importId)
-    if (!imp) { await client.query('ROLLBACK'); return 'skipped_not_found' }
+    if (!imp) abortTransaction('skipped_not_found')
     const line = await lockLine(client, tenantId, importId, decision.lineId)
-    if (!line) { await client.query('ROLLBACK'); return 'skipped_not_found' }
-    if (line.status !== 'pending') { await client.query('ROLLBACK'); return 'skipped_already_committed' }
+    if (!line) abortTransaction('skipped_not_found')
+    if (line.status !== 'pending') abortTransaction('skipped_already_committed')
 
     const status = await applyDecision(client, tenantId, line, decision, userId)
     if (status === 'skipped') {
+      // Persist the explicit skip (a write) — commit, don't roll back.
       await markLineResult(client, tenantId, line.id, { status: 'skipped' })
-      await client.query('COMMIT')
       return status
     }
+    // A non-terminal status means the decision backed out — roll back and report it.
     if (status !== 'imported' && status !== 'reconciled_invoice' && status !== 'reconciled_purchase') {
-      await client.query('ROLLBACK')
-      return status
+      abortTransaction(status)
     }
-    await client.query('COMMIT')
     return status
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped?.error.body.code === 'period_closed') return 'skipped_closed_period'
-    if (mapped?.error.body.code === 'accounting_not_configured') return 'skipped_accounting_not_configured'
-    throw err
-  } finally {
-    client.release()
-  }
+  }, {
+    db,
+    mapError: (err) => {
+      const mapped = ledgerErrorResult(err)
+      if (mapped?.error.body.code === 'period_closed') return 'skipped_closed_period'
+      if (mapped?.error.body.code === 'accounting_not_configured') return 'skipped_accounting_not_configured'
+      return null
+    },
+  })
 }
 
 const SYSTEM_OPTS = (userId) => ({ actorUserId: userId, clampToOpenPeriod: true })

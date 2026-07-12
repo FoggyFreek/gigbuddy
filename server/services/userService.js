@@ -3,7 +3,7 @@
 // failures and a domain payload on success. Audit events that need the request
 // (ip/session) are returned as an `audit` { action, details } descriptor for the
 // route to emit via auditLog(req, ...).
-import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   validateMembershipPatch,
   buildMembershipUpdate,
@@ -71,13 +71,9 @@ function authorizeMembershipChange({ existing, status, role, callerIsSuperAdmin,
 // before clearing the old link, so a missing target can't leave the user
 // unlinked. Returns { error } | {}.
 async function reassignBandMember(tenantId, userId, bandMemberId) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     if (bandMemberId !== null && !(await lockBandMember(client, bandMemberId, tenantId))) {
-      await client.query('ROLLBACK')
-      return { error: notFound('Band member not found in this tenant') }
+      abortTransaction({ error: notFound('Band member not found in this tenant') })
     }
 
     // Clear the user's current link, then assign the new one (if any).
@@ -86,14 +82,8 @@ async function reassignBandMember(tenantId, userId, bandMemberId) {
       await assignBandMember(client, userId, bandMemberId, tenantId)
     }
 
-    await client.query('COMMIT')
     return {}
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // ---------- public API ----------
@@ -129,22 +119,13 @@ export async function patchMembership(db, tenantId, actingUser, userId, body) {
   // transaction under the tenant-row lock. Invite redemption (pending rows)
   // deliberately doesn't consume capacity — only approval does.
   if (status === 'approved' && existing.status !== 'approved') {
-    const client = await db.connect()
-    try {
-      await client.query('BEGIN')
-      const capError = await enforceMemberCap(client, tenantId, 'membership')
-      if (capError) {
-        await client.query('ROLLBACK')
-        return capError
-      }
+    const capError = await withTransaction(async (client) => {
+      const err = await enforceMemberCap(client, tenantId, 'membership')
+      if (err) abortTransaction(err)
       await updateMembership(client, tenantId, userId, sets, values)
-      await client.query('COMMIT')
-    } catch (err) {
-      await client.query('ROLLBACK')
-      throw err
-    } finally {
-      client.release()
-    }
+      return null
+    }, { db })
+    if (capError) return capError
   } else {
     await updateMembership(db, tenantId, userId, sets, values)
   }

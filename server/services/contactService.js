@@ -1,7 +1,7 @@
 // Contact domain logic. Route handlers stay thin and delegate here. Functions
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function).
-import pool from '../db/index.js'
+import { withTransaction } from '../db/withTransaction.js'
 import {
   VALID_CATEGORIES,
   parseId,
@@ -174,10 +174,7 @@ export async function importContacts(tenantId, body) {
   if (!Array.isArray(body) || body.length === 0) return badRequest('Expected non-empty array')
   if (body.length > 1000) return badRequest('Maximum 1000 rows per import')
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const incomingNames = [...new Set(
       body.map((r) => String(r.name ?? '').trim().toLowerCase()).filter(Boolean),
     )]
@@ -204,12 +201,6 @@ export async function importContacts(tenantId, body) {
       imported++
       seenKeys.add(key)
     }
-    await client.query('COMMIT')
     return { summary: { imported, skipped } }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }

@@ -2,7 +2,7 @@
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function). Multi-statement writes
 // (create, reorder, delete-with-link-fixup) own their transaction here.
-import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   trimOrNull,
   parseSearchLimit,
@@ -108,19 +108,11 @@ export async function createSetlist(tenantId, body) {
   const name = trimOrNull(body.name)
   if (!name) return badRequest('name is required')
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const setlist = await insertSetlist(client, tenantId, name)
     await insertSet(client, setlist.id, tenantId, 'Set 1', 0)
-    await client.query('COMMIT')
     return { setlist }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 export async function patchSetlist(db, tenantId, setlistId, body) {
@@ -139,29 +131,20 @@ export async function deleteSetlist(db, tenantId, setlistId) {
 // ---------- sets ----------
 
 export async function reorderSets(tenantId, setlistId, orderedSetIds) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const current = await listSetIds(client, setlistId, tenantId)
     const currentSet = new Set(current)
     const unique = new Set(orderedSetIds)
     if (unique.size !== orderedSetIds.length
       || currentSet.size !== orderedSetIds.length
       || orderedSetIds.some((sid) => !currentSet.has(sid))) {
-      await client.query('ROLLBACK')
-      return badRequest('Set ids do not match current state')
+      abortTransaction(badRequest('Set ids do not match current state'))
     }
     for (let idx = 0; idx < orderedSetIds.length; idx++) {
       await updateSetSortOrder(client, orderedSetIds[idx], idx, tenantId)
     }
-    await client.query('COMMIT')
     return {}
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 export async function createSet(db, tenantId, setlistId, body) {
@@ -238,28 +221,20 @@ export async function patchItem(db, tenantId, setlistId, itemId, body) {
 // exactly the items currently in the affected sets — then rewrites set_id and
 // sort_order, auto-clearing broken segue links.
 export async function reorderItems(tenantId, setlistId, payloadSets) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const setIds = payloadSets.map((s) => s.setId)
     const validSets = await listValidSetIds(client, setlistId, tenantId, setIds)
-    if (validSets.length !== new Set(setIds).size) {
-      await client.query('ROLLBACK')
-      return NOT_FOUND
-    }
+    if (validSets.length !== new Set(setIds).size) abortTransaction(NOT_FOUND)
 
     const submittedIds = payloadSets.flatMap((s) => s.itemIds)
     if (new Set(submittedIds).size !== submittedIds.length) {
-      await client.query('ROLLBACK')
-      return badRequest('Duplicate item ids')
+      abortTransaction(badRequest('Duplicate item ids'))
     }
 
     const currentItems = await listItemsInSets(client, tenantId, setIds)
     const currentSet = new Set(currentItems.map((r) => r.id))
     if (currentSet.size !== submittedIds.length || submittedIds.some((id) => !currentSet.has(id))) {
-      await client.query('ROLLBACK')
-      return badRequest('Item set does not match current state')
+      abortTransaction(badRequest('Item set does not match current state'))
     }
 
     // Auto-clear broken segue links: a linked item whose immediate follower
@@ -282,39 +257,22 @@ export async function reorderItems(tenantId, setlistId, payloadSets) {
       }
     }
 
-    await client.query('COMMIT')
     return { clearedIds }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // Delete an item, clearing the (now broken) link on its immediate predecessor.
 export async function deleteItem(tenantId, setlistId, itemId) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     // Locate the item (scoped to this setlist + tenant) before deleting, so we can
     // find the immediate predecessor whose segue link points at it.
     const target = await fetchItemForDelete(client, itemId, tenantId, setlistId)
-    if (!target) {
-      await client.query('ROLLBACK')
-      return NOT_FOUND
-    }
+    if (!target) abortTransaction(NOT_FOUND)
 
     const clearedIds = await clearBrokenPredecessorLink(client, tenantId, target.set_id, target.sort_order)
     await deleteSetlistItem(client, itemId, tenantId)
-    await client.query('COMMIT')
     return { clearedIds }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // ---------- per-member notes ----------

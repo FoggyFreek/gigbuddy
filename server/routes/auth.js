@@ -11,8 +11,8 @@ import {
   startLinkContext,
   matchesProviderSub,
   acceptTerms,
+  completeOnboarding,
 } from '../services/authService.js'
-import { clearOnboardingTenant } from '../repositories/authRepository.js'
 import { requireCurrentTerms } from '../middleware/auth.js'
 import { sendError } from './routeHelpers.js'
 
@@ -243,7 +243,7 @@ router.post('/accept-terms', async (req, res, next) => {
 router.post('/onboarding-complete', requireCurrentTerms, async (req, res, next) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Unauthorized' })
   try {
-    await clearOnboardingTenant(pool, req.session.userId)
+    await completeOnboarding(pool, req.session.userId)
     res.status(204).end()
   } catch (err) {
     next(err)

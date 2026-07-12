@@ -17,6 +17,7 @@ import {
   updateInvoicePaymentState,
 } from '../repositories/invoiceRepository.js'
 import { postInvoiceSent, postInvoicePaid } from './ledgerService.js'
+import { withTransaction } from '../db/withTransaction.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import { loadIntegrationCredential, loadRetainedIntegrationCredential } from './integrationCredentialService.js'
 import { withIntegrationWriteLock } from './featureGuards.js'
@@ -197,9 +198,7 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice, { client: pr
   }
 
   const becamePaid = invoiceStatus === 'paid' && invoice.status !== 'paid'
-  const client = providedClient ?? await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const updated = await updateInvoicePaymentState(client, invoice.tenant_id, invoice.id, {
       mollieStatus, paymentId, paidAt, invoiceStatus,
     })
@@ -215,14 +214,8 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice, { client: pr
       await postInvoiceSent(client, invoice.tenant_id, updated, opts)
       await postInvoicePaid(client, invoice.tenant_id, updated, opts)
     }
-    await client.query('COMMIT')
     return updated
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    if (!providedClient) client.release()
-  }
+  }, { client: providedClient, db })
 }
 
 // Processes a Mollie payment-link webhook for one invoice. The posted payment id

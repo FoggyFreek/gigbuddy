@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   uploadObjectWithQuota,
   removeObject,
@@ -152,13 +153,8 @@ export async function setSongTags(tenantId, songId, body) {
   if (!Array.isArray(body?.tags)) return badRequest('tags must be an array')
   const names = normalizeTagNames(body.tags)
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    if (!(await songExistsInTenant(client, songId, tenantId))) {
-      await client.query('ROLLBACK')
-      return NOT_FOUND
-    }
+  const aborted = await withTransaction(async (client) => {
+    if (!(await songExistsInTenant(client, songId, tenantId))) abortTransaction(NOT_FOUND)
 
     const tagIds = []
     for (const name of names) {
@@ -169,14 +165,11 @@ export async function setSongTags(tenantId, songId, body) {
     for (const tagId of tagIds) {
       await insertSongTagLink(client, songId, tagId, tenantId)
     }
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+    return null
+  })
+  if (aborted) return aborted
 
+  // Post-commit read (on the pool): the song's new tag set.
   return { tags: await loadSongTags(pool, songId, tenantId) }
 }
 
@@ -321,10 +314,7 @@ export async function importSongs(tenantId, body) {
     return badRequest('Maximum 1000 rows per import')
   }
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const existingRows = await loadExistingSongKeys(client, tenantId)
     const existingKeys = new Set(existingRows.map((r) => `${r.title} ${r.artist}`))
 
@@ -347,12 +337,6 @@ export async function importSongs(tenantId, body) {
       imported++
       seenKeys.add(key)
     }
-    await client.query('COMMIT')
     return { summary: { imported, skipped } }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
