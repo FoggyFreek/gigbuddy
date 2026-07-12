@@ -22,6 +22,9 @@ import {
   getPurchaseStatus,
   deletePurchase as deletePurchaseRow,
   deleteAttachmentReturningKey,
+  listImportedPaymentCandidates,
+  lockImportedPaymentCandidate,
+  lockPurchase,
 } from '../repositories/purchaseRepository.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import {
@@ -39,6 +42,7 @@ import {
   loadAccountingSettings,
   postBillAccrued,
   postBillPaid,
+  correctLedgerTransaction,
 } from './ledgerService.js'
 import { randomUUID } from 'node:crypto'
 import { purchaseAttachmentKey, uploadObjectWithQuota, removeObject, safeRemove } from './storageService.js'
@@ -519,6 +523,14 @@ function mapPatchError(err) {
 
 // ---------- register payment ----------
 
+export async function listPaymentCandidates(pool, tenantId, id) {
+  const purchase = await fetchPurchase(pool, tenantId, id)
+  if (!purchase) return { error: { status: 404, body: { error: 'Not found' } } }
+  const preconditionErr = validatePaymentPreconditions(purchase)
+  if (preconditionErr) return preconditionErr
+  return { candidates: await listImportedPaymentCandidates(pool, tenantId, purchase) }
+}
+
 export async function registerPayment(pool, tenantId, id, body, actorUserId = null) {
   const existing = await fetchPurchase(pool, tenantId, id)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
@@ -533,9 +545,51 @@ export async function registerPayment(pool, tenantId, id, body, actorUserId = nu
   if (methodResult.error) return methodResult
   const { method, paidByBandMemberId } = methodResult
 
+  const bankLineId = body.bank_statement_line_id == null ? null : parseId(body.bank_statement_line_id)
+  if (body.bank_statement_line_id != null && bankLineId === null) {
+    return { error: { status: 400, body: { error: 'Invalid bank_statement_line_id' } } }
+  }
+  if (bankLineId != null && method !== 'bank') {
+    return { error: { status: 400, body: { error: 'Imported payments require bank method', code: 'invalid_payment_method' } } }
+  }
+
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    const lockedPurchase = await lockPurchase(client, tenantId, id)
+    if (!lockedPurchase) {
+      await client.query('ROLLBACK')
+      return { error: { status: 404, body: { error: 'Not found' } } }
+    }
+    const lockedPreconditionErr = validatePaymentPreconditions(lockedPurchase)
+    if (lockedPreconditionErr) {
+      await client.query('ROLLBACK')
+      return lockedPreconditionErr
+    }
+    let effectivePaidOn = paidOn
+    let candidate = null
+    if (bankLineId != null) {
+      candidate = await lockImportedPaymentCandidate(client, tenantId, bankLineId)
+      const invalid = !candidate
+        || candidate.direction !== 'debit'
+        || candidate.status !== 'imported'
+        || candidate.amount_cents !== lockedPurchase.total_cents
+        || candidate.source_type !== 'bank_statement_line'
+        || candidate.source_id !== candidate.id
+        || candidate.source_event !== 'paid'
+        || candidate.voided_at != null
+        || candidate.reversed_by_transaction_id != null
+      if (invalid) {
+        await client.query('ROLLBACK')
+        return { error: { status: 409, body: { error: 'Imported payment is no longer eligible', code: 'bank_payment_not_eligible' } } }
+      }
+      effectivePaidOn = candidate.booking_date.toISOString?.().slice(0, 10) ?? String(candidate.booking_date).slice(0, 10)
+      const corrected = await correctLedgerTransaction(client, tenantId, candidate.ledger_transaction_id, actorUserId)
+      if (corrected.error) {
+        await client.query('ROLLBACK')
+        return corrected
+      }
+    }
     await client.query(
       `UPDATE purchases
           SET status = 'paid',
@@ -545,14 +599,28 @@ export async function registerPayment(pool, tenantId, id, body, actorUserId = nu
               payment_registered_by_user_id = $4,
               updated_at = NOW()
         WHERE id = $5 AND tenant_id = $6`,
-      [paidOn, method, paidByBandMemberId, actorUserId, id, tenantId],
+      [effectivePaidOn, method, paidByBandMemberId, actorUserId, id, tenantId],
     )
     await postBillPaid(client, tenantId, {
-      ...existing,
-      paid_at: paidOn,
+      ...lockedPurchase,
+      paid_at: effectivePaidOn,
       payment_method: method,
       paid_by_band_member_id: paidByBandMemberId,
-    }, { actorUserId })
+    }, { actorUserId, clampToOpenPeriod: bankLineId != null })
+    if (candidate) {
+      const { rows: [paymentTxn] } = await client.query(
+        `SELECT id FROM ledger_transactions
+          WHERE tenant_id = $1 AND source_type = 'purchase' AND source_id = $2 AND source_event = 'paid'`,
+        [tenantId, id],
+      )
+      await client.query(
+        `UPDATE bank_statement_lines
+            SET status = 'reconciled_purchase', ledger_transaction_id = $1,
+                matched_source_type = 'purchase', matched_source_id = $2
+          WHERE id = $3 AND tenant_id = $4`,
+        [paymentTxn.id, id, candidate.id, tenantId],
+      )
+    }
     await client.query('COMMIT')
     return {}
   } catch (err) {

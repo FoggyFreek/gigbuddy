@@ -39,6 +39,87 @@
     "openTransactionAria": "open transaction",
     "totals": "Totals ({{count}})"
   },
+  "bankImport": {
+    "button": "Import statement",
+    "title": "Import bank statement",
+    "chooseFile": "Choose file",
+    "fileHint": "CAMT.053 (.xml) or MT940 (.sta, .940, .txt)",
+    "parsing": "Parsing statement…",
+    "accountMismatch": "This statement is for account {{iban}}. Make sure it is your bank account before importing.",
+    "incomeAccountLabel": "Income account for unmatched incoming lines",
+    "reviewIntro": "Review each line. Matched invoices and bills are pre-selected; a new supplier can be created per outgoing line.",
+    "duplicate": "Bank reference appeared in an earlier import",
+    "skippedCurrency": "Foreign currency — skipped",
+    "empty": "No transactions to import.",
+    "table": {
+      "date": "Date",
+      "counterparty": "Counterparty",
+      "description": "Description",
+      "amount": "Amount",
+      "action": "Booking"
+    },
+    "actions": {
+      "skip": "Skip",
+      "bookExpense": "Book as expense",
+      "bookIncome": "Book as income",
+      "matchInvoice": "Match invoice {{number}}",
+      "matchInvoiceDeactivateMollie": "Match invoice {{number}} and deactivate Mollie link",
+      "matchPurchase": "Match bill #{{number}}"
+    },
+    "supplier": {
+      "label": "Supplier",
+      "create": "Create \"{{name}}\"",
+      "createNew": "Create new supplier",
+      "name": "Supplier name",
+      "none": "No supplier"
+    },
+    "expenseAccount": "Expense account",
+    "incomeAccount": "Income account",
+    "bookingMethod": "How to book",
+    "gigLabel": "Gig: {{details}}",
+    "decision": {
+      "income": "Income",
+      "expense": "Expense",
+      "skip": "Skip"
+    },
+    "importButton": "Import {{count}} selected",
+    "finish": "Finish",
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "done": {
+      "summary": "Booked {{count}}, skipped {{skipped}}.",
+      "line": "Line",
+      "status": "Result"
+    },
+    "openingBalance": {
+      "prompt": "No opening balance is set yet. This statement opens at {{amount}} on {{date}}.",
+      "set": "Set opening balance",
+      "done": "Opening balance set from this statement."
+    },
+    "lineStatus": {
+      "imported": "Booked",
+      "reconciled_invoice": "Matched to invoice",
+      "reconciled_purchase": "Matched to bill",
+      "skipped": "Skipped",
+      "skipped_currency": "Foreign currency — skipped",
+      "pending": "Not yet booked",
+      "skipped_already_committed": "Already booked",
+      "skipped_amount_mismatch": "Amount mismatch",
+      "skipped_invalid_account": "Invalid account",
+      "skipped_direction_mismatch": "Wrong direction",
+      "skipped_invoice_not_open": "Invoice not open",
+      "skipped_invoice_has_link": "Invoice has a payment link",
+      "skipped_invoice_paid_via_mollie": "Invoice was already paid through Mollie",
+      "skipped_mollie_error": "Mollie link could not be deactivated — retry available",
+      "skipped_mollie_reconciliation_conflict": "Invoice or payment changed during reconciliation",
+      "skipped_bill_not_open": "Bill not open",
+      "skipped_not_found": "Not found",
+      "skipped_invalid_supplier": "Invalid supplier",
+      "skipped_closed_period": "Closed period",
+      "skipped_accounting_not_configured": "Accounting not configured"
+    }
+  },
   "detail": {
     "heading": "Ledger entry: {{name}}",
     "notice": {

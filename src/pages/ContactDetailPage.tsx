@@ -83,7 +83,7 @@ export default function ContactDetailPage() {
     else navigate(-1)
   }, [navigate, onClose])
 
-  const [form, setForm] = useState<ContactForm>({ name: '', email: '', phone: '', category: 'press' })
+  const [form, setForm] = useState<ContactForm>({ name: '', email: '', phone: '', category: 'press', iban: '' })
   const [notes, setNotes] = useState<ContactNote[]>([])
   const [newNote, setNewNote] = useState('')
   const [venues, setVenues] = useState<LinkedVenue[]>([])
@@ -127,6 +127,7 @@ export default function ContactDetailPage() {
           email:    c.email || '',
           phone:    c.phone || '',
           category: c.category || 'press',
+          iban:     c.iban || '',
         })
         setNotes((c as { notes?: ContactNote[] }).notes || [])
       })

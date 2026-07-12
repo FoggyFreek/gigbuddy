@@ -64,6 +64,7 @@ import { ContentWidthContext } from '../contexts/contentWidthContext.ts'
 import NavGroup from './appShell/NavGroup.tsx'
 import { isItemSelected } from './appShell/navSelection.ts'
 import NotificationsBell from './appShell/NotificationsBell.tsx'
+import TutorialHost from '../tutorials/TutorialHost.tsx'
 import SearchPanel from './appShell/SearchPanel.tsx'
 import SettingsMenu from './appShell/SettingsMenu.tsx'
 import UserMenu from './appShell/UserMenu.tsx'
@@ -545,6 +546,7 @@ export default function AppShell() {
           <ContentWidthContext.Provider value={requestWideContent}>
             <Outlet />
           </ContentWidthContext.Provider>
+          <TutorialHost />
         </Box>
       </Box>
     </Box>

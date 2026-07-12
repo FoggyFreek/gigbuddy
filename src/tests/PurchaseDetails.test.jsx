@@ -15,6 +15,7 @@ vi.mock('../api/purchases.ts', () => ({
   getPurchase: vi.fn(),
   deletePurchase: vi.fn(async () => {}),
   registerPurchasePayment: vi.fn(async () => ({ id: 5, status: 'paid' })),
+  listPurchasePaymentCandidates: vi.fn(async () => []),
 }))
 
 vi.mock('../api/contacts.ts', () => ({
@@ -128,6 +129,38 @@ describe('PurchaseDetails', () => {
         paid_on: '2026-06-10',
       }),
     )
+  })
+
+  it('reconciles a selected imported bank payment and locks its booking date', async () => {
+    purchasesApi.getPurchase.mockResolvedValue(purchase({ status: 'approved' }))
+    purchasesApi.listPurchasePaymentCandidates.mockResolvedValue([{
+      id: 41,
+      booking_date: '2026-05-29',
+      amount_cents: 125000,
+      counterparty_name: 'mi5 Studios',
+      counterparty_iban: 'NL91ABNA0417164300',
+      remittance_info: 'Invoice 5',
+      ledger_transaction_id: 77,
+      supplier_match: 'name',
+    }])
+    const user = userEvent.setup()
+
+    wrap(<PurchaseDetails mode="edit" purchaseId={5} onClose={() => {}} embedded />)
+    await screen.findByText('Purchase 5')
+    await user.click(screen.getByRole('button', { name: /register payment/i }))
+    await waitFor(() => expect(purchasesApi.listPurchasePaymentCandidates).toHaveBeenCalledWith(5))
+    await user.click(screen.getByLabelText(/imported bank payment/i))
+    await user.click(await screen.findByRole('option', { name: /mi5 Studios/ }))
+
+    expect(screen.getByLabelText(/paid on/i)).toHaveValue('2026-05-29')
+    expect(screen.getByLabelText(/paid on/i)).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: /^register$/i }))
+
+    await waitFor(() => expect(purchasesApi.registerPurchasePayment).toHaveBeenCalledWith(5, {
+      method: 'bank',
+      paid_on: expect.any(String),
+      bank_statement_line_id: 41,
+    }))
   })
 
   it('requires selecting a band member before submitting a member payment', async () => {

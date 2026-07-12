@@ -8,6 +8,7 @@ import {
   createPurchase,
   applyPurchasePatch,
   registerPayment,
+  listPaymentCandidates,
   createPurchaseAttachment,
   listPurchases,
   searchPurchases,
@@ -112,6 +113,13 @@ router.delete('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req,
 })
 
 // ---------- register payment ----------
+router.get('/:id/payment-candidates', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await listPaymentCandidates(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.candidates)
+})
+
 router.post('/:id/payment', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await registerPayment(pool, req.tenantId, id, req.body || {}, req.user.id)

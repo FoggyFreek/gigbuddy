@@ -19,10 +19,13 @@ import merchRouter from './merch.js'
 import accountsRouter from './accounts.js'
 import journalRouter from './journal.js'
 import ledgerRouter from './ledger.js'
+import bankImportRouter from './bankImport.js'
+import financeOnboardingRouter from './financeOnboarding.js'
 import reimbursementsRouter from './reimbursements.js'
 import vatReturnsRouter from './vatReturns.js'
 import pushRouter from './push.js'
 import notificationsRouter from './notifications.js'
+import tutorialsRouter from './tutorials.js'
 import authRouter from './auth.js'
 import usersRouter from './users.js'
 import tenantsRouter from './tenants.js'
@@ -188,12 +191,16 @@ router.use('/merch', financeView, merchRouter)
 router.use('/accounts', financeView, accountsRouter)
 router.use('/journal', financeView, journalRouter)
 router.use('/ledger', financeView, ledgerRouter)
+router.use('/bank-import', financeView, bankImportRouter)
+router.use('/finance-onboarding', financeView, financeOnboardingRouter)
 router.use('/reimbursements', financeView, reimbursementsRouter)
 router.use('/vat-returns', financeView, vatReturnsRouter)
 router.use('/push', tenantMember, pushRouter)
 // User-scoped, deliberately cross-tenant (the bell aggregates all bands) —
 // requireApproved only, no resolveTenantId. See migration 097.
 router.use('/notifications', currentTermsUser, notificationsRouter)
+// User-scoped, cross-tenant tutorial dismissals (per-user, global).
+router.use('/tutorials', currentTermsUser, tutorialsRouter)
 // Not entitlement-gated at the mount: describing and revoking a feed token
 // must stay possible after a downgrade (bearer-token erasure); only creating/
 // rotating a token requires the integrations feature (gated in the router).

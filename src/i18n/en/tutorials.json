@@ -1,0 +1,13 @@
+{
+  "financeWelcome": {
+    "title": "Welcome to your finances",
+    "intro": "gigBuddy keeps your band's books with a full double-entry ledger — invoices, purchases, merch, VAT returns and reports, all in one place.",
+    "points": {
+      "openingBalance": "Set your opening balance so your bank total is right from day one.",
+      "profile": "Add your financial profile (KVK, VAT number, IBAN) used on invoices and filings.",
+      "accounts": "Review the default accounts your bookings post to."
+    },
+    "getStarted": "Get started",
+    "maybeLater": "Maybe later"
+  }
+}

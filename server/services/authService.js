@@ -15,6 +15,7 @@ import {
   firstApprovedTenantId,
   isApprovedMember,
   setTermsAccepted,
+  listDismissedTutorials,
 } from '../repositories/authRepository.js'
 import { permissionsForRole } from '../auth/permissions.js'
 import { resolveTenantEntitlements } from './entitlementService.js'
@@ -29,6 +30,7 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
   if (!user) return null
 
   const memberships = await listMembershipsForMe(db, user.id)
+  const dismissedTutorials = await listDismissedTutorials(db, user.id)
 
   const approved = memberships.filter((m) => m.status === 'approved')
   let activeTenantId = sessionActiveTenantId ?? null
@@ -83,6 +85,7 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
       termsAcceptedAt: user.terms_accepted_at ?? null,
       termsVersion: user.terms_version ?? null,
       onboardingTenantId: user.onboarding_tenant_id ?? null,
+      dismissedTutorials,
       memberships: memberships.map((m) => ({
         tenantId: m.tenant_id,
         tenantName: m.tenant_name,

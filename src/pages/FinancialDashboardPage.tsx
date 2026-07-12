@@ -501,7 +501,7 @@ interface InvoiceBucketProps {
 function InvoiceBucket({ label, bucket, dotColor }: Readonly<InvoiceBucketProps>) {
   const { t } = useTranslation('financialDashboard')
   return (
-    <Box sx={{ flex: 1, minWidth: 110 }}>
+    <Box sx={{ flex: 1, minWidth: 95 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: dotColor }} />
         <Typography variant="body2" color="text.secondary">{label}</Typography>

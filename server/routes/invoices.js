@@ -8,6 +8,7 @@ import { FEATURES } from '../auth/entitlements.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
   listInvoices,
+  listInvoicesForGig,
   listInvoicePeriods,
   searchInvoices,
   buildDraftFromGig,
@@ -56,6 +57,15 @@ router.get('/draft-from-gig/:gigId', async (req, res) => {
   const result = await buildDraftFromGig(pool, req.tenantId, gigId)
   if (result.error) return sendError(res, result.error)
   res.json(result.draftResponse)
+})
+
+// Active invoices (draft/sent/paid) linked to a gig — the gig Terms tab. Must
+// precede /:id so "by-gig" isn't parsed as an invoice id.
+router.get('/by-gig/:gigId', async (req, res) => {
+  const gigId = requireParam(req, res, 'gigId'); if (gigId === null) return
+  const result = await listInvoicesForGig(pool, req.tenantId, gigId)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.invoices)
 })
 
 // Get single invoice with lines and tenant

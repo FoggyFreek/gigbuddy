@@ -95,10 +95,23 @@
     "add": "Logo toevoegen",
     "useDark": "Alternatief logo gebruiken"
   },
+  "statusActions": {
+    "markSent": "Als verzonden markeren",
+    "markPaid": "Als betaald markeren",
+    "void": "Laten vervallen"
+  },
+  "sentDialog": {
+    "title": "Factuur {{number}} als verzonden markeren?",
+    "intro": "Deze factuur als verzonden markeren heeft de volgende gevolgen:",
+    "finalized": "De factuur wordt definitief — de gegevens kunnen niet meer worden bewerkt.",
+    "ledger": "De omzet en de vordering worden in het grootboek geboekt.",
+    "forward": "De status kan daarna alleen vooruit naar betaald of vervallen — terug naar concept kan nooit.",
+    "confirm": "Factuur verzenden"
+  },
   "paidDialog": {
     "title": "Factuur {{number}} als betaald markeren?",
     "body": "De ontvangen betaling wordt geboekt op de standaard betaalrekening in het grootboek.",
-    "confirm": "Als betaald markeren"
+    "confirm": "Betaling bevestigen"
   },
   "deleteDialog": {
     "title": "Factuur verwijderen?",

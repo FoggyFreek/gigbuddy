@@ -32,6 +32,8 @@ export interface User {
   termsVersion?: string | null
   /** Tenant created mid-onboarding (resume pointer); null once onboarding completed. */
   onboardingTenantId?: Id | null
+  /** Tutorial keys this user has dismissed (per-user, global). See src/tutorials. */
+  dismissedTutorials?: string[]
   memberships?: UserMembership[]
 }
 

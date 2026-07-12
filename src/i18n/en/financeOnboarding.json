@@ -1,0 +1,58 @@
+{
+  "title": "Finance setup",
+  "steps": {
+    "welcome": "Welcome",
+    "openingBalance": "Opening balance",
+    "profile": "Financial profile",
+    "integrations": "Integrations",
+    "accounts": "Default accounts",
+    "done": "Done"
+  },
+  "welcome": {
+    "heading": "Set up your finances",
+    "body": "A few quick steps to get your books ready. You can change everything later.",
+    "featureInvoicing": "Send invoices and get paid",
+    "featurePurchases": "Track purchases and reimbursements",
+    "featureReports": "File VAT returns and read financial reports"
+  },
+  "openingBalance": {
+    "heading": "Opening balance",
+    "body": "Tell gigBuddy how much was in your bank account when you start keeping books here.",
+    "choiceManual": "Enter it now",
+    "choiceLater": "Set it later from a bank statement",
+    "laterHelp": "When you import a bank statement, gigBuddy will offer to set the opening balance from it.",
+    "amount": "Bank balance",
+    "date": "As of date",
+    "negativeHint": "Use a negative amount if the account was overdrawn.",
+    "alreadySet": "An opening balance is already set for this band."
+  },
+  "profile": {
+    "heading": "Financial profile",
+    "body": "Used on your invoices and tax filings. You can edit this later on your profile page."
+  },
+  "integrations": {
+    "heading": "Connect Mollie and Shopify",
+    "body": "Optional. Connect Mollie to let customers pay your invoices online, and Shopify to import merch orders into your books. You can add or change these later under Settings."
+  },
+  "accounts": {
+    "heading": "Default accounts",
+    "body": "New bookings post to these accounts by default. You can change them later under Settings."
+  },
+  "done": {
+    "heading": "You're all set",
+    "body": "Your finances are ready. Head to the financial dashboard to see where things stand.",
+    "toDashboard": "Go to financial dashboard"
+  },
+  "actions": {
+    "back": "Back",
+    "next": "Next",
+    "skip": "Skip for now",
+    "finish": "Finish"
+  },
+  "errors": {
+    "opening_balance_exists": "An opening balance is already set.",
+    "invalid_amount": "Enter a non-zero amount.",
+    "period_closed": "That date falls in a closed accounting period.",
+    "generic": "Something went wrong. Please try again."
+  }
+}

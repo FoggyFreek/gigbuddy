@@ -78,6 +78,11 @@ export function ledgerErrorResult(err) {
 // versa. Transaction-scoped: released automatically at COMMIT/ROLLBACK.
 export const ACCOUNTING_SETTINGS_LOCK_NAMESPACE = 53002
 
+// The system Opening Balance Equity account seeded for every tenant
+// (defaultChartOfAccounts.js / migration 064). It is is_system (undeletable), so
+// a constant is safe — no per-tenant setting is needed.
+export const OPENING_BALANCE_EQUITY_CODE = '39000'
+
 export async function acquireAccountingSettingsLock(client, tenantId) {
   await client.query('SELECT pg_advisory_xact_lock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
 }
@@ -382,7 +387,7 @@ async function markVoidedAt(client, tenantId, transactionId) {
   )
 }
 
-async function postReversingJournal(client, tenantId, original, mode, actorUserId) {
+async function postReversingJournal(client, tenantId, original, mode, actorUserId, opts = {}) {
   const verb = mode === 'void' ? 'Void' : 'Reversal'
   const lines = (await listLines(client, tenantId, original.id)).map((l) => ({
     account_code: l.account_code,
@@ -394,7 +399,7 @@ async function postReversingJournal(client, tenantId, original, mode, actorUserI
     entryDate: today(),
     description: `${verb} of ledger entry #${original.id}`,
     sourceType: 'ledger_transaction', sourceId: original.id, sourceEvent: mode,
-    lines, actorUserId,
+    lines, actorUserId, ...opts,
   })
 }
 
@@ -489,6 +494,26 @@ async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode)
   } finally {
     client.release()
   }
+}
+
+// Transaction-scoped correction used by domain workflows that must combine a
+// correction and replacement posting atomically. The caller owns BEGIN/COMMIT.
+export async function correctLedgerTransaction(client, tenantId, transactionId, actorUserId = null) {
+  const row = await getTransaction(client, tenantId, transactionId)
+  if (!row) return { error: { status: 404, body: { error: 'Not found' } } }
+  const rowConflict = correctionRowConflict(row)
+  if (rowConflict) return { error: rowConflict }
+
+  const closedThrough = await fetchBooksClosedThrough(client, tenantId)
+  const mode = closedThrough && row.entry_date <= closedThrough ? 'reversal' : 'void'
+  const result = await postReversingJournal(client, tenantId, row, mode, actorUserId, { clampToOpenPeriod: true })
+  if (!result.posted) {
+    const code = mode === 'void' ? 'already_voided' : 'already_reversed'
+    return { error: { status: 409, body: { error: 'Entry already corrected', code } } }
+  }
+  if (mode === 'void') await markVoided(client, tenantId, transactionId, result.transactionId)
+  else await markReversed(client, tenantId, transactionId, result.transactionId)
+  return { mode, transactionId: result.transactionId }
 }
 
 // Void an open-period entry (hidden + excluded from reports). 409s a
@@ -687,22 +712,25 @@ export async function postInvoiceSent(client, tenantId, invoice, opts = {}) {
   })
 }
 
-// Invoice paid: DR checking (cash up), CR receivable (clears the asset).
+// Invoice paid: DR checking (cash up), CR receivable (clears the asset). The
+// entry date defaults to the Mollie paid timestamp; bank-statement reconciliation
+// overrides it via opts.entryDate with the statement booking date.
 export async function postInvoicePaid(client, tenantId, invoice, opts = {}) {
+  const { entryDate, ...journalOpts } = opts
   const settings = await loadAccountingSettings(client, tenantId)
   const checking = requireCode(settings, 'primary_checking_account_code')
   const receivable = requireCode(settings, 'receivable_account_code')
   const memo = `Invoice ${invoice.invoice_number}`
 
   return postJournal(client, tenantId, {
-    entryDate: toDateString(invoice.mollie_paid_at),
+    entryDate: toDateString(entryDate ?? invoice.mollie_paid_at),
     description: `Invoice ${invoice.invoice_number} paid`,
     sourceType: 'invoice', sourceId: invoice.id, sourceEvent: 'paid',
     lines: [
       { account_code: checking, debit_cents: invoice.total_cents, memo },
       { account_code: receivable, credit_cents: invoice.total_cents, memo },
     ],
-    ...opts,
+    ...journalOpts,
   })
 }
 
@@ -786,6 +814,69 @@ export async function postBillPaid(client, tenantId, purchase, opts = {}) {
       { account_code: creditAccount, credit_cents: purchase.total_cents, memo },
     ],
     ...opts,
+  })
+}
+
+// ---------- bank statement import journals ----------
+
+// A bank-statement line posted as a direct journal (no matching invoice/bill).
+// Received (credit): DR primary checking, CR the chosen contra account. Paid
+// (debit): DR the chosen contra account, CR primary checking. Posts gross — a
+// bank line carries no VAT breakdown. Two distinct source events ('received' /
+// 'paid') let the ledger browser sign the row without the direction.
+export async function postBankStatementLine(client, tenantId, line, opts = {}) {
+  const { id, entryDate, amountCents, direction, contraAccountCode, memo } = line
+  const settings = await loadAccountingSettings(client, tenantId)
+  const checking = requireCode(settings, 'primary_checking_account_code')
+  const received = direction === 'credit'
+
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(entryDate),
+    description: memo ?? null,
+    sourceType: 'bank_statement_line',
+    sourceId: id,
+    sourceEvent: received ? 'received' : 'paid',
+    lines: received
+      ? [
+        { account_code: checking, debit_cents: amountCents, memo },
+        { account_code: contraAccountCode, credit_cents: amountCents, memo },
+      ]
+      : [
+        { account_code: contraAccountCode, debit_cents: amountCents, memo },
+        { account_code: checking, credit_cents: amountCents, memo },
+      ],
+    ...opts,
+  })
+}
+
+// ---------- opening balance journal (equity) ----------
+
+// Sets the tenant's opening bank balance on a chosen date: a positive balance
+// DR primary checking (asset up) / CR Opening Balance Equity; a negative
+// (overdrawn) balance swaps the sides. `signedAmountCents` is the signed balance
+// (positive = funds available). Idempotent per tenant — sourceId is the tenant
+// id, so a second call returns { posted: false } and the "opening balance set"
+// state can never be duplicated. Not clamped to the open period: this is a
+// deliberate dated entry, so a closed period surfaces PeriodClosedError.
+export async function postOpeningBalance(client, tenantId, { signedAmountCents, entryDate }, opts = {}) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const bank = requireCode(settings, 'primary_checking_account_code')
+  const amount = Math.abs(signedAmountCents)
+  const memo = 'Opening balance'
+  const lines = signedAmountCents >= 0
+    ? [
+      { account_code: bank, debit_cents: amount, memo },
+      { account_code: OPENING_BALANCE_EQUITY_CODE, credit_cents: amount, memo },
+    ]
+    : [
+      { account_code: OPENING_BALANCE_EQUITY_CODE, debit_cents: amount, memo },
+      { account_code: bank, credit_cents: amount, memo },
+    ]
+
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(entryDate),
+    description: memo,
+    sourceType: 'opening_balance', sourceId: tenantId, sourceEvent: 'set', lines, ...opts,
   })
 }
 

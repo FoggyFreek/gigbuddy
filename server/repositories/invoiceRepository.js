@@ -71,6 +71,23 @@ export async function searchInvoices(executor, tenantId, like, limit) {
   return rows
 }
 
+// Active invoices linked to a single gig (invoices.gig_id → gigs), tenant-scoped.
+// Excludes voided invoices so only live states (draft/sent/paid) surface on the
+// gig's Terms tab. Ordered newest issue date first.
+export async function listInvoicesByGig(executor, tenantId, gigId) {
+  const { rows } = await executor.query(
+    `SELECT id, invoice_number, status, issue_date, due_date,
+            payment_term_days, customer_name, total_cents
+       FROM invoices
+      WHERE tenant_id = $1
+        AND gig_id = $2
+        AND status <> 'void'
+      ORDER BY issue_date DESC, id DESC`,
+    [tenantId, gigId],
+  )
+  return rows
+}
+
 export async function listInvoicePeriodDates(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT DISTINCT to_char(issue_date, 'YYYY-MM-DD') AS date
@@ -270,8 +287,8 @@ export async function setInvoicePaymentLink(executor, tenantId, invoiceId, { lin
   return rows[0] || null
 }
 
-export async function clearInvoicePaymentLink(executor, tenantId, invoiceId) {
-  await executor.query(
+export async function clearInvoicePaymentLink(executor, tenantId, invoiceId, expectedLinkId = null) {
+  const { rows } = await executor.query(
     `UPDATE invoices
         SET mollie_payment_link_id = NULL,
             mollie_payment_link_url = NULL,
@@ -279,9 +296,12 @@ export async function clearInvoicePaymentLink(executor, tenantId, invoiceId) {
             mollie_payment_link_expires_at = NULL,
             mollie_payment_status = NULL,
             updated_at = NOW()
-      WHERE id = $1 AND tenant_id = $2`,
-    [invoiceId, tenantId],
+      WHERE id = $1 AND tenant_id = $2
+        AND ($3::text IS NULL OR mollie_payment_link_id = $3)
+      RETURNING ${invoiceProjection()}`,
+    [invoiceId, tenantId, expectedLinkId],
   )
+  return rows[0] || null
 }
 
 // Writes the payment state pulled from Mollie (and the derived invoice status).

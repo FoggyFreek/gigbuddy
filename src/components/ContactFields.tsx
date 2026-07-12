@@ -6,10 +6,10 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import CopyAdornment from './CopyAdornment.tsx'
-import { ALL_CONTACT_CATEGORIES, useContactCategoryLabel } from '../utils/contactCategories.ts'
+import { ALL_CONTACT_CATEGORIES, SUPPLIER_CATEGORY, useContactCategoryLabel } from '../utils/contactCategories.ts'
 
 interface ContactFieldsProps {
-  form: { name: string; email: string; phone: string; category: string }
+  form: { name: string; email: string; phone: string; category: string; iban?: string }
   onChange: (field: string, value: string) => void
   errors?: Record<string, string | undefined>
   categories?: string[]
@@ -67,6 +67,17 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
           slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.phone} /> } }}
         />
       </Grid>
+      {form.category === SUPPLIER_CATEGORY && (
+        <Grid size={12}>
+          <TextField
+            label={t($ => $.fields.iban)}
+            fullWidth
+            value={form.iban ?? ''}
+            onChange={(e) => onChange('iban', e.target.value)}
+            slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.iban ?? ''} /> } }}
+          />
+        </Grid>
+      )}
     </>
   )
 }

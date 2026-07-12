@@ -9,6 +9,7 @@ import {
   parseSearchLimit,
   buildContactUpdateFields,
   normalizeImportRow,
+  normalizeIban,
 } from '../validators/contactValidators.js'
 import {
   listContacts as listContactRows,
@@ -71,7 +72,7 @@ export async function getContact(db, tenantId, contactId) {
 // ---------- writes ----------
 
 export async function createContact(db, tenantId, body) {
-  const { name, email, phone, category } = body
+  const { name, email, phone, category, iban } = body
   if (!name || !String(name).trim()) return badRequest('name is required')
   const finalCategory = VALID_CATEGORIES.has(category) ? category : 'press'
   try {
@@ -80,6 +81,7 @@ export async function createContact(db, tenantId, body) {
       email: email || null,
       phone: phone || null,
       category: finalCategory,
+      iban: normalizeIban(iban),
     })
     return { contact }
   } catch (err) {

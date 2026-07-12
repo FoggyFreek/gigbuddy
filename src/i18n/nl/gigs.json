@@ -177,6 +177,14 @@
     "merchandiseSold": "Verkochte merchandise",
     "itemsSold_one": "{{count}} item · excl. btw",
     "itemsSold_other": "{{count}} items · excl. btw",
+    "relatedInvoices": "Gerelateerde facturen",
+    "openInvoice": "Factuur openen",
+    "invoiceStatus": {
+      "draft": "Concept",
+      "sent": "Verzonden",
+      "paid": "Betaald",
+      "void": "Vervallen"
+    },
     "equipmentOnSite": "Beschikbare apparatuur ter plaatse",
     "paSystem": "PA-systeem",
     "drumkit": "Drumstel",

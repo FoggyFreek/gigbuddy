@@ -325,7 +325,7 @@ function ShopifyDomainBlock({ domain, savedDomain, saving, error, onChange, onSa
   )
 }
 
-function ShopifyKeySection() {
+export function ShopifyKeySection() {
   const { t } = useTranslation(['settings', 'common'])
   const [status, setStatus] = useState<ShopifyKeyStatus | null>(null)
   const [editing, setEditing] = useState(false)
@@ -587,7 +587,7 @@ function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, er
   )
 }
 
-function MollieKeySection() {
+export function MollieKeySection() {
   const { t } = useTranslation('settings')
   const [status, setStatus] = useState<MollieKeyStatus | null>(null)
   const [editing, setEditing] = useState(false)

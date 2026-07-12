@@ -19,7 +19,9 @@ const SOURCE_JOIN_COLUMNS = `
        mp.name AS merch_sale_product_name,
        ms.quantity AS merch_sale_quantity,
        ms.unit_price_incl_cents AS merch_sale_unit_price_incl_cents,
-       ms.gross_incl_cents AS merch_sale_gross_incl_cents`
+       ms.gross_incl_cents AS merch_sale_gross_incl_cents,
+       bsl.counterparty_name AS bank_line_counterparty_name,
+       bsl.remittance_info AS bank_line_remittance`
 
 const SOURCE_JOINS = `
   LEFT JOIN invoices i
@@ -41,7 +43,9 @@ const SOURCE_JOINS = `
   LEFT JOIN merch_sales ms
     ON lt.source_type = 'merch_sale' AND ms.id = lt.source_id AND ms.tenant_id = lt.tenant_id
   LEFT JOIN products mp
-    ON mp.id = ms.product_id AND mp.tenant_id = ms.tenant_id`
+    ON mp.id = ms.product_id AND mp.tenant_id = ms.tenant_id
+  LEFT JOIN bank_statement_lines bsl
+    ON lt.source_type = 'bank_statement_line' AND bsl.id = lt.source_id AND bsl.tenant_id = lt.tenant_id`
 
 // Open-period voids (the voided original and its ledger_transaction/void
 // reverser) are excluded from every financial aggregation; they stay visible
@@ -115,6 +119,8 @@ export async function searchTransactions(executor, tenantId, like, limit) {
           OR p.supplier_name ILIKE $2
           OR p.memo ILIKE $2
           OR j.description ILIKE $2
+          OR bsl.counterparty_name ILIKE $2
+          OR bsl.remittance_info ILIKE $2
         )
       ORDER BY lt.entry_date DESC, lt.id DESC
       LIMIT $3`,
@@ -217,6 +223,19 @@ export async function checkingAccountBalance(executor, tenantId) {
     [tenantId],
   )
   return rows[0]?.balance_cents ?? 0
+}
+
+// True once the tenant has a (non-voided) opening balance posted. Drives the
+// finance-onboarding welcome nudge and the bank-import opening-balance banner.
+export async function hasOpeningBalance(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT 1 FROM ledger_transactions
+      WHERE tenant_id = $1 AND source_type = 'opening_balance' AND source_event = 'set'
+        AND voided_at IS NULL
+      LIMIT 1`,
+    [tenantId],
+  )
+  return rows.length > 0
 }
 
 // Merch revenue/COGS movement inside [from, toExclusive) on the tenant's

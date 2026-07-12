@@ -39,6 +39,87 @@
     "openTransactionAria": "transactie openen",
     "totals": "Totalen ({{count}})"
   },
+  "bankImport": {
+    "button": "Afschrift importeren",
+    "title": "Bankafschrift importeren",
+    "chooseFile": "Bestand kiezen",
+    "fileHint": "CAMT.053 (.xml) of MT940 (.sta, .940, .txt)",
+    "parsing": "Afschrift verwerken…",
+    "accountMismatch": "Dit afschrift is voor rekening {{iban}}. Controleer of dit je bankrekening is voordat je importeert.",
+    "incomeAccountLabel": "Opbrengstrekening voor niet-gematchte inkomende regels",
+    "reviewIntro": "Controleer elke regel. Gematchte facturen en inkoopfacturen zijn voorgeselecteerd; per uitgaande regel kan een nieuwe leverancier worden aangemaakt.",
+    "duplicate": "Bankreferentie kwam voor in een eerdere import",
+    "skippedCurrency": "Vreemde valuta — overgeslagen",
+    "empty": "Geen transacties om te importeren.",
+    "table": {
+      "date": "Datum",
+      "counterparty": "Tegenpartij",
+      "description": "Omschrijving",
+      "amount": "Bedrag",
+      "action": "Boeking"
+    },
+    "actions": {
+      "skip": "Overslaan",
+      "bookExpense": "Als kosten boeken",
+      "bookIncome": "Als opbrengst boeken",
+      "matchInvoice": "Koppel factuur {{number}}",
+      "matchInvoiceDeactivateMollie": "Koppel factuur {{number}} en deactiveer Mollie-link",
+      "matchPurchase": "Koppel inkoop #{{number}}"
+    },
+    "supplier": {
+      "label": "Leverancier",
+      "create": "\"{{name}}\" aanmaken",
+      "createNew": "Nieuwe leverancier aanmaken",
+      "name": "Naam leverancier",
+      "none": "Geen leverancier"
+    },
+    "expenseAccount": "Kostenrekening",
+    "incomeAccount": "Opbrengstrekening",
+    "bookingMethod": "Hoe boeken",
+    "gigLabel": "Optreden: {{details}}",
+    "decision": {
+      "income": "Inkomsten",
+      "expense": "Uitgave",
+      "skip": "Overslaan"
+    },
+    "importButton": "{{count}} geselecteerde importeren",
+    "finish": "Voltooien",
+    "back": "Terug",
+    "cancel": "Annuleren",
+    "close": "Sluiten",
+    "done": {
+      "summary": "{{count}} geboekt, {{skipped}} overgeslagen.",
+      "line": "Regel",
+      "status": "Resultaat"
+    },
+    "openingBalance": {
+      "prompt": "Er is nog geen beginsaldo ingesteld. Dit afschrift opent met {{amount}} op {{date}}.",
+      "set": "Beginsaldo instellen",
+      "done": "Beginsaldo ingesteld vanaf dit afschrift."
+    },
+    "lineStatus": {
+      "imported": "Geboekt",
+      "reconciled_invoice": "Gekoppeld aan factuur",
+      "reconciled_purchase": "Gekoppeld aan inkoop",
+      "skipped": "Overgeslagen",
+      "skipped_currency": "Vreemde valuta — overgeslagen",
+      "pending": "Nog niet geboekt",
+      "skipped_already_committed": "Al geboekt",
+      "skipped_amount_mismatch": "Bedrag komt niet overeen",
+      "skipped_invalid_account": "Ongeldige rekening",
+      "skipped_direction_mismatch": "Verkeerde richting",
+      "skipped_invoice_not_open": "Factuur niet open",
+      "skipped_invoice_has_link": "Factuur heeft een betaallink",
+      "skipped_invoice_paid_via_mollie": "Factuur was al via Mollie betaald",
+      "skipped_mollie_error": "Mollie-link kon niet worden gedeactiveerd — opnieuw proberen mogelijk",
+      "skipped_mollie_reconciliation_conflict": "Factuur of betaling veranderde tijdens het koppelen",
+      "skipped_bill_not_open": "Inkoop niet open",
+      "skipped_not_found": "Niet gevonden",
+      "skipped_invalid_supplier": "Ongeldige leverancier",
+      "skipped_closed_period": "Gesloten periode",
+      "skipped_accounting_not_configured": "Boekhouding niet ingesteld"
+    }
+  },
   "detail": {
     "heading": "Grootboektransactie: {{name}}",
     "notice": {

@@ -17,6 +17,65 @@ export async function fetchPurchase(executor, tenantId, purchaseId) {
   return rows[0] || null
 }
 
+export async function lockPurchase(executor, tenantId, purchaseId) {
+  const { rows } = await executor.query(
+    'SELECT * FROM purchases WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+    [purchaseId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function listImportedPaymentCandidates(executor, tenantId, purchase) {
+  const { rows } = await executor.query(
+    `SELECT bsl.id, to_char(bsl.booking_date, 'YYYY-MM-DD') AS booking_date,
+            bsl.amount_cents, bsl.counterparty_name, bsl.counterparty_iban,
+            bsl.remittance_info, bsl.ledger_transaction_id,
+            CASE
+              WHEN c.iban IS NOT NULL AND bsl.counterparty_iban IS NOT NULL
+                AND upper(replace(c.iban, ' ', '')) = upper(replace(bsl.counterparty_iban, ' ', '')) THEN 'iban'
+              WHEN lower(bsl.counterparty_name) = lower(p.supplier_name) THEN 'name'
+              ELSE 'none'
+            END AS supplier_match
+       FROM bank_statement_lines bsl
+       JOIN ledger_transactions lt
+         ON lt.id = bsl.ledger_transaction_id AND lt.tenant_id = bsl.tenant_id
+       JOIN purchases p ON p.id = $2 AND p.tenant_id = bsl.tenant_id
+       LEFT JOIN contacts c ON c.id = p.supplier_contact_id AND c.tenant_id = p.tenant_id
+      WHERE bsl.tenant_id = $1
+        AND bsl.direction = 'debit'
+        AND bsl.status = 'imported'
+        AND bsl.amount_cents = p.total_cents
+        AND lt.source_type = 'bank_statement_line'
+        AND lt.source_id = bsl.id
+        AND lt.source_event = 'paid'
+        AND lt.voided_at IS NULL
+        AND lt.reversed_by_transaction_id IS NULL
+      ORDER BY CASE
+                 WHEN c.iban IS NOT NULL AND bsl.counterparty_iban IS NOT NULL
+                   AND upper(replace(c.iban, ' ', '')) = upper(replace(bsl.counterparty_iban, ' ', '')) THEN 0
+                 WHEN lower(bsl.counterparty_name) = lower(p.supplier_name) THEN 1
+                 ELSE 2
+               END,
+               bsl.booking_date DESC, bsl.id DESC`,
+    [tenantId, purchase.id],
+  )
+  return rows
+}
+
+export async function lockImportedPaymentCandidate(executor, tenantId, lineId) {
+  const { rows } = await executor.query(
+    `SELECT bsl.*, lt.entry_date AS ledger_entry_date, lt.voided_at,
+            lt.reversed_by_transaction_id, lt.source_type, lt.source_id, lt.source_event
+       FROM bank_statement_lines bsl
+       JOIN ledger_transactions lt
+         ON lt.id = bsl.ledger_transaction_id AND lt.tenant_id = bsl.tenant_id
+      WHERE bsl.id = $1 AND bsl.tenant_id = $2
+      FOR UPDATE OF bsl, lt`,
+    [lineId, tenantId],
+  )
+  return rows[0] || null
+}
+
 export async function fetchPurchaseLines(executor, purchaseId, tenantId) {
   const { rows } = await executor.query(
     `SELECT id, description, expense_category, account_code, tax_rate, amount_incl_cents, position, product_id, quantity

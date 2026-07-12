@@ -177,6 +177,14 @@
     "merchandiseSold": "Merchandise sold",
     "itemsSold_one": "{{count}} item · excl. VAT",
     "itemsSold_other": "{{count}} items · excl. VAT",
+    "relatedInvoices": "Related invoices",
+    "openInvoice": "Open invoice",
+    "invoiceStatus": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "paid": "Paid",
+      "void": "Void"
+    },
     "equipmentOnSite": "Available equipment on-site",
     "paSystem": "PA system",
     "drumkit": "Drumkit",

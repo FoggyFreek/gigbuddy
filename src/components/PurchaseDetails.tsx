@@ -1,4 +1,4 @@
-import type { Id, Member, Account, Purchase, PurchasePaymentMethod, PurchaseStatus } from '../types/entities.ts'
+import type { Id, Member, Account, Purchase, PurchasePaymentCandidate, PurchasePaymentMethod, PurchaseStatus } from '../types/entities.ts'
 import { useTranslation } from 'react-i18next'
 import type { UsePurchaseFormStateResult } from './purchases/usePurchaseFormState.ts'
 import { useState } from 'react'
@@ -18,6 +18,7 @@ import FormControl from '@mui/material/FormControl'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import FormLabel from '@mui/material/FormLabel'
 import IconButton from '@mui/material/IconButton'
+import MenuItem from '@mui/material/MenuItem'
 import Radio from '@mui/material/Radio'
 import RadioGroup from '@mui/material/RadioGroup'
 import TextField from '@mui/material/TextField'
@@ -36,6 +37,7 @@ import PurchaseSupplierFields from './purchases/PurchaseSupplierFields.tsx'
 import PurchaseLinesEditor from './purchases/PurchaseLinesEditor.tsx'
 import PurchaseTotalsPanel from './purchases/PurchaseTotalsPanel.tsx'
 import DateEntryField from './DateEntryField.tsx'
+import { formatEur } from '../utils/invoiceTotals.ts'
 
 function accountLabel(account: Account | { code: string } | null, fallback: string): string {
   if (!account) return fallback
@@ -59,10 +61,15 @@ interface PaymentRegistrationDialogProps {
   paidOn?: string
   paidByBandMemberId?: Id | null
   bandMembers: Member[]
+  paymentCandidates: PurchasePaymentCandidate[]
+  paymentCandidatesLoading: boolean
+  paymentCandidatesError: string | null
+  selectedBankLineId: Id | null
   onClose: () => void
   onMethodChange: (method: PurchasePaymentMethod) => void
   onPaidOnChange: (date: string) => void
   onPaidByBandMemberIdChange: (id: Id | null) => void
+  onSelectedBankLineIdChange: (id: Id | null) => void
   onSubmit: () => void
 }
 
@@ -74,15 +81,21 @@ function PaymentRegistrationDialog({
   paidOn,
   paidByBandMemberId,
   bandMembers,
+  paymentCandidates,
+  paymentCandidatesLoading,
+  paymentCandidatesError,
+  selectedBankLineId,
   onClose,
   onMethodChange,
   onPaidOnChange,
   onPaidByBandMemberIdChange,
+  onSelectedBankLineIdChange,
   onSubmit,
 }: Readonly<PaymentRegistrationDialogProps>) {
   const { t } = useTranslation(['purchases', 'common'])
   const hasBandMembers = bandMembers.length > 0
   const selectedPayee = bandMembers.find((m) => Number(m.id) === Number(paidByBandMemberId)) || null
+  const selectedBankLine = paymentCandidates.find((c) => Number(c.id) === Number(selectedBankLineId)) || null
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
@@ -95,9 +108,9 @@ function PaymentRegistrationDialog({
             openPickerLabel={t($ => $.payment.openPaidOnPicker)}
             size="small"
             fullWidth
-            value={paidOn || ''}
+            value={selectedBankLine?.booking_date || paidOn || ''}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => onPaidOnChange(e.target.value)}
-            disabled={saving}
+            disabled={saving || selectedBankLine != null}
           />
           <FormControl>
             <FormLabel>{t($ => $.payment.method)}</FormLabel>
@@ -118,6 +131,40 @@ function PaymentRegistrationDialog({
             <Alert severity="info">
               {t($ => $.payment.noBandMembers)}
             </Alert>
+          )}
+          {method === 'bank' && (
+            <>
+              {paymentCandidatesError && <Alert severity="warning">{t($ => $.payment.candidatesError)}</Alert>}
+              <TextField
+                select
+                size="small"
+                fullWidth
+                label={t($ => $.payment.importedPayment)}
+                value={selectedBankLineId == null ? '' : String(selectedBankLineId)}
+                disabled={saving || paymentCandidatesLoading}
+                onChange={(e) => onSelectedBankLineIdChange(e.target.value ? Number(e.target.value) : null)}
+                helperText={selectedBankLine
+                  ? t($ => $.payment.reclassifyHelp)
+                  : t($ => $.payment.importedPaymentHelp)}
+              >
+                <MenuItem value="">{t($ => $.payment.noImportedPayment)}</MenuItem>
+                {paymentCandidates.map((candidate) => (
+                  <MenuItem key={candidate.id} value={String(candidate.id)}>
+                    <Box>
+                      <Typography variant="body2">
+                        {candidate.booking_date} — {candidate.counterparty_name || t($ => $.payment.unknownCounterparty)} — {formatEur(candidate.amount_cents)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {[candidate.counterparty_iban, candidate.remittance_info,
+                          candidate.supplier_match === 'iban' ? t($ => $.payment.ibanMatch)
+                            : candidate.supplier_match === 'name' ? t($ => $.payment.nameMatch) : null]
+                          .filter(Boolean).join(' — ')}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </TextField>
+            </>
           )}
           {method === 'member' && (
             <Autocomplete<BandMemberOption>
@@ -390,10 +437,15 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
       paidOn={s.paidOn}
       paidByBandMemberId={s.paidByBandMemberId}
       bandMembers={s.bandMembers}
+      paymentCandidates={s.paymentCandidates}
+      paymentCandidatesLoading={s.paymentCandidatesLoading}
+      paymentCandidatesError={s.paymentCandidatesError}
+      selectedBankLineId={s.selectedBankLineId}
       onClose={s.closePaymentDialog}
       onMethodChange={s.setPaymentMethod}
       onPaidOnChange={s.setPaidOn}
       onPaidByBandMemberIdChange={s.setPaidByBandMemberId}
+      onSelectedBankLineIdChange={s.setSelectedBankLineId}
       onSubmit={s.handleRegisterPayment}
     />
   )

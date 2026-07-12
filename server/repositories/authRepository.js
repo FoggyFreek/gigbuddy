@@ -167,6 +167,27 @@ export async function setOnboardingTenant(executor, userId, tenantId) {
   await executor.query('UPDATE users SET onboarding_tenant_id = $2 WHERE id = $1', [userId, tenantId])
 }
 
+// The tutorial keys this user has dismissed (per-user, global). Feeds the
+// /auth/me payload so the frontend tutorial host can skip them.
+export async function listDismissedTutorials(executor, userId) {
+  const { rows } = await executor.query(
+    'SELECT tutorial_key FROM user_tutorial_dismissals WHERE user_id = $1',
+    [userId],
+  )
+  return rows.map((r) => r.tutorial_key)
+}
+
+// Records that the user dismissed a tutorial. Idempotent (keep the first
+// dismissal timestamp on a repeat).
+export async function dismissTutorial(executor, userId, key) {
+  await executor.query(
+    `INSERT INTO user_tutorial_dismissals (user_id, tutorial_key)
+     VALUES ($1, $2)
+     ON CONFLICT (user_id, tutorial_key) DO NOTHING`,
+    [userId, key],
+  )
+}
+
 export async function isApprovedMember(executor, userId, tenantId) {
   const { rowCount } = await executor.query(
     `SELECT 1

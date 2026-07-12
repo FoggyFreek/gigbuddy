@@ -31,7 +31,7 @@ export async function searchContacts(executor, tenantId, like, prefix, limit, { 
     categoryClause = `AND category <> $${params.push(excludeCategory)}`
   }
   const { rows } = await executor.query(
-    `SELECT id, name, category, email, phone
+    `SELECT id, name, category, email, phone, iban
        FROM contacts
       WHERE tenant_id = $1
         AND (name ILIKE $2 OR email ILIKE $2)
@@ -77,14 +77,60 @@ export async function contactExistsInTenant(executor, contactId, tenantId) {
   return rowCount > 0
 }
 
-export async function insertContact(executor, tenantId, { name, email, phone, category }) {
+export async function insertContact(executor, tenantId, { name, email, phone, category, iban = null }) {
   const { rows } = await executor.query(
-    `INSERT INTO contacts (tenant_id, name, email, phone, category)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO contacts (tenant_id, name, email, phone, category, iban)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [tenantId, name, email, phone, category],
+    [tenantId, name, email, phone, category, iban],
   )
   return rows[0]
+}
+
+// Suppliers whose IBAN matches (canonical, case-insensitive). Returns all
+// matches so the caller can treat 2+ as ambiguous rather than auto-picking.
+export async function findSuppliersByIban(executor, tenantId, iban) {
+  if (!iban) return []
+  const { rows } = await executor.query(
+    `SELECT id, name, category, email, phone, iban
+       FROM contacts
+      WHERE tenant_id = $1 AND category = 'supplier' AND upper(iban) = upper($2)
+      ORDER BY name ASC`,
+    [tenantId, iban],
+  )
+  return rows
+}
+
+// Suppliers whose name matches exactly (case-insensitive). Fallback match when
+// no IBAN is stored; multiple matches are ambiguous.
+export async function findSuppliersByName(executor, tenantId, name) {
+  if (!name) return []
+  const { rows } = await executor.query(
+    `SELECT id, name, category, email, phone, iban
+       FROM contacts
+      WHERE tenant_id = $1 AND category = 'supplier' AND lower(name) = lower($2)
+      ORDER BY name ASC`,
+    [tenantId, name],
+  )
+  return rows
+}
+
+// Batched supplier lookup: all suppliers matching any of the given (canonical)
+// IBANs or names. Returns rows the caller groups by iban/name in memory — one
+// query per import instead of per line.
+export async function findSuppliersForImport(executor, tenantId, ibans, names) {
+  const wantIbans = [...new Set(ibans.filter(Boolean).map((i) => i.toUpperCase()))]
+  const wantNames = [...new Set(names.filter(Boolean).map((n) => n.toLowerCase()))]
+  if (!wantIbans.length && !wantNames.length) return []
+  const { rows } = await executor.query(
+    `SELECT id, name, category, email, phone, iban
+       FROM contacts
+      WHERE tenant_id = $1 AND category = 'supplier'
+        AND (upper(iban) = ANY($2) OR lower(name) = ANY($3))
+      ORDER BY name ASC`,
+    [tenantId, wantIbans, wantNames],
+  )
+  return rows
 }
 
 export async function updateContactFields(executor, tenantId, contactId, fields, values) {

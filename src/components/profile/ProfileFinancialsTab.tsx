@@ -22,7 +22,7 @@ interface FinancialsEditFormProps {
   schedule: (patch: Partial<ProfileForm>) => void
 }
 
-function FinancialsEditForm({ form, onChange, onFormChange, schedule }: Readonly<FinancialsEditFormProps>) {
+export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: Readonly<FinancialsEditFormProps>) {
   const { t } = useTranslation('profile')
   function handleTaxPercentageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value

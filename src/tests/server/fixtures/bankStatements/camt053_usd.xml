@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>US-MSG-1</MsgId>
+      <CreDtTm>2026-02-01T08:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>US-STMT-1</Id>
+      <Acct>
+        <Id><Othr><Id>0123456789</Id></Othr></Id>
+        <Ccy>USD</Ccy>
+      </Acct>
+      <Ntry>
+        <Amt Ccy="USD">250.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-02-03</Dt></BookgDt>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="USD">250.00</Amt>
+            <CdtDbtInd>DBIT</CdtDbtInd>
+            <RltdPties><Cdtr><Nm>US Vendor Inc</Nm></Cdtr></RltdPties>
+            <RmtInf><Ustrd>USD invoice 55</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

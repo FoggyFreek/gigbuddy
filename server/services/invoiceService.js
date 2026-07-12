@@ -27,6 +27,7 @@ import {
   replaceInvoiceLines,
   validateGigIdForTenant,
   listInvoices as listInvoiceRows,
+  listInvoicesByGig,
   searchInvoices as searchInvoiceRows,
   listInvoicePeriodDates,
   fetchGig,
@@ -474,6 +475,14 @@ export async function listInvoices(pool, tenantId, query) {
   const period = buildPeriodWhere(query, 'issue_date')
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
   return { invoices: await listInvoiceRows(pool, tenantId, period) }
+}
+
+// Active invoices (draft/sent/paid) linked to a gig, for the gig's Terms tab.
+// 404s a gig that doesn't exist in the active tenant so existence isn't leaked.
+export async function listInvoicesForGig(pool, tenantId, gigId) {
+  const gig = await fetchGig(pool, tenantId, gigId)
+  if (!gig) return { error: { status: 404, body: { error: 'Gig not found' } } }
+  return { invoices: await listInvoicesByGig(pool, tenantId, gigId) }
 }
 
 export async function listInvoicePeriods(pool, tenantId) {

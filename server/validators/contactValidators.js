@@ -7,6 +7,15 @@ export const VALID_CATEGORIES = new Set([
 
 export { parseId, parseSearchLimit }
 
+// Canonical IBAN form for storage/matching: no spaces, upper-case. Returns null
+// for blank input. Not validated as a real IBAN — banks send canonical values
+// and a wrong user entry simply won't match a statement counterparty.
+export function normalizeIban(value) {
+  if (value == null) return null
+  const cleaned = String(value).replace(/\s+/g, '').toUpperCase()
+  return cleaned === '' ? null : cleaned
+}
+
 // Normalizes a category query filter. Returns null (no filter), false (invalid
 // value → 400 in the service), or the validated category string.
 export function parseCategoryFilter(value) {
@@ -18,7 +27,7 @@ export function parseCategoryFilter(value) {
 // Builds SET fragments ($1..$N) for a contact PATCH. Empty strings normalize to
 // NULL. Returns { error } on an invalid category, or { fields, values }.
 export function buildContactUpdateFields(body) {
-  const allowed = ['name', 'email', 'phone', 'category']
+  const allowed = ['name', 'email', 'phone', 'category', 'iban']
   const fields = []
   const values = []
   let idx = 1
@@ -28,7 +37,7 @@ export function buildContactUpdateFields(body) {
       return { error: 'Invalid category value' }
     }
     fields.push(`${key} = $${idx++}`)
-    values.push(body[key] || null)
+    values.push(key === 'iban' ? normalizeIban(body[key]) : (body[key] || null))
   }
   return { fields, values }
 }
