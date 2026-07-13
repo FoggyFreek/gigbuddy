@@ -288,6 +288,45 @@ export async function updateParticipantVote(executor, tenantId, gigId, memberId,
   return rows[0] || null
 }
 
+// Locks the parent option before a response mutation. Every vote takes this
+// lock, making the first-unavailable claim and incomplete -> complete check
+// deterministic even when members respond concurrently.
+export async function lockGigOptionResponseState(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id, status, first_unavailable_notification_at
+     FROM gigs
+     WHERE id = $1 AND tenant_id = $2
+     FOR UPDATE`,
+    [gigId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function getGigParticipantResponseState(executor, gigId, memberId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT target.id AS participant_id, target.vote AS previous_vote,
+            counts.total, counts.pending
+     FROM gig_participants target
+     CROSS JOIN LATERAL (
+       SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE vote IS NULL)::int AS pending
+       FROM gig_participants
+       WHERE gig_id = $1 AND tenant_id = $3
+     ) counts
+     WHERE target.gig_id = $1 AND target.band_member_id = $2 AND target.tenant_id = $3`,
+    [gigId, memberId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function markGigFirstUnavailableNotified(executor, gigId, tenantId) {
+  await executor.query(
+    `UPDATE gigs SET first_unavailable_notification_at = NOW()
+     WHERE id = $1 AND tenant_id = $2 AND first_unavailable_notification_at IS NULL`,
+    [gigId, tenantId],
+  )
+}
+
 export async function touchGig(executor, gigId, tenantId) {
   await executor.query(
     'UPDATE gigs SET updated_at = NOW() WHERE id = $1 AND tenant_id = $2',

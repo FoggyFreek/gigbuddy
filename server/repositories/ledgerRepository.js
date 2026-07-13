@@ -73,7 +73,7 @@ export async function listTransactions(executor, tenantId, period = EMPTY_PERIOD
   const { rows } = await executor.query(
     `SELECT lt.id, to_char(lt.entry_date, 'YYYY-MM-DD') AS entry_date,
             lt.description, lt.source_type, lt.source_id, lt.source_event,
-            lt.created_at, lt.voided_at,
+            lt.created_at, lt.voided_at, lt.note,
             e.total_debit_cents,
             ${SOURCE_JOIN_COLUMNS}
        FROM ledger_transactions lt
@@ -100,7 +100,7 @@ export async function searchTransactions(executor, tenantId, like, limit) {
   const { rows } = await executor.query(
     `SELECT lt.id, to_char(lt.entry_date, 'YYYY-MM-DD') AS entry_date,
             lt.description, lt.source_type, lt.source_id, lt.source_event,
-            lt.created_at, lt.voided_at,
+            lt.created_at, lt.voided_at, lt.note,
             e.total_debit_cents,
             ${SOURCE_JOIN_COLUMNS}
        FROM ledger_transactions lt
@@ -114,6 +114,7 @@ export async function searchTransactions(executor, tenantId, like, limit) {
         ${EXCLUDE_VOIDED_SQL}
         AND (
           lt.description ILIKE $2
+          OR lt.note ILIKE $2
           OR i.invoice_number ILIKE $2
           OR i.customer_name ILIKE $2
           OR p.supplier_name ILIKE $2
@@ -439,10 +440,13 @@ export async function getTransaction(executor, tenantId, transactionId) {
             lt.description, lt.source_type, lt.source_id, lt.source_event,
             lt.created_at, lt.created_by_user_id,
             lt.voided_at, lt.voided_by_transaction_id, lt.reversed_by_transaction_id,
+            lt.note, lt.note_updated_at, lt.note_updated_by_user_id,
             u.name AS created_by_name,
+            nu.name AS note_updated_by_name,
             ${SOURCE_JOIN_COLUMNS}
        FROM ledger_transactions lt
        LEFT JOIN users u ON u.id = lt.created_by_user_id
+       LEFT JOIN users nu ON nu.id = lt.note_updated_by_user_id
        ${SOURCE_JOINS}
       WHERE lt.id = $2 AND lt.tenant_id = $1`,
     [tenantId, transactionId],
@@ -463,19 +467,64 @@ export async function getTransactionBySource(executor, tenantId, sourceType, sou
   return rows[0] || null
 }
 
-// Journal lines of one transaction, joined to the chart of accounts for names.
+// Journal lines of one transaction, joined to the chart of accounts for names
+// and to any reclassification journal that moves the line to another account
+// (at most one per line — unique index in migration 115).
 export async function listLines(executor, tenantId, transactionId) {
   const { rows } = await executor.query(
     `SELECT le.id, le.account_code, coa.name AS account_name, le.memo,
-            le.debit_cents, le.credit_cents
+            le.debit_cents, le.credit_cents,
+            rj.id AS reclassified_by_journal_id,
+            rj.status AS reclassification_status,
+            rj.posted_transaction_id AS reclassified_to_transaction_id
        FROM ledger_entries le
        LEFT JOIN chart_of_accounts coa
          ON coa.tenant_id = le.tenant_id AND coa.code = le.account_code
+       LEFT JOIN journals rj
+         ON rj.tenant_id = le.tenant_id AND rj.reclassifies_ledger_entry_id = le.id
       WHERE le.transaction_id = $2 AND le.tenant_id = $1
       ORDER BY le.id ASC`,
     [tenantId, transactionId],
   )
   return rows
+}
+
+// Locks one transaction row for the duration of the surrounding DB transaction,
+// returning false when it isn't the tenant's. Corrections (void/reverse) and
+// reclassifications of the same transaction take this lock first, so their
+// state checks and postings serialize instead of racing.
+export async function lockTransactionRow(executor, tenantId, transactionId) {
+  const { rows } = await executor.query(
+    'SELECT id FROM ledger_transactions WHERE id = $2 AND tenant_id = $1 FOR UPDATE',
+    [tenantId, transactionId],
+  )
+  return rows.length > 0
+}
+
+// Sets (or clears) the free-text note on one transaction, recording the editor
+// and time. The one sanctioned update besides the correction markers — notes
+// are display metadata, never part of the posted amounts. Returns the updated
+// note fields (editor name resolved) or null when the row isn't the tenant's.
+export async function updateTransactionNote(executor, tenantId, transactionId, note, userId) {
+  const { rows } = await executor.query(
+    `UPDATE ledger_transactions
+        SET note = $3, note_updated_at = NOW(), note_updated_by_user_id = $4
+      WHERE id = $2 AND tenant_id = $1
+      RETURNING note, note_updated_at, note_updated_by_user_id,
+                (SELECT name FROM users WHERE id = $4) AS note_updated_by_name`,
+    [tenantId, transactionId, note, userId],
+  )
+  return rows[0] || null
+}
+
+// The note of one transaction (null when unset or not the tenant's). Approved
+// journals read this as their canonical note.
+export async function getTransactionNote(executor, tenantId, transactionId) {
+  const { rows } = await executor.query(
+    'SELECT note FROM ledger_transactions WHERE id = $2 AND tenant_id = $1',
+    [tenantId, transactionId],
+  )
+  return rows[0]?.note ?? null
 }
 
 // Display name for report export headers/filenames (formal name, else band name).

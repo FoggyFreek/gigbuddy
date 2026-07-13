@@ -7,6 +7,8 @@ export const NOTIFICATION_TYPES = Object.freeze([
   'gig-import',
   'rehearsal-new',
   'rehearsal-confirmed',
+  'option-member-unavailable',
+  'option-all-responded',
   'invoice-paid',
   'task-assigned',
   'invite-redeemed',

@@ -141,7 +141,25 @@
     },
     "actions": {
       "void": "Void",
-      "reverse": "Reverse"
+      "reverse": "Reverse",
+      "reclassify": "Reclassify account"
+    },
+    "reclassifyDialog": {
+      "title": "Reclassify account",
+      "body": "Move one complete ledger line to another account. This immediately posts a journal that reverses the amount from the source account and posts it to the destination account. VAT is not recalculated.",
+      "sourceLine": "Ledger line",
+      "destination": "Destination account",
+      "note": "Note",
+      "create": "Reclassify",
+      "defaultNote": "Reclassified {{source}} to {{destination}} from ledger entry #{{id}}",
+      "accountsError": "The accounts could not be loaded.",
+      "retry": "Retry"
+    },
+    "note": {
+      "title": "Note",
+      "empty": "No note",
+      "placeholder": "Add a note…",
+      "lastEdited": "Last edited by {{name}} · {{date}}"
     },
     "meta": {
       "number": "Ledger entry number",
@@ -161,7 +179,8 @@
       "total": "Total",
       "totalEur": "Total EUR:",
       "totalDebit": "{{amount}} debit",
-      "totalCredit": "{{amount}} credit"
+      "totalCredit": "{{amount}} credit",
+      "reclassified": "Reclassified — view entry #{{id}}"
     }
   }
 }

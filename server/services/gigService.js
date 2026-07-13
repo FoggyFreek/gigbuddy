@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import { uploadObjectWithQuota, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
@@ -39,6 +40,9 @@ import {
   insertGigParticipant,
   deleteGigParticipant,
   updateParticipantVote,
+  lockGigOptionResponseState,
+  getGigParticipantResponseState,
+  markGigFirstUnavailableNotified,
   touchGig,
   deleteGig as deleteGigRow,
   getGigBannerRow,
@@ -100,6 +104,32 @@ export function notifyGigsImported(tenantId, count) {
     title: `${count} gig${count === 1 ? '' : 's'} imported`,
     body: 'Your Bandsintown import is complete.',
     url: '/gigs',
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
+}
+
+export function notifyGigOptionUnavailable(tenantId, gig) {
+  return dispatchNotification({
+    tenantId,
+    type: 'option-member-unavailable',
+    title: `One or more band members aren't available for option ${gig.event_description}`,
+    body: gigPushSummary(gig),
+    url: `/gigs/${gig.id}`,
+    sourceType: 'gig',
+    sourceId: gig.id,
+    requiredPermission: PERMISSIONS.PLANNING_WRITE,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
+}
+
+export function notifyGigOptionResponsesComplete(tenantId, gig) {
+  return dispatchNotification({
+    tenantId,
+    type: 'option-all-responded',
+    title: `All required band members have responded for option ${gig.event_description}`,
+    body: gigPushSummary(gig),
+    url: `/gigs/${gig.id}`,
+    sourceType: 'gig',
+    sourceId: gig.id,
+    requiredPermission: PERMISSIONS.PLANNING_WRITE,
   }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
 }
 
@@ -384,12 +414,34 @@ export async function setParticipantVote(db, tenantId, userId, gigId, memberId, 
     return { error: { status: 400, body: { error: 'Invalid vote value' } } }
   }
 
-  const participant = await updateParticipantVote(db, tenantId, gigId, memberId, vote, userId)
-  if (!participant) return NOT_FOUND
+  return withTransaction(async (client) => {
+    const option = await lockGigOptionResponseState(client, gigId, tenantId)
+    if (!option) return NOT_FOUND
 
-  await touchGig(db, gigId, tenantId)
-  const gig = await fetchGigWithRelations(db, gigId, tenantId)
-  return { gig: await withTasksAndParticipants(db, tenantId, gigId, gig) }
+    const responseState = await getGigParticipantResponseState(client, gigId, memberId, tenantId)
+    if (!responseState) return NOT_FOUND
+
+    const participant = await updateParticipantVote(client, tenantId, gigId, memberId, vote, userId)
+    if (!participant) return NOT_FOUND
+
+    const isOption = option.status === 'option'
+    const firstUnavailable = isOption
+      && vote === 'no'
+      && option.first_unavailable_notification_at == null
+    const allResponded = isOption
+      && responseState.previous_vote == null
+      && vote != null
+      && responseState.total > 0
+      && responseState.pending === 1
+
+    if (firstUnavailable) await markGigFirstUnavailableNotified(client, gigId, tenantId)
+    await touchGig(client, gigId, tenantId)
+    const gig = await fetchGigWithRelations(client, gigId, tenantId)
+    return {
+      gig: await withTasksAndParticipants(client, tenantId, gigId, gig),
+      notifications: { firstUnavailable, allResponded },
+    }
+  }, { db })
 }
 
 // ---------- banner ----------

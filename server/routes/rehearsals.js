@@ -18,6 +18,8 @@ import {
   unlinkSong,
   notifyRehearsalCreated,
   notifyRehearsalConfirmed,
+  notifyRehearsalOptionUnavailable,
+  notifyRehearsalOptionResponsesComplete,
 } from '../services/rehearsalService.js'
 
 const router = Router()
@@ -94,6 +96,12 @@ router.patch('/:id/participants/:bandMemberId', requirePermission(PERMISSIONS.RE
   const caller = { role: req.membership?.role, isSuperAdmin: !!req.user?.is_super_admin }
   const result = await setParticipantVote(pool, req.tenantId, req.user.id, id, memberId, req.body, caller)
   if (result.error) return sendError(res, result.error)
+  if (result.notifications.firstUnavailable) {
+    await notifyRehearsalOptionUnavailable(req.tenantId, result.rehearsal)
+  }
+  if (result.notifications.allResponded) {
+    await notifyRehearsalOptionResponsesComplete(req.tenantId, result.rehearsal)
+  }
   res.json(result.rehearsal)
 })
 

@@ -108,6 +108,7 @@ export default function LedgerEntriesPage() {
       list = list.filter(
         (row) =>
           row.description?.toLowerCase().includes(q) ||
+          row.note?.toLowerCase().includes(q) ||
           row.type?.toLowerCase().includes(q) ||
           (row.receipt != null && String(row.receipt).includes(q)) ||
           String(row.id).includes(q),

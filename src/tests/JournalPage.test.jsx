@@ -258,4 +258,20 @@ describe('JournalPage', () => {
     await user.click(screen.getByRole('checkbox', { name: /select all draft entries/i }))
     expect(await screen.findByText('2 selected')).toBeInTheDocument()
   })
+
+  // The journal editor deliberately has no note field — notes live on the
+  // posted transaction's detail page, so autosave payloads never carry `note`.
+  it('has no note field and autosave payloads do not carry a note', async () => {
+    const user = userEvent.setup()
+    journalApi.listJournals.mockResolvedValue([draft({ note: 'Some note' })])
+    wrap(<JournalPage />)
+    await screen.findByText('1 ledger entry')
+
+    expect(screen.queryByPlaceholderText('Note')).not.toBeInTheDocument()
+
+    await user.type(screen.getByPlaceholderText('Description'), 'x')
+    await waitFor(() => expect(journalApi.updateJournal).toHaveBeenCalled())
+    const [, body] = journalApi.updateJournal.mock.calls.at(-1)
+    expect('note' in body).toBe(false)
+  })
 })

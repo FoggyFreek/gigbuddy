@@ -153,6 +153,8 @@ export type NotificationType =
   | 'gig-import'
   | 'rehearsal-new'
   | 'rehearsal-confirmed'
+  | 'option-member-unavailable'
+  | 'option-all-responded'
   | 'invoice-paid'
   | 'task-assigned'
   | 'invite-redeemed'
@@ -511,6 +513,8 @@ export interface Journal {
   entry_number?: number
   entry_date?: string
   description?: string | null
+  note?: string | null
+  reclassifies_ledger_entry_id?: Id | null
   status?: 'draft' | 'approved'
   posted_transaction_id?: Id
   lines?: JournalLine[]
@@ -525,6 +529,7 @@ export interface LedgerEntryRow {
   voided?: boolean
   receipt?: number | string
   description?: string
+  note?: string | null
   amount_cents?: number
   source_type?: string
   source_id?: Id
@@ -547,6 +552,14 @@ export interface LedgerEntryLineRow {
   voided?: boolean
 }
 
+/** The reclassification journal moving one ledger line (posted immediately, so
+ * always approved with its posted transaction in practice). */
+export interface LedgerLineReclassification {
+  journal_id: Id
+  status: 'draft' | 'approved'
+  posted_transaction_id: Id | null
+}
+
 /** One journal line in the ledger entry detail (GET /api/ledger/:id). */
 export interface LedgerLine {
   id?: Id
@@ -555,6 +568,7 @@ export interface LedgerLine {
   memo?: string
   debit_cents?: number
   credit_cents?: number
+  reclassification?: LedgerLineReclassification | null
 }
 
 export interface Period {

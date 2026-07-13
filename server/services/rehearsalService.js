@@ -26,6 +26,9 @@ import {
   insertParticipant,
   deleteParticipant,
   updateParticipantVote,
+  lockRehearsalOptionResponseState,
+  getRehearsalParticipantResponseState,
+  markRehearsalFirstUnavailableNotified,
   countVoteShortfall,
   getDemotionState,
   demoteToOption,
@@ -70,6 +73,32 @@ export function notifyRehearsalConfirmed(tenantId, rehearsal) {
     url: '/rehearsals',
     sourceType: 'rehearsal',
     sourceId: rehearsal.id,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
+}
+
+export function notifyRehearsalOptionUnavailable(tenantId, rehearsal) {
+  return dispatchNotification({
+    tenantId,
+    type: 'option-member-unavailable',
+    title: `One or more band members aren't available for option ${rehearsalDateStr(rehearsal)}`,
+    body: [rehearsalDateStr(rehearsal), rehearsal.location].filter(Boolean).join(' · '),
+    url: `/rehearsals/${rehearsal.id}`,
+    sourceType: 'rehearsal',
+    sourceId: rehearsal.id,
+    requiredPermission: PERMISSIONS.PLANNING_WRITE,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
+}
+
+export function notifyRehearsalOptionResponsesComplete(tenantId, rehearsal) {
+  return dispatchNotification({
+    tenantId,
+    type: 'option-all-responded',
+    title: `All required band members have responded for option ${rehearsalDateStr(rehearsal)}`,
+    body: [rehearsalDateStr(rehearsal), rehearsal.location].filter(Boolean).join(' · '),
+    url: `/rehearsals/${rehearsal.id}`,
+    sourceType: 'rehearsal',
+    sourceId: rehearsal.id,
+    requiredPermission: PERMISSIONS.PLANNING_WRITE,
   }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
 }
 
@@ -233,14 +262,38 @@ export async function setParticipantVote(db, tenantId, userId, rehearsalId, memb
     }
   }
 
-  const participant = await updateParticipantVote(db, tenantId, rehearsalId, memberId, vote, userId)
-  if (!participant) return NOT_FOUND
+  return withTransaction(async (client) => {
+    const option = await lockRehearsalOptionResponseState(client, rehearsalId, tenantId)
+    if (!option) return NOT_FOUND
 
-  await touchRehearsal(db, rehearsalId, tenantId)
-  await autoDemoteIfNeeded(db, rehearsalId, tenantId)
+    const responseState = await getRehearsalParticipantResponseState(client, rehearsalId, memberId, tenantId)
+    if (!responseState) return NOT_FOUND
 
-  const rehearsal = await fetchRehearsal(db, rehearsalId, tenantId)
-  return { rehearsal: await withParticipants(db, rehearsal, tenantId) }
+    const participant = await updateParticipantVote(client, tenantId, rehearsalId, memberId, vote, userId)
+    if (!participant) return NOT_FOUND
+
+    const isOption = option.status === 'option'
+    const firstUnavailable = isOption
+      && vote === 'no'
+      && option.first_unavailable_notification_at == null
+    const allResponded = isOption
+      && responseState.previous_vote == null
+      && vote != null
+      && responseState.total > 0
+      && responseState.pending === 1
+
+    if (firstUnavailable) {
+      await markRehearsalFirstUnavailableNotified(client, rehearsalId, tenantId)
+    }
+    await touchRehearsal(client, rehearsalId, tenantId)
+    await autoDemoteIfNeeded(client, rehearsalId, tenantId)
+
+    const rehearsal = await fetchRehearsal(client, rehearsalId, tenantId)
+    return {
+      rehearsal: await withParticipants(client, rehearsal, tenantId),
+      notifications: { firstUnavailable, allResponded },
+    }
+  }, { db })
 }
 
 // ---------- songs ----------

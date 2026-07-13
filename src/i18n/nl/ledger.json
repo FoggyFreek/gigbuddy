@@ -141,7 +141,25 @@
     },
     "actions": {
       "void": "Storneren",
-      "reverse": "Terugboeken"
+      "reverse": "Terugboeken",
+      "reclassify": "Rekening herrubriceren"
+    },
+    "reclassifyDialog": {
+      "title": "Rekening herrubriceren",
+      "body": "Verplaats één volledige grootboekregel naar een andere rekening. Dit boekt direct een journaalpost die het bedrag van de bronrekening terugboekt en op de bestemmingsrekening boekt. Btw wordt niet herrekend.",
+      "sourceLine": "Grootboekregel",
+      "destination": "Bestemmingsrekening",
+      "note": "Notitie",
+      "create": "Herrubriceren",
+      "defaultNote": "Geherrubriceerd van {{source}} naar {{destination}} vanuit grootboektransactie #{{id}}",
+      "accountsError": "De rekeningen konden niet worden geladen.",
+      "retry": "Opnieuw proberen"
+    },
+    "note": {
+      "title": "Notitie",
+      "empty": "Geen notitie",
+      "placeholder": "Notitie toevoegen…",
+      "lastEdited": "Laatst bewerkt door {{name}} · {{date}}"
     },
     "meta": {
       "number": "Grootboektransactienummer",
@@ -161,7 +179,8 @@
       "total": "Totaal",
       "totalEur": "Totaal EUR:",
       "totalDebit": "{{amount}} debet",
-      "totalCredit": "{{amount}} credit"
+      "totalCredit": "{{amount}} credit",
+      "reclassified": "Geherrubriceerd — bekijk transactie #{{id}}"
     }
   }
 }

@@ -26,7 +26,7 @@ import theme from '../theme.ts'
 
 const ROWS = [
   { id: 5, entry_date: '2026-06-12', type: 'Purchase', group: 'purchases', voided: false, receipt: 9, description: 'Bill from mi5 Studios: TEST', amount_cents: -2500, source_type: 'purchase', source_id: 9 },
-  { id: 4, entry_date: '2026-06-10', type: 'Journal', group: 'journals', voided: false, receipt: 5, description: 'T', amount_cents: null, source_type: 'journal', source_id: 5 },
+  { id: 4, entry_date: '2026-06-10', type: 'Journal', group: 'journals', voided: false, receipt: 5, description: 'T', note: 'Zebra crossing fee', amount_cents: null, source_type: 'journal', source_id: 5 },
   { id: 3, entry_date: '2026-06-09', type: 'Ingoing payment', group: 'payments', voided: false, receipt: null, description: 'Paid by Texel Buitengewoon for invoice 1', amount_cents: 65400, source_type: 'invoice', source_id: 1 },
   { id: 2, entry_date: '2026-06-09', type: 'Invoice', group: 'invoices', voided: false, receipt: null, description: 'Invoice number 1 for Texel Buitengewoon', amount_cents: 65400, source_type: 'invoice', source_id: 1 },
   { id: 1, entry_date: '2026-06-08', type: 'Invoice (void)', group: 'invoices', voided: true, receipt: null, description: 'Invoice 2 voided', amount_cents: -10000, source_type: 'invoice', source_id: 2 },
@@ -115,6 +115,19 @@ describe('LedgerEntriesPage', () => {
     await user.type(screen.getByPlaceholderText(/search/i), 'mi5')
 
     expect(screen.getByText('Bill from mi5 Studios: TEST')).toBeInTheDocument()
+    expect(screen.queryByText('Invoice number 1 for Texel Buitengewoon')).not.toBeInTheDocument()
+  })
+
+  it('search matches the transaction note', async () => {
+    const user = userEvent.setup()
+    wrap(<LedgerEntriesPage />)
+    await waitFor(() => expect(screen.getByText('Bill from mi5 Studios: TEST')).toBeInTheDocument())
+
+    await user.type(screen.getByPlaceholderText(/search/i), 'zebra')
+
+    // Only the journal row (id 4) carries the "Zebra crossing fee" note.
+    expect(screen.getByText('T')).toBeInTheDocument()
+    expect(screen.queryByText('Bill from mi5 Studios: TEST')).not.toBeInTheDocument()
     expect(screen.queryByText('Invoice number 1 for Texel Buitengewoon')).not.toBeInTheDocument()
   })
 
