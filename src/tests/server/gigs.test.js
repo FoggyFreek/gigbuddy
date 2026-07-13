@@ -419,6 +419,18 @@ describe('gig search', () => {
     expect(descriptions(res)).toContain('Alpha Gig')
   })
 
+  it('matches on a linked gig tag', async () => {
+    await asUserA(
+      request(app).put(`/api/gigs/${seed.gigA.id}/tags`).send({ tags: ['Summer Tour'] }),
+    ).expect(200)
+
+    const res = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Summer' })).expect(200)
+    expect(descriptions(res)).toContain('Alpha Gig')
+    expect(res.body[0].tags).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Summer Tour' }),
+    ]))
+  })
+
   it('matches on the linked venue name and city', async () => {
     await addVenueGig(seed.tenantA.id, {
       category: 'venue', name: 'The Roxy', city: 'Antwerp', event_description: 'Mystery Show',
@@ -455,6 +467,53 @@ describe('gig search', () => {
     })
     const byCity = await asUserA(request(app).get('/api/gigs/search').query({ q: 'Rotterdam' })).expect(200)
     expect(byCity.body).toEqual([])
+  })
+})
+
+describe('gig tags', () => {
+  it('find-or-creates tags case-insensitively and includes them in gig payloads', async () => {
+    const setRes = await asUserA(
+      request(app).put(`/api/gigs/${seed.gigA.id}/tags`).send({
+        tags: ['Summer Tour', 'Festivals', 'summer tour'],
+      }),
+    ).expect(200)
+
+    expect(setRes.body.map((tag) => tag.name).sort()).toEqual(['Festivals', 'Summer Tour'])
+
+    const detail = await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}`)).expect(200)
+    expect(detail.body.tags.map((tag) => tag.name).sort()).toEqual(['Festivals', 'Summer Tour'])
+
+    const list = await asUserA(request(app).get('/api/gigs')).expect(200)
+    expect(list.body.find((gig) => gig.id === seed.gigA.id).tags).toEqual(detail.body.tags)
+
+    const { rows } = await pool.query('SELECT id FROM gig_tags WHERE tenant_id = $1', [seed.tenantA.id])
+    expect(rows).toHaveLength(2)
+  })
+
+  it('searches previously used tags while typing, including unlinked tags', async () => {
+    await asUserA(
+      request(app).put(`/api/gigs/${seed.gigA.id}/tags`).send({ tags: ['Northern Tour'] }),
+    ).expect(200)
+    await asUserA(
+      request(app).put(`/api/gigs/${seed.gigA.id}/tags`).send({ tags: [] }),
+    ).expect(200)
+
+    const res = await asUserA(request(app).get('/api/gigs/tags').query({ q: 'north' })).expect(200)
+    expect(res.body).toEqual([expect.objectContaining({ name: 'Northern Tour' })])
+  })
+
+  it('isolates tag reads and gig writes by tenant', async () => {
+    await pool.query(
+      'INSERT INTO gig_tags (tenant_id, name) VALUES ($1, $2)',
+      [seed.tenantB.id, 'Secret Tour'],
+    )
+
+    const suggestions = await asUserA(request(app).get('/api/gigs/tags').query({ q: 'Secret' })).expect(200)
+    expect(suggestions.body).toEqual([])
+
+    await asUserA(
+      request(app).put(`/api/gigs/${seed.gigB.id}/tags`).send({ tags: ['Leaked'] }),
+    ).expect(404)
   })
 })
 

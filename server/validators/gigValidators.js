@@ -4,6 +4,8 @@ import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
 
 export const VALID_STATUSES = ['option', 'confirmed', 'announced']
 export const VALID_VOTES = ['yes', 'no']
+export const MAX_GIG_TAGS = 20
+export const MAX_GIG_TAG_LENGTH = 50
 
 export const GIG_PATCH_FIELDS = [
   'event_date', 'event_description', 'venue_id', 'festival_id', 'event_link',
@@ -41,6 +43,17 @@ export function toDateStr(val) {
 export function venueDisplay(v) {
   if (!v) return ''
   return [v.name, v.city].filter(Boolean).join(' · ')
+}
+
+// Trims blanks and dedupes case-insensitively while preserving the spelling of
+// the first occurrence. The repository also enforces this per tenant.
+export function normalizeGigTagNames(tags) {
+  const names = new Map()
+  for (const value of tags) {
+    const name = String(value ?? '').trim()
+    if (name && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name)
+  }
+  return [...names.values()]
 }
 
 // Returns a copy of body with venue_id/festival_id parsed to validated

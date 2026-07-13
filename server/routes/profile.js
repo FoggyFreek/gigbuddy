@@ -39,6 +39,7 @@ const router = Router()
 
 const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const JPEG_PNG = new Set(['image/jpeg', 'image/png'])
+const CUSTOMIZATION_IMAGE_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 const logoUpload = multer({
   storage: multer.memoryStorage(),
@@ -229,11 +230,11 @@ router.post('/logo', requirePermission(PERMISSIONS.TENANT_MANAGE), logoUpload.si
 
 // Upload / replace profile banner (tenant admin only)
 router.post('/banner', requirePermission(PERMISSIONS.TENANT_MANAGE), customization, imageUpload.single('banner'), async (req, res) =>
-  handleImageUpload(req, res, uploadBanner, JPEG_PNG))
+  handleImageUpload(req, res, uploadBanner, CUSTOMIZATION_IMAGE_ALLOWED_TYPES))
 
 // Upload / replace profile avatar (tenant admin only)
 router.post('/avatar', requirePermission(PERMISSIONS.TENANT_MANAGE), customization, imageUpload.single('avatar'), async (req, res) =>
-  handleImageUpload(req, res, uploadAvatar, JPEG_PNG))
+  handleImageUpload(req, res, uploadAvatar, CUSTOMIZATION_IMAGE_ALLOWED_TYPES))
 
 // Upload / replace dark-theme logo variant (tenant admin only, ungated — see /logo)
 router.post('/logo-dark', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpload.single('logo_dark'), async (req, res) =>

@@ -40,6 +40,7 @@ vi.mock('../api/gigs.ts', () => ({
     tasks: [],
     attachments: [],
     participants: [],
+    tags: [],
   }),
   getGigMerchSummary: vi.fn().mockResolvedValue({ unitsSold: 0, netCents: 0, grossCents: 0 }),
   updateGig: vi.fn().mockResolvedValue({}),
@@ -52,6 +53,9 @@ vi.mock('../api/gigs.ts', () => ({
   addGigContact: vi.fn().mockResolvedValue({}),
   setGigContactPrimary: vi.fn().mockResolvedValue({}),
   removeGigContact: vi.fn().mockResolvedValue(undefined),
+  searchGigTags: vi.fn().mockResolvedValue([{ id: 7, name: 'Summer Tour' }]),
+  setGigTags: vi.fn().mockImplementation(async (_id, tags) =>
+    tags.map((name, index) => ({ id: index + 1, name }))),
 }))
 
 vi.mock('../api/venues.ts', async (importOriginal) => ({
@@ -79,7 +83,7 @@ vi.mock('../components/map/GigLocationMap.tsx', () => ({
   ),
 }))
 
-import { getGig, getGigMerchSummary, updateGig } from '../api/gigs.ts'
+import { getGig, getGigMerchSummary, setGigTags, updateGig } from '../api/gigs.ts'
 import { geocodePlace } from '../utils/geocode.ts'
 
 const GIG_PAID = {
@@ -101,6 +105,7 @@ const GIG_PAID = {
   tasks: [],
   attachments: [],
   participants: [],
+  tags: [],
 }
 
 function wrap(ui) {
@@ -197,6 +202,73 @@ describe('GigDetailContent — field rendering', () => {
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/percentage of net sales/i))
     expect(screen.getByLabelText(/percentage of net sales/i)).toBeInTheDocument()
+  })
+})
+
+describe('GigDetailContent — banner tags', () => {
+  beforeEach(() => {
+    getGig.mockClear()
+    setGigTags.mockClear()
+  })
+
+  it('shows Add tag at the top-left of the banner when no tag exists', async () => {
+    wrap(<GigDetailContent gigId={1} />)
+    expect(await screen.findByRole('button', { name: 'Add tag' })).toBeInTheDocument()
+  })
+
+  it('shows deletable tag chips and a square add button when tags exist', async () => {
+    getGig.mockResolvedValueOnce({ ...GIG_PAID, tags: [{ id: 7, name: 'Summer Tour' }] })
+    wrap(<GigDetailContent gigId={1} />)
+
+    expect(await screen.findByText('Summer Tour')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add another tag' })).toBeInTheDocument()
+    const chip = screen.getByText('Summer Tour').closest('.MuiChip-root')
+    expect(chip?.querySelector('[data-testid="CloseIcon"]')).toBeInTheDocument()
+  })
+
+  it('deletes a tag inline from its chip', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce({ ...GIG_PAID, tags: [{ id: 7, name: 'Summer Tour' }] })
+    wrap(<GigDetailContent gigId={1} />)
+
+    const chip = (await screen.findByText('Summer Tour')).closest('.MuiChip-root')
+    const deleteIcon = chip?.querySelector('[data-testid="CloseIcon"]')
+    expect(deleteIcon).toBeInTheDocument()
+    await user.click(deleteIcon)
+
+    await waitFor(() => expect(setGigTags).toHaveBeenCalledWith(1, []))
+  })
+
+  it('adds a tag inline from earlier tag suggestions', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Add tag' }))
+    await user.type(screen.getByRole('combobox', { name: 'Tag' }), 'Summer')
+    await user.click(await screen.findByText('Summer Tour'))
+
+    await waitFor(() => expect(setGigTags).toHaveBeenCalledWith(1, ['Summer Tour']))
+  })
+
+  it('closes the tag textbox when clicking outside it', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Add tag' }))
+    expect(screen.getByRole('combobox', { name: 'Tag' })).toBeInTheDocument()
+    await user.click(screen.getByText('No event banner'))
+
+    expect(screen.queryByRole('combobox', { name: 'Tag' })).not.toBeInTheDocument()
+  })
+
+  it('closes the tag textbox when pressing Escape', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Add tag' }))
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('combobox', { name: 'Tag' })).not.toBeInTheDocument()
   })
 })
 

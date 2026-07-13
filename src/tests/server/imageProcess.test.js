@@ -61,6 +61,7 @@ describe('validateAndReencodeImage — asset presets', () => {
   it.each([
     ['logo', 800],
     ['avatar', 720],
+    ['profileBanner', 820],
     ['banner', 1600],
     ['sharePhoto', 1200],
     ['invoiceLogo', 800],

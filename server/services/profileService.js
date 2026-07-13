@@ -297,7 +297,7 @@ export const uploadLogo = (db, tenantId, file) =>
   uploadTenantImage(db, tenantId, file, bandLogoKey, 'logo_path', IMAGE_PROCESSING_PRESETS.logo)
 
 export const uploadBanner = (db, tenantId, file) =>
-  uploadTenantImage(db, tenantId, file, bandProfileBannerKey, 'banner_path', IMAGE_PROCESSING_PRESETS.banner, FEATURES.CUSTOMIZATION)
+  uploadTenantImage(db, tenantId, file, bandProfileBannerKey, 'banner_path', IMAGE_PROCESSING_PRESETS.profileBanner, FEATURES.CUSTOMIZATION)
 
 export const uploadAvatar = (db, tenantId, file) =>
   uploadTenantImage(db, tenantId, file, bandAvatarKey, 'avatar_path', IMAGE_PROCESSING_PRESETS.avatar, FEATURES.CUSTOMIZATION)

@@ -26,9 +26,10 @@ export function compressLogo(file: File): Promise<File> {
 }
 
 const BANNER_OPTIONS: Options = {
-  maxSizeMB: 1,
+  maxSizeMB: 0.5,
   maxWidthOrHeight: 820,
-  initialQuality: 0.88,
+  initialQuality: 0.9,
+  fileType: 'image/webp',
   useWebWorker: true,
 }
 
@@ -37,9 +38,10 @@ export function compressBanner(file: File): Promise<File> {
 }
 
 const AVATAR_OPTIONS: Options = {
-  maxSizeMB: 2,
+  maxSizeMB: 0.3,
   maxWidthOrHeight: 720,
   initialQuality: 0.9,
+  fileType: 'image/webp',
   useWebWorker: true,
 }
 

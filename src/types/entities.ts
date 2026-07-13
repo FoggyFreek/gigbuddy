@@ -32,7 +32,8 @@ export interface Gig {
   status?: string
   start_time?: string | null
   end_time?: string | null
-  banner_path?: string
+  banner_path?: string | null
+  tags?: GigTag[]
   venue?: Venue
   festival?: Venue
   open_task_count?: number
@@ -42,6 +43,11 @@ export interface Gig {
   // but may be set as numbers in code; null = not agreed.
   merchandise_cut?: number | string | null
   percentage_of_sales?: number | string | null
+}
+
+export interface GigTag {
+  id?: Id
+  name?: string
 }
 
 export interface Member {

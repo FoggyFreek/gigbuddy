@@ -118,12 +118,52 @@ describe('financial report', () => {
     expect(balance_sheet.totals.liabilities_and_equity_cents)
       .toBe(balance_sheet.totals.assets_cents)
 
-    // VAT
-    expect(vat).toEqual({ output_cents: 21000, input_cents: 434, net_cents: 20566 })
+    // VAT — figures plus declaration/period-close status (nothing filed yet)
+    expect(vat).toEqual({
+      output_cents: 21000,
+      input_cents: 434,
+      net_cents: 20566,
+      books_closed_through: null,
+      books_closed: false,
+      period_to: `${YEAR}-12-31`,
+      returns: [],
+    })
 
     // Trial balance always balances
     expect(trial_balance.totals.debit_cents).toBe(trial_balance.totals.credit_cents)
     expect(trial_balance.rows.length).toBeGreaterThan(0)
+  })
+
+  it('reports the VAT declaration status and closed period once a quarter is filed', async () => {
+    await createSentInvoice() // Q1 activity: output VAT 21000
+    await createAccruedPurchase() // Q1 activity: input VAT 434
+
+    await asUserA(request(app).post('/api/vat-returns'))
+      .send({ year: YEAR, quarter: 1 }).expect(201)
+
+    // Fiscal year overlaps the filed Q1: the quarter shows as declared and the
+    // books are closed through Q1's end (not the whole year).
+    const year = await asUserA(
+      request(app).get('/api/ledger/report').query({ mode: 'fiscal_year', year: YEAR }),
+    ).expect(200)
+    expect(year.body.vat.books_closed_through).toBe(`${YEAR}-03-31`)
+    expect(year.body.vat.books_closed).toBe(false)
+    expect(year.body.vat.returns).toHaveLength(1)
+    expect(year.body.vat.returns[0]).toMatchObject({ year: YEAR, quarter: 1, direction: 'payable' })
+
+    // Scoping to Q1 itself: the period is fully closed.
+    const q1 = await asUserA(
+      request(app).get('/api/ledger/report').query({ mode: 'quarter', year: YEAR, quarter: 1 }),
+    ).expect(200)
+    expect(q1.body.vat.books_closed).toBe(true)
+    expect(q1.body.vat.returns).toHaveLength(1)
+
+    // A later quarter with no activity has no return and stays open.
+    const q3 = await asUserA(
+      request(app).get('/api/ledger/report').query({ mode: 'quarter', year: YEAR, quarter: 3 }),
+    ).expect(200)
+    expect(q3.body.vat.returns).toEqual([])
+    expect(q3.body.vat.books_closed).toBe(false)
   })
 
   it('excludes activity outside the requested period but keeps balance-sheet history', async () => {
@@ -190,7 +230,7 @@ describe('financial report', () => {
       revenue_cents: 0, cogs_cents: 0, gross_profit_cents: 0, expense_cents: 0, result_cents: 0,
     })
     expect(res.body.balance_sheet.totals.assets_cents).toBe(0)
-    expect(res.body.vat).toEqual({ output_cents: 0, input_cents: 0, net_cents: 0 })
+    expect(res.body.vat).toMatchObject({ output_cents: 0, input_cents: 0, net_cents: 0, returns: [] })
     expect(res.body.trial_balance.rows).toEqual([])
   })
 })
@@ -223,7 +263,7 @@ describe('financial report — voids excluded, reversals included', () => {
     // The voided pair drops out of the balance sheet and VAT too.
     expect(after.body.balance_sheet.totals.assets_cents).toBe(0)
     expect(after.body.balance_sheet.totals.liabilities_cents).toBe(0)
-    expect(after.body.vat).toEqual({ output_cents: 0, input_cents: 0, net_cents: 0 })
+    expect(after.body.vat).toMatchObject({ output_cents: 0, input_cents: 0, net_cents: 0 })
   })
 
   it('keeps a reversed closed-period entry in its own period but nets it out across the year', async () => {

@@ -159,7 +159,7 @@ function nextDay(isoDate) {
   return d.toISOString().slice(0, 10)
 }
 
-async function fetchBooksClosedThrough(executor, tenantId) {
+export async function fetchBooksClosedThrough(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT to_char(books_closed_through, 'YYYY-MM-DD') AS closed_through
        FROM tenant_accounting_settings WHERE tenant_id = $1`,

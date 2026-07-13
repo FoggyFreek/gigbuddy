@@ -6,7 +6,39 @@ const { imageCompression } = vi.hoisted(() => ({
 
 vi.mock('browser-image-compression', () => ({ default: imageCompression }))
 
-import { compressReceipt } from '../utils/compressImage.ts'
+import { compressAvatar, compressBanner, compressReceipt } from '../utils/compressImage.ts'
+
+describe('banner compression', () => {
+  it('converts banners to a compact high-quality WebP', async () => {
+    const file = new File(['banner'], 'banner.png', { type: 'image/png' })
+
+    await compressBanner(file)
+
+    expect(imageCompression).toHaveBeenCalledWith(file, {
+      maxSizeMB: 0.5,
+      maxWidthOrHeight: 820,
+      initialQuality: 0.9,
+      fileType: 'image/webp',
+      useWebWorker: true,
+    })
+  })
+})
+
+describe('avatar compression', () => {
+  it('converts avatars to a compact high-quality WebP', async () => {
+    const file = new File(['avatar'], 'avatar.png', { type: 'image/png' })
+
+    await compressAvatar(file)
+
+    expect(imageCompression).toHaveBeenCalledWith(file, {
+      maxSizeMB: 0.3,
+      maxWidthOrHeight: 720,
+      initialQuality: 0.9,
+      fileType: 'image/webp',
+      useWebWorker: true,
+    })
+  })
+})
 
 describe('compressReceipt', () => {
   it('uses the receipt-specific size and dimension limits', async () => {

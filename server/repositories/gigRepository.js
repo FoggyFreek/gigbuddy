@@ -28,6 +28,13 @@ export const FESTIVAL_JSON_SELECT = `CASE WHEN fv.id IS NULL THEN NULL ELSE json
 export const VENUE_JOIN = `LEFT JOIN venues v ON v.id = g.venue_id AND v.tenant_id = g.tenant_id`
 export const FESTIVAL_JOIN = `LEFT JOIN venues fv ON fv.id = g.festival_id AND fv.tenant_id = g.tenant_id`
 
+export const GIG_TAGS_SELECT = `COALESCE((
+  SELECT jsonb_agg(jsonb_build_object('id', gt.id, 'name', gt.name) ORDER BY lower(gt.name), gt.id)
+    FROM gig_tag_links gtl
+    JOIN gig_tags gt ON gt.id = gtl.tag_id AND gt.tenant_id = gtl.tenant_id
+   WHERE gtl.gig_id = g.id AND gtl.tenant_id = g.tenant_id
+), '[]'::jsonb) AS tags`
+
 // Throws a 400 Error when venueId is set but does not reference a row of the
 // expected category in the tenant. A null/undefined id is a no-op.
 export async function assertVenueInTenant(executor, venueId, tenantId, expectedCategory = null) {
@@ -109,7 +116,8 @@ export async function listGigsWithTaskCounts(executor, tenantId) {
             AND t.done = FALSE
        ) AS open_task_count,
        ${VENUE_JSON_SELECT},
-       ${FESTIVAL_JSON_SELECT}
+       ${FESTIVAL_JSON_SELECT},
+       ${GIG_TAGS_SELECT}
      FROM gigs g
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
@@ -120,8 +128,8 @@ export async function listGigsWithTaskCounts(executor, tenantId) {
   return rows
 }
 
-// Full-text-ish search over a tenant's gigs: matches the event name, or the
-// linked venue/festival name or city. Exact name matches on the event sort
+// Full-text-ish search over a tenant's gigs: matches the event name, linked
+// venue/festival name or city, or a tag. Exact name matches on the event sort
 // first, then by most recent date. Tenant-scoped like every other query.
 export async function searchGigs(executor, tenantId, { like, limit }) {
   const { rows } = await executor.query(
@@ -129,7 +137,8 @@ export async function searchGigs(executor, tenantId, { like, limit }) {
        g.id, g.event_date, g.event_description, g.status,
        g.venue_id, g.festival_id,
        ${VENUE_JSON_SELECT},
-       ${FESTIVAL_JSON_SELECT}
+       ${FESTIVAL_JSON_SELECT},
+       ${GIG_TAGS_SELECT}
      FROM gigs g
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
@@ -140,6 +149,16 @@ export async function searchGigs(executor, tenantId, { like, limit }) {
          OR v.city ILIKE $2
          OR fv.name ILIKE $2
          OR fv.city ILIKE $2
+         OR EXISTS (
+           SELECT 1
+             FROM gig_tag_links search_link
+             JOIN gig_tags search_tag
+               ON search_tag.id = search_link.tag_id
+              AND search_tag.tenant_id = search_link.tenant_id
+            WHERE search_link.gig_id = g.id
+              AND search_link.tenant_id = g.tenant_id
+              AND search_tag.name ILIKE $2
+          )
        )
      ORDER BY
        CASE WHEN g.event_description ILIKE $2 THEN 0 ELSE 1 END,
@@ -246,7 +265,7 @@ export async function insertGigWithRelations(executor, tenantId, data) {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *
      )
-     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
+     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
        FROM inserted g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}`,
@@ -340,6 +359,61 @@ export async function deleteGig(executor, gigId, tenantId) {
     [gigId, tenantId],
   )
   return rowCount > 0
+}
+
+// ---------- tags ----------
+
+export async function searchGigTags(executor, tenantId, like) {
+  const params = [tenantId]
+  let nameFilter = ''
+  if (like) {
+    params.push(like)
+    nameFilter = 'AND name ILIKE $2'
+  }
+  const { rows } = await executor.query(
+    `SELECT id, name FROM gig_tags
+      WHERE tenant_id = $1 ${nameFilter}
+      ORDER BY lower(name), id
+      LIMIT 100`,
+    params,
+  )
+  return rows
+}
+
+export async function loadGigTags(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT gt.id, gt.name
+       FROM gig_tag_links gtl
+       JOIN gig_tags gt ON gt.id = gtl.tag_id AND gt.tenant_id = gtl.tenant_id
+      WHERE gtl.gig_id = $1 AND gtl.tenant_id = $2
+      ORDER BY lower(gt.name), gt.id`,
+    [gigId, tenantId],
+  )
+  return rows
+}
+
+export async function upsertGigTag(executor, tenantId, name) {
+  const { rows } = await executor.query(
+    `INSERT INTO gig_tags (tenant_id, name) VALUES ($1, $2)
+     ON CONFLICT (tenant_id, lower(name)) DO UPDATE SET name = gig_tags.name
+     RETURNING id`,
+    [tenantId, name],
+  )
+  return rows[0].id
+}
+
+export async function deleteGigTagLinks(executor, gigId, tenantId) {
+  await executor.query(
+    'DELETE FROM gig_tag_links WHERE gig_id = $1 AND tenant_id = $2',
+    [gigId, tenantId],
+  )
+}
+
+export async function insertGigTagLink(executor, gigId, tagId, tenantId) {
+  await executor.query(
+    'INSERT INTO gig_tag_links (gig_id, tag_id, tenant_id) VALUES ($1, $2, $3)',
+    [gigId, tagId, tenantId],
+  )
 }
 
 // Returns { banner_path } for the gig, or null when the gig does not exist
@@ -460,7 +534,7 @@ export async function deleteGigContact(executor, gigId, contactId, tenantId) {
 
 export async function fetchGigWithRelations(executor, gigId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
+    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
        FROM gigs g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}
@@ -482,7 +556,7 @@ export async function updateGigFields(executor, tenantId, gigId, fields, values)
        WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1}
        RETURNING *
      )
-     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}
+     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
        FROM updated g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}`,

@@ -1,5 +1,5 @@
 import { request, requestForm } from './_client.ts'
-import type { Gig, GigMerchSummary, Id, Task } from '../types/entities.ts'
+import type { Gig, GigMerchSummary, GigTag, Id, Task } from '../types/entities.ts'
 
 interface GigParticipant {
   band_member_id?: Id
@@ -25,6 +25,10 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
 export const listGigs = () => api<Gig[]>('/')
 export const searchGigs = (q: string) =>
   api<Gig[]>(`/search?${new URLSearchParams({ q })}`)
+export const searchGigTags = (q: string) =>
+  api<GigTag[]>(`/tags?${new URLSearchParams({ q: q ?? '' })}`)
+export const setGigTags = (id: Id, tags: string[]) =>
+  api<GigTag[]>(`/${id}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) })
 export const getGig = (id: Id, opts?: RequestInit) => api<Gig>(`/${id}`, opts)
 export const getGigMerchSummary = (id: Id, opts?: RequestInit) =>
   api<GigMerchSummary>(`/${id}/merch-summary`, opts)

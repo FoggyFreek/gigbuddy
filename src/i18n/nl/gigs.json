@@ -18,8 +18,11 @@
   },
   "table": {
     "searchPlaceholder": "Optredens zoeken…",
-    "filter": "Filteren",
-    "filterWithCount": "Filteren ({{count}})",
+    "types": "Types",
+    "typesWithCount": "Types ({{count}})",
+    "tags": "Tags",
+    "tagsWithCount": "Tags ({{count}})",
+    "allTags": "Alles tonen",
     "allStatuses": "Alle statussen",
     "colDate": "Datum",
     "colEvent": "Evenement",
@@ -157,6 +160,12 @@
       "remove": "Evenementbanner verwijderen",
       "uploadFailed": "Uploaden banner mislukt",
       "deleteFailed": "Verwijderen banner mislukt"
+    },
+    "tags": {
+      "add": "Tag toevoegen",
+      "addAnother": "Nog een tag toevoegen",
+      "label": "Tag",
+      "saveFailed": "Tags opslaan mislukt"
     },
     "eventDetails": "Evenementgegevens",
     "date": "Datum",

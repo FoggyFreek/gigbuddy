@@ -8,11 +8,13 @@ import { requireParam, sendError } from './routeHelpers.js'
 import {
   listGigs,
   searchGigs,
+  searchGigTags,
   getGig,
   gigMerchSummary,
   importGigs,
   createGig,
   patchGig,
+  setGigTags,
   deleteGig,
   addGigTask,
   patchGigTask,
@@ -61,9 +63,14 @@ router.get('/', async (req, res) => {
   res.json(await listGigs(pool, req.tenantId))
 })
 
-// Global search (min 3 chars): event name, or linked venue/festival name or city
+// Global search (min 3 chars): event, venue/festival, city, or gig tag.
 router.get('/search', async (req, res) => {
   res.json(await searchGigs(pool, req.tenantId, req.query))
+})
+
+// Registered before /:id so the literal path is not captured as an id.
+router.get('/tags', async (req, res) => {
+  res.json(await searchGigTags(pool, req.tenantId, req.query))
 })
 
 // Get single gig with tasks, participants, and attachments
@@ -222,6 +229,13 @@ router.patch('/:id/participants/:bandMemberId', requirePermission(PERMISSIONS.PL
   if (result.notifications.firstUnavailable) await notifyGigOptionUnavailable(req.tenantId, result.gig)
   if (result.notifications.allResponded) await notifyGigOptionResponsesComplete(req.tenantId, result.gig)
   res.json(result.gig)
+})
+
+router.put('/:id/tags', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await setGigTags(pool, req.tenantId, id, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.tags)
 })
 
 // --- Gig contacts (mirrors venue_contacts; links are informational) ---

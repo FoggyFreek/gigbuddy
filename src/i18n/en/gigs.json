@@ -18,8 +18,11 @@
   },
   "table": {
     "searchPlaceholder": "Search gigs…",
-    "filter": "Filter",
-    "filterWithCount": "Filter ({{count}})",
+    "types": "Types",
+    "typesWithCount": "Types ({{count}})",
+    "tags": "Tags",
+    "tagsWithCount": "Tags ({{count}})",
+    "allTags": "Show all",
     "allStatuses": "All statuses",
     "colDate": "Date",
     "colEvent": "Event",
@@ -157,6 +160,12 @@
       "remove": "Remove event banner",
       "uploadFailed": "Banner upload failed",
       "deleteFailed": "Banner delete failed"
+    },
+    "tags": {
+      "add": "Add tag",
+      "addAnother": "Add another tag",
+      "label": "Tag",
+      "saveFailed": "Saving tags failed"
     },
     "eventDetails": "Event details",
     "date": "Date",

@@ -21,6 +21,9 @@ import {
   normalizeGigVenueRefs,
   normalizeImportRow,
   buildGigUpdateFields,
+  normalizeGigTagNames,
+  MAX_GIG_TAGS,
+  MAX_GIG_TAG_LENGTH,
 } from '../validators/gigValidators.js'
 import {
   assertVenueInTenant,
@@ -58,6 +61,11 @@ import {
   setGigContactPrimary as setGigContactPrimaryRow,
   deleteGigContact,
   updateGigFields,
+  searchGigTags as searchGigTagRows,
+  loadGigTags,
+  upsertGigTag,
+  deleteGigTagLinks,
+  insertGigTagLink,
 } from '../repositories/gigRepository.js'
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { getTaskById } from '../repositories/taskRepository.js'
@@ -197,7 +205,8 @@ export async function listGigs(db, tenantId) {
   })
 }
 
-// Global-search read: matches gigs on event name, venue/festival name or city.
+// Global-search read: matches gigs on event name, venue/festival name or city,
+// and linked gig tags.
 // Mirrors searchVenues — short queries (<3 chars) return nothing so we don't
 // run a wildcard scan on every keystroke.
 export async function searchGigs(db, tenantId, query) {
@@ -207,6 +216,11 @@ export async function searchGigs(db, tenantId, query) {
     like: `%${q}%`,
     limit: parseSearchLimit(query.limit),
   })
+}
+
+export async function searchGigTags(db, tenantId, query) {
+  const q = String(query.q ?? '').trim()
+  return searchGigTagRows(db, tenantId, q ? `%${q}%` : null)
 }
 
 export async function getGig(db, tenantId, gigId) {
@@ -340,6 +354,33 @@ export async function patchGig(db, tenantId, gigId, body) {
   const gig = await updateGigFields(db, tenantId, gigId, built.fields, built.values)
   if (!gig) return NOT_FOUND
   return { gig, confirmed: body.status === 'confirmed' }
+}
+
+// Replaces a gig's complete tag set. Tag rows remain available as suggestions
+// after unlinking, so previously used tour/group names can be reused later.
+export async function setGigTags(db, tenantId, gigId, body) {
+  if (!Array.isArray(body?.tags)) {
+    return { error: { status: 400, body: { error: 'tags must be an array' } } }
+  }
+  const names = normalizeGigTagNames(body.tags)
+  if (names.length > MAX_GIG_TAGS) {
+    return { error: { status: 400, body: { error: `Maximum ${MAX_GIG_TAGS} tags per gig` } } }
+  }
+  if (names.some((name) => name.length > MAX_GIG_TAG_LENGTH)) {
+    return { error: { status: 400, body: { error: `Tags may be at most ${MAX_GIG_TAG_LENGTH} characters` } } }
+  }
+
+  return withTransaction(async (client) => {
+    if (!(await gigExistsInTenant(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+
+    const tagIds = []
+    for (const name of names) tagIds.push(await upsertGigTag(client, tenantId, name))
+
+    await deleteGigTagLinks(client, gigId, tenantId)
+    for (const tagId of tagIds) await insertGigTagLink(client, gigId, tagId, tenantId)
+    await touchGig(client, gigId, tenantId)
+    return { tags: await loadGigTags(client, gigId, tenantId) }
+  }, { db })
 }
 
 // Deletes the gig and removes its banner object from storage.

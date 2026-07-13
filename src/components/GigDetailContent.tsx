@@ -40,6 +40,7 @@ import GigAvailabilityPanel from './GigAvailabilityPanel.tsx'
 import GigParticipantsSection from './GigParticipantsSection.tsx'
 import GigContactsSection from './GigContactsSection.tsx'
 import GigStatusIcon from './GigStatusIcon.tsx'
+import GigTagEditor from './GigTagEditor.tsx'
 import ImageCropDialog from './ImageCropDialog.tsx'
 import PlanningReadOnlyAlert from './PlanningReadOnlyAlert.tsx'
 import StatusDot from './StatusDot.tsx'
@@ -68,7 +69,7 @@ import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
 import { invoiceStatusColor } from '../utils/invoiceStatus.ts'
-import type { Id, Gig, GigMerchSummary, Invoice, InvoiceStatus, Participant, PurchaseAttachment, Member, Venue, Task } from '../types/entities.ts'
+import type { Id, Gig, GigMerchSummary, GigTag, Invoice, InvoiceStatus, Participant, PurchaseAttachment, Member, Venue, Task } from '../types/entities.ts'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
 
@@ -205,6 +206,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const [members, setMembers] = useState<Member[]>([])
   const [addMemberId, setAddMemberId] = useState<Id | ''>('')
   const [bannerPath, setBannerPath] = useState<string | null>(null)
+  const [tags, setTags] = useState<GigTag[]>([])
   const [bandBannerPath, setBandBannerPath] = useState<string | null>(null)
   const [bannerBusy, setBannerBusy] = useState(false)
   const [bannerError, setBannerError] = useState<string | null>(null)
@@ -231,6 +233,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     setGig(g)
     onGigLoaded?.(g)
     setBannerPath(g.banner_path || null)
+    setTags(g.tags || [])
     setSelectedVenue(g.venue || null)
     setSelectedFestival(g.festival || null)
     setForm({
@@ -488,6 +491,17 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             }}
           />
         )}
+
+        <GigTagEditor
+          gigId={gigId}
+          tags={tags}
+          canWrite={canWrite}
+          onChange={(nextTags) => {
+            setTags(nextTags)
+            setGig((current) => current ? { ...current, tags: nextTags } : current)
+            onBannerUpdate?.(gigId, { tags: nextTags })
+          }}
+        />
 
         {/* Event banner centered, or placeholder when unset. The bottom inset
             reserves the strip the tab pill overlaps so it never covers the

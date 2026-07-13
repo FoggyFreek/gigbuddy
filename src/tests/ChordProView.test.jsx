@@ -23,4 +23,13 @@ describe('ChordProView', () => {
     expect(CHORDPRO_PRINT_CSS).toContain('.cp-diagrams-collapsible { display: none; }')
     expect(CHORDPRO_PRINT_CSS).toContain('.cp-diagrams-print { display: block; }')
   })
+
+  it('visualizes lowercase chord roots as resolved fretboard diagrams', () => {
+    const { container } = wrap('[cadd9]One [g]two [d]three [em]four')
+    const diagrams = container.querySelectorAll('.cp-diagrams-print .cp-diagram')
+
+    expect(diagrams).toHaveLength(4)
+    expect(container.querySelectorAll('.cp-diagrams-print .cp-diagram svg')).toHaveLength(4)
+    expect([...diagrams].map((diagram) => diagram.firstElementChild.textContent)).toEqual(['Cadd9', 'G', 'D', 'Em'])
+  })
 })

@@ -860,8 +860,11 @@ export function analyzeChords(source: string, transposeOffset = 0): ChordAnalysi
   // Transpose the grid's chord names by the same amount as the lyrics so the
   // diagrams match what's printed above the words.
   const transpose = getTransposeAmount(text) + transposeOffset
-  const transposeName = (name: string): string =>
-    transpose ? (Chord.parse(name)?.transpose(transpose)?.toString() ?? name) : name
+  const transposeName = (name: string): string => {
+    const parsed = Chord.parse(name)
+    if (!parsed) return name
+    return (transpose ? parsed.transpose(transpose) : parsed)?.toString() ?? name
+  }
 
   const chords: ResolvedChord[] = []
   const seen = new Set<string>()

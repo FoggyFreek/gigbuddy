@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Paper from '@mui/material/Paper'
 import Table from '@mui/material/Table'
@@ -12,6 +13,8 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import GridOnOutlined from '@mui/icons-material/GridOnOutlined'
+import LockOutlined from '@mui/icons-material/LockOutlined'
+import LockOpenOutlined from '@mui/icons-material/LockOpenOutlined'
 import PictureAsPdfOutlined from '@mui/icons-material/PictureAsPdfOutlined'
 import PeriodPicker from '../components/shared/periodPicker.tsx'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
@@ -252,10 +255,59 @@ function BalanceSheetCard({ balanceSheet }: Readonly<{ balanceSheet: BalanceShee
   )
 }
 
+interface VatReturnSummary {
+  year: number
+  quarter: number
+  period_from: string
+  period_to: string
+  filed_on: string | null
+  direction: 'payable' | 'receivable' | 'nil'
+  net_cents: number
+}
+
 interface VatData {
   output_cents: number
   input_cents: number
   net_cents: number
+  books_closed_through: string | null
+  books_closed: boolean
+  period_to: string
+  returns: VatReturnSummary[]
+}
+
+// Whether the VAT declaration for the period was filed and the books closed.
+// A period can span several quarters, so each filed quarter is shown as a chip.
+function VatFilingStatus({ vat }: Readonly<{ vat: VatData }>) {
+  const { t } = useTranslation('reports')
+  const declared = vat.returns.length > 0
+  return (
+    <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+        <Chip
+          size="small"
+          icon={vat.books_closed ? <LockOutlined /> : <LockOpenOutlined />}
+          color={vat.books_closed ? 'success' : 'default'}
+          variant={vat.books_closed ? 'filled' : 'outlined'}
+          label={vat.books_closed ? t($ => $.vat.booksClosed) : t($ => $.vat.booksOpen)}
+        />
+        {vat.books_closed_through && (
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {t($ => $.vat.closedThrough, { date: vat.books_closed_through })}
+          </Typography>
+        )}
+      </Box>
+      {declared ? (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t($ => $.vat.declared)}</Typography>
+          {vat.returns.map((r) => (
+            <Chip key={`${r.year}-Q${r.quarter}`} size="small" variant="outlined" color="success" label={`Q${r.quarter} ${r.year}`} />
+          ))}
+        </Box>
+      ) : (
+        <Typography variant="caption" sx={{ color: 'warning.main' }}>{t($ => $.vat.notDeclared)}</Typography>
+      )}
+    </Box>
+  )
 }
 
 function VatCard({ vat }: Readonly<{ vat: VatData }>) {
@@ -280,6 +332,7 @@ function VatCard({ vat }: Readonly<{ vat: VatData }>) {
           </TableRow>
         </TableBody>
       </Table>
+      <VatFilingStatus vat={vat} />
     </ReportCard>
   )
 }

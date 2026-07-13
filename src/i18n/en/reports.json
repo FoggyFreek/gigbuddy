@@ -34,7 +34,12 @@
     "salesOutput": "VAT on sales (output)",
     "purchasesInput": "VAT on purchases (input)",
     "netPayable": "Net VAT position (payable)",
-    "netReceivable": "Net VAT position (receivable)"
+    "netReceivable": "Net VAT position (receivable)",
+    "booksClosed": "Books closed",
+    "booksOpen": "Books open",
+    "closedThrough": "Closed through {{date}}",
+    "declared": "Declared:",
+    "notDeclared": "No VAT return filed for this period"
   },
   "trialBalance": {
     "title": "Trial Balance",

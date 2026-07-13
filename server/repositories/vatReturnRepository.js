@@ -93,6 +93,23 @@ export async function listVatReturns(executor, tenantId) {
   return rows
 }
 
+// Filed returns whose quarter overlaps [from, to] (both inclusive), oldest
+// first — drives the report's "was this period declared?" indicator.
+export async function listVatReturnsInRange(executor, tenantId, { from, to }) {
+  const { rows } = await executor.query(
+    `SELECT year, quarter,
+            to_char(period_from, 'YYYY-MM-DD') AS period_from,
+            to_char(period_to, 'YYYY-MM-DD') AS period_to,
+            to_char(filed_at, 'YYYY-MM-DD') AS filed_on,
+            direction, net_cents
+       FROM vat_returns
+      WHERE tenant_id = $1 AND period_from <= $3::date AND period_to >= $2::date
+      ORDER BY year, quarter`,
+    [tenantId, from, to],
+  )
+  return rows
+}
+
 export async function fetchVatReturn(executor, tenantId, vatReturnId) {
   const { rows } = await executor.query(
     `SELECT ${RETURN_COLUMNS} FROM vat_returns WHERE id = $1 AND tenant_id = $2`,
