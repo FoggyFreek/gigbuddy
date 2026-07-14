@@ -1,4 +1,3 @@
-import type { Invoice, InvoiceStatus } from '../../types/entities.ts'
 import type { InvoiceForm } from './invoiceFormHelpers.ts'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
@@ -14,25 +13,21 @@ import DateEntryField from '../DateEntryField.tsx'
 
 const PAYMENT_TERMS = [7, 14, 30, 60]
 
-const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'void'] as const satisfies readonly InvoiceStatus[]
-
 interface InvoiceCustomerFieldsProps {
   form: InvoiceForm
   patchForm: (patch: Partial<InvoiceForm>) => void
   readOnly: boolean
-  invoice?: Invoice
-  onStatusChange: (status: InvoiceStatus) => void
   memoOpen: boolean
   setMemoOpen: (open: boolean) => void
 }
 
 export default function InvoiceCustomerFields({
-  form, patchForm, readOnly, invoice, onStatusChange, memoOpen, setMemoOpen,
+  form, patchForm, readOnly, memoOpen, setMemoOpen,
 }: Readonly<InvoiceCustomerFieldsProps>) {
   const { t } = useTranslation('invoices')
   return (
     <>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
         <DateEntryField
           label={t($ => $.customerFields.issueDate)}
           openPickerLabel={t($ => $.customerFields.openIssueDatePicker)}
@@ -52,20 +47,6 @@ export default function InvoiceCustomerFields({
           >
             {PAYMENT_TERMS.map((days) => (
               <MenuItem key={days} value={days}>{t($ => $.customerFields.paymentTermDays, { count: days })}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl size="small">
-          <InputLabel id="invoice-status-label">{t($ => $.customerFields.status)}</InputLabel>
-          <Select
-            labelId="invoice-status-label"
-            id="invoice-status-select"
-            label={t($ => $.customerFields.status)}
-            value={invoice?.status || 'draft'}
-            onChange={(e) => onStatusChange(e.target.value as InvoiceStatus)}
-          >
-            {STATUS_OPTIONS.map((status) => (
-              <MenuItem key={status} value={status}>{t($ => $.state[status])}</MenuItem>
             ))}
           </Select>
         </FormControl>

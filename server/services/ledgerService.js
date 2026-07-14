@@ -9,6 +9,7 @@
 // Core invariant: Assets & Expenses increase with Debits; Liabilities, Equity &
 // Revenue increase with Credits. Every journal balances (Σ debits == Σ credits).
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { classify, describe, receiptFor } from './ledgerEntryTypes.js'
 import { parseSearchLimit } from '../validators/ledgerValidators.js'
 import {
@@ -26,7 +27,11 @@ import {
   checkingAccountBalance,
   merchTotals,
   merchInventoryValue,
+  updateTransactionNote,
+  lockTransactionRow,
 } from '../repositories/ledgerRepository.js'
+import { hasReclassifiedLines } from '../repositories/journalRepository.js'
+import { badRequest, notFound } from './serviceErrors.js'
 import { openInvoiceBuckets } from '../repositories/invoiceRepository.js'
 import { upcomingBandFeesByStatus } from '../repositories/gigRepository.js'
 
@@ -58,6 +63,19 @@ export class PeriodClosedError extends Error {
   }
 }
 
+// Thrown when a workflow tries to cancel/compensate a transaction whose line(s)
+// carry an ACTIVE reclassification posting: the compensation would cancel the
+// original while the reclassification keeps moving that amount, double-counting
+// it in reports. The reclassification must be voided/reversed first.
+export class ReclassifiedLinesError extends Error {
+  constructor() {
+    super('This ledger entry has reclassified lines; void or reverse the reclassification first')
+    this.name = 'ReclassifiedLinesError'
+    this.code = 'has_reclassified_lines'
+    this.status = 409
+  }
+}
+
 // Maps the ledger guard errors to a discriminated { error } result for the HTTP
 // layer, or null when the error is not a ledger guard and should propagate.
 export function ledgerErrorResult(err) {
@@ -67,7 +85,23 @@ export function ledgerErrorResult(err) {
   if (err instanceof PeriodClosedError) {
     return { error: { status: err.status, body: { error: err.message, code: err.code, closed_through: err.closedThrough } } }
   }
+  if (err instanceof ReclassifiedLinesError) {
+    return { error: { status: err.status, body: { error: err.message, code: err.code } } }
+  }
   return null
+}
+
+// The one guard every workflow that cancels or compensates a posted transaction
+// must run inside its DB transaction, BEFORE posting the compensating journal:
+// takes the same row lock as the reclassify flow (so the check can't race a
+// concurrent reclassification) and throws when a line still has an active
+// reclassification. A null/undefined id (nothing was posted) is a no-op.
+export async function assertNoActiveReclassifications(client, tenantId, transactionId) {
+  if (transactionId == null) return
+  await lockTransactionRow(client, tenantId, transactionId)
+  if (await hasReclassifiedLines(client, tenantId, transactionId)) {
+    throw new ReclassifiedLinesError()
+  }
 }
 
 // Per-tenant advisory lock serializing ledger postings against accounting
@@ -77,6 +111,11 @@ export function ledgerErrorResult(err) {
 // (and is seen by the balance check) before the codes can change, and vice
 // versa. Transaction-scoped: released automatically at COMMIT/ROLLBACK.
 export const ACCOUNTING_SETTINGS_LOCK_NAMESPACE = 53002
+
+// The system Opening Balance Equity account seeded for every tenant
+// (defaultChartOfAccounts.js / migration 064). It is is_system (undeletable), so
+// a constant is safe — no per-tenant setting is needed.
+export const OPENING_BALANCE_EQUITY_CODE = '39000'
 
 export async function acquireAccountingSettingsLock(client, tenantId) {
   await client.query('SELECT pg_advisory_xact_lock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
@@ -120,13 +159,21 @@ function nextDay(isoDate) {
   return d.toISOString().slice(0, 10)
 }
 
-async function fetchBooksClosedThrough(executor, tenantId) {
+export async function fetchBooksClosedThrough(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT to_char(books_closed_through, 'YYYY-MM-DD') AS closed_through
        FROM tenant_accounting_settings WHERE tenant_id = $1`,
     [tenantId],
   )
   return rows[0]?.closed_through || null
+}
+
+// The given date when its period is still open, else the first day after
+// books_closed_through. Used by postings that prefer an original date but must
+// land in the open period (e.g. reclassification drafts).
+export async function firstOpenDate(executor, tenantId, isoDate) {
+  const closedThrough = await fetchBooksClosedThrough(executor, tenantId)
+  return closedThrough && isoDate <= closedThrough ? nextDay(closedThrough) : isoDate
 }
 
 // Throws PeriodClosedError when entryDate falls in the closed period.
@@ -147,6 +194,8 @@ export async function assertInvoiceVoidPostable(executor, tenantId, invoice) {
   requireCode(settings, 'default_revenue_account_code')
   if (invoice.tax_cents > 0) requireCode(settings, 'output_vat_account_code')
   await assertPeriodOpen(executor, tenantId, today())
+  const original = await getTransactionBySource(executor, tenantId, 'invoice', invoice.id, 'sent')
+  await assertNoActiveReclassifications(executor, tenantId, original?.id)
 }
 
 export async function postJournal(client, tenantId, {
@@ -237,6 +286,7 @@ function toListRow(row) {
     voided: voided || row.voided_at != null,
     receipt: receiptFor(row),
     description: describe(row),
+    note: row.note ?? null,
     amount_cents: sign === null ? null : sign * headlineAmount(row),
     source_type: row.source_type,
     source_id: row.source_id,
@@ -323,7 +373,21 @@ function originFor(row) {
 export async function getLedgerEntryDetail(executor, tenantId, transactionId) {
   const row = await getTransaction(executor, tenantId, transactionId)
   if (!row) return null
-  const lines = await listLines(executor, tenantId, transactionId)
+  // Per line: the reclassification journal that moves it (posted immediately,
+  // so approved with its correcting transaction).
+  const lines = (await listLines(executor, tenantId, transactionId)).map((l) => ({
+    id: l.id,
+    account_code: l.account_code,
+    account_name: l.account_name,
+    memo: l.memo,
+    debit_cents: l.debit_cents,
+    credit_cents: l.credit_cents,
+    reclassification: l.reclassified_by_journal_id == null ? null : {
+      journal_id: l.reclassified_by_journal_id,
+      status: l.reclassification_status,
+      posted_transaction_id: l.reclassified_to_transaction_id ?? null,
+    },
+  }))
   const { type, group, voided } = classify(row.source_type, row.source_event)
   const isCorrection = row.source_type === 'ledger_transaction'
     && (row.source_event === 'void' || row.source_event === 'reversal')
@@ -344,9 +408,23 @@ export async function getLedgerEntryDetail(executor, tenantId, transactionId) {
     source_id: row.source_id,
     created_at: row.created_at,
     created_by_name: row.created_by_name,
+    note: row.note ?? null,
+    note_updated_at: row.note_updated_at ?? null,
+    note_updated_by_name: row.note_updated_by_name ?? null,
     origin: originFor(row),
     lines,
   }
+}
+
+// Sets/clears the free-text note on one transaction (any state, incl. voided
+// and corrections — notes are display metadata). Blank input stores NULL.
+export async function updateLedgerNote(executor, tenantId, transactionId, body, actorUserId) {
+  const raw = body.note ?? null
+  if (raw !== null && typeof raw !== 'string') return badRequest('Invalid note')
+  const note = raw === null ? null : (raw.trim() || null)
+  const updated = await updateTransactionNote(executor, tenantId, transactionId, note, actorUserId)
+  if (!updated) return notFound('Not found')
+  return { noteUpdate: updated }
 }
 
 // Posts a correcting transaction: a new journal dated today with every line of
@@ -382,7 +460,7 @@ async function markVoidedAt(client, tenantId, transactionId) {
   )
 }
 
-async function postReversingJournal(client, tenantId, original, mode, actorUserId) {
+async function postReversingJournal(client, tenantId, original, mode, actorUserId, opts = {}) {
   const verb = mode === 'void' ? 'Void' : 'Reversal'
   const lines = (await listLines(client, tenantId, original.id)).map((l) => ({
     account_code: l.account_code,
@@ -394,7 +472,7 @@ async function postReversingJournal(client, tenantId, original, mode, actorUserI
     entryDate: today(),
     description: `${verb} of ledger entry #${original.id}`,
     sourceType: 'ledger_transaction', sourceId: original.id, sourceEvent: mode,
-    lines, actorUserId,
+    lines, actorUserId, ...opts,
   })
 }
 
@@ -424,6 +502,10 @@ function correctionRowConflict(row) {
   return null
 }
 
+// The { status, body } shape of ReclassifiedLinesError, for the correction
+// paths that return error results instead of throwing.
+const RECLASSIFIED_LINES_CONFLICT = ledgerErrorResult(new ReclassifiedLinesError()).error
+
 // Open periods must be voided, closed periods reversed. Returns an error body or null.
 function correctionPeriodConflict(mode, isClosed, closedThrough) {
   if (mode === 'void' && isClosed) {
@@ -436,41 +518,29 @@ function correctionPeriodConflict(mode, isClosed, closedThrough) {
 }
 
 async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    const row = await getTransaction(client, tenantId, transactionId)
-    if (!row) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'Not found' } } }
+  return withTransaction(async (client) => {
+    // Serialize against a concurrent reclassification of this transaction (it
+    // takes the same row lock), so the reclassified-lines check can't race.
+    if (!(await lockTransactionRow(client, tenantId, transactionId))) {
+      abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
     }
+    const row = await getTransaction(client, tenantId, transactionId)
+    if (!row) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
     const rowConflict = correctionRowConflict(row)
-    if (rowConflict) {
-      await client.query('ROLLBACK')
-      return { error: rowConflict }
+    if (rowConflict) abortTransaction({ error: rowConflict })
+    if (await hasReclassifiedLines(client, tenantId, transactionId)) {
+      abortTransaction({ error: RECLASSIFIED_LINES_CONFLICT })
     }
 
     const closedThrough = await fetchBooksClosedThrough(client, tenantId)
     const isClosed = Boolean(closedThrough && row.entry_date <= closedThrough)
     const periodConflict = correctionPeriodConflict(mode, isClosed, closedThrough)
-    if (periodConflict) {
-      await client.query('ROLLBACK')
-      return { error: periodConflict }
-    }
+    if (periodConflict) abortTransaction({ error: periodConflict })
 
-    let result
-    try {
-      result = await postReversingJournal(client, tenantId, row, mode, actorUserId)
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
-      const mapped = ledgerErrorResult(err)
-      if (mapped) return mapped
-      throw err
-    }
+    const result = await postReversingJournal(client, tenantId, row, mode, actorUserId)
     if (!result.posted) {
-      await client.query('ROLLBACK')
       const code = mode === 'void' ? 'already_voided' : 'already_reversed'
-      return { error: { status: 409, body: { error: 'Entry already corrected', code } } }
+      abortTransaction({ error: { status: 409, body: { error: 'Entry already corrected', code } } })
     }
 
     // Mark the original. The compensating ledger_transaction/void is excluded
@@ -481,14 +551,34 @@ async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode)
       await markReversed(client, tenantId, transactionId, result.transactionId)
     }
 
-    await client.query('COMMIT')
     return { transactionId: result.transactionId }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
+  }, { db: pool, mapError: ledgerErrorResult })
+}
+
+// Transaction-scoped correction used by domain workflows that must combine a
+// correction and replacement posting atomically. The caller owns BEGIN/COMMIT.
+export async function correctLedgerTransaction(client, tenantId, transactionId, actorUserId = null) {
+  if (!(await lockTransactionRow(client, tenantId, transactionId))) {
+    return { error: { status: 404, body: { error: 'Not found' } } }
   }
+  const row = await getTransaction(client, tenantId, transactionId)
+  if (!row) return { error: { status: 404, body: { error: 'Not found' } } }
+  const rowConflict = correctionRowConflict(row)
+  if (rowConflict) return { error: rowConflict }
+  if (await hasReclassifiedLines(client, tenantId, transactionId)) {
+    return { error: RECLASSIFIED_LINES_CONFLICT }
+  }
+
+  const closedThrough = await fetchBooksClosedThrough(client, tenantId)
+  const mode = closedThrough && row.entry_date <= closedThrough ? 'reversal' : 'void'
+  const result = await postReversingJournal(client, tenantId, row, mode, actorUserId, { clampToOpenPeriod: true })
+  if (!result.posted) {
+    const code = mode === 'void' ? 'already_voided' : 'already_reversed'
+    return { error: { status: 409, body: { error: 'Entry already corrected', code } } }
+  }
+  if (mode === 'void') await markVoided(client, tenantId, transactionId, result.transactionId)
+  else await markReversed(client, tenantId, transactionId, result.transactionId)
+  return { mode, transactionId: result.transactionId }
 }
 
 // Void an open-period entry (hidden + excluded from reports). 409s a
@@ -687,27 +777,35 @@ export async function postInvoiceSent(client, tenantId, invoice, opts = {}) {
   })
 }
 
-// Invoice paid: DR checking (cash up), CR receivable (clears the asset).
+// Invoice paid: DR checking (cash up), CR receivable (clears the asset). The
+// entry date defaults to the Mollie paid timestamp; bank-statement reconciliation
+// overrides it via opts.entryDate with the statement booking date.
 export async function postInvoicePaid(client, tenantId, invoice, opts = {}) {
+  const { entryDate, ...journalOpts } = opts
   const settings = await loadAccountingSettings(client, tenantId)
   const checking = requireCode(settings, 'primary_checking_account_code')
   const receivable = requireCode(settings, 'receivable_account_code')
   const memo = `Invoice ${invoice.invoice_number}`
 
   return postJournal(client, tenantId, {
-    entryDate: toDateString(invoice.mollie_paid_at),
+    entryDate: toDateString(entryDate ?? invoice.mollie_paid_at),
     description: `Invoice ${invoice.invoice_number} paid`,
     sourceType: 'invoice', sourceId: invoice.id, sourceEvent: 'paid',
     lines: [
       { account_code: checking, debit_cents: invoice.total_cents, memo },
       { account_code: receivable, credit_cents: invoice.total_cents, memo },
     ],
-    ...opts,
+    ...journalOpts,
   })
 }
 
 // Invoice voided: reverses the `sent` journal (CR receivable, DR revenue, DR VAT).
 export async function postInvoiceVoid(client, tenantId, invoice, opts = {}) {
+  // The compensation cancels the `sent` posting, so that posting's lines must
+  // not carry an active reclassification (lock + guard, like a manual void).
+  const original = await getTransactionBySource(client, tenantId, 'invoice', invoice.id, 'sent')
+  await assertNoActiveReclassifications(client, tenantId, original?.id)
+
   const settings = await loadAccountingSettings(client, tenantId)
   const receivable = requireCode(settings, 'receivable_account_code')
   const revenue = requireCode(settings, 'default_revenue_account_code')
@@ -789,6 +887,69 @@ export async function postBillPaid(client, tenantId, purchase, opts = {}) {
   })
 }
 
+// ---------- bank statement import journals ----------
+
+// A bank-statement line posted as a direct journal (no matching invoice/bill).
+// Received (credit): DR primary checking, CR the chosen contra account. Paid
+// (debit): DR the chosen contra account, CR primary checking. Posts gross — a
+// bank line carries no VAT breakdown. Two distinct source events ('received' /
+// 'paid') let the ledger browser sign the row without the direction.
+export async function postBankStatementLine(client, tenantId, line, opts = {}) {
+  const { id, entryDate, amountCents, direction, contraAccountCode, memo } = line
+  const settings = await loadAccountingSettings(client, tenantId)
+  const checking = requireCode(settings, 'primary_checking_account_code')
+  const received = direction === 'credit'
+
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(entryDate),
+    description: memo ?? null,
+    sourceType: 'bank_statement_line',
+    sourceId: id,
+    sourceEvent: received ? 'received' : 'paid',
+    lines: received
+      ? [
+        { account_code: checking, debit_cents: amountCents, memo },
+        { account_code: contraAccountCode, credit_cents: amountCents, memo },
+      ]
+      : [
+        { account_code: contraAccountCode, debit_cents: amountCents, memo },
+        { account_code: checking, credit_cents: amountCents, memo },
+      ],
+    ...opts,
+  })
+}
+
+// ---------- opening balance journal (equity) ----------
+
+// Sets the tenant's opening bank balance on a chosen date: a positive balance
+// DR primary checking (asset up) / CR Opening Balance Equity; a negative
+// (overdrawn) balance swaps the sides. `signedAmountCents` is the signed balance
+// (positive = funds available). Idempotent per tenant — sourceId is the tenant
+// id, so a second call returns { posted: false } and the "opening balance set"
+// state can never be duplicated. Not clamped to the open period: this is a
+// deliberate dated entry, so a closed period surfaces PeriodClosedError.
+export async function postOpeningBalance(client, tenantId, { signedAmountCents, entryDate }, opts = {}) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const bank = requireCode(settings, 'primary_checking_account_code')
+  const amount = Math.abs(signedAmountCents)
+  const memo = 'Opening balance'
+  const lines = signedAmountCents >= 0
+    ? [
+      { account_code: bank, debit_cents: amount, memo },
+      { account_code: OPENING_BALANCE_EQUITY_CODE, credit_cents: amount, memo },
+    ]
+    : [
+      { account_code: OPENING_BALANCE_EQUITY_CODE, debit_cents: amount, memo },
+      { account_code: bank, credit_cents: amount, memo },
+    ]
+
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(entryDate),
+    description: memo,
+    sourceType: 'opening_balance', sourceId: tenantId, sourceEvent: 'set', lines, ...opts,
+  })
+}
+
 // ---------- merch sale journals (revenue + COGS) ----------
 
 // Merch sale recorded, one balanced journal combining the sale and cost legs:
@@ -849,6 +1010,9 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
 //                   closed period.
 export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
   const original = await getTransactionBySource(client, tenantId, 'merch_sale', sale.id, 'recorded')
+  // The mirror cancels the `recorded` posting, so that posting's lines must
+  // not carry an active reclassification (lock + guard, like a manual void).
+  await assertNoActiveReclassifications(client, tenantId, original?.id)
   const closedThrough = await fetchBooksClosedThrough(client, tenantId)
   const isClosed = Boolean(original && closedThrough && original.entry_date <= closedThrough)
 

@@ -15,6 +15,7 @@ import {
 } from './shopifyImportMapping.js'
 import { recordMerchSaleTx } from './merchService.js'
 import { ledgerErrorResult, postShopifyRevenueLine } from './ledgerService.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { accountExistsOfType } from '../repositories/accountRepository.js'
 import {
   isLineImported,
@@ -125,12 +126,9 @@ async function importLine(pool, tenantId, order, line, selLine, actorUserId) {
   const lineSkip = lineSkipReason(line)
   if (lineSkip) return lineSkip
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     if (await isLineImported(client, tenantId, line.id)) {
-      await client.query('ROLLBACK')
-      return 'skipped_duplicate'
+      abortTransaction('skipped_duplicate')
     }
 
     let status
@@ -142,21 +140,18 @@ async function importLine(pool, tenantId, order, line, selLine, actorUserId) {
       status = 'skipped_invalid_mapping'
     }
 
-    if (status !== 'imported') {
-      await client.query('ROLLBACK')
-      return status
-    }
-    await client.query('COMMIT')
+    // Not imported: roll back any partial work and report the skip status.
+    if (status !== 'imported') abortTransaction(status)
     return 'imported'
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped?.error.body.code === 'period_closed') return 'skipped_closed_period'
-    if (mapped?.error.body.code === 'accounting_not_configured') return 'skipped_accounting_not_configured'
-    throw err
-  } finally {
-    client.release()
-  }
+  }, {
+    db: pool,
+    mapError: (err) => {
+      const mapped = ledgerErrorResult(err)
+      if (mapped?.error.body.code === 'period_closed') return 'skipped_closed_period'
+      if (mapped?.error.body.code === 'accounting_not_configured') return 'skipped_accounting_not_configured'
+      return null
+    },
+  })
 }
 
 export async function importShopifyOrders(pool, tenantId, body, actorUserId = null, fetchImpl = globalThis.fetch) {

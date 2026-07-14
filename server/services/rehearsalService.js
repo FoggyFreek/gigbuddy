@@ -2,6 +2,7 @@
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function).
 import pool from '../db/index.js'
+import { withTransaction } from '../db/withTransaction.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
@@ -16,8 +17,6 @@ import {
   fetchRehearsal,
   fetchNextRehearsal,
   rehearsalExistsInTenant,
-  memberExistsInTenant,
-  songExistsInTenant,
   loadParticipants,
   loadSongs,
   getBandMemberIdForUser,
@@ -27,6 +26,9 @@ import {
   insertParticipant,
   deleteParticipant,
   updateParticipantVote,
+  lockRehearsalOptionResponseState,
+  getRehearsalParticipantResponseState,
+  markRehearsalFirstUnavailableNotified,
   countVoteShortfall,
   getDemotionState,
   demoteToOption,
@@ -36,8 +38,11 @@ import {
   insertRehearsalSong,
   deleteRehearsalSong,
 } from '../repositories/rehearsalRepository.js'
+import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
+import { songExistsInTenant } from '../repositories/songRepository.js'
+import { notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
+const NOT_FOUND = notFound('Not found')
 
 // ---------- notifications ----------
 
@@ -68,6 +73,32 @@ export function notifyRehearsalConfirmed(tenantId, rehearsal) {
     url: '/rehearsals',
     sourceType: 'rehearsal',
     sourceId: rehearsal.id,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
+}
+
+export function notifyRehearsalOptionUnavailable(tenantId, rehearsal) {
+  return dispatchNotification({
+    tenantId,
+    type: 'option-member-unavailable',
+    title: `One or more band members aren't available for option ${rehearsalDateStr(rehearsal)}`,
+    body: [rehearsalDateStr(rehearsal), rehearsal.location].filter(Boolean).join(' · '),
+    url: `/rehearsals/${rehearsal.id}`,
+    sourceType: 'rehearsal',
+    sourceId: rehearsal.id,
+    requiredPermission: PERMISSIONS.PLANNING_WRITE,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
+}
+
+export function notifyRehearsalOptionResponsesComplete(tenantId, rehearsal) {
+  return dispatchNotification({
+    tenantId,
+    type: 'option-all-responded',
+    title: `All required band members have responded for option ${rehearsalDateStr(rehearsal)}`,
+    body: [rehearsalDateStr(rehearsal), rehearsal.location].filter(Boolean).join(' · '),
+    url: `/rehearsals/${rehearsal.id}`,
+    sourceType: 'rehearsal',
+    sourceId: rehearsal.id,
+    requiredPermission: PERMISSIONS.PLANNING_WRITE,
   }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
 }
 
@@ -124,12 +155,8 @@ export async function createRehearsal(tenantId, userId, body) {
   }
   const extras = normalizeExtraMemberIds(body.extra_member_ids)
 
-  const client = await pool.connect()
-  let rehearsal
-  try {
-    await client.query('BEGIN')
-
-    rehearsal = await insertRehearsal(client, tenantId, body, userId)
+  const rehearsal = await withTransaction(async (client) => {
+    const created = await insertRehearsal(client, tenantId, body, userId)
 
     const leadIds = await getLeadMemberIds(client, tenantId)
     const extraIds = await filterMemberIdsInTenant(client, extras, tenantId)
@@ -139,17 +166,12 @@ export async function createRehearsal(tenantId, userId, body) {
     for (const mid of memberIds) {
       const vote = mid === creatorMemberId ? 'yes' : null
       const updatedBy = mid === creatorMemberId ? userId : null
-      await insertParticipant(client, tenantId, rehearsal.id, mid, vote, updatedBy)
+      await insertParticipant(client, tenantId, created.id, mid, vote, updatedBy)
     }
+    return created
+  })
 
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
-
+  // Post-commit read (on the pool): the created rehearsal with its participants.
   return { rehearsal: await withParticipants(pool, rehearsal, tenantId) }
 }
 
@@ -191,7 +213,7 @@ export async function deleteRehearsal(db, tenantId, rehearsalId) {
 // ---------- participants ----------
 
 export async function addParticipant(db, tenantId, userId, rehearsalId, memberId) {
-  if (!(await memberExistsInTenant(db, memberId, tenantId))) {
+  if (!(await bandMemberExistsInTenant(db, memberId, tenantId))) {
     return { error: { status: 404, body: { error: 'band_member not found' } } }
   }
   if (!(await rehearsalExistsInTenant(db, rehearsalId, tenantId))) return NOT_FOUND
@@ -240,14 +262,38 @@ export async function setParticipantVote(db, tenantId, userId, rehearsalId, memb
     }
   }
 
-  const participant = await updateParticipantVote(db, tenantId, rehearsalId, memberId, vote, userId)
-  if (!participant) return NOT_FOUND
+  return withTransaction(async (client) => {
+    const option = await lockRehearsalOptionResponseState(client, rehearsalId, tenantId)
+    if (!option) return NOT_FOUND
 
-  await touchRehearsal(db, rehearsalId, tenantId)
-  await autoDemoteIfNeeded(db, rehearsalId, tenantId)
+    const responseState = await getRehearsalParticipantResponseState(client, rehearsalId, memberId, tenantId)
+    if (!responseState) return NOT_FOUND
 
-  const rehearsal = await fetchRehearsal(db, rehearsalId, tenantId)
-  return { rehearsal: await withParticipants(db, rehearsal, tenantId) }
+    const participant = await updateParticipantVote(client, tenantId, rehearsalId, memberId, vote, userId)
+    if (!participant) return NOT_FOUND
+
+    const isOption = option.status === 'option'
+    const firstUnavailable = isOption
+      && vote === 'no'
+      && option.first_unavailable_notification_at == null
+    const allResponded = isOption
+      && responseState.previous_vote == null
+      && vote != null
+      && responseState.total > 0
+      && responseState.pending === 1
+
+    if (firstUnavailable) {
+      await markRehearsalFirstUnavailableNotified(client, rehearsalId, tenantId)
+    }
+    await touchRehearsal(client, rehearsalId, tenantId)
+    await autoDemoteIfNeeded(client, rehearsalId, tenantId)
+
+    const rehearsal = await fetchRehearsal(client, rehearsalId, tenantId)
+    return {
+      rehearsal: await withParticipants(client, rehearsal, tenantId),
+      notifications: { firstUnavailable, allResponded },
+    }
+  }, { db })
 }
 
 // ---------- songs ----------

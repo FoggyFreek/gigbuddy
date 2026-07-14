@@ -1,5 +1,6 @@
 // Input parsing and validation for contact routes. No DB access here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
+import { normalizeIban } from '../utils/normalizeIban.js'
 
 export const VALID_CATEGORIES = new Set([
   'press', 'radio & tv', 'booker', 'promotion', 'network', 'supplier',
@@ -18,7 +19,7 @@ export function parseCategoryFilter(value) {
 // Builds SET fragments ($1..$N) for a contact PATCH. Empty strings normalize to
 // NULL. Returns { error } on an invalid category, or { fields, values }.
 export function buildContactUpdateFields(body) {
-  const allowed = ['name', 'email', 'phone', 'category']
+  const allowed = ['name', 'email', 'phone', 'category', 'iban']
   const fields = []
   const values = []
   let idx = 1
@@ -28,7 +29,7 @@ export function buildContactUpdateFields(body) {
       return { error: 'Invalid category value' }
     }
     fields.push(`${key} = $${idx++}`)
-    values.push(body[key] || null)
+    values.push(key === 'iban' ? normalizeIban(body[key]) : (body[key] || null))
   }
   return { fields, values }
 }

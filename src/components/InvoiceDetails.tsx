@@ -19,7 +19,9 @@ import InvoiceLinesEditor from './invoices/InvoiceLinesEditor.tsx'
 import InvoiceTotalsPanel from './invoices/InvoiceTotalsPanel.tsx'
 import InvoiceDeleteDialog from './invoices/InvoiceDeleteDialog.tsx'
 import InvoicePaidDialog from './invoices/InvoicePaidDialog.tsx'
+import InvoiceSentDialog from './invoices/InvoiceSentDialog.tsx'
 import InvoiceVoidDialog from './invoices/InvoiceVoidDialog.tsx'
+import InvoiceStatusActions from './invoices/InvoiceStatusActions.tsx'
 import InvoiceEmlDialog from './invoices/InvoiceEmlDialog.tsx'
 import PaymentLinkPanel from './invoices/PaymentLinkPanel.tsx'
 
@@ -63,6 +65,12 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
         onCancel={() => s.setDeleteDialogOpen(false)}
         onConfirm={s.confirmDelete}
       />
+      <InvoiceSentDialog
+        open={s.sentDialogOpen}
+        invoiceNumber={s.invoice?.invoice_number}
+        onCancel={() => s.setSentDialogOpen(false)}
+        onConfirm={s.confirmSent}
+      />
       <InvoicePaidDialog
         open={s.paidDialogOpen}
         invoiceNumber={s.invoice?.invoice_number}
@@ -94,13 +102,23 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
     <>
       <Box>
         <Box>
-          {s.invoice?.status && (
-            <Chip
-              size="small"
-              color={invoiceStatusColor(s.invoice.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
-              label={t($ => $.rawStatus[s.invoice!.status as InvoiceStatus])}
-              sx={{ mb: 2 }}
-            />
+          {s.invoice && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mb: 2 }}>
+              {s.invoice.status && (
+                <Chip
+                  size="small"
+                  color={invoiceStatusColor(s.invoice.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
+                  label={t($ => $.rawStatus[s.invoice!.status as InvoiceStatus])}
+                />
+              )}
+              <Box sx={{ ml: 'auto' }}>
+                <InvoiceStatusActions
+                  status={s.invoice.status ?? 'draft'}
+                  disabled={s.saving}
+                  onStatusChange={s.handleStatusChange}
+                />
+              </Box>
+            </Box>
           )}
           {s.finalized && (
             <Alert severity="info" sx={{ mb: 2 }}>
@@ -127,8 +145,6 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
             form={s.form}
             patchForm={s.patchForm}
             readOnly={s.readOnly}
-            invoice={s.invoice ?? undefined}
-            onStatusChange={s.handleStatusChange}
             memoOpen={s.memoOpen}
             setMemoOpen={s.setMemoOpen}
           />

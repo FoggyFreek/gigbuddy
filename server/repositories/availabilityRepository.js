@@ -32,14 +32,6 @@ export async function listBandMembers(executor, tenantId) {
   return rows
 }
 
-export async function bandMemberExists(executor, bandMemberId, tenantId) {
-  const { rowCount } = await executor.query(
-    'SELECT id FROM band_members WHERE id = $1 AND tenant_id = $2',
-    [bandMemberId, tenantId],
-  )
-  return rowCount > 0
-}
-
 export async function insertSlot(executor, tenantId, { bandMemberId, startDate, endDate, status, reason }) {
   const { rows } = await executor.query(
     `INSERT INTO availability_slots (tenant_id, band_member_id, start_date, end_date, status, reason)

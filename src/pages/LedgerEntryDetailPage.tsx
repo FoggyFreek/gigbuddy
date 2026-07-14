@@ -24,9 +24,12 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { getLedgerEntry, voidLedgerEntry, reverseLedgerEntry } from '../api/ledger.ts'
 import { createJournal } from '../api/journal.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
 import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
+import LedgerNoteSection from '../components/ledger/LedgerNoteSection.tsx'
+import ReclassifyDialog from '../components/ledger/ReclassifyDialog.tsx'
 import type { LedgerLine, Id } from '../types/entities.ts'
 
 const decimalEur = new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -48,6 +51,9 @@ interface LedgerEntry {
   voided_by_transaction_id?: Id | null
   reversed_by_transaction_id?: Id | null
   corrects_transaction_id?: Id | null
+  note?: string | null
+  note_updated_at?: string | null
+  note_updated_by_name?: string | null
   lines?: LedgerLine[]
   origin?: { path?: string; label?: string } | null
 }
@@ -56,10 +62,12 @@ export default function LedgerEntryDetailPage() {
   const { t } = useTranslation(['ledger', 'common'])
   const navigate = useNavigate()
   const { id } = useParams()
+  const { canManageFinance } = usePermissions()
   const [entry, setEntry] = useState<LedgerEntry | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [voidOpen, setVoidOpen] = useState(false)
   const [reverseOpen, setReverseOpen] = useState(false)
+  const [reclassifyOpen, setReclassifyOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -149,6 +157,11 @@ export default function LedgerEntryDetailPage() {
   const isReversedOriginal = entry.reversed_by_transaction_id != null
   const isCorrection = entry.corrects_transaction_id != null
   const actionable = !isVoidedOriginal && !isReversedOriginal && !isCorrection
+  // Reclassification moves one line to another account; a corrected/voided
+  // entry or a correction can't start one, and neither can a line already
+  // linked to a reclassification journal.
+  const canReclassify = canManageFinance && actionable && !entry.voided
+    && (entry.lines ?? []).some((l) => !l.reclassification)
   let correctionNotice: { text: string; linkId?: Id } | null = null
   if (isVoidedOriginal) {
     correctionNotice = { text: t($ => $.detail.notice.voided), linkId: entry.voided_by_transaction_id ?? undefined }
@@ -173,6 +186,11 @@ export default function LedgerEntryDetailPage() {
         <Button variant="outlined" onClick={copyToJournal} disabled={busy}>
           {t($ => $.actions.copy, { ns: 'common' })}
         </Button>
+        {canReclassify && (
+          <Button variant="outlined" onClick={() => setReclassifyOpen(true)} disabled={busy}>
+            {t($ => $.detail.actions.reclassify)}
+          </Button>
+        )}
         {actionable && entry.period_open && (
           <Button variant="contained" color="error" onClick={() => setVoidOpen(true)} disabled={busy}>
             {t($ => $.detail.actions.void)}
@@ -199,6 +217,20 @@ export default function LedgerEntryDetailPage() {
             </>
           )}
         </Alert>
+      )}
+
+      {reclassifyOpen && entry.id != null && (
+        <ReclassifyDialog
+          entryId={entry.id}
+          lines={entry.lines ?? []}
+          onClose={() => setReclassifyOpen(false)}
+          onCreated={(journal) => {
+            // Close before navigating — the destination route renders this same
+            // component instance, so lingering open state reopens the dialog there.
+            setReclassifyOpen(false)
+            navigate(`/ledger/${journal.posted_transaction_id}`)
+          }}
+        />
       )}
 
       <Dialog open={voidOpen} onClose={() => setVoidOpen(false)}>
@@ -233,30 +265,66 @@ export default function LedgerEntryDetailPage() {
 
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <LedgerLinesTable lines={entry.lines ?? []} />
-        <Paper variant="outlined" sx={{ p: 2, width: { xs: '100%', sm: 280 }, flexShrink: 0 }}>
-          <MetaField label={t($ => $.detail.meta.number)} value={String(entry.id)} />
-          {entry.receipt != null && <MetaField label={t($ => $.detail.meta.receipt)} value={String(entry.receipt)} />}
-          <MetaField label={t($ => $.detail.meta.date)} value={formatShortDate(entry.entry_date)} />
-          <MetaField
-            label={t($ => $.detail.meta.created)}
-            value={entry.created_at
-              ? new Date(entry.created_at).toLocaleString('nl-NL', { dateStyle: 'medium', timeStyle: 'short' })
-              : '-'}
-          />
-          <MetaField label={t($ => $.detail.meta.createdBy)} value={entry.created_by_name || '-'} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{t($ => $.detail.meta.origin)}</Typography>
-          {entry.origin?.path ? (
-            <Link component={RouterLink} to={entry.origin.path} variant="body2">
-              {entry.origin.label}
-            </Link>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              {entry.origin?.label || '-'}
-            </Typography>
+        {/* right column: the details card with the note card anchored below it */}
+        <Box sx={{ width: { xs: '100%', sm: 280 }, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <MetaField label={t($ => $.detail.meta.number)} value={String(entry.id)} />
+            {entry.receipt != null && <MetaField label={t($ => $.detail.meta.receipt)} value={String(entry.receipt)} />}
+            <MetaField label={t($ => $.detail.meta.date)} value={formatShortDate(entry.entry_date)} />
+            <MetaField
+              label={t($ => $.detail.meta.created)}
+              value={entry.created_at
+                ? new Date(entry.created_at).toLocaleString('nl-NL', { dateStyle: 'medium', timeStyle: 'short' })
+                : '-'}
+            />
+            <MetaField label={t($ => $.detail.meta.createdBy)} value={entry.created_by_name || '-'} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{t($ => $.detail.meta.origin)}</Typography>
+            {entry.origin?.path ? (
+              <Link component={RouterLink} to={entry.origin.path} variant="body2">
+                {entry.origin.label}
+              </Link>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                {entry.origin?.label || '-'}
+              </Typography>
+            )}
+          </Paper>
+
+          {entry.id != null && (
+            <LedgerNoteSection
+              entryId={entry.id}
+              note={entry.note ?? null}
+              noteUpdatedAt={entry.note_updated_at ?? null}
+              noteUpdatedByName={entry.note_updated_by_name ?? null}
+              canEdit={canManageFinance}
+              onSaved={(u) => setEntry((prev) => (prev ? {
+                ...prev,
+                note: u.note,
+                note_updated_at: u.note_updated_at,
+                note_updated_by_name: u.note_updated_by_name,
+              } : prev))}
+            />
           )}
-        </Paper>
+        </Box>
       </Box>
     </Box>
+  )
+}
+
+// Per-line reclassification status: reclassifications post immediately, so a
+// linked line always points at its posted correcting transaction.
+interface ReclassificationLinkProps {
+  line: LedgerLine
+}
+
+function ReclassificationLink({ line }: Readonly<ReclassificationLinkProps>) {
+  const { t } = useTranslation('ledger')
+  const r = line.reclassification
+  if (r?.posted_transaction_id == null) return null
+  return (
+    <Link component={RouterLink} to={`/ledger/${r.posted_transaction_id}`} variant="caption" sx={{ display: 'block' }}>
+      {t($ => $.detail.lines.reclassified, { id: r.posted_transaction_id })}
+    </Link>
   )
 }
 
@@ -331,6 +399,7 @@ function LedgerLinesTable({ lines }: Readonly<LedgerLinesTableProps>) {
                   {line.memo}
                 </Typography>
               )}
+              <ReclassificationLink line={line} />
             </Box>
             <Box sx={{ flexShrink: 0, textAlign: 'right' }}>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -376,7 +445,10 @@ function LedgerLinesTable({ lines }: Readonly<LedgerLinesTableProps>) {
               <TableRow key={String(line.id)}>
                 <TableCell>{line.account_code}</TableCell>
                 <TableCell>{line.account_name || '-'}</TableCell>
-                <TableCell>{line.memo || ''}</TableCell>
+                <TableCell>
+                  {line.memo || ''}
+                  <ReclassificationLink line={line} />
+                </TableCell>
                 <TableCell align="right">{formatSigned(line)}</TableCell>
                 <MoneyOrBlankCells cents={line.debit_cents} />
                 <MoneyOrBlankCells cents={line.credit_cents} />

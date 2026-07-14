@@ -51,7 +51,7 @@ export async function runMigrations() {
 export async function truncateAll() {
   await pool.query(`
     TRUNCATE
-      gig_contacts, gig_participants, gig_tasks, gigs,
+      gig_tag_links, gig_tags, gig_contacts, gig_participants, gig_tasks, gigs,
       rehearsal_participants, rehearsals,
       band_events, availability_slots,
       band_members,

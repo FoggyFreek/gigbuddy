@@ -12,6 +12,7 @@
 // - Expected failures return { error: { status, body } }; success returns a
 //   named payload.
 import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { fetchPlan } from '../repositories/planRepository.js'
 import {
   fetchLiveSubscriptionForUser,
@@ -54,7 +55,7 @@ import {
 } from './billingSaga.js'
 import { executeDowngradePurge } from './entitlementPurgeService.js'
 import { dispatchUserNotification, pushUserNotification } from './notificationService.js'
-import { BILLING_NOTIFICATION_TYPES } from './notificationTypes.js'
+import { BILLING_NOTIFICATION_TYPES } from '../domain/notificationTypes.js'
 import { priceForInterval, trialEndFrom, MANDATE_AMOUNT_CENTS } from './billingShared.js'
 import {
   isPlatformBillingConfigured,
@@ -70,13 +71,7 @@ import {
 } from '../auth/entitlements.js'
 import { parsePlanSelection, parseDowngradeSelection } from '../validators/billingValidators.js'
 import { logger } from '../utils/logger.js'
-
-function badRequest(error, code) {
-  return { error: { status: 400, body: { error, ...(code ? { code } : {}) } } }
-}
-function conflict(error, code) {
-  return { error: { status: 409, body: { error, ...(code ? { code } : {}) } } }
-}
+import { badRequest, conflict } from './serviceErrors.js'
 const NOT_CONFIGURED = { error: { status: 503, body: { error: 'Billing is not configured', code: 'billing_not_configured' } } }
 const PROVIDER_ERROR = { error: { status: 502, body: { error: 'Payment provider error', code: 'provider_error' } } }
 const COMPLIMENTARY = { error: { status: 409, body: { error: 'This subscription is managed by an administrator', code: 'complimentary_managed_by_admin' } } }
@@ -108,8 +103,8 @@ export async function subscribe(db, user, body) {
   if (!plan || !plan.is_active) return { error: { status: 404, body: { error: 'Plan not found' } } }
   if (plan.is_fallback) return badRequest('The free plan needs no subscription')
   const price = priceForInterval(plan, interval)
-  if (price === null) return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
-  if (price <= 0) return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
+  if (price === null) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
+  if (price <= 0) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
 
   const existing = await fetchLiveSubscriptionForUser(db, user.id)
   if (existing) {
@@ -123,7 +118,7 @@ export async function subscribe(db, user, body) {
     if (existing.status === 'pending_mandate' && existing.plan_id === planId && existing.billing_interval === interval) {
       return startMandateCheckout(db, existing, user, redirect, existing.trial_ends_at !== null)
     }
-    return conflict('You already have an active subscription', 'already_subscribed')
+    return conflict('You already have an active subscription', { code: 'already_subscribed' })
   }
 
   const trialEligible = !(await hasUsedTrial(db, user.id))
@@ -138,7 +133,7 @@ export async function subscribe(db, user, body) {
       trial_ends_at: trialEligible ? trialEndFrom() : null,
     })
   } catch (err) {
-    if (err.code === '23505') return conflict('You already have an active subscription', 'already_subscribed')
+    if (err.code === '23505') return conflict('You already have an active subscription', { code: 'already_subscribed' })
     throw err
   }
 
@@ -173,19 +168,17 @@ async function startMandateCheckout(db, sub, user, redirect, trialEligible) {
 // ---- cancel ----
 
 export async function cancelSubscription(db, userId) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  const outcome = await withTransaction(async (client) => {
     const sub = await fetchLiveSubscriptionForUpdate(client, userId)
-    if (!sub) { await client.query('ROLLBACK'); return { error: { status: 404, body: { error: 'No subscription' } } } }
-    if (sub.is_complimentary) { await client.query('ROLLBACK'); return COMPLIMENTARY }
-    if (sub.cancel_at_period_end) { await client.query('COMMIT'); return { alreadyScheduled: true } }
+    if (!sub) abortTransaction({ error: { status: 404, body: { error: 'No subscription' } } })
+    if (sub.is_complimentary) abortTransaction(COMPLIMENTARY)
+    if (sub.cancel_at_period_end) return { alreadyScheduled: true }
 
     // A pending upgrade/interval change mid-flight must not be stranded (a
     // settling charge would take money for a subscription about to cancel).
     if (sub.pending_plan_id && sub.pending_change_kind !== 'downgrade') {
       const inFlight = sub.mollie_schedule_stale || (await isPendingChargeNonterminal(client, sub))
-      if (inFlight) { await client.query('ROLLBACK'); return conflict('A plan change is in progress', 'plan_change_in_progress') }
+      if (inFlight) abortTransaction(conflict('A plan change is in progress', { code: 'plan_change_in_progress' }))
     }
     // A pending downgrade is safely clearable (its replacement hasn't charged).
     if (sub.pending_plan_id) await clearPendingChange(client, sub.id)
@@ -197,18 +190,15 @@ export async function cancelSubscription(db, userId) {
       // Trial / not-yet-activated / past_due: nothing paid to honor — cancel now.
       await cancelSubscriptionNow(client, sub.id, 'user_requested')
     }
-    await client.query('COMMIT')
+    return { canceled: true, atPeriodEnd: hasPaidPeriod, sub }
+  }, { db })
 
-    // Remote: stop the provider schedule (idempotent). Outside the txn.
-    await cancelRemoteSubscription(pool, sub).catch((err) =>
-      logger.error('billing.cancel_remote_failed', { err, subscriptionId: sub.id }))
-    return { canceled: true, atPeriodEnd: hasPaidPeriod }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  if (!outcome.canceled) return outcome
+
+  // Remote: stop the provider schedule (idempotent). Outside the txn.
+  await cancelRemoteSubscription(pool, outcome.sub).catch((err) =>
+    logger.error('billing.cancel_remote_failed', { err, subscriptionId: outcome.sub.id }))
+  return { canceled: true, atPeriodEnd: outcome.atPeriodEnd }
 }
 
 async function isPendingChargeNonterminal(executor, sub) {
@@ -220,30 +210,23 @@ async function isPendingChargeNonterminal(executor, sub) {
 // ---- resume ----
 
 export async function resumeSubscription(db, userId) {
-  const client = await db.connect()
-  let subId = null
-  try {
-    await client.query('BEGIN')
+  const outcome = await withTransaction(async (client) => {
     const sub = await fetchLiveSubscriptionForUpdate(client, userId)
-    if (!sub) { await client.query('ROLLBACK'); return { error: { status: 404, body: { error: 'No subscription' } } } }
-    if (sub.is_complimentary) { await client.query('ROLLBACK'); return COMPLIMENTARY }
-    if (!sub.cancel_at_period_end) { await client.query('ROLLBACK'); return badRequest('Nothing to resume') }
+    if (!sub) abortTransaction({ error: { status: 404, body: { error: 'No subscription' } } })
+    if (sub.is_complimentary) abortTransaction(COMPLIMENTARY)
+    if (!sub.cancel_at_period_end) abortTransaction(badRequest('Nothing to resume'))
     if (sub.current_period_end && new Date(sub.current_period_end) <= new Date()) {
-      await client.query('ROLLBACK')
-      return conflict('The subscription period has already ended', 'already_ended')
+      abortTransaction(conflict('The subscription period has already ended', { code: 'already_ended' }))
     }
     await clearCancelAtPeriodEnd(client, sub.id)
     await setScheduleStale(client, sub.id, true) // recreate the provider schedule
-    subId = sub.id
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
-  await repairSchedule(pool, subId).catch((err) =>
-    logger.error('billing.resume_repair_failed', { err, subscriptionId: subId }))
+    return { resumed: true, subId: sub.id }
+  }, { db })
+
+  if (!outcome.resumed) return outcome
+
+  await repairSchedule(pool, outcome.subId).catch((err) =>
+    logger.error('billing.resume_repair_failed', { err, subscriptionId: outcome.subId }))
   return { resumed: true }
 }
 
@@ -254,9 +237,9 @@ export async function resumeSubscription(db, userId) {
 function planChangeGuardError(sub) {
   if (!sub) return { error: { status: 404, body: { error: 'No subscription' } } }
   if (sub.is_complimentary) return COMPLIMENTARY
-  if (!sub.mollie_mandate_id) return conflict('No valid payment mandate', 'no_mandate')
-  if (sub.pending_plan_id) return conflict('A plan change is in progress', 'plan_change_in_progress')
-  if (sub.cancel_at_period_end) return conflict('Resume the subscription before changing plans', 'plan_change_in_progress')
+  if (!sub.mollie_mandate_id) return conflict('No valid payment mandate', { code: 'no_mandate' })
+  if (sub.pending_plan_id) return conflict('A plan change is in progress', { code: 'plan_change_in_progress' })
+  if (sub.cancel_at_period_end) return conflict('Resume the subscription before changing plans', { code: 'plan_change_in_progress' })
   return null
 }
 
@@ -298,46 +281,41 @@ export async function changePlan(db, user, body) {
 
   const targetPlan = await fetchPlan(db, planId)
   if (!targetPlan || !targetPlan.is_active) return { error: { status: 404, body: { error: 'Plan not found' } } }
-  if (targetPlan.is_fallback) return badRequest('Use downgrade to move to the free plan', 'use_downgrade_endpoint')
+  if (targetPlan.is_fallback) return badRequest('Use downgrade to move to the free plan', { code: 'use_downgrade_endpoint' })
   const price = priceForInterval(targetPlan, interval)
-  if (price === null || price <= 0) return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
+  if (price === null || price <= 0) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
 
-  const client = await db.connect()
-  let charge = null
-  try {
-    await client.query('BEGIN')
+  const outcome = await withTransaction(async (client) => {
     const sub = await fetchLiveSubscriptionForUpdate(client, user.id)
     const guardError = planChangeGuardError(sub)
-    if (guardError) { await client.query('ROLLBACK'); return guardError }
+    if (guardError) abortTransaction(guardError)
 
     const kind = classifyPlanChange(sub, targetPlan, interval)
-    if (kind === 'same') { await client.query('ROLLBACK'); return badRequest('Already on this plan') }
-    if (kind === 'downgrade') { await client.query('ROLLBACK'); return badRequest('Use the downgrade endpoint for a lower tier', 'use_downgrade_endpoint') }
+    if (kind === 'same') abortTransaction(badRequest('Already on this plan'))
+    if (kind === 'downgrade') abortTransaction(badRequest('Use the downgrade endpoint for a lower tier', { code: 'use_downgrade_endpoint' }))
 
     if (sub.status === 'trialing') {
       // Trial is free: switch immediately, recreate the schedule at the new
       // amount before the trial ends (repair stages only, no charge).
       await switchPlanTrial(client, sub.id, { planId, interval, priceCents: price })
-      await client.query('COMMIT')
-      await repairSchedule(pool, sub.id).catch((err) =>
-        logger.error('billing.trial_change_repair_failed', { err, subscriptionId: sub.id }))
-      return { changed: true, trial: true }
+      return { trial: true, subId: sub.id }
     }
 
     // Active: set pending state (durable) BEFORE the on-demand charge so the
     // paid webhook can classify the charge and activate-first. Entitlements stay
     // unchanged until that charge is paid.
     await setPendingChange(client, sub.id, { planId, kind, interval, priceCents: price })
-    charge = { sub, planSlug: targetPlan.slug, planId, interval, price }
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+    return { charge: { sub, planSlug: targetPlan.slug, planId, interval, price } }
+  }, { db })
 
-  return chargePendingPlanChange(charge)
+  if (outcome.trial) {
+    // Post-commit: recreate the provider schedule at the new amount (best-effort).
+    await repairSchedule(pool, outcome.subId).catch((err) =>
+      logger.error('billing.trial_change_repair_failed', { err, subscriptionId: outcome.subId }))
+    return { changed: true, trial: true }
+  }
+  if (outcome.charge) return chargePendingPlanChange(outcome.charge)
+  return outcome
 }
 
 // ---- downgrade (phase 6) ----
@@ -409,7 +387,7 @@ async function loadDowngradeTarget(db, planId, interval) {
   if (targetPlan.is_fallback) return { targetPlan, price: 0 }
   const price = priceForInterval(targetPlan, interval)
   if (price === null || price <= 0) {
-    return badRequest('This plan is not available for the chosen interval', 'plan_not_priced')
+    return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
   }
   return { targetPlan, price }
 }
@@ -474,12 +452,12 @@ export async function previewDowngrade(db, user, body) {
 function downgradeGuardError(sub, targetPlan, interval) {
   if (!sub) return { error: { status: 404, body: { error: 'No subscription' } } }
   if (sub.is_complimentary) return COMPLIMENTARY
-  if (!sub.mollie_mandate_id) return conflict('No valid payment mandate', 'no_mandate')
+  if (!sub.mollie_mandate_id) return conflict('No valid payment mandate', { code: 'no_mandate' })
   if (sub.status === 'pending_mandate' || sub.status === 'pending_activation') {
-    return conflict('The subscription is not active yet', 'plan_change_in_progress')
+    return conflict('The subscription is not active yet', { code: 'plan_change_in_progress' })
   }
-  if (sub.cancel_at_period_end) return conflict('Resume the subscription before changing plans', 'plan_change_in_progress')
-  if (sub.pending_plan_id) return conflict('A plan change is in progress', 'plan_change_in_progress')
+  if (sub.cancel_at_period_end) return conflict('Resume the subscription before changing plans', { code: 'plan_change_in_progress' })
+  if (sub.pending_plan_id) return conflict('A plan change is in progress', { code: 'plan_change_in_progress' })
   if (targetPlan.id === sub.plan_id && interval === sub.billing_interval) {
     return badRequest('Already on this plan')
   }
@@ -540,47 +518,41 @@ export async function downgrade(db, user, body) {
   if (target.error) return target
   const { targetPlan, price } = target
 
-  const client = await db.connect()
-  let after = null
-  try {
-    await client.query('BEGIN')
+  const outcome = await withTransaction(async (client) => {
     const sub = await fetchLiveSubscriptionForUpdate(client, user.id)
     const guardError = downgradeGuardError(sub, targetPlan, interval)
-    if (guardError) { await client.query('ROLLBACK'); return guardError }
+    if (guardError) abortTransaction(guardError)
 
     const effCurrent = mergeEntitlements(sub.plan_entitlements, sub.entitlement_overrides)
     const effTarget = mergeEntitlements(targetPlan.entitlements, sub.entitlement_overrides)
     if (!isDowngrade(effCurrent, effTarget)) {
-      await client.query('ROLLBACK'); return badRequest('The chosen plan is not a downgrade', 'not_a_downgrade')
+      abortTransaction(badRequest('The chosen plan is not a downgrade', { code: 'not_a_downgrade' }))
     }
 
     const expected = `downgrade to ${targetPlan.slug}`
     if (confirmation.trim().toLowerCase() !== expected.toLowerCase()) {
-      await client.query('ROLLBACK')
-      return badRequest(`Type "${expected}" to confirm`, 'confirmation_mismatch')
+      abortTransaction(badRequest(`Type "${expected}" to confirm`, { code: 'confirmation_mismatch' }))
     }
 
     // Capacity precheck under the full lock set; growth writes hold the same
     // locks, so nothing can slip over the target limits while this commits.
     const blockers = await computeDowngradeBlockers(client, user.id, effTarget.limits, { lock: true })
     if (blockers.length) {
-      await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'Current usage exceeds the target plan limits', code: 'over_target_limit', blockers } } }
+      abortTransaction({ error: { status: 409, body: { error: 'Current usage exceeds the target plan limits', code: 'over_target_limit', blockers } } })
     }
 
     // Frozen at confirmation: the manifest can only SHRINK at execution.
     const manifest = { features: featuresToPurge(effCurrent, effTarget) }
-    after = await applyDowngradeBranch(client, sub, targetPlan, {
-      planId, interval, price, manifest, snapshot: effTarget.limits,
-    })
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+    return {
+      after: await applyDowngradeBranch(client, sub, targetPlan, {
+        planId, interval, price, manifest, snapshot: effTarget.limits,
+      }),
+    }
+  }, { db })
 
+  if (!outcome.after) return outcome
+
+  const after = outcome.after
   await runDowngradeFollowUps(after)
 
   const { kind, sub } = after

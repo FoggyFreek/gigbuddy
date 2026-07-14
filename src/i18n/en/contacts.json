@@ -17,7 +17,8 @@
     "category": "Category",
     "name": "Name",
     "email": "Email",
-    "phone": "Phone"
+    "phone": "Phone",
+    "iban": "IBAN"
   },
   "table": {
     "searchPlaceholder": "Search contacts…",

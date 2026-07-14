@@ -52,9 +52,11 @@
     "gigNone": "Geen optreden gekoppeld",
     "changePhoto": "Foto wijzigen",
     "addPhoto": "Foto toevoegen",
+    "removePhoto": "Foto verwijderen",
     "edit": "Herinnering bewerken",
     "done": "Klaar",
     "cropTitle": "Herinneringsfoto bijsnijden",
-    "uploadError": "Kon de afbeelding niet uploaden"
+    "uploadError": "Kon de afbeelding niet uploaden",
+    "removeError": "Kon de afbeelding niet verwijderen"
   }
 }

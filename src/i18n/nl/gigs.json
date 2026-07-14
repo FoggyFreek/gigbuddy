@@ -14,12 +14,15 @@
     "exportToBandsintown": "Exporteren naar Bandsintown (CSV)",
     "createTourCard": "Tourkaart maken",
     "bannerMosaic": "Bannermozaïek",
-    "importFromBandsintownApi": "Importeren van Bandsintown"
+    "importFromBandsintownApi": "Importeren van Bandsintown (API)"
   },
   "table": {
     "searchPlaceholder": "Optredens zoeken…",
-    "filter": "Filteren",
-    "filterWithCount": "Filteren ({{count}})",
+    "types": "Types",
+    "typesWithCount": "Types ({{count}})",
+    "tags": "Tags",
+    "tagsWithCount": "Tags ({{count}})",
+    "allTags": "Alles tonen",
     "allStatuses": "Alle statussen",
     "colDate": "Datum",
     "colEvent": "Evenement",
@@ -158,6 +161,12 @@
       "uploadFailed": "Uploaden banner mislukt",
       "deleteFailed": "Verwijderen banner mislukt"
     },
+    "tags": {
+      "add": "Tag toevoegen",
+      "addAnother": "Nog een tag toevoegen",
+      "label": "Tag",
+      "saveFailed": "Tags opslaan mislukt"
+    },
     "eventDetails": "Evenementgegevens",
     "date": "Datum",
     "startTime": "Begintijd",
@@ -177,6 +186,14 @@
     "merchandiseSold": "Verkochte merchandise",
     "itemsSold_one": "{{count}} item · excl. btw",
     "itemsSold_other": "{{count}} items · excl. btw",
+    "relatedInvoices": "Gerelateerde facturen",
+    "openInvoice": "Factuur openen",
+    "invoiceStatus": {
+      "draft": "Concept",
+      "sent": "Verzonden",
+      "paid": "Betaald",
+      "void": "Vervallen"
+    },
     "equipmentOnSite": "Beschikbare apparatuur ter plaatse",
     "paSystem": "PA-systeem",
     "drumkit": "Drumstel",

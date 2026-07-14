@@ -43,8 +43,11 @@ export default function ThemeSettingsSection() {
                 overflow: 'hidden',
                 cursor: 'pointer',
                 p: 0,
-                bgcolor: 'transparent',
+                bgcolor: tokens.bg,
                 textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
                 transition: 'transform 0.1s, border-color 0.15s',
                 '&:hover': { transform: 'scale(1.03)' },
               }}
@@ -85,7 +88,7 @@ export default function ThemeSettingsSection() {
                   </Box>
                 )}
               </Box>
-              <Box sx={{ px: compact ? 1 : 1.5, py: compact ? 0.5 : 1, bgcolor: tokens.paper }}>
+              <Box sx={{ px: compact ? 1 : 1.5, py: compact ? 0.5 : 1, bgcolor: tokens.bg }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block' }}>
                   {t($ => $.settings.theme.variants[id].label)}
                 </Typography>

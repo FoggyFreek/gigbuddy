@@ -10,6 +10,7 @@ const AchievementsPage = lazy(() => import('./pages/AchievementsPage.tsx'))
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage.tsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.tsx'))
 const FinancialDashboardPage = lazy(() => import('./pages/FinancialDashboardPage.tsx'))
+const FinanceOnboardingPage = lazy(() => import('./pages/FinanceOnboardingPage.tsx'))
 const BandEventDetailPage = lazy(() => import('./pages/BandEventDetailPage.tsx'))
 const BandEventsPage = lazy(() => import('./pages/BandEventsPage.tsx'))
 const ContactDetailPage = lazy(() => import('./pages/ContactDetailPage.tsx'))
@@ -112,6 +113,10 @@ export default function App() {
               <Route path="/purchases" element={<PurchasesPage />}>
                 <Route path=":id" element={<PurchaseDetailPage />} />
               </Route>
+            </Route>
+            {/* Finance manage surface — the setup wizard writes settings + opening balance. */}
+            <Route element={<RequirePermission permission={PERMISSIONS.FINANCE_MANAGE} />}>
+              <Route path="/finance-onboarding" element={<FinanceOnboardingPage />} />
             </Route>
             {/* Finance surfaces — financial_admin / tenant_admin / super admin. */}
             <Route element={<RequirePermission permission={PERMISSIONS.FINANCE_VIEW} />}>

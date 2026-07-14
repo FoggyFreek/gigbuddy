@@ -9,7 +9,7 @@ import Tabs from '@mui/material/Tabs'
 import Typography from '@mui/material/Typography'
 import Snackbar from '@mui/material/Snackbar'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
-import { useImageUpload, JPEG_PNG, JPEG_PNG_WEBP } from '../hooks/useImageCrop.ts'
+import { useImageUpload, JPEG_PNG_WEBP } from '../hooks/useImageCrop.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { useProfile } from '../contexts/profileContext.ts'
 import BandMembersSection from '../components/BandMembersSection.tsx'
@@ -72,15 +72,15 @@ export default function ProfilePage() {
   const banner = useImageUpload({
     compress: compressBanner,
     upload: async (file) => (await uploadBanner(file)).banner_path ?? null,
-    onError: setSnackbar, allowedTypes: JPEG_PNG,
-    accept: 'image/jpeg,image/png',
+    onError: setSnackbar, allowedTypes: JPEG_PNG_WEBP,
+    accept: 'image/jpeg,image/png,image/webp',
     title: t($ => $.crop.banner), aspect: 820 / 360, canEdit: isAdmin,
   })
   const avatar = useImageUpload({
     compress: compressAvatar,
     upload: async (file) => (await uploadAvatar(file)).avatar_path ?? null,
-    onError: setSnackbar, allowedTypes: JPEG_PNG,
-    accept: 'image/jpeg,image/png',
+    onError: setSnackbar, allowedTypes: JPEG_PNG_WEBP,
+    accept: 'image/jpeg,image/png,image/webp',
     title: t($ => $.crop.avatar), aspect: 1, canEdit: isAdmin,
   })
   const imageSlots = [logo, logoDark, banner, avatar]

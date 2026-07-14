@@ -1,12 +1,12 @@
 import { request, requestForm } from './_client.ts'
-import type { Purchase, PurchaseAttachment, Period, Id } from '../types/entities.ts'
+import type { Purchase, PurchaseAttachment, PurchasePaymentCandidate, Period, Id } from '../types/entities.ts'
 import { appendPeriodParams } from '../utils/invoicePeriod.ts'
 
 interface PaymentBody {
-  paid_at?: string
-  payment_method?: string
+  paid_on?: string
+  method?: string
   paid_by_band_member_id?: Id
-  bank_account_code?: string
+  bank_statement_line_id?: Id
 }
 
 interface PurchaseListOptions {
@@ -41,6 +41,9 @@ export const deletePurchase = (id: Id) => api<void>(`/${id}`, { method: 'DELETE'
 
 export const registerPurchasePayment = (id: Id, body: PaymentBody = {}) =>
   api<Purchase>(`/${id}/payment`, { method: 'POST', body: JSON.stringify(body) })
+
+export const listPurchasePaymentCandidates = (id: Id) =>
+  api<PurchasePaymentCandidate[]>(`/${id}/payment-candidates`)
 
 export const uploadPurchaseAttachment = (id: Id, file: File) => {
   const fd = new FormData()

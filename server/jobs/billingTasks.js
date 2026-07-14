@@ -37,7 +37,7 @@ import {
 import { executeDowngradePurge } from '../services/entitlementPurgeService.js'
 import { getPaymentProvider, SUBSCRIPTION_STATUS } from '../billing/paymentProvider/index.js'
 import { dispatchUserNotification, pushUserNotification } from '../services/notificationService.js'
-import { BILLING_NOTIFICATION_TYPES } from '../services/notificationTypes.js'
+import { BILLING_NOTIFICATION_TYPES } from '../domain/notificationTypes.js'
 import { logger } from '../utils/logger.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000

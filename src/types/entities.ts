@@ -32,7 +32,8 @@ export interface Gig {
   status?: string
   start_time?: string | null
   end_time?: string | null
-  banner_path?: string
+  banner_path?: string | null
+  tags?: GigTag[]
   venue?: Venue
   festival?: Venue
   open_task_count?: number
@@ -42,6 +43,11 @@ export interface Gig {
   // but may be set as numbers in code; null = not agreed.
   merchandise_cut?: number | string | null
   percentage_of_sales?: number | string | null
+}
+
+export interface GigTag {
+  id?: Id
+  name?: string
 }
 
 export interface Member {
@@ -153,6 +159,8 @@ export type NotificationType =
   | 'gig-import'
   | 'rehearsal-new'
   | 'rehearsal-confirmed'
+  | 'option-member-unavailable'
+  | 'option-all-responded'
   | 'invoice-paid'
   | 'task-assigned'
   | 'invite-redeemed'
@@ -198,6 +206,7 @@ export interface Contact {
   email?: string | null
   phone?: string | null
   category?: string
+  iban?: string | null
 }
 
 export interface InvoiceLine {
@@ -382,6 +391,102 @@ export interface Account {
   is_capitalizable?: boolean
 }
 
+// ---------- bank statement import ----------
+
+export interface BankStatementImport {
+  id: Id
+  filename: string
+  format: 'camt053' | 'mt940'
+  currency: string | null
+  statement_ref: string | null
+  account_iban: string | null
+  status: 'staged' | 'committed'
+  // Signed opening balance carried by the statement (positive = normal balance,
+  // negative = overdrawn); null when the statement had no opening-balance line.
+  opening_balance_cents: number | null
+  opening_balance_date: string | null
+}
+
+export interface BankLineSuggestion {
+  possibleDuplicate: boolean
+  supplierMatches: Contact[]
+  invoiceMatches: {
+    id: Id
+    invoice_number: string
+    customer_name: string
+    total_cents: number
+    mollie_payment_link_id?: string | null
+    // The linked gig's headline, so the reviewer can see what the invoice was
+    // for; null when the invoice isn't linked to a gig.
+    gig?: {
+      event_description: string | null
+      event_date: string | null
+      venue_name: string | null
+      festival_name: string | null
+    } | null
+  }[]
+  purchaseMatches: { id: Id; receipt_number: number; supplier_name: string; total_cents: number }[]
+}
+
+export interface BankStatementLine {
+  id: Id
+  line_index: number
+  booking_date: string
+  value_date: string | null
+  amount_cents: number
+  direction: 'credit' | 'debit'
+  currency: string | null
+  counterparty_name: string | null
+  counterparty_iban: string | null
+  remittance_info: string | null
+  is_reversal: boolean
+  status: string
+  suggestion: BankLineSuggestion
+}
+
+export interface PurchasePaymentCandidate {
+  id: Id
+  booking_date: string
+  amount_cents: number
+  counterparty_name: string | null
+  counterparty_iban: string | null
+  remittance_info: string | null
+  ledger_transaction_id: Id
+  supplier_match: 'iban' | 'name' | 'none'
+}
+
+export interface BankImportParseResult {
+  import: BankStatementImport
+  lines: BankStatementLine[]
+  // True when the tenant has no opening balance yet and this statement carries
+  // one — drives the import's "set opening balance" nudge.
+  openingBalanceSuggested: boolean
+}
+
+export interface FinanceOnboardingStatus {
+  openingBalanceSet: boolean
+}
+
+// One per-line commit decision (mirrors server/validators/bankImportValidators.js).
+export type BankImportDecision =
+  | { line_id: Id; action: 'skip' }
+  | { line_id: Id; action: 'reconcile_invoice'; invoice_id: Id }
+  | { line_id: Id; action: 'reconcile_purchase'; purchase_id: Id }
+  | { line_id: Id; action: 'journal_received'; contra_account_code: string }
+  | {
+      line_id: Id
+      action: 'journal_paid'
+      contra_account_code: string
+      supplier_contact_id?: Id | null
+      create_supplier?: { name: string; iban?: string | null }
+    }
+
+export interface BankImportResult {
+  imported: number
+  skipped: number
+  results: { line_id: Id; status: string }[]
+}
+
 export interface AccountingSettings {
   tenant_id?: Id
   currency?: string
@@ -414,6 +519,8 @@ export interface Journal {
   entry_number?: number
   entry_date?: string
   description?: string | null
+  note?: string | null
+  reclassifies_ledger_entry_id?: Id | null
   status?: 'draft' | 'approved'
   posted_transaction_id?: Id
   lines?: JournalLine[]
@@ -428,6 +535,7 @@ export interface LedgerEntryRow {
   voided?: boolean
   receipt?: number | string
   description?: string
+  note?: string | null
   amount_cents?: number
   source_type?: string
   source_id?: Id
@@ -450,6 +558,14 @@ export interface LedgerEntryLineRow {
   voided?: boolean
 }
 
+/** The reclassification journal moving one ledger line (posted immediately, so
+ * always approved with its posted transaction in practice). */
+export interface LedgerLineReclassification {
+  journal_id: Id
+  status: 'draft' | 'approved'
+  posted_transaction_id: Id | null
+}
+
 /** One journal line in the ledger entry detail (GET /api/ledger/:id). */
 export interface LedgerLine {
   id?: Id
@@ -458,6 +574,7 @@ export interface LedgerLine {
   memo?: string
   debit_cents?: number
   credit_cents?: number
+  reclassification?: LedgerLineReclassification | null
 }
 
 export interface Period {

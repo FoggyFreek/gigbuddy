@@ -122,6 +122,30 @@ describe('invoices — isolation', () => {
   })
 })
 
+describe('invoices — by-gig (gig Terms tab)', () => {
+  it('returns active invoices linked to the gig, excluding voided', async () => {
+    const live = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const voided = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    // Void one directly (the ledger void path needs configured accounts; here we
+    // only exercise the read filter).
+    await pool.query(`UPDATE invoices SET status = 'void' WHERE id = $1`, [voided.body.id])
+
+    const res = await asUserA(request(app).get(`/api/invoices/by-gig/${seed.gigA.id}`)).expect(200)
+    const ids = res.body.map((inv) => inv.id)
+    expect(ids).toContain(live.body.id)
+    expect(ids).not.toContain(voided.body.id)
+  })
+
+  it('cross-tenant gig returns 404', async () => {
+    await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    // Beta cannot read Alpha's gig invoices — 404 (existence not leaked).
+    await asUserB(request(app).get(`/api/invoices/by-gig/${seed.gigA.id}`)).expect(404)
+    // The owning tenant still sees them.
+    const owner = await asUserA(request(app).get(`/api/invoices/by-gig/${seed.gigA.id}`)).expect(200)
+    expect(owner.body).toHaveLength(1)
+  })
+})
+
 describe('invoices — number generation', () => {
   it('produces sequential numbers within the same year', async () => {
     const r1 = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)

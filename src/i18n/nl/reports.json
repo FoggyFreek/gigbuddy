@@ -34,7 +34,12 @@
     "salesOutput": "Btw over verkopen (verschuldigd)",
     "purchasesInput": "Btw over inkopen (voorbelasting)",
     "netPayable": "Netto-btw-positie (te betalen)",
-    "netReceivable": "Netto-btw-positie (te ontvangen)"
+    "netReceivable": "Netto-btw-positie (te ontvangen)",
+    "booksClosed": "Boeken gesloten",
+    "booksOpen": "Boeken open",
+    "closedThrough": "Gesloten t/m {{date}}",
+    "declared": "Aangegeven:",
+    "notDeclared": "Geen btw-aangifte ingediend voor deze periode"
   },
   "trialBalance": {
     "title": "Proefbalans",

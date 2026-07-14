@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <GrpHdr><MsgId>WBC-1</MsgId><CreDtTm>2024-05-02T00:00:00</CreDtTm></GrpHdr>
+    <Stmt>
+      <Id>WBC-STMT-1</Id>
+      <Acct><Id><Othr><Id>032000000007</Id></Othr></Id><Ccy>AUD</Ccy></Acct>
+      <!-- Outgoing, non-IBAN counterparty account (Othr/Id), two Ustrd -->
+      <Ntry>
+        <Amt Ccy="AUD">667.35</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <BookgDt><Dt>2024-05-01</Dt></BookgDt>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="AUD">667.35</Amt>
+            <CdtDbtInd>DBIT</CdtDbtInd>
+            <RltdPties>
+              <Cdtr><Nm>Sydney Sound Hire</Nm></Cdtr>
+              <CdtrAcct><Id><Othr><Id>062000123456</Id></Othr></Id></CdtrAcct>
+            </RltdPties>
+            <RmtInf><Ustrd>Invoice 8891</Ustrd><Ustrd>PA and lighting</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <!-- A returned (reversed) payment marked via RtrInf; CdtDbtInd already
+           shows the money coming back as a credit -->
+      <Ntry>
+        <Amt Ccy="AUD">120.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RtrInf><Rsn><Cd>AC04</Cd></Rsn></RtrInf>
+        <BookgDt><Dt>2024-05-01</Dt></BookgDt>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="AUD">120.00</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+            <RltdPties><Dbtr><Nm>Closed Account Pty</Nm></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Payment return</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

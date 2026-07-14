@@ -17,6 +17,7 @@ import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 type TypeLabelKey =
   | 'gigNew' | 'gigConfirmed' | 'gigImport'
   | 'rehearsalNew' | 'rehearsalConfirmed'
+  | 'optionMemberUnavailable' | 'optionAllResponded'
   | 'invoicePaid' | 'taskAssigned' | 'inviteRedeemed'
   | 'achievementUnlocked'
 
@@ -26,6 +27,8 @@ const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'gig-import': 'gigImport',
   'rehearsal-new': 'rehearsalNew',
   'rehearsal-confirmed': 'rehearsalConfirmed',
+  'option-member-unavailable': 'optionMemberUnavailable',
+  'option-all-responded': 'optionAllResponded',
   'invoice-paid': 'invoicePaid',
   'task-assigned': 'taskAssigned',
   'invite-redeemed': 'inviteRedeemed',

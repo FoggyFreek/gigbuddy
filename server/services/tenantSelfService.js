@@ -8,6 +8,7 @@
 import { randomBytes } from 'node:crypto'
 import { validSlug, slugFromBandName } from '../validators/tenantValidators.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   insertTenant,
   insertTenantIfSlugFree,
@@ -20,12 +21,9 @@ import {
 import { setOnboardingTenant } from '../repositories/authRepository.js'
 import { enforceBandCap } from './limitService.js'
 import { isTenantOnboardingEnabled } from './platformSettingsService.js'
+import { badRequest, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Tenant not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+const NOT_FOUND = notFound('Tenant not found')
 
 // How many "-2".."-N" suffixes to try for a generated slug before falling
 // back to a random suffix (a pathological hot name, still one insert).
@@ -71,23 +69,16 @@ export async function createOwnedTenant(db, userId, body) {
     }
   }
 
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const capError = await enforceBandCap(client, userId)
-    if (capError) {
-      await client.query('ROLLBACK')
-      return capError
-    }
+    if (capError) abortTransaction(capError)
 
     const tenant = hasSlug
       ? await insertTenant(client, slug, band_name, userId, userId)
       : await insertWithGeneratedSlug(client, band_name, userId)
     if (!tenant) {
       // Even the random-suffix fallback collided — effectively impossible.
-      await client.query('ROLLBACK')
-      return { error: { status: 409, body: { error: 'Slug already in use' } } }
+      abortTransaction({ error: { status: 409, body: { error: 'Slug already in use' } } })
     }
     await ensureTenantStatistics(client, tenant.id)
     await seedTenantAccounting(client, tenant.id)
@@ -96,20 +87,16 @@ export async function createOwnedTenant(db, userId, body) {
       await setOnboardingTenant(client, userId, tenant.id)
     }
 
-    await client.query('COMMIT')
     return {
       tenant,
       audit: { action: 'tenant.self_create', details: { tenantId: tenant.id } },
     }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    if (err.code === '23505') {
-      return { error: { status: 409, body: { error: 'Slug already in use' } } }
-    }
-    throw err
-  } finally {
-    client.release()
-  }
+  }, {
+    db,
+    mapError: (err) => (err.code === '23505'
+      ? { error: { status: 409, body: { error: 'Slug already in use' } } }
+      : null),
+  })
 }
 
 export async function listOwnedTenants(db, userId) {
@@ -130,38 +117,20 @@ export async function archiveOwnedTenant(db, userId, tenantId) {
 // archiving must not be a loophole to park bands above the limit and swap
 // them back in.
 export async function unarchiveOwnedTenant(db, userId, tenantId) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     // Cap first: enforceBandCap locks the user row, serializing this with any
     // concurrent create/unarchive by the same user.
     const capError = await enforceBandCap(client, userId)
 
     const tenant = await fetchOwnedTenant(client, tenantId, userId)
-    if (!tenant) {
-      await client.query('ROLLBACK')
-      return NOT_FOUND
-    }
-    if (!tenant.archived_at) {
-      await client.query('ROLLBACK')
-      return { tenant } // already active — idempotent
-    }
-    if (capError) {
-      await client.query('ROLLBACK')
-      return capError
-    }
+    if (!tenant) abortTransaction(NOT_FOUND)
+    if (!tenant.archived_at) abortTransaction({ tenant }) // already active — idempotent
+    if (capError) abortTransaction(capError)
 
     const unarchived = await setTenantArchived(client, tenantId, false)
-    await client.query('COMMIT')
     return {
       tenant: unarchived,
       audit: { action: 'tenant.unarchive', details: { tenantId } },
     }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db })
 }

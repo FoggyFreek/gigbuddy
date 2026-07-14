@@ -39,6 +39,7 @@ const GIGS = [
     end_time: '23:00:00',
     status: 'confirmed',
     open_task_count: 2,
+    tags: [{ id: 101, name: 'Summer Tour' }],
   },
   {
     id: 2,
@@ -49,6 +50,7 @@ const GIGS = [
     end_time: null,
     status: 'option',
     open_task_count: 0,
+    tags: [{ id: 102, name: 'Festival Circuit' }],
   },
 ]
 
@@ -107,6 +109,28 @@ describe('GigsTable', () => {
     const { container } = wrap(<GigsTable gigs={withBanner} onRowClick={() => {}} />)
     const banner = container.querySelector('img[src="/api/files/tenants/1/gig-banners/abc.jpg"]')
     expect(banner).toBeInTheDocument()
+  })
+
+  it('searches gig tags', async () => {
+    const user = userEvent.setup()
+    wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+
+    await user.type(screen.getByPlaceholderText('Search gigs…'), 'summer tour')
+
+    expect(screen.getByText('Jazz Night')).toBeInTheDocument()
+    expect(screen.queryByText('Summer Festival')).not.toBeInTheDocument()
+  })
+
+  it('provides separate Types and Tags filter menus', async () => {
+    const user = userEvent.setup()
+    wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+
+    expect(screen.getByRole('button', { name: 'Types' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Tags' }))
+    await user.click(screen.getByText('Summer Tour'))
+
+    expect(screen.getByText('Jazz Night')).toBeInTheDocument()
+    expect(screen.queryByText('Summer Festival')).not.toBeInTheDocument()
   })
 
   it('sorts only the past gigs table by date descending by default', async () => {

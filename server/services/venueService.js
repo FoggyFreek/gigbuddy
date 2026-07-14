@@ -2,6 +2,7 @@
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function).
 import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   VALID_CATEGORIES,
   VALID_GIG_ACTIONS,
@@ -32,16 +33,9 @@ import {
   deleteVenueContact,
   loadExistingImportKeys,
 } from '../repositories/venueRepository.js'
+import { badRequest, conflict, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
-
-function conflict(error, extra = {}) {
-  return { error: { status: 409, body: { error, ...extra } } }
-}
+const NOT_FOUND = notFound('Not found')
 
 function validateNoFestivalName(body) {
   return 'festival_name' in body
@@ -120,19 +114,10 @@ async function applyVenuePatch(db, patch) {
 // Owns the transaction that fixes up gig references and applies the patch
 // atomically when a category change affects gigs.
 async function applyCategoryChangeWithGigAction(venueId, tenantId, currentCategory, action, patch) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     await applyGigReferenceAction(client, venueId, tenantId, currentCategory, action)
-    const result = await applyVenuePatch(client, patch)
-    await client.query('COMMIT')
-    return result
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+    return applyVenuePatch(client, patch)
+  })
 }
 
 // A category change that would orphan gig references must say what to do with
@@ -208,32 +193,18 @@ export async function linkVenueContact(db, tenantId, venueId, contactId) {
 // Locks the venue's contact links so two concurrent "make primary" requests
 // can't both win; clears the old primary before setting the new one.
 export async function updateVenueContactPrimary(tenantId, venueId, contactId, makePrimary) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const links = await lockVenueContactLinks(client, venueId, tenantId)
-    if (!links.some((link) => link.contact_id === contactId)) {
-      await client.query('ROLLBACK')
-      return NOT_FOUND
-    }
+    if (!links.some((link) => link.contact_id === contactId)) abortTransaction(NOT_FOUND)
 
     if (makePrimary) {
       await clearPrimaryVenueContact(client, venueId, tenantId)
     }
 
-    const contact = await setVenueContactPrimary(client, venueId, contactId, makePrimary, tenantId)
-    await client.query('COMMIT')
-    return { contact }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    if (err.code === '23505') {
-      return conflict('Another contact is already primary')
-    }
-    throw err
-  } finally {
-    client.release()
-  }
+    return { contact: await setVenueContactPrimary(client, venueId, contactId, makePrimary, tenantId) }
+  }, {
+    mapError: (err) => (err.code === '23505' ? conflict('Another contact is already primary') : null),
+  })
 }
 
 export async function unlinkVenueContact(db, tenantId, venueId, contactId) {
@@ -277,17 +248,8 @@ export async function importVenues(tenantId, body) {
     return badRequest('Maximum 1000 rows per import')
   }
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const existingKeys = await buildExistingImportKeys(client, tenantId, body)
-    const summary = await insertImportRows(client, tenantId, body, existingKeys)
-    await client.query('COMMIT')
-    return { summary }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+    return { summary: await insertImportRows(client, tenantId, body, existingKeys) }
+  })
 }

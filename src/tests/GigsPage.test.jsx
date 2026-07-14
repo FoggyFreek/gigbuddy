@@ -36,6 +36,16 @@ vi.mock('../api/profile.ts', () => ({
   getProfile: vi.fn().mockResolvedValue({ banner_path: null }),
   getBannerPath: vi.fn().mockResolvedValue(null),
 }))
+vi.mock('../components/TourShareDialog.tsx', () => ({
+  default: ({ open, gigs }) => open
+    ? <div data-testid="tour-share-gigs">{gigs.map((gig) => gig.event_description).join(',')}</div>
+    : null,
+}))
+vi.mock('../components/BannerMosaicDialog.tsx', () => ({
+  default: ({ open, gigs }) => open
+    ? <div data-testid="mosaic-share-gigs">{gigs.map((gig) => gig.event_description).join(',')}</div>
+    : null,
+}))
 
 import GigsPage from '../pages/GigsPage.tsx'
 import GigDetailPage from '../pages/GigDetailPage.tsx'
@@ -102,6 +112,42 @@ describe('GigsPage', () => {
     expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^add$/i })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+  })
+
+  it('uses the selected type and tag filters for tour cards and banner mosaics', async () => {
+    const user = userEvent.setup()
+    listGigs.mockResolvedValue([
+      { ...GIGS[0], id: 42, event_description: 'Matching Gig', tags: [{ id: 1, name: 'Summer Tour' }] },
+      { ...GIGS[0], id: 43, status: 'announced', event_description: 'Wrong Type', tags: [{ id: 1, name: 'Summer Tour' }] },
+      { ...GIGS[0], id: 44, event_description: 'Wrong Tag', tags: [{ id: 2, name: 'Club Shows' }] },
+      { ...GIGS[0], id: 45, status: 'option', event_description: 'Matching Option', tags: [{ id: 1, name: 'Summer Tour' }] },
+    ])
+    wrap(<GigsPage />)
+
+    await waitFor(() => expect(screen.getByText('Matching Gig')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Types' }))
+    await user.click(screen.getByText('Announced'))
+    await user.keyboard('{Escape}')
+    await user.click(screen.getByRole('button', { name: 'Tags' }))
+    await user.click(screen.getByText('Summer Tour'))
+    await user.keyboard('{Escape}')
+
+    await user.click(screen.getByRole('button', { name: /share tour dates/i }))
+    const shareMenu = screen.getByRole('menu')
+    expect(within(shareMenu).queryByText('Confirmed')).not.toBeInTheDocument()
+    expect(within(shareMenu).queryByText('Announced')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /create tour card/i }))
+    expect(screen.getByTestId('tour-share-gigs')).toHaveTextContent('Matching Gig')
+    expect(screen.getByTestId('tour-share-gigs')).toHaveTextContent('Matching Option')
+    expect(screen.getByTestId('tour-share-gigs')).not.toHaveTextContent('Wrong Type')
+    expect(screen.getByTestId('tour-share-gigs')).not.toHaveTextContent('Wrong Tag')
+
+    await user.click(screen.getByRole('button', { name: /share tour dates/i }))
+    await user.click(screen.getByRole('button', { name: /banner mosaic/i }))
+    expect(screen.getByTestId('mosaic-share-gigs')).toHaveTextContent('Matching Gig')
+    expect(screen.getByTestId('mosaic-share-gigs')).toHaveTextContent('Matching Option')
+    expect(screen.getByTestId('mosaic-share-gigs')).not.toHaveTextContent('Wrong Type')
+    expect(screen.getByTestId('mosaic-share-gigs')).not.toHaveTextContent('Wrong Tag')
   })
 })
 

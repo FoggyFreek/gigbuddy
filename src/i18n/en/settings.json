@@ -221,6 +221,10 @@
     },
     "booksClosedThrough": "Books closed through",
     "booksClosedThroughHelper": "Nothing can be posted on or before this date. Leave empty to keep the books open.",
+    "wizard": {
+      "cta": "Finance setup wizard",
+      "help": "Walk through your opening balance, financial profile and default accounts."
+    },
     "errors": {
       "account_has_open_balance": "This account still carries an open balance (unpaid bills, unsettled member debt or unpaid invoices). Settle them before changing the account.",
       "invalid_books_closed_through": "Enter a valid date (YYYY-MM-DD) or clear the field.",

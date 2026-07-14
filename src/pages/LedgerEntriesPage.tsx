@@ -18,8 +18,13 @@ import TableRow from '@mui/material/TableRow'
 import TableSortLabel from '@mui/material/TableSortLabel'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import Button from '@mui/material/Button'
 import SearchIcon from '@mui/icons-material/Search'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import LedgerTypeFilter from '../components/ledger/LedgerTypeFilter.tsx'
+import BankStatementImportDialog from '../components/ledger/BankStatementImportDialog.tsx'
+import { usePermissions } from '../hooks/usePermissions.ts'
+import { PERMISSIONS } from '../auth/permissions.ts'
 import PeriodPicker from '../components/shared/periodPicker.tsx'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { listLedger, listLedgerPeriods } from '../api/ledger.ts'
@@ -36,6 +41,9 @@ type SortField = 'id' | 'entry_date'
 export default function LedgerEntriesPage() {
   const { t } = useTranslation('ledger')
   const navigate = useNavigate()
+  const { can } = usePermissions()
+  const canManageFinance = can(PERMISSIONS.FINANCE_MANAGE)
+  const [importOpen, setImportOpen] = useState(false)
   // Restore the previous session's filters so navigating into an entry detail
   // and back keeps the user's view.
   const saved = loadLedgerFilters()
@@ -100,6 +108,7 @@ export default function LedgerEntriesPage() {
       list = list.filter(
         (row) =>
           row.description?.toLowerCase().includes(q) ||
+          row.note?.toLowerCase().includes(q) ||
           row.type?.toLowerCase().includes(q) ||
           (row.receipt != null && String(row.receipt).includes(q)) ||
           String(row.id).includes(q),
@@ -178,7 +187,26 @@ export default function LedgerEntriesPage() {
           value={period}
           onChange={handleFilterChange(setPeriod)}
         />
+        {canManageFinance && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<UploadFileIcon />}
+            onClick={() => setImportOpen(true)}
+          >
+            {t($ => $.bankImport.button)}
+          </Button>
+        )}
       </Box>
+
+      {importOpen && (
+        <BankStatementImportDialog
+          onClose={(imported) => {
+            setImportOpen(false)
+            if (imported) load()
+          }}
+        />
+      )}
 
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

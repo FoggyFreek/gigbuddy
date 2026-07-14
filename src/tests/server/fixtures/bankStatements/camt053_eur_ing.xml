@@ -1,0 +1,208 @@
+<?xml version='1.0' encoding='UTF-8'?> 
+<Document xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02"> 
+  <BkToCstmrStmt> 
+    <GrpHdr> 
+      <MsgId>2025-02-11T13:08:01.067+01:00</MsgId> 
+      <CreDtTm>2025-02-11T13:08:01.067+01:00</CreDtTm> 
+      <MsgRcpt> 
+        <Nm>Demo customer name</Nm> 
+        <Id> 
+          <OrgId> 
+            <Othr> 
+              <Id>36000069</Id> 
+            </Othr> 
+          </OrgId> 
+        </Id> 
+      </MsgRcpt> 
+    </GrpHdr> 
+    <Stmt> 
+      <Id>202502050000002</Id> 
+      <ElctrncSeqNb>2</ElctrncSeqNb> 
+      <CreDtTm>2025-02-05T00:00:00.000+01:00</CreDtTm> 
+      <FrToDt> 
+        <FrDtTm>2025-02-05T00:00:00</FrDtTm> 
+        <ToDtTm>2025-02-05T23:59:59</ToDtTm> 
+      </FrToDt> 
+      <Acct> 
+        <Id> 
+          <IBAN>HU981370000100000100000000</IBAN> 
+        </Id> 
+        <Tp> 
+          <Cd>CACC</Cd> 
+        </Tp> 
+        <Ccy>USD</Ccy> 
+        <Ownr> 
+          <Nm> Demo account owner name </Nm> 
+        </Ownr> 
+        <Svcr> 
+          <FinInstnId> 
+            <BIC>INGBHUHB</BIC> 
+          </FinInstnId> 
+        </Svcr> 
+      </Acct> 
+      <Bal> 
+        <Tp> 
+          <CdOrPrtry> 
+            <Cd>PRCD</Cd> 
+          </CdOrPrtry> 
+        </Tp> 
+        <Amt Ccy="USD">142250.77</Amt> 
+        <CdtDbtInd>CRDT</CdtDbtInd> 
+        <Dt> 
+          <Dt>2025-02-04</Dt> 
+        </Dt> 
+      </Bal> 
+CAMT.053 & CAMT.052 interactive reporting formats available in InsideBusiness Payments 
+ 
+ 14 
+  
+      <Bal> 
+        <Tp> 
+          <CdOrPrtry> 
+            <Cd>OPBD</Cd> 
+          </CdOrPrtry> 
+        </Tp> 
+        <Amt Ccy="USD">142250.77</Amt> 
+        <CdtDbtInd>CRDT</CdtDbtInd> 
+        <Dt> 
+          <Dt>2025-02-05</Dt> 
+        </Dt> 
+      </Bal> 
+      <Bal> 
+        <Tp> 
+          <CdOrPrtry> 
+            <Cd>CLBD</Cd> 
+          </CdOrPrtry> 
+        </Tp> 
+        <Amt Ccy="USD">63520.39</Amt> 
+        <CdtDbtInd>CRDT</CdtDbtInd> 
+        <Dt> 
+          <Dt>2025-02-05</Dt> 
+        </Dt> 
+      </Bal> 
+      <Bal> 
+        <Tp> 
+          <CdOrPrtry> 
+            <Cd>CLAV</Cd> 
+          </CdOrPrtry> 
+        </Tp> 
+        <Amt Ccy="USD">63520.39</Amt> 
+        <CdtDbtInd>CRDT</CdtDbtInd> 
+        <Dt> 
+          <Dt>2025-02-05</Dt> 
+        </Dt> 
+      </Bal> 
+      <Bal> 
+        <Tp> 
+          <CdOrPrtry> 
+            <Cd>FWAV</Cd> 
+          </CdOrPrtry> 
+        </Tp> 
+        <Amt Ccy="USD">63469.26</Amt> 
+        <CdtDbtInd>CRDT</CdtDbtInd> 
+        <Dt> 
+          <Dt>2025-02-06</Dt> 
+        </Dt> 
+      </Bal> 
+      <Bal> 
+        <Tp> 
+          <CdOrPrtry> 
+            <Cd>FWAV</Cd> 
+          </CdOrPrtry> 
+        </Tp> 
+        <Amt Ccy="USD">63469.26</Amt> 
+        <CdtDbtInd>CRDT</CdtDbtInd> 
+        <Dt> 
+          <Dt>2025-02-07</Dt> 
+        </Dt> 
+      </Bal> 
+      <TxsSummry> 
+CAMT.053 & CAMT.052 interactive reporting formats available in InsideBusiness Payments 
+ 
+ 15 
+  
+        <TtlNtries> 
+          <NbOfNtries>1</NbOfNtries> 
+          <Sum>78730.38</Sum> 
+        </TtlNtries> 
+        <TtlCdtNtries> 
+          <NbOfNtries>0</NbOfNtries> 
+          <Sum>0.00</Sum> 
+        </TtlCdtNtries> 
+        <TtlDbtNtries> 
+          <NbOfNtries>1</NbOfNtries> 
+          <Sum>78730.38</Sum> 
+        </TtlDbtNtries> 
+      </TxsSummry> 
+      <Ntry> 
+        <NtryRef>PA0250205131976</NtryRef> 
+        <Amt Ccy="USD">78730.38</Amt> 
+        <CdtDbtInd>DBIT</CdtDbtInd> 
+        <Sts>BOOK</Sts> 
+        <BookgDt> 
+          <Dt>2025-02-05</Dt> 
+        </BookgDt> 
+        <ValDt> 
+          <Dt>2025-02-05</Dt> 
+        </ValDt> 
+        <AcctSvcrRef>PA0250205131976</AcctSvcrRef> 
+        <BkTxCd> 
+          <Domn> 
+            <Cd>PMNT</Cd> 
+            <Fmly> 
+              <Cd>ICDT</Cd> 
+              <SubFmlyCd>XBCT</SubFmlyCd> 
+            </Fmly> 
+          </Domn> 
+          <Prtry> 
+            <Cd>00500</Cd> 
+            <Issr>ING Group</Issr> 
+          </Prtry> 
+        </BkTxCd> 
+        <Chrgs> 
+          <Amt Ccy="USD">10.38</Amt> 
+        </Chrgs> 
+        <NtryDtls> 
+          <TxDtls> 
+            <Refs> 
+              <InstrId>5100000640</InstrId> 
+            </Refs> 
+            <AmtDtls> 
+              <InstdAmt> 
+                <Amt Ccy="USD">78720.00</Amt> 
+              </InstdAmt> 
+              <TxAmt> 
+                <Amt Ccy="USD">78730.38</Amt> 
+              </TxAmt> 
+            </AmtDtls> 
+            <RltdPties> 
+              <Cdtr> 
+                <Nm>Demo counterparty name</Nm> 
+              </Cdtr> 
+              <CdtrAcct> 
+                <Id> 
+                  <Othr> 
+<Id>33710201000000000019882</Id> 
+</Othr> 
+</Id> 
+</CdtrAcct> 
+</RltdPties> 
+<RltdAgts> 
+<CdtrAgt> 
+<FinInstnId> 
+<BIC>ZJCBCN2NXXX</BIC> 
+</FinInstnId> 
+</CdtrAgt> 
+</RltdAgts> 
+<RmtInf> 
+<Ustrd>Thank you very much for your service</Ustrd> 
+</RmtInf> 
+</TxDtls> 
+</NtryDtls> 
+</Ntry> 
+<AddtlStmtInf>/NAME/Demo customer name//BIC/INGBHUHB//SUM/1/0/7 
+8730,38/0,00/</AddtlStmtInf> 
+</Stmt> 
+</BkToCstmrStmt> 
+</Document> 

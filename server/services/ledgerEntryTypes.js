@@ -15,6 +15,9 @@ const TYPE_MAP = {
   'merch_sale/voided':   { type: 'Merch sale (void)',     group: 'invoices',  voided: true,  sign: -1 },
   'merch_sale/reversal': { type: 'Merch sale (reversal)', group: 'invoices',  voided: false, sign: -1 },
   'shopify_revenue_line/recorded': { type: 'Shopify revenue', group: 'invoices', voided: false, sign: 1 },
+  'bank_statement_line/received': { type: 'Ingoing payment',  group: 'payments', voided: false, sign: 1 },
+  'bank_statement_line/paid':     { type: 'Outgoing payment', group: 'payments', voided: false, sign: -1 },
+  'opening_balance/set': { type: 'Opening balance',  group: 'journals',  voided: false, sign: null },
   'journal/posted':     { type: 'Journal',          group: 'journals',  voided: false, sign: null },
   'ledger_transaction/void': { type: 'Void',        group: 'journals',  voided: true,  sign: null },
   // A reversal is a *visible* correction of a closed-period entry: unlike a
@@ -69,6 +72,14 @@ export function describe(row) {
     case 'merch_sale/reversal':
       if (!row.merch_sale_product_name) return fallback
       return `Merch sale reversed: ${row.merch_sale_quantity} × ${row.merch_sale_product_name}`
+    case 'bank_statement_line/received':
+      if (!row.bank_line_counterparty_name) return fallback
+      return `Bank: received from ${row.bank_line_counterparty_name}`
+    case 'bank_statement_line/paid':
+      if (!row.bank_line_counterparty_name) return fallback
+      return `Bank: paid to ${row.bank_line_counterparty_name}`
+    case 'opening_balance/set':
+      return 'Opening balance'
     case 'journal/posted':
       return row.journal_description ?? fallback
     case 'vat_settlement/filed':

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { uploadObjectWithQuota, removeObject, safeRemove, sharePhotoKey } from './storageService.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage } from '../utils/imageProcess.js'
+import { notFound } from './serviceErrors.js'
 import {
   listSharePhotos,
   nextSortOrder,
@@ -13,7 +14,7 @@ import {
   deleteSharePhoto,
 } from '../repositories/sharePhotoRepository.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
+const NOT_FOUND = notFound('Not found')
 
 export async function listPhotos(db, tenantId) {
   return listSharePhotos(db, tenantId)

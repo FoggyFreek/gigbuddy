@@ -202,14 +202,6 @@ export async function deleteSet(executor, setId, setlistId, tenantId) {
 
 // ---------- items ----------
 
-export async function songExistsInTenant(executor, songId, tenantId) {
-  const { rowCount } = await executor.query(
-    'SELECT 1 FROM songs WHERE id = $1 AND tenant_id = $2',
-    [songId, tenantId],
-  )
-  return rowCount > 0
-}
-
 export async function itemSortNext(executor, setId, tenantId) {
   const { rows } = await executor.query(
     `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next

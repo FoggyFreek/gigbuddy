@@ -8,7 +8,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import Tooltip from '@mui/material/Tooltip'
 import AddIcon from '@mui/icons-material/Add'
-import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import ContactsTable from '../components/ContactsTable.tsx'
 import ContactFormModal from '../components/ContactFormModal.tsx'
 import ContactImportDialog from '../components/ContactImportDialog.tsx'
@@ -119,7 +119,7 @@ export default function ContactDirectoryPage({
         {allowImport && canWritePlanning && (
           <Tooltip title={t($ => $.importTooltip)}>
             <IconButton onClick={() => setImportOpen(true)}>
-              <FileUploadOutlinedIcon />
+              <UploadFileIcon />
             </IconButton>
           </Tooltip>
         )}

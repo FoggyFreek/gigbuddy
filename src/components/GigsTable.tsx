@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -22,6 +22,7 @@ import Typography from '@mui/material/Typography'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import FilterListIcon from '@mui/icons-material/FilterList'
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined'
 import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
@@ -49,6 +50,12 @@ interface GigsTableProps {
   gigs: GigWithExtras[]
   onRowClick?: (gig: GigWithExtras) => void
   selectedId?: Id
+  onFilterSelectionChange?: (selection: GigsFilterSelection) => void
+}
+
+export interface GigsFilterSelection {
+  selectedStatuses: ReadonlySet<string>
+  selectedTags: ReadonlySet<string>
 }
 
 function formatDate(val: string | Date | undefined): string {
@@ -87,6 +94,7 @@ function applySearch(list: GigWithExtras[], q: string): GigWithExtras[] {
       g.event_description,
       g.venue?.name, g.venue?.city, g.venue?.country,
       g.festival?.name, g.festival?.city, g.festival?.country,
+      ...(g.tags ?? []).map((tag) => tag.name),
     ].some((f) => f && String(f).toLowerCase().includes(lower))
   )
 }
@@ -252,13 +260,25 @@ function PastGigsHeader({ open, count, onToggle }: Readonly<PastGigsHeaderProps>
   )
 }
 
-export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: Readonly<GigsTableProps>) {
+export default function GigsTable({ gigs, onRowClick, selectedId = undefined, onFilterSelectionChange }: Readonly<GigsTableProps>) {
   const { t } = useTranslation('gigs')
   const [pastOpen, setPastOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set(ALL_STATUSES))
-  const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
+  const [typeAnchor, setTypeAnchor] = useState<HTMLElement | null>(null)
+  const [tagAnchor, setTagAnchor] = useState<HTMLElement | null>(null)
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
   const isCompact = useCompactLayout()
+
+  useEffect(() => {
+    onFilterSelectionChange?.({ selectedStatuses, selectedTags })
+  }, [onFilterSelectionChange, selectedStatuses, selectedTags])
+
+  const availableTags = [...new Map(
+    gigs.flatMap((gig) => gig.tags ?? [])
+      .filter((tag) => tag.name)
+      .map((tag) => [tag.name!.toLowerCase(), tag.name!] as const),
+  ).values()].sort((a, b) => a.localeCompare(b))
 
   function toggleStatus(s: string) {
     setSelectedStatuses((prev) => {
@@ -275,48 +295,66 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
     )
   }
 
+  function toggleTag(tag: string) {
+    setSelectedTags((prev) => {
+      const next = new Set(prev)
+      if (next.has(tag)) next.delete(tag)
+      else next.add(tag)
+      return next
+    })
+  }
+
   const allStatusesSelected = selectedStatuses.size === ALL_STATUSES.length
   const someStatusesSelected = selectedStatuses.size > 0 && !allStatusesSelected
+  const statusFilterActive = !allStatusesSelected
 
   let filtered = applySearch(gigs, search)
   if (!allStatusesSelected) filtered = filtered.filter((g) => selectedStatuses.has(g.status ?? ''))
+  if (selectedTags.size > 0) {
+    filtered = filtered.filter((gig) =>
+      (gig.tags ?? []).some((tag) => tag.name && selectedTags.has(tag.name)),
+    )
+  }
 
   const upcoming = filtered.filter((g) => !isPastDate(g.event_date))
   const past = filtered.filter((g) => isPastDate(g.event_date)).sort(compareEventDateDesc)
   const emptyAll = gigs.length === 0
 
-  const controls = (
-    <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-      <TextField
-        size="small"
-        placeholder={t($ => $.table.searchPlaceholder)}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        sx={{ flex: '1 1 200px', minWidth: 160 }}
-        slotProps={{
-          input: {
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            ),
-          },
-        }}
-      />
+  const searchField = (
+    <TextField
+      size="small"
+      placeholder={t($ => $.table.searchPlaceholder)}
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+      sx={isCompact ? { width: '100%' } : { flex: '1 1 200px', minWidth: 160 }}
+      slotProps={{
+        input: {
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon fontSize="small" />
+            </InputAdornment>
+          ),
+        },
+      }}
+    />
+  )
+
+  const typeFilter = (
+    <>
       <Button
         size="small"
-        variant={someStatusesSelected ? 'contained' : 'outlined'}
+        variant={statusFilterActive ? 'contained' : 'outlined'}
         startIcon={<FilterListIcon />}
-        onClick={(e) => setFilterAnchor(e.currentTarget)}
+        onClick={(e) => setTypeAnchor(e.currentTarget)}
       >
-        {someStatusesSelected
-          ? t($ => $.table.filterWithCount, { count: selectedStatuses.size })
-          : t($ => $.table.filter)}
+        {statusFilterActive
+          ? t($ => $.table.typesWithCount, { count: selectedStatuses.size })
+          : t($ => $.table.types)}
       </Button>
       <Menu
-        anchorEl={filterAnchor}
-        open={Boolean(filterAnchor)}
-        onClose={() => setFilterAnchor(null)}
+        anchorEl={typeAnchor}
+        open={Boolean(typeAnchor)}
+        onClose={() => setTypeAnchor(null)}
       >
         <MenuItem dense onClick={toggleAllStatuses}>
           <Checkbox
@@ -334,6 +372,55 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
           </MenuItem>
         ))}
       </Menu>
+    </>
+  )
+
+  const tagFilter = (
+    <>
+      <Button
+        size="small"
+        variant={selectedTags.size > 0 ? 'contained' : 'outlined'}
+        startIcon={<LocalOfferOutlinedIcon />}
+        onClick={(e) => setTagAnchor(e.currentTarget)}
+        disabled={availableTags.length === 0}
+      >
+        {selectedTags.size > 0
+          ? t($ => $.table.tagsWithCount, { count: selectedTags.size })
+          : t($ => $.table.tags)}
+      </Button>
+      <Menu
+        anchorEl={tagAnchor}
+        open={Boolean(tagAnchor)}
+        onClose={() => setTagAnchor(null)}
+      >
+        <MenuItem dense onClick={() => setSelectedTags(new Set())}>
+          <Checkbox size="small" checked={selectedTags.size === 0} />
+          <ListItemText primary={t($ => $.table.allTags)} />
+        </MenuItem>
+        <Divider />
+        {availableTags.map((tag) => (
+          <MenuItem key={tag} dense onClick={() => toggleTag(tag)}>
+            <Checkbox size="small" checked={selectedTags.has(tag)} />
+            <ListItemText primary={tag} />
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  )
+
+  const controls = isCompact ? (
+    <Stack spacing={1.5}>
+      <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+        {typeFilter}
+        {tagFilter}
+      </Box>
+      {searchField}
+    </Stack>
+  ) : (
+    <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+      {searchField}
+      {typeFilter}
+      {tagFilter}
     </Box>
   )
 

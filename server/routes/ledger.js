@@ -18,7 +18,9 @@ import {
   getLedgerTenantDisplayName,
   voidLedgerTransaction,
   reverseLedgerTransaction,
+  updateLedgerNote,
 } from '../services/ledgerService.js'
+import { createReclassification } from '../services/journalService.js'
 import { getFinancialReport, getReportEntryLines } from '../services/financialReportService.js'
 import { renderFinancialReportXlsx } from '../utils/renderFinancialReportXlsx.js'
 import { renderFinancialReportPdf } from '../utils/renderFinancialReportPdf.js'
@@ -130,6 +132,22 @@ router.post('/:id/reverse', requirePermission(PERMISSIONS.FINANCE_MANAGE), async
   const result = await reverseLedgerTransaction(pool, req.tenantId, id, req.user.id)
   if (result.error) return sendError(res, result.error)
   res.json({ id: result.transactionId })
+})
+
+// ---------- note (free text on any transaction, incl. voided/corrections) ----------
+router.patch('/:id/note', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await updateLedgerNote(pool, req.tenantId, id, req.body || {}, req.user.id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.noteUpdate)
+})
+
+// ---------- reclassify (immediately posts a journal moving one line to another account) ----------
+router.post('/:id/reclassify', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await createReclassification(pool, req.tenantId, id, req.body || {}, req.user.id)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.journal)
 })
 
 export default router

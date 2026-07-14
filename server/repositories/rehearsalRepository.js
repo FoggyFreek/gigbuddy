@@ -33,22 +33,6 @@ export async function rehearsalExistsInTenant(executor, rehearsalId, tenantId) {
   return rowCount > 0
 }
 
-export async function memberExistsInTenant(executor, memberId, tenantId) {
-  const { rowCount } = await executor.query(
-    'SELECT 1 FROM band_members WHERE id = $1 AND tenant_id = $2',
-    [memberId, tenantId],
-  )
-  return rowCount > 0
-}
-
-export async function songExistsInTenant(executor, songId, tenantId) {
-  const { rowCount } = await executor.query(
-    'SELECT 1 FROM songs WHERE id = $1 AND tenant_id = $2',
-    [songId, tenantId],
-  )
-  return rowCount > 0
-}
-
 export async function loadParticipants(executor, rehearsalIds, tenantId) {
   if (!rehearsalIds.length) return new Map()
   const { rows } = await executor.query(
@@ -157,6 +141,45 @@ export async function updateParticipantVote(executor, tenantId, rehearsalId, mem
     [vote, updatedByUserId, rehearsalId, memberId, tenantId],
   )
   return rows[0] || null
+}
+
+// Locks the parent option before a response mutation. Every vote takes this
+// lock, making the first-unavailable claim and incomplete -> complete check
+// deterministic even when members respond concurrently.
+export async function lockRehearsalOptionResponseState(executor, rehearsalId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id, status, first_unavailable_notification_at
+     FROM rehearsals
+     WHERE id = $1 AND tenant_id = $2
+     FOR UPDATE`,
+    [rehearsalId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function getRehearsalParticipantResponseState(executor, rehearsalId, memberId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT target.id AS participant_id, target.vote AS previous_vote,
+            counts.total, counts.pending
+     FROM rehearsal_participants target
+     CROSS JOIN LATERAL (
+       SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE vote IS NULL)::int AS pending
+       FROM rehearsal_participants
+       WHERE rehearsal_id = $1 AND tenant_id = $3
+     ) counts
+     WHERE target.rehearsal_id = $1 AND target.band_member_id = $2 AND target.tenant_id = $3`,
+    [rehearsalId, memberId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function markRehearsalFirstUnavailableNotified(executor, rehearsalId, tenantId) {
+  await executor.query(
+    `UPDATE rehearsals SET first_unavailable_notification_at = NOW()
+     WHERE id = $1 AND tenant_id = $2 AND first_unavailable_notification_at IS NULL`,
+    [rehearsalId, tenantId],
+  )
 }
 
 // Counts of participants that haven't voted yes, used to gate the

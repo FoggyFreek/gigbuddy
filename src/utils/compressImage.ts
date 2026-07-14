@@ -18,6 +18,20 @@ export function compressPhoto(file: File): Promise<File> {
   return imageCompression(file, PHOTO_OPTIONS)
 }
 
+// The dashboard memory tile stores its photo long-term, so encode to WebP for a
+// smaller footprint (the server re-encode preserves the uploaded MIME type).
+const MEMORY_PHOTO_OPTIONS: Options = {
+  maxSizeMB: 0.9,
+  maxWidthOrHeight: 1600,
+  initialQuality: 0.85,
+  fileType: 'image/webp',
+  useWebWorker: true,
+}
+
+export function compressMemoryPhoto(file: File): Promise<File> {
+  return imageCompression(file, MEMORY_PHOTO_OPTIONS)
+}
+
 export function compressLogo(file: File): Promise<File> {
   if (file.type === 'image/gif') {
     return Promise.reject(new Error('File type not allowed'))
@@ -26,9 +40,10 @@ export function compressLogo(file: File): Promise<File> {
 }
 
 const BANNER_OPTIONS: Options = {
-  maxSizeMB: 1,
+  maxSizeMB: 0.5,
   maxWidthOrHeight: 820,
-  initialQuality: 0.88,
+  initialQuality: 0.9,
+  fileType: 'image/webp',
   useWebWorker: true,
 }
 
@@ -37,9 +52,10 @@ export function compressBanner(file: File): Promise<File> {
 }
 
 const AVATAR_OPTIONS: Options = {
-  maxSizeMB: 2,
+  maxSizeMB: 0.3,
   maxWidthOrHeight: 720,
   initialQuality: 0.9,
+  fileType: 'image/webp',
   useWebWorker: true,
 }
 

@@ -3,10 +3,7 @@ import {
   fetchPlatformSettings,
   updateTenantOnboardingEnabled,
 } from '../repositories/platformSettingsRepository.js'
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+import { badRequest } from './serviceErrors.js'
 
 function toPayload(row) {
   return {

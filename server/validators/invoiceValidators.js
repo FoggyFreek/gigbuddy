@@ -1,5 +1,6 @@
 // Pure request/parameter validation for invoice routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
+export { formatInvoiceNumber } from '../domain/invoice.js'
 
 export const CONTENT_FIELDS = [
   'gig_id',
@@ -52,12 +53,6 @@ export const SUPPORTED_PAYMENT_METHODS = new Set([
 ])
 
 export { parseId, parseSearchLimit }
-
-function pad4(n) { return String(n).padStart(4, '0') }
-
-export function formatInvoiceNumber(year, seq) {
-  return `${year}-${pad4(seq)}`
-}
 
 export function normalizeLines(lines) {
   if (!Array.isArray(lines)) return []

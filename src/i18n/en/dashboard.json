@@ -52,9 +52,11 @@
     "gigNone": "No gig linked",
     "changePhoto": "Change photo",
     "addPhoto": "Add photo",
+    "removePhoto": "Remove photo",
     "edit": "Edit memory",
     "done": "Done",
     "cropTitle": "Crop memory photo",
-    "uploadError": "Couldn't upload the image"
+    "uploadError": "Couldn't upload the image",
+    "removeError": "Couldn't remove the image"
   }
 }

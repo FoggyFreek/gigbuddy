@@ -280,7 +280,12 @@ function applyBassNote(base: ChordShape, bassPc: number): ChordShape | null {
 // shape and the note after it is re-voiced into the bass (see applyBassNote).
 // Unicode accidentals are folded to ASCII first.
 export function lookupGuitarChord(name: string): ChordShape | null {
-  const n = (name ?? '').trim().replace(/♯/g, '#').replace(/♭/g, 'b')
+  const n = (name ?? '')
+    .trim()
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .replace(/^([a-h])/, (_, root: string) => root.toUpperCase())
+    .replace(/\/([a-h])(?=[#b]?$)/, (_, bass: string) => `/${bass.toUpperCase()}`)
   if (!n) return null
   if (CHORDS[n]) return CHORDS[n]
 

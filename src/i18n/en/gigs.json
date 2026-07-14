@@ -14,12 +14,15 @@
     "exportToBandsintown": "Export to Bandsintown (CSV)",
     "createTourCard": "Create Tour Card",
     "bannerMosaic": "Banner Mosaic",
-    "importFromBandsintownApi": "Import from Bandsintown"
+    "importFromBandsintownApi": "Import from Bandsintown (API)"
   },
   "table": {
     "searchPlaceholder": "Search gigs…",
-    "filter": "Filter",
-    "filterWithCount": "Filter ({{count}})",
+    "types": "Types",
+    "typesWithCount": "Types ({{count}})",
+    "tags": "Tags",
+    "tagsWithCount": "Tags ({{count}})",
+    "allTags": "Show all",
     "allStatuses": "All statuses",
     "colDate": "Date",
     "colEvent": "Event",
@@ -158,6 +161,12 @@
       "uploadFailed": "Banner upload failed",
       "deleteFailed": "Banner delete failed"
     },
+    "tags": {
+      "add": "Add tag",
+      "addAnother": "Add another tag",
+      "label": "Tag",
+      "saveFailed": "Saving tags failed"
+    },
     "eventDetails": "Event details",
     "date": "Date",
     "startTime": "Start time",
@@ -177,6 +186,14 @@
     "merchandiseSold": "Merchandise sold",
     "itemsSold_one": "{{count}} item · excl. VAT",
     "itemsSold_other": "{{count}} items · excl. VAT",
+    "relatedInvoices": "Related invoices",
+    "openInvoice": "Open invoice",
+    "invoiceStatus": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "paid": "Paid",
+      "void": "Void"
+    },
     "equipmentOnSite": "Available equipment on-site",
     "paSystem": "PA system",
     "drumkit": "Drumkit",

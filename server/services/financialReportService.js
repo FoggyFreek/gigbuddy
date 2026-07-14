@@ -8,7 +8,8 @@ import {
   reportEntryLines,
   vatTotals,
 } from '../repositories/ledgerRepository.js'
-import { loadAccountingSettings, resolveEffectiveRange } from './ledgerService.js'
+import { listVatReturnsInRange } from '../repositories/vatReturnRepository.js'
+import { fetchBooksClosedThrough, loadAccountingSettings, resolveEffectiveRange } from './ledgerService.js'
 
 const PL_TYPES = new Set(['revenue', 'cost_of_goods_sold', 'expense'])
 
@@ -43,11 +44,15 @@ function dayBefore(toExclusive) {
 export async function getFinancialReport(executor, tenantId, range) {
   const effectiveRange = await resolveEffectiveRange(executor, tenantId, range)
 
-  const [activity, balances, vat, settings] = await Promise.all([
+  const periodEnd = dayBefore(effectiveRange.toExclusive)
+
+  const [activity, balances, vat, settings, closedThrough, vatReturns] = await Promise.all([
     accountActivity(executor, tenantId, effectiveRange),
     accountBalancesBefore(executor, tenantId, effectiveRange.toExclusive),
     vatTotals(executor, tenantId, effectiveRange),
     loadAccountingSettings(executor, tenantId),
+    fetchBooksClosedThrough(executor, tenantId),
+    listVatReturnsInRange(executor, tenantId, { from: effectiveRange.from, to: periodEnd }),
   ])
 
   // ---- profit & loss: period movement on result accounts ----
@@ -123,6 +128,13 @@ export async function getFinancialReport(executor, tenantId, range) {
       output_cents: outputCents,
       input_cents: inputCents,
       net_cents: outputCents - inputCents,
+      // VAT declaration / period-close status for this period. The books are
+      // considered closed for the report when the close date reaches the period
+      // end; `returns` lists the filed quarters that overlap the period.
+      books_closed_through: closedThrough,
+      books_closed: Boolean(closedThrough && closedThrough >= periodEnd),
+      period_to: periodEnd,
+      returns: vatReturns,
     },
     trial_balance: {
       rows: trialBalance,

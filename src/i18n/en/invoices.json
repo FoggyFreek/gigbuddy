@@ -95,10 +95,23 @@
     "add": "Add logo",
     "useDark": "Use alternative logo"
   },
+  "statusActions": {
+    "markSent": "Mark as sent",
+    "markPaid": "Mark as paid",
+    "void": "Void"
+  },
+  "sentDialog": {
+    "title": "Mark invoice {{number}} as sent?",
+    "intro": "Marking this invoice as sent has the following consequences:",
+    "finalized": "The invoice is finalized — its details can no longer be edited.",
+    "ledger": "The revenue and the receivable are recorded in the ledger.",
+    "forward": "The status can only move forward to paid or void afterwards — it can never return to draft.",
+    "confirm": "Send invoice"
+  },
   "paidDialog": {
     "title": "Mark invoice {{number}} as paid?",
     "body": "The received payment will be booked to the default payment account in the ledger.",
-    "confirm": "Mark as paid"
+    "confirm": "Confirm payment"
   },
   "deleteDialog": {
     "title": "Delete invoice?",

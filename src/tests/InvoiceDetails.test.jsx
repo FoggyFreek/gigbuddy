@@ -236,9 +236,8 @@ describe('InvoiceDetails', () => {
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    // Pick "Void" in the status select → dialog appears, nothing PATCHed yet.
-    await userEvent.click(screen.getByRole('combobox', { name: 'Status' }))
-    await userEvent.click(await screen.findByRole('option', { name: 'Void' }))
+    // Click the "Void" status action → dialog appears, nothing PATCHed yet.
+    await userEvent.click(screen.getByRole('button', { name: 'Void' }))
     expect(await screen.findByText(/Void invoice 2026-0007\?/)).toBeInTheDocument()
     expect(screen.getByText(/voiding is permanent/i)).toBeInTheDocument()
     expect(screen.getByText(/reversing entry is posted/i)).toBeInTheDocument()
@@ -253,10 +252,25 @@ describe('InvoiceDetails', () => {
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('combobox', { name: 'Status' }))
-    await userEvent.click(await screen.findByRole('option', { name: 'Void' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Void' }))
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
+  })
+
+  it('confirms the consequences before marking a draft as sent', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    invoicesApi.updateInvoice.mockResolvedValueOnce({ ...EDIT_INVOICE, status: 'sent' })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    // Click the "Mark as sent" status action → consequences dialog, nothing PATCHed yet.
+    await userEvent.click(screen.getByRole('button', { name: 'Mark as sent' }))
+    expect(await screen.findByText(/Mark invoice 2026-0007 as sent\?/)).toBeInTheDocument()
+    expect(screen.getByText(/invoice is finalized/i)).toBeInTheDocument()
+    expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send invoice' }))
+    await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(7, { status: 'sent' }))
   })
 
   it('hides the "Use alternative logo" toggle when the tenant has no alternative logo', async () => {

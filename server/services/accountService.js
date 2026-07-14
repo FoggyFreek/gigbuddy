@@ -2,7 +2,9 @@
 // thin and delegate here. Functions that can fail with a specific HTTP outcome
 // return { error: { status, body } }; success returns a domain payload.
 import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { acquireAccountingSettingsLock } from './ledgerService.js'
+import { notFound } from './serviceErrors.js'
 import {
   validateAccountCreate,
   validateCurrency,
@@ -28,7 +30,7 @@ import {
   deleteAccount as deleteAccountRow,
 } from '../repositories/accountRepository.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'not_found' } } }
+const NOT_FOUND = notFound('not_found')
 
 // Smart defaults for a missing settings row: codes that still exist in the
 // tenant's chart (do NOT re-seed accounts, an admin may have deleted them).
@@ -129,9 +131,7 @@ export async function patchSettings(tenantId, body = {}) {
     return { error: { status: 400, body: { error: 'nothing_to_update' } } }
   }
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     // Serialize against ledger postings (which take the same lock via
     // loadAccountingSettings), then refuse to move an account code that still
     // carries an open balance.
@@ -140,8 +140,7 @@ export async function patchSettings(tenantId, body = {}) {
 
     const conflict = await findOpenBalanceConflict(client, tenantId, updates, current)
     if (conflict) {
-      await client.query('ROLLBACK')
-      return {
+      abortTransaction({
         error: {
           status: 409,
           body: {
@@ -150,7 +149,7 @@ export async function patchSettings(tenantId, body = {}) {
             field: conflict.field,
           },
         },
-      }
+      })
     }
 
     const updated = await updateSettings(client, tenantId, updates)
@@ -176,17 +175,10 @@ export async function patchSettings(tenantId, body = {}) {
         ...updates,
       }
       const inserted = await insertSettings(client, tenantId, full)
-      await client.query('COMMIT')
       return { settings: inserted }
     }
-    await client.query('COMMIT')
     return { settings: updated }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // ---------- chart of accounts ----------

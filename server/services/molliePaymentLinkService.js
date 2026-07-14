@@ -17,6 +17,7 @@ import {
   updateInvoicePaymentState,
 } from '../repositories/invoiceRepository.js'
 import { postInvoiceSent, postInvoicePaid } from './ledgerService.js'
+import { withTransaction } from '../db/withTransaction.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import { loadIntegrationCredential, loadRetainedIntegrationCredential } from './integrationCredentialService.js'
 import { withIntegrationWriteLock } from './featureGuards.js'
@@ -117,7 +118,7 @@ export async function createMolliePaymentLink({ pool, tenant, invoice, tenantId,
 // 422→sync posting path and the column updates run on that connection (see
 // withAccountingSettingsSessionLock — a fresh pooled connection would deadlock
 // on the settings advisory lock the caller already holds).
-export async function removeMolliePaymentLink({ pool, tenant: _tenant, invoice, tenantId, invoiceId, client = null }) {
+export async function deactivateMolliePaymentLink({ pool, invoice, tenantId, invoiceId, client = null }) {
   const executor = client ?? pool
   const configured = await getMollieClientForTenant(executor, tenantId, { includeRetained: true })
   if (configured.error) return configured
@@ -146,6 +147,13 @@ export async function removeMolliePaymentLink({ pool, tenant: _tenant, invoice, 
     }
   }
 
+  return { deactivated: true }
+}
+
+export async function removeMolliePaymentLink({ pool, tenant: _tenant, invoice, tenantId, invoiceId, client = null }) {
+  const result = await deactivateMolliePaymentLink({ pool, invoice, tenantId, invoiceId, client })
+  if (result.error) return result
+  const executor = client ?? pool
   await clearInvoicePaymentLink(executor, tenantId, invoiceId)
   return { invoice: await fetchInvoice(executor, tenantId, invoiceId) }
 }
@@ -190,9 +198,7 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice, { client: pr
   }
 
   const becamePaid = invoiceStatus === 'paid' && invoice.status !== 'paid'
-  const client = providedClient ?? await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const updated = await updateInvoicePaymentState(client, invoice.tenant_id, invoice.id, {
       mollieStatus, paymentId, paidAt, invoiceStatus,
     })
@@ -201,18 +207,15 @@ export async function syncInvoicePaymentStatus(mollie, db, invoice, { client: pr
       // idempotent per (invoice, event). System posting: no actor, and a closed
       // period clamps the entry date instead of rejecting — Mollie holds the
       // cash either way, so the receipt must always be booked.
+      //
+      // This is the same paid posting that invoiceService.settleInvoice() owns for
+      // the manual-PATCH and bank-import channels. Keep this pair in sync with settleInvoice.
       const opts = { actorUserId: null, clampToOpenPeriod: true }
       await postInvoiceSent(client, invoice.tenant_id, updated, opts)
       await postInvoicePaid(client, invoice.tenant_id, updated, opts)
     }
-    await client.query('COMMIT')
     return updated
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    if (!providedClient) client.release()
-  }
+  }, { client: providedClient, db })
 }
 
 // Processes a Mollie payment-link webhook for one invoice. The posted payment id

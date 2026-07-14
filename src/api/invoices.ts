@@ -35,6 +35,8 @@ export const searchInvoices = (q: string) =>
   api<Invoice[]>(`/search?${new URLSearchParams({ q })}`)
 export const getInvoice = (id: Id) => api<Invoice>(`/${id}`)
 export const draftFromGig = (gigId: Id) => api<Invoice>(`/draft-from-gig/${gigId}`)
+export const listInvoicesByGig = (gigId: Id, opts?: RequestInit) =>
+  api<Invoice[]>(`/by-gig/${gigId}`, opts)
 export const createInvoice = (body: Partial<Invoice>) =>
   api<Invoice>('/', { method: 'POST', body: JSON.stringify(body) })
 export const updateInvoice = (id: Id, body: Partial<Invoice>) =>

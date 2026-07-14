@@ -5,6 +5,8 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 export interface DebouncedSaveResult<T extends Record<string, unknown>> {
   schedule: (data: Partial<T>) => void
   flush: () => Promise<void>
+  /** Drops any pending save without persisting it (e.g. the field was cleared). */
+  cancel: () => void
   status: SaveStatus
 }
 
@@ -48,11 +50,19 @@ export default function useDebouncedSave<T extends Record<string, unknown>>(
     await runSave()
   }, [runSave])
 
+  const cancel = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    pendingRef.current = null
+  }, [])
+
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
   }, [])
 
-  return { schedule, flush, status }
+  return { schedule, flush, cancel, status }
 }

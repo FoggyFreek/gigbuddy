@@ -166,6 +166,48 @@ describe('PATCH /api/profile — accent color', () => {
   )
 })
 
+describe('DELETE /api/profile/memory-image', () => {
+  async function seedMemory(tenantId, gigId) {
+    await pool.query(
+      `UPDATE tenants
+          SET memory_image_path = $1, memory_caption = $2, memory_gig_id = $3
+        WHERE id = $4`,
+      [`tenants/${tenantId}/memory/photo.webp`, 'What a show', gigId, tenantId],
+    )
+  }
+
+  it('clears the photo, caption and gig link together', async () => {
+    await seedMemory(seed.tenantA.id, seed.gigA.id)
+
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).delete('/api/profile/memory-image'),
+    ).expect(200)
+    expect(res.body).toEqual({ memory_image_path: null, memory_caption: null, memory_gig_id: null })
+
+    const { rows: [stored] } = await pool.query(
+      'SELECT memory_image_path, memory_caption, memory_gig_id FROM tenants WHERE id = $1',
+      [seed.tenantA.id],
+    )
+    expect(stored).toEqual({ memory_image_path: null, memory_caption: null, memory_gig_id: null })
+  })
+
+  it('leaves another tenant\'s memory tile untouched (isolation)', async () => {
+    await seedMemory(seed.tenantA.id, seed.gigA.id)
+
+    // userB acting in tenantB clears only tenantB — there is no id in the URL,
+    // so the write is scoped to the active tenant and tenantA is unaffected.
+    await as(seed.userB.id, seed.tenantB.id)(
+      request(app).delete('/api/profile/memory-image'),
+    ).expect(200)
+
+    const { rows: [stored] } = await pool.query(
+      'SELECT memory_caption FROM tenants WHERE id = $1',
+      [seed.tenantA.id],
+    )
+    expect(stored.memory_caption).toBe('What a show')
+  })
+})
+
 describe('Shopify credential management', () => {
   // Stub secret in the real "shpss_" + 32-hex format — not a real credential.
   // Built by concatenation so the full token never appears as a literal in source

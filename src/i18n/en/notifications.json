@@ -39,6 +39,8 @@
         "gigImport": "Gig imports",
         "rehearsalNew": "New rehearsal options",
         "rehearsalConfirmed": "Confirmed rehearsals",
+        "optionMemberUnavailable": "Unavailable option responses",
+        "optionAllResponded": "Completed option responses",
         "invoicePaid": "Paid invoices",
         "taskAssigned": "Tasks assigned to you",
         "inviteRedeemed": "New members awaiting approval",

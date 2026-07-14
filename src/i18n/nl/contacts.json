@@ -17,7 +17,8 @@
     "category": "Categorie",
     "name": "Naam",
     "email": "E-mail",
-    "phone": "Telefoon"
+    "phone": "Telefoon",
+    "iban": "IBAN"
   },
   "table": {
     "searchPlaceholder": "Contacten zoeken…",

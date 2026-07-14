@@ -221,6 +221,10 @@
     },
     "booksClosedThrough": "Boeken gesloten tot en met",
     "booksClosedThroughHelper": "Op of vóór deze datum kan niets worden geboekt. Laat leeg om de boeken open te houden.",
+    "wizard": {
+      "cta": "Financiële setup-wizard",
+      "help": "Doorloop je beginsaldo, financiële profiel en standaardrekeningen."
+    },
     "errors": {
       "account_has_open_balance": "Deze rekening heeft nog een openstaand saldo (onbetaalde rekeningen, niet-vereffende ledenschulden of onbetaalde facturen). Vereffen deze voordat je de rekening wijzigt.",
       "invalid_books_closed_through": "Voer een geldige datum (JJJJ-MM-DD) in of maak het veld leeg.",

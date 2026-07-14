@@ -67,4 +67,11 @@ describe('lookupGuitarChord', () => {
   it('trims surrounding whitespace before lookup', () => {
     expect(lookupGuitarChord('  G  ')).toBe(lookupGuitarChord('G'))
   })
+
+  it('accepts lowercase chord roots', () => {
+    expect(lookupGuitarChord('cadd9')).toBe(lookupGuitarChord('Cadd9'))
+    expect(lookupGuitarChord('g')).toBe(lookupGuitarChord('G'))
+    expect(lookupGuitarChord('d')).toBe(lookupGuitarChord('D'))
+    expect(lookupGuitarChord('em')).toBe(lookupGuitarChord('Em'))
+  })
 })

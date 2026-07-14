@@ -53,7 +53,18 @@ function reportFixture() {
         liabilities_and_equity_cents: 121434,
       },
     },
-    vat: { output_cents: 21000, input_cents: 434, net_cents: 20566 },
+    vat: {
+      output_cents: 21000,
+      input_cents: 434,
+      net_cents: 20566,
+      books_closed_through: '2026-06-30',
+      books_closed: false,
+      period_to: '2026-12-31',
+      returns: [
+        { year: 2026, quarter: 1, period_from: '2026-01-01', period_to: '2026-03-31', filed_on: '2026-04-10', direction: 'payable', net_cents: 10000 },
+        { year: 2026, quarter: 2, period_from: '2026-04-01', period_to: '2026-06-30', filed_on: '2026-07-08', direction: 'payable', net_cents: 10566 },
+      ],
+    },
     trial_balance: {
       rows: [
         { code: '11200', name: 'Accounts Receivable', type: 'asset', debit_cents: 121000, credit_cents: 0 },
@@ -89,6 +100,34 @@ describe('ReportsPage', () => {
     expect(screen.getByText('62100')).toBeInTheDocument()
     expect(screen.getByText('Instruments & Equipment')).toBeInTheDocument()
     expect(screen.getAllByText('11200')).toHaveLength(2)
+  })
+
+  it('shows the VAT declaration status and filed quarters for the period', async () => {
+    mockHappyPath()
+    wrap(<ReportsPage />)
+    await waitFor(() => expect(getFinancialReport).toHaveBeenCalledTimes(1))
+
+    // Books are only closed through Q2, so the period is not fully closed.
+    expect(screen.getByText('Books open')).toBeInTheDocument()
+    expect(screen.getByText('Closed through 2026-06-30')).toBeInTheDocument()
+    // Each filed quarter overlapping the period appears as a chip.
+    expect(screen.getByText('Q1 2026')).toBeInTheDocument()
+    expect(screen.getByText('Q2 2026')).toBeInTheDocument()
+  })
+
+  it('shows a not-filed notice when no VAT return covers the period', async () => {
+    listLedgerPeriods.mockResolvedValue(['2026-02-10'])
+    getFinancialReport.mockResolvedValue({
+      ...reportFixture(),
+      vat: {
+        output_cents: 0, input_cents: 0, net_cents: 0,
+        books_closed_through: null, books_closed: false, period_to: '2026-12-31', returns: [],
+      },
+    })
+    wrap(<ReportsPage />)
+    await waitFor(() => expect(getFinancialReport).toHaveBeenCalledTimes(1))
+
+    expect(screen.getByText('No VAT return filed for this period')).toBeInTheDocument()
   })
 
   it('exports the report as xlsx and pdf via download', async () => {

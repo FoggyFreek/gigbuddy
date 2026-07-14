@@ -1,6 +1,18 @@
 import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { storageClient, BUCKET } from '../utils/storage.js'
 import { logger } from '../utils/logger.js'
+import {
+  lockTenantStatistics,
+  upsertTenantStatistics,
+  ensureTenantStatistics,
+  getStorageBytes,
+  incrementStorageUsage,
+  decrementStorageUsage,
+  getTenantStatistics as getTenantStatisticsRow,
+  getAllTenantStatistics as getAllTenantStatisticsRows,
+  listTenantIds,
+} from '../repositories/statisticsRepository.js'
 
 // Per-tenant storage accounting. The source of truth is the object store:
 // every tenant's files live under the key prefix `tenants/<id>/`, so the
@@ -34,25 +46,11 @@ export function computeTenantStorage(tenantId) {
 // out of order and overwrite the newer total: the second caller blocks at the
 // lock until the first commits, then re-lists fresh.
 export async function refreshTenantStorage(tenantId) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    await client.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
+  await withTransaction(async (client) => {
+    await lockTenantStatistics(client, tenantId)
     const { storageBytes, objectCount } = await computeTenantStorage(tenantId)
-    await client.query(
-      `INSERT INTO tenant_statistics (tenant_id, storage_bytes, object_count, updated_at)
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (tenant_id)
-       DO UPDATE SET storage_bytes = $2, object_count = $3, updated_at = NOW()`,
-      [tenantId, storageBytes, objectCount],
-    )
-    await client.query('COMMIT')
-  } catch (e) {
-    await client.query('ROLLBACK')
-    throw e
-  } finally {
-    client.release()
-  }
+    await upsertTenantStatistics(client, tenantId, storageBytes, objectCount)
+  })
 }
 
 // Atomically reserves `sizeBytes` of quota before an upload. Serialized with
@@ -66,61 +64,26 @@ export async function refreshTenantStorage(tenantId) {
 // upload either resolves the old limit before the downgrade commits, or the
 // snapshot-bound limit after — never the old limit under a committed snapshot.
 export async function reserveStorageUsage(tenantId, sizeBytes, limit) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    await client.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
+  return withTransaction(async (client) => {
+    await lockTenantStatistics(client, tenantId)
     const limitBytes = typeof limit === 'function' ? await limit(client) : limit
-    await client.query(
-      'INSERT INTO tenant_statistics (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING',
-      [tenantId],
-    )
-    const { rows: [current] } = await client.query(
-      'SELECT storage_bytes FROM tenant_statistics WHERE tenant_id = $1',
-      [tenantId],
-    )
-    if (limitBytes !== null && Number(current.storage_bytes) + sizeBytes > limitBytes) {
-      await client.query('ROLLBACK')
-      return false
+    await ensureTenantStatistics(client, tenantId)
+    const storageBytes = await getStorageBytes(client, tenantId)
+    if (limitBytes !== null && storageBytes + sizeBytes > limitBytes) {
+      abortTransaction(false)
     }
-    await client.query(
-      `UPDATE tenant_statistics
-       SET storage_bytes = storage_bytes + $2, object_count = object_count + 1, updated_at = NOW()
-       WHERE tenant_id = $1`,
-      [tenantId, sizeBytes],
-    )
-    await client.query('COMMIT')
+    await incrementStorageUsage(client, tenantId, sizeBytes)
     return true
-  } catch (e) {
-    await client.query('ROLLBACK')
-    throw e
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // Releases a reservation after a failed upload once the object is confirmed
 // absent. Clamped at zero so a duplicate release can't corrupt the counter.
 export async function releaseStorageUsage(tenantId, sizeBytes) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    await client.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
-    await client.query(
-      `UPDATE tenant_statistics
-       SET storage_bytes = GREATEST(storage_bytes - $2, 0),
-           object_count = GREATEST(object_count - 1, 0),
-           updated_at = NOW()
-       WHERE tenant_id = $1`,
-      [tenantId, sizeBytes],
-    )
-    await client.query('COMMIT')
-  } catch (e) {
-    await client.query('ROLLBACK')
-    throw e
-  } finally {
-    client.release()
-  }
+  await withTransaction(async (client) => {
+    await lockTenantStatistics(client, tenantId)
+    await decrementStorageUsage(client, tenantId, sizeBytes)
+  })
 }
 
 // Best-effort refresh triggered by a storage mutation. Never throws (a stats
@@ -137,41 +100,19 @@ export function refreshTenantStorageForKey(key) {
 // Read one tenant's usage. COALESCE so a tenant with no stats row yet still
 // returns zeros instead of nothing.
 export async function getTenantStatistics(tenantId) {
-  const { rows } = await pool.query(
-    `SELECT t.id AS tenant_id,
-            COALESCE(s.storage_bytes, 0) AS storage_bytes,
-            COALESCE(s.object_count, 0)  AS object_count,
-            s.updated_at
-       FROM tenants t
-       LEFT JOIN tenant_statistics s ON s.tenant_id = t.id
-      WHERE t.id = $1`,
-    [tenantId],
-  )
-  return rows[0] || null
+  return getTenantStatisticsRow(pool, tenantId)
 }
 
 // Read usage for every tenant (super-admin view). Driven from `tenants` so a
 // brand-new zero-usage tenant never disappears from the list.
 export async function getAllTenantStatistics() {
-  const { rows } = await pool.query(
-    `SELECT t.id AS tenant_id,
-            t.slug,
-            t.band_name,
-            COALESCE(s.storage_bytes, 0) AS storage_bytes,
-            COALESCE(s.object_count, 0)  AS object_count,
-            s.updated_at
-       FROM tenants t
-       LEFT JOIN tenant_statistics s ON s.tenant_id = t.id
-      ORDER BY t.id`,
-  )
-  return rows
+  return getAllTenantStatisticsRows(pool)
 }
 
 // Recompute usage for every tenant (super-admin backfill for tenants whose
 // files predate this feature).
 export async function refreshAllTenantStorage() {
-  const { rows } = await pool.query('SELECT id FROM tenants ORDER BY id')
-  for (const { id } of rows) {
-    await refreshTenantStorage(id)
+  for (const tenantId of await listTenantIds(pool)) {
+    await refreshTenantStorage(tenantId)
   }
 }

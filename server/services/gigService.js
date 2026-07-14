@@ -3,7 +3,8 @@
 // success returns a domain payload (see each function).
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
+import { PERMISSIONS } from '../auth/permissions.js'
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
 import { uploadObjectWithQuota, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from './storageService.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
@@ -20,10 +21,12 @@ import {
   normalizeGigVenueRefs,
   normalizeImportRow,
   buildGigUpdateFields,
+  normalizeGigTagNames,
+  MAX_GIG_TAGS,
+  MAX_GIG_TAG_LENGTH,
 } from '../validators/gigValidators.js'
 import {
   assertVenueInTenant,
-  memberExistsInTenant,
   gigExistsInTenant,
   summarizeGigMerchSalesByVatRate,
   searchGigs as searchGigRows,
@@ -40,6 +43,9 @@ import {
   insertGigParticipant,
   deleteGigParticipant,
   updateParticipantVote,
+  lockGigOptionResponseState,
+  getGigParticipantResponseState,
+  markGigFirstUnavailableNotified,
   touchGig,
   deleteGig as deleteGigRow,
   getGigBannerRow,
@@ -55,10 +61,17 @@ import {
   setGigContactPrimary as setGigContactPrimaryRow,
   deleteGigContact,
   updateGigFields,
+  searchGigTags as searchGigTagRows,
+  loadGigTags,
+  upsertGigTag,
+  deleteGigTagLinks,
+  insertGigTagLink,
 } from '../repositories/gigRepository.js'
+import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { getTaskById } from '../repositories/taskRepository.js'
+import { notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
+const NOT_FOUND = notFound('Not found')
 
 // ---------- notifications ----------
 
@@ -99,6 +112,32 @@ export function notifyGigsImported(tenantId, count) {
     title: `${count} gig${count === 1 ? '' : 's'} imported`,
     body: 'Your Bandsintown import is complete.',
     url: '/gigs',
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
+}
+
+export function notifyGigOptionUnavailable(tenantId, gig) {
+  return dispatchNotification({
+    tenantId,
+    type: 'option-member-unavailable',
+    title: `One or more band members aren't available for option ${gig.event_description}`,
+    body: gigPushSummary(gig),
+    url: `/gigs/${gig.id}`,
+    sourceType: 'gig',
+    sourceId: gig.id,
+    requiredPermission: PERMISSIONS.PLANNING_WRITE,
+  }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
+}
+
+export function notifyGigOptionResponsesComplete(tenantId, gig) {
+  return dispatchNotification({
+    tenantId,
+    type: 'option-all-responded',
+    title: `All required band members have responded for option ${gig.event_description}`,
+    body: gigPushSummary(gig),
+    url: `/gigs/${gig.id}`,
+    sourceType: 'gig',
+    sourceId: gig.id,
+    requiredPermission: PERMISSIONS.PLANNING_WRITE,
   }).catch((err) => logger.error('notification.dispatch_failed', { err, tenantId }))
 }
 
@@ -166,7 +205,8 @@ export async function listGigs(db, tenantId) {
   })
 }
 
-// Global-search read: matches gigs on event name, venue/festival name or city.
+// Global-search read: matches gigs on event name, venue/festival name or city,
+// and linked gig tags.
 // Mirrors searchVenues — short queries (<3 chars) return nothing so we don't
 // run a wildcard scan on every keystroke.
 export async function searchGigs(db, tenantId, query) {
@@ -176,6 +216,11 @@ export async function searchGigs(db, tenantId, query) {
     like: `%${q}%`,
     limit: parseSearchLimit(query.limit),
   })
+}
+
+export async function searchGigTags(db, tenantId, query) {
+  const q = String(query.q ?? '').trim()
+  return searchGigTagRows(db, tenantId, q ? `%${q}%` : null)
 }
 
 export async function getGig(db, tenantId, gigId) {
@@ -220,10 +265,7 @@ export async function importGigs(tenantId, userId, body) {
     return { error: { status: 400, body: { error: 'Maximum 200 gigs per import' } } }
   }
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const leadIds = await getLeadMemberIds(client, tenantId)
 
     let created = 0
@@ -232,8 +274,7 @@ export async function importGigs(tenantId, userId, body) {
     for (const item of body) {
       const parsed = normalizeImportRow(item)
       if (parsed.error) {
-        await client.query('ROLLBACK')
-        return { error: { status: 400, body: { error: parsed.error } } }
+        abortTransaction({ error: { status: 400, body: { error: parsed.error } } })
       }
       if (parsed.skip) { skipped++; continue }
       const row = parsed.data
@@ -242,8 +283,7 @@ export async function importGigs(tenantId, userId, body) {
         client, { venue_id: row.venueId, festival_id: row.festivalId }, tenantId,
       )
       if (venueCheck.error) {
-        await client.query('ROLLBACK')
-        return { error: { status: 400, body: { error: venueCheck.error } } }
+        abortTransaction({ error: { status: 400, body: { error: venueCheck.error } } })
       }
 
       const gigId = await insertGigForImport(client, tenantId, row)
@@ -253,14 +293,8 @@ export async function importGigs(tenantId, userId, body) {
       created++
     }
 
-    await client.query('COMMIT')
     return { created, skipped }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // Creates a gig plus its initial lead-member participants in one transaction.
@@ -279,16 +313,12 @@ export async function createGig(tenantId, userId, body) {
   const festivalId = refs.body.festival_id ?? null
   const finalStatus = VALID_STATUSES.includes(status) ? status : 'option'
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const venueCheck = await validateVenueAndFestivalForTenant(
       client, { venue_id: venueId, festival_id: festivalId }, tenantId,
     )
     if (venueCheck.error) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: venueCheck.error } } }
+      abortTransaction({ error: { status: 400, body: { error: venueCheck.error } } })
     }
 
     const gig = await insertGigWithRelations(client, tenantId, {
@@ -302,14 +332,8 @@ export async function createGig(tenantId, userId, body) {
       await insertGigParticipant(client, tenantId, gig.id, memberId, userId)
     }
 
-    await client.query('COMMIT')
     return { gig }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // Validates and applies a gig PATCH. Returns { error } or { gig, confirmed } —
@@ -330,6 +354,33 @@ export async function patchGig(db, tenantId, gigId, body) {
   const gig = await updateGigFields(db, tenantId, gigId, built.fields, built.values)
   if (!gig) return NOT_FOUND
   return { gig, confirmed: body.status === 'confirmed' }
+}
+
+// Replaces a gig's complete tag set. Tag rows remain available as suggestions
+// after unlinking, so previously used tour/group names can be reused later.
+export async function setGigTags(db, tenantId, gigId, body) {
+  if (!Array.isArray(body?.tags)) {
+    return { error: { status: 400, body: { error: 'tags must be an array' } } }
+  }
+  const names = normalizeGigTagNames(body.tags)
+  if (names.length > MAX_GIG_TAGS) {
+    return { error: { status: 400, body: { error: `Maximum ${MAX_GIG_TAGS} tags per gig` } } }
+  }
+  if (names.some((name) => name.length > MAX_GIG_TAG_LENGTH)) {
+    return { error: { status: 400, body: { error: `Tags may be at most ${MAX_GIG_TAG_LENGTH} characters` } } }
+  }
+
+  return withTransaction(async (client) => {
+    if (!(await gigExistsInTenant(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+
+    const tagIds = []
+    for (const name of names) tagIds.push(await upsertGigTag(client, tenantId, name))
+
+    await deleteGigTagLinks(client, gigId, tenantId)
+    for (const tagId of tagIds) await insertGigTagLink(client, gigId, tagId, tenantId)
+    await touchGig(client, gigId, tenantId)
+    return { tags: await loadGigTags(client, gigId, tenantId) }
+  }, { db })
 }
 
 // Deletes the gig and removes its banner object from storage.
@@ -371,7 +422,7 @@ export async function deleteGigTask(db, tenantId, gigId, taskId) {
 // ---------- participants ----------
 
 export async function addParticipant(db, tenantId, userId, gigId, memberId) {
-  if (!(await memberExistsInTenant(db, memberId, tenantId))) {
+  if (!(await bandMemberExistsInTenant(db, memberId, tenantId))) {
     return { error: { status: 404, body: { error: 'band_member not found' } } }
   }
   if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
@@ -404,12 +455,34 @@ export async function setParticipantVote(db, tenantId, userId, gigId, memberId, 
     return { error: { status: 400, body: { error: 'Invalid vote value' } } }
   }
 
-  const participant = await updateParticipantVote(db, tenantId, gigId, memberId, vote, userId)
-  if (!participant) return NOT_FOUND
+  return withTransaction(async (client) => {
+    const option = await lockGigOptionResponseState(client, gigId, tenantId)
+    if (!option) return NOT_FOUND
 
-  await touchGig(db, gigId, tenantId)
-  const gig = await fetchGigWithRelations(db, gigId, tenantId)
-  return { gig: await withTasksAndParticipants(db, tenantId, gigId, gig) }
+    const responseState = await getGigParticipantResponseState(client, gigId, memberId, tenantId)
+    if (!responseState) return NOT_FOUND
+
+    const participant = await updateParticipantVote(client, tenantId, gigId, memberId, vote, userId)
+    if (!participant) return NOT_FOUND
+
+    const isOption = option.status === 'option'
+    const firstUnavailable = isOption
+      && vote === 'no'
+      && option.first_unavailable_notification_at == null
+    const allResponded = isOption
+      && responseState.previous_vote == null
+      && vote != null
+      && responseState.total > 0
+      && responseState.pending === 1
+
+    if (firstUnavailable) await markGigFirstUnavailableNotified(client, gigId, tenantId)
+    await touchGig(client, gigId, tenantId)
+    const gig = await fetchGigWithRelations(client, gigId, tenantId)
+    return {
+      gig: await withTasksAndParticipants(client, tenantId, gigId, gig),
+      notifications: { firstUnavailable, allResponded },
+    }
+  }, { db })
 }
 
 // ---------- banner ----------
@@ -510,32 +583,20 @@ export async function addGigContact(db, tenantId, gigId, contactId) {
 // Toggles a contact's primary flag inside a transaction; at most one contact
 // per gig can be primary, so making one primary first clears the others.
 export async function setGigContactPrimary(tenantId, gigId, contactId, makePrimary) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const linkedIds = await lockGigContacts(client, gigId, tenantId)
-    if (!linkedIds.includes(contactId)) {
-      await client.query('ROLLBACK')
-      return NOT_FOUND
-    }
+    if (!linkedIds.includes(contactId)) abortTransaction(NOT_FOUND)
 
     if (makePrimary) {
       await clearPrimaryGigContact(client, gigId, tenantId)
     }
 
-    const link = await setGigContactPrimaryRow(client, gigId, contactId, makePrimary, tenantId)
-    await client.query('COMMIT')
-    return { link }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    if (err.code === '23505') {
-      return { error: { status: 409, body: { error: 'Another contact is already primary' } } }
-    }
-    throw err
-  } finally {
-    client.release()
-  }
+    return { link: await setGigContactPrimaryRow(client, gigId, contactId, makePrimary, tenantId) }
+  }, {
+    mapError: (err) => (err.code === '23505'
+      ? { error: { status: 409, body: { error: 'Another contact is already primary' } } }
+      : null),
+  })
 }
 
 export async function removeGigContact(db, tenantId, gigId, contactId) {

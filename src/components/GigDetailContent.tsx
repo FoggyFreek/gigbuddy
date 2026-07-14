@@ -32,6 +32,7 @@ import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import { useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router-dom'
 import DateEntryField from './DateEntryField.tsx'
 import GigAttachments from './GigAttachments.tsx'
 import GigTasks from './GigTasks.tsx'
@@ -39,8 +40,10 @@ import GigAvailabilityPanel from './GigAvailabilityPanel.tsx'
 import GigParticipantsSection from './GigParticipantsSection.tsx'
 import GigContactsSection from './GigContactsSection.tsx'
 import GigStatusIcon from './GigStatusIcon.tsx'
+import GigTagEditor from './GigTagEditor.tsx'
 import ImageCropDialog from './ImageCropDialog.tsx'
 import PlanningReadOnlyAlert from './PlanningReadOnlyAlert.tsx'
+import StatusDot from './StatusDot.tsx'
 import _VenuePickerRaw from './VenuePicker.tsx'
 interface VenuePickerProps {
   categoryFilter?: string
@@ -53,8 +56,10 @@ interface VenuePickerProps {
 }
 const VenuePicker = _VenuePickerRaw as React.ComponentType<VenuePickerProps>
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { addGigParticipant, deleteGigBanner, getGig, getGigMerchSummary, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../api/gigs.ts'
+import { listInvoicesByGig } from '../api/invoices.ts'
 import { getBannerPath } from '../api/profile.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import { compressBanner } from '../utils/compressImage.ts'
@@ -62,7 +67,9 @@ import { geocodePlace } from '../utils/geocode.ts'
 import { dayjsToTimeString, timeStringToDayjs, toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
-import type { Id, Gig, GigMerchSummary, Participant, PurchaseAttachment, Member, Venue, Task } from '../types/entities.ts'
+import { formatShortDate } from '../utils/dateFormat.ts'
+import { invoiceStatusColor } from '../utils/invoiceStatus.ts'
+import type { Id, Gig, GigMerchSummary, GigTag, Invoice, InvoiceStatus, Participant, PurchaseAttachment, Member, Venue, Task } from '../types/entities.ts'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
 
@@ -167,8 +174,9 @@ const NO_NUMBER_SPINNER_SX = {
 }
 
 const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, canWrite = true, initialTab = 'event' }, ref) {
-  const { t } = useTranslation('gigs')
+  const { t, i18n } = useTranslation('gigs')
   const { user } = useAuth()
+  const { canViewFinance } = usePermissions()
   const currentBandMemberId = user?.bandMemberId ?? null
   const [form, setForm] = useState<GigForm>({
     event_date: '',
@@ -198,10 +206,12 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const [members, setMembers] = useState<Member[]>([])
   const [addMemberId, setAddMemberId] = useState<Id | ''>('')
   const [bannerPath, setBannerPath] = useState<string | null>(null)
+  const [tags, setTags] = useState<GigTag[]>([])
   const [bandBannerPath, setBandBannerPath] = useState<string | null>(null)
   const [bannerBusy, setBannerBusy] = useState(false)
   const [bannerError, setBannerError] = useState<string | null>(null)
   const [merchSummary, setMerchSummary] = useState<GigMerchSummary | null>(null)
+  const [relatedInvoices, setRelatedInvoices] = useState<Invoice[]>([])
   const [cropOpen, setCropOpen] = useState(false)
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
@@ -223,6 +233,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     setGig(g)
     onGigLoaded?.(g)
     setBannerPath(g.banner_path || null)
+    setTags(g.tags || [])
     setSelectedVenue(g.venue || null)
     setSelectedFestival(g.festival || null)
     setForm({
@@ -311,6 +322,18 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       .catch((err: Error) => { if (!ac.signal.aborted) console.error(err) })
     return () => ac.abort()
   }, [gigId, canWrite])
+
+  // Related invoices (draft/sent/paid) for the Terms tab. Invoices are
+  // finance-gated on the server, so only finance viewers fetch them; everyone
+  // else skips the request and sees no invoices card.
+  useEffect(() => {
+    if (!canViewFinance) { setRelatedInvoices([]); return }
+    const ac = new AbortController()
+    listInvoicesByGig(gigId, { signal: ac.signal })
+      .then(setRelatedInvoices)
+      .catch((err: Error) => { if (!ac.signal.aborted) console.error(err) })
+    return () => ac.abort()
+  }, [gigId, canViewFinance])
 
   const participantIds = useMemo(
     () => new Set((gig?.participants ?? []).map((p) => p.band_member_id)),
@@ -468,6 +491,17 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             }}
           />
         )}
+
+        <GigTagEditor
+          gigId={gigId}
+          tags={tags}
+          canWrite={canWrite}
+          onChange={(nextTags) => {
+            setTags(nextTags)
+            setGig((current) => current ? { ...current, tags: nextTags } : current)
+            onBannerUpdate?.(gigId, { tags: nextTags })
+          }}
+        />
 
         {/* Event banner centered, or placeholder when unset. The bottom inset
             reserves the strip the tab pill overlaps so it never covers the
@@ -888,6 +922,54 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                       {t($ => $.detail.itemsSold, { count: merchSummary.unitsSold })}
                     </Typography>
                   </Box>
+                </Stack>
+              </Card>
+            </Grid>
+          )}
+
+          {/* Related invoices (draft/sent/paid). Only fetched for finance
+              viewers; hidden entirely when the gig has none. */}
+          {canViewFinance && relatedInvoices.length > 0 && (
+            <Grid size={12}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                {t($ => $.detail.relatedInvoices)}
+              </Typography>
+              <Card variant="outlined" sx={{ p: 2 }}>
+                <Stack divider={<Divider flexItem />} spacing={0.5}>
+                  {relatedInvoices.map((inv) => (
+                    <Stack
+                      key={String(inv.id)}
+                      direction="row"
+                      spacing={1.5}
+                      sx={{ alignItems: 'center', py: 0.5 }}
+                    >
+                      <StatusDot
+                        color={invoiceStatusColor(inv.status)}
+                        label={inv.status ? t($ => $.detail.invoiceStatus[inv.status as InvoiceStatus]) : undefined}
+                      />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          #{inv.invoice_number}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatShortDate(inv.issue_date, i18n.resolvedLanguage)}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {formatEur(inv.total_cents)}
+                      </Typography>
+                      <Tooltip title={t($ => $.detail.openInvoice)}>
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          component={RouterLink}
+                          to={`/invoices/${inv.id}`}
+                        >
+                          <OpenInNewIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  ))}
                 </Stack>
               </Card>
             </Grid>

@@ -33,6 +33,7 @@ const IMAGE_EXTENSIONS = {
 export const IMAGE_PROCESSING_PRESETS = Object.freeze({
   logo: Object.freeze({ maxDimension: 800, quality: 90 }),
   avatar: Object.freeze({ maxDimension: 720, quality: 85 }),
+  profileBanner: Object.freeze({ maxDimension: 820, quality: 85 }),
   banner: Object.freeze({ maxDimension: 1600, quality: 82 }),
   memory: Object.freeze({ maxDimension: 1600, quality: 82 }),
   sharePhoto: Object.freeze({ maxDimension: 1200, quality: 82 }),

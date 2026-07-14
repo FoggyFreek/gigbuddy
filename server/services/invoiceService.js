@@ -19,14 +19,20 @@ import {
 import { dispatchNotification } from './notificationService.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { logger } from '../utils/logger.js'
-import { invoiceProjection } from '../repositories/invoiceProjection.js'
 import {
-  fetchTenant,
+  acquireSessionLock,
+  releaseSessionLock,
   fetchInvoice,
+  lockInvoice,
+  lockInvoiceTotalsState,
+  updateInvoiceFields,
+  setInvoicePdfPath,
+  finalizeInvoiceForPaymentLink as finalizeInvoiceForPaymentLinkRow,
   fetchLines,
   replaceInvoiceLines,
   validateGigIdForTenant,
   listInvoices as listInvoiceRows,
+  listInvoicesByGig,
   searchInvoices as searchInvoiceRows,
   listInvoicePeriodDates,
   fetchGig,
@@ -38,6 +44,7 @@ import {
   setCustomLogoPath,
   fetchPublicInvoiceLogoPath,
 } from '../repositories/invoiceRepository.js'
+import { fetchTenant } from '../repositories/tenantRepository.js'
 import {
   SIMPLE_PATCH_FIELDS,
   CONTENT_FIELDS_SET,
@@ -57,6 +64,8 @@ import {
   postInvoiceVoid,
   ACCOUNTING_SETTINGS_LOCK_NAMESPACE,
 } from './ledgerService.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
+import { notFound } from './serviceErrors.js'
 
 // Holds a session-level per-tenant accounting-settings advisory lock for the
 // duration of `fn`, which receives the lock-holding client. Session and
@@ -69,11 +78,11 @@ async function withAccountingSettingsSessionLock(pool, tenantId, fn) {
   const client = await pool.connect()
   let releaseError = null
   try {
-    await client.query('SELECT pg_advisory_lock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
+    await acquireSessionLock(client, ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId)
     return await fn(client)
   } finally {
     try {
-      await client.query('SELECT pg_advisory_unlock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
+      await releaseSessionLock(client, ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId)
     } catch (err) {
       releaseError = err
       logger.error('invoice.accounting_lock_release_failed', { err })
@@ -125,10 +134,7 @@ export async function renderAndStorePdf(pool, invoiceId, tenantId) {
   await uploadObjectWithQuota(newKey, pdfBuffer, pdfBuffer.length, 'application/pdf')
 
   try {
-    await pool.query(
-      'UPDATE invoices SET pdf_path = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3',
-      [newKey, invoiceId, tenantId],
-    )
+    await setInvoicePdfPath(pool, tenantId, invoiceId, newKey)
   } catch (err) {
     removeObject(newKey).catch(() => {})
     throw err
@@ -141,31 +147,16 @@ export async function renderAndStorePdf(pool, invoiceId, tenantId) {
 
 // ---------- patch ----------
 
-// Accumulates SET clauses for the dynamic invoice UPDATE. Parameterised columns
-// and raw SQL expressions (e.g. finalized_at = NOW()) are tracked separately so
-// the final placeholder numbering stays correct.
+// Collects requested field changes and the finalization intent. The repository
+// turns this trusted change set into the parameterized UPDATE.
 function createUpdateBuilder() {
   const columns = []
-  const rawExpressions = []
+  let finalize = false
   return {
     set(column, value) { columns.push({ column, value }) },
-    setRaw(expression) { rawExpressions.push(expression) },
-    get size() { return columns.length + rawExpressions.length },
-    build(invoiceId, tenantId) {
-      const assignments = []
-      const values = []
-      let idx = 1
-      for (const { column, value } of columns) {
-        assignments.push(`${column} = $${idx++}`)
-        values.push(value)
-      }
-      assignments.push(...rawExpressions, 'updated_at = NOW()')
-      values.push(invoiceId, tenantId)
-      return {
-        sql: `UPDATE invoices SET ${assignments.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`,
-        values,
-      }
-    },
+    finalize() { finalize = true },
+    get size() { return columns.length + Number(finalize) },
+    changes() { return { columns, finalize } },
   }
 }
 
@@ -191,24 +182,20 @@ function applyStatusFields(body, existing, builder) {
   if (body.status === undefined) return
   builder.set('status', body.status)
   if (body.status !== 'draft' && existing.finalized_at === null) {
-    builder.setRaw('finalized_at = NOW()')
+    builder.finalize()
   }
 }
 
 const FINALIZED_ERROR = { status: 409, body: { error: 'Invoice is finalized', code: 'invoice_finalized' } }
 
 async function recomputeTotals(client, tenantId, invoiceId, body, tenant, requestedContentFields, builder) {
-  const { rows: cur } = await client.query(
-    'SELECT tax_inclusive, discount_type, discount_pct, discount_cents, finalized_at FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
-    [invoiceId, tenantId],
-  )
+  const current = await lockInvoiceTotalsState(client, tenantId, invoiceId)
   // Re-check finalization under row lock: a concurrent payment-link creation may
   // have finalized the invoice between the initial read and here. Block only
   // when a finalized-locked field is in the body (memo/status stay allowed).
-  if (cur[0].finalized_at !== null && requestedContentFields.length > 0) {
+  if (current.finalized_at !== null && requestedContentFields.length > 0) {
     return { error: FINALIZED_ERROR }
   }
-  const current = cur[0]
   const taxInclusive = 'tax_inclusive' in body ? Boolean(body.tax_inclusive) : current.tax_inclusive
   const discountType = 'discount_type' in body ? normalizeDiscountType(body.discount_type) : current.discount_type
   const discountPct = 'discount_pct' in body ? clampNonNegative(body.discount_pct) : Number(current.discount_pct)
@@ -237,9 +224,7 @@ function clampNonNegative(value) {
 // `client` is optional: when provided (the void flow's lock-holding session),
 // the transaction runs on it and the caller keeps ownership of the connection.
 async function runPatchTransaction({ pool, client: providedClient, tenantId, invoiceId, body, existing, tenant, requestedContentFields, actorUserId }) {
-  const client = providedClient ?? await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const builder = createUpdateBuilder()
     collectSimpleFields(body, builder)
     const contentChanged = hasContentChange(body)
@@ -247,44 +232,30 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
     if ('lines' in body) {
       const lines = normalizeLines(body.lines)
       if (!lines.length) {
-        await client.query('ROLLBACK')
-        return { error: { status: 400, body: { error: 'At least one line is required' } } }
+        abortTransaction({ error: { status: 400, body: { error: 'At least one line is required' } } })
       }
       await replaceInvoiceLines(client, invoiceId, tenantId, lines)
     }
 
     if (contentChanged) {
       const guard = await recomputeTotals(client, tenantId, invoiceId, body, tenant, requestedContentFields, builder)
-      if (guard?.error) {
-        await client.query('ROLLBACK')
-        return guard
-      }
+      if (guard?.error) abortTransaction(guard)
     }
 
     applyStatusFields(body, existing, builder)
 
     if (builder.size === 0) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'No valid fields to update' } } }
+      abortTransaction({ error: { status: 400, body: { error: 'No valid fields to update' } } })
     }
 
-    const { sql, values } = builder.build(invoiceId, tenantId)
-    await client.query(sql, values)
+    await updateInvoiceFields(client, tenantId, invoiceId, builder.changes())
 
     if (body.status !== undefined) {
       await postInvoiceTransition(client, tenantId, invoiceId, existing.status, body.status, actorUserId)
     }
 
-    await client.query('COMMIT')
     return { contentChanged }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    throw err
-  } finally {
-    if (!providedClient) client.release()
-  }
+  }, { client: providedClient, db: pool, mapError: ledgerErrorResult })
 }
 
 const CANNOT_VOID_PAID_ERROR = {
@@ -331,6 +302,17 @@ function validatePatchRequest(body, existing) {
   return { requestedContentFields }
 }
 
+// Domain operation owning the invoice paid *posting*: ensure the revenue leg
+// exists (idempotent) then record the cash receipt.
+export async function settleInvoice(executor, tenantId, invoiceId, { entryDate, actorUserId = null, clampToOpenPeriod = false } = {}) {
+  const invoice = await fetchInvoice(executor, tenantId, invoiceId)
+  if (!invoice) return { error: { status: 404, body: { error: 'Not found' } } }
+  const commonOpts = { actorUserId, clampToOpenPeriod }
+  await postInvoiceSent(executor, tenantId, invoice, commonOpts) // idempotent revenue leg
+  const posted = await postInvoicePaid(executor, tenantId, invoice, { ...commonOpts, entryDate })
+  return { posted }
+}
+
 // Posts the ledger journal for a status transition, inside the patch transaction.
 // Idempotent per (invoice, event), so re-running a transition is a no-op. A
 // direct draft->paid jump still records the revenue leg first (postInvoiceSent).
@@ -342,8 +324,9 @@ async function postInvoiceTransition(client, tenantId, invoiceId, prevStatus, ne
   if (newStatus === 'sent') {
     await postInvoiceSent(client, tenantId, fresh, opts)
   } else if (newStatus === 'paid') {
-    await postInvoiceSent(client, tenantId, fresh, opts)
-    await postInvoicePaid(client, tenantId, fresh, opts)
+    // The paid posting is owned by settleInvoice (its internal fetch subsumes the
+    // `fresh` re-read above); status was already flipped by the patch builder.
+    await settleInvoice(client, tenantId, invoiceId, { actorUserId })
   } else if (newStatus === 'void' && prevStatus === 'sent') {
     await postInvoiceVoid(client, tenantId, fresh, opts)
   }
@@ -418,62 +401,36 @@ export async function applyInvoicePatch(pool, tenantId, invoiceId, body, actorUs
 // (draft -> sent, sets finalized_at) BEFORE any external Mollie call. Returns
 // { error } | { alreadyLinked: invoice } | { invoice: finalizedInvoice }.
 export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, actorUserId = null) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    const locked = await client.query(
-      `SELECT ${invoiceProjection()} FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
-      [invoiceId, tenantId],
-    )
-    if (!locked.rows.length) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'Not found' } } }
-    }
-    const current = locked.rows[0]
-    if (current.status === 'void') {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'void_invoice' } } }
-    }
-    if (current.total_cents <= 0) {
-      await client.query('ROLLBACK')
-      return { error: { status: 400, body: { error: 'zero_amount' } } }
-    }
-    if (current.mollie_payment_link_id) {
-      await client.query('ROLLBACK')
-      return { alreadyLinked: current }
-    }
-    const finalized = await client.query(
-      `UPDATE invoices
-          SET status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END,
-              finalized_at = COALESCE(finalized_at, NOW()),
-              updated_at = NOW()
-        WHERE id = $1 AND tenant_id = $2
-      RETURNING ${invoiceProjection()}`,
-      [invoiceId, tenantId],
-    )
+  return withTransaction(async (client) => {
+    const current = await lockInvoice(client, tenantId, invoiceId)
+    if (!current) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
+    if (current.status === 'void') abortTransaction({ error: { status: 400, body: { error: 'void_invoice' } } })
+    if (current.total_cents <= 0) abortTransaction({ error: { status: 400, body: { error: 'zero_amount' } } })
+    if (current.mollie_payment_link_id) abortTransaction({ alreadyLinked: current })
+    const finalized = await finalizeInvoiceForPaymentLinkRow(client, tenantId, invoiceId)
     // The invoice is now sent (revenue recognised). Idempotent if already posted
     // by a prior PATCH-to-sent.
-    await postInvoiceSent(client, tenantId, finalized.rows[0], { actorUserId })
-    await client.query('COMMIT')
-    return { invoice: finalized.rows[0] }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    const mapped = ledgerErrorResult(err)
-    if (mapped) return mapped
-    throw err
-  } finally {
-    client.release()
-  }
+    await postInvoiceSent(client, tenantId, finalized, { actorUserId })
+    return { invoice: finalized }
+  }, { db: pool, mapError: ledgerErrorResult })
 }
 
 // ---------- route-facing operations ----------
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
+const NOT_FOUND = notFound('Not found')
 
 export async function listInvoices(pool, tenantId, query) {
   const period = buildPeriodWhere(query, 'issue_date')
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
   return { invoices: await listInvoiceRows(pool, tenantId, period) }
+}
+
+// Active invoices (draft/sent/paid) linked to a gig, for the gig's Terms tab.
+// 404s a gig that doesn't exist in the active tenant so existence isn't leaked.
+export async function listInvoicesForGig(pool, tenantId, gigId) {
+  const gig = await fetchGig(pool, tenantId, gigId)
+  if (!gig) return { error: { status: 404, body: { error: 'Gig not found' } } }
+  return { invoices: await listInvoicesByGig(pool, tenantId, gigId) }
 }
 
 export async function listInvoicePeriods(pool, tenantId) {
@@ -622,12 +579,9 @@ export async function createInvoice(pool, tenantId, userId, body) {
     if (gigId === null) return { error: { status: 400, body: { error: 'Invalid gig_id' } } }
   }
 
-  const client = await pool.connect()
-  let invoiceId
-  try {
-    await client.query('BEGIN')
+  const invoiceId = await withTransaction(async (client) => {
     const invoiceNumber = await nextInvoiceNumber(client, tenantId, year)
-    invoiceId = await insertInvoice(client, {
+    const id = await insertInvoice(client, {
       tenant_id: tenantId,
       gig_id: gigId,
       invoice_number: invoiceNumber,
@@ -656,15 +610,11 @@ export async function createInvoice(pool, tenantId, userId, body) {
       total_cents: totals.totalCents,
       created_by_user_id: userId,
     })
-    await insertInvoiceLines(client, invoiceId, tenantId, parsed.lines)
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+    await insertInvoiceLines(client, id, tenantId, parsed.lines)
+    return id
+  }, { db: pool })
 
+  // Post-commit: render the PDF (best-effort) and return the created invoice.
   try {
     await renderAndStorePdf(pool, invoiceId, tenantId)
   } catch (err) {
@@ -775,11 +725,11 @@ async function withPaymentLinkCreationLock(db, invoiceId, fn) {
   const client = await db.connect()
   let releaseError = null
   try {
-    await client.query('SELECT pg_advisory_lock($1, $2)', [PAYMENT_LINK_LOCK_NAMESPACE, invoiceId])
+    await acquireSessionLock(client, PAYMENT_LINK_LOCK_NAMESPACE, invoiceId)
     return await fn()
   } finally {
     try {
-      await client.query('SELECT pg_advisory_unlock($1, $2)', [PAYMENT_LINK_LOCK_NAMESPACE, invoiceId])
+      await releaseSessionLock(client, PAYMENT_LINK_LOCK_NAMESPACE, invoiceId)
     } catch (err) {
       releaseError = err
       logger.error('invoice.payment_link_lock_release_failed', { err, invoiceId })

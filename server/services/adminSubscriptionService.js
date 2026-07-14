@@ -11,15 +11,13 @@ import {
   cancelSubscriptionNow,
   listSubscriptionsForAdmin,
 } from '../repositories/subscriptionRepository.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { serializeSubscription } from './billingService.js'
 import { parseComplimentaryBody } from '../validators/billingValidators.js'
 import { dispatchUserNotification, pushUserNotification } from './notificationService.js'
-import { BILLING_NOTIFICATION_TYPES } from './notificationTypes.js'
+import { BILLING_NOTIFICATION_TYPES } from '../domain/notificationTypes.js'
 import { logger } from '../utils/logger.js'
-
-function badRequest(error, code) {
-  return { error: { status: 400, body: { error, ...(code ? { code } : {}) } } }
-}
+import { badRequest } from './serviceErrors.js'
 
 // Best-effort: the grant itself must not fail because a notification couldn't
 // be written or pushed.
@@ -68,23 +66,14 @@ export async function grantComplimentary(db, body) {
 }
 
 export async function revokeComplimentary(db, userId) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const sub = await fetchLiveSubscriptionForUpdate(client, userId)
     if (!sub || !sub.is_complimentary) {
-      await client.query('ROLLBACK')
-      return { error: { status: 404, body: { error: 'No complimentary subscription' } } }
+      abortTransaction({ error: { status: 404, body: { error: 'No complimentary subscription' } } })
     }
     await cancelSubscriptionNow(client, sub.id, 'admin_revoked')
-    await client.query('COMMIT')
     return { revoked: true }
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db })
 }
 
 export async function listSubscriptions(db, { repairOnly = false } = {}) {

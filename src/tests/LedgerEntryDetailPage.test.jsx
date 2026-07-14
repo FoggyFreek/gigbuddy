@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,13 +8,27 @@ vi.mock('../api/ledger.ts', () => ({
   getLedgerEntry: vi.fn(),
   voidLedgerEntry: vi.fn(),
   reverseLedgerEntry: vi.fn(),
+  updateLedgerNote: vi.fn(),
+  reclassifyLedgerEntry: vi.fn(),
 }))
 vi.mock('../api/journal.ts', () => ({
   createJournal: vi.fn(),
 }))
+vi.mock('../api/accounts.ts', () => ({
+  listAccounts: vi.fn(async () => [
+    { id: 1, code: '421', name: 'Administrative expenses', type: 'expense', is_active: true },
+    { id: 2, code: '64200', name: 'Hired Musicians & Contractors', type: 'expense', is_active: true },
+    { id: 3, code: '65000', name: 'Old account', type: 'expense', is_active: false },
+  ]),
+}))
+vi.mock('../hooks/usePermissions.ts', () => ({
+  usePermissions: vi.fn(() => ({ canManageFinance: true })),
+}))
 
-import { getLedgerEntry, voidLedgerEntry, reverseLedgerEntry } from '../api/ledger.ts'
+import { getLedgerEntry, voidLedgerEntry, reverseLedgerEntry, updateLedgerNote, reclassifyLedgerEntry } from '../api/ledger.ts'
+import { listAccounts } from '../api/accounts.ts'
 import { createJournal } from '../api/journal.ts'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
 import LedgerEntryDetailPage from '../pages/LedgerEntryDetailPage.tsx'
 import theme from '../theme.ts'
@@ -60,6 +75,7 @@ function wrap({ compact = false } = {}) {
 
 beforeEach(() => {
   getLedgerEntry.mockResolvedValue(DETAIL)
+  usePermissions.mockReturnValue({ canManageFinance: true })
 })
 
 afterEach(() => {
@@ -211,5 +227,197 @@ describe('LedgerEntryDetailPage', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument())
     screen.getByRole('button', { name: /back/i }).click()
     await waitFor(() => expect(screen.getByText('list-route')).toBeInTheDocument())
+  })
+})
+
+describe('LedgerEntryDetailPage — note', () => {
+  it('shows the note with the latest editor and edit time', async () => {
+    getLedgerEntry.mockResolvedValue({
+      ...DETAIL,
+      note: 'Checked with accountant',
+      note_updated_at: '2026-07-01T10:00:00.000Z',
+      note_updated_by_name: 'Joris Bos',
+    })
+    wrap()
+    await waitFor(() => expect(screen.getByText('Checked with accountant')).toBeInTheDocument())
+    expect(screen.getByText(/last edited by joris bos/i)).toBeInTheDocument()
+  })
+
+  it('shows a placeholder when there is no note', async () => {
+    wrap()
+    await waitFor(() => expect(screen.getByText(/no note/i)).toBeInTheDocument())
+  })
+
+  it('a finance manager edits and saves the note', async () => {
+    const user = userEvent.setup()
+    getLedgerEntry.mockResolvedValue({ ...DETAIL, note: 'Old note' })
+    updateLedgerNote.mockResolvedValue({
+      note: 'New note',
+      note_updated_at: '2026-07-02T09:00:00.000Z',
+      note_updated_by_user_id: 1,
+      note_updated_by_name: 'Alpha User',
+    })
+    wrap()
+    await waitFor(() => expect(screen.getByText('Old note')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /^edit$/i }))
+    const input = screen.getByPlaceholderText(/add a note/i)
+    expect(input).toHaveValue('Old note')
+    await user.clear(input)
+    await user.type(input, 'New note')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateLedgerNote).toHaveBeenCalledWith(5, 'New note'))
+    expect(await screen.findByText('New note')).toBeInTheDocument()
+    expect(screen.getByText(/last edited by alpha user/i)).toBeInTheDocument()
+  })
+
+  it('cancelling the note edit calls no API and keeps the old note', async () => {
+    const user = userEvent.setup()
+    getLedgerEntry.mockResolvedValue({ ...DETAIL, note: 'Old note' })
+    wrap()
+    await waitFor(() => expect(screen.getByText('Old note')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /^edit$/i }))
+    await user.type(screen.getByPlaceholderText(/add a note/i), ' changed')
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }))
+
+    expect(updateLedgerNote).not.toHaveBeenCalled()
+    expect(screen.getByText('Old note')).toBeInTheDocument()
+  })
+
+  it('a finance viewer sees the note read-only (no Edit button)', async () => {
+    usePermissions.mockReturnValue({ canManageFinance: false })
+    getLedgerEntry.mockResolvedValue({ ...DETAIL, note: 'Read me' })
+    wrap()
+    await waitFor(() => expect(screen.getByText('Read me')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('LedgerEntryDetailPage — reclassify', () => {
+  it('posts the reclassification immediately and navigates to the posted transaction', async () => {
+    const user = userEvent.setup()
+    reclassifyLedgerEntry.mockResolvedValue({ id: 12, status: 'approved', posted_transaction_id: 77 })
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /reclassify account/i })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /reclassify account/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    // Pick the expense line…
+    await user.click(within(dialog).getByLabelText(/ledger line/i))
+    await user.click(await screen.findByRole('option', { name: /421 · Administrative expenses/i }))
+    // …and a destination account.
+    await user.click(within(dialog).getByLabelText(/destination account/i))
+    await user.click(await screen.findByRole('option', { name: /64200/i }))
+
+    // The note is generated from the selection but stays editable.
+    const note = within(dialog).getByLabelText(/^note$/i)
+    expect(note).toHaveValue('Reclassified 421 to 64200 from ledger entry #5')
+    await user.type(note, ' (rebooked)')
+
+    await user.click(within(dialog).getByRole('button', { name: /^reclassify$/i }))
+    await waitFor(() => expect(reclassifyLedgerEntry).toHaveBeenCalledWith(5, {
+      source_line_id: 1,
+      destination_account_code: '64200',
+      note: 'Reclassified 421 to 64200 from ledger entry #5 (rebooked)',
+    }))
+    // Navigates to the newly posted correcting transaction's detail page.
+    await waitFor(() => expect(getLedgerEntry).toHaveBeenCalledWith(77))
+    // The destination route reuses this same component instance, so the dialog
+    // must be explicitly closed — otherwise it pops up again on the new entry.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('excludes lines that already have a reclassification from the picker', async () => {
+    const user = userEvent.setup()
+    getLedgerEntry.mockResolvedValue({
+      ...DETAIL,
+      lines: [
+        { ...DETAIL.lines[0], reclassification: { journal_id: 12, status: 'approved', posted_transaction_id: 76 } },
+        DETAIL.lines[1],
+        DETAIL.lines[2],
+      ],
+    })
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /reclassify account/i })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /reclassify account/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByLabelText(/ledger line/i))
+
+    const options = await screen.findAllByRole('option')
+    const labels = options.map((o) => o.textContent)
+    expect(labels.some((l) => l.includes('120501009'))).toBe(true)
+    expect(labels.some((l) => l.includes('421 ·'))).toBe(false)
+  })
+
+  it('shows the API error inside the dialog', async () => {
+    const user = userEvent.setup()
+    reclassifyLedgerEntry.mockRejectedValue(new Error('This ledger line has already been reclassified'))
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /reclassify account/i })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /reclassify account/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByLabelText(/ledger line/i))
+    await user.click(await screen.findByRole('option', { name: /421 · Administrative expenses/i }))
+    await user.click(within(dialog).getByLabelText(/destination account/i))
+    await user.click(await screen.findByRole('option', { name: /64200/i }))
+    await user.click(within(dialog).getByRole('button', { name: /^reclassify$/i }))
+
+    expect(await within(dialog).findByText(/already been reclassified/i)).toBeInTheDocument()
+  })
+
+  it('hides the reclassify button for voided entries, corrections, and non-managers', async () => {
+    getLedgerEntry.mockResolvedValue({ ...DETAIL, voided: true, voided_by_transaction_id: 6 })
+    const { unmount } = wrap()
+    await waitFor(() => expect(screen.getByText(/has been voided/i)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /reclassify account/i })).not.toBeInTheDocument()
+    unmount()
+
+    usePermissions.mockReturnValue({ canManageFinance: false })
+    getLedgerEntry.mockResolvedValue(DETAIL)
+    wrap()
+    await waitFor(() => expect(screen.getByText('Administrative expenses')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /reclassify account/i })).not.toBeInTheDocument()
+  })
+
+  it('shows an error with a retry when the accounts fail to load', async () => {
+    const user = userEvent.setup()
+    listAccounts.mockRejectedValueOnce(new Error('network down'))
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /reclassify account/i })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /reclassify account/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/accounts could not be loaded/i)).toBeInTheDocument()
+
+    // Retry hits the API again (default mock resolves) and clears the error,
+    // making the destination picker usable.
+    await user.click(within(dialog).getByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(within(dialog).queryByText(/accounts could not be loaded/i)).not.toBeInTheDocument())
+
+    await user.click(within(dialog).getByLabelText(/ledger line/i))
+    await user.click(await screen.findByRole('option', { name: /421 · Administrative expenses/i }))
+    await user.click(within(dialog).getByLabelText(/destination account/i))
+    expect(await screen.findByRole('option', { name: /64200/i })).toBeInTheDocument()
+  })
+
+  it('links a reclassified line to its posted correcting transaction', async () => {
+    getLedgerEntry.mockResolvedValue({
+      ...DETAIL,
+      lines: [
+        { ...DETAIL.lines[0], reclassification: { journal_id: 13, status: 'approved', posted_transaction_id: 77 } },
+        DETAIL.lines[1],
+        DETAIL.lines[2],
+      ],
+    })
+    wrap()
+    await waitFor(() => expect(screen.getByText('Administrative expenses')).toBeInTheDocument())
+
+    expect(screen.getByRole('link', { name: /reclassified — view entry #77/i }))
+      .toHaveAttribute('href', '/ledger/77')
   })
 })

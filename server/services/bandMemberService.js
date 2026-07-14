@@ -10,12 +10,10 @@ import {
   deleteBandMember as deleteBandMemberRow,
 } from '../repositories/bandMemberRepository.js'
 import { enforceMemberCap } from './limitService.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
+import { badRequest, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+const NOT_FOUND = notFound('Not found')
 
 export async function listMembers(db, tenantId) {
   return listBandMembers(db, tenantId)
@@ -31,14 +29,9 @@ export async function createMember(db, tenantId, body) {
 
   // Roster rows count against the plan's member limit; the cap check and the
   // insert share a transaction (tenant-row lock) so parallel adds serialize.
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const capError = await enforceMemberCap(client, tenantId, 'roster')
-    if (capError) {
-      await client.query('ROLLBACK')
-      return capError
-    }
+    if (capError) abortTransaction(capError)
     const sortOrder = await nextSortOrder(client, tenantId)
     const member = await insertBandMember(client, tenantId, {
       name,
@@ -47,14 +40,8 @@ export async function createMember(db, tenantId, body) {
       sortOrder,
       position: pos,
     })
-    await client.query('COMMIT')
     return { member }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  }, { db })
 }
 
 export async function patchMember(db, tenantId, memberId, body) {

@@ -43,6 +43,9 @@ export interface UseInvoiceFormStateResult {
   voidDialogOpen: boolean
   setVoidDialogOpen: (open: boolean) => void
   confirmVoid: () => Promise<void>
+  sentDialogOpen: boolean
+  setSentDialogOpen: (open: boolean) => void
+  confirmSent: () => Promise<void>
   paidDialogOpen: boolean
   setPaidDialogOpen: (open: boolean) => void
   confirmPaid: () => Promise<void>
@@ -66,6 +69,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
   const [saving, setSaving] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
+  const [sentDialogOpen, setSentDialogOpen] = useState(false)
   const [paidDialogOpen, setPaidDialogOpen] = useState(false)
   const [form, setForm] = useState<InvoiceForm>(() => emptyDraft())
   const [tenant, setTenant] = useState<Tenant | null>(null)
@@ -181,11 +185,15 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     }
   }
 
-  // Status changes to 'void' and 'paid' go through confirmation dialogs first
-  // because both have ledger side effects.
+  // Every forward status change is confirmed first: each spells out its
+  // consequences (finalization, ledger postings) before anything is PATCHed.
   function handleStatusChange(newStatus: InvoiceStatus) {
     if (newStatus === 'void' && invoice?.status !== 'void') {
       setVoidDialogOpen(true)
+      return
+    }
+    if (newStatus === 'sent' && invoice?.status !== 'sent') {
+      setSentDialogOpen(true)
       return
     }
     if (newStatus === 'paid' && invoice?.status !== 'paid') {
@@ -198,6 +206,11 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
   async function confirmVoid() {
     setVoidDialogOpen(false)
     await applyStatusChange('void')
+  }
+
+  async function confirmSent() {
+    setSentDialogOpen(false)
+    await applyStatusChange('sent')
   }
 
   async function confirmPaid() {
@@ -241,6 +254,9 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     voidDialogOpen,
     setVoidDialogOpen,
     confirmVoid,
+    sentDialogOpen,
+    setSentDialogOpen,
+    confirmSent,
     paidDialogOpen,
     setPaidDialogOpen,
     confirmPaid,

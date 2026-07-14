@@ -3,7 +3,7 @@
 // failures and a domain payload on success. Audit events that need the request
 // (ip/session) are returned as an `audit` { action, details } descriptor for the
 // route to emit via auditLog(req, ...).
-import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   validateMembershipPatch,
   buildMembershipUpdate,
@@ -19,18 +19,7 @@ import {
   assignBandMember,
 } from '../repositories/userRepository.js'
 import { enforceMemberCap } from './limitService.js'
-
-function badRequest(error) {
-  return { status: 400, body: { error } }
-}
-
-function forbidden(error) {
-  return { status: 403, body: { error } }
-}
-
-function notFound(error) {
-  return { status: 404, body: { error } }
-}
+import { badRequest, forbidden, notFound } from './serviceErrors.js'
 
 function updateDenied(targetUserId, reason, extra = {}) {
   return { action: 'membership.update.denied', details: { targetUserId, ...extra, reason } }
@@ -45,13 +34,13 @@ function removeDenied(targetUserId, reason) {
 function authorizeMembershipChange({ existing, status, role, callerIsSuperAdmin, userId, actingUserId }) {
   if (existing.is_super_admin && existing.user_id !== actingUserId && !callerIsSuperAdmin) {
     return {
-      error: forbidden('Cannot modify a super admin membership'),
+      ...forbidden('Cannot modify a super admin membership'),
       audit: updateDenied(userId, 'modify_super_admin'),
     }
   }
   if (existing.role === 'tenant_admin' && role !== undefined && role !== 'tenant_admin' && !callerIsSuperAdmin) {
     return {
-      error: forbidden('Only super admins can demote a tenant_admin'),
+      ...forbidden('Only super admins can demote a tenant_admin'),
       audit: updateDenied(userId, 'demote_tenant_admin_requires_super_admin', { role }),
     }
   }
@@ -60,7 +49,7 @@ function authorizeMembershipChange({ existing, status, role, callerIsSuperAdmin,
   // row got there (invite redemption, manual seed, etc.).
   if (status === 'approved' && existing.role === 'tenant_admin' && existing.status !== 'approved' && !callerIsSuperAdmin) {
     return {
-      error: forbidden('Only super admins can approve a tenant_admin membership'),
+      ...forbidden('Only super admins can approve a tenant_admin membership'),
       audit: updateDenied(userId, 'approve_tenant_admin_requires_super_admin', { status }),
     }
   }
@@ -71,13 +60,9 @@ function authorizeMembershipChange({ existing, status, role, callerIsSuperAdmin,
 // before clearing the old link, so a missing target can't leave the user
 // unlinked. Returns { error } | {}.
 async function reassignBandMember(tenantId, userId, bandMemberId) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     if (bandMemberId !== null && !(await lockBandMember(client, bandMemberId, tenantId))) {
-      await client.query('ROLLBACK')
-      return { error: notFound('Band member not found in this tenant') }
+      abortTransaction(notFound('Band member not found in this tenant'))
     }
 
     // Clear the user's current link, then assign the new one (if any).
@@ -86,14 +71,8 @@ async function reassignBandMember(tenantId, userId, bandMemberId) {
       await assignBandMember(client, userId, bandMemberId, tenantId)
     }
 
-    await client.query('COMMIT')
     return {}
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }
 
 // ---------- public API ----------
@@ -110,13 +89,13 @@ export async function patchMembership(db, tenantId, actingUser, userId, body) {
   const callerIsSuperAdmin = !!actingUser?.is_super_admin
   if (role === 'tenant_admin' && !callerIsSuperAdmin) {
     return {
-      error: forbidden('Only super admins can grant tenant_admin'),
+      ...forbidden('Only super admins can grant tenant_admin'),
       audit: updateDenied(userId, 'grant_tenant_admin_requires_super_admin', { role }),
     }
   }
 
   const existing = await readMembershipRow(db, tenantId, userId)
-  if (!existing) return { error: notFound('Membership not found') }
+  if (!existing) return notFound('Membership not found')
 
   const denial = authorizeMembershipChange({
     existing, status, role, callerIsSuperAdmin, userId, actingUserId: actingUser.id,
@@ -129,22 +108,13 @@ export async function patchMembership(db, tenantId, actingUser, userId, body) {
   // transaction under the tenant-row lock. Invite redemption (pending rows)
   // deliberately doesn't consume capacity — only approval does.
   if (status === 'approved' && existing.status !== 'approved') {
-    const client = await db.connect()
-    try {
-      await client.query('BEGIN')
-      const capError = await enforceMemberCap(client, tenantId, 'membership')
-      if (capError) {
-        await client.query('ROLLBACK')
-        return capError
-      }
+    const capError = await withTransaction(async (client) => {
+      const err = await enforceMemberCap(client, tenantId, 'membership')
+      if (err) abortTransaction(err)
       await updateMembership(client, tenantId, userId, sets, values)
-      await client.query('COMMIT')
-    } catch (err) {
-      await client.query('ROLLBACK')
-      throw err
-    } finally {
-      client.release()
-    }
+      return null
+    }, { db })
+    if (capError) return capError
   } else {
     await updateMembership(db, tenantId, userId, sets, values)
   }
@@ -165,13 +135,13 @@ export async function patchMembership(db, tenantId, actingUser, userId, body) {
 
 export async function patchBandMember(db, tenantId, userId, body) {
   const parsed = parseBandMemberId(body)
-  if (parsed.error) return { error: badRequest(parsed.error) }
+  if (parsed.error) return badRequest(parsed.error)
 
   const membership = await readMembershipRow(db, tenantId, userId)
-  if (!membership) return { error: notFound('Membership not found') }
+  if (!membership) return notFound('Membership not found')
 
   const result = await reassignBandMember(tenantId, userId, parsed.bandMemberId)
-  if (result.error) return { error: result.error }
+  if (result.error) return result
 
   return { membership: await readMembershipRow(db, tenantId, userId) }
 }
@@ -179,17 +149,17 @@ export async function patchBandMember(db, tenantId, userId, body) {
 export async function removeMembership(db, tenantId, actingUser, userId) {
   const callerIsSuperAdmin = !!actingUser?.is_super_admin
   const existing = await readMembershipRow(db, tenantId, userId)
-  if (!existing) return { error: notFound('Membership not found') }
+  if (!existing) return notFound('Membership not found')
 
   if (existing.is_super_admin && !callerIsSuperAdmin) {
     return {
-      error: forbidden('Cannot remove a super admin membership'),
+      ...forbidden('Cannot remove a super admin membership'),
       audit: removeDenied(userId, 'remove_super_admin'),
     }
   }
   if (existing.role === 'tenant_admin' && existing.user_id !== actingUser.id && !callerIsSuperAdmin) {
     return {
-      error: forbidden('Only super admins can remove a tenant_admin'),
+      ...forbidden('Only super admins can remove a tenant_admin'),
       audit: removeDenied(userId, 'remove_tenant_admin_requires_super_admin'),
     }
   }

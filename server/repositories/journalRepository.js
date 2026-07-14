@@ -27,8 +27,8 @@ export async function fetchJournalLines(executor, journalId, tenantId) {
 // transaction and no longer belongs in the journal editor.
 export async function listJournals(executor, tenantId) {
   const { rows: journals } = await executor.query(
-    `SELECT id, entry_number, entry_date, description, status,
-            posted_transaction_id, created_at, updated_at
+    `SELECT id, entry_number, entry_date, description, status, note,
+            reclassifies_ledger_entry_id, posted_transaction_id, created_at, updated_at
        FROM journals
       WHERE tenant_id = $1 AND status = 'draft'
       ORDER BY entry_date DESC, entry_number DESC, id DESC`,
@@ -88,23 +88,63 @@ export async function replaceJournalLines(executor, journalId, tenantId, lines) 
 
 // Inserts a draft journal header and returns its id. Assigns the next entry
 // number from the sequence table.
-export async function createJournal(executor, tenantId, { entryDate, description, createdByUserId = null }) {
+export async function createJournal(executor, tenantId, {
+  entryDate, description, createdByUserId = null, note = null, reclassifiesLedgerEntryId = null,
+}) {
   const entryNumber = await nextJournalNumber(executor, tenantId)
   const { rows } = await executor.query(
-    `INSERT INTO journals (tenant_id, entry_number, entry_date, description, created_by_user_id)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO journals
+       (tenant_id, entry_number, entry_date, description, created_by_user_id, note, reclassifies_ledger_entry_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
-    [tenantId, entryNumber, entryDate, description ?? null, createdByUserId],
+    [tenantId, entryNumber, entryDate, description ?? null, createdByUserId, note, reclassifiesLedgerEntryId],
   )
   return rows[0].id
 }
 
-export async function updateJournalHeader(executor, tenantId, journalId, { entryDate, description }) {
+export async function updateJournalHeader(executor, tenantId, journalId, { entryDate, description, note }) {
   await executor.query(
-    `UPDATE journals SET entry_date = $1, description = $2, updated_at = NOW()
-      WHERE id = $3 AND tenant_id = $4`,
-    [entryDate, description ?? null, journalId, tenantId],
+    `UPDATE journals SET entry_date = $1, description = $2, note = $3, updated_at = NOW()
+      WHERE id = $4 AND tenant_id = $5`,
+    [entryDate, description ?? null, note ?? null, journalId, tenantId],
   )
+}
+
+// True when any line of the transaction is linked to an ACTIVE reclassification
+// posting. A correction (void/reverse) must not compensate such a transaction:
+// the reclassification posting would keep moving an amount the correction
+// already cancelled. A reclassification whose own posted transaction has been
+// voided or reversed no longer moves anything, so it stops blocking — that is
+// the unwind order the 409 asks for. (A journal without a posted transaction
+// can't normally exist — reclassifications post immediately — but a NULL link
+// stays blocking rather than silently passing.)
+export async function hasReclassifiedLines(executor, tenantId, transactionId) {
+  const { rows } = await executor.query(
+    `SELECT 1
+       FROM journals j
+       JOIN ledger_entries le
+         ON le.id = j.reclassifies_ledger_entry_id AND le.tenant_id = j.tenant_id
+       LEFT JOIN ledger_transactions pt
+         ON pt.id = j.posted_transaction_id AND pt.tenant_id = j.tenant_id
+      WHERE j.tenant_id = $1 AND le.transaction_id = $2
+        AND (pt.id IS NULL
+             OR (pt.voided_at IS NULL AND pt.reversed_by_transaction_id IS NULL))
+      LIMIT 1`,
+    [tenantId, transactionId],
+  )
+  return rows.length > 0
+}
+
+// The journal (draft or approved) that reclassifies one ledger line, or null.
+// At most one exists per line (unique index in migration 115).
+export async function findReclassificationByLine(executor, tenantId, ledgerEntryId) {
+  const { rows } = await executor.query(
+    `SELECT id, status, posted_transaction_id
+       FROM journals
+      WHERE tenant_id = $1 AND reclassifies_ledger_entry_id = $2`,
+    [tenantId, ledgerEntryId],
+  )
+  return rows[0] || null
 }
 
 // Locks the journal row for the duration of the surrounding transaction so a

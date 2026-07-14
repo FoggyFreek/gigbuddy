@@ -1,5 +1,23 @@
+# Keep changes inside the repository while letting Codex complete routine work
+# without waiting for a user approval at every boundary.
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
+approvals_reviewer = "auto_review"
+
+# Prefer careful implementation and current sources without pinning a model ID.
+model_reasoning_effort = "high"
+web_search = "live"
+
+developer_instructions = """
+Work autonomously within the user's requested scope. For change requests, inspect
+the repository, make reasonable assumptions, implement the complete change, run
+the narrowest relevant verification, fix issues found, and report the result.
+Do not pause for confirmation between routine, reversible steps. Ask the user only
+when a material ambiguity cannot be resolved from repository context, or when an
+irreversible, destructive, credential-sensitive, or external side effect requires
+their decision. Follow AGENTS.md and CLAUDE.md, preserve unrelated working-tree
+changes, and never expose secrets.
+"""
 
 [sandbox_workspace_write]
 network_access = true

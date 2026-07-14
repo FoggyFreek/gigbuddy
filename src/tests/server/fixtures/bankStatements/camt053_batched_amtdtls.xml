@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <GrpHdr><MsgId>BATCH-1</MsgId><CreDtTm>2026-03-01T00:00:00</CreDtTm></GrpHdr>
+    <Stmt>
+      <Id>BATCH-STMT</Id>
+      <Acct><Id><IBAN>NL02RABO0123456789</IBAN></Id><Ccy>EUR</Ccy></Acct>
+      <!-- One aggregate (batched) entry of 150.00 whose two details carry their
+           own amounts only under AmtDtls/TxAmt (no TxDtls/Amt) -->
+      <Ntry>
+        <Amt Ccy="EUR">150.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <BookgDt><Dt>2026-03-02</Dt></BookgDt>
+        <NtryDtls>
+          <TxDtls>
+            <Refs><EndToEndId>BATCH-A</EndToEndId></Refs>
+            <AmtDtls><TxAmt><Amt Ccy="EUR">40.00</Amt></TxAmt></AmtDtls>
+            <CdtDbtInd>DBIT</CdtDbtInd>
+            <RltdPties><Cdtr><Nm>Vendor A</Nm></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Part A</Ustrd></RmtInf>
+          </TxDtls>
+          <TxDtls>
+            <Refs><EndToEndId>BATCH-B</EndToEndId></Refs>
+            <AmtDtls><TxAmt><Amt Ccy="EUR">110.00</Amt></TxAmt></AmtDtls>
+            <CdtDbtInd>DBIT</CdtDbtInd>
+            <RltdPties><Cdtr><Nm>Vendor B</Nm></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Part B</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

@@ -2,10 +2,12 @@
 // invoiceService.js to keep the MIME/HTML assembly out of the domain service.
 import QRCode from 'qrcode'
 import { getObject } from './storageService.js'
-import { fetchTenant, fetchInvoiceWithGig } from '../repositories/invoiceRepository.js'
+import { fetchInvoiceWithGig } from '../repositories/invoiceRepository.js'
+import { fetchTenant } from '../repositories/tenantRepository.js'
 import { logger } from '../utils/logger.js'
+import { notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
+const NOT_FOUND = notFound('Not found')
 
 function escHtml(str) {
   if (!str) return ''

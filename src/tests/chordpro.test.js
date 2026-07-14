@@ -246,6 +246,32 @@ describe('analyzeChords', () => {
     const { chords } = analyzeChords('[C]a [*Coda] [C]b [G]c')
     expect(chords.map((c) => c.name)).toEqual(['C', 'G'])
   })
+
+  it('resolves lowercase chord roots used in a ChordPro chart', () => {
+    const source = [
+      '[cadd9]Sitting there on the beach',
+      'Almost all alone [g]together',
+      '[cadd9]It makes us think about the little things',
+      "That we've put ourselves [g]through",
+      '',
+      'It [cadd9] makes me realize',
+      'I might be blind sometimes',
+      'For everything [g] you do',
+      'Now [cadd9] all the little things I say are true',
+      '',
+      '{start_of_chorus: Chorus}',
+      '',
+      "The [d]waves you see, they're trying to talk to [em] us",
+      '[cadd9]About this crazy thing we call it [g]love',
+      "The [d]waves you see they're climbing [em]higher and higher",
+      'But [cadd9]we will always rise [g] above',
+    ].join('\n')
+
+    const { chords } = analyzeChords(source)
+
+    expect(chords.map((chord) => chord.name)).toEqual(['Cadd9', 'G', 'D', 'Em'])
+    expect(chords.every((chord) => chord.shape !== null)).toBe(true)
+  })
 })
 
 describe('extractMetadata', () => {

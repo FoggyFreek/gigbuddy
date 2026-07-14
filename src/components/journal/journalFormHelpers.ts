@@ -71,6 +71,8 @@ export function journalToForm(journal: Journal): JournalForm {
 
 /** Builds the PATCH payload from the current form state. */
 export function buildJournalPayload(form: JournalForm): Partial<Journal> {
+  // No `note` here: the journal editor doesn't expose notes — they live on the
+  // posted transaction's detail page — so the PATCH payload never touches them.
   return {
     entry_date: form.entry_date,
     description: form.description?.trim() || null,

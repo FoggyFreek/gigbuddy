@@ -4,6 +4,7 @@ import {
   deletePurchase,
   deletePurchaseAttachment,
   getPurchase,
+  listPurchasePaymentCandidates,
   registerPurchasePayment,
   updatePurchase,
   uploadPurchaseAttachment,
@@ -13,7 +14,7 @@ import { listProducts } from '../../api/merch.ts'
 import { listMembers } from '../../api/bandMembers.ts'
 import { computePurchaseTotals } from '../../utils/purchaseTotals.ts'
 import { compressReceipt } from '../../utils/compressImage.ts'
-import type { Purchase, PurchaseAttachment, PurchasePaymentMethod, PurchaseStatus, Account, AccountingSettings, Member, Product, Id } from '../../types/entities.ts'
+import type { Purchase, PurchaseAttachment, PurchasePaymentCandidate, PurchasePaymentMethod, PurchaseStatus, Account, AccountingSettings, Member, Product, Id } from '../../types/entities.ts'
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.ts'
 import type { PurchaseForm, PurchaseFormLine } from './purchaseFormHelpers.ts'
 
@@ -55,6 +56,11 @@ export interface UsePurchaseFormStateResult {
   setPaidOn: (date: string) => void
   paidByBandMemberId: Id | null
   setPaidByBandMemberId: (id: Id | null) => void
+  paymentCandidates: PurchasePaymentCandidate[]
+  paymentCandidatesLoading: boolean
+  paymentCandidatesError: string | null
+  selectedBankLineId: Id | null
+  setSelectedBankLineId: (id: Id | null) => void
   deleteDialogOpen: boolean
   setDeleteDialogOpen: (open: boolean) => void
   patchForm: (patch: Partial<PurchaseForm>) => void
@@ -99,6 +105,10 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
   const [paymentMethod, setPaymentMethod] = useState<PurchasePaymentMethod>('bank')
   const [paidOn, setPaidOn] = useState(todayIso())
   const [paidByBandMemberId, setPaidByBandMemberId] = useState<Id | null>(null)
+  const [paymentCandidates, setPaymentCandidates] = useState<PurchasePaymentCandidate[]>([])
+  const [paymentCandidatesLoading, setPaymentCandidatesLoading] = useState(false)
+  const [paymentCandidatesError, setPaymentCandidatesError] = useState<string | null>(null)
+  const [selectedBankLineId, setSelectedBankLineId] = useState<Id | null>(null)
   const [attachments, setAttachments] = useState<PurchaseAttachment[]>([])
   const [attachmentsBusy, setAttachmentsBusy] = useState(false)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
@@ -317,7 +327,17 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
     setPaymentMethod('bank')
     setPaidOn(todayIso())
     setPaidByBandMemberId(null)
+    setSelectedBankLineId(null)
+    setPaymentCandidatesError(null)
     setPaymentDialogOpen(true)
+    setPaymentCandidatesLoading(true)
+    listPurchasePaymentCandidates(purchaseId)
+      .then(setPaymentCandidates)
+      .catch((e: unknown) => {
+        setPaymentCandidates([])
+        setPaymentCandidatesError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => setPaymentCandidatesLoading(false))
   }
 
   function closePaymentDialog() {
@@ -338,6 +358,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
         paid_on: paidOn || todayIso(),
       }
       if (paymentMethod === 'member') payload.paid_by_band_member_id = paidByBandMemberId
+      if (paymentMethod === 'bank' && selectedBankLineId != null) payload.bank_statement_line_id = selectedBankLineId
       const updated = await registerPurchasePayment(purchaseId, payload)
       setPurchase(updated)
       setPaymentDialogOpen(false)
@@ -423,6 +444,11 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
     setPaidOn,
     paidByBandMemberId,
     setPaidByBandMemberId,
+    paymentCandidates,
+    paymentCandidatesLoading,
+    paymentCandidatesError,
+    selectedBankLineId,
+    setSelectedBankLineId,
     deleteDialogOpen,
     setDeleteDialogOpen,
     patchForm,

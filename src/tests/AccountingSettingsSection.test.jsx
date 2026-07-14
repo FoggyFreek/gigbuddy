@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/accounts.ts', () => ({
@@ -17,7 +18,7 @@ import AccountingSettingsSection from '../components/settings/AccountingSettings
 import theme from '../theme.ts'
 
 function wrap(ui) {
-  return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
+  return render(<MemoryRouter><ThemeProvider theme={theme}>{ui}</ThemeProvider></MemoryRouter>)
 }
 
 const ACCOUNTS = [

@@ -1,0 +1,58 @@
+{
+  "title": "Financiële setup",
+  "steps": {
+    "welcome": "Welkom",
+    "openingBalance": "Beginsaldo",
+    "profile": "Financieel profiel",
+    "integrations": "Integraties",
+    "accounts": "Standaardrekeningen",
+    "done": "Klaar"
+  },
+  "welcome": {
+    "heading": "Stel je financiën in",
+    "body": "Een paar snelle stappen om je boekhouding klaar te maken. Je kunt alles later wijzigen.",
+    "featureInvoicing": "Verstuur facturen en word betaald",
+    "featurePurchases": "Houd inkopen en onkostenvergoedingen bij",
+    "featureReports": "Doe btw-aangiften en lees financiële rapporten"
+  },
+  "openingBalance": {
+    "heading": "Beginsaldo",
+    "body": "Vertel gigBuddy hoeveel er op je bankrekening stond toen je hier begon met boekhouden.",
+    "choiceManual": "Nu invoeren",
+    "choiceLater": "Later instellen vanaf een bankafschrift",
+    "laterHelp": "Wanneer je een bankafschrift importeert, biedt gigBuddy aan het beginsaldo daaruit in te stellen.",
+    "amount": "Banksaldo",
+    "date": "Per datum",
+    "negativeHint": "Gebruik een negatief bedrag als de rekening rood stond.",
+    "alreadySet": "Er is al een beginsaldo ingesteld voor deze band."
+  },
+  "profile": {
+    "heading": "Financieel profiel",
+    "body": "Gebruikt op je facturen en belastingaangiften. Je kunt dit later op je profielpagina bewerken."
+  },
+  "integrations": {
+    "heading": "Mollie en Shopify koppelen",
+    "body": "Optioneel. Koppel Mollie zodat klanten je facturen online kunnen betalen, en Shopify om merch-bestellingen in je boekhouding te importeren. Je kunt deze later toevoegen of wijzigen onder Instellingen."
+  },
+  "accounts": {
+    "heading": "Standaardrekeningen",
+    "body": "Nieuwe boekingen komen standaard op deze rekeningen. Je kunt ze later wijzigen onder Instellingen."
+  },
+  "done": {
+    "heading": "Alles is klaar",
+    "body": "Je financiën zijn klaar. Ga naar het financiële dashboard om te zien hoe je ervoor staat.",
+    "toDashboard": "Ga naar financieel dashboard"
+  },
+  "actions": {
+    "back": "Terug",
+    "next": "Volgende",
+    "skip": "Nu overslaan",
+    "finish": "Voltooien"
+  },
+  "errors": {
+    "opening_balance_exists": "Er is al een beginsaldo ingesteld.",
+    "invalid_amount": "Voer een bedrag in dat niet nul is.",
+    "period_closed": "Die datum valt in een gesloten boekhoudperiode.",
+    "generic": "Er ging iets mis. Probeer het opnieuw."
+  }
+}

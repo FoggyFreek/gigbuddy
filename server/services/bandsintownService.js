@@ -4,7 +4,7 @@
 // public Bandsintown REST API; the app_id comes from the tenant's encrypted
 // integration credential (see integrationCredentialService). Pass `fetchImpl`
 // to inject a fake in tests.
-import pool from '../db/index.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { logger } from '../utils/logger.js'
 import {
   parseArtistId,
@@ -16,7 +16,8 @@ import {
   scoreVenueMatch,
   countryToIso2,
 } from '../validators/bandsintownValidators.js'
-import { venueImportKey } from '../validators/venueValidators.js'
+import { venueImportKey } from '../domain/venue.js'
+import { badRequest } from './serviceErrors.js'
 import { insertVenue } from '../repositories/venueRepository.js'
 import {
   getLeadMemberIds,
@@ -43,10 +44,6 @@ const UPSTREAM_FAILED = {
 async function loadAppId(db, tenantId) {
   const value = await loadIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.BANDSINTOWN_APP_ID)
   return (value || '').trim() || null
-}
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
 }
 
 async function bandsintownGet(path, appId, fetchImpl) {
@@ -360,25 +357,14 @@ export async function importEvents(tenantId, userId, body) {
   const parsed = parseImportRows(items)
   if (parsed.error) return badRequest(parsed.error)
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     const ctx = await loadImportContext(client, tenantId)
 
     for (const row of parsed.rows) {
       const result = await importEventRow(client, tenantId, userId, row, ctx)
-      if (result.error) {
-        await client.query('ROLLBACK')
-        return badRequest(result.error)
-      }
+      if (result.error) abortTransaction(badRequest(result.error))
     }
 
-    await client.query('COMMIT')
     return ctx.summary
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }

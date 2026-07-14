@@ -1,5 +1,5 @@
 import { request, requestBlob } from './_client.ts'
-import type { LedgerEntryRow, LedgerEntryLineRow, LedgerLine, Period, Id } from '../types/entities.ts'
+import type { Journal, LedgerEntryRow, LedgerEntryLineRow, LedgerLine, Period, Id } from '../types/entities.ts'
 import { periodQueryString } from '../utils/invoicePeriod.ts'
 
 interface LedgerEntry {
@@ -11,6 +11,20 @@ interface LedgerEntry {
   source_event?: string
   voided_at?: string
   lines?: LedgerLine[]
+}
+
+/** Response of PATCH /api/ledger/:id/note — the stored note + audit metadata. */
+export interface LedgerNoteUpdate {
+  note: string | null
+  note_updated_at: string
+  note_updated_by_user_id: Id
+  note_updated_by_name: string | null
+}
+
+export interface ReclassifyBody {
+  source_line_id: Id
+  destination_account_code: string
+  note?: string | null
 }
 
 interface LedgerOverview {
@@ -57,6 +71,12 @@ export const getFinancialReport = (period: Period) =>
 export const voidLedgerEntry = (id: Id) => api<LedgerEntry>(`/${id}/void`, { method: 'POST' })
 export const reverseLedgerEntry = (id: Id) =>
   api<LedgerEntry>(`/${id}/reverse`, { method: 'POST' })
+export const updateLedgerNote = (id: Id, note: string | null) =>
+  api<LedgerNoteUpdate>(`/${id}/note`, { method: 'PATCH', body: JSON.stringify({ note }) })
+// Immediately posts the journal that moves one posted line to another account;
+// the response is the approved journal incl. its posted_transaction_id.
+export const reclassifyLedgerEntry = (id: Id, body: ReclassifyBody) =>
+  api<Journal>(`/${id}/reclassify`, { method: 'POST', body: JSON.stringify(body) })
 
 // format: 'xlsx' | 'pdf'
 export const exportFinancialReport = (period: Period, format: 'xlsx' | 'pdf') => {

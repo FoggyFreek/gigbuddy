@@ -9,6 +9,7 @@ import Link from '@mui/material/Link'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Step from '@mui/material/Step'
+import MuiStepContent from '@mui/material/StepContent'
 import StepLabel from '@mui/material/StepLabel'
 import Stepper from '@mui/material/Stepper'
 import Typography from '@mui/material/Typography'
@@ -24,6 +25,7 @@ import {
 } from '../api/billing.ts'
 import { createOwnedTenant, getTenantOnboardingStatus, listOwnedTenants } from '../api/tenants.ts'
 import { uploadLogo } from '../api/profile.ts'
+import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import type { Tenant } from '../types/entities.ts'
 import WelcomeStep from '../components/onboarding/WelcomeStep.tsx'
 import BandStep from '../components/onboarding/BandStep.tsx'
@@ -233,6 +235,7 @@ export default function OnboardingPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const { user, switchTenant, refreshUser } = useAuth()
+  const isCompact = useCompactLayout()
   const checkoutReturn = params.get('checkout') === 'return'
 
   const [activeStep, setActiveStep] = useState(0)
@@ -391,6 +394,73 @@ export default function OnboardingPage() {
     }
   }, [selectedPlan, ensureOnboardingTenant, logo, interval, switchTenant, refreshUser, navigate, t])
 
+  const loadErrorAlert = loadError && (
+    <Alert severity="error">{t($ => $.errors.loadFailed)}</Alert>
+  )
+
+  // The interactive wizard: active step body, error, and the back/next row.
+  const wizardBody = (
+    <>
+      <StepContent
+        activeStep={activeStep}
+        ready={ready}
+        loadError={loadError}
+        plans={sortedPlans}
+        interval={interval}
+        onIntervalChange={setInterval}
+        selectedPlanId={selectedPlanId}
+        onSelectPlan={setSelectedPlanId}
+        selectedPlan={selectedPlan}
+        termsAgreed={termsAgreed}
+        onTermsAgreedChange={setTermsAgreed}
+        onOpenTerms={() => setTermsOpen(true)}
+        bandName={bandName}
+        onBandNameChange={setBandName}
+        onboardingTenant={onboardingTenant}
+        logo={logo}
+        onLogoFileChange={handleLogoFileChange}
+      />
+
+      {error && <Alert severity="error">{error}</Alert>}
+
+      {ready && (
+        <WizardControls
+          activeStep={activeStep}
+          busy={busy}
+          termsAgreed={termsAgreed}
+          bandName={bandName}
+          selectedPlan={selectedPlan}
+          onBack={() => setActiveStep((s) => Math.max(0, s - 1))}
+          onWelcomeNext={() => { void handleWelcomeNext() }}
+          onGoSummary={() => setActiveStep(2)}
+          onConfirm={() => { void handleConfirm() }}
+        />
+      )}
+    </>
+  )
+
+  // A handled dead end (band cap / onboarding disabled) replaces the wizard.
+  const bodyRegion = capBlocked ? (
+    <Stack spacing={2}>
+      <Alert severity="info">{t($ => $.errors.bandCapNoPointer)}</Alert>
+      <Button variant="contained" onClick={() => navigate('/')}>
+        {t($ => $.checkout.enterApp)}
+      </Button>
+    </Stack>
+  ) : onboardingDisabled ? (
+    <Stack spacing={2}>
+      <Alert severity="info">{t($ => $.errors.onboardingDisabled)}</Alert>
+    </Stack>
+  ) : (
+    wizardBody
+  )
+
+  const haveInviteLink = activeStep === 0 && !capBlocked && (
+    <Link component={RouterLink} to="/redeem-invite" variant="body2" sx={{ alignSelf: 'center' }}>
+      {t($ => $.welcome.haveInvite)}
+    </Link>
+  )
+
   return (
     <Box
       sx={{
@@ -421,6 +491,28 @@ export default function OnboardingPage() {
 
         {checkoutReturn ? (
           <CheckoutReturn />
+        ) : isCompact ? (
+          // Compact: nest the active step's body + controls inside its
+          // StepContent so the wizard doesn't stack three tall labels.
+          <>
+            <Stepper activeStep={activeStep} orientation="vertical">
+              {stepLabels.map((label, index) => (
+                <Step key={label}>
+                  <StepLabel>{label}</StepLabel>
+                  <MuiStepContent>
+                    {index === activeStep && (
+                      <>
+                        {loadErrorAlert}
+                        {bodyRegion}
+                      </>
+                    )}
+                  </MuiStepContent>
+                </Step>
+              ))}
+            </Stepper>
+
+            {haveInviteLink}
+          </>
         ) : (
           <>
             <Stepper activeStep={activeStep} alternativeLabel>
@@ -431,63 +523,9 @@ export default function OnboardingPage() {
               ))}
             </Stepper>
 
-            {loadError && <Alert severity="error">{t($ => $.errors.loadFailed)}</Alert>}
-            {capBlocked ? (
-              <Stack spacing={2}>
-                <Alert severity="info">{t($ => $.errors.bandCapNoPointer)}</Alert>
-                <Button variant="contained" onClick={() => navigate('/')}>
-                  {t($ => $.checkout.enterApp)}
-                </Button>
-              </Stack>
-            ) : onboardingDisabled ? (
-              <Stack spacing={2}>
-                <Alert severity="info">{t($ => $.errors.onboardingDisabled)}</Alert>
-              </Stack>
-            ) : (
-              <>
-                <StepContent
-                  activeStep={activeStep}
-                  ready={ready}
-                  loadError={loadError}
-                  plans={sortedPlans}
-                  interval={interval}
-                  onIntervalChange={setInterval}
-                  selectedPlanId={selectedPlanId}
-                  onSelectPlan={setSelectedPlanId}
-                  selectedPlan={selectedPlan}
-                  termsAgreed={termsAgreed}
-                  onTermsAgreedChange={setTermsAgreed}
-                  onOpenTerms={() => setTermsOpen(true)}
-                  bandName={bandName}
-                  onBandNameChange={setBandName}
-                  onboardingTenant={onboardingTenant}
-                  logo={logo}
-                  onLogoFileChange={handleLogoFileChange}
-                />
-
-                {error && <Alert severity="error">{error}</Alert>}
-
-                {ready && (
-                  <WizardControls
-                    activeStep={activeStep}
-                    busy={busy}
-                    termsAgreed={termsAgreed}
-                    bandName={bandName}
-                    selectedPlan={selectedPlan}
-                    onBack={() => setActiveStep((s) => Math.max(0, s - 1))}
-                    onWelcomeNext={() => { void handleWelcomeNext() }}
-                    onGoSummary={() => setActiveStep(2)}
-                    onConfirm={() => { void handleConfirm() }}
-                  />
-                )}
-              </>
-            )}
-
-            {activeStep === 0 && !capBlocked && (
-              <Link component={RouterLink} to="/redeem-invite" variant="body2" sx={{ alignSelf: 'center' }}>
-                {t($ => $.welcome.haveInvite)}
-              </Link>
-            )}
+            {loadErrorAlert}
+            {bodyRegion}
+            {haveInviteLink}
           </>
         )}
       </Paper>

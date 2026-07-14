@@ -1,7 +1,7 @@
 // Contact domain logic. Route handlers stay thin and delegate here. Functions
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function).
-import pool from '../db/index.js'
+import { withTransaction } from '../db/withTransaction.js'
 import {
   VALID_CATEGORIES,
   parseId,
@@ -10,6 +10,7 @@ import {
   buildContactUpdateFields,
   normalizeImportRow,
 } from '../validators/contactValidators.js'
+import { normalizeIban } from '../utils/normalizeIban.js'
 import {
   listContacts as listContactRows,
   searchContacts as searchContactRows,
@@ -28,16 +29,9 @@ import {
   insertImportContact,
 } from '../repositories/contactRepository.js'
 import { countPurchasesBySupplierContact } from '../repositories/purchaseRepository.js'
+import { badRequest, conflict, notFound } from './serviceErrors.js'
 
-const NOT_FOUND = { error: { status: 404, body: { error: 'Not found' } } }
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
-
-function conflict(error, extra = {}) {
-  return { error: { status: 409, body: { error, ...extra } } }
-}
+const NOT_FOUND = notFound('Not found')
 
 // ---------- reads ----------
 
@@ -71,7 +65,7 @@ export async function getContact(db, tenantId, contactId) {
 // ---------- writes ----------
 
 export async function createContact(db, tenantId, body) {
-  const { name, email, phone, category } = body
+  const { name, email, phone, category, iban } = body
   if (!name || !String(name).trim()) return badRequest('name is required')
   const finalCategory = VALID_CATEGORIES.has(category) ? category : 'press'
   try {
@@ -80,6 +74,7 @@ export async function createContact(db, tenantId, body) {
       email: email || null,
       phone: phone || null,
       category: finalCategory,
+      iban: normalizeIban(iban),
     })
     return { contact }
   } catch (err) {
@@ -172,10 +167,7 @@ export async function importContacts(tenantId, body) {
   if (!Array.isArray(body) || body.length === 0) return badRequest('Expected non-empty array')
   if (body.length > 1000) return badRequest('Maximum 1000 rows per import')
 
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-
+  return withTransaction(async (client) => {
     const incomingNames = [...new Set(
       body.map((r) => String(r.name ?? '').trim().toLowerCase()).filter(Boolean),
     )]
@@ -202,12 +194,6 @@ export async function importContacts(tenantId, body) {
       imported++
       seenKeys.add(key)
     }
-    await client.query('COMMIT')
     return { summary: { imported, skipped } }
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
+  })
 }

@@ -22,6 +22,7 @@
 // the key retain/delete decision.
 import { resolveTenantEntitlements } from './entitlementService.js'
 import { enqueueCleanup } from '../repositories/storageCleanupRepository.js'
+import { withTransaction } from '../db/withTransaction.js'
 
 // Matches the requireEntitlement middleware denial; the global error handler
 // surfaces status/code/feature.
@@ -38,19 +39,10 @@ export class EntitlementRequiredError extends Error {
 // One transaction under the tenant's advisory lock. `fn(client)` runs inside;
 // commit on success, rollback on throw.
 export async function withTenantFeatureLock(db, tenantId, fn) {
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
+  return withTransaction(async (client) => {
     await client.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
-    const result = await fn(client)
-    await client.query('COMMIT')
-    return result
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+    return fn(client)
+  }, { db })
 }
 
 // Write guard for purgeable-feature inserts/updates: tenant advisory lock +
@@ -60,26 +52,19 @@ export async function withTenantFeatureLock(db, tenantId, fn) {
 // recheck aborts, the key is enqueued for cleanup IN THE SAME transaction so
 // nothing is orphaned (the reservation is released by the drain's recompute).
 export async function withFeatureWriteGuard(db, tenantId, feature, fn, { orphanKey = null } = {}) {
-  const client = await db.connect()
-  let denied = false
-  try {
-    await client.query('BEGIN')
+  // Commit-then-throw: when denied we still COMMIT the orphan-cleanup enqueue,
+  // then raise EntitlementRequiredError AFTER the transaction. Aborting here
+  // would roll the cleanup back, so the deny marker rides out on the result.
+  const { denied, result } = await withTransaction(async (client) => {
     await client.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
     const resolved = await resolveTenantEntitlements(client, tenantId)
-    denied = resolved !== null && resolved.entitlements.features[feature] !== true
-    if (denied && orphanKey) await enqueueCleanup(client, tenantId, orphanKey, true)
-    const result = denied ? null : await fn(client)
-    await client.query('COMMIT')
-    if (denied) throw new EntitlementRequiredError(feature)
-    return result
-  } catch (err) {
-    if (!(err instanceof EntitlementRequiredError)) {
-      await client.query('ROLLBACK').catch(() => {})
-    }
-    throw err
-  } finally {
-    client.release()
-  }
+    const isDenied = resolved !== null && resolved.entitlements.features[feature] !== true
+    if (isDenied && orphanKey) await enqueueCleanup(client, tenantId, orphanKey, true)
+    return { denied: isDenied, result: isDenied ? null : await fn(client) }
+  }, { db })
+
+  if (denied) throw new EntitlementRequiredError(feature)
+  return result
 }
 
 // Session-level per-tenant lock serializing integration mutations that mix

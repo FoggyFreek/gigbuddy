@@ -22,7 +22,6 @@ import {
   buildLinkUpdate,
 } from '../validators/profileValidators.js'
 import {
-  fetchTenant,
   listProfileLinks,
   updateTenantFields,
   nextLinkSortOrder,
@@ -37,8 +36,10 @@ import {
   clearShopifyDomain,
   getTenantImagePath,
   setTenantImagePath,
+  clearMemoryTile,
   gigBelongsToTenant,
 } from '../repositories/profileRepository.js'
+import { fetchTenant } from '../repositories/tenantRepository.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import {
   clearIntegrationCredential,
@@ -49,10 +50,7 @@ import { invalidateToken } from './shopifyTokenService.js'
 import { withFeatureWriteGuard, withIntegrationWriteLock } from './featureGuards.js'
 import { resolveTenantEntitlements } from './entitlementService.js'
 import { FEATURES } from '../auth/entitlements.js'
-
-function badRequest(error) {
-  return { error: { status: 400, body: { error } } }
-}
+import { badRequest, notFound } from './serviceErrors.js'
 
 function entitlementRequired(feature) {
   return {
@@ -83,10 +81,6 @@ async function setIntegrationCredentialGuarded(db, tenantId, type, plaintext) {
   return guardedIntegrationWrite(db, tenantId, async () => ({
     status: await setIntegrationCredential(db, tenantId, type, plaintext),
   }))
-}
-
-function notFound(error) {
-  return { error: { status: 404, body: { error } } }
 }
 
 // ---------- profile ----------
@@ -304,7 +298,7 @@ export const uploadLogo = (db, tenantId, file) =>
   uploadTenantImage(db, tenantId, file, bandLogoKey, 'logo_path', IMAGE_PROCESSING_PRESETS.logo)
 
 export const uploadBanner = (db, tenantId, file) =>
-  uploadTenantImage(db, tenantId, file, bandProfileBannerKey, 'banner_path', IMAGE_PROCESSING_PRESETS.banner, FEATURES.CUSTOMIZATION)
+  uploadTenantImage(db, tenantId, file, bandProfileBannerKey, 'banner_path', IMAGE_PROCESSING_PRESETS.profileBanner, FEATURES.CUSTOMIZATION)
 
 export const uploadAvatar = (db, tenantId, file) =>
   uploadTenantImage(db, tenantId, file, bandAvatarKey, 'avatar_path', IMAGE_PROCESSING_PRESETS.avatar, FEATURES.CUSTOMIZATION)
@@ -314,3 +308,15 @@ export const uploadLogoDark = (db, tenantId, file) =>
 
 export const uploadMemoryImage = (db, tenantId, file) =>
   uploadTenantImage(db, tenantId, file, bandMemoryImageKey, 'memory_image_path', IMAGE_PROCESSING_PRESETS.memory, FEATURES.CUSTOMIZATION)
+
+// Clears the dashboard memory tile: nulls the photo, caption and gig link, and
+// deletes the stored object so its quota is reclaimed. Idempotent: a no-op when
+// nothing is set. Clearing needs no purge-race guard (removing data never
+// conflicts with a downgrade purge) and no entitlement gate (a lost feature
+// must not trap data).
+export async function deleteMemoryImage(db, tenantId) {
+  const oldKey = await getTenantImagePath(db, tenantId, 'memory_image_path')
+  await clearMemoryTile(db, tenantId)
+  safeRemove(oldKey, 'Failed to delete memory image:')
+  return { memory_image_path: null, memory_caption: null, memory_gig_id: null }
+}
