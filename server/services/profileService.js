@@ -36,6 +36,7 @@ import {
   clearShopifyDomain,
   getTenantImagePath,
   setTenantImagePath,
+  clearMemoryTile,
   gigBelongsToTenant,
 } from '../repositories/profileRepository.js'
 import { fetchTenant } from '../repositories/tenantRepository.js'
@@ -307,3 +308,15 @@ export const uploadLogoDark = (db, tenantId, file) =>
 
 export const uploadMemoryImage = (db, tenantId, file) =>
   uploadTenantImage(db, tenantId, file, bandMemoryImageKey, 'memory_image_path', IMAGE_PROCESSING_PRESETS.memory, FEATURES.CUSTOMIZATION)
+
+// Clears the dashboard memory tile: nulls the photo, caption and gig link, and
+// deletes the stored object so its quota is reclaimed. Idempotent: a no-op when
+// nothing is set. Clearing needs no purge-race guard (removing data never
+// conflicts with a downgrade purge) and no entitlement gate (a lost feature
+// must not trap data).
+export async function deleteMemoryImage(db, tenantId) {
+  const oldKey = await getTenantImagePath(db, tenantId, 'memory_image_path')
+  await clearMemoryTile(db, tenantId)
+  safeRemove(oldKey, 'Failed to delete memory image:')
+  return { memory_image_path: null, memory_caption: null, memory_gig_id: null }
+}

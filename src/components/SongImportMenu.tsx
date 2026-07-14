@@ -11,7 +11,7 @@ import Snackbar from '@mui/material/Snackbar'
 import Tooltip from '@mui/material/Tooltip'
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
 import LibraryMusicIcon from '@mui/icons-material/LibraryMusic'
-import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import SongImportDialog from './SongImportDialog.tsx'
 import { createSong, deleteSong, uploadSongChart } from '../api/songs.ts'
 import { lyricsHtmlFromChordPro, songFieldsFromChordPro } from '../utils/chordpro.ts'
@@ -100,7 +100,7 @@ export default function SongImportMenu({ onImported, onSongCreated }: Readonly<S
 
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
         <MenuItem onClick={openCsv}>
-          <ListItemIcon><TableChartOutlinedIcon fontSize="small" /></ListItemIcon>
+          <ListItemIcon><UploadFileIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t($ => $.import.fromCsv)}</ListItemText>
         </MenuItem>
         <MenuItem onClick={pickChordPro}>

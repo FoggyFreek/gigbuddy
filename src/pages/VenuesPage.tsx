@@ -8,7 +8,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import Tooltip from '@mui/material/Tooltip'
 import AddIcon from '@mui/icons-material/Add'
-import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import SplitView from '../components/SplitView.tsx'
 import VenuesTable from '../components/VenuesTable.tsx'
 import VenueFormModal from '../components/VenueFormModal.tsx'
@@ -66,7 +66,7 @@ export default function VenuesPage() {
         </Typography>
         <Tooltip title={t($ => $.importTooltip)}>
           <IconButton onClick={() => setImportOpen(true)}>
-            <FileUploadOutlinedIcon />
+            <UploadFileIcon />
           </IconButton>
         </Tooltip>
         <Button

@@ -82,6 +82,11 @@ export function uploadMemoryImage(file: File) {
   return requestForm<{ memory_image_path: string | null }>('/api/profile/memory-image', fd)
 }
 
+// Clears the whole memory tile (photo + caption + gig link), not just the image.
+export const deleteMemoryImage = () =>
+  api<{ memory_image_path: string | null; memory_caption: string | null; memory_gig_id: Id | null }>(
+    '/memory-image', { method: 'DELETE' })
+
 export const getBandsintownKey = () => api<IntegrationSecretStatus>('/bandsintown-key')
 export const setBandsintownKey = (key: string) =>
   api<IntegrationSecretStatus>('/bandsintown-key', { method: 'PUT', body: JSON.stringify({ key }) })

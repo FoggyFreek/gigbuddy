@@ -14,7 +14,7 @@
     "exportToBandsintown": "Export to Bandsintown (CSV)",
     "createTourCard": "Create Tour Card",
     "bannerMosaic": "Banner Mosaic",
-    "importFromBandsintownApi": "Import from Bandsintown"
+    "importFromBandsintownApi": "Import from Bandsintown (API)"
   },
   "table": {
     "searchPlaceholder": "Search gigs…",

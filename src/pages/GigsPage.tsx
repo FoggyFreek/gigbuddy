@@ -3,11 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import Checkbox from '@mui/material/Checkbox'
 import IconButton from '@mui/material/IconButton'
 import CircularProgress from '@mui/material/CircularProgress'
-import Divider from '@mui/material/Divider'
-import ListItemText from '@mui/material/ListItemText'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Tooltip from '@mui/material/Tooltip'
@@ -15,9 +12,8 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
-import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined'
 import ShareIcon from '@mui/icons-material/Share'
-import GigsTable from '../components/GigsTable.tsx'
+import GigsTable, { type GigsFilterSelection } from '../components/GigsTable.tsx'
 import GigFormModal from '../components/GigFormModal.tsx'
 import SplitView from '../components/SplitView.tsx'
 import TourShareDialog from '../components/TourShareDialog.tsx'
@@ -29,6 +25,7 @@ import { listGigs } from '../api/gigs.ts'
 import { getProfile } from '../api/profile.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { downloadBandsintownCsv } from '../utils/bandsintownExport.ts'
+import { ALL_STATUSES } from '../utils/gigStatus.ts'
 import type { Gig } from '../types/entities.ts'
 
 export default function GigsPage() {
@@ -44,11 +41,13 @@ export default function GigsPage() {
   const [tourMenuAnchor, setTourMenuAnchor] = useState<HTMLElement | null>(null)
   const [importMenuAnchor, setImportMenuAnchor] = useState<HTMLElement | null>(null)
   const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null)
-  const [tourIncludeConfirmed, setTourIncludeConfirmed] = useState(true)
-  const [tourIncludeAnnounced, setTourIncludeAnnounced] = useState(true)
   const [tourShareOpen, setTourShareOpen] = useState(false)
   const [tourExportOpen, setTourExportOpen] = useState(false)
   const [mosaicOpen, setMosaicOpen] = useState(false)
+  const [shareFilterSelection, setShareFilterSelection] = useState<GigsFilterSelection>(() => ({
+    selectedStatuses: new Set(ALL_STATUSES),
+    selectedTags: new Set(),
+  }))
   const [bandsintownArtistName, setBandsintownArtistName] = useState('')
   const [bandsintownImportOpen, setBandsintownImportOpen] = useState(false)
   const [bandsintownApiImportOpen, setBandsintownApiImportOpen] = useState(false)
@@ -85,11 +84,16 @@ export default function GigsPage() {
     setGigs((prev) => prev.filter((g) => g.id !== gigId))
   }, [])
 
-  const filteredForShare = gigs
-    .filter((g) =>
-      (tourIncludeConfirmed && g.status === 'confirmed') ||
-      (tourIncludeAnnounced && g.status === 'announced'),
-    )
+  const filteredForExport = gigs
+    .filter((gig) => gig.status === 'confirmed' || gig.status === 'announced')
+    .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))
+
+  const filteredForCardShare = gigs
+    .filter((gig) => {
+      if (!shareFilterSelection.selectedStatuses.has(gig.status ?? '')) return false
+      if (shareFilterSelection.selectedTags.size === 0) return true
+      return (gig.tags ?? []).some((tag) => tag.name && shareFilterSelection.selectedTags.has(tag.name))
+    })
     .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))
 
   return (
@@ -106,7 +110,7 @@ export default function GigsPage() {
           <>
             <Tooltip title={t($ => $.toolbar.import)}>
               <IconButton onClick={(e) => setImportMenuAnchor(e.currentTarget)}>
-                <FileUploadOutlinedIcon />
+                <FileDownloadOutlinedIcon />
               </IconButton>
             </Tooltip>
             <Menu
@@ -118,7 +122,7 @@ export default function GigsPage() {
                 onClick={() => { setImportMenuAnchor(null); setBandsintownApiImportOpen(true) }}
                 dense
               >
-                <Button variant="outlined" size="small" fullWidth startIcon={<CloudOutlinedIcon />}>
+                <Button variant="outlined" size="small" fullWidth>
                   {t($ => $.toolbar.importFromBandsintownApi)}
                 </Button>
               </MenuItem>
@@ -135,7 +139,7 @@ export default function GigsPage() {
         )}
         <Tooltip title={t($ => $.toolbar.export)}>
           <IconButton onClick={(e) => setExportMenuAnchor(e.currentTarget)}>
-            <FileDownloadOutlinedIcon />
+            <FileUploadOutlinedIcon />
           </IconButton>
         </Tooltip>
         <Menu
@@ -144,23 +148,23 @@ export default function GigsPage() {
           onClose={() => setExportMenuAnchor(null)}
         >
           <MenuItem
-            disabled={filteredForShare.length === 0}
+            disabled={filteredForExport.length === 0}
             onClick={() => { setExportMenuAnchor(null); setTourExportOpen(true) }}
             dense
           >
-            <Button variant="outlined" size="small" fullWidth disabled={filteredForShare.length === 0}>
+            <Button variant="outlined" size="small" fullWidth disabled={filteredForExport.length === 0}>
               {t($ => $.toolbar.exportTourDates)}
             </Button>
           </MenuItem>
           <MenuItem
-            disabled={filteredForShare.length === 0}
+            disabled={filteredForExport.length === 0}
             onClick={() => {
               setExportMenuAnchor(null)
-              downloadBandsintownCsv(filteredForShare, bandsintownArtistName)
+              downloadBandsintownCsv(filteredForExport, bandsintownArtistName)
             }}
             dense
           >
-            <Button variant="outlined" size="small" fullWidth disabled={filteredForShare.length === 0}>
+            <Button variant="outlined" size="small" fullWidth disabled={filteredForExport.length === 0}>
               {t($ => $.toolbar.exportToBandsintown)}
             </Button>
           </MenuItem>
@@ -175,17 +179,8 @@ export default function GigsPage() {
           open={!!tourMenuAnchor}
           onClose={() => setTourMenuAnchor(null)}
         >
-          <MenuItem onClick={() => setTourIncludeConfirmed((v) => !v)} dense>
-            <Checkbox checked={tourIncludeConfirmed} size="small" sx={{ p: 0.5 }} />
-            <ListItemText primary={t($ => $.status.confirmed)} />
-          </MenuItem>
-          <MenuItem onClick={() => setTourIncludeAnnounced((v) => !v)} dense>
-            <Checkbox checked={tourIncludeAnnounced} size="small" sx={{ p: 0.5 }} />
-            <ListItemText primary={t($ => $.status.announced)} />
-          </MenuItem>
-          <Divider />
           <MenuItem
-            disabled={!tourIncludeConfirmed && !tourIncludeAnnounced}
+            disabled={filteredForCardShare.length === 0}
             onClick={() => { setTourMenuAnchor(null); setTourShareOpen(true) }}
             dense
           >
@@ -193,8 +188,8 @@ export default function GigsPage() {
               {t($ => $.toolbar.createTourCard)}
             </Button>
           </MenuItem>
-           <MenuItem
-            disabled={!tourIncludeConfirmed && !tourIncludeAnnounced}
+          <MenuItem
+            disabled={filteredForCardShare.length === 0}
             onClick={() => { setTourMenuAnchor(null); setMosaicOpen(true) }}
             dense
           >
@@ -231,6 +226,7 @@ export default function GigsPage() {
           gigs={gigs}
           onRowClick={(gig) => navigate(`/gigs/${gig.id}`)}
           selectedId={selectedId ?? undefined}
+          onFilterSelectionChange={setShareFilterSelection}
         />
       )}
 
@@ -244,19 +240,19 @@ export default function GigsPage() {
       <TourShareDialog
         open={tourShareOpen}
         onClose={() => setTourShareOpen(false)}
-        gigs={filteredForShare}
+        gigs={filteredForCardShare}
       />
 
       <TourExportDialog
         open={tourExportOpen}
         onClose={() => setTourExportOpen(false)}
-        gigs={filteredForShare}
+        gigs={filteredForExport}
       />
 
       <BannerMosaicDialog
         open={mosaicOpen}
         onClose={() => setMosaicOpen(false)}
-        gigs={filteredForShare}
+        gigs={filteredForCardShare}
       />
 
       {bandsintownApiImportOpen && (

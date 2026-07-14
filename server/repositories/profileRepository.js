@@ -158,6 +158,19 @@ export async function setTenantImagePath(executor, tenantId, column, objectKey) 
   return rows[0][col]
 }
 
+// Clears the whole dashboard memory tile (photo + caption + gig link) in one
+// write. The caller reads the old image key first (via getTenantImagePath) to
+// remove its stored object.
+export async function clearMemoryTile(executor, tenantId) {
+  await executor.query(
+    `UPDATE tenants
+        SET memory_image_path = NULL, memory_caption = NULL, memory_gig_id = NULL,
+            updated_at = NOW()
+      WHERE id = $1`,
+    [tenantId],
+  )
+}
+
 // Downgrade purge: nulls the accent color, the gated customization images
 // (banner, avatar) and the dashboard memory tile (image + caption + gig ref),
 // returning the previous object keys so they can be queued for storage cleanup.

@@ -33,12 +33,12 @@ import {
   uploadAvatar,
   uploadLogoDark,
   uploadMemoryImage,
+  deleteMemoryImage,
 } from '../services/profileService.js'
 
 const router = Router()
 
 const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
-const JPEG_PNG = new Set(['image/jpeg', 'image/png'])
 const CUSTOMIZATION_IMAGE_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 const logoUpload = multer({
@@ -244,6 +244,13 @@ router.post('/logo-dark', requirePermission(PERMISSIONS.TENANT_MANAGE), imageUpl
 // NOT tenant-admin-only — any member with planning write may set the band's
 // memory photo (the tile is for the whole band). Still gated by customization.
 router.post('/memory-image', writeProfile, customization, imageUpload.single('memory'), async (req, res) =>
-  handleImageUpload(req, res, uploadMemoryImage, JPEG_PNG))
+  handleImageUpload(req, res, uploadMemoryImage, CUSTOMIZATION_IMAGE_ALLOWED_TYPES))
+
+// Remove the dashboard memory-tile photo. Deliberately NOT gated by the
+// customization entitlement (only planning write): removal is data erasure, and
+// a lost feature must never trap a stored image — mirrors the credential DELETEs.
+router.delete('/memory-image', writeProfile, async (req, res) => {
+  res.json(await deleteMemoryImage(pool, req.tenantId))
+})
 
 export default router

@@ -63,7 +63,7 @@ function pickRandomBackground(mode: ThemeMode) {
   const x = Math.floor(Math.random() * 101)
   const y = Math.floor(Math.random() * 101)
   return {
-    image: `url(/backgrounds/bg_${String(n).padStart(2, '0')}_${mode}.jpg)`,
+    image: `url(/backgrounds/bg_${String(n).padStart(2, '0')}_${mode}.webp)`,
     position: `${x}% ${y}%`,
   }
 }

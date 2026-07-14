@@ -13,6 +13,7 @@ import Typography from '@mui/material/Typography'
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import CheckIcon from '@mui/icons-material/Check'
 import CollectionsIcon from '@mui/icons-material/Collections'
+import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import DashboardCard from './DashboardCard.tsx'
@@ -20,8 +21,8 @@ import ImageCropDialog from '../ImageCropDialog.tsx'
 import { useImageCrop, JPEG_PNG } from '../../hooks/useImageCrop.ts'
 import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
 import { useToast } from '../../contexts/toastContext.ts'
-import { compressPhoto } from '../../utils/compressImage.ts'
-import { updateProfile, uploadMemoryImage } from '../../api/profile.ts'
+import { compressMemoryPhoto } from '../../utils/compressImage.ts'
+import { deleteMemoryImage, updateProfile, uploadMemoryImage } from '../../api/profile.ts'
 import type { Gig, Id } from '../../types/entities.ts'
 
 export interface MemoryPatch {
@@ -58,6 +59,7 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
   const showToast = useToast()
 
   const [editing, setEditing] = useState(false)
+  const [removing, setRemoving] = useState(false)
   // Local caption for the controlled TextField, re-seeded (render-phase sync, the
   // React-recommended alternative to a setState-in-effect) whenever the persisted
   // prop changes so it never drifts from the source.
@@ -70,7 +72,7 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
 
   const inputRef = useRef<HTMLInputElement>(null)
   const crop = useImageCrop(
-    compressPhoto,
+    compressMemoryPhoto,
     async (file) => {
       const { memory_image_path } = await uploadMemoryImage(file)
       onSaved({ memory_image_path: memory_image_path ?? null })
@@ -79,7 +81,7 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
     JPEG_PNG,
   )
 
-  const { schedule, flush } = useDebouncedSave<{ memory_caption: string | null }>(
+  const { schedule, flush, cancel } = useDebouncedSave<{ memory_caption: string | null }>(
     async ({ memory_caption }) => {
       await updateProfile({ memory_caption })
       onSaved({ memory_caption })
@@ -103,6 +105,21 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
     }
   }
 
+  async function removePhoto() {
+    // Drop any in-flight caption edit so its debounced save can't resurrect the
+    // caption after we clear the whole tile.
+    cancel()
+    setRemoving(true)
+    try {
+      await deleteMemoryImage()
+      onSaved({ memory_image_path: null, memory_caption: null, memory_gig_id: null })
+    } catch {
+      showToast?.(t($ => $.memory.removeError), 'error')
+    } finally {
+      setRemoving(false)
+    }
+  }
+
   function toggleEditing() {
     if (editing) flush()
     setEditing((prev) => !prev)
@@ -113,16 +130,34 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
   if (!canEdit && !hasContent) return null
 
   const editAction = canEdit ? (
-    <Tooltip title={editing ? t($ => $.memory.done) : t($ => $.memory.edit)}>
-      <IconButton
-        size="small"
-        onClick={toggleEditing}
-        color={editing ? 'primary' : 'default'}
-        aria-label={editing ? t($ => $.memory.done) : t($ => $.memory.edit)}
-      >
-        {editing ? <CheckIcon fontSize="small" /> : <EditIcon fontSize="small" />}
-      </IconButton>
-    </Tooltip>
+    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+      {/* Remove sits next to Done while editing, but only when there's a photo. */}
+      {editing && imagePath && (
+        <Tooltip title={t($ => $.memory.removePhoto)}>
+          <span>
+            <IconButton
+              size="small"
+              onClick={removePhoto}
+              disabled={removing || crop.uploading}
+              color="error"
+              aria-label={t($ => $.memory.removePhoto)}
+            >
+              {removing ? <CircularProgress size={18} /> : <DeleteIcon fontSize="small" />}
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+      <Tooltip title={editing ? t($ => $.memory.done) : t($ => $.memory.edit)}>
+        <IconButton
+          size="small"
+          onClick={toggleEditing}
+          color={editing ? 'primary' : 'default'}
+          aria-label={editing ? t($ => $.memory.done) : t($ => $.memory.edit)}
+        >
+          {editing ? <CheckIcon fontSize="small" /> : <EditIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
+    </Box>
   ) : undefined
 
   return (

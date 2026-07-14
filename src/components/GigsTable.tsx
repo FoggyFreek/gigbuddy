@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -50,6 +50,12 @@ interface GigsTableProps {
   gigs: GigWithExtras[]
   onRowClick?: (gig: GigWithExtras) => void
   selectedId?: Id
+  onFilterSelectionChange?: (selection: GigsFilterSelection) => void
+}
+
+export interface GigsFilterSelection {
+  selectedStatuses: ReadonlySet<string>
+  selectedTags: ReadonlySet<string>
 }
 
 function formatDate(val: string | Date | undefined): string {
@@ -254,7 +260,7 @@ function PastGigsHeader({ open, count, onToggle }: Readonly<PastGigsHeaderProps>
   )
 }
 
-export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: Readonly<GigsTableProps>) {
+export default function GigsTable({ gigs, onRowClick, selectedId = undefined, onFilterSelectionChange }: Readonly<GigsTableProps>) {
   const { t } = useTranslation('gigs')
   const [pastOpen, setPastOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -263,6 +269,10 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined }: 
   const [tagAnchor, setTagAnchor] = useState<HTMLElement | null>(null)
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
   const isCompact = useCompactLayout()
+
+  useEffect(() => {
+    onFilterSelectionChange?.({ selectedStatuses, selectedTags })
+  }, [onFilterSelectionChange, selectedStatuses, selectedTags])
 
   const availableTags = [...new Map(
     gigs.flatMap((gig) => gig.tags ?? [])

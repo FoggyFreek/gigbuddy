@@ -14,7 +14,7 @@
     "exportToBandsintown": "Exporteren naar Bandsintown (CSV)",
     "createTourCard": "Tourkaart maken",
     "bannerMosaic": "Bannermozaïek",
-    "importFromBandsintownApi": "Importeren van Bandsintown"
+    "importFromBandsintownApi": "Importeren van Bandsintown (API)"
   },
   "table": {
     "searchPlaceholder": "Optredens zoeken…",

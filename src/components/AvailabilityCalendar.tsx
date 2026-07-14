@@ -8,8 +8,8 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
-import FileDownloadIcon from '@mui/icons-material/FileDownload'
-import CloudSyncIcon from '@mui/icons-material/CloudSync'
+import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
+import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
 import { normalizeIsoDate, toIsoDate } from '../utils/availabilityUtils.ts'
 import {
   getDayHeaders,
@@ -156,14 +156,14 @@ export default function AvailabilityCalendar({
         {onSubscribe && (
           <Tooltip title={t($ => $.subscribe.tooltip)}>
             <IconButton size="small" onClick={onSubscribe} aria-label={t($ => $.subscribe.aria)}>
-              <CloudSyncIcon fontSize="small" />
+              <CloudSyncOutlinedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
         {onExport && (
           <Tooltip title={t($ => $.export.tooltip)}>
             <IconButton size="small" onClick={onExport} aria-label={t($ => $.export.aria)}>
-              <FileDownloadIcon fontSize="small" />
+              <FileUploadOutlinedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
