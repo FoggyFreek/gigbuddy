@@ -107,8 +107,7 @@ function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatu
 }
 
 // Roles a tenant admin may assign. `tenant_admin` is added separately and stays
-// super-admin-only; legacy `member` rows render their own option so the Select
-// value still matches. Mirrors ASSIGNABLE_ROLES in src/auth/permissions.ts.
+// super-admin-only. Mirrors ASSIGNABLE_ROLES in src/auth/permissions.ts.
 const ASSIGNABLE_ROLE_OPTIONS = [...ASSIGNABLE_ROLES]
 
 interface RoleSelectProps {
@@ -119,7 +118,6 @@ interface RoleSelectProps {
 }
 
 function RoleSelect({ r, callerIsSuperAdmin, isSelf, onRole }: Readonly<RoleSelectProps>) {
-  const { t } = useTranslation('settings')
   // Non-super callers cannot touch a tenant_admin's role, nor grant tenant_admin.
   const cannotDemoteAdmin = r.role === 'tenant_admin' && !callerIsSuperAdmin && !isSelf
   const cannotPromote = !callerIsSuperAdmin
@@ -130,7 +128,6 @@ function RoleSelect({ r, callerIsSuperAdmin, isSelf, onRole }: Readonly<RoleSele
         disabled={cannotDemoteAdmin}
         onChange={(e) => r.user_id != null && onRole(r.user_id, e.target.value)}
       >
-        {r.role === 'member' && <MenuItem value="member">{t($ => $.members.legacyMemberOption)}</MenuItem>}
         {ASSIGNABLE_ROLE_OPTIONS.map((role) => (
           <MenuItem key={role} value={role}>{role}</MenuItem>
         ))}

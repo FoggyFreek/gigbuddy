@@ -4,13 +4,18 @@ import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Routes, Route, useParams } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api/gigs.ts', () => ({ listGigs: vi.fn() }))
-vi.mock('../api/rehearsals.ts', () => ({ getNextRehearsal: vi.fn() }))
-vi.mock('../api/bandEvents.ts', () => ({ listBandEvents: vi.fn() }))
-vi.mock('../api/tasks.ts', () => ({ listAllTasks: vi.fn() }))
+vi.mock('../api/gigs.ts', () => ({
+  listGigs: vi.fn(),
+  listUpcomingGigs: vi.fn(),
+  getGig: vi.fn(),
+  searchGigs: vi.fn(),
+}))
+vi.mock('../api/rehearsals.ts', () => ({ listUpcomingRehearsals: vi.fn() }))
+vi.mock('../api/bandEvents.ts', () => ({ listUpcomingBandEvents: vi.fn() }))
+vi.mock('../api/tasks.ts', () => ({ listTasks: vi.fn() }))
 vi.mock('../contexts/authContext.ts', () => ({ useAuth: vi.fn() }))
 // The world-map tile loads its own data (and Leaflet); stub it so these tests stay
-// focused on the dashboard sections and listGigs is only called by the page itself.
+// focused on the dashboard sections and can detect any full-list gig request.
 vi.mock('../components/dashboard/GigMapTile.tsx', () => ({
   default: () => <div data-testid="gig-map-tile" />,
 }))
@@ -22,10 +27,10 @@ vi.mock('../api/profile.ts', () => ({
 vi.mock('../api/achievements.ts', () => ({ listAchievements: vi.fn() }))
 
 import DashboardPage from '../pages/DashboardPage.tsx'
-import { listGigs } from '../api/gigs.ts'
-import { getNextRehearsal } from '../api/rehearsals.ts'
-import { listBandEvents } from '../api/bandEvents.ts'
-import { listAllTasks } from '../api/tasks.ts'
+import { listGigs, listUpcomingGigs, getGig, searchGigs } from '../api/gigs.ts'
+import { listUpcomingRehearsals } from '../api/rehearsals.ts'
+import { listUpcomingBandEvents } from '../api/bandEvents.ts'
+import { listTasks } from '../api/tasks.ts'
 import { getProfile, updateProfile } from '../api/profile.ts'
 import { listAchievements } from '../api/achievements.ts'
 import { useAuth } from '../contexts/authContext.ts'
@@ -77,11 +82,19 @@ const ACHIEVEMENTS = [
   { key: 'tour_bus_not_included', category: 'gigs', cheers: 10, unlocked_at: null },
 ]
 
+const collection = (items, limit, total = items.length) => ({
+  items,
+  meta: { limit, returned: items.length, total },
+})
+
 function resolveAll() {
   listGigs.mockResolvedValue(GIGS)
-  getNextRehearsal.mockResolvedValue(NEXT_REHEARSAL)
-  listBandEvents.mockResolvedValue([])
-  listAllTasks.mockResolvedValue(TASKS)
+  searchGigs.mockResolvedValue([])
+  listUpcomingGigs.mockResolvedValue(collection(GIGS.filter((gig) => gig.id !== 1), 6))
+  getGig.mockImplementation((id) => Promise.resolve(GIGS.find((gig) => gig.id === id)))
+  listUpcomingRehearsals.mockResolvedValue(collection([NEXT_REHEARSAL], 1))
+  listUpcomingBandEvents.mockResolvedValue(collection([], 1))
+  listTasks.mockResolvedValue(collection(TASKS.filter((task) => !task.done && task.assigned_to === 7), 5))
   getProfile.mockResolvedValue({ logo_path: null })
   listAchievements.mockResolvedValue([])
 }
@@ -120,16 +133,21 @@ describe('DashboardPage', () => {
     expect(img).not.toBeNull()
   })
 
-  it('derives both gig cards from a single listGigs call', async () => {
+  it('fetches the six gigs needed by both gig cards', async () => {
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
-    expect(listGigs).toHaveBeenCalledTimes(1)
+    const today = new Date()
+    const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    expect(listUpcomingGigs).toHaveBeenCalledWith(6, localToday)
+    expect(listTasks).toHaveBeenCalledWith({ limit: 5, assignee: 'me', done: false })
+    expect(listUpcomingBandEvents).toHaveBeenCalledWith(1, localToday)
+    expect(listGigs).not.toHaveBeenCalled()
   })
 
-  it('shows the next rehearsal returned by getNextRehearsal', async () => {
+  it('shows the next rehearsal returned by the limited upcoming endpoint', async () => {
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Studio A')).toBeInTheDocument())
-    expect(getNextRehearsal).toHaveBeenCalledTimes(1)
+    expect(listUpcomingRehearsals).toHaveBeenCalledWith(1)
   })
 
   it('does not render invoice or purchase cards (moved to the financial dashboard)', async () => {
@@ -156,9 +174,9 @@ describe('DashboardPage', () => {
 
   it('navigates to the tasks page when a gig-less task is clicked', async () => {
     const user = userEvent.setup()
-    listAllTasks.mockResolvedValue([
+    listTasks.mockResolvedValue(collection([
       { id: 60, gig_id: null, title: 'Standalone chore', done: false, due_date: null, assigned_to: 7, event_description: null },
-    ])
+    ], 5))
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Standalone chore')).toBeInTheDocument())
     await user.click(screen.getByText('Standalone chore'))
@@ -166,9 +184,9 @@ describe('DashboardPage', () => {
   })
 
   it('renders empty states when sources return nothing', async () => {
-    listGigs.mockResolvedValue([])
-    getNextRehearsal.mockResolvedValue(null)
-    listAllTasks.mockResolvedValue([])
+    listUpcomingGigs.mockResolvedValue(collection([], 6))
+    listUpcomingRehearsals.mockResolvedValue(collection([], 1))
+    listTasks.mockResolvedValue(collection([], 5))
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText(/no upcoming shows/i)).toBeInTheDocument())
     expect(screen.getByText(/no open tasks/i)).toBeInTheDocument()
@@ -185,13 +203,32 @@ describe('DashboardPage', () => {
       assigned_to: 7,
       event_description: 'Tour Stop',
     }))
-    listAllTasks.mockResolvedValue(manyTasks)
+    listTasks.mockResolvedValue(collection(manyTasks.slice(0, 5), 5, 7))
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('My tasks')).toBeInTheDocument())
     expect(screen.getByText('7')).toBeInTheDocument()
     // Capped at 5 rendered rows.
     expect(screen.getByText('Task 0')).toBeInTheDocument()
     expect(screen.queryByText('Task 5')).not.toBeInTheDocument()
+  })
+
+  it('derives the shows badge from the same limited response as the rows', async () => {
+    const gigs = Array.from({ length: 6 }, (_, i) => ({
+      id: 200 + i,
+      event_date: `2026-07-${String(i + 1).padStart(2, '0')}`,
+      event_description: `Atomic show ${i}`,
+      venue: null,
+      festival: null,
+      status: 'confirmed',
+    }))
+    // Nine upcoming gigs total: one is featured and five remain visible, while
+    // the shows badge reports all eight non-featured gigs from the same envelope.
+    listUpcomingGigs.mockResolvedValue(collection(gigs, 6, 9))
+    wrap(<DashboardPage />)
+
+    await waitFor(() => expect(screen.getByText('Atomic show 0')).toBeInTheDocument())
+    expect(screen.getByText('8')).toBeInTheDocument()
+    expect(screen.getByText('Atomic show 5')).toBeInTheDocument()
   })
 
   it('shows the 3 most recently unlocked achievements with a Show all link', async () => {
@@ -253,8 +290,53 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ memory_caption: 'Hello' }))
   })
 
+  it('searches gigs remotely after three characters without loading the full gig list', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, bandMemberId: 7, isSuperAdmin: true } })
+    searchGigs.mockResolvedValue([GIGS[0]])
+    getGig.mockResolvedValue({ ...GIGS[0], event_description: 'Canonical Past Show' })
+    const user = userEvent.setup()
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Memory')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /edit memory/i }))
+    const field = screen.getByLabelText('Link a past gig')
+    await user.type(field, 'Pa')
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(searchGigs).not.toHaveBeenCalled()
+
+    await user.type(field, 's')
+    await waitFor(() => expect(searchGigs).toHaveBeenCalledWith('Pas'))
+    await user.click(await screen.findByText(/Past Show/))
+
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ memory_gig_id: 1 }))
+    await waitFor(() => expect(getGig).toHaveBeenCalledWith(1))
+    expect(updateProfile.mock.invocationCallOrder[0]).toBeLessThan(getGig.mock.invocationCallOrder[0])
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(field.value).toContain('Canonical Past Show')
+    expect(listGigs).not.toHaveBeenCalled()
+  })
+
+  it('does not search when an existing linked gig resets the picker input to its label', async () => {
+    useAuth.mockReturnValue({ user: { id: 1, bandMemberId: 7, isSuperAdmin: true } })
+    getProfile.mockResolvedValue({
+      logo_path: null,
+      memory_image_path: 'tenants/1/memory/x.png',
+      memory_gig_id: 1,
+    })
+    const user = userEvent.setup()
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText(/Past Show/)).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /edit memory/i }))
+    await waitFor(() => expect(screen.getByLabelText('Link a past gig').value).toContain('Past Show'))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+
+    expect(searchGigs).not.toHaveBeenCalled()
+    expect(listGigs).not.toHaveBeenCalled()
+  })
+
   it('shows a per-card error when one source fails, while the others still render', async () => {
-    getNextRehearsal.mockRejectedValue(new Error('boom'))
+    listUpcomingRehearsals.mockRejectedValue(new Error('boom'))
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument()

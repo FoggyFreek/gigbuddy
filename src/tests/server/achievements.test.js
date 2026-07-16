@@ -88,7 +88,7 @@ async function satisfyAllProfileGoals(tenantId, redeemedByUserId) {
   await addMember(tenantId, 'Sub Sally', 'sub')
   await pool.query(
     `INSERT INTO tenant_invites (code, tenant_id, role, created_by_user_id, expires_at, used_by_user_id, used_at)
-     VALUES ('ACHTEST1', $1, 'member', $2, NOW() + INTERVAL '1 day', $2, NOW())`,
+     VALUES ('ACHTEST1', $1, 'contributor', $2, NOW() + INTERVAL '1 day', $2, NOW())`,
     [tenantId, redeemedByUserId],
   )
 }

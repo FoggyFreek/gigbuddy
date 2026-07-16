@@ -24,9 +24,9 @@ beforeEach(async () => {
   seed = await seedTwoTenants()
   resetShopifyTokenCacheForTests()
   // seedTwoTenants() makes every user a tenant_admin. Downgrade userA in
-  // tenantA to a plain member so we can test the financial-field gate.
+  // tenantA to a plain contributor so we can test the financial-field gate.
   await pool.query(
-    `UPDATE memberships SET role = 'member'
+    `UPDATE memberships SET role = 'contributor'
      WHERE user_id = $1 AND tenant_id = $2`,
     [seed.userA.id, seed.tenantA.id],
   )
@@ -142,7 +142,7 @@ describe('PATCH /api/profile — financial fields', () => {
 })
 
 describe('PATCH /api/profile — accent color', () => {
-  it.each(['reader', 'contributor', 'financial_admin', 'member'])(
+  it.each(['reader', 'contributor', 'financial_admin'])(
     '%s cannot update the tenant accent color',
     async (role) => {
       await pool.query(

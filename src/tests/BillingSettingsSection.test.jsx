@@ -56,7 +56,7 @@ function wrap(ui, user, { initialEntry = '/settings/billing' } = {}) {
 
 const participantUser = {
   id: 7, email: 'p@test.local', name: 'Participant',
-  memberships: [{ tenantId: 1, tenantName: 'Alpha', status: 'approved', role: 'member' }],
+  memberships: [{ tenantId: 1, tenantName: 'Alpha', status: 'approved', role: 'contributor' }],
 }
 
 beforeEach(() => {

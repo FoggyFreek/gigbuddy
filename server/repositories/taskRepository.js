@@ -5,20 +5,40 @@
 // All open/done tasks across the tenant, enriched with gig + assignee context for
 // the cross-gig task list. LEFT JOIN to gigs so gig-less tasks still appear (their
 // event_description/event_date come back null).
-export async function listGigTasks(executor, tenantId) {
+export async function listTasks(executor, tenantId, { done, assigneeId, limit }) {
+  const values = [tenantId]
+  const predicates = ['t.tenant_id = $1']
+
+  if (done !== undefined) {
+    values.push(done)
+    predicates.push(`t.done = $${values.length}`)
+  }
+  if (assigneeId !== undefined) {
+    values.push(assigneeId)
+    predicates.push(`t.assigned_to = $${values.length}`)
+  }
+
+  values.push(limit)
+  const limitPlaceholder = `$${values.length}`
+
   const { rows } = await executor.query(
     `SELECT t.id, t.gig_id, t.title, t.done, t.due_date, t.created_at,
+            (COUNT(*) OVER ())::int AS collection_total,
             g.event_description, g.event_date,
             t.assigned_to,
             bm.name AS assigned_to_name
      FROM gig_tasks t
-     LEFT JOIN gigs g ON g.id = t.gig_id AND g.tenant_id = $1
-     LEFT JOIN band_members bm ON bm.id = t.assigned_to AND bm.tenant_id = $1
-     WHERE t.tenant_id = $1
-     ORDER BY t.done ASC, t.due_date ASC NULLS LAST, t.created_at ASC`,
-    [tenantId],
+     LEFT JOIN gigs g ON g.id = t.gig_id AND g.tenant_id = t.tenant_id
+     LEFT JOIN band_members bm ON bm.id = t.assigned_to AND bm.tenant_id = t.tenant_id
+     WHERE ${predicates.join(' AND ')}
+     ORDER BY t.done ASC, t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC
+     LIMIT ${limitPlaceholder}`,
+    values,
   )
-  return rows
+  return {
+    items: rows.map(({ collection_total: _collectionTotal, ...task }) => task),
+    total: rows[0]?.collection_total ?? 0,
+  }
 }
 
 export async function getTaskById(executor, taskId, tenantId) {

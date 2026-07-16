@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import pool from '../../../server/db/index.js'
 import { seedTenantAccounting } from '../../../server/db/defaultChartOfAccounts.js'
 import { TERMS_VERSION } from '../../../shared/termsVersion.js'
+import { assertTestDatabase } from './_databaseGuard.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const migrationsDir = join(__dirname, '../../../server/db/migrations')
@@ -11,6 +12,7 @@ const migrationsDir = join(__dirname, '../../../server/db/migrations')
 export { pool }
 
 export async function runMigrations() {
+  await assertTestDatabase(pool)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS migrations (
       id SERIAL PRIMARY KEY,
@@ -49,6 +51,7 @@ export async function runMigrations() {
 
 // Wipe all test-relevant data. Preserves the schema and the `migrations` table.
 export async function truncateAll() {
+  await assertTestDatabase(pool)
   await pool.query(`
     TRUNCATE
       gig_tag_links, gig_tags, gig_contacts, gig_participants, gig_tasks, gigs,
@@ -204,6 +207,7 @@ SELECT
 // tenant_admin in both. Plus one row per tenant in every tenant-owned table
 // for isolation assertions.
 export async function seedTwoTenants() {
+  await assertTestDatabase(pool)
   const { rows: [d] } = await pool.query(SEED_SQL)
 
   const tenants = d.tenants

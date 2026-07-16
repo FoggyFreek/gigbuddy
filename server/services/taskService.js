@@ -4,7 +4,7 @@
 // stand alone (gig_id null). The gig-nested routes in gigService delegate here so
 // there is a single task implementation.
 import {
-  listGigTasks,
+  listTasks as listTaskRows,
   getTaskById,
   insertTask,
   updateTaskFields,
@@ -18,9 +18,15 @@ import {
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { parseId, buildGigTaskUpdateFields } from '../validators/gigValidators.js'
+import {
+  MAX_TASK_LIST_LIMIT,
+  parseTaskAssigneeFilter,
+  parseTaskDoneFilter,
+} from '../validators/taskValidators.js'
 import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
-import { notFound } from './serviceErrors.js'
+import { badRequest, notFound } from './serviceErrors.js'
+import { limitedCollectionWithTotal } from './limitedCollectionService.js'
 
 const NOT_FOUND = notFound('Not found')
 
@@ -79,8 +85,18 @@ async function authorizeSelfPatch(db, tenantId, taskId, body, userId) {
 
 // ---------- service API ----------
 
-export async function listTasks(db, tenantId) {
-  return listGigTasks(db, tenantId)
+export async function listTasks(db, tenantId, userId, query = {}) {
+  const done = parseTaskDoneFilter(query.done)
+  if (done === null) return badRequest('done must be true or false')
+
+  const assignee = parseTaskAssigneeFilter(query.assignee)
+  if (assignee === null) return badRequest('assignee must be me or a positive member id')
+  const assigneeId = assignee === 'me'
+    ? await getBandMemberIdForUser(db, userId, tenantId)
+    : assignee
+
+  return limitedCollectionWithTotal(query.limit, (limit) =>
+    listTaskRows(db, tenantId, { done, assigneeId, limit }), MAX_TASK_LIST_LIMIT)
 }
 
 // Creates a task. `title` is required. `gig_id` is optional — both absent and an

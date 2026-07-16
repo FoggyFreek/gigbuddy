@@ -38,7 +38,7 @@ describe('RequirePermission', () => {
   })
 
   it('renders the outlet for super admins regardless of role', () => {
-    useAuth.mockReturnValue({ user: { id: 1, activeTenantRole: 'member', isSuperAdmin: true } })
+    useAuth.mockReturnValue({ user: { id: 1, activeTenantRole: 'contributor', isSuperAdmin: true } })
     setup('/members', PERMISSIONS.TENANT_MANAGE)
     expect(screen.getByText('members')).toBeInTheDocument()
   })

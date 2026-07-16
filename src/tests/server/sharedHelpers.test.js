@@ -4,6 +4,8 @@ import {
   isValidIsoDate,
   parseIntegerId,
   parsePositiveId,
+  parseDateRange,
+  parseListLimit,
   parseSearchLimit,
   trimOrNull,
 } from '../../../server/validators/common.js'
@@ -47,6 +49,30 @@ describe('shared validator primitives', () => {
     expect(parseSearchLimit('0')).toBe(1)
     expect(parseSearchLimit('100')).toBe(25)
     expect(parseSearchLimit('not-a-number')).toBe(10)
+  })
+
+  it('strictly validates reusable limited-collection limits', () => {
+    expect(parseListLimit(undefined)).toBe(10)
+    expect(parseListLimit('6')).toBe(6)
+    expect(parseListLimit('100')).toBe(100)
+    expect(parseListLimit('0')).toBeNull()
+    expect(parseListLimit('101')).toBeNull()
+    expect(parseListLimit('500', 500)).toBe(500)
+    expect(parseListLimit('501', 500)).toBeNull()
+    expect(parseListLimit('6x')).toBeNull()
+    expect(parseListLimit(['6'])).toBeNull()
+  })
+
+  it('strictly validates inclusive day windows for windowed-collection endpoints', () => {
+    expect(parseDateRange({ from: '2026-07-01', to: '2026-07-31' })).toEqual({ from: '2026-07-01', to: '2026-07-31' })
+    expect(parseDateRange({ from: '2026-07-01', to: '2026-07-01' })).toEqual({ from: '2026-07-01', to: '2026-07-01' })
+    expect(parseDateRange({ from: '2026-07-31', to: '2026-07-01' })).toBeNull()
+    expect(parseDateRange({ from: '2026-07-01' })).toBeNull()
+    expect(parseDateRange({ to: '2026-07-31' })).toBeNull()
+    expect(parseDateRange({ from: '2026-02-30', to: '2026-03-01' })).toBeNull()
+    expect(parseDateRange({ from: '20260701', to: '2026-07-31' })).toBeNull()
+    expect(parseDateRange({ from: ['2026-07-01'], to: '2026-07-31' })).toBeNull()
+    expect(parseDateRange(undefined)).toBeNull()
   })
 
   it('shares the date and nullable-text helpers without changing their semantics', () => {

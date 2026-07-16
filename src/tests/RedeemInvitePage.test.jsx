@@ -39,7 +39,7 @@ describe('RedeemInvitePage', () => {
   it('auto-redeems when ?code= is in the URL', async () => {
     redeemInvite.mockResolvedValue({
       tenant: { id: 1, slug: 'a', name: 'Band A' },
-      role: 'member',
+      role: 'contributor',
       status: 'pending',
     })
     wrap(<RedeemInvitePage />, '/redeem-invite?code=abc123')
@@ -50,7 +50,7 @@ describe('RedeemInvitePage', () => {
   it('auto-redeems exactly once under StrictMode double-effects', async () => {
     redeemInvite.mockResolvedValue({
       tenant: { id: 1, slug: 'a', name: 'Band A' },
-      role: 'member',
+      role: 'contributor',
       status: 'pending',
     })
     render(
@@ -69,7 +69,7 @@ describe('RedeemInvitePage', () => {
   it('submits manually when no code in URL', async () => {
     redeemInvite.mockResolvedValue({
       tenant: { id: 1, slug: 'a', name: 'Band A' },
-      role: 'member',
+      role: 'contributor',
       status: 'pending',
     })
     const user = userEvent.setup()
@@ -96,7 +96,7 @@ describe('RedeemInvitePage', () => {
   it('refreshes the user after successful redemption', async () => {
     redeemInvite.mockResolvedValue({
       tenant: { id: 1, slug: 'a', name: 'Band A' },
-      role: 'member',
+      role: 'contributor',
       status: 'pending',
     })
     const refreshUser = vi.fn().mockResolvedValue(null)

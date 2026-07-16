@@ -52,6 +52,26 @@ export function normalizeImportCity(row) {
   return row.city ? String(row.city).trim() : ''
 }
 
+function parseImportCoordinate(value, min, max, field) {
+  if (value === null || value === undefined || String(value).trim() === '') return { value: null }
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    return { error: `${field} must be a number between ${min} and ${max}` }
+  }
+  return { value: parsed }
+}
+
+function normalizeImportCoordinates(row) {
+  const latitude = parseImportCoordinate(row.latitude, -90, 90, 'latitude')
+  if (latitude.error) return latitude
+  const longitude = parseImportCoordinate(row.longitude, -180, 180, 'longitude')
+  if (longitude.error) return longitude
+  if ((latitude.value === null) !== (longitude.value === null)) {
+    return { error: 'latitude and longitude must be provided together' }
+  }
+  return { latitude: latitude.value, longitude: longitude.value }
+}
+
 export { venueImportKey }
 
 export function collectIncomingNames(rows) {
@@ -65,8 +85,10 @@ export function normalizeImportRow(row) {
   if (!name) return null
 
   const city = normalizeImportCity(row)
+  const coordinates = normalizeImportCoordinates(row)
+  if (coordinates.error) return coordinates
   return {
-    body: { ...row, name, city },
+    body: { ...row, name, city, latitude: coordinates.latitude, longitude: coordinates.longitude },
     key: venueImportKey(name, city),
   }
 }

@@ -89,7 +89,9 @@ export async function createVenue(db, tenantId, body) {
   if (legacyNameError) return legacyNameError
 
   try {
-    return { venue: await insertVenue(db, tenantId, body) }
+    // Coordinates are system/import-managed and are intentionally ignored by
+    // the ordinary create endpoint used by venue forms.
+    return { venue: await insertVenue(db, tenantId, { ...body, latitude: null, longitude: null }) }
   } catch (err) {
     if (err.code === '23505') {
       return conflict('A venue with this name and city already exists')
@@ -224,15 +226,14 @@ async function insertImportRows(client, tenantId, rows, existingKeys) {
   const summary = { imported: 0, skipped: 0 }
 
   for (const row of rows) {
-    const normalized = normalizeImportRow(row)
-    if (!normalized || existingKeys.has(normalized.key) || seenKeys.has(normalized.key)) {
+    if (!row || existingKeys.has(row.key) || seenKeys.has(row.key)) {
       summary.skipped++
       continue
     }
 
-    await insertVenue(client, tenantId, normalized.body)
+    await insertVenue(client, tenantId, row.body)
     summary.imported++
-    seenKeys.add(normalized.key)
+    seenKeys.add(row.key)
   }
 
   return summary
@@ -248,8 +249,12 @@ export async function importVenues(tenantId, body) {
     return badRequest('Maximum 1000 rows per import')
   }
 
+  const normalizedRows = body.map(normalizeImportRow)
+  const invalid = normalizedRows.find((row) => row?.error)
+  if (invalid) return badRequest(invalid.error)
+
   return withTransaction(async (client) => {
     const existingKeys = await buildExistingImportKeys(client, tenantId, body)
-    return { summary: await insertImportRows(client, tenantId, body, existingKeys) }
+    return { summary: await insertImportRows(client, tenantId, normalizedRows, existingKeys) }
   })
 }

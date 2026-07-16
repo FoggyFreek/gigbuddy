@@ -7,6 +7,7 @@ import TenantsPage from '../pages/admin/TenantsPage.tsx'
 import {
   deleteTenant,
   getTenantOnboardingStatus,
+  grantMembership,
   listTenants,
   updateTenant,
   updateTenantOnboardingStatus,
@@ -41,9 +42,9 @@ const tenants = [
 
 const users = [
   { id: 10, name: 'Owner Olly', email: 'olly@test.local', memberships: [{ tenant_id: 1, role: 'tenant_admin', status: 'approved' }] },
-  { id: 11, name: 'Member Mia', email: 'mia@test.local', memberships: [{ tenant_id: 1, role: 'member', status: 'approved' }] },
-  { id: 12, name: 'Pending Pete', email: 'pete@test.local', memberships: [{ tenant_id: 1, role: 'member', status: 'pending' }] },
-  { id: 13, name: 'Beta Bob', email: 'bob@test.local', memberships: [{ tenant_id: 2, role: 'member', status: 'approved' }] },
+  { id: 11, name: 'Member Mia', email: 'mia@test.local', memberships: [{ tenant_id: 1, role: 'contributor', status: 'approved' }] },
+  { id: 12, name: 'Pending Pete', email: 'pete@test.local', memberships: [{ tenant_id: 1, role: 'contributor', status: 'pending' }] },
+  { id: 13, name: 'Beta Bob', email: 'bob@test.local', memberships: [{ tenant_id: 2, role: 'contributor', status: 'approved' }] },
 ]
 
 function wrap() {
@@ -100,6 +101,45 @@ describe('TenantsPage owner assignment', () => {
     await user.click(within(await screen.findByRole('listbox')).getByText(/No owner/))
     await user.click(screen.getByRole('button', { name: 'Assign' }))
     await waitFor(() => expect(updateTenant).toHaveBeenCalledWith(1, { owner_user_id: null }))
+  })
+})
+
+describe('TenantsPage member management', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    listTenants.mockResolvedValue(tenants)
+    listAllUsers.mockResolvedValue(users)
+    getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })
+    grantMembership.mockResolvedValue({})
+  })
+
+  it('grants a membership using the userId field the backend expects', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findAllByText('Active Band')
+    await user.click(screen.getAllByRole('button', { name: 'add member' })[0])
+
+    await user.click(screen.getByRole('combobox', { name: 'User' }))
+    await user.click(within(await screen.findByRole('listbox')).getByText(/Beta Bob/))
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(grantMembership).toHaveBeenCalledWith(1, { userId: 13, role: 'contributor' }))
+    await waitFor(() => expect(listTenants).toHaveBeenCalledTimes(2))
+  })
+
+  it('offers only current write roles, not the legacy "member" alias', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findAllByText('Active Band')
+    await user.click(screen.getAllByRole('button', { name: 'add member' })[0])
+
+    await user.click(screen.getByRole('combobox', { name: 'Role' }))
+    const listbox = await screen.findByRole('listbox')
+    expect(within(listbox).getByText('reader')).toBeInTheDocument()
+    expect(within(listbox).getByText('contributor')).toBeInTheDocument()
+    expect(within(listbox).getByText('financial_admin')).toBeInTheDocument()
+    expect(within(listbox).getByText('tenant_admin')).toBeInTheDocument()
+    expect(within(listbox).queryByText('member')).not.toBeInTheDocument()
   })
 })
 

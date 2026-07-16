@@ -9,9 +9,7 @@
 // Tenant isolation is enforced separately (every query is tenant-scoped);
 // permissions decide *capability* within a tenant.
 //
-// Roles live on `memberships.role`. `member` is a legacy alias that behaves
-// exactly like `contributor` (locked product decision — members lose finance
-// access, no data backfill needed). Super admins bypass every check.
+// Roles live on `memberships.role`. Super admins bypass every check.
 
 export const ROLES = Object.freeze({
   READER: 'reader',
@@ -28,23 +26,8 @@ export const ASSIGNABLE_ROLES = Object.freeze([
   ROLES.FINANCIAL_ADMIN,
 ])
 
-// Every role accepted on a membership/invite (incl. the legacy `member` alias).
-export const ALL_ROLES = Object.freeze([
-  ROLES.READER,
-  ROLES.CONTRIBUTOR,
-  'member',
-  ROLES.FINANCIAL_ADMIN,
-  ROLES.TENANT_ADMIN,
-])
-
-// Roles valid for new writes (invites and role changes). Excludes the legacy
-// `member` alias — new assignments must use `contributor`.
-export const WRITE_ROLES = Object.freeze([
-  ROLES.READER,
-  ROLES.CONTRIBUTOR,
-  ROLES.FINANCIAL_ADMIN,
-  ROLES.TENANT_ADMIN,
-])
+// Every canonical role accepted on a membership/invite.
+export const WRITE_ROLES = Object.freeze(Object.values(ROLES))
 
 export const PERMISSIONS = Object.freeze({
   APP_VIEW: 'app.view', // view all non-finance resources
@@ -85,7 +68,6 @@ const TENANT_ADMIN = new Set([
 export const ROLE_PERMISSIONS = Object.freeze({
   [ROLES.READER]: READER,
   [ROLES.CONTRIBUTOR]: CONTRIBUTOR,
-  member: CONTRIBUTOR, // legacy alias → contributor
   [ROLES.FINANCIAL_ADMIN]: FINANCIAL_ADMIN,
   [ROLES.TENANT_ADMIN]: TENANT_ADMIN,
 })

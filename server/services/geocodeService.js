@@ -1,4 +1,9 @@
+import { fetchVenueGeocode, updateVenueGeocode } from '../repositories/venueRepository.js'
+import { notFound } from './serviceErrors.js'
+
 const GEOCODING_ENABLED = process.env.GEOCODING_ENABLED !== 'false'
+
+const NOT_FOUND = notFound('Not found')
 
 const GEOCODER = {
   buildUrls({ city, region, country, address, postalCode }) {
@@ -149,6 +154,37 @@ export async function geocodePlace(place = {}, { fetchImpl = globalThis.fetch } 
   })
   inflight.set(key, promise)
   return promise
+}
+
+function storedCoords(venue) {
+  if (venue?.latitude === null || venue?.latitude === undefined
+    || venue?.longitude === null || venue?.longitude === undefined) return null
+  const lat = Number(venue.latitude)
+  const lon = Number(venue.longitude)
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null
+}
+
+// Resolves and persists coordinates on the tenant-owned venue/festival row.
+// Existing coordinates short-circuit both the provider and the write.
+export async function geocodeVenue(db, tenantId, venueId, options = {}) {
+  const venue = await fetchVenueGeocode(db, venueId, tenantId)
+  if (!venue) return NOT_FOUND
+
+  const existing = storedCoords(venue)
+  if (existing) return { status: 'hit', coords: existing }
+
+  const result = await geocodePlace({
+    city: venue.city,
+    region: venue.region,
+    country: venue.country,
+  }, options)
+  if (result.status !== 'hit') return result
+
+  const updated = await updateVenueGeocode(
+    db, result.coords.lat, result.coords.lon, venueId, tenantId,
+  )
+  const coords = storedCoords(updated) ?? result.coords
+  return { status: 'hit', coords }
 }
 
 export function resetGeocodeCacheForTests() {

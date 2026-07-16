@@ -2,7 +2,7 @@ import { request } from './_client.ts'
 import type { Tenant, Id } from '../types/entities.ts'
 
 interface MembershipPayload {
-  user_id?: Id
+  userId?: Id
   role?: string
   status?: string
 }

@@ -15,7 +15,8 @@ import {
 import {
   listRehearsals as listRehearsalRows,
   fetchRehearsal,
-  fetchNextRehearsal,
+  listUpcomingRehearsals as listUpcomingRehearsalRows,
+  listRehearsalsInRange as listRehearsalsInRangeRows,
   rehearsalExistsInTenant,
   loadParticipants,
   loadSongs,
@@ -41,6 +42,7 @@ import {
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { songExistsInTenant } from '../repositories/songRepository.js'
 import { notFound } from './serviceErrors.js'
+import { limitedCollection, windowedCollection } from './limitedCollectionService.js'
 
 const NOT_FOUND = notFound('Not found')
 
@@ -122,16 +124,29 @@ async function autoDemoteIfNeeded(db, rehearsalId, tenantId) {
 // ---------- reads ----------
 
 export async function getNextRehearsal(db, tenantId) {
-  const rehearsal = await fetchNextRehearsal(db, tenantId)
+  const [rehearsal] = await listUpcomingRehearsalRows(db, tenantId, 1)
   if (!rehearsal) return { rehearsal: null }
   return getRehearsal(db, tenantId, rehearsal.id)
 }
 
-export async function listRehearsals(db, tenantId) {
-  const rehearsals = await listRehearsalRows(db, tenantId)
+async function attachParticipants(db, tenantId, rehearsals) {
   if (!rehearsals.length) return []
   const byRehearsal = await loadParticipants(db, rehearsals.map((r) => r.id), tenantId)
   return rehearsals.map((r) => ({ ...r, participants: byRehearsal.get(r.id) || [] }))
+}
+
+export async function listUpcomingRehearsals(db, tenantId, query = {}) {
+  return limitedCollection(query.limit, async (limit) =>
+    attachParticipants(db, tenantId, await listUpcomingRehearsalRows(db, tenantId, limit)))
+}
+
+export async function listRehearsalsInRange(db, tenantId, query = {}) {
+  return windowedCollection(query, async (range) =>
+    attachParticipants(db, tenantId, await listRehearsalsInRangeRows(db, tenantId, range.from, range.to)))
+}
+
+export async function listRehearsals(db, tenantId) {
+  return attachParticipants(db, tenantId, await listRehearsalRows(db, tenantId))
 }
 
 export async function getRehearsal(db, tenantId, rehearsalId) {

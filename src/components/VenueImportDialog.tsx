@@ -29,6 +29,7 @@ type VenueFieldLabelKey =
   | 'venueName' | 'category' | 'title' | 'givenName' | 'familyName' | 'organizationName'
   | 'streetAndNumber' | 'streetAdditional' | 'postalCode' | 'city' | 'region' | 'country'
   | 'website' | 'phone' | 'email'
+  | 'latitude' | 'longitude'
 
 interface VenueField {
   key: string
@@ -53,6 +54,8 @@ const VENUE_FIELDS: VenueField[] = [
   { key: 'website',           labelKey: 'website',          required: false, aliases: ['website', 'url', 'web'] },
   { key: 'phone',             labelKey: 'phone',            required: false, aliases: ['phone', 'tel', 'telephone', 'phone number'] },
   { key: 'email',             labelKey: 'email',            required: false, aliases: ['email', 'e-mail', 'email address'] },
+  { key: 'latitude',          labelKey: 'latitude',         required: false, aliases: ['latitude', 'lat'] },
+  { key: 'longitude',         labelKey: 'longitude',        required: false, aliases: ['longitude', 'lon', 'lng'] },
 ]
 
 function autoMap(headers: string[]): Record<string, string> {

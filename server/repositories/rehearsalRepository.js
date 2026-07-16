@@ -9,12 +9,25 @@ export async function listRehearsals(executor, tenantId) {
   return rows
 }
 
-export async function fetchNextRehearsal(executor, tenantId) {
+export async function listUpcomingRehearsals(executor, tenantId, limit) {
   const { rows } = await executor.query(
-    'SELECT * FROM rehearsals WHERE tenant_id = $1 AND status = \'planned\' AND proposed_date >= CURRENT_DATE ORDER BY proposed_date ASC, id ASC LIMIT 1',
-    [tenantId],
+    `SELECT * FROM rehearsals
+     WHERE tenant_id = $1 AND status = 'planned' AND proposed_date >= CURRENT_DATE
+     ORDER BY proposed_date ASC, id ASC
+     LIMIT $2`,
+    [tenantId, limit],
   )
-  return rows[0] ?? null
+  return rows
+}
+
+export async function listRehearsalsInRange(executor, tenantId, from, to) {
+  const { rows } = await executor.query(
+    `SELECT * FROM rehearsals
+     WHERE tenant_id = $1 AND proposed_date BETWEEN $2 AND $3
+     ORDER BY proposed_date ASC, id ASC`,
+    [tenantId, from, to],
+  )
+  return rows
 }
 
 export async function fetchRehearsal(executor, rehearsalId, tenantId) {

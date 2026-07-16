@@ -7,6 +7,9 @@ import { parseId } from '../validators/gigValidators.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
   listGigs,
+  listUpcomingGigs,
+  listGigsInRange,
+  listGigMapData,
   searchGigs,
   searchGigTags,
   getGig,
@@ -61,6 +64,26 @@ const router = Router()
 // List all gigs with open task count and member availability
 router.get('/', async (req, res) => {
   res.json(await listGigs(pool, req.tenantId))
+})
+
+router.get('/upcoming', async (req, res) => {
+  const result = await listUpcomingGigs(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+// Calendar month read: gigs inside the inclusive ?from=&to= day window.
+router.get('/range', async (req, res) => {
+  const result = await listGigsInRange(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+// Past-gig world map: minimal venue/festival projection in an inclusive date window.
+router.get('/map', async (req, res) => {
+  const result = await listGigMapData(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
 })
 
 // Global search (min 3 chars): event, venue/festival, city, or gig tag.

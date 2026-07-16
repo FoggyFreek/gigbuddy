@@ -156,10 +156,10 @@ export async function upsertMembership(executor, userId, tenantId, role, approve
   return rows[0]
 }
 
-// Demotes a tenant_admin back to member. Returns true when a row was updated.
-export async function demoteAdminToMember(executor, tenantId, userId) {
+// Demotes a tenant_admin back to a plain contributor. Returns true when a row was updated.
+export async function demoteAdminToContributor(executor, tenantId, userId) {
   const { rowCount } = await executor.query(
-    `UPDATE memberships SET role = 'member'
+    `UPDATE memberships SET role = 'contributor'
       WHERE tenant_id = $1 AND user_id = $2 AND role = 'tenant_admin'`,
     [tenantId, userId],
   )

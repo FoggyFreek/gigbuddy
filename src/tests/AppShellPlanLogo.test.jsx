@@ -35,8 +35,8 @@ function makeUser(entitlements) {
     pictureUrl: null,
     isSuperAdmin: false,
     activeTenantId: 1,
-    activeTenantRole: 'member',
-    memberships: [{ tenantId: 1, tenantSlug: 'a', tenantName: 'Band A', role: 'member', status: 'approved' }],
+    activeTenantRole: 'contributor',
+    memberships: [{ tenantId: 1, tenantSlug: 'a', tenantName: 'Band A', role: 'contributor', status: 'approved' }],
     entitlements,
   }
 }

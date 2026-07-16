@@ -4,17 +4,32 @@
 import { buildEventUpdateFields } from '../validators/bandEventValidators.js'
 import {
   listBandEvents,
+  listUpcomingBandEvents as listUpcomingBandEventRows,
+  listBandEventsInRange as listBandEventsInRangeRows,
   fetchBandEvent,
   insertBandEvent,
   updateBandEventFields,
   deleteBandEvent as deleteBandEventRow,
 } from '../repositories/bandEventRepository.js'
+import { parseLocalDate } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
+import { limitedCollection, windowedCollection } from './limitedCollectionService.js'
 
 const NOT_FOUND = notFound('Not found')
+const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
 
 export async function listEvents(db, tenantId) {
   return listBandEvents(db, tenantId)
+}
+
+export async function listUpcomingEvents(db, tenantId, query = {}) {
+  const today = parseLocalDate(query.today)
+  if (today === null) return badRequest(INVALID_TODAY)
+  return limitedCollection(query.limit, (limit) => listUpcomingBandEventRows(db, tenantId, today, limit))
+}
+
+export async function listEventsInRange(db, tenantId, query = {}) {
+  return windowedCollection(query, (range) => listBandEventsInRangeRows(db, tenantId, range.from, range.to))
 }
 
 export async function getEvent(db, tenantId, eventId) {

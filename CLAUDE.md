@@ -6,11 +6,19 @@ Guidance for Claude Code working in this repository: environment quirks, the arc
 
 **Node 24** everywhere: local dev, CI (`.github/workflows/deploy.yml`), and the Docker images (`node:24-alpine`). Keep the three in sync when bumping.
 
-**Secrets are injected by Infisical — never edit `.env` by hand and never paste credentials.** Every command that needs env vars must be wrapped:
+**Secrets are injected by Infisical — never edit `.env` by hand and never paste credentials.** Application commands use the default `dev` slug:
 
 ```
 infisical run -- <command>
 ```
+
+Backend tests are the exception: always select the dedicated `test` slug explicitly:
+
+```
+infisical run --env=test -- <test command>
+```
+
+The `test` slug sets `PGDATABASE=gigbuddy_test`. Do not run backend tests with the default Infisical environment.
 
 `.infisical.json` maps git branches to Infisical environments (`main` → `dev`). `pg` and the app read `PGHOST`/`PGDATABASE`/`PGUSER`/`PGPASSWORD`/`PGPORT` and the rest from the process env that Infisical populates. `.env.example` documents the variable *names* only.
 
@@ -45,15 +53,15 @@ Write or adjust the test first, watch it fail, then implement until it passes. T
 infisical run -- npm test                                   # frontend (vitest watch), excludes server tests
 infisical run -- npm test -- --run                          # frontend, single run
 infisical run -- npm test -- --run src/tests/Foo.test.jsx   # one file
-infisical run -- npm run test:server                        # FULL backend suite (~10 min!) — only when explicitly asked
-infisical run -- npx vitest run --no-file-parallelism src/tests/server/<file>.test.js   # targeted backend test — default
+infisical run --env=test -- npm run test:server                        # FULL backend suite (~10 min!) — only when explicitly asked
+infisical run --env=test -- npx vitest run --no-file-parallelism src/tests/server/<file>.test.js   # targeted backend test — default
 ```
 
 **Backend tests are slow** (sequential, real Postgres). Run only the affected file(s) via `npx vitest` as shown. Note `npm run test:server -- <file>` does NOT narrow the run — the npm script already passes `src/tests/server` as a path, so appended file args are ignored and the full suite runs anyway.
 
 - **Frontend** tests (`src/tests/`, jsdom): all `src/api/*` modules are mocked with `vi.mock`. Components are wrapped in MUI `ThemeProvider` (+ `LocalizationProvider`/`MemoryRouter` as needed) via a local `wrap()` helper. Debounced-save tests use `vi.useFakeTimers()` + `vi.runAllTimersAsync()`.
 
-- **Backend** tests (`src/tests/server/`) run against a **real Postgres test database** whose name must end in `_test` (defaults to `${PGDATABASE}_test`, override with `PGDATABASE_TEST`); the harness refuses any other name and rewrites `PGDATABASE` before the pool is imported. Create the test DB manually once. `_app.js` builds a real Express app but `x-test-user-id`/`x-test-tenant-id` headers stand in for OIDC and CSRF is short-circuited. `_db.js` exposes `runMigrations`, `truncateAll`, `seedTwoTenants`.
+- **Backend** tests (`src/tests/server/`) run against a **real Postgres test database** whose name must end in `_test`. Resolution order is: `PGDATABASE_TEST`, then `PGDATABASE` itself when it already ends in `_test` (for dedicated test-only Infisical credentials), otherwise `${PGDATABASE}_test`. `_envSetup.js` must remain the first import, but safety does not depend on import order alone: every mutating `_db.js` helper requires its bootstrap marker and verifies PostgreSQL's actual `current_database()` exactly matches the expected `_test` database before migrations, truncation, or fixture inserts. Create the test DB manually once. `_app.js` builds a real Express app but `x-test-user-id`/`x-test-tenant-id` headers stand in for OIDC and CSRF is short-circuited. `_db.js` exposes `runMigrations`, `truncateAll`, `seedTwoTenants`.
 
 When you add backend behavior, add an isolation test that proves **tenant isolation holds** — a cross-tenant read/write must 404, not leak.
 
@@ -89,6 +97,7 @@ Multiple bands (tenants) share one instance with strict data isolation. This is 
 ## Backend foundations
 
 - **Layering: route → service → repository → PostgreSQL**, validators at the service boundary. Routes stay thin; SQL lives in repositories; transactions (`withTransaction`) in services; common errors in `server/services/serviceErrors.js`; domain constants in `server/domain/`. **Canonical example: the rehearsals stack** (`server/{routes,services,repositories,validators}/rehearsal*`). Load the **backend-layering** skill before adding or refactoring any backend resource.
+- **Collection reads are scoped.** Load the **collection-scoping** skill before adding or changing any endpoint that returns a list (bounded `?limit=` vs windowed `?from=&to=` contract, `{ items, meta }` envelope, interval semantics).
 - **Shared primitives have one owner.** Before adding a repository query or normalization helper, search for an existing equivalent. Aggregate reads belong to the aggregate's repository; shared normalization belongs in `server/utils`. Never duplicate equivalent SQL or normalization logic.
 - Auth: OIDC protocol in `server/oidc.js`, flows in `server/routes/auth.js` → `authService.js`; user/terms middleware `server/middleware/auth.js`. Cold sign-in is **invite-only**: a new sign-in gets zero memberships → `/redeem-invite`; `ADMIN_EMAIL` bootstraps the super admin.
 - CSRF (`server/middleware/csrf.js`): synchronizer token, mounted on `/api`; the SPA picks it up from the `X-CSRF-Token` header on the `/auth/me` bootstrap. OIDC redirect GETs and **`/push/resubscribe`** are deliberately exempt.

@@ -18,3 +18,49 @@ export function isApiError(e: unknown): e is ApiError {
 
 /** Options accepted by request() — fetch options with our JSON-string body. */
 export type RequestOptions = RequestInit
+
+/** Stable envelope for bounded list endpoints such as `GET /gigs/upcoming`. */
+export interface LimitedCollectionResponse<T> {
+  items: T[]
+  meta: {
+    limit: number
+    returned: number
+  }
+}
+
+/** Bounded collection whose full matching count is returned with the page. */
+export interface LimitedCollectionWithTotalResponse<T> {
+  items: T[]
+  meta: {
+    limit: number
+    returned: number
+    total: number
+  }
+}
+
+/** Stable envelope for windowed list endpoints such as `GET /gigs/range` (inclusive day window). */
+export interface WindowedCollectionResponse<T> {
+  items: T[]
+  meta: {
+    from: string
+    to: string
+    returned: number
+  }
+}
+
+export interface GigMapPlace {
+  id: import('./entities.ts').Id
+  city: string | null
+  region: string | null
+  country: string | null
+  latitude: number | null
+  longitude: number | null
+}
+
+export interface GigMapGig {
+  id: import('./entities.ts').Id
+  event_date: string
+  event_description: string
+  venue: GigMapPlace | null
+  festival: GigMapPlace | null
+}

@@ -25,7 +25,9 @@
     "country": "Country",
     "website": "Website",
     "phone": "Phone",
-    "email": "Email"
+    "email": "Email",
+    "latitude": "Latitude",
+    "longitude": "Longitude"
   },
   "placeholders": {
     "title": "Mr.",
@@ -80,7 +82,7 @@
   },
   "import": {
     "title": "Import Venues from CSV",
-    "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: name, category, title, given name, family name, organization name, street and number, street additional, postal code, city, region, country, website, phone, email.",
+    "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: name, category, title, given name, family name, organization name, street and number, street additional, postal code, city, region, country, website, phone, email, latitude, longitude.",
     "mapHelp": "Map your CSV columns to venue fields. {{count}} rows detected.",
     "columns": {
       "category": "Category",

@@ -8,6 +8,8 @@ import {
   listRehearsals,
   getRehearsal,
   getNextRehearsal,
+  listUpcomingRehearsals,
+  listRehearsalsInRange,
   createRehearsal,
   patchRehearsal,
   deleteRehearsal,
@@ -34,6 +36,19 @@ router.get('/next', async (req, res) => {
   const result = await getNextRehearsal(pool, req.tenantId)
   if (result.error) return sendError(res, result.error)
   res.json(result.rehearsal)
+})
+
+router.get('/upcoming', async (req, res) => {
+  const result = await listUpcomingRehearsals(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+// Calendar month read: rehearsals inside the inclusive ?from=&to= day window.
+router.get('/range', async (req, res) => {
+  const result = await listRehearsalsInRange(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
 })
 
 // Get single rehearsal

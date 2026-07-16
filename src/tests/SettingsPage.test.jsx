@@ -65,7 +65,7 @@ describe('SettingsPage — nav gating', () => {
   })
 
   it('hides tenant-admin settings for a plain member', async () => {
-    wrap('/settings', { role: 'member' })
+    wrap('/settings', { role: 'contributor' })
     expect(await screen.findByText('My preferences')).toBeInTheDocument()
     expect(screen.queryByText('Accent color')).not.toBeInTheDocument()
     expect(screen.queryByText('Members')).not.toBeInTheDocument()

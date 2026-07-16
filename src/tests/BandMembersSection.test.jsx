@@ -19,7 +19,7 @@ vi.mock('../api/bandMembers.ts', () => ({
 import { createMember, deleteMember, listMembers, updateMember } from '../api/bandMembers.ts'
 
 const memberAuth = {
-  user: { id: 7, activeTenantRole: 'member', permissions: ['app.view', 'planning.write', 'purchase.create'] },
+  user: { id: 7, activeTenantRole: 'contributor', permissions: ['app.view', 'planning.write', 'purchase.create'] },
   setUser: () => {},
   logout: async () => {},
   switchTenant: async () => undefined,

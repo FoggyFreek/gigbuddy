@@ -2,11 +2,11 @@
 // transaction client) so callers control transactions.
 import {
   VALID_VENUE_CATEGORIES,
-  VENUE_EDITABLE_FIELDS,
+  VENUE_INSERT_FIELDS,
   buildVenueInsertValues,
 } from '../domain/venue.js'
 
-const INSERT_COLUMNS = ['tenant_id', ...VENUE_EDITABLE_FIELDS]
+const INSERT_COLUMNS = ['tenant_id', ...VENUE_INSERT_FIELDS]
 const INSERT_SQL = `INSERT INTO venues (${INSERT_COLUMNS.join(', ')})
      VALUES (${INSERT_COLUMNS.map((_, i) => `$${i + 1}`).join(', ')})
      RETURNING *`
@@ -73,6 +73,27 @@ export async function fetchVenue(executor, venueId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM venues WHERE id = $1 AND tenant_id = $2',
     [venueId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function fetchVenueGeocode(executor, venueId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id, city, region, country, latitude, longitude
+       FROM venues
+      WHERE id = $1 AND tenant_id = $2`,
+    [venueId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function updateVenueGeocode(executor, latitude, longitude, venueId, tenantId) {
+  const { rows } = await executor.query(
+    `UPDATE venues
+        SET latitude = $1, longitude = $2, updated_at = NOW()
+      WHERE id = $3 AND tenant_id = $4
+      RETURNING latitude, longitude`,
+    [latitude, longitude, venueId, tenantId],
   )
   return rows[0] || null
 }

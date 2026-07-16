@@ -75,7 +75,7 @@ describe('RequireAuth', () => {
         id: 1,
         status: 'approved',
         isSuperAdmin: false,
-        memberships: [{ tenantId: 1, status: 'pending', role: 'member' }],
+        memberships: [{ tenantId: 1, status: 'pending', role: 'contributor' }],
       },
     })
     setup('/')
@@ -89,7 +89,7 @@ describe('RequireAuth', () => {
         status: 'approved',
         isSuperAdmin: false,
         termsVersion: TERMS_VERSION,
-        memberships: [{ tenantId: 1, status: 'approved', role: 'member' }],
+        memberships: [{ tenantId: 1, status: 'approved', role: 'contributor' }],
       },
     })
     setup('/')
@@ -116,7 +116,7 @@ describe('RequireAuth', () => {
         id: 1,
         status: 'approved',
         isSuperAdmin: false,
-        memberships: [{ tenantId: 1, status: 'pending', role: 'member' }],
+        memberships: [{ tenantId: 1, status: 'pending', role: 'contributor' }],
       },
     })
     setup('/redeem-invite')
@@ -131,7 +131,7 @@ describe('RequireAuth', () => {
           status: 'approved',
           isSuperAdmin: false,
           termsVersion: '2000-01-01',
-          memberships: [{ tenantId: 1, status: 'approved', role: 'member' }],
+          memberships: [{ tenantId: 1, status: 'approved', role: 'contributor' }],
         },
       })
       setup('/')
@@ -145,7 +145,7 @@ describe('RequireAuth', () => {
           status: 'approved',
           isSuperAdmin: false,
           termsVersion: null,
-          memberships: [{ tenantId: 1, status: 'approved', role: 'member' }],
+          memberships: [{ tenantId: 1, status: 'approved', role: 'contributor' }],
         },
       })
       setup('/')
@@ -167,7 +167,7 @@ describe('RequireAuth', () => {
           status: 'approved',
           isSuperAdmin: false,
           termsVersion: null,
-          memberships: [{ tenantId: 1, status: 'approved', role: 'member' }],
+          memberships: [{ tenantId: 1, status: 'approved', role: 'contributor' }],
         },
       })
       setup('/accept-terms')
@@ -181,7 +181,7 @@ describe('RequireAuth', () => {
           status: 'approved',
           isSuperAdmin: false,
           termsVersion: null,
-          memberships: [{ tenantId: 1, status: 'approved', role: 'member' }],
+          memberships: [{ tenantId: 1, status: 'approved', role: 'contributor' }],
         },
       })
       setup('/onboarding')
@@ -204,7 +204,7 @@ describe('RequireAuth', () => {
           id: 1,
           status: 'approved',
           isSuperAdmin: false,
-          memberships: [{ tenantId: 1, status: 'pending', role: 'member' }],
+          memberships: [{ tenantId: 1, status: 'pending', role: 'contributor' }],
         },
       })
       setup('/onboarding')
@@ -217,7 +217,7 @@ describe('RequireAuth', () => {
           id: 1,
           status: 'approved',
           isSuperAdmin: false,
-          memberships: [{ tenantId: 1, status: 'approved', role: 'member' }],
+          memberships: [{ tenantId: 1, status: 'approved', role: 'contributor' }],
         },
       })
       setup('/onboarding')

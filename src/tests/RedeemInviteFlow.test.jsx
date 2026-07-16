@@ -49,7 +49,7 @@ const memberlessUser = {
 
 const redeemedBandA = {
   tenant: { id: 1, slug: 'a', name: 'Band A' },
-  role: 'member',
+  role: 'contributor',
   status: 'pending',
 }
 

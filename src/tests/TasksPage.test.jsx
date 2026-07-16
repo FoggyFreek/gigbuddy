@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/tasks.ts', () => ({
-  listAllTasks: vi.fn(),
+  listTasks: vi.fn(),
   createTask: vi.fn(),
   updateTask: vi.fn(),
   deleteTask: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('react-router-dom', async (orig) => ({
 }))
 
 import TasksPage from '../pages/TasksPage.tsx'
-import { listAllTasks, createTask, updateTask, deleteTask } from '../api/tasks.ts'
+import { listTasks, createTask, updateTask, deleteTask } from '../api/tasks.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
@@ -58,10 +58,15 @@ const TASKS = [
   },
 ]
 
+const collection = (items) => ({
+  items,
+  meta: { limit: 50, returned: items.length, total: items.length },
+})
+
 describe('TasksPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    listAllTasks.mockResolvedValue(TASKS)
+    listTasks.mockResolvedValue(collection(TASKS))
     createTask.mockResolvedValue({ id: 99 })
     updateTask.mockResolvedValue({})
     deleteTask.mockResolvedValue(undefined)
@@ -69,18 +74,19 @@ describe('TasksPage', () => {
     usePermissions.mockReturnValue({ canWritePlanning: true })
   })
 
-  it('shows all tasks on load', async () => {
+  it('shows the tasks returned by the collection on load', async () => {
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
+    expect(listTasks).toHaveBeenCalledWith({ limit: 50 })
     expect(screen.getByText('Confirm rider')).toBeInTheDocument()
     expect(screen.getByText('Buy strings')).toBeInTheDocument()
   })
 
   it('keeps a finished gig task visible and disabled while that gig has open tasks', async () => {
-    listAllTasks.mockResolvedValue([
+    listTasks.mockResolvedValue(collection([
       { ...TASKS[0], id: 20, title: 'Finished setup', done: true },
       { ...TASKS[0], id: 21, title: 'Open setup', done: false },
-    ])
+    ]))
 
     wrap(<TasksPage />)
 
@@ -112,6 +118,31 @@ describe('TasksPage', () => {
     // The menu items carry the filter labels as plain text (no icons).
     expect(await screen.findByRole('menuitem', { name: 'Assigned to me' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Finished' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Max. tasks shown' })).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Tasks shown' })).not.toBeInTheDocument()
+  })
+
+  it('reloads with the selected task limit in desktop view', async () => {
+    const user = userEvent.setup()
+    wrap(<TasksPage />)
+    await waitFor(() => expect(listTasks).toHaveBeenCalledWith({ limit: 50 }))
+
+    await user.click(screen.getByRole('combobox', { name: 'Tasks shown' }))
+    await user.click(await screen.findByRole('option', { name: '200' }))
+
+    await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith({ limit: 200 }))
+  })
+
+  it('reloads with the selected task limit from the compact menu', async () => {
+    const user = userEvent.setup()
+    wrap(<TasksPage />, { compact: true })
+    await waitFor(() => expect(listTasks).toHaveBeenCalledWith({ limit: 50 }))
+
+    await user.click(screen.getByRole('button', { name: /filters/i }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Max. tasks shown' }))
+    await user.click(await screen.findByRole('menuitem', { name: '500' }))
+
+    await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith({ limit: 500 }))
   })
 
   it('filters via the compact filter menu', async () => {
@@ -157,19 +188,19 @@ describe('TasksPage', () => {
     const user = userEvent.setup()
     let resolveRefresh
     const refresh = new Promise((resolve) => { resolveRefresh = resolve })
-    listAllTasks
-      .mockResolvedValueOnce(TASKS)
+    listTasks
+      .mockResolvedValueOnce(collection(TASKS))
       .mockReturnValueOnce(refresh)
 
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
     await user.click(screen.getAllByRole('checkbox')[2])
-    await waitFor(() => expect(listAllTasks).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(2))
 
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     expect(screen.getByText('Confirm rider')).toBeInTheDocument()
 
-    resolveRefresh(TASKS)
+    resolveRefresh(collection(TASKS))
     await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
   })
 
@@ -186,7 +217,7 @@ describe('TasksPage', () => {
     expect(body).toMatchObject({ title: 'Practice set' })
     expect(body).not.toHaveProperty('gig_id')
     // List reloads after create (initial load + reload).
-    expect(listAllTasks).toHaveBeenCalledTimes(2)
+    expect(listTasks).toHaveBeenCalledTimes(2)
   })
 
   it('opens the edit dialog when a card is clicked and updates the task', async () => {

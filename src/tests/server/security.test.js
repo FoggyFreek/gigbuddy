@@ -171,7 +171,7 @@ describe('audit logging', () => {
     )
     await pool.query(
       `INSERT INTO memberships (user_id, tenant_id, role, status)
-       VALUES ($1, $2, 'member', 'pending')`,
+       VALUES ($1, $2, 'contributor', 'pending')`,
       [pending.id, seed.tenantA.id],
     )
 
@@ -199,7 +199,7 @@ describe('audit logging', () => {
     )
     await pool.query(
       `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'member', 'approved', NOW())`,
+       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
       [removable.id, seed.tenantA.id],
     )
 
@@ -254,7 +254,7 @@ describe('audit logging', () => {
     )
     await pool.query(
       `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'member', 'approved', NOW())`,
+       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
       [target.id, seed.tenantA.id],
     )
 

@@ -7,7 +7,7 @@ import * as be from '../../server/auth/permissions.js'
 // is kept as a regression guard: if anyone re-introduces a hand-maintained
 // matrix in either wrapper instead of re-exporting the shared source, parity
 // breaks here.
-const ROLES = ['reader', 'contributor', 'member', 'financial_admin', 'tenant_admin']
+const ROLES = ['reader', 'contributor', 'financial_admin', 'tenant_admin']
 
 describe('permission matrix parity (frontend mirrors backend)', () => {
   it('exposes the same permission keys', () => {
@@ -34,13 +34,16 @@ describe('hasPermission truth table', () => {
     expect(hasPermission('reader', PERMISSIONS.FINANCE_VIEW)).toBe(false)
   })
 
-  it('contributor == member: planning + purchase, no finance', () => {
-    for (const role of ['contributor', 'member']) {
-      expect(hasPermission(role, PERMISSIONS.PLANNING_WRITE)).toBe(true)
-      expect(hasPermission(role, PERMISSIONS.PURCHASE_CREATE)).toBe(true)
-      expect(hasPermission(role, PERMISSIONS.FINANCE_VIEW)).toBe(false)
-      expect(hasPermission(role, PERMISSIONS.FINANCE_MANAGE)).toBe(false)
-    }
+  it('contributor: planning + purchase, no finance', () => {
+    expect(hasPermission('contributor', PERMISSIONS.PLANNING_WRITE)).toBe(true)
+    expect(hasPermission('contributor', PERMISSIONS.PURCHASE_CREATE)).toBe(true)
+    expect(hasPermission('contributor', PERMISSIONS.FINANCE_VIEW)).toBe(false)
+    expect(hasPermission('contributor', PERMISSIONS.FINANCE_MANAGE)).toBe(false)
+  })
+
+  it('legacy "member" role no longer grants any permission', () => {
+    expect(hasPermission('member', PERMISSIONS.PLANNING_WRITE)).toBe(false)
+    expect(hasPermission('member', PERMISSIONS.APP_VIEW)).toBe(false)
   })
 
   it('financial_admin: finance but no member management', () => {

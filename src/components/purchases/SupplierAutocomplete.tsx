@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Contact, Id } from '../../types/entities.ts'
 import Autocomplete from '@mui/material/Autocomplete'
@@ -8,9 +8,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import SearchIcon from '@mui/icons-material/Search'
 import { createContact, searchContacts } from '../../api/contacts.ts'
-
-const MIN_CHARS = 3
-const DEBOUNCE_MS = 250
+import useRemoteSearch from '../../hooks/useRemoteSearch.ts'
 
 // An action option injected at the end of the list when no exact match exists.
 interface ActionOption {
@@ -44,45 +42,23 @@ export default function SupplierAutocomplete({
   value, onChange, disabled, autoFocus, label,
 }: Readonly<SupplierAutocompleteProps>) {
   const { t } = useTranslation(['purchases', 'common'])
-  const [options, setOptions] = useState<Contact[]>([])
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const reqIdRef = useRef(0)
+  const {
+    inputValue, query, options, loading, tooShort, onInputChange,
+  } = useRemoteSearch<Contact>({
+    search: searchContacts,
+    inputValue: value || '',
+    onInputValueChange: (nextValue) => {
+      onChange({ supplier_name: nextValue, supplier_contact_id: null })
+    },
+  })
 
-  const trimmed = (value || '').trim()
-  const tooShort = trimmed.length < MIN_CHARS
-
-  useEffect(() => {
-    const myReqId = ++reqIdRef.current
-    if (tooShort) {
-      const reset = setTimeout(() => {
-        if (reqIdRef.current !== myReqId) return
-        setOptions([])
-        setLoading(false)
-      }, 0)
-      return () => clearTimeout(reset)
-    }
-    const startHandle = setTimeout(() => {
-      if (reqIdRef.current === myReqId) setLoading(true)
-    }, 0)
-    const handle = setTimeout(() => {
-      searchContacts(trimmed)
-        .then((rows) => { if (reqIdRef.current === myReqId) setOptions(rows) })
-        .catch(() => { if (reqIdRef.current === myReqId) setOptions([]) })
-        .finally(() => { if (reqIdRef.current === myReqId) setLoading(false) })
-    }, DEBOUNCE_MS)
-    return () => {
-      clearTimeout(startHandle)
-      clearTimeout(handle)
-    }
-  }, [trimmed, tooShort])
-
-  const hasExactMatch = options.some((o) => (o.name || '').toLowerCase() === trimmed.toLowerCase())
+  const hasExactMatch = options.some((o) => (o.name || '').toLowerCase() === query.toLowerCase())
 
   const augmentedOptions: SupplierOption[] = useMemo(() => {
     if (tooShort || loading || hasExactMatch) return options
-    return [...options, { __action: 'create-supplier' as const, __label: t($ => $.supplierPicker.create, { name: trimmed }) }]
-  }, [options, tooShort, loading, hasExactMatch, trimmed, t])
+    return [...options, { __action: 'create-supplier' as const, __label: t($ => $.supplierPicker.create, { name: query }) }]
+  }, [options, tooShort, loading, hasExactMatch, query, t])
 
   async function createSupplier(name: string) {
     setError(null)
@@ -108,7 +84,7 @@ export default function SupplierAutocomplete({
       return
     }
     if (isAction(picked)) {
-      createSupplier(trimmed)
+      createSupplier(query)
       return
     }
     onChange({ supplier_name: picked.name ?? '', supplier_contact_id: picked.id ?? null })
@@ -119,11 +95,8 @@ export default function SupplierAutocomplete({
       freeSolo
       value={value || ''}
       onChange={handleChange}
-      inputValue={value || ''}
-      onInputChange={(_e, v, reason) => {
-        if (reason === 'reset') return
-        onChange({ supplier_name: v, supplier_contact_id: null })
-      }}
+      inputValue={inputValue}
+      onInputChange={onInputChange}
       options={augmentedOptions}
       filterOptions={(x) => x}
       loading={loading}

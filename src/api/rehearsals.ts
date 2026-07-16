@@ -1,11 +1,15 @@
 import { request } from './_client.ts'
 import type { Rehearsal, Id } from '../types/entities.ts'
+import type { LimitedCollectionResponse, WindowedCollectionResponse } from '../types/api.ts'
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/rehearsals${path}`, options)
 
 export const listRehearsals = () => api<Rehearsal[]>('/')
-export const getNextRehearsal = () => api<Rehearsal | null>('/next')
+export const listUpcomingRehearsals = (limit: number) =>
+  api<LimitedCollectionResponse<Rehearsal>>(`/upcoming?${new URLSearchParams({ limit: String(limit) })}`)
+export const listRehearsalsInRange = ({ from, to }: { from: string; to: string }) =>
+  api<WindowedCollectionResponse<Rehearsal>>(`/range?${new URLSearchParams({ from, to })}`)
 export const getRehearsal = (id: Id) => api<Rehearsal>(`/${id}`)
 export const createRehearsal = (body: Partial<Rehearsal>) =>
   api<Rehearsal>('/', { method: 'POST', body: JSON.stringify(body) })

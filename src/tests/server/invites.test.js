@@ -116,9 +116,9 @@ describe('/api/invites — admin endpoints', () => {
   })
 
   it('non-tenant-admin members are forbidden from /api/invites', async () => {
-    // Demote userA to plain member.
+    // Demote userA to plain contributor.
     await pool.query(
-      `UPDATE memberships SET role = 'member' WHERE user_id = $1 AND tenant_id = $2`,
+      `UPDATE memberships SET role = 'contributor' WHERE user_id = $1 AND tenant_id = $2`,
       [seed.userA.id, seed.tenantA.id],
     )
     await asAdminA(request(app).get('/api/invites')).expect(403)
@@ -216,7 +216,7 @@ describe('/api/invites/redeem', () => {
   it('rejects expired invites', async () => {
     const outsider = await createOutsider()
     const past = new Date(Date.now() - 1000)
-    const invite = await newInvite(seed.tenantA.id, 'member', past)
+    const invite = await newInvite(seed.tenantA.id, 'contributor', past)
     await as(outsider.id, null)(
       request(app).post('/api/invites/redeem').send({ code: invite.code }),
     ).expect(410)

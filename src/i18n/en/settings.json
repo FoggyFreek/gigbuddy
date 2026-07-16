@@ -32,7 +32,6 @@
     },
     "superChip": "super",
     "noneOption": "— none —",
-    "legacyMemberOption": "member (legacy)",
     "approve": "Approve",
     "reject": "Reject",
     "status": {

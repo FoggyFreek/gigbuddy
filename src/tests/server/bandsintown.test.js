@@ -375,18 +375,19 @@ describe('POST /api/bandsintown/import', () => {
     expect(res.body).toEqual({ created: 2, skipped: 0, venues_created: 2 })
 
     const { rows: venues } = await pool.query(
-      `SELECT name, category, city, street_and_number, postal_code FROM venues
+      `SELECT name, category, city, street_and_number, postal_code, latitude, longitude FROM venues
        WHERE tenant_id = $1 AND name IN ('Tall Ships Races 2026', 'Schokker blues') ORDER BY name`,
       [seed.tenantA.id],
     )
     expect(venues).toEqual([
       {
         name: 'Schokker blues', category: 'venue', city: 'Schokland',
-        street_and_number: 'Middelbuurt 2', postal_code: '8319 AB',
+        street_and_number: 'Middelbuurt 2', postal_code: '8319 AB', latitude: null, longitude: null,
       },
       {
         name: 'Tall Ships Races 2026', category: 'festival', city: 'Harlingen',
         street_and_number: 'Nieuwe Willemshaven 5', postal_code: '8862 RZ',
+        latitude: 53.1720076, longitude: 5.411957399999999,
       },
     ])
 

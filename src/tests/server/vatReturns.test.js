@@ -386,7 +386,7 @@ describe('VAT returns — list', () => {
 describe('VAT returns — authorization & tenant isolation', () => {
   it('a non-admin member gets 403', async () => {
     await pool.query(
-      `UPDATE memberships SET role = 'member' WHERE user_id = $1 AND tenant_id = $2`,
+      `UPDATE memberships SET role = 'contributor' WHERE user_id = $1 AND tenant_id = $2`,
       [seed.userA.id, seed.tenantA.id],
     )
     await asUserA(request(app).get('/api/vat-returns')).expect(403)

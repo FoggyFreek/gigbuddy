@@ -231,7 +231,7 @@ describe('ProfilePage', () => {
 
   it('hides edit affordance for non-admin members on the financial section', async () => {
     const user = userEvent.setup()
-    wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'member' } })
+    wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'contributor' } })
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
 
     // Switch to Financial details tab (visible to everyone)

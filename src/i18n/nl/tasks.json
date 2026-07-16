@@ -3,6 +3,8 @@
   "myTasks": "Aan mij toegewezen",
   "showFinished": "Voltooid",
   "filters": "Filters",
+  "taskLimit": "Getoonde taken",
+  "maxTaskLimit": "Max. getoonde taken",
   "newTask": "Nieuwe taak",
   "empty": "Nog geen taken.",
   "unassigned": "Niet toegewezen",

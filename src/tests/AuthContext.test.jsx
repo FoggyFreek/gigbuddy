@@ -272,10 +272,10 @@ describe('AuthContext', () => {
       status: 'approved',
       isSuperAdmin: false,
       activeTenantId: 1,
-      activeTenantRole: 'member',
+      activeTenantRole: 'contributor',
       memberships: [
-        { tenantId: 1, tenantSlug: 'a', tenantName: 'A', role: 'member', status: 'approved' },
-        { tenantId: 2, tenantSlug: 'b', tenantName: 'B', role: 'member', status: 'approved' },
+        { tenantId: 1, tenantSlug: 'a', tenantName: 'A', role: 'contributor', status: 'approved' },
+        { tenantId: 2, tenantSlug: 'b', tenantName: 'B', role: 'contributor', status: 'approved' },
       ],
     })
     wrap(
@@ -296,8 +296,8 @@ describe('AuthContext', () => {
       status: 'approved',
       activeTenantId: 1,
       memberships: [
-        { tenantId: 1, tenantSlug: 'a', tenantName: 'A', role: 'member', status: 'approved' },
-        { tenantId: 2, tenantSlug: 'b', tenantName: 'B', role: 'member', status: 'approved' },
+        { tenantId: 1, tenantSlug: 'a', tenantName: 'A', role: 'contributor', status: 'approved' },
+        { tenantId: 2, tenantSlug: 'b', tenantName: 'B', role: 'contributor', status: 'approved' },
       ],
     })
     setActiveTenant.mockResolvedValue({
@@ -307,8 +307,8 @@ describe('AuthContext', () => {
       status: 'approved',
       activeTenantId: 2,
       memberships: [
-        { tenantId: 1, tenantSlug: 'a', tenantName: 'A', role: 'member', status: 'approved' },
-        { tenantId: 2, tenantSlug: 'b', tenantName: 'B', role: 'member', status: 'approved' },
+        { tenantId: 1, tenantSlug: 'a', tenantName: 'A', role: 'contributor', status: 'approved' },
+        { tenantId: 2, tenantSlug: 'b', tenantName: 'B', role: 'contributor', status: 'approved' },
       ],
     })
     const user = userEvent.setup()
