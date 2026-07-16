@@ -25,7 +25,6 @@ import { getAchievementIcon } from '../components/achievements/achievementIcons.
 import GigMapTile from '../components/dashboard/GigMapTile.tsx'
 import MemoryTile, { type MemoryPatch } from '../components/dashboard/MemoryTile.tsx'
 import { SOCIALS } from '../components/profile/profileForm.ts'
-import { useAuth } from '../contexts/authContext.ts'
 import { useEntitlements } from '../hooks/useEntitlements.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
@@ -33,14 +32,15 @@ import { useSetWideContent } from '../contexts/contentWidthContext.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import type { ThemeMode } from '../contexts/themeModeContext.ts'
 import { listAchievements } from '../api/achievements.ts'
-import { listGigs } from '../api/gigs.ts'
+import { getGig, listUpcomingGigs } from '../api/gigs.ts'
 import { getNextRehearsal } from '../api/rehearsals.ts'
-import { listAllTasks } from '../api/tasks.ts'
-import { listBandEvents } from '../api/bandEvents.ts'
+import { listTasks } from '../api/tasks.ts'
+import { listUpcomingBandEvents } from '../api/bandEvents.ts'
 import { getProfile } from '../api/profile.ts'
-import { daysUntil, formatDueDate } from '../utils/dateFormat.ts'
+import { daysUntil, formatDueDate, localDateString } from '../utils/dateFormat.ts'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
 import type { Achievement, Gig, Rehearsal, BandEvent, Task } from '../types/entities.ts'
+import type { LimitedCollectionResponse, LimitedCollectionWithTotalResponse } from '../types/api.ts'
 
 function logoSrc(logoPath: string | undefined | null) {
   return logoPath ? `/api/files/${logoPath}` : '/share/logo.png'
@@ -75,29 +75,6 @@ const GIG_STATUS_COLOR: Record<string, 'success' | 'info' | 'default'> = {
 }
 const MAX_ROWS = 5
 
-// DATE columns arrive as ISO strings or plain 'YYYY-MM-DD'; key by the first 10 chars.
-const dateKey = (v: unknown) => (v ? String(v).slice(0, 10) : '')
-
-function todayStr() {
-  const d = new Date()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mm}-${dd}`
-}
-
-function byDateAscNullsLast(field: string) {
-  return (a: Record<string, unknown>, b: Record<string, unknown>) => {
-    const av = dateKey(a[field])
-    const bv = dateKey(b[field])
-    if (!av && !bv) return 0
-    if (!av) return 1
-    if (!bv) return -1
-    if (av < bv) return -1
-    if (av > bv) return 1
-    return 0
-  }
-}
-
 interface SettledResult<T> {
   status: 'ok' | 'error'
   data: T[]
@@ -108,10 +85,10 @@ const settle = <T,>(r: PromiseSettledResult<T[]>): SettledResult<T> =>
     ? { status: 'ok', data: r.value || [] }
     : { status: 'error', data: [] }
 
-const settleOne = <T,>(r: PromiseSettledResult<T | null>): { status: 'ok' | 'error'; data: T | null } =>
+const settleCollection = <T,>(r: PromiseSettledResult<LimitedCollectionResponse<T>>): SettledResult<T> =>
   r.status === 'fulfilled'
-    ? { status: 'ok', data: r.value ?? null }
-    : { status: 'error', data: null }
+    ? { status: 'ok', data: r.value.items }
+    : { status: 'error', data: [] }
 
 interface SectionData<T> {
   status: 'ok' | 'error'
@@ -140,32 +117,18 @@ interface Sections {
 
 // Build the whole view-model in the effect (not in render) so render stays pure.
 function buildSections(
-  results: [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>, PromiseSettledResult<Achievement[]>],
-  bandMemberId: number | string | null | undefined,
+  results: [PromiseSettledResult<LimitedCollectionWithTotalResponse<Gig>>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<LimitedCollectionWithTotalResponse<Task>>, PromiseSettledResult<LimitedCollectionResponse<BandEvent>>, PromiseSettledResult<Achievement[]>],
 ): Sections {
   const [gigsR, rehR, taskR, bandEventsR, achievementsR] = results
-  const today = todayStr()
 
-  const gigsSettled = settle(gigsR)
-  const upcomingGigs = [...gigsSettled.data]
-    .filter((g) => dateKey(g.event_date) >= today)
-    .sort(byDateAscNullsLast('event_date') as (a: Gig, b: Gig) => number)
-
-  const rehSettled = settleOne(rehR)
-  const taskSettled = settle(taskR)
-  const bandEventsSettled = settle(bandEventsR)
-  const upcomingBandEvents = [...bandEventsSettled.data]
-    .filter((e) => dateKey(e.start_date) >= today)
-    .sort(byDateAscNullsLast('start_date') as (a: BandEvent, b: BandEvent) => number)
+  const gigsSettled = settleCollection(gigsR)
+  const upcomingGigs = gigsSettled.data
+  const taskSettled = settleCollection(taskR)
+  const bandEventsSettled = settleCollection(bandEventsR)
 
   // Featured "next gig" is dropped from the shows list, so total excludes it too.
   const upcomingShows = upcomingGigs.slice(1)
-  const myTasks: DashTask[] = taskSettled.data
-    .filter((t) => !t.done && bandMemberId != null && t.assigned_to === bandMemberId)
-    .sort(byDateAscNullsLast('due_date') as (a: Task, b: Task) => number)
-    .map((t) => ({ ...t, __daysUntil: daysUntil(t.due_date) }))
-  // Sorted ascending (nulls last), so overdue rows come first and survive the cap.
-  const visibleTasks = myTasks.slice(0, MAX_ROWS)
+  const visibleTasks: DashTask[] = taskSettled.data.map((t) => ({ ...t, __daysUntil: daysUntil(t.due_date) }))
 
   const achievementsSettled = settle(achievementsR)
   const unlockedAchievements = achievementsSettled.data
@@ -183,12 +146,19 @@ function buildSections(
 
   return {
     nextGig: { status: gigsSettled.status, data: upcomingGigs[0] || null },
-    nextBandEvent: { status: bandEventsSettled.status, data: upcomingBandEvents[0] || null },
-    shows: { status: gigsSettled.status, total: upcomingShows.length, data: upcomingShows.slice(0, MAX_ROWS) },
-    nextRehearsal: { status: rehSettled.status, data: rehSettled.data },
+    nextBandEvent: { status: bandEventsSettled.status, data: bandEventsSettled.data[0] || null },
+    shows: {
+      status: gigsSettled.status,
+      total: gigsR.status === 'fulfilled' ? Math.max(0, gigsR.value.meta.total - 1) : 0,
+      data: upcomingShows,
+    },
+    nextRehearsal: {
+      status: rehR.status === 'fulfilled' ? 'ok' : 'error',
+      data: rehR.status === 'fulfilled' ? rehR.value : null,
+    },
     tasks: {
       status: taskSettled.status,
-      total: myTasks.length,
+      total: taskR.status === 'fulfilled' ? taskR.value.meta.total : 0,
       overdue: visibleTasks.filter((t) => t.__daysUntil != null && t.__daysUntil < 0),
       upcoming: visibleTasks.filter((t) => t.__daysUntil == null || t.__daysUntil >= 0),
     },
@@ -218,8 +188,6 @@ export default function DashboardPage() {
   const { t, i18n } = useTranslation('dashboard')
   // Achievement titles live in their own namespace, keyed by achievement key.
   const { t: tAchievements } = useTranslation('achievements')
-  const { user } = useAuth()
-  const bandMemberId = user?.bandMemberId ?? null
   const navigate = useNavigate()
   const theme = useTheme()
   const isCompact = useCompactLayout()
@@ -227,7 +195,7 @@ export default function DashboardPage() {
   const { canWritePlanning } = usePermissions()
   const [loading, setLoading] = useState(true)
   const [sections, setSections] = useState<Sections | null>(null)
-  const [allGigs, setAllGigs] = useState<Gig[]>([])
+  const [memoryGigs, setMemoryGigs] = useState<Gig[]>([])
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
   // Chosen once per mount so it stays stable across re-renders, then re-picked
@@ -263,7 +231,17 @@ export default function DashboardPage() {
   useEffect(() => {
     let cancelled = false
     getProfile()
-      .then((data) => { if (!cancelled) { setProfile(data as ProfileData); setProfileLoading(false) } })
+      .then((data) => {
+        if (cancelled) return
+        const nextProfile = data as ProfileData
+        setProfile(nextProfile)
+        setProfileLoading(false)
+        if (nextProfile.memory_gig_id != null) {
+          getGig(nextProfile.memory_gig_id)
+            .then((gig) => { if (!cancelled) setMemoryGigs([gig]) })
+            .catch(() => {})
+        }
+      })
       .catch(() => { if (!cancelled) setProfileLoading(false) })
     return () => { cancelled = true }
   }, [])
@@ -271,20 +249,19 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true)
+      const today = localDateString()
       const results = await Promise.allSettled([
-        listGigs(),
+        listUpcomingGigs(6, today),
         getNextRehearsal(),
-        listAllTasks() as Promise<Task[]>,
-        listBandEvents(),
+        listTasks({ limit: MAX_ROWS, assignee: 'me', done: false }),
+        listUpcomingBandEvents(1, today),
         listAchievements(),
       ])
-      const gigsR = results[0]
-      setAllGigs(gigsR.status === 'fulfilled' ? gigsR.value || [] : [])
-      setSections(buildSections(results as [PromiseSettledResult<Gig[]>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<Task[]>, PromiseSettledResult<BandEvent[]>, PromiseSettledResult<Achievement[]>], bandMemberId))
+      setSections(buildSections(results as [PromiseSettledResult<LimitedCollectionWithTotalResponse<Gig>>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<LimitedCollectionWithTotalResponse<Task>>, PromiseSettledResult<LimitedCollectionResponse<BandEvent>>, PromiseSettledResult<Achievement[]>]))
     } finally {
       setLoading(false)
     }
-  }, [bandMemberId])
+  }, [])
 
   useEffect(() => { load() }, [load])
 
@@ -667,7 +644,7 @@ export default function DashboardPage() {
               imagePath={profile?.memory_image_path ?? null}
               caption={profile?.memory_caption ?? null}
               gigId={profile?.memory_gig_id ?? null}
-              gigs={allGigs}
+              gigs={memoryGigs}
               canEdit={canWritePlanning}
               onSaved={handleMemorySaved}
             />

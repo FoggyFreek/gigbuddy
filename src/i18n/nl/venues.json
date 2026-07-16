@@ -25,7 +25,9 @@
     "country": "Land",
     "website": "Website",
     "phone": "Telefoon",
-    "email": "E-mail"
+    "email": "E-mail",
+    "latitude": "Breedtegraad",
+    "longitude": "Lengtegraad"
   },
   "placeholders": {
     "title": "Dhr.",
@@ -66,7 +68,8 @@
   },
   "modal": {
     "addTitle": "Locatie toevoegen",
-    "confirmDelete": "Deze locatie verwijderen?"
+    "confirmDelete": "Deze locatie verwijderen?",
+    "duplicateWarning": "De ingevoerde informatie lijkt overeen te komen met een bestaand item:"
   },
   "categoryChange": {
     "title_one": "Categoriewijziging raakt {{count}} optreden",
@@ -80,7 +83,7 @@
   },
   "import": {
     "title": "Locaties importeren uit CSV",
-    "uploadHelp": "Upload een UTF-8 CSV-bestand met kolomkoppen. Ondersteunde velden: naam, categorie, aanhef, voornaam, achternaam, organisatienaam, straat en huisnummer, adres aanvullend, postcode, plaats, regio, land, website, telefoon, e-mail.",
+    "uploadHelp": "Upload een UTF-8 CSV-bestand met kolomkoppen. Ondersteunde velden: naam, categorie, aanhef, voornaam, achternaam, organisatienaam, straat en huisnummer, adres aanvullend, postcode, plaats, regio, land, website, telefoon, e-mail, breedtegraad, lengtegraad.",
     "mapHelp": "Koppel je CSV-kolommen aan locatievelden. {{count}} rijen gevonden.",
     "columns": {
       "category": "Categorie",

@@ -41,9 +41,9 @@ const TWO_TENANT_USER = {
   pictureUrl: null,
   isSuperAdmin: false,
   activeTenantId: 1,
-  activeTenantRole: 'member',
+  activeTenantRole: 'contributor',
   memberships: [
-    { tenantId: 1, tenantSlug: 'a', tenantName: 'Band A', role: 'member', status: 'approved' },
+    { tenantId: 1, tenantSlug: 'a', tenantName: 'Band A', role: 'contributor', status: 'approved' },
     { tenantId: 2, tenantSlug: 'b', tenantName: 'Band B', role: 'tenant_admin', status: 'approved' },
   ],
 }

@@ -146,6 +146,35 @@ describe('invoices — by-gig (gig Terms tab)', () => {
   })
 })
 
+describe('invoices — gig search', () => {
+  it('requires three characters and marks gigs that already have an invoice', async () => {
+    await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const { rows: availableRows } = await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description)
+       VALUES ($1, '2026-08-01', 'Alpha Available Gig') RETURNING id`,
+      [seed.tenantA.id],
+    )
+
+    const short = await asUserA(request(app).get('/api/invoices/gig-search').query({ q: 'Al' })).expect(200)
+    expect(short.body).toEqual([])
+
+    const res = await asUserA(request(app).get('/api/invoices/gig-search').query({ q: 'Alpha' })).expect(200)
+    expect(res.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: seed.gigA.id, event_description: 'Alpha Gig', has_invoice: true }),
+      expect.objectContaining({ id: availableRows[0].id, event_description: 'Alpha Available Gig', has_invoice: false }),
+    ]))
+  })
+
+  it('does not expose another tenant gig or its invoice state', async () => {
+    await asUserB(request(app).post('/api/invoices')).send(basePayload({
+      gig_id: seed.gigB.id, customer_name: 'Beta Hall',
+    })).expect(201)
+
+    const res = await asUserA(request(app).get('/api/invoices/gig-search').query({ q: 'Beta' })).expect(200)
+    expect(res.body).toEqual([])
+  })
+})
+
 describe('invoices — number generation', () => {
   it('produces sequential numbers within the same year', async () => {
     const r1 = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)

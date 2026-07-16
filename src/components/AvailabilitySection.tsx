@@ -38,11 +38,12 @@ import AvailabilitySlotDialog from './AvailabilitySlotDialog.tsx'
 import GigFormModal from './GigFormModal.tsx'
 import RehearsalFormModal from './RehearsalFormModal.tsx'
 import BandEventFormModal from './BandEventFormModal.tsx'
+import { buildCalendarCells } from './calendar/calendarGrid.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import { createSlot, deleteSlot, listAvailability, updateSlot } from '../api/availability.ts'
-import { listGigs } from '../api/gigs.ts'
-import { listRehearsals } from '../api/rehearsals.ts'
-import { listBandEvents } from '../api/bandEvents.ts'
+import { getGig, listGigsInRange } from '../api/gigs.ts'
+import { getRehearsal, listRehearsalsInRange } from '../api/rehearsals.ts'
+import { getBandEvent, listBandEventsInRange } from '../api/bandEvents.ts'
 import { exportMonthToICS } from '../utils/shareUtils.ts'
 import { useProfile } from '../contexts/profileContext.ts'
 import CalendarFeedDialog from './appShell/CalendarFeedDialog.tsx'
@@ -53,15 +54,9 @@ interface AvailabilitySectionProps {
   eventReloadKey?: number
 }
 
-function pad(n: number) {
-  return String(n).padStart(2, '0')
-}
-
-function monthBounds(year: number, month: number) {
-  const from = `${year}-${pad(month)}-01`
-  const last = new Date(year, month, 0).getDate()
-  const to = `${year}-${pad(month)}-${pad(last)}`
-  return { from, to }
+function calendarBounds(year: number, month: number) {
+  const cells = buildCalendarCells(year, month)
+  return { from: cells[0].iso, to: cells[cells.length - 1].iso }
 }
 
 export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 }: AvailabilitySectionProps = {}) {
@@ -90,59 +85,76 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   const [calendarFeedOpen, setCalendarFeedOpen] = useState(false)
   const [exportOptions, setExportOptions] = useState({ gigs: true, rehearsals: true, bandEvents: true })
   const fabRef = useRef<HTMLButtonElement | null>(null)
+  const escapedBasePath = basePath.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')
+  const focusMatch = basePath
+    ? new RegExp(`^${escapedBasePath}/(gigs|rehearsals|events)/(\\d+)`).exec(pathname)
+    : null
+  const focusType = focusMatch?.[1] ?? null
+  const focusId = focusMatch ? Number(focusMatch[2]) : null
+  let loadedFocusDate: string | null = null
+  if (focusType === 'gigs') {
+    loadedFocusDate = normalizeIsoDate(gigs.find((gig) => gig.id === focusId)?.event_date)
+  } else if (focusType === 'rehearsals') {
+    loadedFocusDate = normalizeIsoDate(rehearsals.find((rehearsal) => rehearsal.id === focusId)?.proposed_date)
+  } else if (focusType === 'events') {
+    loadedFocusDate = normalizeIsoDate(bandEvents.find((event) => event.id === focusId)?.start_date)
+  }
 
   function loadGigs() {
-    listGigs().then(setGigs).catch(() => {})
+    listGigsInRange(calendarBounds(viewYear, viewMonth)).then((res) => setGigs(res.items)).catch(() => {})
   }
 
   function loadRehearsals() {
-    listRehearsals().then(setRehearsals).catch(() => {})
+    listRehearsalsInRange(calendarBounds(viewYear, viewMonth)).then((res) => setRehearsals(res.items)).catch(() => {})
   }
 
   function loadBandEvents() {
-    listBandEvents().then(setBandEvents).catch(() => {})
+    listBandEventsInRange(calendarBounds(viewYear, viewMonth)).then((res) => setBandEvents(res.items)).catch(() => {})
   }
 
   useEffect(() => {
     listMembers().then(setMembers).catch(() => {})
-    listGigs().then(setGigs).catch(() => {})
-    listRehearsals().then(setRehearsals).catch(() => {})
-    listBandEvents().then(setBandEvents).catch(() => {})
   }, [eventReloadKey])
 
   useEffect(() => {
-    const { from, to } = monthBounds(viewYear, viewMonth)
-    listAvailability({ from, to }).then(setSlots).catch(() => {})
-  }, [viewYear, viewMonth])
+    const bounds = calendarBounds(viewYear, viewMonth)
+    listGigsInRange(bounds).then((res) => setGigs(res.items)).catch(() => {})
+    listRehearsalsInRange(bounds).then((res) => setRehearsals(res.items)).catch(() => {})
+    listBandEventsInRange(bounds).then((res) => setBandEvents(res.items)).catch(() => {})
+    listAvailability(bounds).then(setSlots).catch(() => {})
+  }, [viewYear, viewMonth, eventReloadKey])
 
   // Sync calendar focus to the item opened in the split-view detail pane
-  // (URL is the source of truth; data may arrive async, hence the effect).
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // (URL is the source of truth; deep links may fall outside the loaded grid).
   useEffect(() => {
-    if (!basePath) return
-    const escaped = basePath.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')
-    const match = new RegExp(`^${escaped}/(gigs|rehearsals|events)/(\\d+)`).exec(pathname)
-    if (!match) return
-    const [, type, idStr] = match
-    const id = Number(idStr)
-    let dateStr: string | null = null
-    if (type === 'gigs') {
-      const g = gigs.find((x) => x.id === id)
-      if (g) dateStr = normalizeIsoDate(g.event_date)
-    } else if (type === 'rehearsals') {
-      const r = rehearsals.find((x) => x.id === id)
-      if (r) dateStr = normalizeIsoDate(r.proposed_date)
-    } else if (type === 'events') {
-      const ev = bandEvents.find((x) => x.id === id)
-      if (ev) dateStr = normalizeIsoDate(ev.start_date)
+    if (!focusType || focusId === null) return
+    let cancelled = false
+
+    function focusDate(dateStr: string | null) {
+      if (cancelled || !dateStr) return
+      setSelectedDay(dateStr)
+      const [yStr, mStr] = dateStr.split('-')
+      setViewYear(Number(yStr))
+      setViewMonth(Number(mStr))
     }
-    if (!dateStr) return
-    setSelectedDay(dateStr)
-    const [yStr, mStr] = dateStr.split('-')
-    setViewYear(Number(yStr))
-    setViewMonth(Number(mStr))
-  }, [pathname, basePath, gigs, rehearsals, bandEvents])
-  /* eslint-enable react-hooks/set-state-in-effect */
+
+    if (loadedFocusDate) {
+      focusDate(loadedFocusDate)
+      return
+    }
+
+    let lookup: Promise<string | null>
+    if (focusType === 'gigs') {
+      lookup = getGig(focusId).then((gig) => normalizeIsoDate(gig.event_date))
+    } else if (focusType === 'rehearsals') {
+      lookup = getRehearsal(focusId).then((rehearsal) => normalizeIsoDate(rehearsal.proposed_date))
+    } else {
+      lookup = getBandEvent(focusId).then((event) => normalizeIsoDate(event.start_date))
+    }
+    lookup.then(focusDate).catch(() => {})
+
+    return () => { cancelled = true }
+  }, [focusType, focusId, loadedFocusDate])
 
   function handlePrev() {
     if (viewMonth === 1) { setViewYear((y) => y - 1); setViewMonth(12) }
@@ -190,7 +202,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   }
 
   async function handleSave(data: Partial<Slot>) {
-    const { from, to } = monthBounds(viewYear, viewMonth)
+    const { from, to } = calendarBounds(viewYear, viewMonth)
     if (dialog?.slot?.id) {
       await updateSlot(dialog.slot.id, data)
     } else {

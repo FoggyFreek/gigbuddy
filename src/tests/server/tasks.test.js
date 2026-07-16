@@ -84,7 +84,8 @@ describe('GET /api/tasks — includes gig-less tasks (LEFT JOIN)', () => {
   it('returns both gig-linked and gig-less tasks', async () => {
     await asUserA(request(app).post('/api/tasks').send({ title: 'No gig' })).expect(201)
     const res = await asUserA(request(app).get('/api/tasks')).expect(200)
-    const byTitle = Object.fromEntries(res.body.map((t) => [t.title, t]))
+    expect(res.body.meta).toEqual({ limit: 10, returned: 2, total: 2 })
+    const byTitle = Object.fromEntries(res.body.items.map((t) => [t.title, t]))
     expect(byTitle['Alpha task'].event_description).toBe('Alpha Gig')
     expect(byTitle['No gig']).toBeDefined()
     expect(byTitle['No gig'].gig_id).toBeNull()

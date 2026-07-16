@@ -30,9 +30,12 @@
     "colTime": "Tijd",
     "colBand": "Band",
     "colOpenTasks": "Open taken",
-    "emptyAll": "Nog geen optredens — voeg er een toe om te beginnen.",
     "emptyUpcoming": "Geen aankomende optredens.",
-    "pastGigs": "Eerdere optredens ({{count}})"
+    "emptyPast": "Geen eerdere optredens.",
+    "emptySearch": "Geen optredens gevonden voor deze zoekopdracht.",
+    "tabUpcoming": "Aankomend",
+    "tabPast": "Eerder",
+    "loadMore": "Meer laden"
   },
   "form": {
     "newGig": "Nieuw optreden",
@@ -188,6 +191,9 @@
     "itemsSold_other": "{{count}} items · excl. btw",
     "relatedInvoices": "Gerelateerde facturen",
     "openInvoice": "Factuur openen",
+    "createInvoice": "Factuur aanmaken",
+    "createInvoiceTitle": "Factuur aanmaken voor dit optreden?",
+    "createInvoiceBody": "Er wordt een conceptfactuur op naam van {{name}} aangemaakt, vooraf ingevuld met de gage en gegevens van dit optreden. Je gaat daarna naar de nieuwe factuur om deze te controleren.",
     "invoiceStatus": {
       "draft": "Concept",
       "sent": "Verzonden",

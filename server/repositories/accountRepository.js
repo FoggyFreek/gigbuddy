@@ -12,6 +12,17 @@ const SETTINGS_INSERT_COLUMNS = [
   'merch_inventory_account_code', 'merch_revenue_account_code', 'merch_cogs_account_code',
 ]
 
+// Shared transaction-scoped lock serializing ledger postings with accounting
+// settings changes for one tenant.
+export const ACCOUNTING_SETTINGS_LOCK_NAMESPACE = 53002
+
+export async function acquireAccountingSettingsLock(executor, tenantId) {
+  await executor.query(
+    'SELECT pg_advisory_xact_lock($1, $2)',
+    [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId],
+  )
+}
+
 // Changing these account codes while a balance is still open on the current
 // account would orphan that balance: postings already made (payable accrual,
 // member-paid reimbursement liability, receivable on sent invoices) would sit
@@ -49,6 +60,15 @@ export async function getSettings(executor, tenantId) {
     [tenantId],
   )
   return rows[0] || null
+}
+
+export async function getBooksClosedThrough(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT to_char(books_closed_through, 'YYYY-MM-DD') AS closed_through
+       FROM tenant_accounting_settings WHERE tenant_id = $1`,
+    [tenantId],
+  )
+  return rows[0]?.closed_through || null
 }
 
 export async function listChartCodes(executor, tenantId) {

@@ -15,9 +15,13 @@
     "shareWhatsApp": "Delen via WhatsApp",
     "noRequiredParticipants": "geen verplichte deelnemers",
     "myVote": "Mijn stem:",
+    "tabUpcoming": "Aankomend",
+    "tabPast": "Eerder",
     "emptyAll": "Nog geen repetities — stel er een voor om te beginnen.",
     "emptyUpcoming": "Geen aankomende repetities.",
-    "pastRehearsals": "Eerdere repetities ({{count}})"
+    "emptyPast": "Geen eerdere repetities.",
+    "pastRehearsals": "Eerdere repetities ({{count}})",
+    "loadMore": "Meer laden"
   },
   "form": {
     "proposeTitle": "Repetitie voorstellen",

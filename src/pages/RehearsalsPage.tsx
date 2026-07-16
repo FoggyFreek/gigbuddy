@@ -1,10 +1,9 @@
-﻿import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
-import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
 import ListItemText from '@mui/material/ListItemText'
@@ -14,24 +13,27 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import FilterListIcon from '@mui/icons-material/FilterList'
-import RehearsalsTable from '../components/RehearsalsTable.tsx'
+import RehearsalsTable, { type RehearsalsTab } from '../components/RehearsalsTable.tsx'
 import RehearsalFormModal from '../components/RehearsalFormModal.tsx'
 import SplitView from '../components/SplitView.tsx'
-import { listRehearsals, setVote } from '../api/rehearsals.ts'
+import { listPastRehearsals, listUpcomingRehearsals, setVote } from '../api/rehearsals.ts'
 import { rehearsalShareUrl } from '../utils/shareUtils.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import { isPastDate, localDateString } from '../utils/dateFormat.ts'
+import type { ListCollectionCursor } from '../types/api.ts'
 import type { Rehearsal, Id } from '../types/entities.ts'
 
 const REHEARSAL_STATUSES = ['planned', 'option'] as const
+const TAB_PAGE_SIZE = 100
 
 function applyVoteToRehearsals(rehearsals: Rehearsal[], rehearsalId: Id, memberId: Id, vote: string): Rehearsal[] {
-  return rehearsals.map((r) => {
-    if (r.id !== rehearsalId) return r
-    const participants = (r.participants ?? []).map((p) =>
-      p.band_member_id === memberId ? { ...p, vote } : p,
+  return rehearsals.map((rehearsal) => {
+    if (rehearsal.id !== rehearsalId) return rehearsal
+    const participants = (rehearsal.participants ?? []).map((participant) =>
+      participant.band_member_id === memberId ? { ...participant, vote } : participant,
     )
-    return { ...r, participants }
+    return { ...rehearsal, participants }
   })
 }
 
@@ -42,48 +44,110 @@ export default function RehearsalsPage() {
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
+
+  const [activeTab, setActiveTab] = useState<RehearsalsTab>('upcoming')
+  const activeTabRef = useRef(activeTab)
+  activeTabRef.current = activeTab
   const [rehearsals, setRehearsals] = useState<Rehearsal[]>([])
   const [loading, setLoading] = useState(true)
+  const [pastCursor, setPastCursor] = useState<ListCollectionCursor | null>(null)
+  const [pastHasMore, setPastHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<{ mode: 'create' } | null>(null)
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
     () => new Set(REHEARSAL_STATUSES),
   )
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
+  const deferInitialTabLoadRef = useRef(selectedIdParam != null)
+  const requestIdRef = useRef(0)
 
-  const load = useCallback(async () => {
+  const loadTab = useCallback(async (tab: RehearsalsTab) => {
+    const requestId = ++requestIdRef.current
     try {
       setLoading(true)
       setError(null)
-      const data = await listRehearsals()
-      setRehearsals(data as Rehearsal[])
+      const today = localDateString()
+      if (tab === 'upcoming') {
+        const result = await listUpcomingRehearsals(TAB_PAGE_SIZE, today)
+        if (requestIdRef.current !== requestId) return
+        setRehearsals(result.items)
+        setPastCursor(null)
+        setPastHasMore(false)
+      } else {
+        const result = await listPastRehearsals(TAB_PAGE_SIZE, today)
+        if (requestIdRef.current !== requestId) return
+        setRehearsals(result.items)
+        setPastCursor(result.meta.nextCursor)
+        setPastHasMore(result.meta.nextCursor !== null)
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (requestIdRef.current === requestId) setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (requestIdRef.current === requestId) setLoading(false)
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (deferInitialTabLoadRef.current) return
+    loadTab(activeTab)
+  }, [activeTab, loadTab])
+
+  const handleDetailLoaded = useCallback((rehearsal: Rehearsal) => {
+    const wasDeferred = deferInitialTabLoadRef.current
+    deferInitialTabLoadRef.current = false
+    const tab: RehearsalsTab = isPastDate(rehearsal.proposed_date) ? 'past' : 'upcoming'
+    if (tab === activeTabRef.current) {
+      if (wasDeferred) loadTab(tab)
+    } else {
+      setActiveTab(tab)
+    }
+  }, [loadTab])
+
+  const handleDetailLoadError = useCallback(() => {
+    if (!deferInitialTabLoadRef.current) return
+    deferInitialTabLoadRef.current = false
+    loadTab(activeTabRef.current)
+  }, [loadTab])
 
   function handleClose() {
     setModal(null)
-    load()
+    loadTab(activeTabRef.current)
   }
 
   async function handleVote(rehearsalId: Id | undefined, memberId: Id | undefined, vote: string | null) {
     if (rehearsalId === undefined || memberId === undefined || vote === null) return
     await setVote(rehearsalId, memberId, vote)
-    setRehearsals((prev) => applyVoteToRehearsals(prev, rehearsalId, memberId, vote))
+    setRehearsals((previous) => applyVoteToRehearsals(previous, rehearsalId, memberId, vote))
   }
 
   const handleRehearsalUpdate = useCallback((id: Id, patch: Partial<Rehearsal>) => {
-    setRehearsals((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
-  }, [])
+    setRehearsals((previous) => previous.map((rehearsal) => (
+      rehearsal.id === id ? { ...rehearsal, ...patch } : rehearsal
+    )))
+    if ('proposed_date' in patch) loadTab(activeTabRef.current)
+  }, [loadTab])
 
   const handleRehearsalDetailDelete = useCallback((id: Id) => {
-    setRehearsals((prev) => prev.filter((r) => r.id !== id))
+    setRehearsals((previous) => previous.filter((rehearsal) => rehearsal.id !== id))
   }, [])
+
+  async function handleLoadMorePast() {
+    if (!pastCursor || loadingMore) return
+    const requestId = requestIdRef.current
+    try {
+      setLoadingMore(true)
+      const result = await listPastRehearsals(TAB_PAGE_SIZE, localDateString(), pastCursor)
+      if (requestIdRef.current !== requestId || activeTabRef.current !== 'past') return
+      setRehearsals((previous) => [...previous, ...result.items])
+      setPastCursor(result.meta.nextCursor)
+      setPastHasMore(result.meta.nextCursor !== null)
+    } catch (e: unknown) {
+      if (requestIdRef.current === requestId) setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   function toggleStatus(status: string) {
     setSelectedStatuses((previous) => {
@@ -102,15 +166,15 @@ export default function RehearsalsPage() {
 
   const allStatusesSelected = selectedStatuses.size === REHEARSAL_STATUSES.length
   const someStatusesSelected = selectedStatuses.size > 0 && !allStatusesSelected
+  const outletContext = useMemo(() => ({
+    onRehearsalUpdate: handleRehearsalUpdate,
+    onRehearsalDelete: handleRehearsalDetailDelete,
+    onRehearsalDetailLoaded: handleDetailLoaded,
+    onRehearsalDetailLoadError: handleDetailLoadError,
+  }), [handleRehearsalUpdate, handleRehearsalDetailDelete, handleDetailLoaded, handleDetailLoadError])
 
   return (
-    <SplitView
-      basePath="/rehearsals"
-      outletContext={{
-        onRehearsalUpdate: handleRehearsalUpdate,
-        onRehearsalDelete: handleRehearsalDetailDelete,
-      }}
-    >
+    <SplitView basePath="/rehearsals" outletContext={outletContext}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 0.5 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>
           {t($ => $.title)}
@@ -124,17 +188,9 @@ export default function RehearsalsPage() {
             <FilterListIcon />
           </IconButton>
         </Tooltip>
-        <Menu
-          anchorEl={filterAnchor}
-          open={Boolean(filterAnchor)}
-          onClose={() => setFilterAnchor(null)}
-        >
+        <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={() => setFilterAnchor(null)}>
           <MenuItem dense onClick={toggleAllStatuses}>
-            <Checkbox
-              size="small"
-              checked={allStatusesSelected}
-              indeterminate={someStatusesSelected}
-            />
+            <Checkbox size="small" checked={allStatusesSelected} indeterminate={someStatusesSelected} />
             <ListItemText primary={t($ => $.table.allStatuses)} />
           </MenuItem>
           <Divider />
@@ -146,46 +202,31 @@ export default function RehearsalsPage() {
           ))}
         </Menu>
         {canWritePlanning && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setModal({ mode: 'create' })}
-          >
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setModal({ mode: 'create' })}>
             {t($ => $.actions.add, { ns: 'common' })}
           </Button>
         )}
       </Box>
 
-      {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
-        </Box>
-      )}
+      {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
 
-      {error && (
-        <Typography color="error" sx={{ mb: 2 }}>
-          {error}
-        </Typography>
-      )}
+      <RehearsalsTable
+        rehearsals={rehearsals}
+        loading={loading}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        selectedStatuses={selectedStatuses}
+        bandMemberId={user?.bandMemberId}
+        onVote={handleVote}
+        onRowClick={(rehearsal) => navigate(`/rehearsals/${rehearsal.id}`)}
+        onShare={(rehearsal) => window.open(rehearsalShareUrl(rehearsal), '_blank')}
+        selectedId={selectedId}
+        hasMore={pastHasMore}
+        loadingMore={loadingMore}
+        onLoadMore={handleLoadMorePast}
+      />
 
-      {!loading && (
-        <RehearsalsTable
-          rehearsals={rehearsals}
-          selectedStatuses={selectedStatuses}
-          bandMemberId={user?.bandMemberId}
-          onVote={handleVote}
-          onRowClick={(r) => navigate(`/rehearsals/${r.id}`)}
-          onShare={(r) => window.open(rehearsalShareUrl(r), '_blank')}
-          selectedId={selectedId}
-        />
-      )}
-
-      {modal && (
-        <RehearsalFormModal
-          mode="create"
-          onClose={handleClose}
-        />
-      )}
+      {modal && <RehearsalFormModal mode="create" onClose={handleClose} />}
     </SplitView>
   )
 }

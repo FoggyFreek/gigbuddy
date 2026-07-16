@@ -21,7 +21,7 @@ import {
   updateTenantFields,
   upsertTenantAdmin,
   upsertMembership,
-  demoteAdminToMember,
+  demoteAdminToContributor,
   setTenantArchived,
   fetchTenantForDeletion,
   fetchTenantAssetKeys,
@@ -168,7 +168,7 @@ export async function addMembership(db, tenantId, body, actingUserId) {
 }
 
 export async function removeAdmin(db, tenantId, userId) {
-  const demoted = await demoteAdminToMember(db, tenantId, userId)
+  const demoted = await demoteAdminToContributor(db, tenantId, userId)
   if (!demoted) return notFound('Tenant admin membership not found')
   return {}
 }

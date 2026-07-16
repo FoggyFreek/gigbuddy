@@ -73,8 +73,9 @@ describe('tenant isolation — list endpoints return only the active tenant', ()
 
   it('GET /api/tasks', async () => {
     const res = await asUserA(request(app).get('/api/tasks')).expect(200)
-    expect(res.body).toHaveLength(1)
-    expect(res.body[0].title).toBe('Alpha task')
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.items[0].title).toBe('Alpha task')
+    expect(res.body.meta).toEqual({ limit: 10, returned: 1, total: 1 })
   })
 
   it('GET /api/email-templates', async () => {

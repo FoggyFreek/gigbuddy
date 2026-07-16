@@ -12,7 +12,7 @@ function parseIntParam(query, key) {
   return Number.isInteger(parsed) ? parsed : null
 }
 
-function isIsoDate(value) {
+export function isIsoDate(value) {
   if (typeof value !== 'string' || !DATE_RE.test(value)) return false
   const date = new Date(`${value}T12:00:00Z`)
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value

@@ -9,12 +9,54 @@ export async function listRehearsals(executor, tenantId) {
   return rows
 }
 
-export async function fetchNextRehearsal(executor, tenantId) {
+export async function listNextPlannedRehearsal(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT * FROM rehearsals WHERE tenant_id = $1 AND status = \'planned\' AND proposed_date >= CURRENT_DATE ORDER BY proposed_date ASC, id ASC LIMIT 1',
+    `SELECT * FROM rehearsals
+     WHERE tenant_id = $1 AND status = 'planned' AND proposed_date >= CURRENT_DATE
+     ORDER BY proposed_date ASC, id ASC
+     LIMIT 1`,
     [tenantId],
   )
   return rows[0] ?? null
+}
+
+export async function listUpcomingRehearsals(executor, tenantId, today, limit) {
+  const { rows } = await executor.query(
+    `SELECT * FROM rehearsals
+     WHERE tenant_id = $1 AND proposed_date >= $2
+     ORDER BY proposed_date ASC, id ASC
+     LIMIT $3`,
+    [tenantId, today, limit],
+  )
+  return rows
+}
+
+export async function listPastRehearsals(executor, tenantId, today, limit, cursor = null) {
+  const params = [tenantId, today]
+  let cursorClause = ''
+  if (cursor) {
+    params.push(cursor.date, cursor.id)
+    cursorClause = `AND (proposed_date, id) < ($${params.length - 1}, $${params.length})`
+  }
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT * FROM rehearsals
+     WHERE tenant_id = $1 AND proposed_date < $2 ${cursorClause}
+     ORDER BY proposed_date DESC, id DESC
+     LIMIT $${params.length}`,
+    params,
+  )
+  return rows
+}
+
+export async function listRehearsalsInRange(executor, tenantId, from, to) {
+  const { rows } = await executor.query(
+    `SELECT * FROM rehearsals
+     WHERE tenant_id = $1 AND proposed_date BETWEEN $2 AND $3
+     ORDER BY proposed_date ASC, id ASC`,
+    [tenantId, from, to],
+  )
+  return rows
 }
 
 export async function fetchRehearsal(executor, rehearsalId, tenantId) {

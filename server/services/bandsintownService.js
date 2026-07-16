@@ -253,6 +253,8 @@ async function createImportVenue(client, tenantId, row, venuesByKey, summary) {
     city: row.venue.city || null,
     region: row.venue.region || null,
     country: countryToIso2(row.venue.country),
+    latitude: row.venue.latitude,
+    longitude: row.venue.longitude,
   })
   venuesByKey.set(venueImportKey(row.venue.name, row.venue.city), created)
   summary.venues_created++

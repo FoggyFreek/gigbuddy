@@ -14,6 +14,7 @@ import { normalizeIban } from '../utils/normalizeIban.js'
 import {
   listContacts as listContactRows,
   searchContacts as searchContactRows,
+  findContactDuplicates,
   fetchContactWithNotes,
   contactExistsInTenant,
   insertContact,
@@ -54,6 +55,32 @@ export async function searchContacts(db, tenantId, query) {
     category,
     excludeCategory,
   })
+}
+
+const DUPLICATE_LIMIT = 5
+
+function normalizedMatchText(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return normalized || null
+}
+
+export async function checkContactDuplicates(db, tenantId, body = {}) {
+  const supplierOnly = body.category === 'supplier'
+  const input = {
+    name: normalizedMatchText(body.name),
+    email: normalizedMatchText(body.email),
+    iban: supplierOnly ? normalizeIban(body.iban) : null,
+  }
+  if (!input.name && !input.email && !input.iban) {
+    return { items: [], meta: { limit: DUPLICATE_LIMIT, returned: 0 } }
+  }
+
+  const items = await findContactDuplicates(db, tenantId, {
+    ...input,
+    supplierOnly,
+    limit: DUPLICATE_LIMIT,
+  })
+  return { items, meta: { limit: DUPLICATE_LIMIT, returned: items.length } }
 }
 
 export async function getContact(db, tenantId, contactId) {

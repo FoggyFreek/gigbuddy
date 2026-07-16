@@ -12,7 +12,7 @@
 export {
   ROLES,
   ASSIGNABLE_ROLES,
-  ALL_ROLES,
+  WRITE_ROLES,
   PERMISSIONS,
   ROLE_PERMISSIONS,
   ALL_PERMISSIONS,
@@ -22,6 +22,5 @@ export {
 
 import { PERMISSIONS as PERMISSIONS_VALUES, ROLES as ROLES_VALUES } from '../../shared/permissions.js'
 
-export type Permission     = (typeof PERMISSIONS_VALUES)[keyof typeof PERMISSIONS_VALUES]
-export type Role           = (typeof ROLES_VALUES)[keyof typeof ROLES_VALUES]
-export type MembershipRole = Role | 'member'
+export type Permission = (typeof PERMISSIONS_VALUES)[keyof typeof PERMISSIONS_VALUES]
+export type Role       = (typeof ROLES_VALUES)[keyof typeof ROLES_VALUES]

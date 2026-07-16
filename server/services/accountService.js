@@ -3,7 +3,6 @@
 // return { error: { status, body } }; success returns a domain payload.
 import pool from '../db/index.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
-import { acquireAccountingSettingsLock } from './ledgerService.js'
 import { notFound } from './serviceErrors.js'
 import {
   validateAccountCreate,
@@ -14,6 +13,7 @@ import {
 } from '../validators/accountValidators.js'
 import {
   GUARDED_SETTINGS_FIELDS,
+  acquireAccountingSettingsLock,
   checkOpenBalance,
   getSettings as getSettingsRow,
   listChartCodes,

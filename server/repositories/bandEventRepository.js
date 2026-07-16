@@ -10,6 +10,45 @@ export async function listBandEvents(executor, tenantId) {
   return rows
 }
 
+export async function listUpcomingBandEvents(executor, tenantId, today, limit) {
+  const { rows } = await executor.query(
+    `SELECT * FROM band_events
+     WHERE tenant_id = $1 AND end_date >= $2
+     ORDER BY start_date ASC, id ASC
+     LIMIT $3`,
+    [tenantId, today, limit],
+  )
+  return rows
+}
+
+export async function listPastBandEvents(executor, tenantId, today, limit, cursor = null) {
+  const params = [tenantId, today]
+  let cursorClause = ''
+  if (cursor) {
+    params.push(cursor.date, cursor.id)
+    cursorClause = `AND (end_date, id) < ($${params.length - 1}, $${params.length})`
+  }
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT * FROM band_events
+     WHERE tenant_id = $1 AND end_date < $2 ${cursorClause}
+     ORDER BY end_date DESC, id DESC
+     LIMIT $${params.length}`,
+    params,
+  )
+  return rows
+}
+
+export async function listBandEventsInRange(executor, tenantId, from, to) {
+  const { rows } = await executor.query(
+    `SELECT * FROM band_events
+     WHERE tenant_id = $1 AND start_date <= $3 AND end_date >= $2
+     ORDER BY start_date ASC, id ASC`,
+    [tenantId, from, to],
+  )
+  return rows
+}
+
 export async function fetchBandEvent(executor, eventId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM band_events WHERE id = $1 AND tenant_id = $2',

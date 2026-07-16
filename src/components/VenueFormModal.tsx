@@ -1,6 +1,8 @@
 import type { Venue, Id } from '../types/entities.ts'
 import { useCallback, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router-dom'
+import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -9,14 +11,16 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
+import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
-import { createVenue, getVenueCategoryImpact, getVenue, updateVenue } from '../api/venues.ts'
+import { checkVenueDuplicates, createVenue, getVenueCategoryImpact, getVenue, updateVenue } from '../api/venues.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
 import VenueFields from './VenueFields.tsx'
 import type { VenueForm } from './VenueFields.tsx'
+import type { DuplicateEntityMatch } from '../types/entities.ts'
 
 const REQUIRED_FIELDS = ['name']
 
@@ -70,6 +74,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [categoryChange, setCategoryChange] = useState<CategoryChange | null>(null)
   const [categorySaving, setCategorySaving] = useState(false)
+  const [duplicateMatches, setDuplicateMatches] = useState<DuplicateEntityMatch[]>([])
   const { canWritePlanning: canWrite } = usePermissions()
 
   const saveFn = useCallback(
@@ -104,6 +109,35 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
       })
       .finally(() => setLoading(false))
   }, [mode, venueId])
+
+  useEffect(() => {
+    if (mode !== 'create') return
+    const hasMatchableInput = Boolean(
+      form.organization_name?.trim()
+      || form.street_and_number?.trim()
+      || form.website?.trim()
+      || form.email?.trim(),
+    )
+    if (!hasMatchableInput) return
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      void checkVenueDuplicates({
+        organization_name: form.organization_name,
+        street_and_number: form.street_and_number,
+        website: form.website,
+        email: form.email,
+      }, { signal: controller.signal })
+        .then((result) => setDuplicateMatches(result.items))
+        .catch(() => {
+          if (!controller.signal.aborted) setDuplicateMatches([])
+        })
+    }, 400)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [mode, form.organization_name, form.street_and_number, form.website, form.email])
 
   async function handleCategoryChangeCheck(newCategory: string, prevCategory: string) {
     try {
@@ -140,6 +174,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
 
   function handleChange(field: string, value: string) {
     if (mode === 'edit' && !canWrite) return
+    setDuplicateMatches([])
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
     if (mode === 'edit') {
@@ -204,6 +239,14 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
               disabled={mode === 'edit' && !canWrite}
             />
           </Grid>
+          {duplicateMatches.map((match) => (
+            <Alert severity="info" key={String(match.id)} sx={{ mt: 2 }}>
+              {t($ => $.modal.duplicateWarning)}{' '}
+              <Link component={RouterLink} to={`/venues/${match.id}`} onClick={onClose}>
+                {match.name}
+              </Link>.
+            </Alert>
+          ))}
         </DialogContent>
       )}
 

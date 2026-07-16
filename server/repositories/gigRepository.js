@@ -35,6 +35,18 @@ export const GIG_TAGS_SELECT = `COALESCE((
    WHERE gtl.gig_id = g.id AND gtl.tenant_id = g.tenant_id
 ), '[]'::jsonb) AS tags`
 
+export const GIG_LIST_PROJECTION = `g.*,
+  (
+    SELECT COUNT(*)::int
+      FROM gig_tasks t
+     WHERE t.gig_id = g.id
+       AND t.tenant_id = g.tenant_id
+       AND t.done = FALSE
+  ) AS open_task_count,
+  ${VENUE_JSON_SELECT},
+  ${FESTIVAL_JSON_SELECT},
+  ${GIG_TAGS_SELECT}`
+
 // Throws a 400 Error when venueId is set but does not reference a row of the
 // expected category in the tenant. A null/undefined id is a no-op.
 export async function assertVenueInTenant(executor, venueId, tenantId, expectedCategory = null) {
@@ -107,17 +119,7 @@ export async function loadParticipants(executor, gigIds, tenantId) {
 export async function listGigsWithTaskCounts(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT
-       g.*,
-       (
-         SELECT COUNT(*)::int
-           FROM gig_tasks t
-          WHERE t.gig_id = g.id
-            AND t.tenant_id = g.tenant_id
-            AND t.done = FALSE
-       ) AS open_task_count,
-       ${VENUE_JSON_SELECT},
-       ${FESTIVAL_JSON_SELECT},
-       ${GIG_TAGS_SELECT}
+       ${GIG_LIST_PROJECTION}
      FROM gigs g
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
@@ -128,13 +130,96 @@ export async function listGigsWithTaskCounts(executor, tenantId) {
   return rows
 }
 
+export async function listUpcomingGigs(executor, tenantId, today, limit) {
+  const { rows } = await executor.query(
+    `SELECT
+       ${GIG_LIST_PROJECTION},
+       (COUNT(*) OVER ())::int AS collection_total
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = $1 AND g.event_date >= $2
+     ORDER BY g.event_date ASC, g.id ASC
+     LIMIT $3`,
+    [tenantId, today, limit],
+  )
+  return {
+    items: rows.map(({ collection_total: _collectionTotal, ...gig }) => gig),
+    total: rows[0]?.collection_total ?? 0,
+  }
+}
+
+// Past gigs, most recent first. Optional keyset cursor continues past the
+// last (event_date, id) pair of a previous page for "load more" pagination.
+export async function listPastGigs(executor, tenantId, today, limit, cursor = null) {
+  const params = [tenantId, today]
+  let cursorClause = ''
+  if (cursor) {
+    params.push(cursor.date, cursor.id)
+    cursorClause = `AND (g.event_date, g.id) < ($${params.length - 1}, $${params.length})`
+  }
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT
+       ${GIG_LIST_PROJECTION}
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = $1 AND g.event_date < $2 ${cursorClause}
+     ORDER BY g.event_date DESC, g.id DESC
+     LIMIT $${params.length}`,
+    params,
+  )
+  return rows
+}
+
+export async function listGigsInRange(executor, tenantId, from, to) {
+  const { rows } = await executor.query(
+    `SELECT
+       ${GIG_LIST_PROJECTION}
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = $1 AND g.event_date BETWEEN $2 AND $3
+     ORDER BY g.event_date ASC, g.id ASC`,
+    [tenantId, from, to],
+  )
+  return rows
+}
+
+// Minimal projection used by the gig map. It intentionally omits gig detail,
+// task, tag, participant, and availability data.
+export async function listGigMapData(executor, tenantId, from, to) {
+  const placeJson = (alias) => `CASE WHEN ${alias}.id IS NULL THEN NULL ELSE jsonb_build_object(
+    'id', ${alias}.id,
+    'city', ${alias}.city,
+    'region', ${alias}.region,
+    'country', ${alias}.country,
+    'latitude', ${alias}.latitude,
+    'longitude', ${alias}.longitude
+  ) END`
+  const { rows } = await executor.query(
+    `SELECT g.id, g.event_date, g.event_description,
+            ${placeJson('v')} AS venue,
+            ${placeJson('fv')} AS festival
+       FROM gigs g
+       ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
+      WHERE g.tenant_id = $1
+        AND g.event_date BETWEEN $2 AND $3
+      ORDER BY g.event_date ASC, g.id ASC`,
+    [tenantId, from, to],
+  )
+  return rows
+}
+
 // Full-text-ish search over a tenant's gigs: matches the event name, linked
 // venue/festival name or city, or a tag. Exact name matches on the event sort
 // first, then by most recent date. Tenant-scoped like every other query.
 export async function searchGigs(executor, tenantId, { like, limit }) {
   const { rows } = await executor.query(
     `SELECT
-       g.id, g.event_date, g.event_description, g.status,
+       g.id, g.event_date, g.event_description, g.status, g.booking_fee_cents,
        g.venue_id, g.festival_id,
        ${VENUE_JSON_SELECT},
        ${FESTIVAL_JSON_SELECT},

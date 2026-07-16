@@ -3,12 +3,19 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireParam, sendError } from './routeHelpers.js'
-import { listTasks, createTask, patchTask, removeTask } from '../services/taskService.js'
+import {
+  listTasks,
+  createTask,
+  patchTask,
+  removeTask,
+} from '../services/taskService.js'
 
 const router = Router()
 
 router.get('/', async (req, res) => {
-  res.json(await listTasks(pool, req.tenantId))
+  const result = await listTasks(pool, req.tenantId, req.user.id, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
 })
 
 router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {

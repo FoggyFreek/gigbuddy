@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
@@ -37,6 +37,16 @@ export default function GigDetailPage() {
   const [polledStatus, setPolledStatus] = useState('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [gig, setGig] = useState<Gig | null>(null)
+
+  // Report the gig this pane just fetched back up to the list page (e.g. so
+  // it can pick the Upcoming/Past tab from the gig's date) instead of the
+  // list page making its own, redundant getGig() call for the same id.
+  const onGigDetailLoaded = outletCtx.onGigDetailLoaded as ((gig: Gig) => void) | undefined
+  const onGigDetailLoadError = outletCtx.onGigDetailLoadError as (() => void) | undefined
+  const handleGigLoaded = useCallback((g: Gig) => {
+    setGig(g)
+    onGigDetailLoaded?.(g)
+  }, [onGigDetailLoaded])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -81,7 +91,8 @@ export default function GigDetailPage() {
         canWrite={canWritePlanning}
         initialTab={initialTab}
         onBannerUpdate={outletCtx.onGigUpdate as ((gigId: Id, patch: Record<string, unknown>) => void) | undefined}
-        onGigLoaded={setGig as (gig: Gig) => void}
+        onGigLoaded={handleGigLoaded}
+        onGigLoadError={onGigDetailLoadError}
       />
 
       <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>

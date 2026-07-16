@@ -23,6 +23,8 @@ export interface Venue {
   primary_contact_name?: string
   years?: number[]
   is_primary?: boolean
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export interface Gig {
@@ -207,6 +209,13 @@ export interface Contact {
   phone?: string | null
   category?: string
   iban?: string | null
+}
+
+export interface DuplicateEntityMatch {
+  id: Id
+  name: string
+  category?: string
+  matched_fields: string[]
 }
 
 export interface InvoiceLine {

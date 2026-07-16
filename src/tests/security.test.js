@@ -246,11 +246,11 @@ describe('auditLog', () => {
   it('includes arbitrary extra fields', () => {
     const fakeReq = { session: { userId: 1 }, tenantId: 2, ip: '0.0.0.0' }
     const entries = captureAuditEntries(() =>
-      auditLog(fakeReq, 'invite.create', { inviteId: 99, role: 'member' }),
+      auditLog(fakeReq, 'invite.create', { inviteId: 99, role: 'contributor' }),
     )
 
     expect(entries[0].inviteId).toBe(99)
-    expect(entries[0].role).toBe('member')
+    expect(entries[0].role).toBe('contributor')
   })
 })
 

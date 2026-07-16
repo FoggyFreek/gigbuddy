@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useOutlet } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
@@ -22,10 +22,19 @@ export default function SplitView({ basePath, children, outletContext }: Readonl
   const setWideContent = useSetWideContent()
 
   const normalizedBase = basePath.replace(/\/$/, '')
-  const handleClose = () => navigate(normalizedBase)
+  const handleClose = useCallback(() => navigate(normalizedBase), [navigate, normalizedBase])
 
   const splitDesktop = hasDetail && isDesktop
   const hideList = hasDetail && !isDesktop
+
+  // Stable reference: react-router re-renders every useOutletContext()
+  // consumer whenever this object's identity changes, so an unrelated
+  // GigsPage/SplitView re-render (e.g. list search, tab switch) must not
+  // recreate it unless something the detail pane actually reads has changed.
+  const outletContextValue = useMemo(
+    () => ({ insideSplitView: isDesktop, onClose: handleClose, ...outletContext }),
+    [isDesktop, handleClose, outletContext],
+  )
 
   // While the master-detail layout is active, let the page use full width;
   // restore the capped/centered default when it closes or this view unmounts.
@@ -67,7 +76,7 @@ export default function SplitView({ basePath, children, outletContext }: Readonl
             ...(splitDesktop && { overflow: 'hidden auto' }),
           }}
         >
-          <Outlet context={{ insideSplitView: isDesktop, onClose: handleClose, ...outletContext }} />
+          <Outlet context={outletContextValue} />
         </Box>
       )}
     </Box>

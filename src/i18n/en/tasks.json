@@ -3,6 +3,8 @@
   "myTasks": "Assigned to me",
   "showFinished": "Finished",
   "filters": "Filters",
+  "taskLimit": "Tasks shown",
+  "maxTaskLimit": "Max. tasks shown",
   "newTask": "New task",
   "empty": "No tasks yet.",
   "unassigned": "Unassigned",

@@ -9,7 +9,7 @@
 import pool from '../db/index.js'
 import { sendPushToUsers, sendPushToUser } from '../utils/sendPush.js'
 import { logger } from '../utils/logger.js'
-import { ALL_ROLES, hasPermission } from '../auth/permissions.js'
+import { WRITE_ROLES, hasPermission } from '../auth/permissions.js'
 import { NOTIFICATION_TYPES } from '../domain/notificationTypes.js'
 import { notFound } from './serviceErrors.js'
 import { parsePrefsBody } from '../validators/notificationValidators.js'
@@ -85,7 +85,7 @@ export async function dispatchNotification({
   }
 
   const allowedRoles = requiredPermission
-    ? ALL_ROLES.filter((role) => hasPermission(role, requiredPermission))
+    ? WRITE_ROLES.filter((role) => hasPermission(role, requiredPermission))
     : null
 
   const userIds = await resolveAudience(pool, tenantId, type, { userId, allowedRoles })

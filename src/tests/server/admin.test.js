@@ -56,7 +56,7 @@ async function createPendingUser({ email, name = 'Pending', tenantId, status = '
   )
   await pool.query(
     `INSERT INTO memberships (user_id, tenant_id, role, status)
-     VALUES ($1, $2, 'member', $3)`,
+     VALUES ($1, $2, 'contributor', $3)`,
     [u[0].id, tenantId, status],
   )
   return u[0]
@@ -163,7 +163,7 @@ describe('/api/users — tenant-scoped membership ops', () => {
     expect(res.body.role).toBe('tenant_admin')
   })
 
-  it('tenant_admin can still approve a pending member-role membership', async () => {
+  it('tenant_admin can still approve a pending contributor-role membership', async () => {
     const pending = await createPendingUser({
       email: 'pm@test.local',
       tenantId: seed.tenantA.id,
@@ -172,7 +172,7 @@ describe('/api/users — tenant-scoped membership ops', () => {
       request(app).patch(`/api/users/${pending.id}/membership`).send({ status: 'approved' }),
     ).expect(200)
     expect(res.body.status).toBe('approved')
-    expect(res.body.role).toBe('member')
+    expect(res.body.role).toBe('contributor')
   })
 
   it('tenant_admin cannot remove a super admin membership', async () => {
@@ -188,7 +188,7 @@ describe('/api/users — tenant-scoped membership ops', () => {
     // Give userA a second membership in tenant B for this test (super admin grants it)
     await pool.query(
       `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'member', 'approved', NOW())`,
+       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
       [seed.userA.id, seed.tenantB.id],
     )
     // Super admin removes userA's membership in tenant B (acting in tenant B)
@@ -271,7 +271,7 @@ describe('/api/invites/redeem', () => {
     const code = 'single-use-code'
     await pool.query(
       `INSERT INTO tenant_invites (code, tenant_id, role, created_by_user_id)
-       VALUES ($1, $2, 'member', $3)`,
+       VALUES ($1, $2, 'contributor', $3)`,
       [code, seed.tenantA.id, seed.superUser.id],
     )
     const secondUser = await createUser({ email: 'second@test.local' })
@@ -468,7 +468,7 @@ describe('/api/admin/tenants — super admin only', () => {
     ).expect(400)
   })
 
-  it('DELETE /:id/admins/:userId demotes to member', async () => {
+  it('DELETE /:id/admins/:userId demotes to contributor', async () => {
     await asSuper(
       request(app).delete(`/api/admin/tenants/${seed.tenantA.id}/admins/${seed.userA.id}`),
     ).expect(204)
@@ -476,7 +476,7 @@ describe('/api/admin/tenants — super admin only', () => {
       'SELECT role FROM memberships WHERE user_id = $1 AND tenant_id = $2',
       [seed.userA.id, seed.tenantA.id],
     )
-    expect(rows[0].role).toBe('member')
+    expect(rows[0].role).toBe('contributor')
   })
 })
 
@@ -531,7 +531,7 @@ describe('Archived tenants', () => {
     // tenant falls back to a non-archived membership when the active one is archived.
     await pool.query(
       `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'member', 'approved', NOW())`,
+       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
       [seed.userA.id, seed.tenantB.id],
     )
     await archiveA()

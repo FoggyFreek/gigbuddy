@@ -50,7 +50,8 @@
     "purchasesHeading": "Inkopen"
   },
   "modal": {
-    "confirmDelete": "Dit contact verwijderen?"
+    "confirmDelete": "Dit contact verwijderen?",
+    "duplicateWarning": "De ingevoerde informatie lijkt overeen te komen met een bestaand item:"
   },
   "import": {
     "title": "Contacten importeren uit CSV",

@@ -5,6 +5,9 @@ import { PERMISSIONS } from '../auth/permissions.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
   listEvents,
+  listUpcomingEvents,
+  listPastEvents,
+  listEventsInRange,
   getEvent,
   createEvent,
   patchEvent,
@@ -15,6 +18,25 @@ const router = Router()
 
 router.get('/', async (req, res) => {
   res.json(await listEvents(pool, req.tenantId))
+})
+
+router.get('/upcoming', async (req, res) => {
+  const result = await listUpcomingEvents(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.get('/past', async (req, res) => {
+  const result = await listPastEvents(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+// Calendar month read: events overlapping the inclusive ?from=&to= day window.
+router.get('/range', async (req, res) => {
+  const result = await listEventsInRange(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
 })
 
 router.get('/:id', async (req, res) => {

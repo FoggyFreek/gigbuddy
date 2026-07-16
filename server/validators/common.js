@@ -1,5 +1,6 @@
 // Shared pure parsing primitives. Resource validators re-export these under
 // their existing names so routes keep their current API and error behavior.
+import { isIsoDate } from '../utils/periodQuery.js'
 
 export function parsePositiveId(value) {
   const id = Number(value)
@@ -19,6 +20,52 @@ export function parseSearchLimit(value) {
     1,
     Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 10, 25),
   )
+}
+
+export const DEFAULT_LIST_LIMIT = 10
+export const MAX_LIST_LIMIT = 100
+
+// Strict limit parsing for public limited-collection endpoints. Unlike search
+// limits, malformed values are rejected instead of silently clamped so clients
+// can detect contract mistakes.
+export function parseListLimit(value, maxLimit = MAX_LIST_LIMIT) {
+  if (value === undefined) return DEFAULT_LIST_LIMIT
+  if (typeof value !== 'string' && typeof value !== 'number') return null
+  const raw = String(value)
+  if (!/^[1-9]\d*$/.test(raw)) return null
+  const limit = Number(raw)
+  return limit <= maxLimit ? limit : null
+}
+
+// Strict parsing of an inclusive day window (`?from=YYYY-MM-DD&to=YYYY-MM-DD`)
+// for windowed collection endpoints. Both bounds are required — an omitted
+// bound would be an unbounded scan — and malformed input is rejected, not
+// clamped, so clients can detect contract mistakes.
+export function parseDateRange(query) {
+  const from = query?.from
+  const to = query?.to
+  if (!isIsoDate(from) || !isIsoDate(to) || from > to) return null
+  return { from, to }
+}
+
+// Optional keyset cursor for "load more" pagination on bounded feeds
+// (`?cursorDate=YYYY-MM-DD&cursorId=123`), keyed on (date, id) to match the
+// feed's ORDER BY tiebreak. Both params are required together; omitting both
+// means "first page". Never use OFFSET-style page/offset params instead.
+export function parseListCursor(query) {
+  const cursorDate = query?.cursorDate
+  const cursorId = query?.cursorId
+  if (cursorDate === undefined && cursorId === undefined) return { cursor: null }
+  if (!isIsoDate(cursorDate)) return null
+  const id = parsePositiveId(cursorId)
+  if (id === null) return null
+  return { cursor: { date: cursorDate, id } }
+}
+
+// Calendar-day cutoff supplied by the browser. This intentionally represents
+// the user's local date rather than the API or database server's date.
+export function parseLocalDate(value) {
+  return isIsoDate(value) ? value : null
 }
 
 export function isValidIsoDate(value) {

@@ -49,7 +49,7 @@ async function seedMemberUser() {
     `INSERT INTO users (google_sub, email, name, status) VALUES ('sub-mem', 'mem@test.local', 'Member', 'approved') RETURNING *`,
   )
   await pool.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at) VALUES ($1, $2, 'member', 'approved', NOW())`,
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at) VALUES ($1, $2, 'contributor', 'approved', NOW())`,
     [u.id, seed.tenantA.id],
   )
   return u

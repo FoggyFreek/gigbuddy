@@ -29,7 +29,18 @@ import {
   merchInventoryValue,
   updateTransactionNote,
   lockTransactionRow,
+  insertLedgerTransaction,
+  insertLedgerEntries,
+  markTransactionVoided,
+  markTransactionReversed,
+  markTransactionVoidedAt,
 } from '../repositories/ledgerRepository.js'
+import {
+  ACCOUNTING_SETTINGS_LOCK_NAMESPACE,
+  acquireAccountingSettingsLock,
+  getSettings,
+  getBooksClosedThrough,
+} from '../repositories/accountRepository.js'
 import { hasReclassifiedLines } from '../repositories/journalRepository.js'
 import { badRequest, notFound } from './serviceErrors.js'
 import { openInvoiceBuckets } from '../repositories/invoiceRepository.js'
@@ -110,16 +121,12 @@ export async function assertNoActiveReclassifications(client, tenantId, transact
 // open-balance checks, so a posting in flight to the old account codes commits
 // (and is seen by the balance check) before the codes can change, and vice
 // versa. Transaction-scoped: released automatically at COMMIT/ROLLBACK.
-export const ACCOUNTING_SETTINGS_LOCK_NAMESPACE = 53002
+export { ACCOUNTING_SETTINGS_LOCK_NAMESPACE }
 
 // The system Opening Balance Equity account seeded for every tenant
 // (defaultChartOfAccounts.js / migration 064). It is is_system (undeletable), so
 // a constant is safe — no per-tenant setting is needed.
 export const OPENING_BALANCE_EQUITY_CODE = '39000'
-
-export async function acquireAccountingSettingsLock(client, tenantId) {
-  await client.query('SELECT pg_advisory_xact_lock($1, $2)', [ACCOUNTING_SETTINGS_LOCK_NAMESPACE, tenantId])
-}
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -136,11 +143,7 @@ export async function loadAccountingSettings(client, tenantId) {
   // Outside an explicit transaction the xact lock releases at statement end,
   // which is harmless for read-only callers.
   await acquireAccountingSettingsLock(client, tenantId)
-  const { rows } = await client.query(
-    'SELECT * FROM tenant_accounting_settings WHERE tenant_id = $1',
-    [tenantId],
-  )
-  return rows[0] || null
+  return getSettings(client, tenantId)
 }
 
 function requireCode(settings, field) {
@@ -160,12 +163,7 @@ function nextDay(isoDate) {
 }
 
 export async function fetchBooksClosedThrough(executor, tenantId) {
-  const { rows } = await executor.query(
-    `SELECT to_char(books_closed_through, 'YYYY-MM-DD') AS closed_through
-       FROM tenant_accounting_settings WHERE tenant_id = $1`,
-    [tenantId],
-  )
-  return rows[0]?.closed_through || null
+  return getBooksClosedThrough(executor, tenantId)
 }
 
 // The given date when its period is still open, else the first day after
@@ -233,25 +231,17 @@ export async function postJournal(client, tenantId, {
     throw new Error(`ledger: journal ${label} is unbalanced (debit ${totalDebit} != credit ${totalCredit})`)
   }
 
-  const { rows } = await client.query(
-    `INSERT INTO ledger_transactions
-       (tenant_id, entry_date, description, source_type, source_id, source_event, created_by_user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (tenant_id, source_type, source_id, source_event) DO NOTHING
-     RETURNING id`,
-    [tenantId, effectiveDate, effectiveDescription, sourceType, sourceId, sourceEvent, actorUserId],
-  )
-  if (!rows.length) return { posted: false }
-  const transactionId = rows[0].id
+  const transactionId = await insertLedgerTransaction(client, tenantId, {
+    entryDate: effectiveDate,
+    description: effectiveDescription,
+    sourceType,
+    sourceId,
+    sourceEvent,
+    actorUserId,
+  })
+  if (transactionId == null) return { posted: false }
 
-  for (const l of normalized) {
-    await client.query(
-      `INSERT INTO ledger_entries
-         (tenant_id, transaction_id, account_code, debit_cents, credit_cents, memo)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [tenantId, transactionId, l.account_code, l.debit_cents, l.credit_cents, l.memo],
-    )
-  }
+  await insertLedgerEntries(client, tenantId, transactionId, normalized)
   return { posted: true, transactionId }
 }
 
@@ -430,36 +420,6 @@ export async function updateLedgerNote(executor, tenantId, transactionId, body, 
 // Posts a correcting transaction: a new journal dated today with every line of
 // `original` debit/credit-swapped. `mode` is 'void' or 'reversal'; the
 // source_event records which.
-// Marks an original transaction as voided by its (open-period) compensating
-// entry: the original then hides from the default list and drops from reports.
-async function markVoided(client, tenantId, originalId, byTransactionId) {
-  await client.query(
-    `UPDATE ledger_transactions SET voided_by_transaction_id = $1, voided_at = NOW()
-      WHERE id = $2 AND tenant_id = $3`,
-    [byTransactionId, originalId, tenantId],
-  )
-}
-
-// Marks an original as reversed by a visible (closed-period) correction: both
-// halves stay in the ledger and in reports, netting the mistake out forward.
-async function markReversed(client, tenantId, originalId, byTransactionId) {
-  await client.query(
-    `UPDATE ledger_transactions SET reversed_by_transaction_id = $1
-      WHERE id = $2 AND tenant_id = $3`,
-    [byTransactionId, originalId, tenantId],
-  )
-}
-
-// Flags a transaction's own voided_at so it drops from reports. Used on the
-// compensating half of a domain void (merch) that isn't a ledger_transaction/void,
-// so the open-period pair nets to zero like a manual void does.
-async function markVoidedAt(client, tenantId, transactionId) {
-  await client.query(
-    `UPDATE ledger_transactions SET voided_at = NOW() WHERE id = $1 AND tenant_id = $2`,
-    [transactionId, tenantId],
-  )
-}
-
 async function postReversingJournal(client, tenantId, original, mode, actorUserId, opts = {}) {
   const verb = mode === 'void' ? 'Void' : 'Reversal'
   const lines = (await listLines(client, tenantId, original.id)).map((l) => ({
@@ -546,9 +506,9 @@ async function applyCorrection(pool, tenantId, transactionId, actorUserId, mode)
     // Mark the original. The compensating ledger_transaction/void is excluded
     // from reports by its source_event, so only the original needs marking.
     if (mode === 'void') {
-      await markVoided(client, tenantId, transactionId, result.transactionId)
+      await markTransactionVoided(client, tenantId, transactionId, result.transactionId)
     } else {
-      await markReversed(client, tenantId, transactionId, result.transactionId)
+      await markTransactionReversed(client, tenantId, transactionId, result.transactionId)
     }
 
     return { transactionId: result.transactionId }
@@ -576,8 +536,8 @@ export async function correctLedgerTransaction(client, tenantId, transactionId, 
     const code = mode === 'void' ? 'already_voided' : 'already_reversed'
     return { error: { status: 409, body: { error: 'Entry already corrected', code } } }
   }
-  if (mode === 'void') await markVoided(client, tenantId, transactionId, result.transactionId)
-  else await markReversed(client, tenantId, transactionId, result.transactionId)
+  if (mode === 'void') await markTransactionVoided(client, tenantId, transactionId, result.transactionId)
+  else await markTransactionReversed(client, tenantId, transactionId, result.transactionId)
   return { mode, transactionId: result.transactionId }
 }
 
@@ -1056,10 +1016,10 @@ export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
 
   if (result.posted && original) {
     if (isClosed) {
-      await markReversed(client, tenantId, original.id, result.transactionId)
+      await markTransactionReversed(client, tenantId, original.id, result.transactionId)
     } else {
-      await markVoided(client, tenantId, original.id, result.transactionId)
-      await markVoidedAt(client, tenantId, result.transactionId)
+      await markTransactionVoided(client, tenantId, original.id, result.transactionId)
+      await markTransactionVoidedAt(client, tenantId, result.transactionId)
     }
   }
   return result

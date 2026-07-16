@@ -1,5 +1,12 @@
 import { request, requestForm } from './_client.ts'
 import type { Gig, GigMerchSummary, GigTag, Id, Task } from '../types/entities.ts'
+import type {
+  GigMapGig,
+  LimitedCollectionWithCursorResponse,
+  LimitedCollectionWithTotalResponse,
+  ListCollectionCursor,
+  WindowedCollectionResponse,
+} from '../types/api.ts'
 
 interface GigParticipant {
   band_member_id?: Id
@@ -23,6 +30,20 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/gigs${path}`, options)
 
 export const listGigs = () => api<Gig[]>('/')
+export const listUpcomingGigs = (limit: number, today: string) =>
+  api<LimitedCollectionWithTotalResponse<Gig>>(`/upcoming?${new URLSearchParams({ limit: String(limit), today })}`)
+export const listPastGigs = (limit: number, today: string, cursor?: ListCollectionCursor) => {
+  const params = new URLSearchParams({ limit: String(limit), today })
+  if (cursor) {
+    params.set('cursorDate', cursor.date)
+    params.set('cursorId', String(cursor.id))
+  }
+  return api<LimitedCollectionWithCursorResponse<Gig>>(`/past?${params}`)
+}
+export const listGigsInRange = ({ from, to }: { from: string; to: string }) =>
+  api<WindowedCollectionResponse<Gig>>(`/range?${new URLSearchParams({ from, to })}`)
+export const listGigMapData = ({ from, to }: { from: string; to: string }) =>
+  api<WindowedCollectionResponse<GigMapGig>>(`/map?${new URLSearchParams({ from, to })}`)
 export const searchGigs = (q: string) =>
   api<Gig[]>(`/search?${new URLSearchParams({ q })}`)
 export const searchGigTags = (q: string) =>

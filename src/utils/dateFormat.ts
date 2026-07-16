@@ -5,6 +5,14 @@ export function formatShortDate(value: string | Date | null | undefined, locale 
   return d.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+// YYYY-MM-DD in the browser's local timezone. Do not use toISOString() here:
+// its UTC conversion can move the calendar day around local midnight.
+export function localDateString(date = new Date()): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
 // Whole-day distance from `today` to a 'YYYY-MM-DD' (or ISO) date, using UTC
 // midnights so DST/time-of-day never shift the count. Negative = past (overdue),
 // 0 = today. null when the date is missing or unparseable.
@@ -15,6 +23,13 @@ export function daysUntil(value: string | null | undefined, today = new Date()):
   const dueUtc = Date.UTC(year, month - 1, day)
   const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
   return Math.round((dueUtc - todayUtc) / 86_400_000)
+}
+
+// True when a date is strictly before today (calendar-day comparison, DST-safe).
+export function isPastDate(value: string | Date | null | undefined): boolean {
+  if (!value) return false
+  const days = daysUntil(value instanceof Date ? localDateString(value) : value)
+  return days !== null && days < 0
 }
 
 // Compact relative timestamp for feeds ("5 minutes ago", "yesterday"); falls

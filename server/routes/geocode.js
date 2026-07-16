@@ -1,5 +1,7 @@
 import { Router } from 'express'
-import { geocodePlace } from '../services/geocodeService.js'
+import pool from '../db/index.js'
+import { geocodePlace, geocodeVenue } from '../services/geocodeService.js'
+import { requireParam, sendError } from './routeHelpers.js'
 
 const router = Router()
 const MAX_PARAM_LENGTH = 120
@@ -23,6 +25,13 @@ function validatePlace(query) {
   }
   return { place }
 }
+
+router.get('/venue/:id', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await geocodeVenue(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
 
 router.get('/', async (req, res) => {
   const validation = validatePlace(req.query)

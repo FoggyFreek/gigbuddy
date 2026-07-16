@@ -5,21 +5,28 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import IconButton from '@mui/material/IconButton'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import ListItemText from '@mui/material/ListItemText'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import Select from '@mui/material/Select'
 import ToggleButton from '@mui/material/ToggleButton'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
+import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import FilterAltIcon from '@mui/icons-material/FilterAlt'
 import TasksTable from '../components/TasksTable.tsx'
 import TaskFormDialog from '../components/TaskFormDialog.tsx'
 import { useAuth } from '../contexts/authContext.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
-import { listAllTasks, updateTask } from '../api/tasks.ts'
+import { listTasks, updateTask } from '../api/tasks.ts'
 import type { Id, Task } from '../types/entities.ts'
 
 const FILTER_SX = { height: 31 } as const
+const DEFAULT_TASK_LIST_LIMIT = 50
+const TASK_LIST_LIMIT_OPTIONS = [50, 100, 200, 500] as const
 
 const COMPACT_FILTER_SX = {
   ...FILTER_SX,
@@ -39,21 +46,24 @@ export default function TasksPage() {
   const [error, setError] = useState<string | null>(null)
   const [myTasksOnly, setMyTasksOnly] = useState(false)
   const [showFinished, setShowFinished] = useState(false)
+  const [taskLimit, setTaskLimit] = useState(DEFAULT_TASK_LIST_LIMIT)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
+  const [taskLimitAnchor, setTaskLimitAnchor] = useState<HTMLElement | null>(null)
 
   const load = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true)
       setError(null)
-      setTasks(await listAllTasks())
+      const response = await listTasks({ limit: taskLimit })
+      setTasks(response.items)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [])
+  }, [taskLimit])
 
   useEffect(() => { load() }, [load])
 
@@ -81,6 +91,16 @@ export default function TasksPage() {
   function openEdit(task: Task) {
     setEditingTask(task)
     setDialogOpen(true)
+  }
+
+  function closeCompactMenus() {
+    setTaskLimitAnchor(null)
+    setFilterAnchor(null)
+  }
+
+  function selectTaskLimit(limit: number) {
+    setTaskLimit(limit)
+    closeCompactMenus()
   }
 
   const memberTasks = tasks
@@ -116,7 +136,7 @@ export default function TasksPage() {
             <Menu
               anchorEl={filterAnchor}
               open={Boolean(filterAnchor)}
-              onClose={() => setFilterAnchor(null)}
+              onClose={closeCompactMenus}
             >
               {user?.bandMemberId && (
                 <MenuItem selected={myTasksOnly} onClick={() => setMyTasksOnly((v) => !v)}>
@@ -126,6 +146,31 @@ export default function TasksPage() {
               <MenuItem selected={showFinished} onClick={() => setShowFinished((v) => !v)}>
                 {t($ => $.showFinished)}
               </MenuItem>
+              <MenuItem
+                aria-haspopup="menu"
+                aria-expanded={Boolean(taskLimitAnchor)}
+                onClick={(e) => setTaskLimitAnchor(e.currentTarget)}
+              >
+                <ListItemText>{t($ => $.maxTaskLimit)}</ListItemText>
+                <ChevronRightIcon fontSize="small" />
+              </MenuItem>
+            </Menu>
+            <Menu
+              anchorEl={taskLimitAnchor}
+              open={Boolean(taskLimitAnchor)}
+              onClose={() => setTaskLimitAnchor(null)}
+              anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            >
+              {TASK_LIST_LIMIT_OPTIONS.map((limit) => (
+                <MenuItem
+                  key={limit}
+                  selected={taskLimit === limit}
+                  onClick={() => selectTaskLimit(limit)}
+                >
+                  {limit}
+                </MenuItem>
+              ))}
             </Menu>
           </>
         ) : (
@@ -150,6 +195,20 @@ export default function TasksPage() {
             >
               {t($ => $.showFinished)}
             </ToggleButton>
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel id="task-limit-label">{t($ => $.taskLimit)}</InputLabel>
+              <Select
+                labelId="task-limit-label"
+                value={taskLimit}
+                label={t($ => $.taskLimit)}
+                onChange={(e) => setTaskLimit(Number(e.target.value))}
+                sx={FILTER_SX}
+              >
+                {TASK_LIST_LIMIT_OPTIONS.map((limit) => (
+                  <MenuItem key={limit} value={limit}>{limit}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </>
         )}
         {canWritePlanning && (

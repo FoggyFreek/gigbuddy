@@ -6,6 +6,7 @@ import { requireParam, sendError } from './routeHelpers.js'
 import {
   listContacts,
   searchContacts,
+  checkContactDuplicates,
   getContact,
   createContact,
   patchContact,
@@ -28,6 +29,10 @@ router.get('/', async (req, res) => {
 
 router.get('/search', async (req, res) => {
   res.json(await searchContacts(pool, req.tenantId, req.query))
+})
+
+router.post('/duplicate-check', async (req, res) => {
+  res.json(await checkContactDuplicates(pool, req.tenantId, req.body))
 })
 
 router.get('/:id', async (req, res) => {

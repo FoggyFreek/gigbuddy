@@ -15,6 +15,7 @@ import {
 import {
   listVenues as listVenueRows,
   searchVenues as searchVenueRows,
+  findVenueDuplicates,
   fetchVenue,
   venueExistsInTenant,
   getVenueCategory,
@@ -33,6 +34,7 @@ import {
   deleteVenueContact,
   loadExistingImportKeys,
 } from '../repositories/venueRepository.js'
+import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../utils/urls.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
 
 const NOT_FOUND = notFound('Not found')
@@ -57,6 +59,36 @@ export async function searchVenues(db, tenantId, query) {
     limit: parseSearchLimit(query.limit),
     category: query.category,
   })
+}
+
+const DUPLICATE_LIMIT = 5
+
+function normalizedMatchText(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return normalized || null
+}
+
+function normalizedMatchWebsite(value) {
+  try {
+    return normalizeOptionalUrl(value, { allowedProtocols: WEB_URL_PROTOCOLS })?.toLowerCase() ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function checkVenueDuplicates(db, tenantId, body = {}) {
+  const input = {
+    organizationName: normalizedMatchText(body.organization_name),
+    address: normalizedMatchText(body.street_and_number),
+    website: normalizedMatchWebsite(body.website),
+    email: normalizedMatchText(body.email),
+  }
+  if (!Object.values(input).some(Boolean)) {
+    return { items: [], meta: { limit: DUPLICATE_LIMIT, returned: 0 } }
+  }
+
+  const items = await findVenueDuplicates(db, tenantId, { ...input, limit: DUPLICATE_LIMIT })
+  return { items, meta: { limit: DUPLICATE_LIMIT, returned: items.length } }
 }
 
 export async function getVenue(db, tenantId, venueId) {
@@ -89,7 +121,9 @@ export async function createVenue(db, tenantId, body) {
   if (legacyNameError) return legacyNameError
 
   try {
-    return { venue: await insertVenue(db, tenantId, body) }
+    // Coordinates are system/import-managed and are intentionally ignored by
+    // the ordinary create endpoint used by venue forms.
+    return { venue: await insertVenue(db, tenantId, { ...body, latitude: null, longitude: null }) }
   } catch (err) {
     if (err.code === '23505') {
       return conflict('A venue with this name and city already exists')
@@ -224,15 +258,14 @@ async function insertImportRows(client, tenantId, rows, existingKeys) {
   const summary = { imported: 0, skipped: 0 }
 
   for (const row of rows) {
-    const normalized = normalizeImportRow(row)
-    if (!normalized || existingKeys.has(normalized.key) || seenKeys.has(normalized.key)) {
+    if (!row || existingKeys.has(row.key) || seenKeys.has(row.key)) {
       summary.skipped++
       continue
     }
 
-    await insertVenue(client, tenantId, normalized.body)
+    await insertVenue(client, tenantId, row.body)
     summary.imported++
-    seenKeys.add(normalized.key)
+    seenKeys.add(row.key)
   }
 
   return summary
@@ -248,8 +281,12 @@ export async function importVenues(tenantId, body) {
     return badRequest('Maximum 1000 rows per import')
   }
 
+  const normalizedRows = body.map(normalizeImportRow)
+  const invalid = normalizedRows.find((row) => row?.error)
+  if (invalid) return badRequest(invalid.error)
+
   return withTransaction(async (client) => {
     const existingKeys = await buildExistingImportKeys(client, tenantId, body)
-    return { summary: await insertImportRows(client, tenantId, body, existingKeys) }
+    return { summary: await insertImportRows(client, tenantId, normalizedRows, existingKeys) }
   })
 }

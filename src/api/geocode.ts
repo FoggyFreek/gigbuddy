@@ -8,7 +8,7 @@ interface GeocodePlace {
   postalCode?: string
 }
 
-interface GeocodeResult {
+export interface GeocodeResult {
   status: 'hit' | 'empty' | 'fail'
   coords?: { lat: number; lon: number }
 }
@@ -21,4 +21,8 @@ export function lookupGeocode({ city, region, country, address, postalCode }: Ge
   if (address) params.set('address', address)
   if (postalCode) params.set('postalCode', postalCode)
   return request<GeocodeResult>(`/api/geocode?${params}`)
+}
+
+export function lookupVenueGeocode(venueId: import('../types/entities.ts').Id) {
+  return request<GeocodeResult>(`/api/geocode/venue/${venueId}`)
 }

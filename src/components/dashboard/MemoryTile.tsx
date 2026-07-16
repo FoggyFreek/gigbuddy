@@ -20,8 +20,10 @@ import DashboardCard from './DashboardCard.tsx'
 import ImageCropDialog from '../ImageCropDialog.tsx'
 import { useImageCrop, JPEG_PNG } from '../../hooks/useImageCrop.ts'
 import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
+import useRemoteSearch from '../../hooks/useRemoteSearch.ts'
 import { useToast } from '../../contexts/toastContext.ts'
 import { compressMemoryPhoto } from '../../utils/compressImage.ts'
+import { getGig, searchGigs } from '../../api/gigs.ts'
 import { deleteMemoryImage, updateProfile, uploadMemoryImage } from '../../api/profile.ts'
 import type { Gig, Id } from '../../types/entities.ts'
 
@@ -35,7 +37,7 @@ interface MemoryTileProps {
   imagePath: string | null
   caption: string | null
   gigId: Id | null
-  /** All gigs, for resolving the linked-gig label and the picker options. */
+  /** Gigs already needed for display (normally just the linked memory gig). */
   gigs: Gig[]
   /** Whether the viewer may edit (planning write). Read-only members just view. */
   canEdit: boolean
@@ -54,12 +56,14 @@ function gigLabel(gig: Gig, locale: string): string {
 
 export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, onSaved }: Readonly<MemoryTileProps>) {
   const { t, i18n } = useTranslation('dashboard')
+  const { t: tCommon } = useTranslation('common')
   const locale = i18n.resolvedLanguage ?? 'en'
   const navigate = useNavigate()
   const showToast = useToast()
 
   const [editing, setEditing] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const [selectedGig, setSelectedGig] = useState<Gig | null>(null)
   // Local caption for the controlled TextField, re-seeded (render-phase sync, the
   // React-recommended alternative to a setState-in-effect) whenever the persisted
   // prop changes so it never drifts from the source.
@@ -88,20 +92,47 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
     },
   )
 
-  // Gigs newest-first for the picker; a linked gig celebrates a past moment.
-  const gigOptions = useMemo(
-    () => [...gigs].sort((a, b) => String(b.event_date ?? '').localeCompare(String(a.event_date ?? ''))),
-    [gigs],
-  )
-  const linkedGig = gigId != null ? gigs.find((g) => g.id === gigId) ?? null : null
+  const {
+    inputValue: gigInput,
+    options: gigOptions,
+    loading: gigsLoading,
+    tooShort: gigQueryTooShort,
+    minChars: gigSearchMinChars,
+    onInputChange: handleGigInputChange,
+    clear: clearGigSearch,
+    clearQuery: clearGigQuery,
+  } = useRemoteSearch<Gig>({ search: searchGigs, enabled: editing })
+
+  const linkedGig = useMemo(() => {
+    if (gigId == null) return null
+    return (selectedGig?.id === gigId ? selectedGig : null)
+      ?? gigs.find((gig) => gig.id === gigId)
+      ?? gigOptions.find((gig) => gig.id === gigId)
+      ?? null
+  }, [gigId, gigs, gigOptions, selectedGig])
 
   async function saveGig(next: Gig | null) {
     const nextId = next?.id ?? null
     try {
       await updateProfile({ memory_gig_id: nextId })
-      onSaved({ memory_gig_id: nextId })
     } catch {
       showToast?.(t($ => $.memory.uploadError), 'error')
+      return
+    }
+
+    // Keep the clicked search result as the controlled value while the picker
+    // query is cleared, then replace it with the canonical detail response.
+    setSelectedGig(next)
+    onSaved({ memory_gig_id: nextId })
+    clearGigQuery()
+
+    if (nextId != null) {
+      try {
+        setSelectedGig(await getGig(nextId))
+      } catch {
+        // The link was saved successfully; retain the search result if the
+        // follow-up refresh fails instead of making the selection disappear.
+      }
     }
   }
 
@@ -123,6 +154,7 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
   function toggleEditing() {
     if (editing) flush()
     setEditing((prev) => !prev)
+    if (editing) clearGigSearch()
   }
 
   const hasContent = Boolean(imagePath || caption || gigId)
@@ -260,8 +292,17 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
           options={gigOptions}
           value={linkedGig}
           onChange={(_, next) => saveGig(next)}
+          inputValue={gigInput}
+          onInputChange={handleGigInputChange}
+          filterOptions={(options) => options}
+          loading={gigsLoading}
           getOptionLabel={(g) => gigLabel(g, locale)}
           isOptionEqualToValue={(a, b) => a.id === b.id}
+          noOptionsText={gigQueryTooShort
+            ? tCommon($ => $.picker.typeMinChars, { count: gigSearchMinChars })
+            : gigsLoading
+              ? tCommon($ => $.picker.searching)
+              : tCommon($ => $.picker.noMatches)}
           size="small"
           renderInput={(params) => (
             <TextField {...params} label={t($ => $.memory.gigLabel)} placeholder={t($ => $.memory.gigNone)} />

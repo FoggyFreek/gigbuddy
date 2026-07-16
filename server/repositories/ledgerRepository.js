@@ -1,6 +1,6 @@
-// Read-only data access for the ledger browser. Each function takes an
-// `executor` (pool or transaction client) and is scoped by tenantId. The
-// posting engine (ledgerService.js) remains the only writer.
+// Data access for the ledger. Each function takes an `executor` (pool or
+// transaction client) and is scoped by tenantId. The posting engine in
+// ledgerService.js remains the only caller allowed to create journals.
 
 // Source-doc joins shared by list and detail: the columns ledgerEntryTypes.js
 // needs to derive Type / Receipt / Description per (source_type, source_event).
@@ -65,6 +65,63 @@ const NOT_VOIDED_EXISTS_SQL = `AND NOT EXISTS (
                    OR (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')))`
 
 const EMPTY_PERIOD = Object.freeze({ sql: '', values: [] })
+
+// Creates the transaction header for one journal. The unique source-event key
+// makes re-driving an already-posted event a no-op.
+export async function insertLedgerTransaction(executor, tenantId, {
+  entryDate, description, sourceType, sourceId, sourceEvent, actorUserId,
+}) {
+  const { rows } = await executor.query(
+    `INSERT INTO ledger_transactions
+       (tenant_id, entry_date, description, source_type, source_id, source_event, created_by_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (tenant_id, source_type, source_id, source_event) DO NOTHING
+     RETURNING id`,
+    [tenantId, entryDate, description, sourceType, sourceId, sourceEvent, actorUserId],
+  )
+  return rows[0]?.id ?? null
+}
+
+export async function insertLedgerEntries(executor, tenantId, transactionId, lines) {
+  await executor.query(
+    `INSERT INTO ledger_entries
+       (tenant_id, transaction_id, account_code, debit_cents, credit_cents, memo)
+     SELECT $1, $2, line.account_code, line.debit_cents, line.credit_cents, line.memo
+       FROM UNNEST($3::text[], $4::integer[], $5::integer[], $6::text[])
+         AS line(account_code, debit_cents, credit_cents, memo)`,
+    [
+      tenantId,
+      transactionId,
+      lines.map((line) => line.account_code),
+      lines.map((line) => line.debit_cents),
+      lines.map((line) => line.credit_cents),
+      lines.map((line) => line.memo),
+    ],
+  )
+}
+
+export async function markTransactionVoided(executor, tenantId, transactionId, voidedByTransactionId) {
+  await executor.query(
+    `UPDATE ledger_transactions SET voided_by_transaction_id = $1, voided_at = NOW()
+      WHERE id = $2 AND tenant_id = $3`,
+    [voidedByTransactionId, transactionId, tenantId],
+  )
+}
+
+export async function markTransactionReversed(executor, tenantId, transactionId, reversedByTransactionId) {
+  await executor.query(
+    `UPDATE ledger_transactions SET reversed_by_transaction_id = $1
+      WHERE id = $2 AND tenant_id = $3`,
+    [reversedByTransactionId, transactionId, tenantId],
+  )
+}
+
+export async function markTransactionVoidedAt(executor, tenantId, transactionId) {
+  await executor.query(
+    'UPDATE ledger_transactions SET voided_at = NOW() WHERE id = $1 AND tenant_id = $2',
+    [transactionId, tenantId],
+  )
+}
 
 // Transactions in the (optional) date range with their gross amount (sum of
 // the debit side, in cents) and the joined source-doc fields.

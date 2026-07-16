@@ -72,9 +72,9 @@ describe('GET /api/statistics/storage — tenant admin, own tenant', () => {
     expect(Number(res.body.storage_bytes)).toBe(0)
   })
 
-  it('403s a plain member (tenant_admin required)', async () => {
+  it('403s a plain contributor (tenant_admin required)', async () => {
     await pool.query(
-      `UPDATE memberships SET role = 'member' WHERE user_id = $1 AND tenant_id = $2`,
+      `UPDATE memberships SET role = 'contributor' WHERE user_id = $1 AND tenant_id = $2`,
       [seed.userA.id, seed.tenantA.id],
     )
     await asUserA(request(app).get('/api/statistics/storage')).expect(403)

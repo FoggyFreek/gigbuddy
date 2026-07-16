@@ -67,6 +67,9 @@ export function normalizeBandsintownEvent(event) {
   const offers = Array.isArray(event.offers) ? event.offers : []
   const description = trimmed(event.title) || trimmed(event.description) || trimmed(venue.name)
   if (!description) return null
+  const latitude = normalizedCoordinate(venue.latitude, -90, 90)
+  const longitude = normalizedCoordinate(venue.longitude, -180, 180)
+  const hasCoordinatePair = latitude !== null && longitude !== null
 
   return {
     bandsintown_event_id: trimmed(event.id) || extractEventIdFromLink(event.url),
@@ -86,10 +89,17 @@ export function normalizeBandsintownEvent(event) {
       postal_code: trimmed(venue.postal_code),
       street_address: trimmed(venue.street_address),
       location: trimmed(venue.location),
-      latitude: trimmed(venue.latitude) || null,
-      longitude: trimmed(venue.longitude) || null,
+      latitude: hasCoordinatePair ? latitude : null,
+      longitude: hasCoordinatePair ? longitude : null,
     },
   }
+}
+
+function normalizedCoordinate(value, min, max) {
+  const text = trimmed(value)
+  if (!text) return null
+  const number = Number(text)
+  return Number.isFinite(number) && number >= min && number <= max ? text : null
 }
 
 // venues.country is a CHAR(2) ISO code; Bandsintown sends full English

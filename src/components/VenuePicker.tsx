@@ -1,5 +1,5 @@
 import type { Venue, Id } from '../types/entities.ts'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
@@ -11,11 +11,9 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { searchVenues } from '../api/venues.ts'
+import useRemoteSearch from '../hooks/useRemoteSearch.ts'
 import { venueHeadline, venueOptionLabel } from '../utils/venueDisplay.ts'
 import VenueFormModal from './VenueFormModal.tsx'
-
-const MIN_CHARS = 3
-const DEBOUNCE_MS = 250
 
 // A synthetic option for the "create venue/festival" action entries.
 interface CreateAction {
@@ -52,12 +50,7 @@ interface VenuePickerProps {
 export default function VenuePicker({ value, onChange, onSelect, excludeIds = [], disabled, label, categoryFilter }: Readonly<VenuePickerProps>) {
   const { t } = useTranslation('common')
   const navigate = useNavigate()
-  const [input, setInput] = useState('')   // what the field displays
-  const [query, setQuery] = useState('')   // what we actually search on
-  const [options, setOptions] = useState<Venue[]>([])
-  const [loading, setLoading] = useState(false)
   const [createPrefill, setCreatePrefill] = useState<{ name: string; category: string } | null>(null)
-  const reqIdRef = useRef(0)
 
   const addMode = typeof onSelect === 'function'
   const effectiveValue = addMode ? null : (value ?? null)
@@ -71,64 +64,32 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
     : t($ => $.venuePicker.labelVenue)
   const resolvedLabel = label ?? defaultLabel
 
-  const trimmed = query.trim()
-  const tooShort = trimmed.length < MIN_CHARS
-
-  useEffect(() => {
-    const myReqId = ++reqIdRef.current
-    const excluded = new Set<Id>(excludeIds)
-    const notExcluded = (r: Venue) => r.id !== undefined && !excluded.has(r.id)
-    if (tooShort) {
-      const handle = setTimeout(() => {
-        if (reqIdRef.current !== myReqId) return
-        setOptions([])
-        setLoading(false)
-      }, 0)
-      return () => clearTimeout(handle)
-    }
-    const startHandle = setTimeout(() => {
-      if (reqIdRef.current !== myReqId) return
-      setLoading(true)
-    }, 0)
-    const handle = setTimeout(() => {
-      searchVenues(trimmed, categoryFilter)
-        .then((rows: Venue[]) => {
-          if (reqIdRef.current !== myReqId) return
-          setOptions(rows.filter(notExcluded))
-        })
-        .catch(() => {
-          if (reqIdRef.current !== myReqId) return
-          setOptions([])
-        })
-        .finally(() => {
-          if (reqIdRef.current !== myReqId) return
-          setLoading(false)
-        })
-    }, DEBOUNCE_MS)
-    return () => {
-      clearTimeout(startHandle)
-      clearTimeout(handle)
-    }
-    // excludeKey stands in for excludeIds (stable across renders by contents).
-  }, [trimmed, tooShort, categoryFilter, excludeKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const {
+    inputValue, query, options, loading, tooShort, minChars, onInputChange, clear,
+  } = useRemoteSearch<Venue>({
+    search: (searchQuery) => searchVenues(searchQuery, categoryFilter),
+    dependencyKey: `${categoryFilter ?? ''}:${excludeKey}`,
+    filterResults: (rows) => {
+      const excluded = new Set<Id>(excludeIds)
+      return rows.filter((row) => row.id !== undefined && !excluded.has(row.id))
+    },
+  })
 
   const augmentedOptions: VenueOption[] = useMemo(() => {
     if (tooShort || loading) return options
     if (options.length > 0) return options
     if (effectiveValue) return options
-    const createVenue = { __action: 'create-venue', __label: t($ => $.venuePicker.createVenue, { name: trimmed }) }
-    const createFestival = { __action: 'create-festival', __label: t($ => $.venuePicker.createFestival, { name: trimmed }) }
+    const createVenue = { __action: 'create-venue', __label: t($ => $.venuePicker.createVenue, { name: query }) }
+    const createFestival = { __action: 'create-festival', __label: t($ => $.venuePicker.createFestival, { name: query }) }
     if (categoryFilter === 'festival') return [createFestival]
     if (categoryFilter === 'venue') return [createVenue]
     return [createVenue, createFestival]
-  }, [options, tooShort, loading, trimmed, effectiveValue, categoryFilter, t])
+  }, [options, tooShort, loading, query, effectiveValue, categoryFilter, t])
 
   function report(venue: Venue) {
     if (addMode) {
       onSelect!(venue)
-      setInput('')
-      setQuery('')
-      setOptions([])
+      clear()
     } else {
       onChange?.(venue)
     }
@@ -141,9 +102,9 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
     }
     if (isCreateAction(picked)) {
       if (picked.__action === 'create-venue') {
-        setCreatePrefill({ name: trimmed, category: 'venue' })
+        setCreatePrefill({ name: query, category: 'venue' })
       } else if (picked.__action === 'create-festival') {
-        setCreatePrefill({ name: trimmed, category: 'festival' })
+        setCreatePrefill({ name: query, category: 'festival' })
       }
       return
     }
@@ -152,16 +113,14 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
 
   function handleCreated(venue: Venue) {
     setCreatePrefill(null)
-    setInput('')
-    setQuery('')
-    setOptions([])
+    clear()
     if (categoryFilter && venue.category !== categoryFilter) return
     report(venue)
   }
 
   let noOptionsText: string
   if (tooShort) {
-    noOptionsText = t($ => $.picker.typeMinChars, { count: MIN_CHARS })
+    noOptionsText = t($ => $.picker.typeMinChars, { count: minChars })
   } else if (loading) {
     noOptionsText = t($ => $.picker.searching)
   } else {
@@ -173,12 +132,8 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
       <Autocomplete
         value={effectiveValue}
         onChange={handleSelect}
-        inputValue={input}
-        onInputChange={(_e, v, reason) => {
-          if (reason === 'input') { setInput(v); setQuery(v) }
-          else if (reason === 'reset') setInput(v)
-          else if (reason === 'clear') { setInput(''); setQuery('') }
-        }}
+        inputValue={inputValue}
+        onInputChange={onInputChange}
         options={augmentedOptions}
         filterOptions={(x) => x}
         loading={loading}

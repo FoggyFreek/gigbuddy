@@ -93,6 +93,62 @@ describe('GET /api/contacts/search — category filter', () => {
   })
 })
 
+describe('POST /api/contacts/duplicate-check', () => {
+  it('matches non-supplier contacts by name or email and reports the matching fields', async () => {
+    const { rows: [contact] } = await pool.query(
+      `INSERT INTO contacts (tenant_id, name, email, category)
+       VALUES ($1, 'Shared Person', 'person@example.com', 'booker') RETURNING id`,
+      [seed.tenantA.id],
+    )
+
+    const res = await asUserA(request(app).post('/api/contacts/duplicate-check').send({
+      name: ' shared person ',
+      email: 'PERSON@EXAMPLE.COM',
+      category: 'press',
+    })).expect(200)
+
+    expect(res.body.items).toEqual([
+      expect.objectContaining({ id: contact.id, name: 'Shared Person', matched_fields: ['name', 'email'] }),
+    ])
+    expect(res.body.meta).toEqual({ limit: 5, returned: 1 })
+  })
+
+  it('matches suppliers by canonical IBAN and does not mix supplier and contact directories', async () => {
+    const { rows: [supplier] } = await pool.query(
+      `INSERT INTO contacts (tenant_id, name, email, category, iban) VALUES
+       ($1, 'Supplier Match', 'supplier@example.com', 'supplier', 'NL91ABNA0417164300')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, email, category)
+       VALUES ($1, 'Ordinary Contact', 'supplier@example.com', 'press')`,
+      [seed.tenantA.id],
+    )
+
+    const res = await asUserA(request(app).post('/api/contacts/duplicate-check').send({
+      name: 'Different name',
+      email: 'supplier@example.com',
+      iban: 'nl91 abna 0417 1643 00',
+      category: 'supplier',
+    })).expect(200)
+
+    expect(res.body.items).toEqual([
+      expect.objectContaining({ id: supplier.id, matched_fields: ['email', 'iban'] }),
+    ])
+  })
+
+  it('does not reveal matching contacts from another tenant', async () => {
+    const tenantBContact = seed.contacts.find((contact) => contact.tenant_id === seed.tenantB.id)
+    const res = await asUserA(request(app).post('/api/contacts/duplicate-check').send({
+      name: tenantBContact.name,
+      category: tenantBContact.category,
+    })).expect(200)
+
+    expect(res.body.items).toEqual([])
+  })
+})
+
 describe('GET /api/contacts/:id — includes notes array', () => {
   it('returns empty notes array when contact has no notes', async () => {
     const contactId = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id).id

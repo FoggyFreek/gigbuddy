@@ -25,7 +25,9 @@
     "country": "Country",
     "website": "Website",
     "phone": "Phone",
-    "email": "Email"
+    "email": "Email",
+    "latitude": "Latitude",
+    "longitude": "Longitude"
   },
   "placeholders": {
     "title": "Mr.",
@@ -66,7 +68,8 @@
   },
   "modal": {
     "addTitle": "Add venue",
-    "confirmDelete": "Delete this venue?"
+    "confirmDelete": "Delete this venue?",
+    "duplicateWarning": "The entered information seems to match an existing entry:"
   },
   "categoryChange": {
     "title_one": "Category change affects {{count}} gig",
@@ -80,7 +83,7 @@
   },
   "import": {
     "title": "Import Venues from CSV",
-    "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: name, category, title, given name, family name, organization name, street and number, street additional, postal code, city, region, country, website, phone, email.",
+    "uploadHelp": "Upload a UTF-8 CSV file with column headers. Supported fields: name, category, title, given name, family name, organization name, street and number, street additional, postal code, city, region, country, website, phone, email, latitude, longitude.",
     "mapHelp": "Map your CSV columns to venue fields. {{count}} rows detected.",
     "columns": {
       "category": "Category",

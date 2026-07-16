@@ -52,6 +52,7 @@ import {
 import { listAllUsers } from '../../api/adminUsers.ts'
 import type { AdminUser } from '../../api/adminUsers.ts'
 import { getAllStorageStats, refreshAllStorageStats } from '../../api/statistics.ts'
+import { ROLES, WRITE_ROLES } from '../../auth/permissions.ts'
 import { formatBytes } from '../../utils/formatBytes.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import type { Tenant, Id } from '../../types/entities.ts'
@@ -87,7 +88,7 @@ export default function TenantsPage() {
 
   const [memberDialog, setMemberDialog] = useState<{ open: boolean; tenant: TenantRow | null }>({ open: false, tenant: null })
   const [memberUser, setMemberUser] = useState<AdminUser | null>(null)
-  const [memberRole, setMemberRole] = useState('member')
+  const [memberRole, setMemberRole] = useState<string>(ROLES.CONTRIBUTOR)
   const [memberSubmitting, setMemberSubmitting] = useState(false)
   const [memberError, setMemberError] = useState('')
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; tenant: TenantRow | null }>({ open: false, tenant: null })
@@ -192,7 +193,7 @@ export default function TenantsPage() {
 
   const openMemberDialog = (t: TenantRow) => {
     setMemberUser(null)
-    setMemberRole('member')
+    setMemberRole(ROLES.CONTRIBUTOR)
     setMemberError('')
     setMemberDialog({ open: true, tenant: t })
   }
@@ -203,7 +204,7 @@ export default function TenantsPage() {
     setMemberError('')
     try {
       await grantMembership(memberDialog.tenant.id as Id, {
-        user_id: memberUser.id,
+        userId: memberUser.id,
         role: memberRole,
       })
       setMemberDialog({ open: false, tenant: null })
@@ -649,8 +650,9 @@ export default function TenantsPage() {
                 value={memberRole}
                 onChange={(e) => setMemberRole(e.target.value)}
               >
-                <MenuItem value="member">member</MenuItem>
-                <MenuItem value="tenant_admin">tenant_admin</MenuItem>
+                {[...WRITE_ROLES].map((r) => (
+                  <MenuItem key={r} value={r}>{r}</MenuItem>
+                ))}
               </Select>
             </FormControl>
             <Typography variant="caption" color="text.secondary">

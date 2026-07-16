@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { geocodePlace, resetGeocodeCacheForTests } from '../../server/services/geocodeService.js'
+import { geocodePlace, geocodeVenue, resetGeocodeCacheForTests } from '../../server/services/geocodeService.js'
 
 function hit(lat, lon) {
   return { ok: true, json: async () => [{ lat: String(lat), lon: String(lon) }] }
@@ -18,6 +18,48 @@ afterEach(() => {
 })
 
 describe('server geocode service', () => {
+  it('persists a provider hit on the tenant-scoped venue record', async () => {
+    const db = {
+      query: vi.fn()
+        .mockResolvedValueOnce({ rows: [{
+          id: 7,
+          city: 'Amsterdam',
+          region: '',
+          country: 'NL',
+          latitude: null,
+          longitude: null,
+        }] })
+        .mockResolvedValueOnce({ rows: [{ latitude: 52.37, longitude: 4.9 }] }),
+    }
+    const fetchImpl = vi.fn(async () => hit(52.37, 4.9))
+
+    const result = await geocodeVenue(db, 3, 7, { fetchImpl })
+
+    expect(result).toEqual({ status: 'hit', coords: { lat: 52.37, lon: 4.9 } })
+    expect(db.query).toHaveBeenCalledTimes(2)
+    expect(db.query.mock.calls[1][1]).toEqual([52.37, 4.9, 7, 3])
+  })
+
+  it('returns stored venue coordinates without calling the provider', async () => {
+    const db = {
+      query: vi.fn().mockResolvedValueOnce({ rows: [{
+        id: 7,
+        city: 'Amsterdam',
+        region: '',
+        country: 'NL',
+        latitude: 52.37,
+        longitude: 4.9,
+      }] }),
+    }
+    const fetchImpl = vi.fn()
+
+    await expect(geocodeVenue(db, 3, 7, { fetchImpl })).resolves.toEqual({
+      status: 'hit', coords: { lat: 52.37, lon: 4.9 },
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(db.query).toHaveBeenCalledTimes(1)
+  })
+
   it('uses the server provider lookup and caches hits', async () => {
     const fetchImpl = vi.fn(async () => hit(52.37, 4.9))
 

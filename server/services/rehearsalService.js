@@ -15,7 +15,10 @@ import {
 import {
   listRehearsals as listRehearsalRows,
   fetchRehearsal,
-  fetchNextRehearsal,
+  listNextPlannedRehearsal,
+  listUpcomingRehearsals as listUpcomingRehearsalRows,
+  listPastRehearsals as listPastRehearsalRows,
+  listRehearsalsInRange as listRehearsalsInRangeRows,
   rehearsalExistsInTenant,
   loadParticipants,
   loadSongs,
@@ -40,9 +43,13 @@ import {
 } from '../repositories/rehearsalRepository.js'
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { songExistsInTenant } from '../repositories/songRepository.js'
-import { notFound } from './serviceErrors.js'
+import { parseListCursor, parseLocalDate } from '../validators/common.js'
+import { badRequest, notFound } from './serviceErrors.js'
+import { limitedCollection, windowedCollection } from './limitedCollectionService.js'
 
 const NOT_FOUND = notFound('Not found')
+const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
+const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and valid'
 
 // ---------- notifications ----------
 
@@ -122,16 +129,49 @@ async function autoDemoteIfNeeded(db, rehearsalId, tenantId) {
 // ---------- reads ----------
 
 export async function getNextRehearsal(db, tenantId) {
-  const rehearsal = await fetchNextRehearsal(db, tenantId)
+  const rehearsal = await listNextPlannedRehearsal(db, tenantId)
   if (!rehearsal) return { rehearsal: null }
   return getRehearsal(db, tenantId, rehearsal.id)
 }
 
-export async function listRehearsals(db, tenantId) {
-  const rehearsals = await listRehearsalRows(db, tenantId)
+async function attachParticipants(db, tenantId, rehearsals) {
   if (!rehearsals.length) return []
   const byRehearsal = await loadParticipants(db, rehearsals.map((r) => r.id), tenantId)
   return rehearsals.map((r) => ({ ...r, participants: byRehearsal.get(r.id) || [] }))
+}
+
+export async function listUpcomingRehearsals(db, tenantId, query = {}) {
+  const today = parseLocalDate(query.today)
+  if (today === null) return badRequest(INVALID_TODAY)
+  return limitedCollection(query.limit, async (limit) =>
+    attachParticipants(db, tenantId, await listUpcomingRehearsalRows(db, tenantId, today, limit)))
+}
+
+export async function listPastRehearsals(db, tenantId, query = {}) {
+  const today = parseLocalDate(query.today)
+  if (today === null) return badRequest(INVALID_TODAY)
+  const parsedCursor = parseListCursor(query)
+  if (parsedCursor === null) return badRequest(INVALID_CURSOR)
+
+  const result = await limitedCollection(query.limit, (limit) =>
+    listPastRehearsalRows(db, tenantId, today, limit, parsedCursor.cursor))
+  if (result.error) return result
+
+  const items = await attachParticipants(db, tenantId, result.items)
+  const last = items[items.length - 1]
+  const nextCursor = last && items.length === result.meta.limit
+    ? { date: rehearsalDateStr(last), id: last.id }
+    : null
+  return { items, meta: { ...result.meta, nextCursor } }
+}
+
+export async function listRehearsalsInRange(db, tenantId, query = {}) {
+  return windowedCollection(query, async (range) =>
+    attachParticipants(db, tenantId, await listRehearsalsInRangeRows(db, tenantId, range.from, range.to)))
+}
+
+export async function listRehearsals(db, tenantId) {
+  return attachParticipants(db, tenantId, await listRehearsalRows(db, tenantId))
 }
 
 export async function getRehearsal(db, tenantId, rehearsalId) {

@@ -18,6 +18,22 @@ vi.mock('../api/rehearsals.ts', () => ({
       participants: [],
     },
   ]),
+  listUpcomingRehearsals: vi.fn().mockResolvedValue({
+    items: [{
+      id: 1,
+      proposed_date: '2099-05-10',
+      start_time: '19:00:00',
+      end_time: '22:00:00',
+      location: 'Studio A',
+      status: 'option',
+      participants: [],
+    }],
+    meta: { limit: 100, returned: 1 },
+  }),
+  listPastRehearsals: vi.fn().mockResolvedValue({
+    items: [],
+    meta: { limit: 100, returned: 0, nextCursor: null },
+  }),
   getRehearsal: vi.fn().mockResolvedValue({
     id: 1,
     proposed_date: '2099-05-10',
@@ -41,7 +57,7 @@ vi.mock('../api/bandMembers.ts', () => ({
 
 import RehearsalsPage from '../pages/RehearsalsPage.tsx'
 import RehearsalDetailPage from '../pages/RehearsalDetailPage.tsx'
-import { deleteRehearsal, listRehearsals, updateRehearsal } from '../api/rehearsals.ts'
+import { deleteRehearsal, listPastRehearsals, listRehearsals, listUpcomingRehearsals, updateRehearsal } from '../api/rehearsals.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 
@@ -82,6 +98,8 @@ function wrapWithRoutes({ initialEntries }) {
 describe('RehearsalsPage', () => {
   beforeEach(() => {
     listRehearsals.mockClear()
+    listUpcomingRehearsals.mockClear()
+    listPastRehearsals.mockClear()
     deleteRehearsal.mockClear()
   })
 
@@ -89,12 +107,29 @@ describe('RehearsalsPage', () => {
     wrap(<RehearsalsPage />)
     expect(screen.getByRole('heading', { name: /rehearsals/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^add$/i })).toBeInTheDocument()
-    await waitFor(() => expect(listRehearsals).toHaveBeenCalled())
+    await waitFor(() => expect(listUpcomingRehearsals).toHaveBeenCalled())
+    expect(listRehearsals).not.toHaveBeenCalled()
+  })
+
+  it('loads past rehearsals only after selecting the Past tab', async () => {
+    const user = userEvent.setup()
+    listPastRehearsals.mockResolvedValueOnce({
+      items: [{ id: 9, proposed_date: '2020-05-10', location: 'Old Studio', status: 'planned', participants: [] }],
+      meta: { limit: 100, returned: 1, nextCursor: null },
+    })
+    wrap(<RehearsalsPage />)
+
+    await waitFor(() => expect(screen.getByText('Studio A')).toBeInTheDocument())
+    expect(listPastRehearsals).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('tab', { name: 'Past' }))
+
+    await waitFor(() => expect(screen.getByText('Old Studio')).toBeInTheDocument())
+    expect(listPastRehearsals).toHaveBeenCalledWith(100, expect.any(String))
   })
 
   it('shows a status filter immediately before Add and filters rehearsals by status', async () => {
     const user = userEvent.setup()
-    listRehearsals.mockResolvedValueOnce([
+    listUpcomingRehearsals.mockResolvedValueOnce({ items: [
       {
         id: 1,
         proposed_date: '2099-05-10',
@@ -109,7 +144,7 @@ describe('RehearsalsPage', () => {
         status: 'planned',
         participants: [],
       },
-    ])
+    ], meta: { limit: 100, returned: 2 } })
     wrap(<RehearsalsPage />)
 
     await waitFor(() => expect(screen.getByText('Studio Planned')).toBeInTheDocument())
@@ -155,7 +190,7 @@ describe('RehearsalsPage', () => {
     )
     expect(updateRehearsal).toHaveBeenCalledWith(1, expect.objectContaining({ location: 'New Place' }))
     // list was updated in-place, not via a full reload
-    expect(listRehearsals).toHaveBeenCalledTimes(1)
+    expect(listUpcomingRehearsals).toHaveBeenCalledTimes(1)
   })
 
   it('renders detail alongside the list at /rehearsals/:id and the Close button returns to /rehearsals', async () => {
@@ -182,6 +217,6 @@ describe('RehearsalsPage', () => {
 
     await waitFor(() => expect(deleteRehearsal).toHaveBeenCalledWith(1))
     expect(screen.queryByText('Studio A')).not.toBeInTheDocument()
-    expect(screen.getByText(/no rehearsals yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/no upcoming rehearsals/i)).toBeInTheDocument()
   })
 })

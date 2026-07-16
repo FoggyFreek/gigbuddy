@@ -7,9 +7,13 @@
     "colLocation": "Locatie",
     "shareEvent": "evenement delen",
     "shareWhatsApp": "Delen via WhatsApp",
+    "tabUpcoming": "Aankomend",
+    "tabPast": "Eerder",
     "emptyAll": "Nog geen evenementen — voeg er een toe om te beginnen.",
     "emptyUpcoming": "Geen aankomende evenementen.",
-    "pastEvents": "Eerdere evenementen ({{count}})"
+    "emptyPast": "Geen eerdere evenementen.",
+    "pastEvents": "Eerdere evenementen ({{count}})",
+    "loadMore": "Meer laden"
   },
   "form": {
     "addTitle": "Bandevenement toevoegen",

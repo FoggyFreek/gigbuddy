@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { searchContacts } from '../api/contacts.ts'
+import useRemoteSearch from '../hooks/useRemoteSearch.ts'
 import type { Contact, Id } from '../types/entities.ts'
 import ContactFormModal from './ContactFormModal.tsx'
 
@@ -15,9 +16,6 @@ interface ContactPickerProps {
   label?: string
 }
 
-const MIN_CHARS = 3
-const DEBOUNCE_MS = 250
-
 type ActionOption = { __action: string; __label: string }
 type PickerOption = Contact | ActionOption
 
@@ -25,89 +23,50 @@ function isActionOption(o: PickerOption): o is ActionOption {
   return '__action' in o
 }
 
-// An "add" control: searches contacts after MIN_CHARS, offers to create one
-// when nothing matches, and reports the chosen contact via onSelect. Contacts
-// in excludeIds (already linked) are filtered out so a duplicate link can't be
-// picked — the _client.js error path can't surface the server's 409 cleanly.
+// An "add" control: searches contacts after the shared minimum query length,
+// offers to create one when nothing matches, and reports the chosen contact via
+// onSelect. Already-linked contacts are filtered out of the remote results.
 export default function ContactPicker({ onSelect, excludeIds = [], disabled, label }: Readonly<ContactPickerProps>) {
   const { t } = useTranslation('common')
   const resolvedLabel = label ?? t($ => $.contactPicker.label)
-  const [input, setInput] = useState('')
-  const [options, setOptions] = useState<Contact[]>([])
-  const [loading, setLoading] = useState(false)
   const [createPrefill, setCreatePrefill] = useState<{ name: string } | null>(null)
-  const reqIdRef = useRef<number>(0)
-
-  const excluded = useMemo(() => new Set(excludeIds), [excludeIds])
-
-  const trimmed = input.trim()
-  const tooShort = trimmed.length < MIN_CHARS
-
-  useEffect(() => {
-    const myReqId = ++reqIdRef.current
-    const notExcluded = (r: Contact) => !excluded.has(r.id!)
-    if (tooShort) {
-      const handle = setTimeout(() => {
-        if (reqIdRef.current !== myReqId) return
-        setOptions([])
-        setLoading(false)
-      }, 0)
-      return () => clearTimeout(handle)
-    }
-    const startHandle = setTimeout(() => {
-      if (reqIdRef.current !== myReqId) return
-      setLoading(true)
-    }, 0)
-    const handle = setTimeout(() => {
-      searchContacts(trimmed)
-        .then((rows: Contact[]) => {
-          if (reqIdRef.current !== myReqId) return
-          setOptions(rows.filter(notExcluded))
-        })
-        .catch(() => {
-          if (reqIdRef.current !== myReqId) return
-          setOptions([])
-        })
-        .finally(() => {
-          if (reqIdRef.current !== myReqId) return
-          setLoading(false)
-        })
-    }, DEBOUNCE_MS)
-    return () => {
-      clearTimeout(startHandle)
-      clearTimeout(handle)
-    }
-  }, [trimmed, tooShort, excluded])
+  const excludeKey = excludeIds.join(',')
+  const {
+    inputValue, query, options, loading, tooShort, minChars, onInputChange, clear,
+  } = useRemoteSearch<Contact>({
+    search: searchContacts,
+    dependencyKey: excludeKey,
+    filterResults: (rows) => {
+      const excluded = new Set<Id>(excludeIds)
+      return rows.filter((row) => row.id !== undefined && !excluded.has(row.id))
+    },
+  })
 
   const augmentedOptions = useMemo((): PickerOption[] => {
     if (tooShort || loading) return options
     if (options.length > 0) return options
-    return [{ __action: 'create-contact', __label: t($ => $.contactPicker.createContact, { name: trimmed }) }]
-  }, [options, tooShort, loading, trimmed, t])
+    return [{ __action: 'create-contact', __label: t($ => $.contactPicker.createContact, { name: query }) }]
+  }, [options, tooShort, loading, query, t])
 
   function handleSelect(_event: React.SyntheticEvent, picked: PickerOption | null) {
     if (!picked) return
     if (isActionOption(picked)) {
-      if (picked.__action === 'create-contact') {
-        setCreatePrefill({ name: trimmed })
-      }
+      if (picked.__action === 'create-contact') setCreatePrefill({ name: query })
       return
     }
     onSelect(picked)
-    setInput('')
-    setOptions([])
+    clear()
   }
 
   function handleCreated(contact: Contact) {
     setCreatePrefill(null)
-    setInput('')
-    setOptions([])
+    clear()
     onSelect(contact)
   }
 
   let noOptionsText: string
   if (tooShort) {
-    noOptionsText = t($ => $.picker.typeMinChars, { count: MIN_CHARS })
+    noOptionsText = t($ => $.picker.typeMinChars, { count: minChars })
   } else if (loading) {
     noOptionsText = t($ => $.picker.searching)
   } else {
@@ -119,11 +78,8 @@ export default function ContactPicker({ onSelect, excludeIds = [], disabled, lab
       <Autocomplete
         value={null}
         onChange={handleSelect}
-        inputValue={input}
-        onInputChange={(_e, v, reason) => {
-          if (reason === 'input') setInput(v)
-          else if (reason === 'clear') setInput('')
-        }}
+        inputValue={inputValue}
+        onInputChange={onInputChange}
         options={augmentedOptions}
         filterOptions={(x) => x}
         loading={loading}

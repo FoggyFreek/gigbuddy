@@ -61,3 +61,22 @@ describe('GET /api/geocode', () => {
     expect(['hit', 'empty', 'fail']).toContain(res.body.status)
   })
 })
+
+describe('GET /api/geocode/venue/:id', () => {
+  it('returns stored coordinates without contacting the disabled provider', async () => {
+    const venueA = seed.venues.find((venue) => venue.tenant_id === seed.tenantA.id)
+    await pool.query(
+      `UPDATE venues SET city = 'Utrecht', country = 'NL', latitude = 52.09, longitude = 5.12
+       WHERE id = $1`,
+      [venueA.id],
+    )
+
+    const res = await asUserA(request(app).get(`/api/geocode/venue/${venueA.id}`)).expect(200)
+    expect(res.body).toEqual({ status: 'hit', coords: { lat: 52.09, lon: 5.12 } })
+  })
+
+  it('does not expose a venue from another tenant', async () => {
+    const venueB = seed.venues.find((venue) => venue.tenant_id === seed.tenantB.id)
+    await asUserA(request(app).get(`/api/geocode/venue/${venueB.id}`)).expect(404)
+  })
+})

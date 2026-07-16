@@ -21,7 +21,7 @@ const ACTIVE = {
   id: 1,
   code: 'abc',
   url: 'http://localhost/redeem-invite?code=abc',
-  role: 'member',
+  role: 'contributor',
   created_at: '2026-05-01T00:00:00Z',
   created_by_name: 'Admin',
   expires_at: null,
@@ -37,7 +37,7 @@ describe('InvitesSection', () => {
   it('lists invites returned by the API', async () => {
     listInvites.mockResolvedValue([ACTIVE])
     wrap(<InvitesSection canIssueAdmin={false} />)
-    await waitFor(() => expect(screen.getByText('member')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('contributor')).toBeInTheDocument())
     expect(screen.getByText('active')).toBeInTheDocument()
   })
 

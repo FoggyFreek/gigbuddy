@@ -15,9 +15,13 @@
     "shareWhatsApp": "Share via WhatsApp",
     "noRequiredParticipants": "no required participants",
     "myVote": "My vote:",
+    "tabUpcoming": "Upcoming",
+    "tabPast": "Past",
     "emptyAll": "No rehearsals yet — propose one to get started.",
     "emptyUpcoming": "No upcoming rehearsals.",
-    "pastRehearsals": "Past rehearsals ({{count}})"
+    "emptyPast": "No past rehearsals.",
+    "pastRehearsals": "Past rehearsals ({{count}})",
+    "loadMore": "Load more"
   },
   "form": {
     "proposeTitle": "Propose rehearsal",

@@ -8,6 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/gigs.ts', () => ({
   listGigs: vi.fn(),
+  listUpcomingGigs: vi.fn(),
+  listPastGigs: vi.fn(),
+  searchGigs: vi.fn(),
   getGig: vi.fn(),
   getGigMerchSummary: vi.fn().mockResolvedValue({ unitsSold: 0, netCents: 0, grossCents: 0 }),
   createGig: vi.fn(),
@@ -49,9 +52,12 @@ vi.mock('../components/BannerMosaicDialog.tsx', () => ({
 
 import GigsPage from '../pages/GigsPage.tsx'
 import GigDetailPage from '../pages/GigDetailPage.tsx'
-import { deleteGig, getGig, listGigs } from '../api/gigs.ts'
+import { deleteGig, getGig, listGigs, listPastGigs, listUpcomingGigs, searchGigs } from '../api/gigs.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
+
+const limitedCollection = (items, total = items.length) => ({ items, meta: { limit: 100, returned: items.length, total } })
+const pastCollection = (items) => ({ items, meta: { limit: 100, returned: items.length, nextCursor: null } })
 
 // Render as a writer (super admin grants every planning.write capability) so the
 // create/edit/delete affordances gated on canWritePlanning are present.
@@ -105,23 +111,52 @@ describe('GigsPage', () => {
   beforeEach(() => {
     listGigs.mockReset()
     listGigs.mockResolvedValue(GIGS)
+    listUpcomingGigs.mockReset()
+    listUpcomingGigs.mockResolvedValue(limitedCollection(GIGS))
+    listPastGigs.mockReset()
+    listPastGigs.mockResolvedValue(pastCollection([]))
+    searchGigs.mockReset()
+    searchGigs.mockResolvedValue([])
   })
 
-  it('renders header, Add button, and loaded gigs', async () => {
+  it('renders header, Add button, and loaded gigs without fetching the full unscoped gig list', async () => {
     wrap(<GigsPage />)
     expect(screen.getByRole('heading', { name: /^gigs$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^add$/i })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+
+    // The Upcoming tab is served entirely by the bounded /upcoming fetch —
+    // the legacy bare listGigs() (used only by Tour Share/Export/Banner
+    // Mosaic) must stay untouched until one of those is actually opened.
+    expect(listGigs).not.toHaveBeenCalled()
+  })
+
+  it('lazily fetches the full gig list the first time Export or Share is opened', async () => {
+    const user = userEvent.setup()
+    wrap(<GigsPage />)
+    await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+    expect(listGigs).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /share tour dates/i }))
+    await waitFor(() => expect(listGigs).toHaveBeenCalledTimes(1))
+
+    // Re-opening the same (or the Export) menu must not re-fetch.
+    await user.keyboard('{Escape}')
+    await user.click(screen.getByRole('button', { name: /^export$/i }))
+    await waitFor(() => expect(screen.getByRole('menu')).toBeInTheDocument())
+    expect(listGigs).toHaveBeenCalledTimes(1)
   })
 
   it('uses the selected type and tag filters for tour cards and banner mosaics', async () => {
     const user = userEvent.setup()
-    listGigs.mockResolvedValue([
+    const filterGigs = [
       { ...GIGS[0], id: 42, event_description: 'Matching Gig', tags: [{ id: 1, name: 'Summer Tour' }] },
       { ...GIGS[0], id: 43, status: 'announced', event_description: 'Wrong Type', tags: [{ id: 1, name: 'Summer Tour' }] },
       { ...GIGS[0], id: 44, event_description: 'Wrong Tag', tags: [{ id: 2, name: 'Club Shows' }] },
       { ...GIGS[0], id: 45, status: 'option', event_description: 'Matching Option', tags: [{ id: 1, name: 'Summer Tour' }] },
-    ])
+    ]
+    listGigs.mockResolvedValue(filterGigs)
+    listUpcomingGigs.mockResolvedValue(limitedCollection(filterGigs))
     wrap(<GigsPage />)
 
     await waitFor(() => expect(screen.getByText('Matching Gig')).toBeInTheDocument())
@@ -133,6 +168,7 @@ describe('GigsPage', () => {
     await user.keyboard('{Escape}')
 
     await user.click(screen.getByRole('button', { name: /share tour dates/i }))
+    await waitFor(() => expect(listGigs).toHaveBeenCalled())
     const shareMenu = screen.getByRole('menu')
     expect(within(shareMenu).queryByText('Confirmed')).not.toBeInTheDocument()
     expect(within(shareMenu).queryByText('Announced')).not.toBeInTheDocument()
@@ -166,6 +202,12 @@ describe('GigsPage — split-view detail route', () => {
   beforeEach(() => {
     listGigs.mockClear()
     listGigs.mockResolvedValue(GIGS)
+    listUpcomingGigs.mockReset()
+    listUpcomingGigs.mockResolvedValue(limitedCollection(GIGS))
+    listPastGigs.mockReset()
+    listPastGigs.mockResolvedValue(pastCollection([]))
+    searchGigs.mockReset()
+    searchGigs.mockResolvedValue([])
     getGig.mockClear()
     getGig.mockResolvedValue(GIG_DETAIL)
     deleteGig.mockClear()
@@ -206,7 +248,7 @@ describe('GigsPage — split-view detail route', () => {
     // list row carry 'Jazz Night', so wait until every instance is gone.
     await waitFor(() => expect(screen.queryByText('Jazz Night')).not.toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /^close$/i })).not.toBeInTheDocument()
-    expect(screen.getByText(/no gigs yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/no upcoming gigs/i)).toBeInTheDocument()
   })
 
   it('returns to the list after deleting in compact (mobile) view', async () => {
@@ -236,5 +278,29 @@ describe('GigsPage — split-view detail route', () => {
     } finally {
       window.matchMedia = originalMatchMedia
     }
+  })
+
+  it('resolves the Past tab from the detail pane\'s own getGig() fetch, without a second fetch of the same gig', async () => {
+    const pastGig = { ...GIGS[0], id: 99, event_date: '2020-01-01T00:00:00.000Z', event_description: 'Old Show' }
+    listPastGigs.mockResolvedValue(pastCollection([pastGig]))
+    getGig.mockResolvedValue({ ...GIG_DETAIL, id: 99, event_date: pastGig.event_date, event_description: 'Old Show' })
+
+    wrapWithRoutes({ initialEntries: ['/gigs/99'] })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /^close$/i })).toBeInTheDocument())
+    await waitFor(() => expect(listPastGigs).toHaveBeenCalled())
+    expect(screen.getByRole('tab', { name: 'Past', selected: true })).toBeInTheDocument()
+    // The list page must not make its own redundant getGig(99) call — the
+    // one GigDetailContent already made (to render the pane) is reused via
+    // the outlet context's onGigDetailLoaded callback.
+    expect(getGig).toHaveBeenCalledTimes(1)
+    expect(getGig).toHaveBeenCalledWith(99, expect.anything())
+    // And the full unscoped list stays untouched — nothing here opened
+    // Export/Share.
+    expect(listGigs).not.toHaveBeenCalled()
+    // The initial-tab fetch is deferred until the deep link's date is known,
+    // so a past-gig deep link never fires the throwaway default /upcoming
+    // request (see deferInitialTabLoadRef in GigsPage.tsx).
+    expect(listUpcomingGigs).not.toHaveBeenCalled()
   })
 })

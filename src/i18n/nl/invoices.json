@@ -26,7 +26,8 @@
   "gigPicker": {
     "label": "Optreden",
     "untitled": "(zonder titel)",
-    "empty": "Nog geen optredens - maak er eerst een aan"
+    "empty": "Nog geen optredens - maak er eerst een aan",
+    "alreadyHasInvoice": "Heeft al een factuur"
   },
   "pagination": {
     "rowsPerPage": "Rijen per pagina:",
