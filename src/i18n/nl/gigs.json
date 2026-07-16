@@ -191,6 +191,9 @@
     "itemsSold_other": "{{count}} items · excl. btw",
     "relatedInvoices": "Gerelateerde facturen",
     "openInvoice": "Factuur openen",
+    "createInvoice": "Factuur aanmaken",
+    "createInvoiceTitle": "Factuur aanmaken voor dit optreden?",
+    "createInvoiceBody": "Er wordt een conceptfactuur op naam van {{name}} aangemaakt, vooraf ingevuld met de gage en gegevens van dit optreden. Je gaat daarna naar de nieuwe factuur om deze te controleren.",
     "invoiceStatus": {
       "draft": "Concept",
       "sent": "Verzonden",

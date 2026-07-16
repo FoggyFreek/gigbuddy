@@ -191,6 +191,9 @@
     "itemsSold_other": "{{count}} items · excl. VAT",
     "relatedInvoices": "Related invoices",
     "openInvoice": "Open invoice",
+    "createInvoice": "Create invoice",
+    "createInvoiceTitle": "Create invoice for this gig?",
+    "createInvoiceBody": "A draft invoice addressed to {{name}} will be created, pre-filled with this gig's booking fee and details. You will be taken to the new invoice to review it.",
     "invoiceStatus": {
       "draft": "Draft",
       "sent": "Sent",

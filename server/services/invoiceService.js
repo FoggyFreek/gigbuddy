@@ -33,6 +33,7 @@ import {
   validateGigIdForTenant,
   listInvoices as listInvoiceRows,
   listInvoicesByGig,
+  listGigIdsWithInvoices,
   searchInvoices as searchInvoiceRows,
   listInvoicePeriodDates,
   fetchGig,
@@ -44,6 +45,7 @@ import {
   setCustomLogoPath,
   fetchPublicInvoiceLogoPath,
 } from '../repositories/invoiceRepository.js'
+import { searchGigs as searchGigRows } from '../repositories/gigRepository.js'
 import { fetchTenant } from '../repositories/tenantRepository.js'
 import {
   SIMPLE_PATCH_FIELDS,
@@ -443,6 +445,24 @@ export async function searchInvoices(pool, tenantId, query) {
   const q = String(query.q ?? '').trim()
   if (q.length < 3) return []
   return searchInvoiceRows(pool, tenantId, `%${q}%`, parseSearchLimit(query.limit))
+}
+
+// Invoice-creation gig picker. Reuses the bounded gig search and annotates the
+// result with invoice state that is only exposed by the finance-gated router.
+export async function searchInvoiceGigs(pool, tenantId, query) {
+  const q = String(query.q ?? '').trim()
+  if (q.length < 3) return []
+
+  const gigs = await searchGigRows(pool, tenantId, {
+    like: `%${q}%`,
+    limit: parseSearchLimit(query.limit),
+  })
+  const linkedIds = new Set(await listGigIdsWithInvoices(
+    pool,
+    tenantId,
+    gigs.map((gig) => gig.id),
+  ))
+  return gigs.map((gig) => ({ ...gig, has_invoice: linkedIds.has(gig.id) }))
 }
 
 function buildBillingTarget(type, row) {

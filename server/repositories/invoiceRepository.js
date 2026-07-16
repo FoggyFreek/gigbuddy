@@ -70,6 +70,21 @@ export async function searchInvoices(executor, tenantId, like, limit) {
   return rows
 }
 
+// Gig ids with any linked invoice. The caller supplies an already tenant-scoped
+// gig result set; both sides are scoped again here so invoice state can never
+// leak across tenants.
+export async function listGigIdsWithInvoices(executor, tenantId, gigIds) {
+  if (gigIds.length === 0) return []
+  const { rows } = await executor.query(
+    `SELECT DISTINCT gig_id
+       FROM invoices
+      WHERE tenant_id = $1
+        AND gig_id = ANY($2::int[])`,
+    [tenantId, gigIds],
+  )
+  return rows.map((row) => row.gig_id)
+}
+
 // Active invoices linked to a single gig (invoices.gig_id → gigs), tenant-scoped.
 // Excludes voided invoices so only live states (draft/sent/paid) surface on the
 // gig's Terms tab. Ordered newest issue date first.

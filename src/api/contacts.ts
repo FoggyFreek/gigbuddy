@@ -1,5 +1,6 @@
 import { request } from './_client.ts'
-import type { Contact, Venue, Id } from '../types/entities.ts'
+import type { Contact, DuplicateEntityMatch, Venue, Id } from '../types/entities.ts'
+import type { LimitedCollectionResponse } from '../types/api.ts'
 
 interface ContactFilters {
   category?: string
@@ -32,6 +33,15 @@ export const searchContacts = (
   if (opts.excludeCategory) params.set('excludeCategory', opts.excludeCategory)
   return api<Contact[]>(`/search?${params}`)
 }
+export const checkContactDuplicates = (
+  body: Pick<Contact, 'name' | 'email' | 'category' | 'iban'>,
+  options: Pick<RequestInit, 'signal'> = {},
+) =>
+  api<LimitedCollectionResponse<DuplicateEntityMatch>>('/duplicate-check', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    signal: options.signal,
+  })
 export const getContact = (id: Id) => api<Contact>(`/${id}`)
 export const createContact = (body: Partial<Contact>) =>
   api<Contact>('/', { method: 'POST', body: JSON.stringify(body) })

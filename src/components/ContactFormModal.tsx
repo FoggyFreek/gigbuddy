@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router-dom'
+import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -8,13 +10,14 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
+import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
-import { createContact, getContact, updateContact } from '../api/contacts.ts'
+import { checkContactDuplicates, createContact, getContact, updateContact } from '../api/contacts.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import { ALL_CONTACT_CATEGORIES } from '../utils/contactCategories.ts'
-import type { Id, Contact } from '../types/entities.ts'
+import type { Id, Contact, DuplicateEntityMatch } from '../types/entities.ts'
 import ContactFields from './ContactFields.tsx'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
 
@@ -61,6 +64,7 @@ export default function ContactFormModal({
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(mode === 'edit')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [duplicateMatches, setDuplicateMatches] = useState<DuplicateEntityMatch[]>([])
   const { canWritePlanning: canWrite } = usePermissions()
 
   const saveFn = useCallback(
@@ -88,8 +92,35 @@ export default function ContactFormModal({
       .finally(() => setLoading(false))
   }, [mode, contactId])
 
+  useEffect(() => {
+    if (mode !== 'create') return
+    const hasMatchableInput = Boolean(
+      form.name.trim() || form.email.trim() || (form.category === 'supplier' && form.iban.trim()),
+    )
+    if (!hasMatchableInput) return
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      void checkContactDuplicates({
+        name: form.name,
+        email: form.email,
+        category: form.category,
+        iban: form.iban,
+      }, { signal: controller.signal })
+        .then((result) => setDuplicateMatches(result.items))
+        .catch(() => {
+          if (!controller.signal.aborted) setDuplicateMatches([])
+        })
+    }, 400)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [mode, form.name, form.email, form.category, form.iban])
+
   function handleChange(field: string, value: string) {
     if (mode === 'edit' && !canWrite) return
+    setDuplicateMatches([])
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
     if (mode === 'edit') {
@@ -139,6 +170,18 @@ export default function ContactFormModal({
               disabled={mode === 'edit' && !canWrite}
             />
           </Grid>
+          {duplicateMatches.map((match) => (
+            <Alert severity="info" key={String(match.id)} sx={{ mt: 2 }}>
+              {t($ => $.modal.duplicateWarning)}{' '}
+              <Link
+                component={RouterLink}
+                to={`${match.category === 'supplier' ? '/suppliers' : '/contacts'}/${match.id}`}
+                onClick={onClose}
+              >
+                {match.name}
+              </Link>.
+            </Alert>
+          ))}
         </DialogContent>
       )}
 

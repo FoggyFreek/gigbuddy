@@ -109,6 +109,51 @@ describe('POST /api/venues — create venue', () => {
   })
 })
 
+describe('POST /api/venues/duplicate-check', () => {
+  it('matches organization name, address, website, or email and reports every matching field', async () => {
+    const { rows: [venue] } = await pool.query(
+      `INSERT INTO venues (
+         tenant_id, name, organization_name, street_and_number, website, email
+       ) VALUES ($1, 'Existing Hall', 'Existing Org', 'Main Street 10',
+                 'https://example.com/', 'bookings@example.com')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+
+    const res = await asUserA(request(app).post('/api/venues/duplicate-check').send({
+      organization_name: ' existing org ',
+      street_and_number: ' MAIN STREET 10 ',
+      website: 'https://example.com',
+      email: 'BOOKINGS@EXAMPLE.COM',
+    })).expect(200)
+
+    expect(res.body.items).toEqual([
+      expect.objectContaining({
+        id: venue.id,
+        name: 'Existing Hall',
+        matched_fields: ['organization_name', 'address', 'website', 'email'],
+      }),
+    ])
+    expect(res.body.meta).toEqual({ limit: 5, returned: 1 })
+  })
+
+  it('does not reveal matching venues from another tenant', async () => {
+    const venueB = seed.venues.find((venue) => venue.tenant_id === seed.tenantB.id)
+    await pool.query(
+      `UPDATE venues SET organization_name = 'Private Org', email = 'private@example.com'
+       WHERE id = $1`,
+      [venueB.id],
+    )
+
+    const res = await asUserA(request(app).post('/api/venues/duplicate-check').send({
+      organization_name: 'Private Org',
+      email: 'private@example.com',
+    })).expect(200)
+
+    expect(res.body.items).toEqual([])
+  })
+})
+
 describe('POST /api/venues — festival_name rejected', () => {
   it('returns 400 when festival_name is present in create body', async () => {
     const res = await asUserA(

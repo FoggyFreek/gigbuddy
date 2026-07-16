@@ -211,6 +211,13 @@ export interface Contact {
   iban?: string | null
 }
 
+export interface DuplicateEntityMatch {
+  id: Id
+  name: string
+  category?: string
+  matched_fields: string[]
+}
+
 export interface InvoiceLine {
   id?: Id
   description?: string

@@ -26,7 +26,8 @@
   "gigPicker": {
     "label": "Gig",
     "untitled": "(untitled)",
-    "empty": "No gigs yet - create one first"
+    "empty": "No gigs yet - create one first",
+    "alreadyHasInvoice": "Already has an invoice"
   },
   "pagination": {
     "rowsPerPage": "Rows per page:",

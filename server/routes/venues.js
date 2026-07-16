@@ -7,6 +7,7 @@ import { requireParam, sendError } from './routeHelpers.js'
 import {
   listVenues,
   searchVenues,
+  checkVenueDuplicates,
   getVenue,
   getCategoryImpact,
   createVenue,
@@ -29,6 +30,10 @@ router.get('/', async (req, res) => {
 // Typeahead search (min 3 chars)
 router.get('/search', async (req, res) => {
   res.json(await searchVenues(pool, req.tenantId, req.query))
+})
+
+router.post('/duplicate-check', async (req, res) => {
+  res.json(await checkVenueDuplicates(pool, req.tenantId, req.body))
 })
 
 // Get single venue

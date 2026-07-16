@@ -12,27 +12,9 @@ import Radio from '@mui/material/Radio'
 import RadioGroup from '@mui/material/RadioGroup'
 import Typography from '@mui/material/Typography'
 import GigPicker from './GigPicker.tsx'
-import { createInvoice, draftFromGig } from '../api/invoices.ts'
-import { buildInvoicePayload, emptyDraft } from './invoices/invoiceFormHelpers.ts'
-import type { InvoiceFormLine } from './invoices/invoiceFormHelpers.ts'
-
-interface BillingTarget {
-  type: string
-  name?: string
-  address_city?: string
-  contact_title?: string | null
-  contact_given_name?: string | null
-  contact_family_name?: string | null
-  address_street?: string | null
-  address_postal_code?: string | null
-  address_country?: string | null
-  email?: string | null
-}
-
-interface GigDraftPayload {
-  draft?: Record<string, unknown>
-  billing_targets?: BillingTarget[]
-}
+import { draftFromGig } from '../api/invoices.ts'
+import type { InvoiceBillingTarget, InvoiceGigDraft } from '../api/invoices.ts'
+import { createInvoiceFromGigDraft } from './invoices/createInvoiceFromGigDraft.ts'
 
 interface NewInvoiceDialogProps {
   onClose: () => void
@@ -45,13 +27,12 @@ export default function NewInvoiceDialog({ onClose, onCreated }: Readonly<NewInv
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // billing_targets step
-  const [billingTargets, setBillingTargets] = useState<BillingTarget[] | null>(null)
-  const [pendingPayload, setPendingPayload] = useState<GigDraftPayload | null>(null)
+  const [billingTargets, setBillingTargets] = useState<InvoiceBillingTarget[] | null>(null)
+  const [pendingPayload, setPendingPayload] = useState<InvoiceGigDraft | null>(null)
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
 
-  async function createFromDraft(payload: GigDraftPayload) {
-    const form = { ...emptyDraft(), ...payload.draft, lines: (payload.draft?.lines as InvoiceFormLine[] | undefined) || [] }
-    const created = await createInvoice(buildInvoicePayload(form))
+  async function createFromDraft(payload: InvoiceGigDraft) {
+    const created = await createInvoiceFromGigDraft(payload)
     onCreated(created.id!)
   }
 
@@ -60,7 +41,7 @@ export default function NewInvoiceDialog({ onClose, onCreated }: Readonly<NewInv
     try {
       setBusy(true)
       setError(null)
-      const payload = await draftFromGig(gig.id!) as unknown as GigDraftPayload
+      const payload = await draftFromGig(gig.id!)
       if (payload.billing_targets && payload.billing_targets.length > 1) {
         // Show billing target selection before proceeding
         setBillingTargets(payload.billing_targets)
@@ -92,7 +73,7 @@ export default function NewInvoiceDialog({ onClose, onCreated }: Readonly<NewInv
       return
     }
     // Override customer fields in draft with selected target
-    const updated: GigDraftPayload = {
+    const updated: InvoiceGigDraft = {
       ...pendingPayload,
       draft: {
         ...pendingPayload.draft,

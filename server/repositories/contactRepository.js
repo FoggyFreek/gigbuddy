@@ -45,6 +45,29 @@ export async function searchContacts(executor, tenantId, like, prefix, limit, { 
   return rows
 }
 
+export async function findContactDuplicates(executor, tenantId, { name, email, iban, supplierOnly, limit }) {
+  const { rows } = await executor.query(
+    `SELECT id, name, category, email, phone, iban,
+            array_remove(ARRAY[
+              CASE WHEN $2::text IS NOT NULL AND lower(btrim(name)) = $2 THEN 'name' END,
+              CASE WHEN $3::text IS NOT NULL AND lower(btrim(email)) = $3 THEN 'email' END,
+              CASE WHEN $4::text IS NOT NULL AND upper(regexp_replace(iban, '\\s+', '', 'g')) = $4 THEN 'iban' END
+            ], NULL) AS matched_fields
+       FROM contacts
+      WHERE tenant_id = $1
+        AND CASE WHEN $5 THEN category = 'supplier' ELSE category <> 'supplier' END
+        AND (
+          ($2::text IS NOT NULL AND lower(btrim(name)) = $2)
+          OR ($3::text IS NOT NULL AND lower(btrim(email)) = $3)
+          OR ($5 AND $4::text IS NOT NULL AND upper(regexp_replace(iban, '\\s+', '', 'g')) = $4)
+        )
+      ORDER BY name ASC, id ASC
+      LIMIT $6`,
+    [tenantId, name, email, iban, supplierOnly, limit],
+  )
+  return rows
+}
+
 export async function fetchContactWithNotes(executor, contactId, tenantId) {
   const { rows } = await executor.query(
     `SELECT c.*,

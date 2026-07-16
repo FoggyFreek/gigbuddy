@@ -11,6 +11,7 @@ import {
   listInvoicesForGig,
   listInvoicePeriods,
   searchInvoices,
+  searchInvoiceGigs,
   buildDraftFromGig,
   getInvoice,
   createInvoice,
@@ -49,6 +50,12 @@ router.get('/periods', async (req, res) => {
 // router is already finance-gated. Must precede /:id.
 router.get('/search', async (req, res) => {
   res.json(await searchInvoices(pool, req.tenantId, req.query))
+})
+
+// Bounded search for the new-invoice gig picker. Includes whether each gig is
+// already linked to an invoice so the UI can show it without allowing selection.
+router.get('/gig-search', async (req, res) => {
+  res.json(await searchInvoiceGigs(pool, req.tenantId, req.query))
 })
 
 // Pre-filled invoice draft from a gig

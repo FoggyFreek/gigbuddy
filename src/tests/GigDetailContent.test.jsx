@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -58,6 +58,18 @@ vi.mock('../api/gigs.ts', () => ({
     tags.map((name, index) => ({ id: index + 1, name }))),
 }))
 
+vi.mock('../api/invoices.ts', () => ({
+  listInvoicesByGig: vi.fn().mockResolvedValue([]),
+  draftFromGig: vi.fn(),
+  createInvoice: vi.fn(),
+}))
+
+const navigate = vi.fn()
+vi.mock('react-router-dom', async (orig) => ({
+  ...(await orig()),
+  useNavigate: () => navigate,
+}))
+
 vi.mock('../api/venues.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   listVenueContacts: vi.fn().mockResolvedValue([]),
@@ -84,6 +96,8 @@ vi.mock('../components/map/GigLocationMap.tsx', () => ({
 }))
 
 import { getGig, getGigMerchSummary, setGigTags, updateGig } from '../api/gigs.ts'
+import { createInvoice, draftFromGig, listInvoicesByGig } from '../api/invoices.ts'
+import { AuthContext } from '../contexts/authContext.ts'
 import { geocodePlace } from '../utils/geocode.ts'
 
 const GIG_PAID = {
@@ -590,5 +604,154 @@ describe('GigDetailContent — location map', () => {
     unmount()
     await act(async () => { resolve({ lat: 1, lon: 2 }) })
     expect(screen.queryByTestId('gig-location-map')).not.toBeInTheDocument()
+  })
+})
+
+describe('GigDetailContent — create invoice from Terms tab', () => {
+  const FINANCE_USER = {
+    id: 9,
+    activeTenantRole: 'financial_admin',
+    permissions: ['app.view', 'planning.write', 'finance.view', 'finance.manage'],
+    bandMemberId: 3,
+  }
+
+  const GIG_WITH_ORG = {
+    ...GIG_PAID,
+    admission: 'free',
+    ticket_link: null,
+    venue: { id: 11, name: 'Bimhuis', organization_name: 'Stichting Bimhuis', category: 'venue', city: 'Amsterdam' },
+  }
+
+  function wrapAs(user, ui) {
+    return render(
+      <MemoryRouter>
+        <AuthContext.Provider
+          value={{
+            user,
+            setUser: () => {},
+            logout: async () => {},
+            switchTenant: async () => undefined,
+            refreshUser: async () => undefined,
+          }}
+        >
+          <ThemeProvider theme={theme}>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+          </ThemeProvider>
+        </AuthContext.Provider>
+      </MemoryRouter>
+    )
+  }
+
+  beforeEach(() => {
+    getGig.mockClear()
+    listInvoicesByGig.mockReset()
+    listInvoicesByGig.mockResolvedValue([])
+    draftFromGig.mockReset()
+    createInvoice.mockReset()
+    navigate.mockClear()
+  })
+
+  async function openTerms(user) {
+    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await openTab(user, 'Terms')
+  }
+
+  it('creates a draft invoice after confirmation and navigates to it', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_ORG)
+    draftFromGig.mockResolvedValue({
+      billing_targets: [],
+      draft: {
+        gig_id: 1,
+        customer_name: 'Stichting Bimhuis',
+        lines: [{ description: 'Optreden', quantity: 1, unit_price_cents: 15000, tax_percentage: 9, position: 0 }],
+      },
+    })
+    createInvoice.mockResolvedValue({ id: 55 })
+
+    wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    // The button lives under the "Related invoices" section heading
+    const createButton = await screen.findByRole('button', { name: /create invoice/i })
+    expect(screen.getByText('Related invoices')).toBeInTheDocument()
+    await user.click(createButton)
+
+    // Confirmation modal states the result: a draft invoice for the organisation
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/stichting bimhuis/i)).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /create invoice/i }))
+
+    await waitFor(() => expect(createInvoice).toHaveBeenCalled())
+    expect(draftFromGig).toHaveBeenCalledWith(1)
+    expect(createInvoice.mock.calls[0][0]).toMatchObject({ gig_id: 1, customer_name: 'Stichting Bimhuis' })
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/invoices/55'))
+  })
+
+  it('does not create an invoice when the confirmation is cancelled', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_ORG)
+
+    wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await user.click(await screen.findByRole('button', { name: /create invoice/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }))
+
+    expect(draftFromGig).not.toHaveBeenCalled()
+    expect(createInvoice).not.toHaveBeenCalled()
+  })
+
+  it('uses the festival organisation when both a venue and festival are linked', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce({
+      ...GIG_WITH_ORG,
+      festival: { id: 22, name: 'Pinkpop', organization_name: 'Buro Pinkpop', category: 'festival', city: 'Landgraaf' },
+    })
+
+    wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await user.click(await screen.findByRole('button', { name: /create invoice/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/buro pinkpop/i)).toBeInTheDocument()
+  })
+
+  it('hides the button when an invoice is already linked to the gig', async () => {
+    listInvoicesByGig.mockResolvedValue([
+      { id: 5, invoice_number: '2026-001', status: 'draft', issue_date: '2026-06-16', total_cents: 15000 },
+    ])
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_ORG)
+
+    wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await screen.findByText('#2026-001')
+    expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the button when neither venue nor festival has an organization name', async () => {
+    const user = userEvent.setup()
+    // default getGig venue has no organization_name
+
+    wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await waitFor(() => expect(listInvoicesByGig).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the button without the finance.manage permission', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_ORG)
+    const viewer = { ...FINANCE_USER, activeTenantRole: 'contributor', permissions: ['app.view', 'planning.write', 'finance.view'] }
+
+    wrapAs(viewer, <GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await waitFor(() => expect(listInvoicesByGig).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
   })
 })

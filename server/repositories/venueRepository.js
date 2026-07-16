@@ -69,6 +69,30 @@ export async function searchVenues(executor, tenantId, { like, limit, category }
   return rows
 }
 
+export async function findVenueDuplicates(executor, tenantId, { organizationName, address, website, email, limit }) {
+  const { rows } = await executor.query(
+    `SELECT id, name, category, organization_name, street_and_number, website, email,
+            array_remove(ARRAY[
+              CASE WHEN $2::text IS NOT NULL AND lower(btrim(organization_name)) = $2 THEN 'organization_name' END,
+              CASE WHEN $3::text IS NOT NULL AND lower(btrim(street_and_number)) = $3 THEN 'address' END,
+              CASE WHEN $4::text IS NOT NULL AND lower(btrim(website)) = $4 THEN 'website' END,
+              CASE WHEN $5::text IS NOT NULL AND lower(btrim(email)) = $5 THEN 'email' END
+            ], NULL) AS matched_fields
+       FROM venues
+      WHERE tenant_id = $1
+        AND (
+          ($2::text IS NOT NULL AND lower(btrim(organization_name)) = $2)
+          OR ($3::text IS NOT NULL AND lower(btrim(street_and_number)) = $3)
+          OR ($4::text IS NOT NULL AND lower(btrim(website)) = $4)
+          OR ($5::text IS NOT NULL AND lower(btrim(email)) = $5)
+        )
+      ORDER BY name ASC, id ASC
+      LIMIT $6`,
+    [tenantId, organizationName, address, website, email, limit],
+  )
+  return rows
+}
+
 export async function fetchVenue(executor, venueId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM venues WHERE id = $1 AND tenant_id = $2',

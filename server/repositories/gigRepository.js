@@ -219,7 +219,7 @@ export async function listGigMapData(executor, tenantId, from, to) {
 export async function searchGigs(executor, tenantId, { like, limit }) {
   const { rows } = await executor.query(
     `SELECT
-       g.id, g.event_date, g.event_description, g.status,
+       g.id, g.event_date, g.event_description, g.status, g.booking_fee_cents,
        g.venue_id, g.festival_id,
        ${VENUE_JSON_SELECT},
        ${FESTIVAL_JSON_SELECT},

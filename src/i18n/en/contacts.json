@@ -50,7 +50,8 @@
     "purchasesHeading": "Purchases"
   },
   "modal": {
-    "confirmDelete": "Delete this contact?"
+    "confirmDelete": "Delete this contact?",
+    "duplicateWarning": "The entered information seems to match an existing entry:"
   },
   "import": {
     "title": "Import Contacts from CSV",

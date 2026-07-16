@@ -1,8 +1,14 @@
 import React, { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import Card from '@mui/material/Card'
 import Skeleton from '@mui/material/Skeleton'
 import CircularProgress from '@mui/material/CircularProgress'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import FormGroup from '@mui/material/FormGroup'
@@ -27,12 +33,13 @@ import ImageIcon from '@mui/icons-material/Image'
 import LocalMallIcon from '@mui/icons-material/LocalMall'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import PeopleIcon from '@mui/icons-material/People'
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import type { SvgIconComponent } from '@mui/icons-material'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import DateEntryField from './DateEntryField.tsx'
 import GigAttachments from './GigAttachments.tsx'
 import GigTasks from './GigTasks.tsx'
@@ -59,7 +66,8 @@ import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { addGigParticipant, deleteGigBanner, getGig, getGigMerchSummary, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../api/gigs.ts'
-import { listInvoicesByGig } from '../api/invoices.ts'
+import { draftFromGig, listInvoicesByGig } from '../api/invoices.ts'
+import { createInvoiceFromGigDraft } from './invoices/createInvoiceFromGigDraft.ts'
 import { getBannerPath } from '../api/profile.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import { compressBanner } from '../utils/compressImage.ts'
@@ -175,9 +183,9 @@ const NO_NUMBER_SPINNER_SX = {
 }
 
 const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, onGigLoadError, canWrite = true, initialTab = 'event' }, ref) {
-  const { t, i18n } = useTranslation('gigs')
+  const { t, i18n } = useTranslation(['gigs', 'common'])
   const { user } = useAuth()
-  const { canViewFinance } = usePermissions()
+  const { canViewFinance, canManageFinance } = usePermissions()
   const currentBandMemberId = user?.bandMemberId ?? null
   const [form, setForm] = useState<GigForm>({
     event_date: '',
@@ -212,11 +220,17 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const [bannerBusy, setBannerBusy] = useState(false)
   const [bannerError, setBannerError] = useState<string | null>(null)
   const [merchSummary, setMerchSummary] = useState<GigMerchSummary | null>(null)
-  const [relatedInvoices, setRelatedInvoices] = useState<Invoice[]>([])
+  // null = not fetched yet; keeps the create-invoice button from flashing in
+  // before we know whether the gig already has invoices.
+  const [relatedInvoices, setRelatedInvoices] = useState<Invoice[] | null>(null)
+  const [invoiceConfirmOpen, setInvoiceConfirmOpen] = useState(false)
+  const [invoiceBusy, setInvoiceBusy] = useState(false)
+  const [invoiceError, setInvoiceError] = useState<string | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const bannerInputRef = useRef<HTMLInputElement | null>(null)
+  const navigate = useNavigate()
 
   const saveFn = useCallback(
     async (patch: Record<string, unknown>) => { await updateGig(gigId, patch) },
@@ -335,6 +349,30 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       .catch((err: Error) => { if (!ac.signal.aborted) console.error(err) })
     return () => ac.abort()
   }, [gigId, canViewFinance])
+
+  // Create-invoice affordance: mirrors the server's default billing target in
+  // buildDraftFromGig (festival ?? venue). Only offered when the gig has no
+  // invoice yet and the linked venue/festival names an organisation to bill.
+  const invoiceTarget = selectedFestival ?? selectedVenue
+  const invoiceCustomerName = invoiceTarget?.organization_name || invoiceTarget?.name || ''
+  const canCreateInvoice =
+    canManageFinance &&
+    relatedInvoices?.length === 0 &&
+    Boolean(selectedFestival?.organization_name || selectedVenue?.organization_name)
+
+  async function handleCreateInvoice() {
+    try {
+      setInvoiceBusy(true)
+      setInvoiceError(null)
+      const payload = await draftFromGig(gigId)
+      const created = await createInvoiceFromGigDraft(payload)
+      navigate(`/invoices/${created.id}`)
+    } catch (e) {
+      setInvoiceError((e as Error).message)
+    } finally {
+      setInvoiceBusy(false)
+    }
+  }
 
   const participantIds = useMemo(
     () => new Set((gig?.participants ?? []).map((p) => p.band_member_id)),
@@ -929,12 +967,15 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           )}
 
           {/* Related invoices (draft/sent/paid). Only fetched for finance
-              viewers; hidden entirely when the gig has none. */}
-          {canViewFinance && relatedInvoices.length > 0 && (
+              viewers; the section shows either the linked invoices or — for
+              finance managers, when the gig has none and the venue/festival
+              names an organisation — a create-invoice shortcut. */}
+          {canViewFinance && ((relatedInvoices && relatedInvoices.length > 0) || canCreateInvoice) && (
             <Grid size={12}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 {t($ => $.detail.relatedInvoices)}
               </Typography>
+              {relatedInvoices && relatedInvoices.length > 0 && (
               <Card variant="outlined" sx={{ p: 2 }}>
                 <Stack divider={<Divider flexItem />} spacing={0.5}>
                   {relatedInvoices.map((inv) => (
@@ -973,6 +1014,18 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                   ))}
                 </Stack>
               </Card>
+              )}
+              {canCreateInvoice && (
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<ReceiptLongIcon />}
+                    onClick={() => { setInvoiceError(null); setInvoiceConfirmOpen(true) }}
+                  >
+                    {t($ => $.detail.createInvoice)}
+                  </Button>
+                </Box>
+              )}
             </Grid>
           )}
 
@@ -1088,6 +1141,28 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         </Grid>
       </Box>
 
+      <Dialog
+        open={invoiceConfirmOpen}
+        onClose={() => { if (!invoiceBusy) setInvoiceConfirmOpen(false) }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>{t($ => $.detail.createInvoiceTitle)}</DialogTitle>
+        <DialogContent>
+          {invoiceError && <Alert severity="error" sx={{ mb: 2 }}>{invoiceError}</Alert>}
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {t($ => $.detail.createInvoiceBody, { name: invoiceCustomerName })}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInvoiceConfirmOpen(false)} disabled={invoiceBusy}>
+            {t($ => $.common.actions.cancel)}
+          </Button>
+          <Button variant="contained" onClick={handleCreateInvoice} disabled={invoiceBusy}>
+            {t($ => $.detail.createInvoice)}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <ImageCropDialog
         open={cropOpen}
         imageSrc={cropImageSrc}

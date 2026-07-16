@@ -15,6 +15,7 @@ import {
 import {
   listVenues as listVenueRows,
   searchVenues as searchVenueRows,
+  findVenueDuplicates,
   fetchVenue,
   venueExistsInTenant,
   getVenueCategory,
@@ -33,6 +34,7 @@ import {
   deleteVenueContact,
   loadExistingImportKeys,
 } from '../repositories/venueRepository.js'
+import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../utils/urls.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
 
 const NOT_FOUND = notFound('Not found')
@@ -57,6 +59,36 @@ export async function searchVenues(db, tenantId, query) {
     limit: parseSearchLimit(query.limit),
     category: query.category,
   })
+}
+
+const DUPLICATE_LIMIT = 5
+
+function normalizedMatchText(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return normalized || null
+}
+
+function normalizedMatchWebsite(value) {
+  try {
+    return normalizeOptionalUrl(value, { allowedProtocols: WEB_URL_PROTOCOLS })?.toLowerCase() ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function checkVenueDuplicates(db, tenantId, body = {}) {
+  const input = {
+    organizationName: normalizedMatchText(body.organization_name),
+    address: normalizedMatchText(body.street_and_number),
+    website: normalizedMatchWebsite(body.website),
+    email: normalizedMatchText(body.email),
+  }
+  if (!Object.values(input).some(Boolean)) {
+    return { items: [], meta: { limit: DUPLICATE_LIMIT, returned: 0 } }
+  }
+
+  const items = await findVenueDuplicates(db, tenantId, { ...input, limit: DUPLICATE_LIMIT })
+  return { items, meta: { limit: DUPLICATE_LIMIT, returned: items.length } }
 }
 
 export async function getVenue(db, tenantId, venueId) {

@@ -68,7 +68,8 @@
   },
   "modal": {
     "addTitle": "Locatie toevoegen",
-    "confirmDelete": "Deze locatie verwijderen?"
+    "confirmDelete": "Deze locatie verwijderen?",
+    "duplicateWarning": "De ingevoerde informatie lijkt overeen te komen met een bestaand item:"
   },
   "categoryChange": {
     "title_one": "Categoriewijziging raakt {{count}} optreden",

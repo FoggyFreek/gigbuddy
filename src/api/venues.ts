@@ -1,5 +1,6 @@
 import { request } from './_client.ts'
-import type { Venue, Contact, Id } from '../types/entities.ts'
+import type { Venue, Contact, DuplicateEntityMatch, Id } from '../types/entities.ts'
+import type { LimitedCollectionResponse } from '../types/api.ts'
 
 interface VenueCategoryImpact {
   affected_count?: number
@@ -16,6 +17,16 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/venues${path}`, options)
 
 export const listVenues = () => api<Venue[]>('/')
+export const checkVenueDuplicates = (body: {
+  organization_name?: string
+  street_and_number?: string
+  website?: string
+  email?: string
+}, options: Pick<RequestInit, 'signal'> = {}) => api<LimitedCollectionResponse<DuplicateEntityMatch>>('/duplicate-check', {
+  method: 'POST',
+  body: JSON.stringify(body),
+  signal: options.signal,
+})
 export const getVenue = (id: Id) => api<Venue>(`/${id}`)
 export const createVenue = (body: Partial<Venue>) =>
   api<Venue>('/', { method: 'POST', body: JSON.stringify(body) })
