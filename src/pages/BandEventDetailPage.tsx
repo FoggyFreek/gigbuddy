@@ -52,6 +52,8 @@ export default function BandEventDetailPage() {
   const navigate = useNavigate()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
+  const onBandEventDetailLoaded = outletCtx.onBandEventDetailLoaded as ((event: BandEvent) => void) | undefined
+  const onBandEventDetailLoadError = outletCtx.onBandEventDetailLoadError as (() => void) | undefined
 
   const [form, setForm] = useState<BandEventForm>({
     title: '',
@@ -84,6 +86,7 @@ export default function BandEventDetailPage() {
     getBandEvent(bandEventId)
       .then((ev) => {
         const detail = ev as BandEventDetail
+        onBandEventDetailLoaded?.(detail)
         setForm({
           title: detail.title || '',
           start_date: toDateInput(detail.start_date),
@@ -94,8 +97,9 @@ export default function BandEventDetailPage() {
           notes: detail.notes || '',
         })
       })
+      .catch(() => onBandEventDetailLoadError?.())
       .finally(() => setLoading(false))
-  }, [bandEventId])
+  }, [bandEventId, onBandEventDetailLoaded, onBandEventDetailLoadError])
 
   function handleChange(field: string, value: string | boolean | null) {
     if (!canWritePlanning) return

@@ -9,6 +9,7 @@ import {
   getRehearsal,
   getNextRehearsal,
   listUpcomingRehearsals,
+  listPastRehearsals,
   listRehearsalsInRange,
   createRehearsal,
   patchRehearsal,
@@ -40,6 +41,12 @@ router.get('/next', async (req, res) => {
 
 router.get('/upcoming', async (req, res) => {
   const result = await listUpcomingRehearsals(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.get('/past', async (req, res) => {
+  const result = await listPastRehearsals(pool, req.tenantId, req.query)
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })

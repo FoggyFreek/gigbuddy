@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/bandEvents.ts', () => ({
   listBandEvents: vi.fn(),
+  listUpcomingBandEvents: vi.fn(),
+  listPastBandEvents: vi.fn(),
   getBandEvent: vi.fn().mockResolvedValue({
     id: 1,
     title: 'Studio session',
@@ -24,7 +26,7 @@ vi.mock('../api/bandEvents.ts', () => ({
 
 import BandEventsPage from '../pages/BandEventsPage.tsx'
 import BandEventDetailPage from '../pages/BandEventDetailPage.tsx'
-import { deleteBandEvent, listBandEvents, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
+import { deleteBandEvent, listBandEvents, listPastBandEvents, listUpcomingBandEvents, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 
@@ -77,6 +79,10 @@ describe('BandEventsPage', () => {
   beforeEach(() => {
     listBandEvents.mockReset()
     listBandEvents.mockResolvedValue(EVENTS)
+    listUpcomingBandEvents.mockReset()
+    listUpcomingBandEvents.mockResolvedValue({ items: EVENTS, meta: { limit: 100, returned: EVENTS.length } })
+    listPastBandEvents.mockReset()
+    listPastBandEvents.mockResolvedValue({ items: [], meta: { limit: 100, returned: 0, nextCursor: null } })
     deleteBandEvent.mockClear()
   })
 
@@ -84,7 +90,24 @@ describe('BandEventsPage', () => {
     wrap(<BandEventsPage />)
     expect(screen.getByRole('heading', { name: /band events/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^add$/i })).toBeInTheDocument()
-    await waitFor(() => expect(listBandEvents).toHaveBeenCalled())
+    await waitFor(() => expect(listUpcomingBandEvents).toHaveBeenCalled())
+    expect(listBandEvents).not.toHaveBeenCalled()
+  })
+
+  it('loads past events only after selecting the Past tab', async () => {
+    const user = userEvent.setup()
+    listPastBandEvents.mockResolvedValueOnce({
+      items: [{ id: 9, title: 'Old meeting', start_date: '2020-05-10', end_date: '2020-05-10' }],
+      meta: { limit: 100, returned: 1, nextCursor: null },
+    })
+    wrap(<BandEventsPage />)
+
+    await waitFor(() => expect(screen.getByText('Studio session')).toBeInTheDocument())
+    expect(listPastBandEvents).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('tab', { name: 'Past' }))
+
+    await waitFor(() => expect(screen.getByText('Old meeting')).toBeInTheDocument())
+    expect(listPastBandEvents).toHaveBeenCalledWith(100, expect.any(String))
   })
 
   it('shows loaded events in the table', async () => {
@@ -95,7 +118,7 @@ describe('BandEventsPage', () => {
   it('opens the create modal when Add is clicked', async () => {
     const user = userEvent.setup()
     wrap(<BandEventsPage />)
-    await waitFor(() => expect(listBandEvents).toHaveBeenCalled())
+    await waitFor(() => expect(listUpcomingBandEvents).toHaveBeenCalled())
     await user.click(screen.getByRole('button', { name: /^add$/i }))
     expect(screen.getByText('Add band event', { selector: 'h2' })).toBeInTheDocument()
   })
@@ -127,7 +150,7 @@ describe('BandEventsPage', () => {
       { timeout: 2000 }
     )
     expect(updateBandEvent).toHaveBeenCalledWith(1, expect.objectContaining({ title: 'Rehearsal day' }))
-    expect(listBandEvents).toHaveBeenCalledTimes(1)
+    expect(listUpcomingBandEvents).toHaveBeenCalledTimes(1)
   })
 
   it('renders detail alongside the list at /events/:id and the Close button returns to /events', async () => {
@@ -154,6 +177,6 @@ describe('BandEventsPage', () => {
 
     await waitFor(() => expect(deleteBandEvent).toHaveBeenCalledWith(1))
     expect(screen.queryByText('Studio session')).not.toBeInTheDocument()
-    expect(screen.getByText(/no events yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/no upcoming events/i)).toBeInTheDocument()
   })
 })

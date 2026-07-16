@@ -1,11 +1,14 @@
 import type { Rehearsal, Participant, Id } from '../types/entities.ts'
-import { type ReactNode, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
-import Collapse from '@mui/material/Collapse'
+import Button from '@mui/material/Button'
+import CircularProgress from '@mui/material/CircularProgress'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
+import Tab from '@mui/material/Tab'
+import Tabs from '@mui/material/Tabs'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
@@ -15,7 +18,6 @@ import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import ShareIcon from '@mui/icons-material/Share'
 import Tooltip from '@mui/material/Tooltip'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import VoteToggle from './VoteToggle.tsx'
 import RehearsalStatusIcon from './RehearsalStatusIcon.tsx'
@@ -32,23 +34,7 @@ function formatTime(val: string | undefined | null) {
   return val.slice(0, 5)
 }
 
-function isPastDate(val: string | undefined | null) {
-  if (!val) return false
-  const d = new Date(val)
-  d.setHours(0, 0, 0, 0)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return d < today
-}
-
-function rehearsalDateTime(val: string | undefined | null): number {
-  if (!val) return 0
-  return new Date(val).getTime()
-}
-
-function compareRehearsalDateDesc(a: Rehearsal, b: Rehearsal): number {
-  return rehearsalDateTime(b.proposed_date) - rehearsalDateTime(a.proposed_date)
-}
+export type RehearsalsTab = 'upcoming' | 'past'
 
 function tallyCounts(participants: Participant[] | undefined) {
   const total = participants?.length ?? 0
@@ -212,155 +198,134 @@ function DesktopHead() {
   )
 }
 
-interface PastHeaderProps {
-  open?: boolean
-  count?: number
-  onToggle?: () => void
-}
-
-function PastHeader({ open, count, onToggle }: Readonly<PastHeaderProps>) {
-  const { t } = useTranslation('rehearsals')
-  return (
-    <Box
-      onClick={onToggle}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        p: 1.25,
-        cursor: 'pointer',
-        userSelect: 'none',
-        '&:hover': { bgcolor: 'action.hover' },
-      }}
-    >
-      <ExpandMoreIcon
-        fontSize="small"
-        sx={{
-          transition: 'transform 150ms',
-          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-        }}
-      />
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-        {t($ => $.table.pastRehearsals, { count })}
-      </Typography>
-    </Box>
-  )
-}
-
 interface RehearsalsTableProps {
   rehearsals?: Rehearsal[]
+  loading?: boolean
+  activeTab?: RehearsalsTab
+  onTabChange?: (tab: RehearsalsTab) => void
   selectedStatuses?: ReadonlySet<string>
   bandMemberId?: Id | null
   onVote?: (rehearsalId: Id | undefined, memberId: Id | undefined, vote: string | null) => void
   onRowClick?: (rehearsal: Rehearsal) => void
   onShare?: (rehearsal: Rehearsal) => void
   selectedId?: Id | null
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }
 
-export default function RehearsalsTable({ rehearsals = [], selectedStatuses, bandMemberId, onVote, onRowClick, onShare, selectedId = null }: Readonly<RehearsalsTableProps>) {
+export default function RehearsalsTable({
+  rehearsals = [],
+  loading = false,
+  activeTab = 'upcoming',
+  onTabChange = () => {},
+  selectedStatuses,
+  bandMemberId,
+  onVote,
+  onRowClick,
+  onShare,
+  selectedId = null,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+}: Readonly<RehearsalsTableProps>) {
   const { t } = useTranslation('rehearsals')
-  const [pastOpen, setPastOpen] = useState(false)
   const isCompact = useCompactLayout()
 
   const filtered = selectedStatuses
     ? rehearsals.filter((rehearsal) => selectedStatuses.has(rehearsal.status ?? ''))
     : rehearsals
-  const upcoming = filtered.filter((r) => !isPastDate(r.proposed_date))
-  const past = filtered.filter((r) => isPastDate(r.proposed_date)).sort(compareRehearsalDateDesc)
-  const emptyAll = rehearsals.length === 0
+
+  const tabs = (
+    <Tabs
+      value={activeTab}
+      onChange={(_event, value) => onTabChange(value as RehearsalsTab)}
+      variant={isCompact ? 'fullWidth' : 'standard'}
+      textColor="primary"
+      indicatorColor="primary"
+      centered
+    >
+      <Tab value="upcoming" label={t($ => $.table.tabUpcoming)} />
+      <Tab value="past" label={t($ => $.table.tabPast)} />
+    </Tabs>
+  )
+
+  const emptyMessage = activeTab === 'upcoming'
+    ? t($ => $.table.emptyUpcoming)
+    : t($ => $.table.emptyPast)
+
+  const loadMoreFooter = hasMore && (
+    <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.5 }}>
+      <Button
+        size="small"
+        onClick={onLoadMore}
+        disabled={loadingMore}
+        startIcon={loadingMore ? <CircularProgress size={14} /> : undefined}
+      >
+        {t($ => $.table.loadMore)}
+      </Button>
+    </Box>
+  )
 
   if (isCompact) {
-    let upcomingContent: ReactNode
-    if (emptyAll) {
-      upcomingContent = (
-        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          {t($ => $.table.emptyAll)}
+    let content: ReactNode
+    if (loading) {
+      content = (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress size={24} />
         </Box>
       )
-    } else if (upcoming.length === 0) {
-      upcomingContent = (
+    } else if (filtered.length === 0) {
+      content = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          {t($ => $.table.emptyUpcoming)}
+          {emptyMessage}
         </Box>
       )
     } else {
-      upcomingContent = upcoming.map((r) => (
+      content = filtered.map((r) => (
         <RehearsalCard key={String(r.id)} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick?.(r)} onShare={onShare} />
       ))
     }
 
     return (
       <Stack spacing={1.5}>
+        {tabs}
         <Paper variant="outlined">
-          {upcomingContent}
+          {content}
         </Paper>
-        {past.length > 0 && (
-          <Paper variant="outlined">
-            <PastHeader
-              open={pastOpen}
-              count={past.length}
-              onToggle={() => setPastOpen((v) => !v)}
-            />
-            <Collapse in={pastOpen} unmountOnExit>
-              <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-                {past.map((r) => (
-                  <RehearsalCard key={String(r.id)} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick?.(r)} onShare={onShare} />
-                ))}
-              </Box>
-            </Collapse>
-          </Paper>
-        )}
+        {loadMoreFooter}
       </Stack>
     )
   }
 
   return (
     <Stack spacing={2}>
+      {tabs}
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
           <DesktopHead />
           <TableBody>
-            {emptyAll && (
+            {loading && (
               <TableRow>
-                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  {t($ => $.table.emptyAll)}
+                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 4 }}>
+                  <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
             )}
-            {!emptyAll && upcoming.length === 0 && (
+            {!loading && filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  {t($ => $.table.emptyUpcoming)}
+                  {emptyMessage}
                 </TableCell>
               </TableRow>
             )}
-            {upcoming.map((r) => (
+            {!loading && filtered.map((r) => (
               <DesktopRow key={String(r.id)} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick?.(r)} onShare={onShare} />
             ))}
           </TableBody>
         </Table>
       </TableContainer>
-      {past.length > 0 && (
-        <Paper variant="outlined">
-          <PastHeader
-            open={pastOpen}
-            count={past.length}
-            onToggle={() => setPastOpen((v) => !v)}
-          />
-          <Collapse in={pastOpen} unmountOnExit>
-            <TableContainer sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-              <Table size="small">
-                <DesktopHead />
-                <TableBody>
-                  {past.map((r) => (
-                    <DesktopRow key={String(r.id)} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick?.(r)} onShare={onShare} />
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Collapse>
-        </Paper>
-      )}
+      {loadMoreFooter}
     </Stack>
   )
 }

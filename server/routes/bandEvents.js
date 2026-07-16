@@ -6,6 +6,7 @@ import { requireParam, sendError } from './routeHelpers.js'
 import {
   listEvents,
   listUpcomingEvents,
+  listPastEvents,
   listEventsInRange,
   getEvent,
   createEvent,
@@ -21,6 +22,12 @@ router.get('/', async (req, res) => {
 
 router.get('/upcoming', async (req, res) => {
   const result = await listUpcomingEvents(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.get('/past', async (req, res) => {
+  const result = await listPastEvents(pool, req.tenantId, req.query)
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })

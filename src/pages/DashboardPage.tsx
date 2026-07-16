@@ -33,7 +33,7 @@ import { useThemeMode } from '../contexts/themeModeContext.ts'
 import type { ThemeMode } from '../contexts/themeModeContext.ts'
 import { listAchievements } from '../api/achievements.ts'
 import { getGig, listUpcomingGigs } from '../api/gigs.ts'
-import { listUpcomingRehearsals } from '../api/rehearsals.ts'
+import { getNextRehearsal } from '../api/rehearsals.ts'
 import { listTasks } from '../api/tasks.ts'
 import { listUpcomingBandEvents } from '../api/bandEvents.ts'
 import { getProfile } from '../api/profile.ts'
@@ -117,13 +117,12 @@ interface Sections {
 
 // Build the whole view-model in the effect (not in render) so render stays pure.
 function buildSections(
-  results: [PromiseSettledResult<LimitedCollectionWithTotalResponse<Gig>>, PromiseSettledResult<LimitedCollectionResponse<Rehearsal>>, PromiseSettledResult<LimitedCollectionWithTotalResponse<Task>>, PromiseSettledResult<LimitedCollectionResponse<BandEvent>>, PromiseSettledResult<Achievement[]>],
+  results: [PromiseSettledResult<LimitedCollectionWithTotalResponse<Gig>>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<LimitedCollectionWithTotalResponse<Task>>, PromiseSettledResult<LimitedCollectionResponse<BandEvent>>, PromiseSettledResult<Achievement[]>],
 ): Sections {
   const [gigsR, rehR, taskR, bandEventsR, achievementsR] = results
 
   const gigsSettled = settleCollection(gigsR)
   const upcomingGigs = gigsSettled.data
-  const rehSettled = settleCollection(rehR)
   const taskSettled = settleCollection(taskR)
   const bandEventsSettled = settleCollection(bandEventsR)
 
@@ -153,7 +152,10 @@ function buildSections(
       total: gigsR.status === 'fulfilled' ? Math.max(0, gigsR.value.meta.total - 1) : 0,
       data: upcomingShows,
     },
-    nextRehearsal: { status: rehSettled.status, data: rehSettled.data[0] || null },
+    nextRehearsal: {
+      status: rehR.status === 'fulfilled' ? 'ok' : 'error',
+      data: rehR.status === 'fulfilled' ? rehR.value : null,
+    },
     tasks: {
       status: taskSettled.status,
       total: taskR.status === 'fulfilled' ? taskR.value.meta.total : 0,
@@ -250,12 +252,12 @@ export default function DashboardPage() {
       const today = localDateString()
       const results = await Promise.allSettled([
         listUpcomingGigs(6, today),
-        listUpcomingRehearsals(1),
+        getNextRehearsal(),
         listTasks({ limit: MAX_ROWS, assignee: 'me', done: false }),
         listUpcomingBandEvents(1, today),
         listAchievements(),
       ])
-      setSections(buildSections(results as [PromiseSettledResult<LimitedCollectionWithTotalResponse<Gig>>, PromiseSettledResult<LimitedCollectionResponse<Rehearsal>>, PromiseSettledResult<LimitedCollectionWithTotalResponse<Task>>, PromiseSettledResult<LimitedCollectionResponse<BandEvent>>, PromiseSettledResult<Achievement[]>]))
+      setSections(buildSections(results as [PromiseSettledResult<LimitedCollectionWithTotalResponse<Gig>>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<LimitedCollectionWithTotalResponse<Task>>, PromiseSettledResult<LimitedCollectionResponse<BandEvent>>, PromiseSettledResult<Achievement[]>]))
     } finally {
       setLoading(false)
     }

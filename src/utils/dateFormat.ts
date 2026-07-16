@@ -25,6 +25,13 @@ export function daysUntil(value: string | null | undefined, today = new Date()):
   return Math.round((dueUtc - todayUtc) / 86_400_000)
 }
 
+// True when a date is strictly before today (calendar-day comparison, DST-safe).
+export function isPastDate(value: string | Date | null | undefined): boolean {
+  if (!value) return false
+  const days = daysUntil(value instanceof Date ? localDateString(value) : value)
+  return days !== null && days < 0
+}
+
 // Compact relative timestamp for feeds ("5 minutes ago", "yesterday"); falls
 // back to an absolute short date beyond a week. Localized via Intl.
 export function formatRelativeTime(value: string | Date, locale: string, now = new Date()): string {

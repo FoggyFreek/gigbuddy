@@ -36,6 +36,8 @@ interface RehearsalDetailOutletContext {
   onClose?: () => void
   onRehearsalUpdate?: (id: Id, patch: Partial<Rehearsal>) => void
   onRehearsalDelete?: (id: Id) => void
+  onRehearsalDetailLoaded?: (rehearsal: Rehearsal) => void
+  onRehearsalDetailLoadError?: () => void
 }
 
 interface RehearsalForm {
@@ -57,6 +59,8 @@ export default function RehearsalDetailPage() {
   const { canWritePlanning } = usePermissions()
   const outletCtx = (useOutletContext<RehearsalDetailOutletContext>() || {}) as RehearsalDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
+  const onRehearsalDetailLoaded = outletCtx.onRehearsalDetailLoaded
+  const onRehearsalDetailLoadError = outletCtx.onRehearsalDetailLoadError
 
   const [form, setForm] = useState<RehearsalForm>({ proposed_date: '', start_time: '', end_time: '', location: '', notes: '' })
   const [loading, setLoading] = useState(true)
@@ -96,6 +100,7 @@ export default function RehearsalDetailPage() {
       .then((r) => {
         const rehearsalData = r as Rehearsal
         setRehearsal(rehearsalData)
+        onRehearsalDetailLoaded?.(rehearsalData)
         setForm({
           proposed_date: toDateInput(rehearsalData.proposed_date),
           start_time: toTimeInput(rehearsalData.start_time),
@@ -104,8 +109,9 @@ export default function RehearsalDetailPage() {
           notes: rehearsalData.notes || '',
         })
       })
+      .catch(() => onRehearsalDetailLoadError?.())
       .finally(() => setLoading(false))
-  }, [rehearsalId])
+  }, [rehearsalId, onRehearsalDetailLoaded, onRehearsalDetailLoadError])
 
   function handleChange(field: string, value: string | null) {
     if (!canWritePlanning) return

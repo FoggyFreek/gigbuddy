@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,13 +18,6 @@ function wrap(ui) {
 function futureDateISO(daysFromNow) {
   const d = new Date()
   d.setDate(d.getDate() + daysFromNow)
-  d.setUTCHours(0, 0, 0, 0)
-  return d.toISOString()
-}
-
-function pastDateISO(daysAgo) {
-  const d = new Date()
-  d.setDate(d.getDate() - daysAgo)
   d.setUTCHours(0, 0, 0, 0)
   return d.toISOString()
 }
@@ -64,9 +57,22 @@ describe('GigsTable', () => {
     expect(screen.queryByText('Status')).not.toBeInTheDocument()
   })
 
-  it('shows empty state when no gigs', () => {
-    wrap(<GigsTable gigs={[]} onRowClick={() => {}} />)
-    expect(screen.getByText(/No gigs yet/i)).toBeInTheDocument()
+  it('renders Upcoming/Past tabs and reports tab changes', async () => {
+    const user = userEvent.setup()
+    const onTabChange = vi.fn()
+    wrap(<GigsTable gigs={[]} onRowClick={() => {}} activeTab="upcoming" onTabChange={onTabChange} />)
+
+    expect(screen.getByRole('tab', { name: 'Upcoming', selected: true })).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Past' }))
+    expect(onTabChange).toHaveBeenCalledWith('past')
+  })
+
+  it('shows a tab-specific empty message per active tab', () => {
+    const { rerender } = wrap(<GigsTable gigs={[]} onRowClick={() => {}} activeTab="upcoming" />)
+    expect(screen.getByText(/No upcoming gigs/i)).toBeInTheDocument()
+
+    rerender(<ThemeProvider theme={theme}><GigsTable gigs={[]} onRowClick={() => {}} activeTab="past" /></ThemeProvider>)
+    expect(screen.getByText(/No past gigs/i)).toBeInTheDocument()
   })
 
   it('renders gig rows', () => {
@@ -111,14 +117,36 @@ describe('GigsTable', () => {
     expect(banner).toBeInTheDocument()
   })
 
-  it('searches gig tags', async () => {
-    const user = userEvent.setup()
-    wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+  it('updates the input immediately but only bubbles onSearchChange after the debounce settles', async () => {
+    const onSearchChange = vi.fn()
+    wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} search="" onSearchChange={onSearchChange} />)
 
-    await user.type(screen.getByPlaceholderText('Search gigs…'), 'summer tour')
+    vi.useFakeTimers()
+    try {
+      fireEvent.change(screen.getByPlaceholderText('Search gigs…'), { target: { value: 'summer tour' } })
+      // Local input reflects the keystroke immediately...
+      expect(screen.getByPlaceholderText('Search gigs…')).toHaveValue('summer tour')
+      // ...but the parent (which owns the split-view detail pane) hasn't
+      // been notified yet — that's what keeps it from re-rendering per key.
+      expect(onSearchChange).not.toHaveBeenCalled()
 
-    expect(screen.getByText('Jazz Night')).toBeInTheDocument()
-    expect(screen.queryByText('Summer Festival')).not.toBeInTheDocument()
+      await vi.runAllTimersAsync()
+      expect(onSearchChange).toHaveBeenCalledWith('summer tour')
+      expect(onSearchChange).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('hides the tabs while showing search results', () => {
+    wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} isSearching search="jazz" />)
+    expect(screen.queryByRole('tab', { name: 'Upcoming' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Past' })).not.toBeInTheDocument()
+  })
+
+  it('shows a "no gigs match" message when a search has no results', () => {
+    wrap(<GigsTable gigs={[]} onRowClick={() => {}} isSearching search="nothing matches" />)
+    expect(screen.getByText(/No gigs match your search/i)).toBeInTheDocument()
   })
 
   it('provides separate Types and Tags filter menus', async () => {
@@ -133,28 +161,18 @@ describe('GigsTable', () => {
     expect(screen.queryByText('Summer Festival')).not.toBeInTheDocument()
   })
 
-  it('sorts only the past gigs table by date descending by default', async () => {
+  it('shows a Load more button when hasMore is set and reports clicks', async () => {
     const user = userEvent.setup()
-    const gigs = [
-      { ...GIGS[0], id: 10, event_date: pastDateISO(30), event_description: 'Old Past Gig' },
-      { ...GIGS[0], id: 11, event_date: pastDateISO(1), event_description: 'Most Recent Past Gig' },
-      { ...GIGS[0], id: 12, event_date: pastDateISO(10), event_description: 'Middle Past Gig' },
-      { ...GIGS[0], id: 13, event_date: futureDateISO(20), event_description: 'Later Upcoming Gig' },
-      { ...GIGS[0], id: 14, event_date: futureDateISO(5), event_description: 'Earlier Upcoming Gig' },
-    ]
+    const onLoadMore = vi.fn()
+    wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} activeTab="past" hasMore onLoadMore={onLoadMore} />)
 
-    wrap(<GigsTable gigs={gigs} onRowClick={() => {}} />)
-    await user.click(screen.getByText('Past gigs (3)'))
+    await user.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(onLoadMore).toHaveBeenCalled()
+  })
 
-    const recent = screen.getByText('Most Recent Past Gig')
-    const middle = screen.getByText('Middle Past Gig')
-    const old = screen.getByText('Old Past Gig')
-    const laterUpcoming = screen.getByText('Later Upcoming Gig')
-    const earlierUpcoming = screen.getByText('Earlier Upcoming Gig')
-
-    expect(recent.compareDocumentPosition(middle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(middle.compareDocumentPosition(old) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(laterUpcoming.compareDocumentPosition(earlierUpcoming) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  it('shows a loading spinner instead of rows while loading', () => {
+    wrap(<GigsTable gigs={[]} onRowClick={() => {}} loading />)
+    expect(screen.getByRole('progressbar')).toBeInTheDocument()
   })
 
   describe('mobile (compact card layout)', () => {
@@ -195,7 +213,7 @@ describe('GigsTable', () => {
 
     it('shows empty state when no gigs', () => {
       wrap(<GigsTable gigs={[]} onRowClick={() => {}} />)
-      expect(screen.getByText(/No gigs yet/i)).toBeInTheDocument()
+      expect(screen.getByText(/No upcoming gigs/i)).toBeInTheDocument()
     })
 
     it('does not render a banner background on compact cards when banner_path is set', () => {

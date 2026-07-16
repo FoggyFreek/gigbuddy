@@ -15,20 +15,6 @@ function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
 }
 
-function futureDateISO(daysFromNow) {
-  const d = new Date()
-  d.setDate(d.getDate() + daysFromNow)
-  d.setUTCHours(0, 0, 0, 0)
-  return d.toISOString()
-}
-
-function pastDateISO(daysAgo) {
-  const d = new Date()
-  d.setDate(d.getDate() - daysAgo)
-  d.setUTCHours(0, 0, 0, 0)
-  return d.toISOString()
-}
-
 const REHEARSALS = [
   {
     id: 1,
@@ -66,9 +52,18 @@ describe('RehearsalsTable', () => {
     expect(screen.queryByText('Status')).not.toBeInTheDocument()
   })
 
-  it('shows empty state when no rehearsals', () => {
+  it('shows tab-specific empty states', () => {
     wrap(<RehearsalsTable rehearsals={[]} onRowClick={() => {}} />)
-    expect(screen.getByText(/No rehearsals yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/No upcoming rehearsals/i)).toBeInTheDocument()
+  })
+
+  it('renders Upcoming/Past tabs and reports tab changes', async () => {
+    const user = userEvent.setup()
+    const onTabChange = vi.fn()
+    wrap(<RehearsalsTable rehearsals={[]} activeTab="upcoming" onTabChange={onTabChange} />)
+    expect(screen.getByRole('tab', { name: 'Upcoming', selected: true })).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Past' }))
+    expect(onTabChange).toHaveBeenCalledWith('past')
   })
 
   it('renders rehearsal rows and shows status as an icon without a text label', () => {
@@ -101,28 +96,12 @@ describe('RehearsalsTable', () => {
     expect(onRowClick).toHaveBeenCalledWith(REHEARSALS[0])
   })
 
-  it('sorts only the past rehearsals table by date descending by default', async () => {
+  it('shows Load more for a paginated past feed', async () => {
     const user = userEvent.setup()
-    const rehearsals = [
-      { ...REHEARSALS[0], id: 10, proposed_date: pastDateISO(30), location: 'Old Past Rehearsal' },
-      { ...REHEARSALS[0], id: 11, proposed_date: pastDateISO(1), location: 'Most Recent Past Rehearsal' },
-      { ...REHEARSALS[0], id: 12, proposed_date: pastDateISO(10), location: 'Middle Past Rehearsal' },
-      { ...REHEARSALS[0], id: 13, proposed_date: futureDateISO(20), location: 'Later Upcoming Rehearsal' },
-      { ...REHEARSALS[0], id: 14, proposed_date: futureDateISO(5), location: 'Earlier Upcoming Rehearsal' },
-    ]
-
-    wrap(<RehearsalsTable rehearsals={rehearsals} onRowClick={() => {}} />)
-    await user.click(screen.getByText('Past rehearsals (3)'))
-
-    const recent = screen.getByText('Most Recent Past Rehearsal')
-    const middle = screen.getByText('Middle Past Rehearsal')
-    const old = screen.getByText('Old Past Rehearsal')
-    const laterUpcoming = screen.getByText('Later Upcoming Rehearsal')
-    const earlierUpcoming = screen.getByText('Earlier Upcoming Rehearsal')
-
-    expect(recent.compareDocumentPosition(middle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(middle.compareDocumentPosition(old) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(laterUpcoming.compareDocumentPosition(earlierUpcoming) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const onLoadMore = vi.fn()
+    wrap(<RehearsalsTable rehearsals={REHEARSALS} activeTab="past" hasMore onLoadMore={onLoadMore} />)
+    await user.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(onLoadMore).toHaveBeenCalledTimes(1)
   })
 
   describe('mobile', () => {
@@ -145,7 +124,7 @@ describe('RehearsalsTable', () => {
 
     it('shows empty state when no rehearsals', () => {
       wrap(<RehearsalsTable rehearsals={[]} onRowClick={() => {}} />)
-      expect(screen.getByText(/No rehearsals yet/i)).toBeInTheDocument()
+      expect(screen.getByText(/No upcoming rehearsals/i)).toBeInTheDocument()
     })
   })
 })

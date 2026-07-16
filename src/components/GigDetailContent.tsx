@@ -138,6 +138,7 @@ interface GigDetailContentProps {
   gigId: Id
   onBannerUpdate?: (gigId: Id, patch: Record<string, unknown>) => void
   onGigLoaded?: (gig: GigDetail) => void
+  onGigLoadError?: () => void
   // Readers (no planning.write) see the gig read-only: fields disabled, no
   // banner/participant/contact/attachment/task-edit affordances. They keep the
   // one self-action — ticking their own assigned task done (see GigTasks).
@@ -173,7 +174,7 @@ const NO_NUMBER_SPINNER_SX = {
   '& input[type=number]::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 },
 }
 
-const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, canWrite = true, initialTab = 'event' }, ref) {
+const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, onGigLoadError, canWrite = true, initialTab = 'event' }, ref) {
   const { t, i18n } = useTranslation('gigs')
   const { user } = useAuth()
   const { canViewFinance } = usePermissions()
@@ -306,10 +307,10 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     getBannerPath().then(setBandBannerPath).catch(() => {})
     getGig(gigId, { signal: ac.signal })
       .then(applyGig)
-      .catch((err: Error) => { if (!ac.signal.aborted) console.error(err) })
+      .catch((err: Error) => { if (!ac.signal.aborted) { console.error(err); onGigLoadError?.() } })
       .finally(() => { if (!ac.signal.aborted) setLoading(false) })
     return () => ac.abort()
-  }, [gigId, applyGig])
+  }, [gigId, applyGig, onGigLoadError])
 
   // Merch-sold summary. Reader gate: this is finance-ish data the server only
   // serves to non-readers — and on this page `canWrite` is exactly

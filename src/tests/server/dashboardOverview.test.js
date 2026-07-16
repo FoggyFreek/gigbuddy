@@ -47,7 +47,7 @@ describe('dashboard overview endpoints', () => {
     expect(upcoming.body.items[0].event_description).toBe('Next A')
   })
 
-  it('returns the limited upcoming planned rehearsal and band event for the active tenant', async () => {
+  it('returns the next planned rehearsal and limited upcoming band event for the active tenant', async () => {
     await pool.query(
       `INSERT INTO rehearsals (tenant_id, proposed_date, status, location)
        VALUES ($1, CURRENT_DATE + 1, 'planned', 'Studio A'),
@@ -64,10 +64,8 @@ describe('dashboard overview endpoints', () => {
       [seed.tenantA.id, seed.tenantB.id],
     )
 
-    const rehearsals = await asUserA(request(app).get('/api/rehearsals/upcoming').query({ limit: 1 })).expect(200)
-    expect(rehearsals.body.meta).toEqual({ limit: 1, returned: 1 })
-    expect(rehearsals.body.items).toHaveLength(1)
-    expect(rehearsals.body.items[0].location).toBe('Studio A')
+    const rehearsal = await asUserA(request(app).get('/api/rehearsals/next')).expect(200)
+    expect(rehearsal.body.location).toBe('Studio A')
 
     const events = await asUserA(request(app).get('/api/band-events/upcoming').query({ limit: 1, today: '2099-07-16' })).expect(200)
     expect(events.body.meta).toEqual({ limit: 1, returned: 1 })
@@ -172,7 +170,7 @@ describe('dashboard overview endpoints', () => {
   })
 
   it('requires a valid browser-local date for date-filtered dashboard endpoints', async () => {
-    for (const path of ['/api/gigs/upcoming', '/api/band-events/upcoming']) {
+    for (const path of ['/api/gigs/upcoming', '/api/rehearsals/upcoming', '/api/band-events/upcoming']) {
       const missing = await asUserA(request(app).get(path).query({ limit: 1 })).expect(400)
       expect(missing.body).toEqual({ error: 'today must be a valid ISO date (YYYY-MM-DD)' })
 

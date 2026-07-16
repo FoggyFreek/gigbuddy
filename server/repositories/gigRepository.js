@@ -149,6 +149,30 @@ export async function listUpcomingGigs(executor, tenantId, today, limit) {
   }
 }
 
+// Past gigs, most recent first. Optional keyset cursor continues past the
+// last (event_date, id) pair of a previous page for "load more" pagination.
+export async function listPastGigs(executor, tenantId, today, limit, cursor = null) {
+  const params = [tenantId, today]
+  let cursorClause = ''
+  if (cursor) {
+    params.push(cursor.date, cursor.id)
+    cursorClause = `AND (g.event_date, g.id) < ($${params.length - 1}, $${params.length})`
+  }
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT
+       ${GIG_LIST_PROJECTION}
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = $1 AND g.event_date < $2 ${cursorClause}
+     ORDER BY g.event_date DESC, g.id DESC
+     LIMIT $${params.length}`,
+    params,
+  )
+  return rows
+}
+
 export async function listGigsInRange(executor, tenantId, from, to) {
   const { rows } = await executor.query(
     `SELECT

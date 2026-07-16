@@ -1,13 +1,16 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
-import Collapse from '@mui/material/Collapse'
+import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import InputAdornment from '@mui/material/InputAdornment'
 import ListItemText from '@mui/material/ListItemText'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import Tab from '@mui/material/Tab'
+import Tabs from '@mui/material/Tabs'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
@@ -15,12 +18,10 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Paper from '@mui/material/Paper'
-import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import ChecklistIcon from '@mui/icons-material/Checklist'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined'
 import SearchIcon from '@mui/icons-material/Search'
@@ -32,6 +33,13 @@ import { ALL_STATUSES } from '../utils/gigStatus.ts'
 import type { Gig, Member, Id } from '../types/entities.ts'
 
 const COLUMN_COUNT = 7
+// Search text is kept as component-local state so keystrokes never touch the
+// parent page's state — the parent (and anything sibling to it, like an open
+// split-view detail pane) would otherwise re-render on every keypress. Only
+// the settled, debounced value is bubbled up via onSearchChange.
+const SEARCH_DEBOUNCE_MS = 300
+
+export type GigsTab = 'upcoming' | 'past'
 
 type GigStatusKey = 'option' | 'confirmed' | 'announced'
 
@@ -48,9 +56,18 @@ interface GigCardProps {
 
 interface GigsTableProps {
   gigs: GigWithExtras[]
+  loading?: boolean
+  activeTab?: GigsTab
+  onTabChange?: (tab: GigsTab) => void
   onRowClick?: (gig: GigWithExtras) => void
   selectedId?: Id
   onFilterSelectionChange?: (selection: GigsFilterSelection) => void
+  search?: string
+  onSearchChange?: (value: string) => void
+  isSearching?: boolean
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }
 
 export interface GigsFilterSelection {
@@ -66,37 +83,6 @@ function formatDate(val: string | Date | undefined): string {
 function formatTime(val: string | null | undefined): string {
   if (!val) return '—'
   return val.slice(0, 5)
-}
-
-function isPastDate(val: string | Date | undefined): boolean {
-  if (!val) return false
-  const d = new Date(val as string)
-  d.setHours(0, 0, 0, 0)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return d < today
-}
-
-function eventDateTime(val: string | Date | undefined): number {
-  if (!val) return 0
-  return new Date(val as string).getTime()
-}
-
-function compareEventDateDesc(a: GigWithExtras, b: GigWithExtras): number {
-  return eventDateTime(b.event_date) - eventDateTime(a.event_date)
-}
-
-function applySearch(list: GigWithExtras[], q: string): GigWithExtras[] {
-  if (!q) return list
-  const lower = q.toLowerCase()
-  return list.filter((g) =>
-    [
-      g.event_description,
-      g.venue?.name, g.venue?.city, g.venue?.country,
-      g.festival?.name, g.festival?.city, g.festival?.country,
-      ...(g.tags ?? []).map((tag) => tag.name),
-    ].some((f) => f && String(f).toLowerCase().includes(lower))
-  )
 }
 
 function GigCard({ gig, active, onClick }: Readonly<GigCardProps>) {
@@ -225,54 +211,60 @@ function DesktopHead() {
   )
 }
 
-interface PastGigsHeaderProps {
-  open: boolean
-  count: number
-  onToggle: () => void
-}
-
-function PastGigsHeader({ open, count, onToggle }: Readonly<PastGigsHeaderProps>) {
+export default function GigsTable({
+  gigs,
+  loading = false,
+  activeTab = 'upcoming',
+  onTabChange = () => {},
+  onRowClick,
+  selectedId = undefined,
+  onFilterSelectionChange,
+  search = '',
+  onSearchChange = () => {},
+  isSearching = false,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+}: Readonly<GigsTableProps>) {
   const { t } = useTranslation('gigs')
-  return (
-    <Box
-      onClick={onToggle}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        p: 1.25,
-        cursor: 'pointer',
-        userSelect: 'none',
-        '&:hover': { bgcolor: 'action.hover' },
-      }}
-    >
-      <ExpandMoreIcon
-        fontSize="small"
-        sx={{
-          transition: 'transform 150ms',
-          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-        }}
-      />
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-        {t($ => $.table.pastGigs, { count })}
-      </Typography>
-    </Box>
-  )
-}
-
-export default function GigsTable({ gigs, onRowClick, selectedId = undefined, onFilterSelectionChange }: Readonly<GigsTableProps>) {
-  const { t } = useTranslation('gigs')
-  const [pastOpen, setPastOpen] = useState(false)
-  const [search, setSearch] = useState('')
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set(ALL_STATUSES))
   const [typeAnchor, setTypeAnchor] = useState<HTMLElement | null>(null)
   const [tagAnchor, setTagAnchor] = useState<HTMLElement | null>(null)
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
+  const [inputValue, setInputValue] = useState(search)
+  const [syncedSearch, setSyncedSearch] = useState(search)
+  const [lastSent, setLastSent] = useState(search)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isCompact = useCompactLayout()
+
+  // Adjust local input state when `search` changes externally (e.g. the
+  // parent clearing it) — per React's "adjusting state on a prop change"
+  // pattern, done during render rather than in an effect. Our own debounced
+  // pushes already match `lastSent`, so this never fires as an echo of the
+  // user's own typing.
+  if (search !== syncedSearch) {
+    setSyncedSearch(search)
+    if (search !== lastSent) {
+      setInputValue(search)
+    }
+  }
 
   useEffect(() => {
     onFilterSelectionChange?.({ selectedStatuses, selectedTags })
   }, [onFilterSelectionChange, selectedStatuses, selectedTags])
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+  }, [])
+
+  function handleSearchInput(value: string) {
+    setInputValue(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setLastSent(value)
+      onSearchChange(value)
+    }, SEARCH_DEBOUNCE_MS)
+  }
 
   const availableTags = [...new Map(
     gigs.flatMap((gig) => gig.tags ?? [])
@@ -308,7 +300,7 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined, on
   const someStatusesSelected = selectedStatuses.size > 0 && !allStatusesSelected
   const statusFilterActive = !allStatusesSelected
 
-  let filtered = applySearch(gigs, search)
+  let filtered = gigs
   if (!allStatusesSelected) filtered = filtered.filter((g) => selectedStatuses.has(g.status ?? ''))
   if (selectedTags.size > 0) {
     filtered = filtered.filter((gig) =>
@@ -316,16 +308,16 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined, on
     )
   }
 
-  const upcoming = filtered.filter((g) => !isPastDate(g.event_date))
-  const past = filtered.filter((g) => isPastDate(g.event_date)).sort(compareEventDateDesc)
-  const emptyAll = gigs.length === 0
+  const emptyMessage = isSearching
+    ? t($ => $.table.emptySearch)
+    : t(activeTab === 'upcoming' ? ($ => $.table.emptyUpcoming) : ($ => $.table.emptyPast))
 
   const searchField = (
     <TextField
       size="small"
       placeholder={t($ => $.table.searchPlaceholder)}
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
+      value={inputValue}
+      onChange={(e) => handleSearchInput(e.target.value)}
       sx={isCompact ? { width: '100%' } : { flex: '1 1 200px', minWidth: 160 }}
       slotProps={{
         input: {
@@ -408,6 +400,20 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined, on
     </>
   )
 
+  const tabs = (
+    <Tabs
+      value={activeTab}
+      onChange={(_e, v) => onTabChange(v as GigsTab)}
+      variant={isCompact ? "fullWidth": "standard"}
+      textColor="primary"
+      indicatorColor="primary"
+      centered
+    >
+      <Tab value="upcoming" label={t($ => $.table.tabUpcoming)} />
+      <Tab value="past" label={t($ => $.table.tabPast)} />
+    </Tabs>
+  )
+
   const controls = isCompact ? (
     <Stack spacing={1.5}>
       <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -424,100 +430,75 @@ export default function GigsTable({ gigs, onRowClick, selectedId = undefined, on
     </Box>
   )
 
+  const loadMoreFooter = hasMore && (
+    <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.5 }}>
+      <Button size="small" onClick={onLoadMore} disabled={loadingMore} startIcon={loadingMore ? <CircularProgress size={14} /> : undefined}>
+        {t($ => $.table.loadMore)}
+      </Button>
+    </Box>
+  )
+
   if (isCompact) {
-    let upcomingContent: ReactNode
-    if (emptyAll) {
-      upcomingContent = (
-        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          {t($ => $.table.emptyAll)}
+    let content: ReactNode
+    if (loading) {
+      content = (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress size={24} />
         </Box>
       )
-    } else if (upcoming.length === 0) {
-      upcomingContent = (
+    } else if (filtered.length === 0) {
+      content = (
         <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          {t($ => $.table.emptyUpcoming)}
+          {emptyMessage}
         </Box>
       )
     } else {
-      upcomingContent = upcoming.map((gig) => (
+      content = filtered.map((gig) => (
         <GigCard key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
       ))
     }
 
     return (
       <Stack spacing={1.5}>
+        {!isSearching && tabs}
         {controls}
         <Paper variant="outlined">
-          {upcomingContent}
+          {content}
         </Paper>
-        {past.length > 0 && (
-          <Paper variant="outlined">
-            <PastGigsHeader
-              open={pastOpen}
-              count={past.length}
-              onToggle={() => setPastOpen((v) => !v)}
-            />
-            <Collapse in={pastOpen} unmountOnExit>
-              <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-                {past.map((gig) => (
-                  <GigCard key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
-                ))}
-              </Box>
-            </Collapse>
-          </Paper>
-        )}
+        {!isSearching && loadMoreFooter}
       </Stack>
     )
   }
 
   return (
     <Stack spacing={2}>
+      {!isSearching && tabs}
       {controls}
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
           <DesktopHead />
           <TableBody>
-            {emptyAll && (
+            {loading && (
               <TableRow>
-                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  {t($ => $.table.emptyAll)}
+                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 4 }}>
+                  <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
             )}
-            {!emptyAll && upcoming.length === 0 && (
+            {!loading && filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  {t($ => $.table.emptyUpcoming)}
+                  {emptyMessage}
                 </TableCell>
               </TableRow>
             )}
-            {upcoming.map((gig) => (
+            {!loading && filtered.map((gig) => (
               <DesktopRow key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
             ))}
           </TableBody>
         </Table>
       </TableContainer>
-      {past.length > 0 && (
-        <Paper variant="outlined">
-          <PastGigsHeader
-            open={pastOpen}
-            count={past.length}
-            onToggle={() => setPastOpen((v) => !v)}
-          />
-          <Collapse in={pastOpen} unmountOnExit>
-            <TableContainer sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-              <Table size="small">
-                <DesktopHead />
-                <TableBody>
-                  {past.map((gig) => (
-                    <DesktopRow key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Collapse>
-        </Paper>
-      )}
+      {!isSearching && loadMoreFooter}
     </Stack>
   )
 }

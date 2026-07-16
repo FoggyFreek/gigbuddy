@@ -8,6 +8,7 @@ import { requireParam, sendError } from './routeHelpers.js'
 import {
   listGigs,
   listUpcomingGigs,
+  listPastGigs,
   listGigsInRange,
   listGigMapData,
   searchGigs,
@@ -68,6 +69,14 @@ router.get('/', async (req, res) => {
 
 router.get('/upcoming', async (req, res) => {
   const result = await listUpcomingGigs(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+// Past gigs, most recent first. Bounded + keyset-paginated (?cursorDate=&cursorId=)
+// for "load more" — see listPastGigs in gigService.js.
+router.get('/past', async (req, res) => {
+  const result = await listPastGigs(pool, req.tenantId, req.query)
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })

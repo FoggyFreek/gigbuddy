@@ -10,7 +10,7 @@ vi.mock('../api/gigs.ts', () => ({
   getGig: vi.fn(),
   searchGigs: vi.fn(),
 }))
-vi.mock('../api/rehearsals.ts', () => ({ listUpcomingRehearsals: vi.fn() }))
+vi.mock('../api/rehearsals.ts', () => ({ getNextRehearsal: vi.fn() }))
 vi.mock('../api/bandEvents.ts', () => ({ listUpcomingBandEvents: vi.fn() }))
 vi.mock('../api/tasks.ts', () => ({ listTasks: vi.fn() }))
 vi.mock('../contexts/authContext.ts', () => ({ useAuth: vi.fn() }))
@@ -28,7 +28,7 @@ vi.mock('../api/achievements.ts', () => ({ listAchievements: vi.fn() }))
 
 import DashboardPage from '../pages/DashboardPage.tsx'
 import { listGigs, listUpcomingGigs, getGig, searchGigs } from '../api/gigs.ts'
-import { listUpcomingRehearsals } from '../api/rehearsals.ts'
+import { getNextRehearsal } from '../api/rehearsals.ts'
 import { listUpcomingBandEvents } from '../api/bandEvents.ts'
 import { listTasks } from '../api/tasks.ts'
 import { getProfile, updateProfile } from '../api/profile.ts'
@@ -92,7 +92,7 @@ function resolveAll() {
   searchGigs.mockResolvedValue([])
   listUpcomingGigs.mockResolvedValue(collection(GIGS.filter((gig) => gig.id !== 1), 6))
   getGig.mockImplementation((id) => Promise.resolve(GIGS.find((gig) => gig.id === id)))
-  listUpcomingRehearsals.mockResolvedValue(collection([NEXT_REHEARSAL], 1))
+  getNextRehearsal.mockResolvedValue(NEXT_REHEARSAL)
   listUpcomingBandEvents.mockResolvedValue(collection([], 1))
   listTasks.mockResolvedValue(collection(TASKS.filter((task) => !task.done && task.assigned_to === 7), 5))
   getProfile.mockResolvedValue({ logo_path: null })
@@ -147,7 +147,7 @@ describe('DashboardPage', () => {
   it('shows the next rehearsal returned by the limited upcoming endpoint', async () => {
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Studio A')).toBeInTheDocument())
-    expect(listUpcomingRehearsals).toHaveBeenCalledWith(1)
+    expect(getNextRehearsal).toHaveBeenCalledTimes(1)
   })
 
   it('does not render invoice or purchase cards (moved to the financial dashboard)', async () => {
@@ -185,7 +185,7 @@ describe('DashboardPage', () => {
 
   it('renders empty states when sources return nothing', async () => {
     listUpcomingGigs.mockResolvedValue(collection([], 6))
-    listUpcomingRehearsals.mockResolvedValue(collection([], 1))
+    getNextRehearsal.mockResolvedValue(null)
     listTasks.mockResolvedValue(collection([], 5))
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText(/no upcoming shows/i)).toBeInTheDocument())
@@ -336,7 +336,7 @@ describe('DashboardPage', () => {
   })
 
   it('shows a per-card error when one source fails, while the others still render', async () => {
-    listUpcomingRehearsals.mockRejectedValue(new Error('boom'))
+    getNextRehearsal.mockRejectedValue(new Error('boom'))
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument()

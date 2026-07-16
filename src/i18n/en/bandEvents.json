@@ -7,9 +7,13 @@
     "colLocation": "Location",
     "shareEvent": "share event",
     "shareWhatsApp": "Share via WhatsApp",
+    "tabUpcoming": "Upcoming",
+    "tabPast": "Past",
     "emptyAll": "No events yet — add one to get started.",
     "emptyUpcoming": "No upcoming events.",
-    "pastEvents": "Past events ({{count}})"
+    "emptyPast": "No past events.",
+    "pastEvents": "Past events ({{count}})",
+    "loadMore": "Load more"
   },
   "form": {
     "addTitle": "Add band event",

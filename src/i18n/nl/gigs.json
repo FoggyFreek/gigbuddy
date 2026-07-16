@@ -30,9 +30,12 @@
     "colTime": "Tijd",
     "colBand": "Band",
     "colOpenTasks": "Open taken",
-    "emptyAll": "Nog geen optredens — voeg er een toe om te beginnen.",
     "emptyUpcoming": "Geen aankomende optredens.",
-    "pastGigs": "Eerdere optredens ({{count}})"
+    "emptyPast": "Geen eerdere optredens.",
+    "emptySearch": "Geen optredens gevonden voor deze zoekopdracht.",
+    "tabUpcoming": "Aankomend",
+    "tabPast": "Eerder",
+    "loadMore": "Meer laden"
   },
   "form": {
     "newGig": "Nieuw optreden",

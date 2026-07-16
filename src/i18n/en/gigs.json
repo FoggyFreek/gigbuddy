@@ -30,9 +30,12 @@
     "colTime": "Time",
     "colBand": "Band",
     "colOpenTasks": "Open tasks",
-    "emptyAll": "No gigs yet — add one to get started.",
     "emptyUpcoming": "No upcoming gigs.",
-    "pastGigs": "Past gigs ({{count}})"
+    "emptyPast": "No past gigs.",
+    "emptySearch": "No gigs match your search.",
+    "tabUpcoming": "Upcoming",
+    "tabPast": "Past",
+    "loadMore": "Load more"
   },
   "form": {
     "newGig": "New gig",

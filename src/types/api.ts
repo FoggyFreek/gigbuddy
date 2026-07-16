@@ -48,6 +48,22 @@ export interface WindowedCollectionResponse<T> {
   }
 }
 
+/** Keyset pagination cursor, keyed on (date, id) — see `GET /gigs/past`. */
+export interface ListCollectionCursor {
+  date: string
+  id: import('./entities.ts').Id
+}
+
+/** Bounded collection paginated via a keyset cursor instead of offset/page params. */
+export interface LimitedCollectionWithCursorResponse<T> {
+  items: T[]
+  meta: {
+    limit: number
+    returned: number
+    nextCursor: ListCollectionCursor | null
+  }
+}
+
 export interface GigMapPlace {
   id: import('./entities.ts').Id
   city: string | null

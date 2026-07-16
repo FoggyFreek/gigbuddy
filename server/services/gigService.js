@@ -34,6 +34,7 @@ import {
   loadParticipants,
   listGigsWithTaskCounts,
   listUpcomingGigs as listUpcomingGigRows,
+  listPastGigs as listPastGigRows,
   listGigsInRange as listGigsInRangeRows,
   listGigMapData as listGigMapRows,
   listBandMembers,
@@ -72,12 +73,13 @@ import {
 } from '../repositories/gigRepository.js'
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { getTaskById } from '../repositories/taskRepository.js'
-import { parseLocalDate } from '../validators/common.js'
+import { parseLocalDate, parseListCursor } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
-import { limitedCollectionWithTotal, windowedCollection } from './limitedCollectionService.js'
+import { limitedCollection, limitedCollectionWithTotal, windowedCollection } from './limitedCollectionService.js'
 
 const NOT_FOUND = notFound('Not found')
 const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
+const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and valid'
 
 // ---------- notifications ----------
 
@@ -219,7 +221,31 @@ async function enrichGigsWithAvailability(db, tenantId, gigs) {
 export async function listUpcomingGigs(db, tenantId, query = {}) {
   const today = parseLocalDate(query.today)
   if (today === null) return badRequest(INVALID_TODAY)
-  return limitedCollectionWithTotal(query.limit, (limit) => listUpcomingGigRows(db, tenantId, today, limit))
+  const result = await limitedCollectionWithTotal(query.limit, (limit) => listUpcomingGigRows(db, tenantId, today, limit))
+  if (result.error) return result
+  return { ...result, items: await enrichGigsWithAvailability(db, tenantId, result.items) }
+}
+
+// Past gigs, most recent first, capped and keyset-paginated via
+// ?cursorDate=&cursorId= (never offset/page params) so "load more" can walk
+// arbitrarily deep history without re-scanning already-seen rows.
+export async function listPastGigs(db, tenantId, query = {}) {
+  const today = parseLocalDate(query.today)
+  if (today === null) return badRequest(INVALID_TODAY)
+  const parsedCursor = parseListCursor(query)
+  if (parsedCursor === null) return badRequest(INVALID_CURSOR)
+
+  const result = await limitedCollection(query.limit, (limit) =>
+    listPastGigRows(db, tenantId, today, limit, parsedCursor.cursor))
+  if (result.error) return result
+
+  const items = await enrichGigsWithAvailability(db, tenantId, result.items)
+  const last = items[items.length - 1]
+  const nextCursor = last && items.length === result.meta.limit
+    ? { date: toDateStr(last.event_date), id: last.id }
+    : null
+
+  return { items, meta: { ...result.meta, nextCursor } }
 }
 
 export async function listGigsInRange(db, tenantId, query = {}) {
