@@ -150,6 +150,18 @@
       "title": "My Personal High Note",
       "description": "Add a note to a song on a setlist."
     },
+    "judging_the_song_by_its_cover": {
+      "title": "Judging the Song by Its Cover",
+      "description": "Set your first album cover on a song."
+    },
+    "linkin_spark": {
+      "title": "Linkin’ Spark",
+      "description": "Add your first link to a song."
+    },
+    "now_with_actual_sound": {
+      "title": "Now With Actual Sound",
+      "description": "Add an MP3 file to a song."
+    },
     "fifty_people_who_might_answer": {
       "title": "Fifty People Who Might Answer",
       "description": "Have more than 50 contacts."

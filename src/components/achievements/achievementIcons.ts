@@ -33,6 +33,9 @@ import EmojiEventsOutlinedIcon from '@mui/icons-material/EmojiEventsOutlined'
 import EditNoteOutlinedIcon from '@mui/icons-material/EditNoteOutlined'
 import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined'
 import SyncOutlinedIcon from '@mui/icons-material/SyncOutlined'
+import AlbumOutlinedIcon from '@mui/icons-material/AlbumOutlined'
+import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
+import AudiotrackOutlinedIcon from '@mui/icons-material/AudiotrackOutlined'
 import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined'
 import type { AchievementCategory, AchievementKey } from '../../types/entities.ts'
 
@@ -70,6 +73,9 @@ export const ACHIEVEMENT_KEY_ICONS: Partial<Record<AchievementKey, SvgIconCompon
   five_songs_and_a_prayer: LibraryMusicOutlinedIcon,
   setlist_match_fire: QueueMusicOutlinedIcon,
   my_personal_high_note: EditNoteOutlinedIcon,
+  judging_the_song_by_its_cover: AlbumOutlinedIcon,
+  linkin_spark: LinkOutlinedIcon,
+  now_with_actual_sound: AudiotrackOutlinedIcon,
   fifty_people_who_might_answer: ContactsOutlinedIcon,
 }
 

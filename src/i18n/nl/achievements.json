@@ -150,6 +150,18 @@
       "title": "My Personal High Note",
       "description": "Voeg een notitie toe aan een nummer op een setlist."
     },
+    "judging_the_song_by_its_cover": {
+      "title": "Judging the Song by Its Cover",
+      "description": "Stel je eerste albumhoes in bij een nummer."
+    },
+    "linkin_spark": {
+      "title": "Linkin’ Spark",
+      "description": "Voeg je eerste link toe aan een nummer."
+    },
+    "now_with_actual_sound": {
+      "title": "Now With Actual Sound",
+      "description": "Voeg een mp3-bestand toe aan een nummer."
+    },
     "fifty_people_who_might_answer": {
       "title": "Fifty People Who Might Answer",
       "description": "Heb meer dan 50 contacten."

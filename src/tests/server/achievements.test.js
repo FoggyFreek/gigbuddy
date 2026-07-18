@@ -131,6 +131,14 @@ async function addPersonalSetlistNote(tenantId, userId) {
   )
 }
 
+async function insertSong(tenantId, title, coverPath = null) {
+  const { rows } = await pool.query(
+    `INSERT INTO songs (tenant_id, title, cover_image_path) VALUES ($1, $2, $3) RETURNING id`,
+    [tenantId, title, coverPath],
+  )
+  return rows[0].id
+}
+
 // ============================================================
 
 describe('GET /api/achievements', () => {
@@ -311,6 +319,34 @@ describe('GET /api/achievements', () => {
     expect(rows[0].url).toBe('/achievements')
   })
 
+  it('unlocks the song cover, link and recording achievements only for the owning tenant', async () => {
+    let list = await getAchievements()
+    expect(byKey(list, 'judging_the_song_by_its_cover').unlocked_at).toBeNull()
+    expect(byKey(list, 'linkin_spark').unlocked_at).toBeNull()
+    expect(byKey(list, 'now_with_actual_sound').unlocked_at).toBeNull()
+
+    const songId = await insertSong(seed.tenantA.id, 'Covered Song', 'tenants/x/song-covers/a.jpg')
+    await pool.query(
+      `INSERT INTO song_links (song_id, tenant_id, label, url) VALUES ($1, $2, 'Spotify', 'https://example.com/track')`,
+      [songId, seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO song_recordings (song_id, tenant_id, object_key, original_filename, content_type, file_size)
+       VALUES ($1, $2, 'tenants/x/song-recordings/a.mp3', 'demo.mp3', 'audio/mpeg', 1234)`,
+      [songId, seed.tenantA.id],
+    )
+
+    list = await getAchievements()
+    expect(byKey(list, 'judging_the_song_by_its_cover').unlocked_at).not.toBeNull()
+    expect(byKey(list, 'linkin_spark').unlocked_at).not.toBeNull()
+    expect(byKey(list, 'now_with_actual_sound').unlocked_at).not.toBeNull()
+
+    const listB = await getAchievements(asUserB)
+    for (const key of ['judging_the_song_by_its_cover', 'linkin_spark', 'now_with_actual_sound']) {
+      expect(byKey(listB, key).unlocked_at, key).toBeNull()
+    }
+  })
+
   it('rejects unauthenticated requests', async () => {
     const res = await request(app).get('/api/achievements')
     expect([401, 403]).toContain(res.status)
@@ -329,6 +365,18 @@ describe('achievement definitions registry', () => {
       { key: 'power_to_the_payments', title: 'Power to the Payments', cheers: 3 },
       { key: 'sync_that_chop_shop', title: 'Sync That Chop Shop', cheers: 3 },
       { key: 'my_personal_high_note', title: 'My Personal High Note', cheers: 1 },
+    ])
+  })
+
+  it('defines the song media achievements with their canonical titles and cheers', () => {
+    expect(ACHIEVEMENT_DEFINITIONS.filter((d) => [
+      'judging_the_song_by_its_cover',
+      'linkin_spark',
+      'now_with_actual_sound',
+    ].includes(d.key)).map(({ key, title, cheers }) => ({ key, title, cheers }))).toEqual([
+      { key: 'judging_the_song_by_its_cover', title: 'Judging the Song by Its Cover', cheers: 1 },
+      { key: 'linkin_spark', title: 'Linkin’ Spark', cheers: 1 },
+      { key: 'now_with_actual_sound', title: 'Now With Actual Sound', cheers: 1 },
     ])
   })
 

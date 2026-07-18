@@ -826,6 +826,9 @@ export type AchievementKey =
   | 'five_songs_and_a_prayer'
   | 'setlist_match_fire'
   | 'my_personal_high_note'
+  | 'judging_the_song_by_its_cover'
+  | 'linkin_spark'
+  | 'now_with_actual_sound'
   | 'fifty_people_who_might_answer'
 
 // GET /api/achievements row; unlocked_at is null while the goal is unmet.

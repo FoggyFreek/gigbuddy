@@ -177,7 +177,17 @@ async function repertoireFacts(db, tenantId) {
                   ON si.id = sin.setlist_item_id AND si.tenant_id = sin.tenant_id
                WHERE sin.tenant_id = $1 AND si.item_type = 'song'
                  AND BTRIM(sin.note) <> ''
-            ) AS has_personal_setlist_note`,
+            ) AS has_personal_setlist_note,
+            EXISTS (
+              SELECT 1 FROM songs
+               WHERE tenant_id = $1 AND NULLIF(BTRIM(cover_image_path), '') IS NOT NULL
+            ) AS has_song_cover,
+            EXISTS (
+              SELECT 1 FROM song_links WHERE tenant_id = $1
+            ) AS has_song_link,
+            EXISTS (
+              SELECT 1 FROM song_recordings WHERE tenant_id = $1
+            ) AS has_song_recording`,
     [tenantId],
   )
   return {
@@ -185,6 +195,9 @@ async function repertoireFacts(db, tenantId) {
       songs: rows[0].songs,
       maxSetlistSongs: rows[0].max_setlist_songs,
       hasPersonalSetlistNote: rows[0].has_personal_setlist_note,
+      hasSongCover: rows[0].has_song_cover,
+      hasSongLink: rows[0].has_song_link,
+      hasSongRecording: rows[0].has_song_recording,
     },
   }
 }

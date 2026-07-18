@@ -299,6 +299,27 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
     title: 'My Personal High Note',
     test: (f) => f.repertoire.hasPersonalSetlistNote,
   },
+  {
+    key: 'judging_the_song_by_its_cover',
+    category: 'repertoire',
+    cheers: 1,
+    title: 'Judging the Song by Its Cover',
+    test: (f) => f.repertoire.hasSongCover,
+  },
+  {
+    key: 'linkin_spark',
+    category: 'repertoire',
+    cheers: 1,
+    title: 'Linkin’ Spark',
+    test: (f) => f.repertoire.hasSongLink,
+  },
+  {
+    key: 'now_with_actual_sound',
+    category: 'repertoire',
+    cheers: 1,
+    title: 'Now With Actual Sound',
+    test: (f) => f.repertoire.hasSongRecording,
+  },
 
   // ---- network ----
   {
