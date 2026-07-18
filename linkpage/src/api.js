@@ -31,6 +31,24 @@ export function sendView(slug, { referrer, utmSource }) {
   }).catch(() => null)
 }
 
+// Outbound click beacon (conversion stats). sendBeacon survives the page
+// being torn down by the navigation the click just triggered.
+export function sendClick(slug, target, { referrer, utmSource }) {
+  const url = `/api/pages/${encodeURIComponent(slug)}/click`
+  const payload = JSON.stringify({ target, referrer, utmSource })
+  try {
+    if (navigator.sendBeacon?.(url, new Blob([payload], { type: 'application/json' }))) return
+  } catch {
+    /* fall through to fetch */
+  }
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    keepalive: true,
+  }).catch(() => null)
+}
+
 // ---------- editor ----------
 
 const SESSION_KEY = 'lp_editor_session'
@@ -59,26 +77,41 @@ export function exchangeHandoff(token) {
   return request('/api/editor/session', { method: 'POST', body: JSON.stringify({ token }) })
 }
 
-export function getEditorPage(session) {
-  return request('/api/editor/page', authed(session))
+export function listEditorPages(session) {
+  return request('/api/editor/pages', authed(session))
 }
 
-export function saveDraft(session, layout) {
-  return request('/api/editor/draft', authed(session, { method: 'PUT', body: JSON.stringify({ layout }) }))
+export function createReleasePage(session, songId, slug) {
+  return request('/api/editor/pages', authed(session, { method: 'POST', body: JSON.stringify({ songId, slug }) }))
 }
 
-export function getPreview(session) {
-  return request('/api/editor/preview', authed(session))
+export function getEditorPage(session, pageId) {
+  return request(`/api/editor/pages/${pageId}`, authed(session))
 }
 
-export function publishPage(session) {
-  return request('/api/editor/publish', authed(session, { method: 'POST' }))
+export function deleteEditorPage(session, pageId) {
+  return request(`/api/editor/pages/${pageId}`, authed(session, { method: 'DELETE' }))
 }
 
-export function refreshContent(session) {
-  return request('/api/editor/refresh-content', authed(session, { method: 'POST' }))
+export function saveDraft(session, pageId, layout) {
+  return request(
+    `/api/editor/pages/${pageId}/draft`,
+    authed(session, { method: 'PUT', body: JSON.stringify({ layout }) }),
+  )
 }
 
-export function getStats(session, days) {
-  return request(`/api/editor/stats?days=${days}`, authed(session))
+export function getPreview(session, pageId) {
+  return request(`/api/editor/pages/${pageId}/preview`, authed(session))
+}
+
+export function publishPage(session, pageId) {
+  return request(`/api/editor/pages/${pageId}/publish`, authed(session, { method: 'POST' }))
+}
+
+export function refreshContent(session, pageId) {
+  return request(`/api/editor/pages/${pageId}/refresh-content`, authed(session, { method: 'POST' }))
+}
+
+export function getStats(session, pageId, days) {
+  return request(`/api/editor/pages/${pageId}/stats?days=${days}`, authed(session))
 }

@@ -2,10 +2,10 @@
 // callers stay in control of transactions (none are needed yet — writes are
 // single-statement).
 
-export async function upsertPage(executor, slug, tenantId) {
+export async function upsertMainPage(executor, slug, tenantId) {
   const { rows } = await executor.query(
-    `INSERT INTO pages (slug, gigbuddy_tenant_id)
-     VALUES ($1, $2)
+    `INSERT INTO pages (slug, gigbuddy_tenant_id, page_type)
+     VALUES ($1, $2, 'main')
      ON CONFLICT (slug) DO UPDATE SET gigbuddy_tenant_id = EXCLUDED.gigbuddy_tenant_id
      RETURNING *`,
     [slug, tenantId],
@@ -16,6 +16,49 @@ export async function upsertPage(executor, slug, tenantId) {
 export async function getPageBySlug(executor, slug) {
   const { rows } = await executor.query('SELECT * FROM pages WHERE slug = $1', [slug])
   return rows[0] || null
+}
+
+// Tenant-scoped id lookup: a session for band A must never load band B's
+// page, so the tenant id is part of the WHERE, not an afterthought.
+export async function getPageForTenant(executor, pageId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT * FROM pages WHERE id = $1 AND gigbuddy_tenant_id = $2',
+    [pageId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function listPagesForTenant(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id, slug, page_type, release, published_at
+       FROM pages
+      WHERE gigbuddy_tenant_id = $1
+      ORDER BY (page_type = 'main') DESC, created_at ASC`,
+    [tenantId],
+  )
+  return rows
+}
+
+// Release landing page. Returns null on a slug collision (caller turns that
+// into a 409) instead of throwing.
+export async function insertReleasePage(executor, slug, tenantId, release, layout, content) {
+  const { rows } = await executor.query(
+    `INSERT INTO pages (slug, gigbuddy_tenant_id, page_type, release, draft_layout, content, content_synced_at)
+     VALUES ($1, $2, 'release', $3, $4, $5, NOW())
+     ON CONFLICT (slug) DO NOTHING
+     RETURNING *`,
+    [slug, tenantId, JSON.stringify(release), JSON.stringify(layout), JSON.stringify(content)],
+  )
+  return rows[0] || null
+}
+
+// Only release pages can be deleted — the main page is the band's anchor.
+export async function deleteReleasePage(executor, pageId, tenantId) {
+  const { rowCount } = await executor.query(
+    `DELETE FROM pages WHERE id = $1 AND gigbuddy_tenant_id = $2 AND page_type = 'release'`,
+    [pageId, tenantId],
+  )
+  return rowCount > 0
 }
 
 export async function saveDraftLayout(executor, pageId, layout) {

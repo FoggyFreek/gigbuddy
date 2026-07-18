@@ -2,6 +2,7 @@
 // payload the public page renders. Widgets referencing content that has since
 // disappeared (deleted song, archived product) are dropped silently — the
 // public page must never break because gigbuddy content moved on.
+import { detectPlatform } from './platforms.js'
 
 function resolveWidget(widget, content) {
   switch (widget.type) {
@@ -15,6 +16,19 @@ function resolveWidget(widget, content) {
         artist: song.artist,
         coverUrl: song.coverUrl,
         links: song.links,
+      }
+    }
+    case 'platforms': {
+      const song = (content.songs || []).find((s) => s.id === widget.songId)
+      if (!song || !song.links?.length) return null
+      return {
+        id: widget.id,
+        type: 'platforms',
+        title: widget.title,
+        platforms: song.links.map((link) => {
+          const platform = detectPlatform(link.url, link.label)
+          return { ...platform, url: link.url }
+        }),
       }
     }
     case 'gigs': {
@@ -49,7 +63,10 @@ function resolveWidget(widget, content) {
   }
 }
 
-export function resolvePage(content, layout) {
+// `release` is the page's stored release snapshot ({songId, title, artist})
+// for release landing pages; null for the main page. The cover comes from the
+// live content snapshot when the song still exists (fresh signed image URL).
+export function resolvePage(content, layout, release = null) {
   const sections = (layout?.sections || [])
     .map((section) => ({
       id: section.id,
@@ -57,8 +74,18 @@ export function resolvePage(content, layout) {
       widgets: section.widgets.map((w) => resolveWidget(w, content)).filter(Boolean),
     }))
     .filter((section) => section.widgets.length > 0)
+  let resolvedRelease = null
+  if (release) {
+    const song = (content.songs || []).find((s) => s.id === release.songId)
+    resolvedRelease = {
+      title: release.title,
+      artist: release.artist || content.band?.name || null,
+      coverUrl: song?.coverUrl || null,
+    }
+  }
   return {
     band: content.band || null,
+    release: resolvedRelease,
     sections,
   }
 }

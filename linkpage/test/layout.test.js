@@ -44,6 +44,12 @@ describe('validateLayout', () => {
     for (const widget of section.widgets) expect(widget.id).toBeTruthy()
   })
 
+  it('accepts platforms widgets and requires their songId', () => {
+    const ok = validateLayout({ sections: [{ widgets: [{ type: 'platforms', songId: 4, title: 'Listen' }] }] })
+    expect(ok.layout.sections[0].widgets[0]).toMatchObject({ type: 'platforms', songId: 4, title: 'Listen' })
+    expect(validateLayout({ sections: [{ widgets: [{ type: 'platforms' }] }] }).error).toBeTruthy()
+  })
+
   it('rejects unknown widget types and malformed shapes', () => {
     expect(validateLayout(null).error).toBeTruthy()
     expect(validateLayout({}).error).toBeTruthy()

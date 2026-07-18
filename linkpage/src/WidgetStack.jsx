@@ -9,6 +9,7 @@ import {
   SpotifyIcon,
   CalendarIcon,
   LINK_ICON_COMPONENTS,
+  PLATFORM_ICON_COMPONENTS,
 } from './icons.jsx'
 
 const SOCIALS = [
@@ -33,7 +34,7 @@ function formatGigDate(iso) {
   return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function BandHeader({ band }) {
+function BandHeader({ band, onLinkClick }) {
   if (!band) return null
   return (
     <header className="band-header">
@@ -53,6 +54,7 @@ function BandHeader({ band }) {
             target="_blank"
             rel="noopener noreferrer"
             aria-label={s.key}
+            onClick={() => onLinkClick(`social:${s.key}`)}
           >
             <s.Icon size={30} />
           </a>
@@ -62,12 +64,18 @@ function BandHeader({ band }) {
   )
 }
 
-function SongWidget({ widget }) {
+function SongWidget({ widget, onLinkClick }) {
   const primary = widget.links[0]
   const extras = widget.links.slice(1)
   return (
     <div className="card song-card">
-      <a className="song-main" href={primary.url} target="_blank" rel="noopener noreferrer">
+      <a
+        className="song-main"
+        href={primary.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => onLinkClick(`song:${primary.label || 'listen'}`)}
+      >
         {widget.coverUrl ? (
           <img className="song-cover" src={widget.coverUrl} alt="" />
         ) : (
@@ -81,7 +89,14 @@ function SongWidget({ widget }) {
       {extras.length > 0 && (
         <div className="song-extra-links">
           {extras.map((link, i) => (
-            <a key={i} className="pill" href={link.url} target="_blank" rel="noopener noreferrer">
+            <a
+              key={i}
+              className="pill"
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => onLinkClick(`song:${link.label || 'listen'}`)}
+            >
               {link.label || 'Listen'}
             </a>
           ))}
@@ -118,7 +133,7 @@ function GigsWidget({ widget }) {
   )
 }
 
-function MerchProduct({ product, shopUrl }) {
+function MerchProduct({ product, shopUrl, onLinkClick }) {
   const body = (
     <>
       <div className="merch-image">
@@ -130,29 +145,41 @@ function MerchProduct({ product, shopUrl }) {
     </>
   )
   return shopUrl ? (
-    <a className="merch-item" href={shopUrl} target="_blank" rel="noopener noreferrer">{body}</a>
+    <a
+      className="merch-item"
+      href={shopUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => onLinkClick('shop')}
+    >{body}</a>
   ) : (
     <div className="merch-item">{body}</div>
   )
 }
 
-function MerchWidget({ widget }) {
+function MerchWidget({ widget, onLinkClick }) {
   return (
     <div className="card merch-card">
       {widget.title && <h3 className="merch-title">{widget.title}</h3>}
       <div className="merch-scroll">
         {widget.products.map((product) => (
-          <MerchProduct key={product.id} product={product} shopUrl={widget.shopUrl} />
+          <MerchProduct key={product.id} product={product} shopUrl={widget.shopUrl} onLinkClick={onLinkClick} />
         ))}
       </div>
     </div>
   )
 }
 
-function LinkWidget({ widget }) {
+function LinkWidget({ widget, onLinkClick }) {
   const Icon = LINK_ICON_COMPONENTS[widget.icon] || LINK_ICON_COMPONENTS.globe
   return (
-    <a className="card link-card" href={widget.url} target="_blank" rel="noopener noreferrer">
+    <a
+      className="card link-card"
+      href={widget.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => onLinkClick(`link:${widget.label}`)}
+    >
       {widget.imageUrl ? (
         <img className="link-thumb" src={widget.imageUrl} alt="" />
       ) : (
@@ -166,18 +193,80 @@ function LinkWidget({ widget }) {
   )
 }
 
-const WIDGETS = { song: SongWidget, gigs: GigsWidget, merch: MerchWidget, link: LinkWidget }
+// "Choose your platform" buttons for a release: one full-width button per
+// streaming link, labeled and iconed by detected platform.
+function PlatformsWidget({ widget, onLinkClick }) {
+  return (
+    <div className="platforms">
+      {widget.title && <h3 className="section-title">{widget.title}</h3>}
+      {widget.platforms.map((platform, i) => {
+        const Icon = PLATFORM_ICON_COMPONENTS[platform.id] || PLATFORM_ICON_COMPONENTS.other
+        return (
+          <a
+            key={i}
+            className="card platform-card"
+            href={platform.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => onLinkClick(`platform:${platform.id}`)}
+          >
+            <span className="card-icon"><Icon size={26} /></span>
+            <span className="card-label">{platform.label}</span>
+            <span className="platform-play">Play</span>
+          </a>
+        )
+      })}
+    </div>
+  )
+}
 
-export default function WidgetStack({ page }) {
+// Release landing page header: big artwork, release title, artist, and a
+// small link back to the band's main page.
+function ReleaseHeader({ release, band }) {
+  return (
+    <header className="release-header">
+      {release.coverUrl ? (
+        <img className="release-cover" src={release.coverUrl} alt={release.title} />
+      ) : (
+        <div className="release-cover release-cover-placeholder">♪</div>
+      )}
+      <h1 className="release-title">{release.title}</h1>
+      {release.artist && <p className="release-artist">{release.artist}</p>}
+      {band?.slug && (
+        <a className="release-band-link" href={`/${band.slug}`}>
+          More from {band.name || 'this band'} →
+        </a>
+      )}
+    </header>
+  )
+}
+
+const WIDGETS = {
+  song: SongWidget,
+  platforms: PlatformsWidget,
+  gigs: GigsWidget,
+  merch: MerchWidget,
+  link: LinkWidget,
+}
+
+const noopClick = () => {}
+
+// `onLinkClick(target)` reports outbound clicks (public page wires it to the
+// click beacon; the editor preview leaves it unset).
+export default function WidgetStack({ page, onLinkClick = noopClick }) {
   return (
     <div className="stack">
-      <BandHeader band={page.band} />
+      {page.release ? (
+        <ReleaseHeader release={page.release} band={page.band} />
+      ) : (
+        <BandHeader band={page.band} onLinkClick={onLinkClick} />
+      )}
       {page.sections.map((section) => (
         <section key={section.id} className="stack-section">
           {section.title && <h2 className="section-title">{section.title}</h2>}
           {section.widgets.map((widget) => {
             const Widget = WIDGETS[widget.type]
-            return Widget ? <Widget key={widget.id} widget={widget} /> : null
+            return Widget ? <Widget key={widget.id} widget={widget} onLinkClick={onLinkClick} /> : null
           })}
         </section>
       ))}

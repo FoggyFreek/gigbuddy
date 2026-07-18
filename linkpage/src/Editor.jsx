@@ -3,7 +3,10 @@ import {
   getStoredSession,
   storeSession,
   exchangeHandoff,
+  listEditorPages,
+  createReleasePage,
   getEditorPage,
+  deleteEditorPage,
   saveDraft,
   getPreview,
   publishPage,
@@ -28,14 +31,21 @@ function moveItem(list, index, delta) {
   return next
 }
 
+function slugify(value) {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+}
+
 // ---------- per-widget editors ----------
 
-function SongWidgetEditor({ widget, songs, onChange }) {
+function SongSelect({ value, songs, onChange }) {
   return (
-    <select
-      value={widget.songId}
-      onChange={(e) => onChange({ ...widget, songId: Number(e.target.value) })}
-    >
+    <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
       {songs.map((song) => (
         <option key={song.id} value={song.id}>
           {song.title}
@@ -43,6 +53,24 @@ function SongWidgetEditor({ widget, songs, onChange }) {
         </option>
       ))}
     </select>
+  )
+}
+
+function SongWidgetEditor({ widget, songs, onChange }) {
+  return <SongSelect value={widget.songId} songs={songs} onChange={(songId) => onChange({ ...widget, songId })} />
+}
+
+function PlatformsWidgetEditor({ widget, songs, onChange }) {
+  return (
+    <div className="widget-fields">
+      <input
+        placeholder="Title (optional)"
+        value={widget.title || ''}
+        onChange={(e) => onChange({ ...widget, title: e.target.value || null })}
+      />
+      <SongSelect value={widget.songId} songs={songs} onChange={(songId) => onChange({ ...widget, songId })} />
+      <p className="field-hint">One button per streaming link of this song, platform detected automatically.</p>
+    </div>
   )
 }
 
@@ -162,11 +190,12 @@ function LinkWidgetEditor({ widget, onChange }) {
 }
 
 function widgetSummary(widget, content) {
+  const songTitle = (songId) => (content.songs || []).find((s) => s.id === songId)?.title || 'missing song'
   switch (widget.type) {
-    case 'song': {
-      const song = (content.songs || []).find((s) => s.id === widget.songId)
-      return `Song · ${song ? song.title : 'missing song'}`
-    }
+    case 'song':
+      return `Song · ${songTitle(widget.songId)}`
+    case 'platforms':
+      return `Platform buttons · ${songTitle(widget.songId)}`
     case 'gigs':
       return `Gigs · ${widget.title || 'Upcoming Gigs'}`
     case 'merch':
@@ -182,6 +211,8 @@ function WidgetEditor({ widget, content, onChange }) {
   switch (widget.type) {
     case 'song':
       return <SongWidgetEditor widget={widget} songs={content.songs || []} onChange={onChange} />
+    case 'platforms':
+      return <PlatformsWidgetEditor widget={widget} songs={content.songs || []} onChange={onChange} />
     case 'gigs':
       return <GigsWidgetEditor widget={widget} onChange={onChange} />
     case 'merch':
@@ -193,10 +224,61 @@ function WidgetEditor({ widget, content, onChange }) {
   }
 }
 
+// ---------- new release page form ----------
+
+function NewReleaseForm({ songs, mainSlug, onCreate, onCancel }) {
+  const [songId, setSongId] = useState(songs[0]?.id ?? 0)
+  const [slugTail, setSlugTail] = useState(songs[0] ? slugify(songs[0].title) : '')
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const pickSong = (id) => {
+    setSongId(id)
+    const song = songs.find((s) => s.id === id)
+    if (song) setSlugTail(slugify(song.title))
+  }
+
+  const create = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await onCreate(songId, `${mainSlug}-${slugTail}`)
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="editor-section new-release-form">
+      <h3>New release page</h3>
+      <p className="field-hint">
+        A landing page for a song or album launch: one button per streaming platform, plus anything
+        else you add. Share its link in your campaign.
+      </p>
+      <div className="widget-fields">
+        <SongSelect value={songId} songs={songs} onChange={pickSong} />
+        <label className="inline-field slug-field">
+          <span>/{mainSlug}-</span>
+          <input value={slugTail} onChange={(e) => setSlugTail(slugify(e.target.value))} />
+        </label>
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      <div className="editor-actions">
+        <button className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="btn btn-primary" onClick={create} disabled={busy || !songId || !slugTail}>
+          Create
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ---------- editor page ----------
 
 export default function Editor() {
   const [session, setSession] = useState(null)
+  const [pages, setPages] = useState([])
   const [page, setPage] = useState(null)
   const [layout, setLayout] = useState(null)
   const [tab, setTab] = useState('build')
@@ -205,10 +287,24 @@ export default function Editor() {
   const [saveState, setSaveState] = useState('saved')
   const [publishedAt, setPublishedAt] = useState(null)
   const [openWidget, setOpenWidget] = useState(null)
+  const [creatingRelease, setCreatingRelease] = useState(false)
 
   const layoutRef = useRef(null)
   const sessionRef = useRef(null)
+  const pageIdRef = useRef(null)
   const timerRef = useRef(null)
+
+  const adoptPage = useCallback((loaded) => {
+    setPage(loaded)
+    setLayout(loaded.draftLayout)
+    layoutRef.current = loaded.draftLayout
+    pageIdRef.current = loaded.id
+    setPublishedAt(loaded.publishedAt)
+    setPreview(null)
+    setOpenWidget(null)
+    setSaveState('saved')
+    setTab('build')
+  }, [])
 
   // Enter the editor: exchange a fresh handoff token from the URL fragment,
   // or resume the stored session.
@@ -218,15 +314,13 @@ export default function Editor() {
     const boot = async () => {
       try {
         if (gbtoken) {
-          const { session: token, page: loaded } = await exchangeHandoff(gbtoken)
+          const { session: token, pages: loadedPages, page: loaded } = await exchangeHandoff(gbtoken)
           window.history.replaceState(null, '', window.location.pathname)
           storeSession(token)
           sessionRef.current = token
           setSession(token)
-          setPage(loaded)
-          setLayout(loaded.draftLayout)
-          layoutRef.current = loaded.draftLayout
-          setPublishedAt(loaded.publishedAt)
+          setPages(loadedPages)
+          adoptPage(loaded)
           return
         }
         const stored = getStoredSession()
@@ -234,25 +328,24 @@ export default function Editor() {
           setFatal('Open the editor from GigBuddy (Profile → Edit link page).')
           return
         }
-        const loaded = await getEditorPage(stored)
+        const { pages: loadedPages } = await listEditorPages(stored)
         sessionRef.current = stored
         setSession(stored)
-        setPage(loaded)
-        setLayout(loaded.draftLayout)
-        layoutRef.current = loaded.draftLayout
-        setPublishedAt(loaded.publishedAt)
+        setPages(loadedPages)
+        const main = loadedPages.find((p) => p.pageType === 'main') || loadedPages[0]
+        adoptPage(await getEditorPage(stored, main.id))
       } catch (err) {
         setFatal(err.message)
       }
     }
     boot()
-  }, [])
+  }, [adoptPage])
 
   const doSave = useCallback(async () => {
-    if (!layoutRef.current || !sessionRef.current) return
+    if (!layoutRef.current || !sessionRef.current || !pageIdRef.current) return
     setSaveState('saving')
     try {
-      await saveDraft(sessionRef.current, layoutRef.current)
+      await saveDraft(sessionRef.current, pageIdRef.current, layoutRef.current)
       setSaveState('saved')
     } catch (err) {
       setSaveState(err.status === 401 ? 'expired' : 'error')
@@ -278,6 +371,46 @@ export default function Editor() {
   if (!page || !layout) return <div className="page-status" aria-busy="true" />
 
   const content = page.content || {}
+  const mainSlug = pages.find((p) => p.pageType === 'main')?.slug || page.slug
+
+  // ---------- page switching / creation ----------
+
+  const selectPage = async (pageId) => {
+    if (pageId === page.id) return
+    await flushSave()
+    try {
+      adoptPage(await getEditorPage(sessionRef.current, pageId))
+    } catch (err) {
+      setFatal(err.message)
+    }
+  }
+
+  const createRelease = async (songId, slug) => {
+    const { page: created } = await createReleasePage(sessionRef.current, songId, slug)
+    setPages((prev) => [...prev, {
+      id: created.id,
+      slug: created.slug,
+      pageType: created.pageType,
+      release: created.release,
+      publishedAt: created.publishedAt,
+    }])
+    setCreatingRelease(false)
+    adoptPage(created)
+  }
+
+  const removeCurrentPage = async () => {
+    if (page.pageType !== 'release') return
+    if (!window.confirm(`Delete the release page /${page.slug}? Its statistics are deleted too.`)) return
+    try {
+      await deleteEditorPage(sessionRef.current, page.id)
+      const remaining = pages.filter((p) => p.id !== page.id)
+      setPages(remaining)
+      const main = remaining.find((p) => p.pageType === 'main') || remaining[0]
+      adoptPage(await getEditorPage(sessionRef.current, main.id))
+    } catch (err) {
+      setFatal(err.message)
+    }
+  }
 
   // ---------- layout operations (all immutable) ----------
 
@@ -306,13 +439,16 @@ export default function Editor() {
   }
 
   const buildWidget = (section, type) => {
+    const firstSong = (content.songs || [])[0]
     switch (type) {
-      case 'song': {
-        const song = (content.songs || [])[0]
-        if (!song) return
-        addWidget(section, { id: newId(), type: 'song', songId: song.id })
+      case 'song':
+        if (!firstSong) return
+        addWidget(section, { id: newId(), type: 'song', songId: firstSong.id })
         break
-      }
+      case 'platforms':
+        if (!firstSong) return
+        addWidget(section, { id: newId(), type: 'platforms', songId: firstSong.id, title: null })
+        break
       case 'gigs':
         addWidget(section, { id: newId(), type: 'gigs', title: 'Upcoming Gigs', limit: 10 })
         break
@@ -331,8 +467,9 @@ export default function Editor() {
   const publish = async () => {
     await flushSave()
     try {
-      const result = await publishPage(sessionRef.current)
+      const result = await publishPage(sessionRef.current, page.id)
       setPublishedAt(result.publishedAt)
+      setPages((prev) => prev.map((p) => (p.id === page.id ? { ...p, publishedAt: result.publishedAt } : p)))
     } catch (err) {
       setSaveState(err.status === 401 ? 'expired' : 'error')
     }
@@ -341,7 +478,7 @@ export default function Editor() {
   const openPreview = async () => {
     await flushSave()
     try {
-      setPreview(await getPreview(sessionRef.current))
+      setPreview(await getPreview(sessionRef.current, page.id))
       setTab('preview')
     } catch (err) {
       setSaveState(err.status === 401 ? 'expired' : 'error')
@@ -350,7 +487,7 @@ export default function Editor() {
 
   const refresh = async () => {
     try {
-      const loaded = await refreshContent(sessionRef.current)
+      const loaded = await refreshContent(sessionRef.current, page.id)
       setPage(loaded)
     } catch {
       /* keep the current snapshot */
@@ -365,21 +502,58 @@ export default function Editor() {
     expired: 'Session expired — reopen from GigBuddy',
   }[saveState]
 
+  const pageLabel = (p) =>
+    p.pageType === 'main' ? (content.band?.name || p.slug) : (p.release?.title || p.slug)
+
   return (
     <div className="editor">
       <header className="editor-header">
         <div>
-          <h1>{content.band?.name || page.slug} — link page</h1>
+          <h1>{pageLabel({ ...page, pageType: page.pageType })} — {page.pageType === 'release' ? 'release page' : 'link page'}</h1>
           <span className="save-state">{saveLabel}</span>
         </div>
         <div className="editor-actions">
           <button className="btn" onClick={refresh}>Refresh content</button>
+          {page.pageType === 'release' && (
+            <button className="btn" onClick={removeCurrentPage}>Delete page</button>
+          )}
           <button className="btn" onClick={openPreview}>Preview</button>
           <button className="btn btn-primary" onClick={publish}>
             {publishedAt ? 'Publish changes' : 'Publish'}
           </button>
         </div>
       </header>
+
+      <div className="page-switcher">
+        {pages.map((p) => (
+          <button
+            key={p.id}
+            className={`page-chip ${p.id === page.id ? 'active' : ''}`}
+            onClick={() => selectPage(p.id)}
+          >
+            {p.pageType === 'main' ? '★ ' : ''}{pageLabel(p)}
+            {!p.publishedAt && p.id !== page.id ? ' (draft)' : ''}
+          </button>
+        ))}
+        <button
+          className="page-chip page-chip-new"
+          onClick={() => setCreatingRelease(true)}
+          disabled={!content.songs?.length}
+          title={content.songs?.length ? '' : 'Add streaming links to a song in GigBuddy first'}
+        >
+          + New release page
+        </button>
+      </div>
+
+      {creatingRelease && (
+        <NewReleaseForm
+          songs={content.songs || []}
+          mainSlug={mainSlug}
+          onCreate={createRelease}
+          onCancel={() => setCreatingRelease(false)}
+        />
+      )}
+
       <nav className="editor-tabs">
         <button className={tab === 'build' ? 'active' : ''} onClick={() => setTab('build')}>Build</button>
         <button className={tab === 'preview' ? 'active' : ''} onClick={openPreview}>Preview</button>
@@ -453,6 +627,7 @@ export default function Editor() {
               <div className="add-widget-row">
                 <span>Add:</span>
                 <button onClick={() => buildWidget(section, 'song')} disabled={!content.songs?.length}>Song</button>
+                <button onClick={() => buildWidget(section, 'platforms')} disabled={!content.songs?.length}>Platform buttons</button>
                 <button onClick={() => buildWidget(section, 'gigs')}>Gigs</button>
                 <button onClick={() => buildWidget(section, 'merch')} disabled={!content.products?.length}>Merch</button>
                 <button onClick={() => buildWidget(section, 'link')}>Link</button>
@@ -472,7 +647,7 @@ export default function Editor() {
         </div>
       )}
 
-      {tab === 'stats' && <StatsPanel session={session} />}
+      {tab === 'stats' && <StatsPanel session={session} pageId={page.id} />}
     </div>
   )
 }

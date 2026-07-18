@@ -53,6 +53,13 @@ function parseWidget(raw) {
       if (!Number.isInteger(songId) || songId <= 0) return fail('Song widget needs a songId')
       return { widget: { id, type: 'song', songId } }
     }
+    // One button per streaming platform for a song's links — the core widget
+    // of a release landing page, but usable on any page.
+    case 'platforms': {
+      const songId = Number(raw.songId)
+      if (!Number.isInteger(songId) || songId <= 0) return fail('Platforms widget needs a songId')
+      return { widget: { id, type: 'platforms', songId, title: cleanString(raw.title, MAX_TITLE) } }
+    }
     case 'gigs': {
       const limit = Number.isInteger(Number(raw.limit)) && Number(raw.limit) > 0
         ? Math.min(Number(raw.limit), 50)

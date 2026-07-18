@@ -3,9 +3,16 @@
 The visitor-facing privacy notice lives at `/privacy` (`src/Privacy.jsx`);
 keep the two in sync. This document states the **hard rules** the
 implementation must uphold, and what an operator (data controller) needs to
-know. The design goal: visit statistics that are useful to bands while never
-processing more personal data than a plain web-server request already does —
-and storing none of it.
+know. The design goal: visit and conversion statistics that are useful to
+bands while never processing more personal data than a plain web-server
+request already does — and storing none of it.
+
+Two event kinds are collected, both under the same rules: **page views** and
+**outbound clicks** (which platform button / widget was clicked — the
+conversion metric for release campaigns). A click event stores only the
+sanitized target label (e.g. `platform:spotify`, `social:instagram`), never
+the destination URL and nothing visitor-derived beyond the shared dimensions
+below.
 
 ## Hard rules (enforced in code — do not weaken)
 
@@ -29,8 +36,8 @@ and storing none of it.
    cannot be linked across days and cannot be reversed; it exists only to
    deduplicate same-day repeat views.
 7. **Aggregate-only reads**: the editor API exposes counts per dimension,
-   never individual view rows.
-8. **Retention**: raw view rows are deleted after `STATS_RETENTION_DAYS`
+   never individual view/click rows.
+8. **Retention**: raw view and click rows are deleted after `STATS_RETENTION_DAYS`
    (default 396 days ≈ 13 months, aligned with common analytics guidance),
    enforced by a daily in-process purge and `npm run stats:purge`.
 9. **Kill switch**: `STATS_DISABLED=1` stops all collection without affecting

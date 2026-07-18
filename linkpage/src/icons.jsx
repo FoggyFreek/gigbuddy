@@ -92,6 +92,60 @@ export function ShopIcon({ size }) {
   )
 }
 
+export function AppleIcon({ size }) {
+  return (
+    <Svg size={size}>
+      <path d="M17.05 12.54c-.03-2.36 1.93-3.5 2.02-3.55-1.1-1.61-2.81-1.83-3.42-1.85-1.45-.15-2.84.86-3.58.86-.74 0-1.88-.84-3.09-.82-1.59.02-3.06.93-3.88 2.35-1.65 2.87-.42 7.12 1.19 9.45.79 1.14 1.73 2.42 2.96 2.37 1.19-.05 1.64-.77 3.08-.77s1.84.77 3.1.75c1.28-.02 2.09-1.16 2.87-2.31.9-1.32 1.28-2.6 1.3-2.67-.03-.01-2.5-.96-2.55-3.81zM14.7 5.6c.65-.79 1.09-1.89.97-2.99-.94.04-2.07.63-2.75 1.42-.6.7-1.13 1.81-.99 2.88 1.05.08 2.12-.53 2.77-1.31z" />
+    </Svg>
+  )
+}
+
+export function DeezerIcon({ size }) {
+  return (
+    <Svg size={size}>
+      <path d="M18.8 5.2h4.1v2.4h-4.1zM18.8 8.9h4.1v2.4h-4.1zM12.9 8.9H17v2.4h-4.1zM18.8 12.6h4.1V15h-4.1zM12.9 12.6H17V15h-4.1zM7.1 12.6h4.1V15H7.1zM18.8 16.3h4.1v2.4h-4.1zM12.9 16.3H17v2.4h-4.1zM7.1 16.3h4.1v2.4H7.1zM1.2 16.3h4.1v2.4H1.2z" />
+    </Svg>
+  )
+}
+
+export function TidalIcon({ size }) {
+  return (
+    <Svg size={size}>
+      <path d="M8 4 12 8 8 12 4 8zM16 4 20 8 16 12 12 8zM8 12l4 4 4-4 4 4-8 8-8-8z" />
+    </Svg>
+  )
+}
+
+export function SoundcloudIcon({ size }) {
+  return (
+    <Svg size={size}>
+      <path d="M1 15.5h1.2v3.1H1zM3.4 14h1.2v4.6H3.4zM5.8 13h1.2v5.6H5.8zM8.2 11.5h1.2v7.1H8.2zM10.6 10.5h1.2v8.1h-1.2zM13 8.6c.5-.3 1.1-.5 1.7-.5 1.9 0 3.5 1.5 3.7 3.4.3-.1.6-.2 1-.2 1.4 0 2.6 1.2 2.6 2.6s-1.2 2.7-2.6 2.7H13z" />
+    </Svg>
+  )
+}
+
+export function BandcampIcon({ size }) {
+  return (
+    <Svg size={size}>
+      <path d="M12 0a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm3.05 15.5H6.5l2.45-7h8.55z" />
+    </Svg>
+  )
+}
+
+// Platform button icons for release landing pages (detectPlatform ids).
+export const PLATFORM_ICON_COMPONENTS = {
+  spotify: SpotifyIcon,
+  apple: AppleIcon,
+  'youtube-music': YoutubeIcon,
+  youtube: YoutubeIcon,
+  deezer: DeezerIcon,
+  tidal: TidalIcon,
+  amazon: MusicIcon,
+  soundcloud: SoundcloudIcon,
+  bandcamp: BandcampIcon,
+  other: MusicIcon,
+}
+
 export const LINK_ICON_COMPONENTS = {
   globe: GlobeIcon,
   instagram: InstagramIcon,

@@ -13,7 +13,10 @@ export default function Privacy() {
         To show the band how their page is doing, each page view is counted with three coarse,
         anonymous facts: the <strong>device class</strong> (phone, tablet or desktop), the{' '}
         <strong>traffic source</strong> (the website that linked here, or a campaign tag — never the
-        full address you came from), and the <strong>country</strong> the visit came from.
+        full address you came from), and the <strong>country</strong> the visit came from. When you
+        follow an outgoing button, we also count <strong>which platform button was clicked</strong>{' '}
+        (for example &quot;Spotify&quot;) with the same three facts — nothing about you, only that
+        the button was used.
       </p>
       <h2>What we do not collect</h2>
       <ul>

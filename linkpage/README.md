@@ -2,8 +2,10 @@
 
 A small, standalone app that gives every GigBuddy band a public **link page** —
 a Linktree-style stack of widgets (music links, upcoming gigs, merch, social
-links) at `link.<your-domain>/<band-slug>` — plus an editor for arranging the
-widgets and privacy-first visit statistics.
+links) at `link.<your-domain>/<band-slug>` — plus **release landing pages**
+(smart-link style, one per song/album launch at `/<band-slug>-<release>`,
+with one button per streaming platform), an editor for arranging the widgets,
+and privacy-first visit + conversion statistics.
 
 This directory is deliberately **decoupled from the main repo**: it has its own
 `package.json`, its own Postgres database, its own migrations, and imports
@@ -35,15 +37,24 @@ into its own repository — nothing else needs to change.
   There are no accounts in this app — GigBuddy is the identity provider.
 - **Preview**: the editor's preview tab renders the draft through the exact
   same resolution + React components as the public page.
-- **Statistics** land in this app's own database (`page_views`) — device
-  class, traffic source, country, per day. See [PRIVACY.md](./PRIVACY.md) for
-  the hard privacy rules (no cookies, no IPs, no fingerprints, retention).
+- **Release pages**: from the editor's "New release page" button a member
+  picks a song (from GigBuddy, with its streaming links) and gets a landing
+  page with big artwork, title/artist, and one platform button per link —
+  extendable with any other widget. Slugs are always prefixed with the band's
+  own slug, so bands cannot squat each other's names.
+- **Statistics** land in this app's own database (`page_views` +
+  `page_clicks`) — views by device class, traffic source, country and day,
+  plus outbound clicks per platform/target and a conversion-by-source table
+  (views → clicks → CTR) for campaign attribution (use `?utm_source=…` in
+  campaign links). See [PRIVACY.md](./PRIVACY.md) for the hard privacy rules
+  (no cookies, no IPs, no fingerprints, retention).
 
 ### Widget types
 
 | Type | Content | Notes |
 |---|---|---|
 | `song` | a song + its streaming links | first link is the card target, extra links render as pills |
+| `platforms` | one button per streaming link of a song | platform (Spotify, Apple Music, YouTube (Music), Deezer, TIDAL, Amazon, SoundCloud, Bandcamp) detected from the URL; the core of a release page |
 | `gigs` | announced upcoming gigs | expandable card; only gigs with status `announced` are ever exported |
 | `merch` | selected products | horizontal card carousel; optional per-item image URL + badge, optional shop URL (e.g. your Shopify store) the cards link to |
 | `link` | free-form link | label, optional sublabel/thumbnail, icon |
