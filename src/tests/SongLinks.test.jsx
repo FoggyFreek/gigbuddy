@@ -32,6 +32,7 @@ describe('matchPlatform', () => {
     expect(matchPlatform('https://www.deezer.com/track/1')?.key).toBe('deezer')
     expect(matchPlatform('https://deezer.com/track/1')?.key).toBe('deezer')
     expect(matchPlatform('https://listen.tidal.com/track/1')?.key).toBe('tidal')
+    expect(matchPlatform('https://tidal.com/browse/track/1')?.key).toBe('tidal')
     expect(matchPlatform('https://www.youtube.com/watch?v=x')?.key).toBe('youtube')
     expect(matchPlatform('https://music.youtube.com/watch?v=x')?.key).toBe('youtube_music')
   })
@@ -40,7 +41,6 @@ describe('matchPlatform', () => {
     expect(matchPlatform('https://example.com/song')).toBeNull()
     expect(matchPlatform('https://spotify.example.com/track')).toBeNull()
     expect(matchPlatform('not a url')).toBeNull()
-    expect(matchPlatform('https://tidal.com/browse/track/1')).toBeNull()
   })
 })
 

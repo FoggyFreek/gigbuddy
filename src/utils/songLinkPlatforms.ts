@@ -1,6 +1,7 @@
 /**
  * Music/streaming platforms a song link can point to. `host` is the canonical
- * host (matched ignoring protocol and a leading `www.`); `prefix` is the
+ * host (matched ignoring protocol and a leading `www.`); `altHosts` lists
+ * additional hosts that also classify as this platform; `prefix` is the
  * canonical URL shown in placeholders and validation messages.
  */
 export interface SongLinkPlatform {
@@ -8,6 +9,7 @@ export interface SongLinkPlatform {
   name: string
   prefix: string
   host: string
+  altHosts?: readonly string[]
 }
 
 export const SONG_LINK_PLATFORMS: readonly SongLinkPlatform[] = [
@@ -15,7 +17,7 @@ export const SONG_LINK_PLATFORMS: readonly SongLinkPlatform[] = [
   { key: 'soundcloud', name: 'SoundCloud', prefix: 'https://soundcloud.com/', host: 'soundcloud.com' },
   { key: 'apple_music', name: 'Apple Music', prefix: 'https://music.apple.com/', host: 'music.apple.com' },
   { key: 'deezer', name: 'Deezer', prefix: 'https://www.deezer.com/', host: 'deezer.com' },
-  { key: 'tidal', name: 'Tidal', prefix: 'https://listen.tidal.com/', host: 'listen.tidal.com' },
+  { key: 'tidal', name: 'Tidal', prefix: 'https://listen.tidal.com/', host: 'listen.tidal.com', altHosts: ['tidal.com'] },
   { key: 'youtube', name: 'YouTube', prefix: 'https://www.youtube.com/', host: 'youtube.com' },
   { key: 'youtube_music', name: 'YouTube Music', prefix: 'https://music.youtube.com/', host: 'music.youtube.com' },
 ]
@@ -35,7 +37,8 @@ function normalizeUrl(url: string): string | null {
 export function urlMatchesPlatform(platform: SongLinkPlatform, url: string): boolean {
   const rest = normalizeUrl(url)
   if (rest === null) return false
-  return rest === platform.host || rest.startsWith(`${platform.host}/`)
+  const hosts = [platform.host, ...(platform.altHosts ?? [])]
+  return hosts.some((host) => rest === host || rest.startsWith(`${host}/`))
 }
 
 /** Classify a URL to one of the known platforms, or null for freeform "other". */
