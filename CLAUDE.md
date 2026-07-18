@@ -83,6 +83,8 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 
 **Domain navigation convention**: for any resource `foo`, look for `server/routes/foo.js` → `server/services/fooService.js` → `server/repositories/fooRepository.js` → `server/validators/fooValidators.js` → `src/api/foo.ts` → its page/components. Domains: planning (gigs, rehearsals, band events, availability, tasks), people/CRM (contacts, venues, band members, invites, tenants), music (songs, setlists, chordpro), finance (accounts, invoices, purchases, journal, ledger, reimbursements, VAT returns, reports), merch (+ Shopify import), promotion (Bandsintown, public calendars, share), admin, achievements, tutorials.
 
+**Decoupled link-page app**: `linkpage/` is a standalone app (own package.json, own Postgres DB, own vitest suite — excluded from root lint/tests) serving public band link pages. It talks to gigbuddy only over HTTP (`server/routes/publicLinkpage.js` export + signed image proxy, `server/routes/linkpage.js` editor handoff, shared secret `LINKPAGE_SECRET`). See `linkpage/README.md` for the contract and `linkpage/PRIVACY.md` for its analytics privacy rules.
+
 ## Multi-tenant isolation — the core invariant
 
 Multiple bands (tenants) share one instance with strict data isolation. This is the most important thing to preserve.

@@ -5,6 +5,10 @@
     "links": "Links",
     "financials": "Financiëel"
   },
+  "linkpage": {
+    "edit": "Linkpagina bewerken",
+    "error": "Kon de linkpagina-editor niet openen"
+  },
   "crop": {
     "logo": "Bandlogo bijsnijden",
     "logoDark": "Donker logo bijsnijden",
