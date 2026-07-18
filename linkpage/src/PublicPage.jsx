@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getPublicPage, sendView, sendClick } from './api.js'
 import WidgetStack from './WidgetStack.jsx'
+import ShareButton from './ShareButton.jsx'
 
 function utmSourceFromLocation() {
   return new URLSearchParams(window.location.search).get('utm_source')
@@ -48,8 +49,17 @@ export default function PublicPage({ slug }) {
   }
   if (status === 'error') return <div className="page-status">Something went wrong — try again later.</div>
 
+  const shareTitle = page.release?.title
+    ? `${page.release.title} — ${page.release.artist || ''}`.trim().replace(/—$/, '').trim()
+    : page.band?.name || 'Band links'
+
   return (
     <div className="public-page">
+      <ShareButton
+        url={`${window.location.origin}/${slug}`}
+        title={shareTitle}
+        onShare={(channel) => onLinkClick(`share:${channel}`)}
+      />
       <WidgetStack page={page} onLinkClick={onLinkClick} />
       <footer className="page-footer">
         <span>Anonymous, cookieless visit statistics only.</span>

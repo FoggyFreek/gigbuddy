@@ -14,6 +14,7 @@ import {
 } from './api.js'
 import WidgetStack from './WidgetStack.jsx'
 import StatsPanel from './StatsPanel.jsx'
+import ShareButton from './ShareButton.jsx'
 import { LINK_ICON_COMPONENTS } from './icons.jsx'
 
 const ICON_OPTIONS = Object.keys(LINK_ICON_COMPONENTS)
@@ -513,6 +514,13 @@ export default function Editor() {
           <span className="save-state">{saveLabel}</span>
         </div>
         <div className="editor-actions">
+          {publishedAt && (
+            <ShareButton
+              variant="inline"
+              url={page.publicUrl}
+              title={page.pageType === 'release' ? page.release?.title || page.slug : content.band?.name || page.slug}
+            />
+          )}
           <button className="btn" onClick={refresh}>Refresh content</button>
           {page.pageType === 'release' && (
             <button className="btn" onClick={removeCurrentPage}>Delete page</button>
