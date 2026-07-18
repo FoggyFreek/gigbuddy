@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -16,7 +16,10 @@ import type { Id } from '../types/entities.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import JournalEntryRow from '../components/journal/JournalEntryRow.tsx'
 import JournalApproveErrorDialog from '../components/journal/JournalApproveErrorDialog.tsx'
+import JournalEffectsOverlay from '../components/journal/JournalEffectsOverlay.tsx'
 import { useJournalListState } from '../components/journal/useJournalListState.ts'
+import { computeJournalEffects } from '../utils/journalEffects.ts'
+import type { JournalForm } from '../components/journal/journalFormHelpers.ts'
 
 export default function JournalPage() {
   const { t } = useTranslation(['journal', 'common'])
@@ -28,15 +31,25 @@ export default function JournalPage() {
   }, [setWideContent, compact])
 
   const {
-    journals, accounts, loading, error,
+    journals, accounts, accountingSettings, loading, error,
     approvalErrors, clearApprovalErrors,
-    selected, draftIds,
-    registerFlush, reportSaveStatus, saveStatus,
+    selected, draftIds, liveForms,
+    registerFlush, reportForm, reportSaveStatus, saveStatus,
     toggleSelect, selectAll,
     addEntry, approveAll, approveSelected, deleteSelected,
   } = useJournalListState()
 
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // Ledger-effect preview of the selected entries only (live form state, so it
+  // tracks unsaved edits); nothing selected → no overlay.
+  const effects = useMemo(() => {
+    const forms = [...selected]
+      .map((id) => liveForms.get(id))
+      .filter((f): f is JournalForm => Boolean(f))
+    return computeJournalEffects(forms, accounts, accountingSettings)
+  }, [selected, liveForms, accounts, accountingSettings])
+  const showEffects = effects.debit.length > 0 || effects.credit.length > 0
 
   // The journal is a wide, multi-column editing grid that doesn't fit a phone.
   // On compact layouts we don't render the editor at all — just a heading, the
@@ -72,7 +85,7 @@ export default function JournalPage() {
   const someSelected = hasSelection && !allSelected
 
   return (
-    <Box>
+    <Box sx={{ pb: showEffects ? 14 : 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, flexGrow: 1 }}>{t($ => $.title)}</Typography>
       </Box>
@@ -142,8 +155,11 @@ export default function JournalPage() {
           onToggleSelect={toggleSelect}
           registerFlush={registerFlush as (id: Id, fn: (() => void) | null) => void}
           onSaveStatus={reportSaveStatus}
+          onFormChange={reportForm}
         />
       ))}
+
+      {showEffects && <JournalEffectsOverlay effects={effects} />}
 
       <JournalApproveErrorDialog
         errors={approvalErrors}

@@ -9,7 +9,6 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Snackbar from '@mui/material/Snackbar'
 import Tooltip from '@mui/material/Tooltip'
-import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
 import LibraryMusicIcon from '@mui/icons-material/LibraryMusic'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import SongImportDialog from './SongImportDialog.tsx'
@@ -93,7 +92,7 @@ export default function SongImportMenu({ onImported, onSongCreated }: Readonly<S
       <Tooltip title={t($ => $.import.menuTooltip)}>
         <span>
           <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} disabled={busy} aria-label={t($ => $.import.menuTooltip)}>
-            {busy ? <CircularProgress size={20} color="inherit" /> : <FileUploadOutlinedIcon />}
+            {busy ? <CircularProgress size={20} color="inherit" /> : <UploadFileIcon />}
           </IconButton>
         </span>
       </Tooltip>

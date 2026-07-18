@@ -183,6 +183,61 @@ describe('POST /api/songs/:id/recordings', () => {
   })
 })
 
+describe('song cover image', () => {
+  // A real decodable PNG (validateAndReencodeImage decodes before the tenant
+  // check, so the isolation test needs valid pixels to get past it).
+  let PNG_1PX
+  beforeAll(async () => {
+    const sharp = (await import('sharp')).default
+    PNG_1PX = await sharp({
+      create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } },
+    }).png().toBuffer()
+  })
+
+  it('rejects a non-image mime type (400)', async () => {
+    const song = await createSong(seed.tenantA.id, 'Cover')
+    await asUserA(
+      request(app)
+        .post(`/api/songs/${song.id}/cover`)
+        .attach('cover', Buffer.from('hello'), { filename: 'x.txt', contentType: 'text/plain' }),
+    ).expect(400)
+  })
+
+  it('rejects an image mime whose bytes are not that image (400)', async () => {
+    const song = await createSong(seed.tenantA.id, 'Cover')
+    await asUserA(
+      request(app)
+        .post(`/api/songs/${song.id}/cover`)
+        .attach('cover', Buffer.from('not a png'), { filename: 'x.png', contentType: 'image/png' }),
+    ).expect(400)
+  })
+
+  it('tenant isolation — A cannot upload a cover on B song (404)', async () => {
+    const songB = await createSong(seed.tenantB.id, 'B Song')
+    await asUserA(
+      request(app)
+        .post(`/api/songs/${songB.id}/cover`)
+        .attach('cover', PNG_1PX, { filename: 'c.png', contentType: 'image/png' }),
+    ).expect(404)
+  })
+
+  it('tenant isolation — A cannot delete a cover on B song (404)', async () => {
+    const songB = await createSong(seed.tenantB.id, 'B Song')
+    await asUserA(request(app).delete(`/api/songs/${songB.id}/cover`)).expect(404)
+  })
+
+  it('delete clears the cover path (204)', async () => {
+    const song = await createSong(seed.tenantA.id, 'Cover')
+    await pool.query(
+      'UPDATE songs SET cover_image_path = $1 WHERE id = $2',
+      [`tenants/${seed.tenantA.id}/song_covers/x.webp`, song.id],
+    )
+    await asUserA(request(app).delete(`/api/songs/${song.id}/cover`)).expect(204)
+    const { rows } = await pool.query('SELECT cover_image_path FROM songs WHERE id = $1', [song.id])
+    expect(rows[0].cover_image_path).toBeNull()
+  })
+})
+
 describe('ChordPro charts', () => {
   const SAMPLE = '{title: Twinkle}\n{start_of_chorus}\n[C]Twinkle [F]little [C]star\n{end_of_chorus}\n'
 

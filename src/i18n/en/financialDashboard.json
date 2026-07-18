@@ -51,6 +51,7 @@
   },
   "vat": {
     "title": "VAT",
+    "settle": "Settle VAT",
     "balanceWithTax": "Balance with the Tax Administration",
     "forPeriod": "For period: Q{{quarter}} {{year}}",
     "dueDate": "Due date",

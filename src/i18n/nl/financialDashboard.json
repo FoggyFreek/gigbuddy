@@ -51,6 +51,7 @@
   },
   "vat": {
     "title": "Btw",
+    "settle": "BTW afrekenen",
     "balanceWithTax": "Saldo bij de Belastingdienst",
     "forPeriod": "Voor periode: K{{quarter}} {{year}}",
     "dueDate": "Vervaldatum",

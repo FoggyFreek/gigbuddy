@@ -4,6 +4,7 @@
 import pool from '../db/index.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { notFound } from './serviceErrors.js'
+import { defaultReportingGroupForType } from '../domain/accountReportingGroups.js'
 import {
   validateAccountCreate,
   validateCurrency,
@@ -22,7 +23,7 @@ import {
   updateSettings,
   findAccountByCode,
   listAccounts as listAccountRows,
-  getAccountTypeByCode,
+  getAccountClassificationByCode,
   insertAccount,
   getAccountById,
   isCodeReferencedInSettings,
@@ -192,17 +193,21 @@ export async function createAccount(db, tenantId, body = {}) {
   if (validated.error) return { error: { status: 400, body: { error: validated.error } } }
 
   const { code, name, type, parent_code, is_capitalizable } = validated
+  let reportingGroup = defaultReportingGroupForType(type)
 
   if (parent_code) {
-    const parentType = await getAccountTypeByCode(db, tenantId, parent_code)
-    if (!parentType) return { error: { status: 400, body: { error: 'parent_not_found' } } }
-    if (parentType !== type) {
+    const parent = await getAccountClassificationByCode(db, tenantId, parent_code)
+    if (!parent) return { error: { status: 400, body: { error: 'parent_not_found' } } }
+    if (parent.type !== type) {
       return { error: { status: 400, body: { error: 'type_mismatch_with_parent' } } }
     }
+    reportingGroup = parent.reporting_group
   }
 
   try {
-    const account = await insertAccount(db, tenantId, { code, name, type, parent_code, is_capitalizable })
+    const account = await insertAccount(db, tenantId, {
+      code, name, type, parent_code, reporting_group: reportingGroup, is_capitalizable,
+    })
     return { account }
   } catch (err) {
     if (err.code === '23505') return { error: { status: 409, body: { error: 'code_taken' } } }

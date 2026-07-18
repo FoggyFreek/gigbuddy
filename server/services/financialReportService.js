@@ -10,6 +10,7 @@ import {
 } from '../repositories/ledgerRepository.js'
 import { listVatReturnsInRange } from '../repositories/vatReturnRepository.js'
 import { fetchBooksClosedThrough, loadAccountingSettings, resolveEffectiveRange } from './ledgerService.js'
+import { ACCOUNT_REPORTING_GROUPS } from '../domain/accountReportingGroups.js'
 
 const PL_TYPES = new Set(['revenue', 'cost_of_goods_sold', 'expense'])
 
@@ -57,10 +58,16 @@ export async function getFinancialReport(executor, tenantId, range) {
 
   // ---- profit & loss: period movement on result accounts ----
   const plRows = activity.filter((r) => PL_TYPES.has(r.type))
-  const revenue = plRows.filter((r) => r.type === 'revenue').map(toReportRow).filter((r) => r.amount_cents !== 0)
+  const revenue = plRows
+    .filter((r) => r.reporting_group === ACCOUNT_REPORTING_GROUPS.OPERATING_REVENUE)
+    .map(toReportRow).filter((r) => r.amount_cents !== 0)
+  const otherOperatingIncome = plRows
+    .filter((r) => r.reporting_group === ACCOUNT_REPORTING_GROUPS.OTHER_OPERATING_INCOME)
+    .map(toReportRow).filter((r) => r.amount_cents !== 0)
   const cogs = plRows.filter((r) => r.type === 'cost_of_goods_sold').map(toReportRow).filter((r) => r.amount_cents !== 0)
   const expenses = plRows.filter((r) => r.type === 'expense').map(toReportRow).filter((r) => r.amount_cents !== 0)
   const revenueCents = sumCents(revenue)
+  const otherOperatingIncomeCents = sumCents(otherOperatingIncome)
   const cogsCents = sumCents(cogs)
   const expenseCents = sumCents(expenses)
 
@@ -101,14 +108,16 @@ export async function getFinancialReport(executor, tenantId, range) {
     period: { from: effectiveRange.from, to: dayBefore(effectiveRange.toExclusive) },
     profit_loss: {
       revenue,
+      other_operating_income: otherOperatingIncome,
       cost_of_goods_sold: cogs,
       expenses,
       totals: {
         revenue_cents: revenueCents,
+        other_operating_income_cents: otherOperatingIncomeCents,
         cogs_cents: cogsCents,
         gross_profit_cents: revenueCents - cogsCents,
         expense_cents: expenseCents,
-        result_cents: revenueCents - cogsCents - expenseCents,
+        result_cents: revenueCents + otherOperatingIncomeCents - cogsCents - expenseCents,
       },
     },
     balance_sheet: {

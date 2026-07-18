@@ -105,6 +105,7 @@ function wrap(ui) {
         <Routes>
           <Route path="/financial" element={ui} />
           <Route path="/invoices" element={<div>invoices-route</div>} />
+          <Route path="/vat-returns" element={<div>vat-returns-route</div>} />
         </Routes>
       </ThemeProvider>
     </MemoryRouter>,
@@ -261,7 +262,8 @@ describe('FinancialDashboardPage', () => {
     expect(screen.getByText('invoices-route')).toBeInTheDocument()
   })
 
-  it('shows the current-quarter VAT position with due-date countdown', async () => {
+  it('shows the current-quarter VAT position and links to VAT returns', async () => {
+    const user = userEvent.setup()
     wrap(<FinancialDashboardPage />)
     await screen.findByText(/result in eur/i)
 
@@ -271,6 +273,9 @@ describe('FinancialDashboardPage', () => {
     expect(within(card).getByText(/you owe tax/i)).toBeInTheDocument()
     expect(within(card).getByText(/50 days/i)).toBeInTheDocument()
     expect(within(card).getByText(/July 31, 2026/)).toBeInTheDocument()
+
+    await user.click(within(card).getByRole('link', { name: /settle vat/i }))
+    expect(screen.getByText('vat-returns-route')).toBeInTheDocument()
   })
 
   it('shows a "get money back" hint when net VAT is negative', async () => {
@@ -283,6 +288,15 @@ describe('FinancialDashboardPage', () => {
 
     const card = screen.getByText(/^vat$/i).closest('[data-card]')
     expect(within(card).getByText(/you get money back/i)).toBeInTheDocument()
+  })
+
+  it('uses the Dutch VAT settlement label', async () => {
+    await i18n.changeLanguage('nl')
+    wrap(<FinancialDashboardPage />)
+    await screen.findByText(/resultaat in eur/i)
+
+    const card = screen.getByText(/^btw$/i).closest('[data-card]')
+    expect(within(card).getByRole('link', { name: 'BTW afrekenen' })).toBeInTheDocument()
   })
 
   it('shows the merch gross profit, margin, revenue share and inventory value', async () => {

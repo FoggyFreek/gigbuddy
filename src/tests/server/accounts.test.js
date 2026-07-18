@@ -8,18 +8,20 @@ import request from 'supertest'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-let app, pool, runMigrations, truncateAll, seedTwoTenants, DEFAULT_ACCOUNTS
+let app, pool, runMigrations, truncateAll, seedTwoTenants, DEFAULT_ACCOUNTS, defaultReportingGroupForType
 let seed
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
   const seedMod = await import('../../../server/db/defaultChartOfAccounts.js')
+  const reportingMod = await import('../../../server/domain/accountReportingGroups.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   DEFAULT_ACCOUNTS = seedMod.DEFAULT_ACCOUNTS
+  defaultReportingGroupForType = reportingMod.defaultReportingGroupForType
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -69,6 +71,21 @@ describe('accounts — seeding (JS path)', () => {
     expect(codes).toContain('22000')
   })
 
+  it('seeds Other Operating Income with Grants & Subsidies as its subaccount', async () => {
+    const { rows } = await pool.query(
+      `SELECT code, name, type, parent_code, reporting_group
+         FROM chart_of_accounts
+        WHERE tenant_id = $1 AND code IN ('70000', '71000')
+        ORDER BY code`,
+      [seed.tenantA.id],
+    )
+
+    expect(rows).toEqual([
+      { code: '70000', name: 'Other Operating Income', type: 'revenue', parent_code: null, reporting_group: 'other_operating_income' },
+      { code: '71000', name: 'Grants & Subsidies', type: 'revenue', parent_code: '70000', reporting_group: 'other_operating_income' },
+    ])
+  })
+
   it('seeded tenants have the default settings row with expected defaults', async () => {
     const { rows } = await pool.query(
       'SELECT * FROM tenant_accounting_settings WHERE tenant_id = $1',
@@ -107,6 +124,10 @@ describe('accounts — migration backfill parity', () => {
     const { rows: [bare] } = await pool.query(
       `INSERT INTO tenants (slug, band_name) VALUES ('bare', 'Bare Band') RETURNING id`,
     )
+    // The current test schema already has migration 123's constraint. Remove
+    // it while replaying the older backfills, then 123 restores it after it has
+    // populated reporting_group for those legacy-style rows.
+    await pool.query('ALTER TABLE chart_of_accounts DROP CONSTRAINT IF EXISTS chart_of_accounts_reporting_group_check')
     const migrationSql = readFileSync(
       join(__dirname, '../../../server/db/migrations/064_chart_of_accounts.sql'),
       'utf8',
@@ -133,9 +154,22 @@ describe('accounts — migration backfill parity', () => {
       'utf8',
     )
     await pool.query(cashAccountMigrationSql)
+    // 121 adds Other Operating Income and its Grants & Subsidies subaccount.
+    const otherOperatingIncomeMigrationSql = readFileSync(
+      join(__dirname, '../../../server/db/migrations/121_other_operating_income.sql'),
+      'utf8',
+    )
+    await pool.query(otherOperatingIncomeMigrationSql)
+    // 123 separates P&L reporting placement from debit/credit account type.
+    const reportingGroupsMigrationSql = readFileSync(
+      join(__dirname, '../../../server/db/migrations/123_account_reporting_groups.sql'),
+      'utf8',
+    )
+    await pool.query(reportingGroupsMigrationSql)
 
     const { rows: accs } = await pool.query(
-      'SELECT code, name, type, parent_code, is_capitalizable FROM chart_of_accounts WHERE tenant_id = $1 ORDER BY code',
+      `SELECT code, name, type, parent_code, is_capitalizable, reporting_group
+         FROM chart_of_accounts WHERE tenant_id = $1 ORDER BY code`,
       [bare.id],
     )
     const jsCodes = DEFAULT_ACCOUNTS.map((a) => a.code).sort()
@@ -149,6 +183,7 @@ describe('accounts — migration backfill parity', () => {
       expect(row.type).toBe(acc.type)
       expect(row.parent_code).toBe(acc.parent_code ?? null)
       expect(row.is_capitalizable).toBe(Boolean(acc.capitalizable))
+      expect(row.reporting_group).toBe(acc.reporting_group ?? defaultReportingGroupForType(acc.type))
     }
 
     const { rows: [s] } = await pool.query(
@@ -254,8 +289,8 @@ describe('accounts — isolation', () => {
   it('cross-tenant DELETE by id returns 404', async () => {
     // create a leaf account under tenantB so it is deletable (no children/settings)
     const { rows: [leaf] } = await pool.query(
-      `INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_code)
-       VALUES ($1, '99001', 'B-only leaf', 'expense', '62000') RETURNING id`,
+      `INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_code, reporting_group)
+       VALUES ($1, '99001', 'B-only leaf', 'expense', '62000', 'operating_expense') RETURNING id`,
       [seed.tenantB.id],
     )
     await asUserA(request(app).delete(`/api/accounts/${leaf.id}`)).expect(404)
@@ -286,6 +321,19 @@ describe('accounts — CRUD', () => {
       .expect(201)
     expect(res.body.code).toBe('61999')
     expect(res.body.is_system).toBe(false)
+  })
+
+  it('POST inherits the reporting group from its parent', async () => {
+    const res = await asUserA(request(app).post('/api/accounts'))
+      .send({ code: '71999', name: 'Municipal grant', type: 'revenue', parent_code: '70000' })
+      .expect(201)
+
+    expect(res.body).toMatchObject({
+      code: '71999',
+      type: 'revenue',
+      parent_code: '70000',
+      reporting_group: 'other_operating_income',
+    })
   })
 
   it('POST 409 code_taken on duplicate code', async () => {

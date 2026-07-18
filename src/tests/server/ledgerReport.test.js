@@ -80,6 +80,19 @@ async function createAccruedPurchase(as = asUserA) {
   return r.body
 }
 
+async function createOtherOperatingIncome(amountCents = 25000, as = asUserA) {
+  const journal = await as(request(app).post('/api/journal')).send({
+    entry_date: `${YEAR}-02-20`,
+    description: 'Arts grant',
+    lines: [{
+      description: 'Arts grant', account_code: '71000', vat_rate: 0,
+      side: 'credit', amount_cents: amountCents, balancing_account_code: '11000',
+    }],
+  }).expect(201)
+  await as(request(app).post(`/api/journal/${journal.body.id}/approve`)).expect(200)
+  return journal.body
+}
+
 const sum = (rows) => rows.reduce((a, r) => a + r.amount_cents, 0)
 
 // ============================================================
@@ -101,6 +114,7 @@ describe('financial report', () => {
     expect(sum(profit_loss.expenses)).toBe(2066)
     expect(profit_loss.totals).toEqual({
       revenue_cents: 100000,
+      other_operating_income_cents: 0,
       cogs_cents: 0,
       gross_profit_cents: 100000,
       expense_cents: 2066,
@@ -132,6 +146,29 @@ describe('financial report', () => {
     // Trial balance always balances
     expect(trial_balance.totals.debit_cents).toBe(trial_balance.totals.credit_cents)
     expect(trial_balance.rows.length).toBeGreaterThan(0)
+  })
+
+  it('reports grants after gross profit without treating them as operating revenue', async () => {
+    await createSentInvoice() // operating revenue 100000
+    await createOtherOperatingIncome(25000)
+
+    const res = await asUserA(
+      request(app).get('/api/ledger/report').query({ mode: 'fiscal_year', year: YEAR }),
+    ).expect(200)
+
+    const { profit_loss } = res.body
+    expect(sum(profit_loss.revenue)).toBe(100000)
+    expect(profit_loss.other_operating_income).toEqual([
+      { code: '71000', name: 'Grants & Subsidies', amount_cents: 25000 },
+    ])
+    expect(profit_loss.totals).toEqual({
+      revenue_cents: 100000,
+      other_operating_income_cents: 25000,
+      cogs_cents: 0,
+      gross_profit_cents: 100000,
+      expense_cents: 0,
+      result_cents: 125000,
+    })
   })
 
   it('reports the VAT declaration status and closed period once a quarter is filed', async () => {
@@ -185,6 +222,7 @@ describe('financial report', () => {
 
   it('exports xlsx and pdf with attachment headers', async () => {
     await createSentInvoice()
+    await createOtherOperatingIncome()
 
     const xlsx = await asUserA(
       request(app).get('/api/ledger/report/export')
@@ -227,7 +265,8 @@ describe('financial report', () => {
     ).expect(200)
 
     expect(res.body.profit_loss.totals).toEqual({
-      revenue_cents: 0, cogs_cents: 0, gross_profit_cents: 0, expense_cents: 0, result_cents: 0,
+      revenue_cents: 0, other_operating_income_cents: 0,
+      cogs_cents: 0, gross_profit_cents: 0, expense_cents: 0, result_cents: 0,
     })
     expect(res.body.balance_sheet.totals.assets_cents).toBe(0)
     expect(res.body.vat).toMatchObject({ output_cents: 0, input_cents: 0, net_cents: 0, returns: [] })

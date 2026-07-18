@@ -96,6 +96,14 @@ export async function renderFinancialReportPdf({ report, tenantName, periodLabel
   if (pl.cost_of_goods_sold.length || pl.totals.cogs_cents !== 0) {
     y = accountSection(doc, y, 'Cost of goods sold', pl.cost_of_goods_sold, 'Total cost of goods sold', pl.totals.cogs_cents)
     y = accountRow(doc, y, { name: 'Gross profit', amount: fmt(pl.totals.gross_profit_cents) }, { bold: true }) + 8
+  } else if (pl.other_operating_income.length || pl.totals.other_operating_income_cents !== 0) {
+    y = accountRow(doc, y, { name: 'Gross profit', amount: fmt(pl.totals.gross_profit_cents) }, { bold: true }) + 8
+  }
+  if (pl.other_operating_income.length || pl.totals.other_operating_income_cents !== 0) {
+    y = accountSection(
+      doc, y, 'Other operating income', pl.other_operating_income,
+      'Total other operating income', pl.totals.other_operating_income_cents,
+    )
   }
   y = accountSection(doc, y, 'Expenses', pl.expenses, 'Total expenses', pl.totals.expense_cents)
   y = ensureSpace(doc, y, 24)

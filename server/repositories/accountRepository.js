@@ -169,19 +169,22 @@ export async function accountExistsOfType(executor, tenantId, code, type) {
   return rows.length > 0
 }
 
-export async function getAccountTypeByCode(executor, tenantId, code) {
+export async function getAccountClassificationByCode(executor, tenantId, code) {
   const { rows } = await executor.query(
-    'SELECT type FROM chart_of_accounts WHERE tenant_id = $1 AND code = $2',
+    'SELECT type, reporting_group FROM chart_of_accounts WHERE tenant_id = $1 AND code = $2',
     [tenantId, code],
   )
-  return rows[0]?.type ?? null
+  return rows[0] ?? null
 }
 
-export async function insertAccount(executor, tenantId, { code, name, type, parent_code, is_capitalizable = false }) {
+export async function insertAccount(executor, tenantId, {
+  code, name, type, parent_code, reporting_group, is_capitalizable = false,
+}) {
   const { rows } = await executor.query(
-    `INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_code, is_system, is_capitalizable)
-     VALUES ($1, $2, $3, $4, $5, false, $6) RETURNING *`,
-    [tenantId, code, name, type, parent_code, is_capitalizable],
+    `INSERT INTO chart_of_accounts (
+       tenant_id, code, name, type, parent_code, reporting_group, is_system, is_capitalizable
+     ) VALUES ($1, $2, $3, $4, $5, $6, false, $7) RETURNING *`,
+    [tenantId, code, name, type, parent_code, reporting_group, is_capitalizable],
   )
   return rows[0]
 }

@@ -256,6 +256,29 @@ describe('customization gates', () => {
     )
   })
 
+  it('gates the song cover upload behind customization, leaving the DELETE open', async () => {
+    await lockTenantA()
+    const { rows: [song] } = await pool.query(
+      "INSERT INTO songs (tenant_id, title) VALUES ($1, 'Cover Song') RETURNING id",
+      [seed.tenantA.id],
+    )
+    expectEntitlementDenied(
+      await asUserA(request(app).post(`/api/songs/${song.id}/cover`)),
+      'customization',
+    )
+    // Removal is data erasure and must survive losing the entitlement.
+    await asUserA(request(app).delete(`/api/songs/${song.id}/cover`)).expect(204)
+  })
+
+  it('passes the song cover gate with gold (missing file is the next error)', async () => {
+    await goldTenantA()
+    const { rows: [song] } = await pool.query(
+      "INSERT INTO songs (tenant_id, title) VALUES ($1, 'Cover Song') RETURNING id",
+      [seed.tenantA.id],
+    )
+    expect((await asUserA(request(app).post(`/api/songs/${song.id}/cover`))).status).toBe(400)
+  })
+
   it('rejects a cross-tenant gig reference on the memory tile with 404, but accepts an own gig', async () => {
     await goldTenantA()
     const { rows: [gigB] } = await pool.query(

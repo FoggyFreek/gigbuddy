@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -7,6 +7,7 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
+import Collapse from '@mui/material/Collapse'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -15,19 +16,25 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import {
   deleteSong,
+  deleteSongCover,
   deleteSongDocument,
   deleteSongRecording,
   getSong,
   searchSongTags,
   setSongTags,
   updateSong,
+  uploadSongCover,
   uploadSongDocument,
   uploadSongRecording,
 } from '../api/songs.ts'
@@ -36,10 +43,13 @@ import { formatDuration, parseDuration } from '../utils/formatDuration.ts'
 import RichTextEditor from '../components/RichTextEditor.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import SongLinks from '../components/SongLinks.tsx'
+import SongCoverThumb from '../components/SongCoverThumb.tsx'
 import SongFileList from '../components/SongFileList.tsx'
 import ChordProChartsSection from '../components/chordpro/ChordProChartsSection.tsx'
 import PremiumDiamond from '../components/PremiumDiamond.tsx'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import { useEntitlements } from '../hooks/useEntitlements.ts'
+import { useToast } from '../contexts/toastContext.ts'
 import type { Song, SongTag, Id } from '../types/entities.ts'
 import type { Feature } from '../auth/entitlements.ts'
 import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
@@ -48,6 +58,8 @@ const DOCUMENT_ACCEPT = '.pdf,application/pdf'
 const DOCUMENT_MAX = 5 * 1024 * 1024
 const RECORDING_ACCEPT = '.mp3,audio/mpeg'
 const RECORDING_MAX = 20 * 1024 * 1024
+const COVER_ACCEPT = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
+const COVER_MAX = 5 * 1024 * 1024
 
 interface SongDetailOutletContext {
   insideSplitView?: boolean
@@ -66,14 +78,43 @@ interface SongForm {
 }
 
 // `premium` marks a plan-gated section: a diamond appears next to the heading
-// when the current plan lacks that feature.
-function SectionHeading({ children, premium }: Readonly<{ children: ReactNode; premium?: Feature }>) {
+// when the current plan lacks that feature. Passing `expanded`/`onToggle`
+// makes the heading a collapse toggle for its section body.
+interface SectionHeadingProps {
+  children: ReactNode
+  premium?: Feature
+  expanded?: boolean
+  onToggle?: () => void
+}
+
+function SectionHeading({ children, premium, expanded, onToggle }: Readonly<SectionHeadingProps>) {
   return (
-    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mb: 1.5 }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+    <Stack
+      direction="row"
+      spacing={0.5}
+      {...(onToggle && {
+        role: 'button',
+        tabIndex: 0,
+        'aria-expanded': expanded,
+        onClick: onToggle,
+        onKeyDown: (e: React.KeyboardEvent) => e.key === 'Enter' && onToggle(),
+      })}
+      sx={{
+        alignItems: 'center',
+        mb: 1.5,
+        ...(onToggle && { cursor: 'pointer', '&:hover': { color: 'text.secondary' } }),
+      }}
+    >
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'inherit' }}>
         {children}
       </Typography>
       {premium && <PremiumDiamond feature={premium} />}
+      {onToggle && (
+        <ExpandMoreIcon
+          fontSize="small"
+          sx={{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }}
+        />
+      )}
     </Stack>
   )
 }
@@ -94,6 +135,13 @@ export default function SongDetailPage() {
   const [loading, setLoading] = useState(true)
   const [loadingSongId, setLoadingSongId] = useState(songId)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [coverMenuAnchor, setCoverMenuAnchor] = useState<HTMLElement | null>(null)
+  const [coverBusy, setCoverBusy] = useState(false)
+  const [lyricsExpanded, setLyricsExpanded] = useState(true)
+  const coverInputRef = useRef<HTMLInputElement>(null)
+  const showToast = useToast()
+  const { has } = useEntitlements()
+  const canCustomize = has('customization')
 
   // Reset during render (not in an effect) when the song changes so the detail
   // body unmounts while the new song loads — children seeded from `initial*`
@@ -129,6 +177,9 @@ export default function SongDetailPage() {
           notes: songData.notes || '',
         })
         setTags((songData.tags || []).map((t: SongTag) => t.name || ''))
+        // Start collapsed when lyrics exist (the peek shows them); an empty
+        // editor ('<p></p>' counts as empty) opens ready for input.
+        setLyricsExpanded(!(songData.lyrics_html || '').replace(/<[^>]*>/g, '').trim())
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     searchSongTags('').then((rows) => { if (!cancelled) setTagOptions((rows as SongTag[]).map((t) => t.name || '')) }).catch(() => {})
@@ -166,6 +217,40 @@ export default function SongDetailPage() {
     outletCtx.onSongUpdate?.(songId, { tags: resolved })
   }
 
+  async function handleCoverFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > COVER_MAX) {
+      showToast?.(t($ => $.files.sizeLimit, { size: '5 MB' }))
+      return
+    }
+    setCoverBusy(true)
+    try {
+      const result = await uploadSongCover(songId, file)
+      setSong((prev) => (prev ? { ...prev, cover_image_path: result.cover_image_path } : prev))
+      outletCtx.onSongUpdate?.(songId, { cover_image_path: result.cover_image_path })
+    } catch {
+      showToast?.(t($ => $.cover.uploadFailed))
+    } finally {
+      setCoverBusy(false)
+    }
+  }
+
+  async function handleCoverRemove() {
+    setCoverMenuAnchor(null)
+    setCoverBusy(true)
+    try {
+      await deleteSongCover(songId)
+      setSong((prev) => (prev ? { ...prev, cover_image_path: null } : prev))
+      outletCtx.onSongUpdate?.(songId, { cover_image_path: null })
+    } catch {
+      showToast?.(t($ => $.cover.removeFailed))
+    } finally {
+      setCoverBusy(false)
+    }
+  }
+
   async function handleDelete() {
     setConfirmingDelete(false)
     await deleteSong(songId)
@@ -188,6 +273,38 @@ export default function SongDetailPage() {
             <ArrowBackIcon />
           </IconButton>
         )}
+        <Box sx={{ position: 'relative', flexShrink: 0 }}>
+          <SongCoverThumb path={song?.cover_image_path} size={40} alt={heading} />
+          {canWritePlanning && !canCustomize && (
+            // Locked plan: the camera becomes the usual diamond upsell badge.
+            <Box sx={{ position: 'absolute', bottom: -16, right: -16 }}>
+              <PremiumDiamond feature="customization" />
+            </Box>
+          )}
+          {canWritePlanning && canCustomize && (
+            <IconButton
+              size="small"
+              disabled={coverBusy}
+              onClick={(e) => {
+                if (song?.cover_image_path) setCoverMenuAnchor(e.currentTarget)
+                else coverInputRef.current?.click()
+              }}
+              aria-label={t($ => $.cover.changeAria)}
+              sx={{
+                position: 'absolute',
+                bottom: -10,
+                right: -10,
+                p: 0.375,
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                '&:hover': { bgcolor: 'background.paper' },
+              }}
+            >
+              <PhotoCameraIcon sx={{ fontSize: 14 }} />
+            </IconButton>
+          )}
+        </Box>
         <Typography variant="h5" sx={{ fontWeight: 600 }}>{heading}</Typography>
         {insideSplitView && (
           <>
@@ -280,15 +397,36 @@ export default function SongDetailPage() {
           </Grid>
 
           <Divider sx={{ my: 3 }} />
-          <SectionHeading>{t($ => $.sections.lyrics)}</SectionHeading>
-          <RichTextEditor
-            initialHtml={song.lyrics_html || ''}
-            onChange={(html) => {
-              if (canWritePlanning) schedule({ lyrics_html: html } as Partial<Song>)
-            }}
-            minHeight={200}
-            readOnly={!canWritePlanning}
-          />
+          <SectionHeading expanded={lyricsExpanded} onToggle={() => setLyricsExpanded((prev) => !prev)}>
+            {t($ => $.sections.lyrics)}
+          </SectionHeading>
+          {/* Collapsed, the top 100px stays visible as a read-only peek (toolbar
+              hidden via readOnly) so it's obvious whether lyrics exist. */}
+          <Box sx={{ position: 'relative' }}>
+            <Collapse in={lyricsExpanded} collapsedSize={100}>
+              <RichTextEditor
+                initialHtml={song.lyrics_html || ''}
+                onChange={(html) => {
+                  if (canWritePlanning) schedule({ lyrics_html: html } as Partial<Song>)
+                }}
+                minHeight={200}
+                readOnly={!canWritePlanning || !lyricsExpanded}
+              />
+            </Collapse>
+            {!lyricsExpanded && (
+              <Box
+                aria-hidden
+                onClick={() => setLyricsExpanded(true)}
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  cursor: 'pointer',
+                  background: (theme) =>
+                    `linear-gradient(to bottom, transparent 30%, ${theme.palette.background.default})`,
+                }}
+              />
+            )}
+          </Box>
 
           <Divider sx={{ my: 3 }} />
           <SectionHeading>{t($ => $.sections.links)}</SectionHeading>
@@ -358,6 +496,24 @@ export default function SongDetailPage() {
           </Button>
         </Box>
       )}
+
+      <input
+        ref={coverInputRef}
+        type="file"
+        accept={COVER_ACCEPT}
+        hidden
+        onChange={handleCoverFileChange}
+      />
+      <Menu
+        anchorEl={coverMenuAnchor}
+        open={!!coverMenuAnchor}
+        onClose={() => setCoverMenuAnchor(null)}
+      >
+        <MenuItem onClick={() => { setCoverMenuAnchor(null); coverInputRef.current?.click() }}>
+          {t($ => $.cover.change)}
+        </MenuItem>
+        <MenuItem onClick={handleCoverRemove}>{t($ => $.cover.remove)}</MenuItem>
+      </Menu>
 
       <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
         <DialogTitle>{t($ => $.deleteDialog.title)}</DialogTitle>

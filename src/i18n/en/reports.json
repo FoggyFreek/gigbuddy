@@ -12,6 +12,8 @@
     "totalRevenue": "Total revenue",
     "costOfGoodsSold": "Cost of goods sold",
     "grossProfit": "Gross profit",
+    "otherOperatingIncome": "Other operating income",
+    "totalOtherOperatingIncome": "Total other operating income",
     "expenses": "Expenses",
     "totalExpenses": "Total expenses",
     "result": "Result"

@@ -85,16 +85,46 @@ export async function updateSongFields(executor, tenantId, songId, fields, value
   return rows[0] || null
 }
 
-// Object keys of all files attached to a song (documents + recordings), gathered
-// before the row is deleted so the objects can be removed after the DB commits.
+// Object keys of all files attached to a song (documents + recordings + cover
+// image), gathered before the row is deleted so the objects can be removed
+// after the DB commits.
 export async function collectSongObjectKeys(executor, songId, tenantId) {
   const { rows } = await executor.query(
     `SELECT object_key FROM song_documents WHERE song_id = $1 AND tenant_id = $2
      UNION ALL
-     SELECT object_key FROM song_recordings WHERE song_id = $1 AND tenant_id = $2`,
+     SELECT object_key FROM song_recordings WHERE song_id = $1 AND tenant_id = $2
+     UNION ALL
+     SELECT cover_image_path FROM songs
+      WHERE id = $1 AND tenant_id = $2 AND cover_image_path IS NOT NULL`,
     [songId, tenantId],
   )
   return rows.map((r) => r.object_key)
+}
+
+// ---------- cover image ----------
+
+export async function getSongCoverRow(executor, songId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT cover_image_path FROM songs WHERE id = $1 AND tenant_id = $2',
+    [songId, tenantId],
+  )
+  return rows[0] ?? null
+}
+
+export async function setSongCoverPath(executor, songId, tenantId, objectKey) {
+  const { rows } = await executor.query(
+    `UPDATE songs SET cover_image_path = $1, updated_at = NOW()
+     WHERE id = $2 AND tenant_id = $3 RETURNING cover_image_path`,
+    [objectKey, songId, tenantId],
+  )
+  return rows[0].cover_image_path
+}
+
+export async function clearSongCoverPath(executor, songId, tenantId) {
+  await executor.query(
+    'UPDATE songs SET cover_image_path = NULL, updated_at = NOW() WHERE id = $1 AND tenant_id = $2',
+    [songId, tenantId],
+  )
 }
 
 export async function deleteSong(executor, songId, tenantId) {
@@ -348,6 +378,22 @@ export async function deleteSongFilesForTenant(executor, tenantId) {
 
 export async function deleteSongChartsForTenant(executor, tenantId) {
   await executor.query('DELETE FROM song_chordpro_charts WHERE tenant_id = $1', [tenantId])
+}
+
+// Downgrade purge (customization): nulls every song cover path, returning the
+// previous object keys so they can be queued for storage cleanup. Callers run
+// this inside the tenant-lock transaction (like clearTenantCustomization), so
+// the read-then-clear pair cannot race another write.
+export async function clearSongCoversForTenant(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT cover_image_path FROM songs WHERE tenant_id = $1 AND cover_image_path IS NOT NULL',
+    [tenantId],
+  )
+  await executor.query(
+    'UPDATE songs SET cover_image_path = NULL WHERE tenant_id = $1 AND cover_image_path IS NOT NULL',
+    [tenantId],
+  )
+  return rows.map((r) => r.cover_image_path)
 }
 
 // ---------- import ----------

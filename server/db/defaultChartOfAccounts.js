@@ -1,6 +1,11 @@
+import {
+  ACCOUNT_REPORTING_GROUPS,
+  defaultReportingGroupForType,
+} from '../domain/accountReportingGroups.js'
+
 // Default chart of accounts for every new tenant.
 // ORDER IS SIGNIFICANT: parents must appear before their children (self-referential FK is IMMEDIATE).
-// The migration backfill SQL (064_chart_of_accounts.sql) duplicates this list — keep in sync.
+// Migration backfills duplicate this list for existing tenants — keep them in sync.
 
 export const DEFAULT_ACCOUNTS = [
   // ---- level 0: top-level (no parent) ----
@@ -8,8 +13,9 @@ export const DEFAULT_ACCOUNTS = [
   { code: '20000', name: 'Liabilities',       type: 'liability',          parent_code: null },
   { code: '30000', name: 'Equity',            type: 'equity',             parent_code: null },
   { code: '40000', name: 'Revenue',           type: 'revenue',            parent_code: null },
-  { code: '50000', name: 'Cost of Goods Sold',type: 'cost_of_goods_sold', parent_code: null },                                                                                                                                               
-  { code: '60000', name: 'Operating Expenses',type: 'expense',            parent_code: null },  
+  { code: '50000', name: 'Cost of Goods Sold',type: 'cost_of_goods_sold', parent_code: null },
+  { code: '60000', name: 'Operating Expenses',type: 'expense',            parent_code: null },
+  { code: '70000', name: 'Other Operating Income', type: 'revenue',       parent_code: null, reporting_group: ACCOUNT_REPORTING_GROUPS.OTHER_OPERATING_INCOME },
   // ---- level 1 ----
   { code: '11000', name: 'Primary Bank Account',                          type: 'asset',              parent_code: '10000' },
   { code: '11100', name: 'Cash on hand',                                  type: 'asset',              parent_code: '10000' },
@@ -35,6 +41,7 @@ export const DEFAULT_ACCOUNTS = [
   { code: '62000', name: 'Gear & Production',                             type: 'expense',            parent_code: '60000' },
   { code: '63000', name: 'Marketing & Promo',                             type: 'expense',            parent_code: '60000' },
   { code: '64000', name: 'Business & Admin',                              type: 'expense',            parent_code: '60000' },
+  { code: '71000', name: 'Grants & Subsidies',                            type: 'revenue',            parent_code: '70000', reporting_group: ACCOUNT_REPORTING_GROUPS.OTHER_OPERATING_INCOME },
 
   // ---- level 2 ----
   { code: '11200', name: 'Accounts Receivable',                           type: 'asset',              parent_code: '11000' },
@@ -83,11 +90,16 @@ const DEFAULT_SETTINGS = {
 // Safe to call multiple times: uses ON CONFLICT DO NOTHING.
 export async function seedTenantAccounting(client, tenantId) {
   for (const acc of DEFAULT_ACCOUNTS) {
+    const reportingGroup = acc.reporting_group ?? defaultReportingGroupForType(acc.type)
     await client.query(
-      `INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_code, is_system, is_capitalizable)
-       VALUES ($1, $2, $3, $4, $5, true, $6)
+      `INSERT INTO chart_of_accounts (
+         tenant_id, code, name, type, parent_code, is_system, is_capitalizable, reporting_group
+       ) VALUES ($1, $2, $3, $4, $5, true, $6, $7)
        ON CONFLICT (tenant_id, code) DO NOTHING`,
-      [tenantId, acc.code, acc.name, acc.type, acc.parent_code ?? null, acc.capitalizable ?? false],
+      [
+        tenantId, acc.code, acc.name, acc.type, acc.parent_code ?? null,
+        acc.capitalizable ?? false, reportingGroup,
+      ],
     )
   }
   await client.query(

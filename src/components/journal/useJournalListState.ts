@@ -5,23 +5,27 @@ import {
   deleteJournal,
   approveJournals,
 } from '../../api/journal.ts'
-import { listAccounts } from '../../api/accounts.ts'
-import type { Journal, Account, Id } from '../../types/entities.ts'
+import { listAccounts, getAccountingSettings } from '../../api/accounts.ts'
+import type { Journal, Account, AccountingSettings, Id } from '../../types/entities.ts'
 import type { SaveStatus } from '../../hooks/useDebouncedSave.ts'
 import { emptyLine } from './journalFormHelpers.ts'
+import type { JournalForm } from './journalFormHelpers.ts'
 
 type FlushFn = () => Promise<void>
 
 interface UseJournalListStateResult {
   journals: Journal[]
   accounts: Account[]
+  accountingSettings: AccountingSettings | null
   loading: boolean
   error: string | null
   approvalErrors: Array<{ id: Id; ok: boolean; message?: string }>
   clearApprovalErrors: () => void
   selected: Set<Id>
   draftIds: Id[]
+  liveForms: Map<Id, JournalForm>
   registerFlush: (id: Id, fn: FlushFn | null) => void
+  reportForm: (id: Id, form: JournalForm | null) => void
   reportSaveStatus: (id: Id, status: SaveStatus | null) => void
   saveStatus: SaveStatus
   toggleSelect: (id: Id, checked: boolean) => void
@@ -39,6 +43,8 @@ interface UseJournalListStateResult {
 export function useJournalListState(): UseJournalListStateResult {
   const [journals, setJournals] = useState<Journal[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [accountingSettings, setAccountingSettings] = useState<AccountingSettings | null>(null)
+  const [liveForms, setLiveForms] = useState<Map<Id, JournalForm>>(() => new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [approvalErrors, setApprovalErrors] = useState<Array<{ id: Id; ok: boolean; message?: string }>>([])
@@ -51,6 +57,18 @@ export function useJournalListState(): UseJournalListStateResult {
   const registerFlush = useCallback((id: Id, fn: FlushFn | null) => {
     if (fn) flushers.current.set(id, fn)
     else flushers.current.delete(id)
+  }, [])
+
+  // Rows report their live (possibly unsaved) form state here so the page can
+  // preview the ledger effects of the current selection as the user types.
+  const reportForm = useCallback((id: Id, form: JournalForm | null) => {
+    setLiveForms((prev) => {
+      if ((prev.get(id) ?? null) === form) return prev
+      const next = new Map(prev)
+      if (form === null) next.delete(id)
+      else next.set(id, form)
+      return next
+    })
   }, [])
 
   // Rows report their useDebouncedSave status here so the page can show one
@@ -108,6 +126,11 @@ export function useJournalListState(): UseJournalListStateResult {
     listAccounts()
       .then((all) => { if (!cancelled) setAccounts((all || []).filter((a) => a.is_active)) })
       .catch(() => { /* best-effort; leave accounts empty */ })
+    // Settings are only needed to route the VAT split in the effects preview;
+    // without them the preview keeps VAT on the line account.
+    getAccountingSettings()
+      .then((s) => { if (!cancelled) setAccountingSettings(s) })
+      .catch(() => { /* best-effort; leave settings null */ })
     return () => { cancelled = true }
   }, [])
 
@@ -169,10 +192,10 @@ export function useJournalListState(): UseJournalListStateResult {
   }, [selected, load])
 
   return {
-    journals, accounts, loading, error,
+    journals, accounts, accountingSettings, loading, error,
     approvalErrors, clearApprovalErrors,
-    selected, draftIds,
-    registerFlush, reportSaveStatus, saveStatus,
+    selected, draftIds, liveForms,
+    registerFlush, reportForm, reportSaveStatus, saveStatus,
     toggleSelect, selectAll,
     addEntry, approveAll, approveSelected, deleteSelected,
   }

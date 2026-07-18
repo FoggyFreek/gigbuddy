@@ -126,7 +126,8 @@ async function subscribeUser(slug, { activate = true } = {}) {
 // Purgeable data across every category on a tenant, plus the legacy mollie key.
 async function seedTenantData(tenantId) {
   const { rows: [song] } = await pool.query(
-    'INSERT INTO songs (tenant_id, title) VALUES ($1, $2) RETURNING id', [tenantId, 'Song'])
+    'INSERT INTO songs (tenant_id, title, cover_image_path) VALUES ($1, $2, $3) RETURNING id',
+    [tenantId, 'Song', `tenants/${tenantId}/song_covers/cover1.webp`])
   await pool.query(
     "INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source) VALUES ($1, $2, 'Chart', '{title: X}')",
     [song.id, tenantId])
@@ -318,13 +319,17 @@ describe('free-fallback (bronze) downgrade', () => {
 
     expect(await chartCount(seed.tenantA.id)).toBe(0)
     expect(await fileCount(seed.tenantA.id)).toBe(0)
-    expect(await cleanupCount(seed.tenantA.id)).toBe(4) // doc + recording + banner + memory image queued for S3
+    expect(await cleanupCount(seed.tenantA.id)).toBe(5) // doc + recording + banner + memory image + song cover queued for S3
     const { rows: [tenant] } = await pool.query(
       'SELECT accent_color, logo_path, banner_path, memory_image_path, memory_caption, mollie_api_key, bandsintown_app_id FROM tenants WHERE id = $1', [seed.tenantA.id])
     expect(tenant.accent_color).toBeNull()
     expect(tenant.banner_path).toBeNull()
     expect(tenant.memory_image_path).toBeNull()
     expect(tenant.memory_caption).toBeNull()
+    // Song covers are customization data and are purged with it.
+    const { rows: [coverSong] } = await pool.query(
+      'SELECT cover_image_path FROM songs WHERE tenant_id = $1', [seed.tenantA.id])
+    expect(coverSong.cover_image_path).toBeNull()
     // Band logos are settable on every plan and are never purged.
     expect(tenant.logo_path).toBe(`tenants/${seed.tenantA.id}/logo/logo1.png`)
     expect(tenant.mollie_api_key).toBeNull() // no payment links → key deleted
@@ -351,7 +356,7 @@ describe('free-fallback (bronze) downgrade', () => {
 
     expect(await chartCount(seed.tenantB.id)).toBe(0)
     expect(await fileCount(seed.tenantB.id)).toBe(0)
-    expect(await cleanupCount(seed.tenantB.id)).toBe(4)
+    expect(await cleanupCount(seed.tenantB.id)).toBe(5)
     const { rows: [tenant] } = await pool.query(
       'SELECT accent_color, logo_path, banner_path, memory_image_path, mollie_api_key, bandsintown_app_id FROM tenants WHERE id = $1', [seed.tenantB.id])
     expect(tenant.accent_color).toBeNull()

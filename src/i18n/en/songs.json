@@ -27,6 +27,13 @@
     "notes": "Notes"
   },
   "notesPlaceholder": "Song notes…",
+  "cover": {
+    "change": "Change cover…",
+    "remove": "Remove cover",
+    "changeAria": "Change or remove cover image",
+    "uploadFailed": "Cover upload failed.",
+    "removeFailed": "Could not remove cover."
+  },
   "addPdf": "Add PDF",
   "addMp3": "Add mp3",
   "deleteDialog": {
@@ -41,7 +48,14 @@
     "url": "URL",
     "urlPlaceholder": "https://…",
     "deleteAria": "delete link",
-    "addError": "Could not add link."
+    "addError": "Could not add link.",
+    "addLinks": "Add links",
+    "editLinks": "Edit links",
+    "finished": "Finished",
+    "other": "Other",
+    "addPlatformAria": "Add {{platform}} link",
+    "invalidUrl": "URL must start with {{prefix}}",
+    "invalidOtherUrl": "Enter a valid http(s) URL"
   },
   "files": {
     "uploading": "Uploading…",

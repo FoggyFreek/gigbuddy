@@ -54,6 +54,11 @@
     "other": "Overig"
   },
   "staleAccount": "Inactieve/onbekende rekening",
+  "effects": {
+    "totalDebit": "Totaal debet",
+    "totalCredit": "Totaal credit",
+    "difference": "Verschil"
+  },
   "approveErrors": {
     "title": "Sommige boekingen konden niet worden goedgekeurd",
     "summary_one": "{{count}} boeking is als concept blijven staan. Los de onderstaande problemen op en probeer het opnieuw.",

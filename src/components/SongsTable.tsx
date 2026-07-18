@@ -19,6 +19,7 @@ import Typography from '@mui/material/Typography'
 import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { formatDuration } from '../utils/formatDuration.ts'
+import SongCoverThumb from './SongCoverThumb.tsx'
 
 const PAGE_SIZE = 25
 
@@ -29,7 +30,8 @@ const COLUMNS = [
   { id: 'duration', labelKey: 'duration' },
   { id: 'tags',     labelKey: 'tags' },
 ] as const
-const COLUMN_COUNT = COLUMNS.length
+// +1 for the unsortable cover-image column in front of the sortable ones.
+const COLUMN_COUNT = COLUMNS.length + 1
 
 function tagNames(song: Song): string[] {
   return (song.tags || []).map((t) => t.name ?? '')
@@ -94,13 +96,16 @@ function SongCard({ song, active, onClick }: Readonly<{ song: Song; active: bool
       }}
     >
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-        <Stack direction="column" spacing={0}>
-          <Typography sx={{ variant: 'body2', fontWeight: 'medium' }} noWrap>
-            {song.title}
-          </Typography>
-          <Typography variant="subtitle2" noWrap sx={{ color: 'text.disabled' }}>
-            {song.artist}
-          </Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+          <SongCoverThumb path={song.cover_image_path} size={40} alt={song.title || ''} />
+          <Stack direction="column" spacing={0} sx={{ minWidth: 0 }}>
+            <Typography sx={{ variant: 'body2', fontWeight: 'medium' }} noWrap>
+              {song.title}
+            </Typography>
+            <Typography variant="subtitle2" noWrap sx={{ color: 'text.disabled' }}>
+              {song.artist}
+            </Typography>
+          </Stack>
         </Stack>
         <Stack direction="column" spacing={0.5} sx={{ mt: 0.5 }}>
           <Typography variant="subtitle2" color="text.secondary" noWrap>
@@ -217,6 +222,7 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }: Rea
           <Table size="small">
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 600 } }}>
+                <TableCell sx={{ width: 56 }} />
                 {COLUMNS.map((col) => (
                   <TableCell key={col.id}>
                     <TableSortLabel
@@ -256,6 +262,9 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }: Rea
                     boxShadow: s.id === selectedId ? (t) => `inset -3px 0 0 0 ${t.palette.primary.main}` : 'none',
                   }}
                 >
+                  <TableCell sx={{ width: 56, pr: 0 }}>
+                    <SongCoverThumb path={s.cover_image_path} size={40} alt={s.title || ''} />
+                  </TableCell>
                   <TableCell>
                     <Typography sx={{ variant: 'body2', fontWeight: 'medium' }} noWrap>
                       {s.title}

@@ -39,6 +39,7 @@ export const IMAGE_PROCESSING_PRESETS = Object.freeze({
   sharePhoto: Object.freeze({ maxDimension: 1200, quality: 82 }),
   invoiceLogo: Object.freeze({ maxDimension: 800, quality: 90 }),
   purchaseReceipt: Object.freeze({ maxDimension: 2000, quality: 85 }),
+  songCover: Object.freeze({ maxDimension: 320, quality: 82, square: true, format: 'webp' }),
 })
 
 // Object-key extension for a validated/re-encoded image. Derive it from the
@@ -52,6 +53,10 @@ export function extensionForImageMime(mimetype) {
  * Validates uploaded image content via magic bytes, then re-encodes with sharp.
  * Re-encoding strips EXIF/metadata and confirms the data is a decodable image.
  * An optional asset preset caps dimensions and selects lossy-image quality.
+ * `square: true` center-crops to a maxDimension × maxDimension square (inputs
+ * already smaller than the target keep their original size — display code
+ * square-crops those via CSS). `format: 'webp'` forces WebP output regardless
+ * of the input type; the returned mimetype reflects what was actually encoded.
  * Returns { buffer, size, mimetype } ready for storage.
  * Throws with .status = 400 on invalid input.
  */
@@ -79,24 +84,24 @@ export async function validateAndReencodeImage(buffer, mimetype, options = {}) {
       img = img.resize({
         width: options.maxDimension,
         height: options.maxDimension,
-        fit: 'inside',
+        fit: options.square ? 'cover' : 'inside',
         withoutEnlargement: true,
       })
     }
 
     const quality = options.quality ?? 85
-    if (mimetype === 'image/jpeg') {
+    const outputMime = options.format === 'webp' ? 'image/webp' : mimetype
+    if (outputMime === 'image/jpeg') {
       output = await img.jpeg({ quality, mozjpeg: true }).toBuffer()
-    } else if (mimetype === 'image/png') {
+    } else if (outputMime === 'image/png') {
       output = await img.png({ compressionLevel: 9, effort: 10 }).toBuffer()
     } else {
       output = await img.webp({ quality, effort: 6 }).toBuffer()
     }
+    return { buffer: output, size: output.length, mimetype: outputMime }
   } catch {
     const err = new Error('Invalid or corrupt image')
     err.status = 400
     throw err
   }
-
-  return { buffer: output, size: output.length, mimetype }
 }

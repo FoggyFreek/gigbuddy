@@ -27,6 +27,13 @@
     "notes": "Notities"
   },
   "notesPlaceholder": "Songnotities…",
+  "cover": {
+    "change": "Hoes wijzigen…",
+    "remove": "Hoes verwijderen",
+    "changeAria": "Hoesafbeelding wijzigen of verwijderen",
+    "uploadFailed": "Uploaden van hoes mislukt.",
+    "removeFailed": "Hoes verwijderen mislukt."
+  },
   "addPdf": "Pdf toevoegen",
   "addMp3": "Mp3 toevoegen",
   "deleteDialog": {
@@ -41,7 +48,14 @@
     "url": "URL",
     "urlPlaceholder": "https://…",
     "deleteAria": "link verwijderen",
-    "addError": "Kan link niet toevoegen."
+    "addError": "Kan link niet toevoegen.",
+    "addLinks": "Links toevoegen",
+    "editLinks": "Links bewerken",
+    "finished": "Klaar",
+    "other": "Overig",
+    "addPlatformAria": "{{platform}}-link toevoegen",
+    "invalidUrl": "URL moet beginnen met {{prefix}}",
+    "invalidOtherUrl": "Voer een geldige http(s)-URL in"
   },
   "files": {
     "uploading": "Uploaden…",

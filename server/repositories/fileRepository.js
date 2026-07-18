@@ -19,6 +19,8 @@ export async function objectKeyBelongsToTenant(executor, tenantId, objectKey) {
      UNION ALL
      SELECT 1 FROM invoices WHERE tenant_id = $1 AND custom_logo_path = $2
      UNION ALL
+     SELECT 1 FROM songs WHERE tenant_id = $1 AND cover_image_path = $2
+     UNION ALL
      SELECT 1 FROM song_documents WHERE tenant_id = $1 AND object_key = $2
      UNION ALL
      SELECT 1 FROM song_recordings WHERE tenant_id = $1 AND object_key = $2

@@ -42,6 +42,7 @@ import {
   listSongFileKeysForTenant,
   deleteSongFilesForTenant,
   deleteSongChartsForTenant,
+  clearSongCoversForTenant,
 } from '../repositories/songRepository.js'
 import {
   listInvoicesWithPaymentLink,
@@ -128,7 +129,10 @@ export async function purgeFeatureData(db, tenantId, features) {
       })
     } else if (feature === FEATURES.CUSTOMIZATION) {
       await withTenantFeatureLock(db, tenantId, async (client) => {
-        const keys = await clearTenantCustomization(client, tenantId)
+        const keys = [
+          ...(await clearTenantCustomization(client, tenantId)),
+          ...(await clearSongCoversForTenant(client, tenantId)),
+        ]
         for (const key of keys) await enqueueCleanup(client, tenantId, key, false)
       })
     } else if (feature === FEATURES.INTEGRATIONS) {

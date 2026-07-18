@@ -83,6 +83,28 @@ describe('validateAndReencodeImage — asset presets', () => {
     expect(meta.height).toBe(200)
   })
 
+  it('songCover: center-crops to a square WebP regardless of input format', async () => {
+    const input = await makeJpeg({ width: 1200, height: 800 })
+    const out = await validateAndReencodeImage(input, 'image/jpeg', IMAGE_PROCESSING_PRESETS.songCover)
+    const meta = await sharp(out.buffer).metadata()
+
+    expect(out.mimetype).toBe('image/webp')
+    expect(meta.format).toBe('webp')
+    expect(meta.width).toBe(320)
+    expect(meta.height).toBe(320)
+  })
+
+  it('songCover: converts PNG input to WebP without enlarging small images', async () => {
+    const input = await makePng({ width: 300, height: 200 })
+    const out = await validateAndReencodeImage(input, 'image/png', IMAGE_PROCESSING_PRESETS.songCover)
+    const meta = await sharp(out.buffer).metadata()
+
+    expect(out.mimetype).toBe('image/webp')
+    expect(meta.format).toBe('webp')
+    expect(meta.width).toBeLessThanOrEqual(300)
+    expect(meta.height).toBeLessThanOrEqual(200)
+  })
+
   it('reduces a representative high-quality JPEG', async () => {
     const input = await solid({ width: 1200, height: 800 }).jpeg({ quality: 100 }).toBuffer()
     const out = await validateAndReencodeImage(input, 'image/jpeg', IMAGE_PROCESSING_PRESETS.sharePhoto)

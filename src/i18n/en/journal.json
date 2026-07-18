@@ -54,6 +54,11 @@
     "other": "Other"
   },
   "staleAccount": "Inactive/unknown account",
+  "effects": {
+    "totalDebit": "Total debit",
+    "totalCredit": "Total credit",
+    "difference": "Difference"
+  },
   "approveErrors": {
     "title": "Some entries could not be approved",
     "summary_one": "{{count}} entry was left as a draft. Fix the issues below and try again.",

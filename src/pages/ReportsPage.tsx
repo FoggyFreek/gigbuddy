@@ -139,6 +139,7 @@ function ReportCard({ title, subtitle, children }: Readonly<{ title: string; sub
 
 interface PlTotals {
   revenue_cents: number
+  other_operating_income_cents: number
   cogs_cents: number
   gross_profit_cents: number
   expense_cents: number
@@ -147,6 +148,7 @@ interface PlTotals {
 
 interface ProfitLossData {
   revenue: AccountRow[]
+  other_operating_income: AccountRow[]
   cost_of_goods_sold: AccountRow[]
   expenses: AccountRow[]
   totals: PlTotals
@@ -156,6 +158,8 @@ function ProfitLossCard({ profitLoss }: Readonly<{ profitLoss: ProfitLossData }>
   const { t } = useTranslation('reports')
   const { totals } = profitLoss
   const showCogs = profitLoss.cost_of_goods_sold.length > 0 || totals.cogs_cents !== 0
+  const showOtherOperatingIncome = profitLoss.other_operating_income.length > 0
+    || totals.other_operating_income_cents !== 0
   return (
     <ReportCard title={t($ => $.profitLoss.title)} subtitle={t($ => $.profitLoss.subtitle)}>
       <Table size="small">
@@ -172,6 +176,22 @@ function ProfitLossCard({ profitLoss }: Readonly<{ profitLoss: ProfitLossData }>
               rows={profitLoss.cost_of_goods_sold}
               totalLabel={t($ => $.profitLoss.grossProfit)}
               totalCents={totals.gross_profit_cents}
+            />
+          )}
+          {!showCogs && showOtherOperatingIncome && (
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>{t($ => $.profitLoss.grossProfit)}</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                <Money cents={totals.gross_profit_cents} />
+              </TableCell>
+            </TableRow>
+          )}
+          {showOtherOperatingIncome && (
+            <AccountSection
+              label={t($ => $.profitLoss.otherOperatingIncome)}
+              rows={profitLoss.other_operating_income}
+              totalLabel={t($ => $.profitLoss.totalOtherOperatingIncome)}
+              totalCents={totals.other_operating_income_cents}
             />
           )}
           <AccountSection

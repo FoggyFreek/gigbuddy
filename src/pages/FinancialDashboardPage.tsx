@@ -673,7 +673,14 @@ function VatCard({ vat }: Readonly<VatCardProps>) {
   const breakdownValues = { output: formatEur(vat.output_cents), input: formatEur(vat.input_cents) }
 
   return (
-    <DashboardCard title={t($ => $.vat.title)}>
+    <DashboardCard
+      title={t($ => $.vat.title)}
+      action={(
+        <Button component={RouterLink} to="/vat-returns" size="small" variant="outlined">
+          {t($ => $.vat.settle)}
+        </Button>
+      )}
+    >
       <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
         <Box sx={{ flex: 1, minWidth: 160 }}>
           <Typography variant="caption" color="text.secondary">

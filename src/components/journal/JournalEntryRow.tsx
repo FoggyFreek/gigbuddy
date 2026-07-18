@@ -22,10 +22,11 @@ interface JournalEntryRowProps {
   onToggleSelect: (id: Id, checked: boolean) => void
   registerFlush: (id: Id, fn: (() => void) | null) => void
   onSaveStatus: (id: Id, status: SaveStatus | null) => void
+  onFormChange: (id: Id, form: JournalForm | null) => void
 }
 
 export default function JournalEntryRow({
-  journal, accounts, selected, onToggleSelect, registerFlush, onSaveStatus,
+  journal, accounts, selected, onToggleSelect, registerFlush, onSaveStatus, onFormChange,
 }: Readonly<JournalEntryRowProps>) {
   const { t } = useTranslation('journal')
   const [form, setForm] = useState<JournalForm>(() => journalToForm(journal))
@@ -48,6 +49,13 @@ export default function JournalEntryRow({
     registerFlush(journal.id!, flush)
     return () => registerFlush(journal.id!, null)
   }, [journal.id, flush, registerFlush])
+
+  // Report the live form upward (including unsaved edits) so the page's effects
+  // overlay can preview what approving the selection would post.
+  useEffect(() => {
+    onFormChange(journal.id!, form)
+  }, [journal.id, form, onFormChange])
+  useEffect(() => () => onFormChange(journal.id!, null), [journal.id, onFormChange])
 
   // Report the save status upward; the page shows it in the toolbar so the
   // indicator never adds/removes height inside the entry list (no jitter).

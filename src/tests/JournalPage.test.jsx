@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
@@ -18,7 +18,13 @@ vi.mock('../api/accounts.ts', () => ({
   listAccounts: vi.fn(async () => [
     { id: 1, code: '62100', name: 'Instruments & Equipment', type: 'expense', is_active: true },
     { id: 2, code: '11000', name: 'Primary Bank Account', type: 'asset', is_active: true },
+    { id: 3, code: '15000', name: 'VAT Receivable', type: 'asset', is_active: true },
+    { id: 4, code: '41000', name: 'Gig fees', type: 'revenue', is_active: true },
   ]),
+  getAccountingSettings: vi.fn(async () => ({
+    input_vat_account_code: '15000',
+    output_vat_account_code: '24000',
+  })),
 }))
 
 import * as journalApi from '../api/journal.ts'
@@ -257,6 +263,65 @@ describe('JournalPage', () => {
     await screen.findByText('2 ledger entries')
     await user.click(screen.getByRole('checkbox', { name: /select all draft entries/i }))
     expect(await screen.findByText('2 selected')).toBeInTheDocument()
+  })
+
+  it('shows the effects overlay only for selected entries, split by debit/credit', async () => {
+    const user = userEvent.setup()
+    journalApi.listJournals.mockResolvedValue([
+      draft({ id: 1, entry_number: 5 }),
+      draft({
+        id: 2,
+        entry_number: 6,
+        lines: [{ id: 2, description: 'Fee', account_code: '41000', vat_rate: 0, side: 'credit', amount_cents: 5000, balancing_account_code: '11000', position: 0 }],
+      }),
+    ])
+    wrap(<JournalPage />)
+    await screen.findByText('2 ledger entries')
+
+    // nothing selected → no overlay
+    expect(screen.queryByTestId('journal-effects')).not.toBeInTheDocument()
+
+    // select entry J5: gross 121.00 debit on the expense account @21% VAT,
+    // balanced against the bank → net 100.00 + VAT 21.00 debit, 121.00 credit
+    await user.click(screen.getByRole('checkbox', { name: /select journal 5/i }))
+    const overlay = await screen.findByTestId('journal-effects')
+    expect(within(overlay).getByText('Instruments & Equipment')).toBeInTheDocument()
+    expect(within(overlay).getByText('€ 100,00')).toBeInTheDocument()
+    expect(within(overlay).getByText('VAT Receivable')).toBeInTheDocument()
+    expect(within(overlay).getByText('€ 21,00')).toBeInTheDocument()
+    expect(within(overlay).getByText('Primary Bank Account')).toBeInTheDocument()
+    expect(within(overlay).getAllByText('€ 121,00')).toHaveLength(3) // credit row + both totals
+    expect(within(overlay).getByText('Total debit')).toBeInTheDocument()
+    expect(within(overlay).getByText('Total credit')).toBeInTheDocument()
+    expect(within(overlay).getByText('Difference')).toBeInTheDocument()
+    expect(within(overlay).getByText('€ 0,00')).toBeInTheDocument()
+    // entry J6 is not selected, so its revenue line stays out
+    expect(within(overlay).queryByText('Gig fees')).not.toBeInTheDocument()
+
+    // selecting J6 too folds its lines in
+    await user.click(screen.getByRole('checkbox', { name: /select journal 6/i }))
+    expect(await within(overlay).findByText('Gig fees')).toBeInTheDocument()
+
+    // deselecting everything hides the overlay again
+    await user.click(screen.getByRole('checkbox', { name: /select journal 5/i }))
+    await user.click(screen.getByRole('checkbox', { name: /select journal 6/i }))
+    await waitFor(() => expect(screen.queryByTestId('journal-effects')).not.toBeInTheDocument())
+  })
+
+  it('the effects overlay tracks unsaved line edits of a selected entry', async () => {
+    const user = userEvent.setup()
+    wrap(<JournalPage />)
+    await screen.findByText('1 ledger entry')
+    await user.click(screen.getByRole('checkbox', { name: /select journal 5/i }))
+    const overlay = await screen.findByTestId('journal-effects')
+    expect(within(overlay).getByText('€ 100,00')).toBeInTheDocument()
+
+    // raise the gross debit from 121.00 to 242.00 → net doubles to 200.00
+    const debit = screen.getByPlaceholderText('Debit')
+    await user.clear(debit)
+    await user.type(debit, '242')
+    await user.tab()
+    expect(await within(overlay).findByText('€ 200,00')).toBeInTheDocument()
   })
 
   // The journal editor deliberately has no note field — notes live on the

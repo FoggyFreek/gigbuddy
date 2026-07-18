@@ -45,6 +45,14 @@ export const uploadSongRecording = (id: Id, file: File) => {
 export const deleteSongRecording = (id: Id, recId: Id) =>
   api<void>(`/${id}/recordings/${recId}`, { method: 'DELETE' })
 
+export const uploadSongCover = (id: Id, file: File) => {
+  const fd = new FormData()
+  fd.append('cover', file)
+  return requestForm<{ cover_image_path: string | null }>(`/api/songs/${id}/cover`, fd)
+}
+export const deleteSongCover = (id: Id) =>
+  api<void>(`/${id}/cover`, { method: 'DELETE' })
+
 export const createSongChart = (id: Id, body: Partial<SongChart>) =>
   api<SongChart>(`/${id}/charts`, { method: 'POST', body: JSON.stringify(body) })
 export const uploadSongChart = (id: Id, file: File) => {

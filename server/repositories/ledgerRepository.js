@@ -386,7 +386,7 @@ export async function vatAccountBalances(executor, tenantId, { asOf }) {
 // joined to the chart of accounts. Accounts without activity are absent.
 export async function accountActivity(executor, tenantId, { from, toExclusive }) {
   const { rows } = await executor.query(
-    `SELECT coa.code, coa.name, coa.type,
+    `SELECT coa.code, coa.name, coa.type, coa.reporting_group,
             COALESCE(SUM(le.debit_cents), 0)::int AS debit_cents,
             COALESCE(SUM(le.credit_cents), 0)::int AS credit_cents
        FROM ledger_entries le
@@ -398,7 +398,7 @@ export async function accountActivity(executor, tenantId, { from, toExclusive })
         AND lt.entry_date >= $2::date
         AND lt.entry_date < $3::date
         ${EXCLUDE_VOIDED_SQL}
-      GROUP BY coa.code, coa.name, coa.type
+      GROUP BY coa.code, coa.name, coa.type, coa.reporting_group
       ORDER BY coa.code`,
     [tenantId, from, toExclusive],
   )

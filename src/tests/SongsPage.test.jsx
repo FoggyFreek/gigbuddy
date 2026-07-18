@@ -20,16 +20,20 @@ vi.mock('../api/songs.ts', () => ({
   deleteSongDocument: vi.fn().mockResolvedValue({}),
   uploadSongRecording: vi.fn(),
   deleteSongRecording: vi.fn().mockResolvedValue({}),
+  uploadSongCover: vi.fn().mockResolvedValue({ cover_image_path: 'tenants/1/song_covers/new.webp' }),
+  deleteSongCover: vi.fn().mockResolvedValue(undefined),
 }))
 
 import SongsPage from '../pages/SongsPage.tsx'
 import SongDetailPage from '../pages/SongDetailPage.tsx'
 import {
   deleteSong,
+  deleteSongCover,
   getSong,
   listSongs,
   setSongTags,
   updateSong,
+  uploadSongCover,
 } from '../api/songs.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
@@ -164,10 +168,12 @@ describe('SongsPage — split-view detail', () => {
 
     await waitFor(() => expect(screen.getByDisplayValue('Creep')).toBeInTheDocument())
 
-    // Chords: diamond next to the section heading.
+    // Chords section heading + the cover camera badge both carry diamonds.
     const diamonds = screen.getAllByRole('link', { name: /premium feature/i })
-    expect(diamonds).toHaveLength(1)
-    expect(diamonds[0]).toHaveAttribute('href', '/upgrade/chordpro')
+    expect(diamonds).toHaveLength(2)
+    const hrefs = diamonds.map((d) => d.getAttribute('href'))
+    expect(hrefs).toContain('/upgrade/chordpro')
+    expect(hrefs).toContain('/upgrade/customization')
 
     // Documents/recordings: the add buttons become diamond links to the upsell.
     const addPdf = screen.getByRole('link', { name: /add pdf/i })
@@ -187,6 +193,56 @@ describe('SongsPage — split-view detail', () => {
     const addPdf = screen.getByRole('button', { name: /add pdf/i })
     expect(within(addPdf).getByTestId('AttachFileIcon')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /add mp3/i })).toBeInTheDocument()
+  })
+
+  it('shows the album placeholder when no cover is set and uploads one via the camera button', async () => {
+    const user = userEvent.setup()
+    const { container } = wrapWithRoutes({ initialEntries: ['/songs/1'] })
+
+    await waitFor(() => expect(screen.getByDisplayValue('Creep')).toBeInTheDocument())
+    expect(screen.getAllByTestId('AlbumIcon').length).toBeGreaterThan(0)
+
+    const file = new File(['x'], 'cover.png', { type: 'image/png' })
+    const input = container.querySelector('input[type="file"][accept*="webp"]')
+    await user.upload(input, file)
+
+    await waitFor(() => expect(uploadSongCover).toHaveBeenCalledWith(1, file))
+    expect(
+      container.querySelector('img[src="/api/files/tenants/1/song_covers/new.webp"]'),
+    ).not.toBeNull()
+  })
+
+  it('shows the cover in the list row and removes it via the camera menu', async () => {
+    const withCover = { ...SONG, cover_image_path: 'tenants/1/song_covers/x.webp' }
+    listSongs.mockResolvedValue([withCover])
+    getSong.mockResolvedValue(withCover)
+    const user = userEvent.setup()
+    const { container } = wrapWithRoutes({ initialEntries: ['/songs/1'] })
+
+    await waitFor(() => expect(screen.getByDisplayValue('Creep')).toBeInTheDocument())
+    expect(
+      container.querySelectorAll('img[src="/api/files/tenants/1/song_covers/x.webp"]').length,
+    ).toBeGreaterThanOrEqual(2) // list row + detail header
+
+    await user.click(screen.getByRole('button', { name: /change or remove cover image/i }))
+    await user.click(screen.getByRole('menuitem', { name: /remove cover/i }))
+
+    await waitFor(() => expect(deleteSongCover).toHaveBeenCalledWith(1))
+  })
+
+  it('falls back to the album placeholder when the plan lacks customization', async () => {
+    const withCover = { ...SONG, cover_image_path: 'tenants/1/song_covers/x.webp' }
+    listSongs.mockResolvedValue([withCover])
+    getSong.mockResolvedValue(withCover)
+    const { container } = wrapWithRoutes({
+      initialEntries: ['/songs/1'],
+      auth: { user: { ...writerAuth.user, entitlements: lockedEntitlements } },
+    })
+
+    await waitFor(() => expect(screen.getByDisplayValue('Creep')).toBeInTheDocument())
+    // Stored cover is not shown; the outlined album placeholder is.
+    expect(container.querySelector('img[src*="song_covers"]')).toBeNull()
+    expect(screen.getAllByTestId('AlbumIcon').length).toBeGreaterThan(0)
   })
 
   it('removes a song from the list after deleting it in detail', async () => {

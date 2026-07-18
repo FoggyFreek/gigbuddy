@@ -341,6 +341,8 @@ export interface Song {
   id?: Id
   title?: string
   artist?: string | null
+  /** object key of the square cover image (WebP), served via /api/files */
+  cover_image_path?: string | null
   song_key?: string | null
   tempo?: number | null
   duration_seconds?: number | null
@@ -394,6 +396,7 @@ export interface Account {
   code?: string
   name?: string
   type?: string
+  reporting_group?: 'operating_revenue' | 'other_operating_income' | 'cost_of_goods_sold' | 'operating_expense' | null
   parent_code?: string
   is_active?: boolean
   is_system?: boolean

@@ -47,8 +47,8 @@ function NewChartCard({ busy, onClick }: Readonly<{ busy: boolean; onClick: () =
           justifyContent: 'center',
           color: 'primary.main',
           opacity: busy ? 0.5 : 1,
-          transition: 'opacity 0.15s, box-shadow 0.15s',
-          '&:hover:not(:disabled)': { boxShadow: 2, opacity: 0.8 },
+          transition: 'opacity 0.15s, box-shadow 0.15s, transform 0.15s',
+          '&:hover:not(:disabled)': { boxShadow: 2, opacity: 0.8, transform: 'translateY(-2px)' },
         }}
       >
         {busy
@@ -82,8 +82,8 @@ function ChartCard({ chart, onOpen }: Readonly<ChartCardProps>) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: 'border-color 0.15s, box-shadow 0.15s',
-          '&:hover': { borderColor: 'primary.main', boxShadow: 2 },
+          transition: 'border-color 0.15s, box-shadow 0.15s, transform 0.15s',
+          '&:hover': { borderColor: 'primary.main', boxShadow: 2, transform: 'translateY(-2px)' },
         }}
       >
         <AudioFileOutlinedIcon sx={{ fontSize: 36, color: 'text.primary' }} />

@@ -26,6 +26,8 @@ import {
   createSongChart,
   patchSongChart,
   deleteSongChart,
+  replaceSongCover,
+  deleteSongCover,
   importSongs,
 } from '../services/songService.js'
 
@@ -41,6 +43,12 @@ const RECORDING_ALLOWED_TYPES = new Set(['audio/mpeg'])
 const recordingUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
+})
+
+const COVER_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const coverUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
 })
 
 // ChordPro charts are plain text. Browsers send inconsistent mime types for
@@ -166,6 +174,29 @@ router.delete('/:id/recordings/:recId', requirePermission(PERMISSIONS.PLANNING_W
   const id = requireParam(req, res, 'id'); if (id === null) return
   const recId = requireParam(req, res, 'recId'); if (recId === null) return
   const result = await deleteSongRecording(pool, req.tenantId, id, recId)
+  if (result.error) return sendError(res, result.error)
+  res.status(204).end()
+})
+
+// ---------- cover image ----------
+
+// Upload / replace the song's cover image (re-encoded server-side to WebP).
+// Gated by the customization feature; the DELETE stays open — losing the
+// entitlement must not block data erasure.
+router.post('/:id/cover', requirePermission(PERMISSIONS.PLANNING_WRITE), requireEntitlement(FEATURES.CUSTOMIZATION), coverUpload.single('cover'), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (!COVER_ALLOWED_TYPES.has(req.file.mimetype)) {
+    return res.status(400).json({ error: 'File type not allowed' })
+  }
+  const result = await replaceSongCover(pool, req.tenantId, id, req.file)
+  if (result.error) return sendError(res, result.error)
+  res.json({ cover_image_path: result.coverImagePath })
+})
+
+router.delete('/:id/cover', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await deleteSongCover(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
   res.status(204).end()
 })

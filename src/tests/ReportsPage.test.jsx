@@ -30,27 +30,32 @@ function reportFixture() {
     period: { from: '2026-01-01', to: '2026-12-31' },
     profit_loss: {
       revenue: [{ code: '41000', name: 'Gig fees', amount_cents: 100000 }],
+      other_operating_income: [{ code: '71000', name: 'Grants & Subsidies', amount_cents: 25000 }],
       cost_of_goods_sold: [],
       expenses: [{ code: '62100', name: 'Instruments & Equipment', amount_cents: 2066 }],
       totals: {
         revenue_cents: 100000,
+        other_operating_income_cents: 25000,
         cogs_cents: 0,
         gross_profit_cents: 100000,
         expense_cents: 2066,
-        result_cents: 97934,
+        result_cents: 122934,
       },
     },
     balance_sheet: {
       as_of: '2026-12-31',
-      assets: [{ code: '11200', name: 'Accounts Receivable', amount_cents: 121000 }],
+      assets: [
+        { code: '11000', name: 'Primary Bank Account', amount_cents: 25000 },
+        { code: '11200', name: 'Accounts Receivable', amount_cents: 121000 },
+      ],
       liabilities: [{ code: '24000', name: 'Sales Tax / VAT Payable', amount_cents: 21000 }],
       equity: [],
-      unallocated_result_cents: 97934,
+      unallocated_result_cents: 122934,
       totals: {
-        assets_cents: 121434,
+        assets_cents: 146434,
         liabilities_cents: 23500,
-        equity_cents: 97934,
-        liabilities_and_equity_cents: 121434,
+        equity_cents: 122934,
+        liabilities_and_equity_cents: 146434,
       },
     },
     vat: {
@@ -99,6 +104,7 @@ describe('ReportsPage', () => {
     expect(screen.getAllByText('Gig fees')).toHaveLength(2)
     expect(screen.getByText('62100')).toBeInTheDocument()
     expect(screen.getByText('Instruments & Equipment')).toBeInTheDocument()
+    expect(screen.getByText('Grants & Subsidies')).toBeInTheDocument()
     expect(screen.getAllByText('11200')).toHaveLength(2)
   })
 

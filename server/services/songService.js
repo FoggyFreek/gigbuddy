@@ -16,8 +16,14 @@ import {
   safeRemove,
   songDocumentKey,
   songRecordingKey,
+  songCoverKey,
 } from './storageService.js'
 import { verifyDocumentContent, verifyAudioContent } from '../utils/verifyFileContent.js'
+import {
+  validateAndReencodeImage,
+  extensionForImageMime,
+  IMAGE_PROCESSING_PRESETS,
+} from '../utils/imageProcess.js'
 import { withFeatureWriteGuard } from './featureGuards.js'
 import { FEATURES } from '../auth/entitlements.js'
 import {
@@ -60,6 +66,9 @@ import {
   insertSongRecording,
   deleteSongRecording as deleteSongRecordingRow,
   loadSongCharts,
+  getSongCoverRow,
+  setSongCoverPath,
+  clearSongCoverPath,
   insertSongChart,
   updateSongChartFields,
   deleteSongChart as deleteSongChartRow,
@@ -263,6 +272,53 @@ export async function deleteSongRecording(db, tenantId, songId, recId) {
   const objectKey = await deleteSongRecordingRow(db, recId, songId, tenantId)
   if (!objectKey) return NOT_FOUND
   safeRemove(objectKey, 'Failed to delete song recording object:')
+  return {}
+}
+
+// ---------- cover image ----------
+
+// Replaces a song's cover image (mirrors replaceGigBanner): re-encodes the
+// upload to a square WebP, stores the new object, points the row at it, and
+// removes the old object on success (or the new object on DB failure).
+export async function replaceSongCover(db, tenantId, songId, file) {
+  const image = await validateAndReencodeImage(file.buffer, file.mimetype, IMAGE_PROCESSING_PRESETS.songCover)
+
+  const before = await getSongCoverRow(db, songId, tenantId)
+  if (!before) return NOT_FOUND
+  const oldKey = before.cover_image_path
+
+  const ext = extensionForImageMime(image.mimetype)
+  const objectKey = songCoverKey(tenantId, randomUUID(), ext)
+
+  await uploadObjectWithQuota(objectKey, image.buffer, image.size, image.mimetype)
+
+  let updatedKey
+  try {
+    // Guarded write: covers are purgeable customization data, so the update
+    // must recheck the entitlement under the tenant lock (403 + queued cleanup
+    // of the just-uploaded object if a downgrade purge won the race).
+    updatedKey = await withFeatureWriteGuard(
+      db, tenantId, FEATURES.CUSTOMIZATION,
+      (client) => setSongCoverPath(client, songId, tenantId, objectKey),
+      { orphanKey: objectKey },
+    )
+  } catch (err) {
+    removeObject(objectKey).catch(() => {})
+    throw err
+  }
+
+  safeRemove(oldKey, 'Failed to delete old song cover object:')
+
+  return { coverImagePath: updatedKey }
+}
+
+export async function deleteSongCover(db, tenantId, songId) {
+  const row = await getSongCoverRow(db, songId, tenantId)
+  if (!row) return NOT_FOUND
+
+  await clearSongCoverPath(db, songId, tenantId)
+
+  safeRemove(row.cover_image_path, 'Failed to delete song cover object:')
   return {}
 }
 
