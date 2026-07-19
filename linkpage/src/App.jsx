@@ -1,6 +1,7 @@
 import PublicPage from './PublicPage.jsx'
 import Editor from './Editor.jsx'
 import Privacy from './Privacy.jsx'
+import { slugFromPath } from './pathSlug.js'
 
 // Path-based routing without a router: three fixed routes and the catch-all
 // band slug. A page path is one segment (main, /foo) or two (release,
@@ -16,11 +17,11 @@ export default function App() {
       </div>
     )
   }
-  const slug = path
-    .slice(1)
-    .split('/')
-    .map(decodeURIComponent)
-    .join('/')
-    .toLowerCase()
+  // Malformed percent-encoding (e.g. /%E0%A4%A) yields null → not-found,
+  // rather than throwing a URIError during render.
+  const slug = slugFromPath(path)
+  if (slug === null) {
+    return <div className="page-status">This page doesn&apos;t exist (or isn&apos;t published yet).</div>
+  }
   return <PublicPage slug={slug} />
 }

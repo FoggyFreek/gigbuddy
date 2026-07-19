@@ -119,9 +119,21 @@ export async function aggregateStats(executor, pageId, since) {
 // Retention: raw view/click events fall out of a rolling window — the page's
 // plan window (content.entitlements.statsRetentionDays, synced from GigBuddy;
 // 30 or 90 days) when present, else the caller's default, hard-capped at 90.
+// Normalize a configured retention default to an integer in [1, 90]; anything
+// missing, non-numeric, zero, or negative falls back to 30. A negative value
+// would otherwise put the cutoff in the FUTURE and delete every row.
+export function normalizeRetentionDays(value) {
+  const n = Math.floor(Number(value))
+  if (!Number.isFinite(n) || n < 1) return 30
+  return Math.min(n, 90)
+}
+
+// GREATEST(1, LEAST(..., 90)) clamps BOTH the per-page window and the default
+// into [1, 90] in SQL too — belt and suspenders, so no configuration or synced
+// value can ever produce a future cutoff that wipes all statistics.
 const RETENTION_PREDICATE = `
   occurred_at < NOW() - make_interval(days =>
-    LEAST(COALESCE((p.content->'entitlements'->>'statsRetentionDays')::int, $1), 90))`
+    GREATEST(1, LEAST(COALESCE((p.content->'entitlements'->>'statsRetentionDays')::int, $1), 90)))`
 
 export async function purgeOldViews(executor, defaultRetentionDays) {
   const { rowCount } = await executor.query(

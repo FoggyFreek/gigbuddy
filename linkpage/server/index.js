@@ -7,7 +7,7 @@ import express from 'express'
 import 'dotenv/config'
 import { createPool } from './db.js'
 import { createApp } from './app.js'
-import { purgeOldViews } from './statsRepo.js'
+import { purgeOldViews, normalizeRetentionDays } from './statsRepo.js'
 
 const pool = createPool()
 const app = createApp(pool)
@@ -24,7 +24,7 @@ if (fs.existsSync(distDir)) {
 // Statistics retention (PRIVACY.md): a rolling window per page — the plan's
 // 30 or 90 days synced from GigBuddy, falling back to this default. Purged on
 // boot and then daily.
-const retentionDays = Number(process.env.STATS_RETENTION_DAYS) || 30
+const retentionDays = normalizeRetentionDays(process.env.STATS_RETENTION_DAYS)
 async function purge() {
   try {
     const deleted = await purgeOldViews(pool, retentionDays)

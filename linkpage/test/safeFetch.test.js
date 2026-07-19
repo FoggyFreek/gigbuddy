@@ -140,6 +140,18 @@ describe('consumeResponse (byte cap)', () => {
     expect((await p).body).toBe('0123456789')
   })
 
+  it('counts network bytes, not JS string length (multibyte UTF-8)', async () => {
+    // '€' is 1 UTF-16 code unit but 3 UTF-8 bytes. '€€€' is 3 characters — a
+    // string-length check against a cap of 8 would NOT trip (3 < 8) — but it
+    // is 9 bytes, so a byte-accurate cap must abort. Destruction here is the
+    // proof the cap is byte-based, not character-based.
+    const res = fakeRes()
+    const p = consumeResponse(res, 8)
+    res.emit('data', Buffer.from('€€€', 'utf8'))
+    await p
+    expect(res.destroyed).toBe(true)
+  })
+
   it('reads a normal body in full', async () => {
     const res = fakeRes({ headers: { 'content-length': '11' } })
     const p = consumeResponse(res, 100)

@@ -2,10 +2,10 @@
 // prefer an external scheduler over the in-process daily purge.
 import 'dotenv/config'
 import { createPool } from './db.js'
-import { purgeOldViews } from './statsRepo.js'
+import { purgeOldViews, normalizeRetentionDays } from './statsRepo.js'
 
 const pool = createPool()
-const retentionDays = Number(process.env.STATS_RETENTION_DAYS) || 30
+const retentionDays = normalizeRetentionDays(process.env.STATS_RETENTION_DAYS)
 
 purgeOldViews(pool, retentionDays)
   .then((deleted) => {
