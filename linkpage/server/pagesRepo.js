@@ -2,15 +2,28 @@
 // callers stay in control of transactions (none are needed yet — writes are
 // single-statement).
 
+// Get-or-create the tenant's main page. Returns the row, or null when the slug
+// is already taken by a DIFFERENT tenant or by a non-main (release) row.
+//
+// The `pages.slug` namespace is global and shared with release-page slugs
+// (which must merely start with the band's main slug), so tenant A's release
+// `foo-bar` can collide with tenant B's legitimate main slug `foo-bar`. The
+// conflict update is therefore guarded to the SAME tenant AND page_type='main':
+// a foreign or release row leaves RETURNING empty instead of silently
+// transferring ownership / corrupting the row. The caller turns null into a
+// 409 rather than opening an editor session onto someone else's data.
 export async function upsertMainPage(executor, slug, tenantId) {
   const { rows } = await executor.query(
     `INSERT INTO pages (slug, gigbuddy_tenant_id, page_type)
      VALUES ($1, $2, 'main')
-     ON CONFLICT (slug) DO UPDATE SET gigbuddy_tenant_id = EXCLUDED.gigbuddy_tenant_id
+     ON CONFLICT (slug) DO UPDATE
+       SET updated_at = NOW()
+       WHERE pages.gigbuddy_tenant_id = EXCLUDED.gigbuddy_tenant_id
+         AND pages.page_type = 'main'
      RETURNING *`,
     [slug, tenantId],
   )
-  return rows[0]
+  return rows[0] || null
 }
 
 export async function getPageBySlug(executor, slug) {

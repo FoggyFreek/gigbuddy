@@ -187,6 +187,15 @@ export function createApp(pool) {
         return res.status(401).json({ error: 'Invalid or expired editor link — reopen it from GigBuddy' })
       }
       let page = await upsertMainPage(pool, handoff.slug, handoff.tenantId)
+      // null → the slug is already held by another tenant or a release page
+      // (the global slug namespace is shared). Refuse rather than open a
+      // session onto a foreign/corrupted row.
+      if (!page) {
+        return res.status(409).json({
+          error: 'This link-page address is already in use — contact support to resolve it',
+          code: 'slug_conflict',
+        })
+      }
       try {
         page = await syncContent(page, handoff.slug)
       } catch (err) {
