@@ -333,7 +333,7 @@ function NewReleaseForm({ songs, mainSlug, onCreate, onCancel }) {
     setBusy(true)
     setError(null)
     try {
-      await onCreate(songId, `${mainSlug}-${slugTail}`)
+      await onCreate(songId, `${mainSlug}/${slugTail}`)
     } catch (err) {
       setError(err.message)
       setBusy(false)
@@ -350,7 +350,7 @@ function NewReleaseForm({ songs, mainSlug, onCreate, onCancel }) {
       <div className="widget-fields">
         <SongSelect value={songId} songs={songs} onChange={pickSong} />
         <label className="inline-field slug-field">
-          <span>/{mainSlug}-</span>
+          <span>/{mainSlug}/</span>
           <input value={slugTail} onChange={(e) => setSlugTail(slugify(e.target.value))} />
         </label>
       </div>

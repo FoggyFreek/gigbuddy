@@ -99,11 +99,11 @@ describe('main-page upsert ownership', () => {
     expect(pages.filter((p) => p.slug === 'foo-bar')).toHaveLength(1)
   })
 
-  it('refuses to hijack another tenant’s release row that collides with a main slug', async () => {
-    // Tenant 1 (band "foo") owns release page "foo-bar".
+  it('release and main slugs live in separate namespaces and cannot collide', async () => {
+    // Tenant 1 (band "foo") owns release page "foo/bar" (namespaced path).
     pages.push({
       id: 1,
-      slug: 'foo-bar',
+      slug: 'foo/bar',
       gigbuddy_tenant_id: 1,
       page_type: 'release',
       release: { songId: 9, title: 'Bar', artist: null },
@@ -117,17 +117,25 @@ describe('main-page upsert ownership', () => {
     const pool = makeFakePool(pages)
     const app = createApp(pool)
 
-    // Tenant 2 (band "foo-bar") opens its editor — the slug collides.
+    // Tenant 2 (band "foo-bar") opens its editor. Its main slug 'foo-bar' is a
+    // different string from the release slug 'foo/bar', so there is no
+    // collision at all — the session succeeds and both rows coexist.
     const res = await openSession(app, 'foo-bar', 2)
-    expect(res.status).toBe(409)
-    expect(res.body.code).toBe('slug_conflict')
+    expect(res.status).toBe(200)
+    expect(res.body.page.pageType).toBe('main')
 
-    // The existing row is untouched: still tenant 1, still a release page,
-    // still its own content — no ownership transfer, no corruption.
-    const row = pages.find((p) => p.slug === 'foo-bar')
-    expect(row.gigbuddy_tenant_id).toBe(1)
-    expect(row.page_type).toBe('release')
-    expect(row.content).toEqual({ band: { name: 'Foo' } })
+    const release = pages.find((p) => p.slug === 'foo/bar')
+    expect(release.gigbuddy_tenant_id).toBe(1)
+    expect(release.page_type).toBe('release')
+    expect(pages.some((p) => p.slug === 'foo-bar' && p.gigbuddy_tenant_id === 2)).toBe(true)
+  })
+
+  it('rejects a handoff whose slug is not a bare main slug (e.g. contains a slash)', async () => {
+    const pool = makeFakePool(pages)
+    const app = createApp(pool)
+    const res = await openSession(app, 'foo/bar', 2)
+    expect(res.status).toBe(401)
+    expect(pages).toHaveLength(0)
   })
 
   it('refuses when the slug is another tenant’s main page', async () => {

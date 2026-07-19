@@ -3,9 +3,17 @@
 A small, standalone app that gives every GigBuddy band a public **link page** —
 a Linktree-style stack of widgets (music links, upcoming gigs, merch, social
 links) at `link.<your-domain>/<band-slug>` — plus **release landing pages**
-(smart-link style, one per song/album launch at `/<band-slug>-<release>`,
+(smart-link style, one per song/album launch at `/<band-slug>/<release>`,
 with one button per streaming platform), an editor for arranging the widgets,
 and privacy-first visit + conversion statistics.
+
+**Slug namespaces.** A band's main page lives at `/<mainSlug>` and its release
+pages one segment deeper at `/<mainSlug>/<tail>`. Because a main slug can never
+contain `/`, the stored slugs `foo` (main) and `foo/bar` (release) occupy
+separate namespaces and can never collide — a release page can't shadow, or be
+mistaken for, another band's main page. `pages.slug` stays globally unique
+(one public URL → one page); release creation is restricted to the caller's own
+`<mainSlug>/` prefix.
 
 This directory is deliberately **decoupled from the main repo**: it has its own
 `package.json`, its own Postgres database, its own migrations, and imports

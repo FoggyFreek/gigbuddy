@@ -19,13 +19,19 @@ async function request(path, options = {}) {
 
 // ---------- public ----------
 
+// A page slug may be one segment (main, 'foo') or two (release, 'foo/bar').
+// Encode each segment but keep the '/' so the API path mirrors the page path.
+function pagePath(slug) {
+  return slug.split('/').map(encodeURIComponent).join('/')
+}
+
 export function getPublicPage(slug) {
-  return request(`/api/pages/${encodeURIComponent(slug)}`)
+  return request(`/api/pages/${pagePath(slug)}`)
 }
 
 // Fire-and-forget view beacon; failures must never affect the visitor.
 export function sendView(slug, { referrer, utmSource }) {
-  return request(`/api/pages/${encodeURIComponent(slug)}/view`, {
+  return request(`/api/pages/${pagePath(slug)}/view`, {
     method: 'POST',
     body: JSON.stringify({ referrer, utmSource }),
   }).catch(() => null)
@@ -34,7 +40,7 @@ export function sendView(slug, { referrer, utmSource }) {
 // Outbound click beacon (conversion stats). sendBeacon survives the page
 // being torn down by the navigation the click just triggered.
 export function sendClick(slug, target, { referrer, utmSource }) {
-  const url = `/api/pages/${encodeURIComponent(slug)}/click`
+  const url = `/api/pages/${pagePath(slug)}/click`
   const payload = JSON.stringify({ target, referrer, utmSource })
   try {
     if (navigator.sendBeacon?.(url, new Blob([payload], { type: 'application/json' }))) return

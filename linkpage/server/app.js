@@ -26,7 +26,34 @@ import { pageEntitlements } from './entitlements.js'
 import { fetchLinkMetadata } from './unfurl.js'
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,80}$/
+
+// URL/namespace design: a band's main page lives at /<mainSlug> (the band's
+// GigBuddy slug); each release page lives one segment deeper at
+// /<mainSlug>/<releaseTail>. A main slug can never contain '/', so the stored
+// slugs 'foo' (main) and 'foo/bar' (release) occupy separate namespaces and
+// can NEVER collide — a release page can no longer shadow, or be mistaken for,
+// another band's main page. Both are validated segment-by-segment.
+export const MAIN_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,80}$/
+export const RELEASE_TAIL_RE = /^[a-z0-9][a-z0-9-]{0,60}$/
+
+// Builds the stored slug from 1 (main) or 2 (release) public path segments,
+// each validated. Returns null for anything that isn't a well-formed page path.
+export function slugFromSegments(segments) {
+  const parts = (Array.isArray(segments) ? segments : [segments])
+    .filter((s) => typeof s === 'string' && s.length > 0)
+    .map((s) => s.toLowerCase())
+  if (parts.length === 1 && MAIN_SLUG_RE.test(parts[0])) return parts[0]
+  if (parts.length === 2 && MAIN_SLUG_RE.test(parts[0]) && RELEASE_TAIL_RE.test(parts[1])) {
+    return `${parts[0]}/${parts[1]}`
+  }
+  return null
+}
+
+// The band's main slug for any stored page: a release slug is '<main>/<tail>',
+// so its main slug is the first segment.
+export function mainSlugOf(page) {
+  return page.page_type === 'main' ? page.slug : page.slug.split('/')[0]
+}
 
 function contentTtlMs() {
   const minutes = Number(process.env.LINKPAGE_CONTENT_TTL_MINUTES)
@@ -51,22 +78,12 @@ export function createApp(pool) {
     return { ...page, content: result.content, content_synced_at: new Date() }
   }
 
-  // The band's main slug for any page row: release slugs are derived from the
-  // main page's, but the source of truth is the tenant's main page row.
-  async function mainSlugFor(page) {
-    if (page.page_type === 'main') return page.slug
-    const pages = await listPagesForTenant(pool, page.gigbuddy_tenant_id)
-    return pages.find((p) => p.page_type === 'main')?.slug || page.slug
-  }
-
   function maybeRefreshContent(page) {
     const syncedAt = page.content_synced_at ? new Date(page.content_synced_at).getTime() : 0
     if (Date.now() - syncedAt < contentTtlMs()) return
-    mainSlugFor(page)
-      .then((mainSlug) => syncContent(page, mainSlug))
-      .catch((err) => {
-        console.error(`content refresh failed for ${page.slug}:`, err.message)
-      })
+    syncContent(page, mainSlugOf(page)).catch((err) => {
+      console.error(`content refresh failed for ${page.slug}:`, err.message)
+    })
   }
 
   // Shared beacon dimension derivation — the ONLY place raw request data is
@@ -86,10 +103,15 @@ export function createApp(pool) {
     }
   }
 
+  // Slug from the public path's 1 or 2 segments (main / release).
+  function publicSlug(req) {
+    return slugFromSegments([req.params.s1, req.params.s2])
+  }
+
   async function publishedPageForBeacon(req) {
     if (!statsEnabled()) return null
-    const slug = String(req.params.slug || '').toLowerCase()
-    if (!SLUG_RE.test(slug)) return null
+    const slug = publicSlug(req)
+    if (!slug) return null
     const page = await getPageBySlug(pool, slug)
     if (!page || !page.published_layout) return null
     if (!pageEntitlements(page.content).enabled) return null
@@ -97,13 +119,16 @@ export function createApp(pool) {
   }
 
   // ---------- public ----------
+  //
+  // Public routes accept one path segment (main page, /<slug>) or two (release
+  // page, /<mainSlug>/<tail>); each action is registered for both arities.
 
   // Resolved published page. No cookies are set anywhere on the public
   // surface — the privacy stance depends on it.
-  app.get('/api/pages/:slug', async (req, res, next) => {
+  async function handleGetPage(req, res, next) {
     try {
-      const slug = String(req.params.slug || '').toLowerCase()
-      if (!SLUG_RE.test(slug)) return res.status(404).json({ error: 'Not found' })
+      const slug = publicSlug(req)
+      if (!slug) return res.status(404).json({ error: 'Not found' })
       const page = await getPageBySlug(pool, slug)
       if (!page || !page.published_layout) return res.status(404).json({ error: 'Not found' })
       maybeRefreshContent(page)
@@ -115,10 +140,12 @@ export function createApp(pool) {
     } catch (err) {
       next(err)
     }
-  })
+  }
+  app.get('/api/pages/:s1', handleGetPage)
+  app.get('/api/pages/:s1/:s2', handleGetPage)
 
   // View beacon, fired once per public page load.
-  app.post('/api/pages/:slug/view', async (req, res, next) => {
+  async function handleView(req, res, next) {
     try {
       const page = await publishedPageForBeacon(req)
       if (page) {
@@ -129,11 +156,13 @@ export function createApp(pool) {
     } catch (err) {
       next(err)
     }
-  })
+  }
+  app.post('/api/pages/:s1/view', handleView)
+  app.post('/api/pages/:s1/:s2/view', handleView)
 
   // Outbound click beacon (conversion statistics): which platform button or
   // widget was clicked, in the same anonymous dimensions as views.
-  app.post('/api/pages/:slug/click', async (req, res, next) => {
+  async function handleClick(req, res, next) {
     try {
       const page = await publishedPageForBeacon(req)
       const target = sanitizeClickTarget(req.body?.target)
@@ -145,7 +174,9 @@ export function createApp(pool) {
     } catch (err) {
       next(err)
     }
-  })
+  }
+  app.post('/api/pages/:s1/click', handleClick)
+  app.post('/api/pages/:s1/:s2/click', handleClick)
 
   // ---------- editor ----------
 
@@ -182,6 +213,7 @@ export function createApp(pool) {
         !handoff ||
         handoff.t !== 'handoff' ||
         typeof handoff.slug !== 'string' ||
+        !MAIN_SLUG_RE.test(handoff.slug) ||
         !Number.isInteger(handoff.tenantId)
       ) {
         return res.status(401).json({ error: 'Invalid or expired editor link — reopen it from GigBuddy' })
@@ -263,10 +295,10 @@ export function createApp(pool) {
     }
   })
 
-  // Create a release landing page for a song: slug is prefixed with the main
-  // slug (prevents cross-band slug squatting), the layout starts with a
-  // platforms widget, and the content snapshot is inherited so the page
-  // previews instantly.
+  // Create a release landing page for a song at /<mainSlug>/<tail>: the slug is
+  // namespaced under the band's main slug (so it can never collide with any
+  // band's main page), the layout starts with a platforms widget, and the
+  // content snapshot is inherited so the page previews instantly.
   app.post('/api/editor/pages', requireSession, async (req, res, next) => {
     try {
       const { tenantId, mainSlug } = req.editorSession
@@ -291,10 +323,15 @@ export function createApp(pool) {
         }
       }
 
-      const slug = String(req.body?.slug || '').toLowerCase()
-      if (!SLUG_RE.test(slug) || !slug.startsWith(`${mainSlug}-`)) {
-        return res.status(400).json({ error: `Slug must start with "${mainSlug}-"` })
+      // The release path is '<mainSlug>/<tail>'. Accept either the full path or
+      // a bare tail from the client; the stored slug is always the full path.
+      const raw = String(req.body?.slug || '').toLowerCase()
+      const prefix = `${mainSlug}/`
+      const tail = raw.startsWith(prefix) ? raw.slice(prefix.length) : raw
+      if (!RELEASE_TAIL_RE.test(tail)) {
+        return res.status(400).json({ error: `Address must be "${mainSlug}/<name>"` })
       }
+      const slug = `${mainSlug}/${tail}`
 
       const release = { songId: song.id, title: song.title, artist: song.artist }
       const layout = {
