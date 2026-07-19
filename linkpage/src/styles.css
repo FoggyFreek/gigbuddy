@@ -444,7 +444,7 @@ input, select { font: inherit; }
 
 .bar-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .bar-list li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.bar-label { flex: 0 0 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-label { flex: 0 0 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-track { flex: 1; background: #f0f1f4; border-radius: 999px; height: 8px; overflow: hidden; }
 .bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 .bar-value { flex: 0 0 34px; text-align: right; color: var(--text-dim); }

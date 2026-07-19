@@ -5,7 +5,54 @@ import { getStats } from './api.js'
 // the page's window are disabled.
 const RANGES = [7, 30, 90]
 
-function BarList({ title, rows, total, valueKey = 'views' }) {
+const PLATFORM_NAMES = {
+  spotify: 'Spotify',
+  apple: 'Apple Music',
+  'youtube-music': 'YouTube Music',
+  youtube: 'YouTube',
+  deezer: 'Deezer',
+  tidal: 'TIDAL',
+  amazon: 'Amazon Music',
+  soundcloud: 'SoundCloud',
+  bandcamp: 'Bandcamp',
+  other: 'Other',
+}
+
+const SHARE_NAMES = {
+  native: 'device menu',
+  copy: 'copy link',
+  x: 'X',
+  whatsapp: 'WhatsApp',
+  facebook: 'Facebook',
+  telegram: 'Telegram',
+  email: 'Email',
+}
+
+// Click targets are stored as compact machine keys ('platform:spotify',
+// 'share:whatsapp', 'link:our website'); render them as readable labels.
+function formatTarget(key) {
+  const colon = key.indexOf(':')
+  const kind = colon === -1 ? key : key.slice(0, colon)
+  const value = colon === -1 ? '' : key.slice(colon + 1)
+  switch (kind) {
+    case 'platform':
+      return PLATFORM_NAMES[value] || value
+    case 'share':
+      return `Share · ${SHARE_NAMES[value] || value}`
+    case 'social':
+      return `Social · ${value.charAt(0).toUpperCase()}${value.slice(1)}`
+    case 'link':
+      return `Link · ${value}`
+    case 'song':
+      return `Song · ${value}`
+    case 'shop':
+      return 'Merch shop'
+    default:
+      return key
+  }
+}
+
+function BarList({ title, rows, total, valueKey = 'views', formatKey = (key) => key }) {
   return (
     <div className="stats-block">
       <h3>{title}</h3>
@@ -15,7 +62,7 @@ function BarList({ title, rows, total, valueKey = 'views' }) {
         <ul className="bar-list">
           {rows.map((row) => (
             <li key={row.key}>
-              <span className="bar-label">{row.key}</span>
+              <span className="bar-label" title={formatKey(row.key)}>{formatKey(row.key)}</span>
               <span className="bar-track">
                 <span
                   className="bar-fill"
@@ -109,7 +156,13 @@ export default function StatsPanel({ session, pageId }) {
         </div>
       )}
       <div className="stats-grid">
-        <BarList title="Clicks by platform / target" rows={stats.byTarget} total={stats.totalClicks} valueKey="clicks" />
+        <BarList
+          title="Clicks by platform / target"
+          rows={stats.byTarget}
+          total={stats.totalClicks}
+          valueKey="clicks"
+          formatKey={formatTarget}
+        />
         <BarList title="Devices" rows={stats.byDevice} total={stats.totalViews} />
         <BarList title="Countries" rows={stats.byCountry} total={stats.totalViews} />
       </div>
