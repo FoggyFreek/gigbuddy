@@ -105,10 +105,20 @@ in-process; deployments that prefer an external scheduler can run
 
 `POST /api/editor/unfurl` (editor session required) fetches a URL's metadata
 server-side: oEmbed for the known platforms, Open Graph scraping otherwise
-(5s timeout, 600KB cap, private/loopback destinations blocked). The editor
-uses it to fill titles, descriptions, and artwork ("Fetch image & info from
-link") — visitors never trigger third-party fetches, and embed players are
-strictly click-to-play (see PRIVACY.md).
+(5s timeout, 600KB cap). The editor uses it to fill titles, descriptions, and
+artwork ("Fetch image & info from link") — visitors never trigger third-party
+fetches, and embed players are strictly click-to-play (see PRIVACY.md).
+
+Because this is the one place the server fetches a user-supplied URL, it is
+SSRF-hardened (`server/safeFetch.js`): only http(s) on standard ports, no
+embedded credentials, redirects followed manually and re-validated per hop,
+and — the load-bearing control — a connection-time DNS lookup that validates
+every resolved address (rejecting private, loopback, link-local, unique-local,
+multicast, reserved, carrier-grade-NAT, 6to4/teredo and IPv4-mapped-IPv6
+ranges via `ipaddr.js`) and pins the socket to the validated IP, so a hostname
+that resolves to a private address — or a DNS-rebinding race — can never
+connect. Operators may additionally route egress through a public-internet-only
+proxy; these controls hold regardless.
 
 ## Integration contract (GigBuddy side)
 

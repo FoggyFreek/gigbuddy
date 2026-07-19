@@ -3,9 +3,8 @@
 // from a pasted link. Only ever called from the authenticated editor — public
 // visitors are never the trigger for third-party fetches.
 import { detectEmbed } from './embeds.js'
+import { safeFetchText, assertPublicUrl } from './safeFetch.js'
 
-const FETCH_TIMEOUT_MS = 5000
-const MAX_HTML_BYTES = 600 * 1024
 const CACHE_TTL_MS = 10 * 60 * 1000
 const CACHE_MAX = 200
 
@@ -37,29 +36,19 @@ export function oembedEndpointFor(rawUrl) {
   return null
 }
 
-// SSRF guard: only public http(s) destinations. Blocks loopback/link-local/
-// private hosts by name and by IP literal. (DNS-rebinding is out of scope —
-// the caller is an authenticated tenant admin, not an anonymous visitor.)
+// SSRF pre-check: a boolean wrapper over assertPublicUrl (scheme, port,
+// credentials, and IP-literal validation). This is only the fast path — the
+// actual guarantee is enforced at connection time in safeFetch.js, where every
+// resolved address is validated and the connected IP is pinned to it, so a
+// hostname that resolves to a private address (or a redirect to one) can never
+// be reached even though its name passes this check.
 export function isSafeRemoteUrl(rawUrl) {
-  let url
   try {
-    url = new URL(rawUrl)
+    assertPublicUrl(rawUrl)
+    return true
   } catch {
     return false
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
-  const host = url.hostname.toLowerCase()
-  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return false
-  if (host === '::1' || host.startsWith('[')) return false
-  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
-  if (ipv4) {
-    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])]
-    if (a === 127 || a === 10 || a === 0) return false
-    if (a === 172 && b >= 16 && b <= 31) return false
-    if (a === 192 && b === 168) return false
-    if (a === 169 && b === 254) return false
-  }
-  return true
 }
 
 // Minimal OG parser: enough for og:title/description/image/site_name plus
@@ -95,19 +84,9 @@ function decodeEntities(text) {
 
 const cache = new Map()
 
-async function fetchWithLimits(url, accept) {
-  const res = await fetch(url, {
-    headers: { accept, 'user-agent': 'gigbuddy-linkpage/1.0 (+link page editor unfurl)' },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    redirect: 'follow',
-  })
-  if (!res.ok) throw new Error(`fetch failed with ${res.status}`)
-  const text = await res.text()
-  return text.slice(0, MAX_HTML_BYTES)
-}
-
 // Resolves { url, title, description, imageUrl, siteName, provider, embed }.
-// Throws on unreachable/unsafe URLs — the route turns that into a 422.
+// Throws on unreachable/unsafe URLs — the route turns that into a 422. All
+// network access goes through safeFetchText (SSRF-hardened, see safeFetch.js).
 export async function fetchLinkMetadata(rawUrl) {
   if (!isSafeRemoteUrl(rawUrl)) throw new Error('URL is not fetchable')
 
@@ -119,7 +98,7 @@ export async function fetchLinkMetadata(rawUrl) {
   const oembedUrl = oembedEndpointFor(rawUrl)
   if (oembedUrl) {
     try {
-      const data = JSON.parse(await fetchWithLimits(oembedUrl, 'application/json'))
+      const data = JSON.parse(await safeFetchText(oembedUrl, 'application/json'))
       meta = {
         title: data.title || null,
         description: data.author_name ? `by ${data.author_name}` : null,
@@ -133,7 +112,7 @@ export async function fetchLinkMetadata(rawUrl) {
   }
 
   if (!meta.title && !meta.imageUrl) {
-    const html = await fetchWithLimits(rawUrl, 'text/html,application/xhtml+xml')
+    const html = await safeFetchText(rawUrl, 'text/html,application/xhtml+xml')
     const og = parseOgTags(html)
     meta = { ...og, provider: og.siteName ? og.siteName.toLowerCase() : null }
   }
