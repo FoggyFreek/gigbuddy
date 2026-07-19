@@ -38,6 +38,12 @@ router.get('/image', async (req, res) => {
     // Immutable-ish content (uploads get fresh keys); let browsers/CDNs cache.
     res.setHeader('Cache-Control', 'public, max-age=86400')
     res.setHeader('Content-Security-Policy', "default-src 'none'")
+    // The link-page app is served from a sibling subdomain (e.g. link.<domain>
+    // vs this app's app.<domain>), so its pages embed these images cross-origin.
+    // Helmet's global default is CORP: same-origin, which would block that
+    // <img>. Relax to same-site (both subdomains share the registrable domain)
+    // so logos/covers render, without opening the endpoint to the whole web.
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-site')
     const stream = await getObject(resolved.objectKey)
     stream.on('error', (streamErr) => {
       logger.error('linkpage.image_stream_error', { err: streamErr })
