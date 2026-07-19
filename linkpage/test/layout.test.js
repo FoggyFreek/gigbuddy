@@ -50,6 +50,16 @@ describe('validateLayout', () => {
     expect(validateLayout({ sections: [{ widgets: [{ type: 'platforms' }] }] }).error).toBeTruthy()
   })
 
+  it('accepts embed widgets and requires a safe url', () => {
+    const ok = validateLayout({
+      sections: [{ widgets: [{ type: 'embed', url: 'https://open.spotify.com/track/x', title: 'Single', imageUrl: 'https://cdn.example.com/a.jpg' }] }],
+    })
+    expect(ok.layout.sections[0].widgets[0]).toMatchObject({ type: 'embed', title: 'Single' })
+    // The embed descriptor is never stored — resolve derives it from the url.
+    expect(ok.layout.sections[0].widgets[0].embed).toBeUndefined()
+    expect(validateLayout({ sections: [{ widgets: [{ type: 'embed', url: 'javascript:x' }] }] }).error).toBeTruthy()
+  })
+
   it('rejects unknown widget types and malformed shapes', () => {
     expect(validateLayout(null).error).toBeTruthy()
     expect(validateLayout({}).error).toBeTruthy()

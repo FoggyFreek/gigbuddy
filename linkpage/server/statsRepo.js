@@ -51,13 +51,15 @@ export async function aggregateStats(executor, pageId, since) {
         WHERE page_id = $1 AND occurred_at >= $2`,
       [pageId, since],
     ),
-    // Share events (target 'share:…') are page amplification, not outbound
-    // conversion — they stay visible in byTarget but are excluded from the
-    // click totals that feed the click-through rate.
+    // Share events ('share:…') are page amplification and embed plays
+    // ('embed:…') are on-page engagement — neither is outbound conversion, so
+    // both stay visible in byTarget but are excluded from the click totals
+    // that feed the click-through rate.
     executor.query(
       `SELECT COUNT(*)::int AS clicks
          FROM page_clicks
-        WHERE page_id = $1 AND occurred_at >= $2 AND target NOT LIKE 'share:%'`,
+        WHERE page_id = $1 AND occurred_at >= $2
+          AND target NOT LIKE 'share:%' AND target NOT LIKE 'embed:%'`,
       [pageId, since],
     ),
     countBy(executor, pageId, since, 'page_views', 'device', 10),
@@ -67,7 +69,8 @@ export async function aggregateStats(executor, pageId, since) {
     executor.query(
       `SELECT source AS key, COUNT(*)::int AS views
          FROM page_clicks
-        WHERE page_id = $1 AND occurred_at >= $2 AND target NOT LIKE 'share:%'
+        WHERE page_id = $1 AND occurred_at >= $2
+          AND target NOT LIKE 'share:%' AND target NOT LIKE 'embed:%'
         GROUP BY source
         ORDER BY views DESC, key
         LIMIT 12`,

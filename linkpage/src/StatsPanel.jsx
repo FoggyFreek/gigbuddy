@@ -45,6 +45,8 @@ function formatTarget(key) {
       return `Link · ${value}`
     case 'song':
       return `Song · ${value}`
+    case 'embed':
+      return `Preview · ${PLATFORM_NAMES[value] || value}`
     case 'shop':
       return 'Merch shop'
     default:

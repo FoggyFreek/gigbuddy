@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  unfurlUrl,
   getStoredSession,
   storeSession,
   exchangeHandoff,
@@ -155,7 +156,26 @@ function MerchWidgetEditor({ widget, products, onChange }) {
   )
 }
 
-function LinkWidgetEditor({ widget, onChange }) {
+function LinkWidgetEditor({ widget, onChange, onUnfurl }) {
+  const [fetching, setFetching] = useState(false)
+  const [fetchError, setFetchError] = useState(null)
+  const fill = async () => {
+    setFetching(true)
+    setFetchError(null)
+    try {
+      const meta = await onUnfurl(widget.url)
+      onChange({
+        ...widget,
+        imageUrl: meta.imageUrl || widget.imageUrl,
+        label: widget.label || meta.title || widget.label,
+        sublabel: widget.sublabel || meta.siteName || null,
+      })
+    } catch (err) {
+      setFetchError(err.message)
+    } finally {
+      setFetching(false)
+    }
+  }
   return (
     <div className="widget-fields">
       <input
@@ -186,6 +206,72 @@ function LinkWidgetEditor({ widget, onChange }) {
           ))}
         </select>
       </label>
+      <div className="unfurl-row">
+        <button className="btn" onClick={fill} disabled={fetching || !widget.url}>
+          {fetching ? 'Fetching…' : 'Fetch image & info from link'}
+        </button>
+        {fetchError && <span className="form-error">{fetchError}</span>}
+      </div>
+    </div>
+  )
+}
+
+// Embed widget: paste a URL, load its metadata (oEmbed / Open Graph), and it
+// renders as a player (Spotify inline, YouTube overlay) or a rich link card.
+function EmbedWidgetEditor({ widget, onChange, onUnfurl }) {
+  const [fetching, setFetching] = useState(false)
+  const [fetchError, setFetchError] = useState(null)
+  const [provider, setProvider] = useState(null)
+  const load = async () => {
+    setFetching(true)
+    setFetchError(null)
+    try {
+      const meta = await onUnfurl(widget.url)
+      setProvider(meta.embed ? meta.embed.type : meta.siteName || 'link card')
+      onChange({
+        ...widget,
+        title: meta.title || widget.title,
+        description: meta.description || widget.description,
+        imageUrl: meta.imageUrl || widget.imageUrl,
+      })
+    } catch (err) {
+      setFetchError(err.message)
+    } finally {
+      setFetching(false)
+    }
+  }
+  return (
+    <div className="widget-fields">
+      <input
+        placeholder="Paste a Spotify, YouTube, SoundCloud or any other URL"
+        value={widget.url || ''}
+        onChange={(e) => onChange({ ...widget, url: e.target.value })}
+      />
+      <div className="unfurl-row">
+        <button className="btn" onClick={load} disabled={fetching || !widget.url}>
+          {fetching ? 'Fetching…' : 'Load info from link'}
+        </button>
+        {provider && <span className="field-hint">Renders as: {provider}</span>}
+        {fetchError && <span className="form-error">{fetchError}</span>}
+      </div>
+      <input
+        placeholder="Title"
+        value={widget.title || ''}
+        onChange={(e) => onChange({ ...widget, title: e.target.value || null })}
+      />
+      <input
+        placeholder="Description (optional)"
+        value={widget.description || ''}
+        onChange={(e) => onChange({ ...widget, description: e.target.value || null })}
+      />
+      <input
+        placeholder="Image URL (auto-filled from the link)"
+        value={widget.imageUrl || ''}
+        onChange={(e) => onChange({ ...widget, imageUrl: e.target.value || null })}
+      />
+      <p className="field-hint">
+        Spotify/SoundCloud play inline, YouTube opens in an overlay — always click-to-play.
+      </p>
     </div>
   )
 }
@@ -203,12 +289,14 @@ function widgetSummary(widget, content) {
       return `Merch · ${widget.title || `${widget.items.length} products`}`
     case 'link':
       return `Link · ${widget.label || widget.url}`
+    case 'embed':
+      return `Embed · ${widget.title || widget.url || 'new'}`
     default:
       return widget.type
   }
 }
 
-function WidgetEditor({ widget, content, onChange }) {
+function WidgetEditor({ widget, content, onChange, onUnfurl }) {
   switch (widget.type) {
     case 'song':
       return <SongWidgetEditor widget={widget} songs={content.songs || []} onChange={onChange} />
@@ -219,7 +307,9 @@ function WidgetEditor({ widget, content, onChange }) {
     case 'merch':
       return <MerchWidgetEditor widget={widget} products={content.products || []} onChange={onChange} />
     case 'link':
-      return <LinkWidgetEditor widget={widget} onChange={onChange} />
+      return <LinkWidgetEditor widget={widget} onChange={onChange} onUnfurl={onUnfurl} />
+    case 'embed':
+      return <EmbedWidgetEditor widget={widget} onChange={onChange} onUnfurl={onUnfurl} />
     default:
       return null
   }
@@ -462,6 +552,9 @@ export default function Editor() {
       case 'link':
         addWidget(section, { id: newId(), type: 'link', label: '', url: '', sublabel: null, imageUrl: null, icon: 'globe' })
         break
+      case 'embed':
+        addWidget(section, { id: newId(), type: 'embed', url: '', title: null, description: null, imageUrl: null })
+        break
     }
   }
 
@@ -622,6 +715,7 @@ export default function Editor() {
                       <WidgetEditor
                         widget={widget}
                         content={content}
+                        onUnfurl={(url) => unfurlUrl(sessionRef.current, url)}
                         onChange={(next) =>
                           updateSection(section.id, {
                             widgets: section.widgets.map((w) => (w.id === widget.id ? next : w)),
@@ -639,6 +733,7 @@ export default function Editor() {
                 <button onClick={() => buildWidget(section, 'gigs')}>Gigs</button>
                 <button onClick={() => buildWidget(section, 'merch')} disabled={!content.products?.length}>Merch</button>
                 <button onClick={() => buildWidget(section, 'link')}>Link</button>
+                <button onClick={() => buildWidget(section, 'embed')}>Embed</button>
               </div>
             </div>
           ))}

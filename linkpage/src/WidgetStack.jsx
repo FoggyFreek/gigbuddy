@@ -1,6 +1,8 @@
 // Visitor-facing rendering of a resolved page: band header + sections of
 // widget cards. Used verbatim by the public page and the editor's
 // preview-as-visitor mode, so preview can never drift from reality.
+import { useState } from 'react'
+import { InlineEmbed, VideoOverlay } from './embeds.jsx'
 import {
   InstagramIcon,
   FacebookIcon,
@@ -190,29 +192,159 @@ function LinkWidget({ widget, onLinkClick }) {
 }
 
 // "Choose your platform" buttons for a release: one full-width button per
-// streaming link, labeled and iconed by detected platform.
+// streaming link, labeled and iconed by detected platform. Embeddable
+// platforms additionally get a click-to-play preview: Spotify expands an
+// inline player under the row, YouTube opens a lightbox overlay.
 function PlatformsWidget({ widget, onLinkClick }) {
+  const [inlineIndex, setInlineIndex] = useState(null)
+  const [overlaySrc, setOverlaySrc] = useState(null)
+
+  const preview = (platform, index) => {
+    onLinkClick(`embed:${platform.embed.type}`)
+    if (platform.embed.display === 'inline') {
+      setInlineIndex(inlineIndex === index ? null : index)
+    } else {
+      setOverlaySrc(platform.embed.src)
+    }
+  }
+
   return (
     <div className="platforms">
       {widget.title && <h3 className="section-title">{widget.title}</h3>}
       {widget.platforms.map((platform, i) => {
         const Icon = PLATFORM_ICON_COMPONENTS[platform.id] || PLATFORM_ICON_COMPONENTS.other
         return (
-          <a
-            key={i}
-            className="card platform-card"
-            href={platform.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => onLinkClick(`platform:${platform.id}`)}
-          >
-            <span className="card-icon"><Icon size={26} /></span>
-            <span className="card-label">{platform.label}</span>
-            <span className="platform-play">Play</span>
-          </a>
+          <div key={i} className="platform-row">
+            <div className="platform-row-main">
+              <a
+                className="card platform-card"
+                href={platform.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => onLinkClick(`platform:${platform.id}`)}
+              >
+                <span className="card-icon"><Icon size={26} /></span>
+                <span className="card-label">{platform.label}</span>
+                <span className="platform-play">Play</span>
+              </a>
+              {platform.embed && (
+                <button
+                  className="card platform-preview"
+                  onClick={() => preview(platform, i)}
+                  aria-label={`Preview on ${platform.label}`}
+                  title="Preview here"
+                >▶</button>
+              )}
+            </div>
+            {inlineIndex === i && platform.embed?.display === 'inline' && (
+              <InlineEmbed embed={platform.embed} title={platform.label} />
+            )}
+          </div>
         )
       })}
+      <VideoOverlay src={overlaySrc} onClose={() => setOverlaySrc(null)} />
     </div>
+  )
+}
+
+// Rich embed card for a pasted URL. Inline platforms show a facade that
+// swaps to the player; video platforms open the overlay; anything else is a
+// rich Open Graph link card.
+function EmbedWidget({ widget, onLinkClick }) {
+  const [inlineOpen, setInlineOpen] = useState(false)
+  const [overlaySrc, setOverlaySrc] = useState(null)
+  const embed = widget.embed
+  const label = widget.title || widget.url
+
+  if (embed?.display === 'inline') {
+    return (
+      <div className="card embed-card">
+        {inlineOpen ? (
+          <InlineEmbed embed={embed} title={widget.title} />
+        ) : (
+          <button
+            className="embed-facade"
+            onClick={() => {
+              onLinkClick(`embed:${embed.type}`)
+              setInlineOpen(true)
+            }}
+          >
+            {widget.imageUrl ? (
+              <img className="song-cover" src={widget.imageUrl} alt="" />
+            ) : (
+              <span className="song-cover song-cover-placeholder">♪</span>
+            )}
+            <span className="card-label">
+              {label}
+              {widget.description && <span className="card-sublabel">{widget.description}</span>}
+            </span>
+            <span className="platform-play">Play</span>
+          </button>
+        )}
+        <a
+          className="embed-external"
+          href={widget.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => onLinkClick(`link:${label}`)}
+        >
+          Open in app ↗
+        </a>
+      </div>
+    )
+  }
+
+  if (embed?.display === 'overlay') {
+    return (
+      <div className="card embed-card embed-video-card">
+        <button
+          className="embed-video-facade"
+          onClick={() => {
+            onLinkClick(`embed:${embed.type}`)
+            setOverlaySrc(embed.src)
+          }}
+        >
+          {widget.imageUrl && <img src={widget.imageUrl} alt="" />}
+          <span className="embed-play-badge" aria-hidden="true">▶</span>
+        </button>
+        <div className="embed-caption">
+          <span className="card-label">
+            {label}
+            {widget.description && <span className="card-sublabel">{widget.description}</span>}
+          </span>
+          <a
+            className="embed-external"
+            href={widget.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => onLinkClick(`link:${label}`)}
+          >
+            Watch on the platform ↗
+          </a>
+        </div>
+        <VideoOverlay src={overlaySrc} onClose={() => setOverlaySrc(null)} />
+      </div>
+    )
+  }
+
+  return (
+    <a
+      className="card link-card"
+      href={widget.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => onLinkClick(`link:${label}`)}
+    >
+      {widget.imageUrl ? (
+        <img className="link-thumb" src={widget.imageUrl} alt="" />
+      ) : (
+        <span className="card-icon"><PLATFORM_ICON_COMPONENTS.other size={26} /></span>
+      )}
+      <span className="card-label">
+        {label}
+        {widget.description && <span className="card-sublabel">{widget.description}</span>}
+      </span>
+    </a>
   )
 }
 
@@ -240,6 +372,7 @@ function ReleaseHeader({ release, band }) {
 const WIDGETS = {
   song: SongWidget,
   platforms: PlatformsWidget,
+  embed: EmbedWidget,
   gigs: GigsWidget,
   merch: MerchWidget,
   link: LinkWidget,

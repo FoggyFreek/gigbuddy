@@ -31,10 +31,16 @@ export default function Privacy() {
         counts are automatically deleted after at most 90 days (30 days for most pages); only
         aggregate totals remain.
       </p>
-      <h2>External links</h2>
+      <h2>External links and embedded players</h2>
       <p>
         Cards on this page link to external platforms (music services, shops, social networks). Once
         you follow a link, that platform&apos;s own privacy policy applies.
+      </p>
+      <p>
+        Some cards can play music or video right here. Those players are <strong>click-to-play</strong>:
+        nothing from the platform loads until you press play. When you do, the player is provided by
+        that platform (for example Spotify or YouTube), its privacy policy applies, and it may set its
+        own cookies. Images on this page may be served from the linked platforms.
       </p>
       <h2>Contact</h2>
       <p>

@@ -62,7 +62,8 @@ into its own repository — nothing else needs to change.
 | Type | Content | Notes |
 |---|---|---|
 | `song` | a song + its streaming links | first link is the card target, extra links render as pills |
-| `platforms` | one button per streaming link of a song | platform (Spotify, Apple Music, YouTube (Music), Deezer, TIDAL, Amazon, SoundCloud, Bandcamp) detected from the URL; the core of a release page |
+| `platforms` | one button per streaming link of a song | platform (Spotify, Apple Music, YouTube (Music), Deezer, TIDAL, Amazon, SoundCloud, Bandcamp) detected from the URL; the core of a release page. Embeddable platforms get a ▶ preview button (Spotify inline player, YouTube overlay) |
+| `embed` | any pasted URL | metadata (title/artwork/description) pulled via oEmbed (Spotify, YouTube, SoundCloud, Vimeo, TikTok) or Open Graph tags; renders as a click-to-play inline player (Spotify/SoundCloud), a lightbox video (YouTube, privacy-enhanced `youtube-nocookie.com`), or a rich link card |
 | `gigs` | announced upcoming gigs | expandable card; only gigs with status `announced` are ever exported |
 | `merch` | selected products | horizontal card carousel; optional per-item image URL + badge, optional shop URL (e.g. your Shopify store) the cards link to |
 | `link` | free-form link | label, optional sublabel/thumbnail, icon |
@@ -99,6 +100,15 @@ by design). A `Dockerfile` is included.
 Run `npm run migrate` on deploy. Statistics retention is enforced daily
 in-process; deployments that prefer an external scheduler can run
 `npm run stats:purge` instead.
+
+### Link enrichment (oEmbed / Open Graph)
+
+`POST /api/editor/unfurl` (editor session required) fetches a URL's metadata
+server-side: oEmbed for the known platforms, Open Graph scraping otherwise
+(5s timeout, 600KB cap, private/loopback destinations blocked). The editor
+uses it to fill titles, descriptions, and artwork ("Fetch image & info from
+link") — visitors never trigger third-party fetches, and embed players are
+strictly click-to-play (see PRIVACY.md).
 
 ## Integration contract (GigBuddy side)
 

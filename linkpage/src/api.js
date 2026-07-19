@@ -112,6 +112,11 @@ export function refreshContent(session, pageId) {
   return request(`/api/editor/pages/${pageId}/refresh-content`, authed(session, { method: 'POST' }))
 }
 
+// Link enrichment: oEmbed/Open Graph metadata + embed capability for a URL.
+export function unfurlUrl(session, url) {
+  return request('/api/editor/unfurl', authed(session, { method: 'POST', body: JSON.stringify({ url }) }))
+}
+
 export function getStats(session, pageId, days) {
   return request(`/api/editor/pages/${pageId}/stats?days=${days}`, authed(session))
 }

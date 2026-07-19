@@ -3,6 +3,7 @@
 // disappeared (deleted song, archived product) are dropped silently — the
 // public page must never break because gigbuddy content moved on.
 import { detectPlatform } from './platforms.js'
+import { detectEmbed } from './embeds.js'
 
 function resolveWidget(widget, content) {
   switch (widget.type) {
@@ -27,7 +28,7 @@ function resolveWidget(widget, content) {
         title: widget.title,
         platforms: song.links.map((link) => {
           const platform = detectPlatform(link.url, link.label)
-          return { ...platform, url: link.url }
+          return { ...platform, url: link.url, embed: detectEmbed(link.url) }
         }),
       }
     }
@@ -56,8 +57,11 @@ function resolveWidget(widget, content) {
       if (!products.length) return null
       return { id: widget.id, type: 'merch', title: widget.title, shopUrl: widget.shopUrl || null, products }
     }
+    case 'embed':
+      // The player descriptor is derived from the stored URL here, server-side.
+      return { ...widget, embed: detectEmbed(widget.url) }
     case 'link':
-      return { ...widget }
+      return { ...widget, embed: detectEmbed(widget.url) }
     default:
       return null
   }

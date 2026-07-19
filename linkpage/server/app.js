@@ -23,6 +23,7 @@ import { validateLayout } from './layout.js'
 import { resolvePage } from './resolve.js'
 import { sanitizeClickTarget } from './platforms.js'
 import { pageEntitlements } from './entitlements.js'
+import { fetchLinkMetadata } from './unfurl.js'
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,80}$/
@@ -232,6 +233,17 @@ export function createApp(pool) {
       next(err)
     }
   }
+
+  // Link enrichment for the editor: oEmbed / Open Graph metadata (title,
+  // artwork, description) plus the embed descriptor for a pasted URL.
+  app.post('/api/editor/unfurl', requireSession, async (req, res) => {
+    const url = typeof req.body?.url === 'string' ? req.body.url.trim() : ''
+    try {
+      res.json(await fetchLinkMetadata(url))
+    } catch {
+      res.status(422).json({ error: 'Could not read that link — check the URL' })
+    }
+  })
 
   app.get('/api/editor/pages', requireSession, async (req, res, next) => {
     try {

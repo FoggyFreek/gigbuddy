@@ -65,17 +65,34 @@ describe('resolvePage', () => {
     expect(page.sections).toHaveLength(0)
   })
 
-  it('resolves platforms widgets with detected platforms', () => {
+  it('resolves platforms widgets with detected platforms and embed descriptors', () => {
     const layout = {
       sections: [{ id: 's', title: null, widgets: [{ id: 'w', type: 'platforms', songId: 1, title: null }] }],
     }
     const page = resolvePage(content, layout)
     const widget = page.sections[0].widgets[0]
     expect(widget.type).toBe('platforms')
-    expect(widget.platforms).toEqual([
-      { id: 'spotify', label: 'Spotify', url: 'https://open.spotify.com/track/x' },
-      { id: 'apple', label: 'Apple Music', url: 'https://music.apple.com/album/x' },
-    ])
+    expect(widget.platforms[0]).toMatchObject({ id: 'spotify', label: 'Spotify' })
+    expect(widget.platforms[0].embed).toMatchObject({ type: 'spotify', display: 'inline' })
+    expect(widget.platforms[1]).toMatchObject({ id: 'apple', label: 'Apple Music', embed: null })
+  })
+
+  it('resolves embed widgets with a server-derived player descriptor', () => {
+    const layout = {
+      sections: [
+        {
+          id: 's',
+          title: null,
+          widgets: [
+            { id: 'w1', type: 'embed', url: 'https://youtu.be/dQw4w9WgXcQ', title: 'Video', description: null, imageUrl: null },
+            { id: 'w2', type: 'embed', url: 'https://example.com/page', title: 'Plain', description: null, imageUrl: null },
+          ],
+        },
+      ],
+    }
+    const widgets = resolvePage(content, layout).sections[0].widgets
+    expect(widgets[0].embed).toMatchObject({ type: 'youtube', display: 'overlay' })
+    expect(widgets[1].embed).toBeNull()
   })
 
   it('resolves a release header from the stored snapshot + live cover', () => {

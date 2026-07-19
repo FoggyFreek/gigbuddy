@@ -44,6 +44,16 @@ below.
    by a daily in-process purge and `npm run stats:purge`.
 9. **Kill switch**: `STATS_DISABLED=1` stops all collection without affecting
    the page.
+10. **Embeds are click-to-play, always.** Third-party players (Spotify,
+    YouTube, SoundCloud) never load on page view — the page renders a local
+    facade and the platform's iframe only mounts after the visitor clicks
+    play. YouTube uses the privacy-enhanced `youtube-nocookie.com` host. Once
+    a visitor starts playback, the platform's own privacy policy applies (and
+    it may set cookies) — the notice says so. Metadata fetching (oEmbed/Open
+    Graph) happens server-side on the editor's request only; visitors never
+    trigger third-party fetches. Note that band-configured artwork (Open
+    Graph images, merch images) may be served from external hosts like any
+    linked image on the web.
 
 ## Operator notes (GDPR)
 

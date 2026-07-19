@@ -86,6 +86,23 @@ function parseWidget(raw) {
       const shopUrl = raw.shopUrl ? sanitizeUrl(raw.shopUrl) : null
       return { widget: { id, type: 'merch', title: cleanString(raw.title, MAX_TITLE), shopUrl, items } }
     }
+    // Rich embed card for a pasted URL: metadata (title/image/description) is
+    // snapshotted from the editor's unfurl; the player descriptor itself is
+    // recomputed server-side at resolve time — never stored from the client.
+    case 'embed': {
+      const url = sanitizeUrl(raw.url)
+      if (!url) return fail('Embed widget needs a valid http(s) URL')
+      return {
+        widget: {
+          id,
+          type: 'embed',
+          url,
+          title: cleanString(raw.title, MAX_LABEL),
+          description: cleanString(raw.description, 300),
+          imageUrl: raw.imageUrl ? sanitizeUrl(raw.imageUrl) : null,
+        },
+      }
+    }
     case 'link': {
       const label = cleanString(raw.label, MAX_LABEL)
       const url = sanitizeUrl(raw.url)

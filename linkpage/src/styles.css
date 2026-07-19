@@ -95,6 +95,20 @@ input, select { font: inherit; }
 
 /* platform buttons */
 .platforms { display: flex; flex-direction: column; gap: 12px; }
+.platform-row { display: flex; flex-direction: column; gap: 10px; }
+.platform-row-main { display: flex; gap: 10px; align-items: stretch; }
+.platform-row-main .platform-card { flex: 1; }
+.platform-preview {
+  flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  font-size: 18px;
+  color: var(--text);
+  padding: 0;
+}
+.platform-preview:hover { background: #f4f5f7; }
 .platform-card { display: flex; align-items: center; gap: 12px; min-height: 62px; }
 .platform-card .card-label { text-align: left; }
 .platform-play {
@@ -238,6 +252,63 @@ input, select { font: inherit; }
 }
 .merch-name { padding: 8px 10px 0; font-size: 14px; font-weight: 500; }
 .merch-price { padding: 2px 10px 10px; font-size: 14px; color: var(--text-dim); }
+
+/* embeds — click-to-play facades, inline players, video overlay */
+.inline-embed { width: 100%; border: 0; border-radius: 12px; display: block; }
+
+.embed-card { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; }
+.embed-facade {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: inherit;
+  width: 100%;
+}
+.embed-external {
+  align-self: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-decoration: underline;
+}
+
+.embed-video-card { padding: 0 0 10px; overflow: hidden; }
+.embed-video-facade {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: none;
+  padding: 0;
+  background: #0c0d0f;
+  overflow: hidden;
+}
+.embed-video-facade img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.embed-play-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgb(12 13 15 / 0.75);
+  color: #fff;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 5px;
+}
+.embed-video-facade:hover .embed-play-badge { background: rgb(12 13 15 / 0.9); }
+.embed-caption { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px 0; }
+
+.video-frame { aspect-ratio: 16 / 9; width: 100%; }
+.video-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+.unfurl-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 .page-footer {
   max-width: 600px;
