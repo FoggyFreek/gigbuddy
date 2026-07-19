@@ -22,6 +22,7 @@ import { classifyDevice, classifySource, resolveCountry, visitorHash } from './c
 import { validateLayout } from './layout.js'
 import { resolvePage } from './resolve.js'
 import { sanitizeClickTarget } from './platforms.js'
+import { pageEntitlements } from './entitlements.js'
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,80}$/
@@ -90,6 +91,7 @@ export function createApp(pool) {
     if (!SLUG_RE.test(slug)) return null
     const page = await getPageBySlug(pool, slug)
     if (!page || !page.published_layout) return null
+    if (!pageEntitlements(page.content).enabled) return null
     return page
   }
 
@@ -104,6 +106,9 @@ export function createApp(pool) {
       const page = await getPageBySlug(pool, slug)
       if (!page || !page.published_layout) return res.status(404).json({ error: 'Not found' })
       maybeRefreshContent(page)
+      // A lapsed plan (content sync reported the linkpage feature off) takes
+      // the page offline — same 404 as an unpublished page.
+      if (!pageEntitlements(page.content).enabled) return res.status(404).json({ error: 'Not found' })
       res.set('Cache-Control', 'public, max-age=60')
       res.json(resolvePage(page.content, page.published_layout, page.release))
     } catch (err) {
@@ -252,6 +257,19 @@ export function createApp(pool) {
       const song = (main.content?.songs || []).find((s) => s.id === songId)
       if (!song) return res.status(400).json({ error: 'Pick a song that has streaming links' })
 
+      // Plan cap on smart link pages (silver 3, gold 30; the main page is free).
+      const { maxReleasePages } = pageEntitlements(main.content)
+      if (maxReleasePages !== null) {
+        const existing = await listPagesForTenant(pool, tenantId)
+        const releaseCount = existing.filter((p) => p.page_type === 'release').length
+        if (releaseCount >= maxReleasePages) {
+          return res.status(403).json({
+            error: `Your plan allows up to ${maxReleasePages} release pages — delete one or upgrade in GigBuddy`,
+            code: 'limit_reached',
+          })
+        }
+      }
+
       const slug = String(req.body?.slug || '').toLowerCase()
       if (!SLUG_RE.test(slug) || !slug.startsWith(`${mainSlug}-`)) {
         return res.status(400).json({ error: `Slug must start with "${mainSlug}-"` })
@@ -326,10 +344,12 @@ export function createApp(pool) {
 
   app.get('/api/editor/pages/:pageId/stats', requireSession, loadPage, async (req, res, next) => {
     try {
-      const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365)
+      // The plan's rolling window (30 or 90 days) caps how far back stats go.
+      const retentionDays = pageEntitlements(req.page.content).statsRetentionDays
+      const days = Math.min(Math.max(Number(req.query.days) || 30, 1), retentionDays)
       const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
       const stats = await aggregateStats(pool, req.page.id, since)
-      res.json({ days, enabled: statsEnabled(), ...stats })
+      res.json({ days, retentionDays, enabled: statsEnabled(), ...stats })
     } catch (err) {
       next(err)
     }

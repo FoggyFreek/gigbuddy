@@ -5,7 +5,7 @@ import { createPool } from './db.js'
 import { purgeOldViews } from './statsRepo.js'
 
 const pool = createPool()
-const retentionDays = Number(process.env.STATS_RETENTION_DAYS) || 396
+const retentionDays = Number(process.env.STATS_RETENTION_DAYS) || 30
 
 purgeOldViews(pool, retentionDays)
   .then((deleted) => {

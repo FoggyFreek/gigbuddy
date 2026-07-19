@@ -37,9 +37,11 @@ below.
    deduplicate same-day repeat views.
 7. **Aggregate-only reads**: the editor API exposes counts per dimension,
    never individual view/click rows.
-8. **Retention**: raw view and click rows are deleted after `STATS_RETENTION_DAYS`
-   (default 396 days ≈ 13 months, aligned with common analytics guidance),
-   enforced by a daily in-process purge and `npm run stats:purge`.
+8. **Retention — rolling window**: raw view and click rows live in a rolling
+   window of 30 days by default, or 90 days for bands on the gold plan (the
+   window is synced from GigBuddy per page; `STATS_RETENTION_DAYS` is the
+   fallback, and 90 days is a hard cap regardless of configuration). Enforced
+   by a daily in-process purge and `npm run stats:purge`.
 9. **Kill switch**: `STATS_DISABLED=1` stops all collection without affecting
    the page.
 

@@ -56,14 +56,7 @@ input, select { font: inherit; }
   background: #0c0d0f;
 }
 
-.band-avatar-placeholder {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 56px;
-}
-
+/* No logo set → the band name text carries the header on its own. */
 .band-name { font-size: 34px; margin: 14px 0 6px; font-weight: 600; }
 
 .band-bio {
@@ -424,6 +417,7 @@ input, select { font: inherit; }
   font-size: 13px;
 }
 .stats-toolbar button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.stats-toolbar button:disabled { opacity: 0.4; cursor: default; }
 
 .stats-tiles { display: flex; gap: 12px; }
 .stat-tile {

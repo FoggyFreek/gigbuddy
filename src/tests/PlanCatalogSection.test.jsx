@@ -21,10 +21,14 @@ function wrap(ui) {
 const entitlements = (features = {}, limits = {}) => ({
   features: {
     finance: false, integrations: false, customization: false,
-    song_files: false, chordpro: false, public_promotion: false,
+    song_files: false, chordpro: false, public_promotion: false, linkpage: false,
     ...features,
   },
-  limits: { storage_mb: null, members: null, bands: null, ...limits },
+  limits: {
+    storage_mb: null, members: null, bands: null,
+    linkpage_pages: null, linkpage_stats_days: null,
+    ...limits,
+  },
 })
 
 const PLANS = [

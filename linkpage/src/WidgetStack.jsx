@@ -38,11 +38,7 @@ function BandHeader({ band, onLinkClick }) {
   if (!band) return null
   return (
     <header className="band-header">
-      {band.logoUrl ? (
-        <img className="band-avatar" src={band.logoUrl} alt={band.name || 'Band logo'} />
-      ) : (
-        <div className="band-avatar band-avatar-placeholder">{(band.name || '?').slice(0, 1)}</div>
-      )}
+      {band.logoUrl && <img className="band-avatar" src={band.logoUrl} alt={band.name || 'Band logo'} />}
       <h1 className="band-name">{band.name}</h1>
       {band.bio && <p className="band-bio">{band.bio}</p>}
       <div className="band-socials">

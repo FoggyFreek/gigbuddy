@@ -210,7 +210,10 @@ router.use('/tutorials', currentTermsUser, tutorialsRouter)
 // The public feed itself 404s while the entitlement is missing.
 router.use('/calendar-feed', tenantMember, calendarFeedRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)
-router.use('/linkpage', tenantMember, linkpageRouter)
+// Link-page management is reserved to tenant admins and gated on the linkpage
+// feature (silver/gold). The public export/image routes above stay open — the
+// linkpage app enforces plan state from the entitlements in the export.
+router.use('/linkpage', tenantManage, requireEntitlement(FEATURES.LINKPAGE), linkpageRouter)
 router.use('/files', tenantMember, filesRouter)
 
 export default router

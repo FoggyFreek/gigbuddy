@@ -10,6 +10,8 @@ import {
   listAnnouncedUpcomingGigs,
 } from '../repositories/linkpageRepository.js'
 import { signPayload, verifyPayload, linkpageConfigured, linkpageEditorUrl } from '../security/linkpageTokens.js'
+import { resolveTenantEntitlements } from './entitlementService.js'
+import { FEATURES, LIMITS } from '../auth/entitlements.js'
 import { notFound, serviceError } from './serviceErrors.js'
 
 const NOT_FOUND = notFound('Not found')
@@ -34,13 +36,33 @@ function imageUrl(objectKey) {
 
 const nullable = (v) => v || null
 
+// The plan-derived link-page entitlements shipped inside the export so the
+// decoupled app can enforce them itself (public serving, release-page cap,
+// statistics window). Ownerless legacy tenants skip enforcement everywhere,
+// so they get the most permissive values.
+async function linkpageEntitlements(db, tenantId) {
+  const resolved = await resolveTenantEntitlements(db, tenantId)
+  if (resolved === null) {
+    return { enabled: true, maxReleasePages: null, statsRetentionDays: 90 }
+  }
+  const { features, limits } = resolved.entitlements
+  const statsDays = limits[LIMITS.LINKPAGE_STATS_DAYS]
+  return {
+    enabled: features[FEATURES.LINKPAGE] === true,
+    maxReleasePages: limits[LIMITS.LINKPAGE_PAGES] ?? 0,
+    // The window is 30 or 90 days; unlimited (null) counts as the 90-day max.
+    statsRetentionDays: statsDays === null || statsDays >= 90 ? 90 : 30,
+  }
+}
+
 // Builds the full denormalized content snapshot the linkpage app syncs.
 export async function buildExport(db, slug) {
   if (!linkpageConfigured()) return NOT_CONFIGURED
   const tenant = await getTenantBySlug(db, slug)
   if (!tenant) return NOT_FOUND
 
-  const [links, songs, products, gigs] = await Promise.all([
+  const [entitlements, links, songs, products, gigs] = await Promise.all([
+    linkpageEntitlements(db, tenant.id),
     listProfileLinks(db, tenant.id),
     listSongsWithLinks(db, tenant.id),
     listActiveProducts(db, tenant.id),
@@ -49,6 +71,7 @@ export async function buildExport(db, slug) {
 
   return {
     export: {
+      entitlements,
       band: {
         slug: tenant.slug,
         name: nullable(tenant.band_name),

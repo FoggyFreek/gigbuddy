@@ -10,6 +10,7 @@ const PLAN_FEATURE_KEYS = {
   chordpro: 'chordpro',
   customization: 'customization',
   public_promotion: 'public_promotion',
+  linkpage: 'linkpage',
 } as const
 
 export type PlanFeatureKey = keyof typeof PLAN_FEATURE_KEYS

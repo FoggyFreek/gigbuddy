@@ -17,12 +17,19 @@ export const FEATURES = Object.freeze({
   SONG_FILES: 'song_files',
   CHORDPRO: 'chordpro',
   PUBLIC_PROMOTION: 'public_promotion',
+  // The decoupled link-page app (linkpage/): public band link pages + smart
+  // release landing pages. Silver and gold tiers.
+  LINKPAGE: 'linkpage',
 })
 
 export const LIMITS = Object.freeze({
   STORAGE_MB: 'storage_mb',
   MEMBERS: 'members',
   BANDS: 'bands',
+  // Max smart (release) link pages per band; the main link page is not counted.
+  LINKPAGE_PAGES: 'linkpage_pages',
+  // Rolling statistics window for link pages, in days (30 or 90).
+  LINKPAGE_STATS_DAYS: 'linkpage_stats_days',
 })
 
 export const FEATURE_KEYS = Object.freeze(Object.values(FEATURES))
@@ -35,7 +42,10 @@ export const ENTITLEMENT_KEYS = Object.freeze({
 
 // Features whose stored data is deleted when a downgrade makes them durably
 // unavailable. `finance` is deliberately absent — financial records are never
-// purged (read-only mode instead); `public_promotion` is flag-only (no data).
+// purged (read-only mode instead); `public_promotion` is flag-only (no data);
+// `linkpage` data lives in the decoupled linkpage app, which disables the
+// pages itself when a content sync reports the feature off — nothing to purge
+// on this side.
 export const PURGEABLE_FEATURES = Object.freeze([
   FEATURES.INTEGRATIONS,
   FEATURES.CUSTOMIZATION,

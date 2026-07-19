@@ -28,7 +28,8 @@ export default function Privacy() {
       <p>
         To estimate unique visitors, a truncated, keyed hash of connection data is kept for a single
         day; it rotates daily, cannot be linked across days, and cannot be traced back to you. Raw
-        view counts are automatically deleted after at most 13 months; only aggregate totals remain.
+        counts are automatically deleted after at most 90 days (30 days for most pages); only
+        aggregate totals remain.
       </p>
       <h2>External links</h2>
       <p>

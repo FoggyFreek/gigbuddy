@@ -3,8 +3,11 @@ import './_envSetup.js'
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import request from 'supertest'
 import { verifyPayload } from '../../../server/security/linkpageTokens.js'
+import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
+let clearEntitlementCaches
+let billing
 let seed
 
 const SECRET = 'test-linkpage-secret'
@@ -20,12 +23,18 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
+  const entMod = await import('../../../server/services/entitlementService.js')
+  clearEntitlementCaches = entMod.clearEntitlementCaches
+  billing = await import('./_billing.js')
   await runMigrations()
 })
 
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  await pool.query('DELETE FROM subscription_plans')
+  await seedDefaultPlans(pool)
+  clearEntitlementCaches()
 })
 
 afterAll(async () => {
@@ -131,9 +140,45 @@ describe('public linkpage export', () => {
     expect(res.body.products).toEqual([expect.objectContaining({ name: 'Alpha CD', priceCents: 999 })])
     expect(res.body.links).toEqual([expect.objectContaining({ label: 'Website', url: 'https://alpha.example' })])
 
+    // Ownerless tenant: enforcement skipped → most permissive entitlements.
+    expect(res.body.entitlements).toEqual({ enabled: true, maxReleasePages: null, statsRetentionDays: 90 })
+
     // Tenant isolation: nothing of tenant B may appear anywhere.
     const flat = JSON.stringify(res.body)
     expect(flat).not.toContain('Beta')
+  })
+
+  it('ships plan-derived entitlements: silver 3 pages/30d, gold 30 pages/90d, lapsed disabled', async () => {
+    const exportEntitlements = async () => {
+      clearEntitlementCaches()
+      const res = await request(app)
+        .get('/api/public/linkpage/export/alpha')
+        .set('Authorization', `Bearer ${SECRET}`)
+      expect(res.status).toBe(200)
+      return res.body.entitlements
+    }
+
+    await billing.setTenantOwner(seed.tenantA.id, seed.userA.id)
+    // Owner without a subscription → bronze fallback → feature off.
+    expect(await exportEntitlements()).toEqual({
+      enabled: false,
+      maxReleasePages: 0,
+      statsRetentionDays: 30,
+    })
+
+    const sub = await billing.createSubscription({ userId: seed.userA.id, planSlug: 'silver' })
+    expect(await exportEntitlements()).toEqual({
+      enabled: true,
+      maxReleasePages: 3,
+      statsRetentionDays: 30,
+    })
+
+    await pool.query(`UPDATE subscriptions SET plan_id = (SELECT id FROM subscription_plans WHERE slug = 'gold') WHERE id = $1`, [sub.id])
+    expect(await exportEntitlements()).toEqual({
+      enabled: true,
+      maxReleasePages: 30,
+      statsRetentionDays: 90,
+    })
   })
 })
 
@@ -165,6 +210,29 @@ describe('linkpage handoff', () => {
   it('requires an authenticated tenant member', async () => {
     const res = await request(app).post('/api/linkpage/handoff')
     expect(res.status).toBe(401)
+  })
+
+  it('is reserved to tenant admins — a contributor is denied', async () => {
+    const { rows: [contributor] } = await pool.query(
+      `INSERT INTO users (google_sub, email, name, status) VALUES ('sub-c', 'c@test.local', 'Contrib', 'approved') RETURNING id`,
+    )
+    await pool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at) VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+      [contributor.id, seed.tenantA.id],
+    )
+    const asContributor = (req) =>
+      req.set('x-test-user-id', String(contributor.id)).set('x-test-tenant-id', String(seed.tenantA.id))
+    expect((await asContributor(request(app).post('/api/linkpage/handoff'))).status).toBe(403)
+    expect((await asContributor(request(app).get('/api/linkpage/status'))).status).toBe(403)
+  })
+
+  it('is gated on the linkpage entitlement (bronze fallback is denied)', async () => {
+    await billing.setTenantOwner(seed.tenantA.id, seed.userA.id)
+    clearEntitlementCaches()
+    const res = await asUserA(request(app).post('/api/linkpage/handoff'))
+    expect(res.status).toBe(403)
+    expect(res.body.code).toBe('entitlement_required')
+    expect(res.body.feature).toBe('linkpage')
   })
 
   it('mints a verifiable short-lived token bound to the active tenant', async () => {

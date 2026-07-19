@@ -21,9 +21,10 @@ if (fs.existsSync(distDir)) {
   })
 }
 
-// Statistics retention (PRIVACY.md): purge raw view events past the window,
-// on boot and then daily.
-const retentionDays = Number(process.env.STATS_RETENTION_DAYS) || 396
+// Statistics retention (PRIVACY.md): a rolling window per page — the plan's
+// 30 or 90 days synced from GigBuddy, falling back to this default. Purged on
+// boot and then daily.
+const retentionDays = Number(process.env.STATS_RETENTION_DAYS) || 30
 async function purge() {
   try {
     const deleted = await purgeOldViews(pool, retentionDays)

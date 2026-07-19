@@ -113,15 +113,21 @@ export async function aggregateStats(executor, pageId, since) {
   }
 }
 
-// Retention: raw view/click events older than the configured window are deleted.
-export async function purgeOldViews(executor, retentionDays) {
+// Retention: raw view/click events fall out of a rolling window — the page's
+// plan window (content.entitlements.statsRetentionDays, synced from GigBuddy;
+// 30 or 90 days) when present, else the caller's default, hard-capped at 90.
+const RETENTION_PREDICATE = `
+  occurred_at < NOW() - make_interval(days =>
+    LEAST(COALESCE((p.content->'entitlements'->>'statsRetentionDays')::int, $1), 90))`
+
+export async function purgeOldViews(executor, defaultRetentionDays) {
   const { rowCount } = await executor.query(
-    `DELETE FROM page_views WHERE occurred_at < NOW() - make_interval(days => $1)`,
-    [retentionDays],
+    `DELETE FROM page_views v USING pages p WHERE v.page_id = p.id AND v.${RETENTION_PREDICATE.trim()}`,
+    [defaultRetentionDays],
   )
   const { rowCount: clickCount } = await executor.query(
-    `DELETE FROM page_clicks WHERE occurred_at < NOW() - make_interval(days => $1)`,
-    [retentionDays],
+    `DELETE FROM page_clicks c USING pages p WHERE c.page_id = p.id AND c.${RETENTION_PREDICATE.trim()}`,
+    [defaultRetentionDays],
   )
   return rowCount + clickCount
 }

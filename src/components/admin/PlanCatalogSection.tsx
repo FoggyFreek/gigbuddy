@@ -51,6 +51,8 @@ const LIMIT_LABELS: Record<string, string> = {
   storage_mb: 'Storage (MB)',
   members: 'Members',
   bands: 'Bands',
+  linkpage_pages: 'Release link pages',
+  linkpage_stats_days: 'Link statistics history (days)',
 }
 
 function centsToEurInput(cents: number | null): string {

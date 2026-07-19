@@ -153,7 +153,7 @@ export default function ProfilePage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>{t($ => $.title)}</Typography>
-        {canWritePlanning && <LinkpageEditButton />}
+        {isAdmin && <LinkpageEditButton />}
         {canWritePlanning && <SaveStatusLabel status={saveStatus} />}
       </Box>
 

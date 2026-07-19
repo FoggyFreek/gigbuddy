@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { getStats } from './api.js'
 
-const RANGES = [7, 30, 90, 365]
+// Statistics live in a rolling window (30 days, 90 on gold) — ranges beyond
+// the page's window are disabled.
+const RANGES = [7, 30, 90]
 
 function BarList({ title, rows, total, valueKey = 'views' }) {
   return (
@@ -61,7 +63,13 @@ export default function StatsPanel({ session, pageId }) {
     <div className="stats-panel">
       <div className="stats-toolbar">
         {RANGES.map((range) => (
-          <button key={range} className={days === range ? 'active' : ''} onClick={() => setDays(range)}>
+          <button
+            key={range}
+            className={days === range ? 'active' : ''}
+            onClick={() => setDays(range)}
+            disabled={range > stats.retentionDays}
+            title={range > stats.retentionDays ? 'Available on the gold plan' : undefined}
+          >
             {range} days
           </button>
         ))}

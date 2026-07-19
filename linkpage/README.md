@@ -31,10 +31,17 @@ into its own repository — nothing else needs to change.
   listings stay current without coupling page loads to GigBuddy uptime.
 - **Layout** (sections and widgets, their order and settings) is owned by this
   app: a draft the editor works on, and a published copy visitors see.
-- **Editing**: in GigBuddy, a band member clicks "Edit link page" (Profile
-  page). GigBuddy mints a 10-minute HMAC handoff token and opens
+- **Editing**: in GigBuddy, a **tenant admin** clicks "Edit link page"
+  (Profile page). GigBuddy mints a 10-minute HMAC handoff token and opens
   `/edit#gbtoken=…` here; the app exchanges it for a 12-hour editor session.
-  There are no accounts in this app — GigBuddy is the identity provider.
+  There are no accounts in this app — GigBuddy is the identity provider and
+  gates the handoff on role (tenant admin) and plan.
+- **Plan gating** (GigBuddy tiers are the source of truth; each export ships
+  an `entitlements` block this app enforces): the link-page feature is
+  **silver and gold** only. Silver allows up to **3** release pages with a
+  **30-day** statistics window; gold allows **30** release pages and a
+  **90-day** window. A lapsed plan takes the public pages offline (404) on
+  the next content sync. Ownerless legacy bands skip enforcement.
 - **Preview**: the editor's preview tab renders the draft through the exact
   same resolution + React components as the public page.
 - **Release pages**: from the editor's "New release page" button a member
@@ -46,7 +53,8 @@ into its own repository — nothing else needs to change.
   `page_clicks`) — views by device class, traffic source, country and day,
   plus outbound clicks per platform/target and a conversion-by-source table
   (views → clicks → CTR) for campaign attribution (use `?utm_source=…` in
-  campaign links). See [PRIVACY.md](./PRIVACY.md) for the hard privacy rules
+  campaign links). Statistics live in a **rolling window** — 30 days, or 90
+  on the gold plan. See [PRIVACY.md](./PRIVACY.md) for the hard privacy rules
   (no cookies, no IPs, no fingerprints, retention).
 
 ### Widget types
