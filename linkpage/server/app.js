@@ -24,6 +24,13 @@ import { resolvePage } from './resolve.js'
 import { sanitizeClickTarget } from './platforms.js'
 import { pageEntitlements } from './entitlements.js'
 import { fetchLinkMetadata } from './unfurl.js'
+import { createConcurrencyGate } from './concurrencyGate.js'
+
+// Bound concurrent editor unfurls: at most a few in flight globally and a
+// couple per tenant, so the endpoint's remote fetches can't fan out into
+// memory/socket pressure even though each is already byte- and time-capped.
+const UNFURL_MAX_GLOBAL = 6
+const UNFURL_MAX_PER_TENANT = 2
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60
 
@@ -276,13 +283,21 @@ export function createApp(pool) {
   }
 
   // Link enrichment for the editor: oEmbed / Open Graph metadata (title,
-  // artwork, description) plus the embed descriptor for a pasted URL.
+  // artwork, description) plus the embed descriptor for a pasted URL. Rate-
+  // limited by in-flight concurrency (global + per tenant) → 429 when saturated.
+  const unfurlGate = createConcurrencyGate({ max: UNFURL_MAX_GLOBAL, maxPerKey: UNFURL_MAX_PER_TENANT })
   app.post('/api/editor/unfurl', requireSession, async (req, res) => {
+    const key = req.editorSession.tenantId
+    if (!unfurlGate.tryAcquire(key)) {
+      return res.status(429).json({ error: 'Too many link lookups at once — try again in a moment' })
+    }
     const url = typeof req.body?.url === 'string' ? req.body.url.trim() : ''
     try {
       res.json(await fetchLinkMetadata(url))
     } catch {
       res.status(422).json({ error: 'Could not read that link — check the URL' })
+    } finally {
+      unfurlGate.release(key)
     }
   })
 

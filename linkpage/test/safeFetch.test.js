@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { isPublicAddress, assertPublicUrl, pinnedLookup, safeFetchText } from '../server/safeFetch.js'
+import { EventEmitter } from 'node:events'
+import { isPublicAddress, assertPublicUrl, pinnedLookup, safeFetchText, consumeResponse } from '../server/safeFetch.js'
+
+// Minimal stand-in for an http.IncomingMessage stream.
+function fakeRes({ statusCode = 200, headers = {} } = {}) {
+  const res = new EventEmitter()
+  res.statusCode = statusCode
+  res.headers = headers
+  res.destroyed = false
+  res.destroy = () => {
+    res.destroyed = true
+  }
+  res.resume = () => {}
+  return res
+}
 
 describe('isPublicAddress', () => {
   it('accepts public unicast v4/v6', () => {
@@ -102,5 +116,47 @@ describe('safeFetchText redirect handling', () => {
   it('throws on 4xx/5xx', async () => {
     const transport = async () => ({ status: 500, location: null, body: '' })
     await expect(safeFetchText('https://example.com/', 'text/html', { transport })).rejects.toThrow(/500/)
+  })
+})
+
+describe('consumeResponse (byte cap)', () => {
+  it('rejects a declared Content-Length over the cap before reading the body', async () => {
+    const res = fakeRes({ headers: { 'content-length': '5000000' } })
+    const p = consumeResponse(res, 10)
+    await expect(p).rejects.toThrow(/too large/)
+    expect(res.destroyed).toBe(true)
+  })
+
+  it('aborts mid-stream and truncates once the running total exceeds the cap', async () => {
+    const res = fakeRes()
+    const p = consumeResponse(res, 10)
+    res.emit('data', Buffer.from('0123456789ABCDEF')) // 16 bytes > 10
+    const out = await p
+    expect(out.body).toBe('0123456789')
+    expect(res.destroyed).toBe(true)
+    // Late events after settling are ignored (no double-resolve / no growth).
+    res.emit('data', Buffer.from('more'))
+    res.emit('end')
+    expect((await p).body).toBe('0123456789')
+  })
+
+  it('reads a normal body in full', async () => {
+    const res = fakeRes({ headers: { 'content-length': '11' } })
+    const p = consumeResponse(res, 100)
+    res.emit('data', Buffer.from('hello '))
+    res.emit('data', Buffer.from('world'))
+    res.emit('end')
+    expect((await p).body).toBe('hello world')
+    expect(res.destroyed).toBe(false)
+  })
+
+  it('rejects on a stream error and resolves redirects without a body', async () => {
+    const errRes = fakeRes()
+    const errP = consumeResponse(errRes, 100)
+    errRes.emit('error', new Error('socket boom'))
+    await expect(errP).rejects.toThrow('socket boom')
+
+    const redir = fakeRes({ statusCode: 302, headers: { location: 'https://next.example/' } })
+    expect(await consumeResponse(redir, 100)).toMatchObject({ status: 302, location: 'https://next.example/', body: '' })
   })
 })

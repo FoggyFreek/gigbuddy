@@ -128,6 +128,14 @@ that resolves to a private address — or a DNS-rebinding race — can never
 connect. Operators may additionally route egress through a public-internet-only
 proxy; these controls hold regardless.
 
+Resource limits: each fetch has a 5s timeout and a 600 KiB body cap enforced
+*before* buffering — a declared `Content-Length` over the cap is rejected up
+front, and the body is read incrementally with the socket destroyed the instant
+the running total exceeds the cap (so an undeclared/lying length or an
+indefinitely-streamed response can neither exhaust memory nor hang). The
+endpoint is also concurrency-limited (a few in flight globally, a couple per
+tenant → 429 when saturated) so it can't fan out into memory/socket pressure.
+
 ## Integration contract (GigBuddy side)
 
 - `GET /api/public/linkpage/export/:slug` — full content snapshot;

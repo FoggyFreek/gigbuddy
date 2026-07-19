@@ -90,8 +90,58 @@ export function pinnedLookup(hostname, options, callback) {
   })
 }
 
+// Consumes a response stream with a hard byte cap, enforced two ways so an
+// oversize body is never fully buffered:
+//   - a declared Content-Length over the cap is rejected before reading a byte;
+//   - the body is read incrementally and the socket is destroyed the instant
+//     the running byte total exceeds the cap (covers chunked/undeclared and
+//     lying Content-Length, incl. an indefinitely-streamed response — combined
+//     with the request timeout it can neither exhaust memory nor hang).
+// A `settled` latch makes resolve/reject fire exactly once. Exported for tests.
+export function consumeResponse(res, maxBytes = MAX_BYTES) {
+  return new Promise((resolve, reject) => {
+    const status = res.statusCode || 0
+    let settled = false
+    const finish = (fn, arg) => {
+      if (settled) return
+      settled = true
+      fn(arg)
+    }
+    // Attached first so a destroy()-induced 'error' after settling is swallowed.
+    res.on('error', (err) => finish(reject, err))
+
+    // Redirect: hand the target back without reading the body.
+    if (status >= 300 && status < 400 && res.headers.location) {
+      finish(resolve, { status, location: res.headers.location, body: '' })
+      res.resume?.()
+      return
+    }
+
+    const declared = Number(res.headers['content-length'])
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      res.destroy()
+      finish(reject, new Error('response too large'))
+      return
+    }
+
+    let size = 0
+    const chunks = []
+    res.on('data', (chunk) => {
+      if (settled) return
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      size += buf.length
+      chunks.push(buf)
+      if (size > maxBytes) {
+        res.destroy()
+        finish(resolve, { status, location: null, body: Buffer.concat(chunks).subarray(0, maxBytes).toString('utf8') })
+      }
+    })
+    res.on('end', () => finish(resolve, { status, location: null, body: Buffer.concat(chunks).toString('utf8') }))
+  })
+}
+
 // Performs ONE request (no redirect following) with the pinned lookup, a hard
-// timeout, and a response-size cap. Resolves { status, location, body }.
+// timeout, and the capped body reader above. Resolves { status, location, body }.
 function performRequest(url, accept) {
   const client = url.protocol === 'https:' ? https : http
   return new Promise((resolve, reject) => {
@@ -103,27 +153,7 @@ function performRequest(url, accept) {
         lookup: pinnedLookup,
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
-      (res) => {
-        const status = res.statusCode || 0
-        // Redirect: hand the target back to the loop without reading the body.
-        if (status >= 300 && status < 400 && res.headers.location) {
-          res.destroy()
-          resolve({ status, location: res.headers.location, body: '' })
-          return
-        }
-        res.setEncoding('utf8')
-        let body = ''
-        res.on('data', (chunk) => {
-          body += chunk
-          if (body.length > MAX_BYTES) {
-            body = body.slice(0, MAX_BYTES)
-            res.destroy()
-            resolve({ status, location: null, body })
-          }
-        })
-        res.on('end', () => resolve({ status, location: null, body }))
-        res.on('error', reject)
-      },
+      (res) => consumeResponse(res).then(resolve, reject),
     )
     req.on('error', reject)
     req.end()
