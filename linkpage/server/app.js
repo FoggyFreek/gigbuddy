@@ -76,6 +76,10 @@ export function createApp(pool) {
   app.set('trust proxy', true)
   app.use(express.json({ limit: '256kb' }))
 
+  // Liveness probe for the container/reverse proxy. Deliberately trivial (no
+  // DB round-trip) so it stays up while the DB reconnects.
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
+
   // Content exports are fetched per band (by the band's main slug) and stored
   // per page, so release pages resolve against the same fresh snapshot.
   async function syncContent(page, mainSlug) {

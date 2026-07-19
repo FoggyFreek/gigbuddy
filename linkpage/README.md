@@ -103,11 +103,49 @@ port (`LINKPAGE_PORT`). Host it on its own subdomain (e.g. `link.example.com`)
 behind a CDN/proxy that sets a country header (`cf-ipcountry`,
 `x-vercel-ip-country`, `fastly-country-code` or `x-country-code`) — without
 one, the country dimension records `unknown` (no IP geolocation is done here,
-by design). A `Dockerfile` is included.
+by design).
 
 Run `npm run migrate` on deploy. Statistics retention is enforced daily
 in-process; deployments that prefer an external scheduler can run
 `npm run stats:purge` instead.
+
+### Deploy on a VPS with Docker
+
+This app is fully decoupled (its own database, no imports from GigBuddy), so it
+runs on its own host. The included `docker-compose.yml` brings up the API/SPA
+server, its **own** Postgres, and a one-shot migration step:
+
+```
+cp .env.example .env      # set POSTGRES_PASSWORD, GIGBUDDY_URL,
+                          #   GIGBUDDY_SYNC_SECRET, LINKPAGE_PUBLIC_URL
+docker compose up -d --build
+```
+
+`migrate` runs `server/migrate.js` and exits; `app` starts only after it
+succeeds, and exposes `127.0.0.1:3010` with a `/api/health` liveness probe.
+Front it with a TLS-terminating reverse proxy (Caddy/nginx/Traefik) for your
+`link.<domain>` and forward a country header if you want the country stat.
+
+For a three-subdomain setup — GigBuddy at `app.<domain>`, this app at
+`link.<domain>`, a marketing site at `www.<domain>` — set:
+
+| Where | Variable | Value |
+|---|---|---|
+| this app (`link`) | `GIGBUDDY_URL` | `https://app.<domain>` (server-to-server export pull) |
+| this app (`link`) | `GIGBUDDY_SYNC_SECRET` | shared secret |
+| this app (`link`) | `LINKPAGE_PUBLIC_URL` | `https://link.<domain>` |
+| GigBuddy (`app`) | `LINKPAGE_SECRET` | **same** shared secret |
+| GigBuddy (`app`) | `LINKPAGE_URL` | `https://link.<domain>` |
+| GigBuddy (`app`) | `APP_URL` | `https://app.<domain>` (the image-proxy URLs in exports are built from this) |
+
+**Cross-origin image note:** public pages on `link.<domain>` embed band
+artwork served by GigBuddy at `app.<domain>/api/public/linkpage/image`. GigBuddy's
+Helmet default sends `Cross-Origin-Resource-Policy: same-origin`, which blocks
+that cross-origin `<img>`. Since `app.` and `link.` are the same site, GigBuddy's
+image route must send `Cross-Origin-Resource-Policy: same-site` for logos and
+covers to render. (There is no browser CORS between the two: the export pull is
+server-to-server, the editor handoff is a top-level navigation, and the editor
+API is same-origin.)
 
 ### Link enrichment (oEmbed / Open Graph)
 

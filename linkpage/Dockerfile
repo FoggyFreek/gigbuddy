@@ -13,6 +13,9 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY server ./server
 COPY --from=build /app/dist ./dist
+# Drop root: the runtime only needs to read the app and listen on a port.
+USER node
 EXPOSE 3010
-# Run `node server/migrate.js` once per deploy before starting.
+# Migrations run as a separate one-shot step (see docker-compose.yml); this is
+# the long-running API + SPA server.
 CMD ["node", "server/index.js"]
