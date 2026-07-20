@@ -50,6 +50,18 @@
     "registrationNumber": "Company registration number",
     "registrationHelper": "Format: {{example}}",
     "registrationSameAsVat": "Uses the VAT number as the registration number",
+    "legalForm": "Legal form",
+    "legalFormUnset": "Not specified",
+    "legalFormHelper": "A company must list its directors on invoices",
+    "legalForms": {
+      "sole_trader": "Sole trader / self-employed",
+      "partnership": "Partnership",
+      "company": "Company (BV, GmbH, Ltd, …)",
+      "association": "Association / foundation",
+      "other": "Other"
+    },
+    "directors": "Managing director(s)",
+    "directorsHelper": "Shown on invoices (e.g. required for a German GmbH)",
     "street": "Street + number",
     "postalCode": "Postal code",
     "city": "City",

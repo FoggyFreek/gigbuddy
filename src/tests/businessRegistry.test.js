@@ -6,6 +6,9 @@ import {
   getRegistrationLabel,
   getRegistrationExample,
   getRegistrationOfficeLabel,
+  LEGAL_FORMS,
+  isKnownLegalForm,
+  requiresCompanyDisclosure,
 } from '../../shared/businessRegistry.js'
 
 describe('businessRegistry', () => {
@@ -57,6 +60,19 @@ describe('businessRegistry', () => {
       expect(registrationUsesOffice(c)).toBe(false)
       expect(getRegistrationOfficeLabel(c)).toBeNull()
     }
+  })
+
+  it('only an incorporated company owes the extra invoice disclosures', () => {
+    expect(LEGAL_FORMS).toContain('sole_trader')
+    expect(LEGAL_FORMS).toContain('company')
+    expect(isKnownLegalForm('company')).toBe(true)
+    expect(isKnownLegalForm('llc')).toBe(false)
+    expect(requiresCompanyDisclosure('company')).toBe(true)
+    // The typical band (sole trader / partnership) owes nothing extra.
+    expect(requiresCompanyDisclosure('sole_trader')).toBe(false)
+    expect(requiresCompanyDisclosure('partnership')).toBe(false)
+    expect(requiresCompanyDisclosure('association')).toBe(false)
+    expect(requiresCompanyDisclosure(null)).toBe(false)
   })
 
   it('exposes a register label and example per country', () => {

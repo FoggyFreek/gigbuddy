@@ -191,6 +191,27 @@ describe('PATCH /api/profile — financial fields', () => {
     }
   })
 
+  it('stores legal_form and directors for an incorporated band', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ legal_form: 'company', directors: 'Anna Müller, Ben Klein' }),
+    ).expect(200)
+    expect(res.body.legal_form).toBe('company')
+    expect(res.body.directors).toBe('Anna Müller, Ben Klein')
+  })
+
+  it('rejects an unknown legal_form with 400 invalid_legal_form', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ legal_form: 'llc' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_legal_form')
+  })
+
+  it('DB constraint rejects an unsupported legal_form via raw SQL', async () => {
+    await expect(
+      pool.query('UPDATE tenants SET legal_form = $1 WHERE id = $2', ['llc', seed.tenantA.id]),
+    ).rejects.toThrow()
+  })
+
   it('rejects a vat_country-only change that would orphan an incompatible tax_id', async () => {
     // Store a Dutch VAT number under the default nl country.
     await as(seed.superUser.id, seed.tenantA.id)(

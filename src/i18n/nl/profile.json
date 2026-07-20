@@ -50,6 +50,18 @@
     "registrationNumber": "Inschrijvingsnummer",
     "registrationHelper": "Formaat: {{example}}",
     "registrationSameAsVat": "Gebruikt het btw-nummer als inschrijvingsnummer",
+    "legalForm": "Rechtsvorm",
+    "legalFormUnset": "Niet opgegeven",
+    "legalFormHelper": "Een vennootschap vermeldt bestuurders op facturen",
+    "legalForms": {
+      "sole_trader": "Eenmanszaak / zzp",
+      "partnership": "Maatschap / vof",
+      "company": "Vennootschap (bv, GmbH, Ltd, …)",
+      "association": "Vereniging / stichting",
+      "other": "Anders"
+    },
+    "directors": "Bestuurder(s)",
+    "directorsHelper": "Op facturen getoond (bijv. vereist voor een Duitse GmbH)",
     "street": "Straat + nummer",
     "postalCode": "Postcode",
     "city": "Plaats",

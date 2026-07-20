@@ -10,7 +10,16 @@ import {
   registrationSameAsVat as registrationSameAsVatJs,
   registrationUsesOffice as registrationUsesOfficeJs,
   isValidRegistrationNumber as isValidRegistrationNumberJs,
+  LEGAL_FORMS as LEGAL_FORMS_JS,
+  requiresCompanyDisclosure as requiresCompanyDisclosureJs,
 } from '../../shared/businessRegistry.js'
+
+export type LegalForm = 'sole_trader' | 'partnership' | 'company' | 'association' | 'other'
+export const LEGAL_FORMS = LEGAL_FORMS_JS as readonly LegalForm[]
+
+export function requiresCompanyDisclosure(legalForm: string | null | undefined): boolean {
+  return requiresCompanyDisclosureJs(legalForm ?? undefined) as boolean
+}
 
 export function getRegistrationLabel(country: string | null | undefined): string | null {
   return getRegistrationLabelJs(country ?? undefined) as string | null

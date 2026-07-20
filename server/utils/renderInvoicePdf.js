@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit'
 import QRCode from 'qrcode'
 import { computeInvoiceTotals } from './computeInvoiceTotals.js'
 import { logger } from './logger.js'
-import { getRegistrationLabel, getRegistrationOfficeLabel } from '../../shared/businessRegistry.js'
+import { getRegistrationLabel, getRegistrationOfficeLabel, requiresCompanyDisclosure } from '../../shared/businessRegistry.js'
 import { normalizeVatCountry, getVatLabel, getVatIdLabel } from '../../shared/vatRates.js'
 import { resolveInvoiceLng, getInvoiceT, invoiceIntlLocale } from './invoiceI18n.js'
 
@@ -195,6 +195,10 @@ function drawAddresses(doc, invoice, tenant, startY, { t }) {
     tenant.kvk_number && tenant.registration_office && officeLabel
       ? `${officeLabel}: ${tenant.registration_office}` : null,
     tenant.tax_id     ? `${getVatIdLabel(tenant.vat_country)}: ${tenant.tax_id}` : null,
+    // Company-law disclosure (e.g. Germany's GmbHG §35a): only an incorporated
+    // band lists its managing directors on the invoice.
+    requiresCompanyDisclosure(tenant.legal_form) && tenant.directors
+      ? `${t('directors')}: ${tenant.directors}` : null,
   ].filter(Boolean)
   if (regLines.length) {
     leftY += 4

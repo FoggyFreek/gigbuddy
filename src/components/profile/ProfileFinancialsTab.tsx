@@ -20,7 +20,9 @@ import { VAT_COUNTRY_CODES, getVatIdExample, isValidVatId } from '../../utils/va
 import {
   getRegistrationLabel, getRegistrationExample, getRegistrationOfficeLabel, getRegistrationOfficeExample,
   registrationSameAsVat, registrationUsesOffice, isValidRegistrationNumber,
+  LEGAL_FORMS, requiresCompanyDisclosure,
 } from '../../utils/businessRegistry.ts'
+import type { LegalForm } from '../../utils/businessRegistry.ts'
 
 // Localized country names from the 2-letter code (e.g. 'nl' → 'Netherlands'),
 // so the VAT-country dropdown reads naturally without hand-maintained i18n keys.
@@ -141,6 +143,33 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
             onChange={(e) => onChange('registration_office', e.target.value.slice(0, 120))}
             slotProps={{ htmlInput: { maxLength: 120 } }}
             placeholder={getRegistrationOfficeExample(form.vat_country)}
+          />
+        </Grid>
+      )}
+      <Grid size={{ xs: 12, md: requiresCompanyDisclosure(form.legal_form) ? 6 : 12 }}>
+        <TextField
+          select
+          label={t($ => $.financials.legalForm)}
+          fullWidth
+          value={form.legal_form}
+          onChange={(e) => onChange('legal_form', e.target.value)}
+          helperText={t($ => $.financials.legalFormHelper)}
+        >
+          <MenuItem value=""><em>{t($ => $.financials.legalFormUnset)}</em></MenuItem>
+          {LEGAL_FORMS.map((lf) => (
+            <MenuItem key={lf} value={lf}>{t($ => $.financials.legalForms[lf])}</MenuItem>
+          ))}
+        </TextField>
+      </Grid>
+      {requiresCompanyDisclosure(form.legal_form) && (
+        <Grid size={{ xs: 12, md: 6 }}>
+          <TextField
+            label={t($ => $.financials.directors)}
+            fullWidth
+            value={form.directors}
+            onChange={(e) => onChange('directors', e.target.value.slice(0, 300))}
+            slotProps={{ htmlInput: { maxLength: 300 } }}
+            helperText={t($ => $.financials.directorsHelper)}
           />
         </Grid>
       )}
@@ -283,6 +312,13 @@ function FinancialsView({ form }: Readonly<FinancialsViewProps>) {
           {registrationSameAsVat(form.vat_country)
             ? t($ => $.financials.registrationSameAsVat)
             : [form.kvk_number, form.registration_office].filter(Boolean).join(' · ') || '—'}
+        </Typography>
+      </Grid>
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="caption" color="text.secondary">{t($ => $.financials.legalForm)}</Typography>
+        <Typography>
+          {form.legal_form ? t($ => $.financials.legalForms[form.legal_form as LegalForm]) : '—'}
+          {requiresCompanyDisclosure(form.legal_form) && form.directors ? ` · ${form.directors}` : ''}
         </Typography>
       </Grid>
       <Grid size={12}>

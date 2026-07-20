@@ -44,6 +44,26 @@ export const BUSINESS_REGISTRY = Object.freeze({
   gb: { label: 'Company number', pattern: /^(\d{8}|[A-Z]{2}\d{6})$/i, example: '12345678' },
 })
 
+// Legal forms a music group realistically takes. Only `company` (an
+// incorporated, limited-liability entity in the commercial register) triggers
+// the national company-law invoice disclosures — managing directors and the
+// register court/number (Germany GmbHG §35a, France société mentions, …). Sole
+// traders and partnerships owe only the EU Art. 226 essentials. Mirrors the
+// CHECK in migration 127_tenant_legal_form.sql.
+export const LEGAL_FORMS = Object.freeze([
+  'sole_trader', 'partnership', 'company', 'association', 'other',
+])
+
+export function isKnownLegalForm(form) {
+  return typeof form === 'string' && LEGAL_FORMS.includes(form)
+}
+
+// True when the legal form owes the company-law disclosures (managing directors,
+// register court + number) on its invoices.
+export function requiresCompanyDisclosure(legalForm) {
+  return legalForm === 'company'
+}
+
 function registryFor(country) {
   return BUSINESS_REGISTRY[normalizeVatCountry(country) ?? DEFAULT_VAT_COUNTRY]
 }

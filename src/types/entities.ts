@@ -146,6 +146,10 @@ export interface Tenant {
   kvk_number?: string
   /** Court/city/province the registration number is scoped to (DE/FR/AT/IT). */
   registration_office?: string
+  /** Legal form of the band; 'company' triggers extra invoice disclosures. */
+  legal_form?: string
+  /** Managing directors / board — disclosed on invoices by incorporated bands. */
+  directors?: string
   iban?: string
   tax_id?: string
   accent_color?: string | null

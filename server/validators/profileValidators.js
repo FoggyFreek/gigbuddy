@@ -2,7 +2,7 @@
 import { parsePositiveId as parseId } from './common.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 import { DEFAULT_VAT_COUNTRY, normalizeVatCountry, isValidVatId } from '../../shared/vatRates.js'
-import { isValidRegistrationNumber, normalizeRegistrationNumber } from '../../shared/businessRegistry.js'
+import { isValidRegistrationNumber, normalizeRegistrationNumber, isKnownLegalForm } from '../../shared/businessRegistry.js'
 
 // Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
 export const MOLLIE_KEY_RE = /^(live|test)_[A-Za-z0-9]{25,}$/
@@ -91,6 +91,8 @@ export const FINANCIAL_FIELDS = [
   'address_country',
   'kvk_number',
   'registration_office',
+  'legal_form',
+  'directors',
   'iban',
   'tax_id',
   'tax_percentage',
@@ -110,6 +112,8 @@ const TEXT_MAX_LENGTHS = {
   address_country: 200,
   // Court / city / province the registration number is scoped to (DE/FR/AT/IT).
   registration_office: 120,
+  // Managing directors / board, disclosed on invoices by incorporated bands.
+  directors: 300,
 }
 
 const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/
@@ -137,6 +141,12 @@ function validateVatCountry(raw) {
   const code = normalizeVatCountry(raw)
   if (!code) return { error: 'invalid_vat_country' }
   return { value: code }
+}
+
+function validateLegalForm(raw) {
+  if (raw === null || raw === undefined || raw === '') return { value: null }
+  if (!isKnownLegalForm(raw)) return { error: 'invalid_legal_form' }
+  return { value: raw }
 }
 
 // The company registration number (KvK/Handelsregister/SIREN/…) is validated
@@ -196,6 +206,7 @@ const FINANCIAL_VALIDATORS = {
   applies_kor: validateAppliesKor,
   tax_percentage: validateTaxPercentage,
   vat_country: validateVatCountry,
+  legal_form: validateLegalForm,
   iban: makeStrippedValidator('iban', IBAN_RE, true),
 }
 

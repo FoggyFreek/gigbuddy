@@ -7,6 +7,7 @@
   "paymentTerm_one": "Betaalvoorwaarden: binnen {{count}} dag",
   "paymentTerm_other": "Betaalvoorwaarden: binnen {{count}} dagen",
   "attnPrefix": "t.a.v.",
+  "directors": "Bestuurder(s)",
   "colDescription": "Beschrijving",
   "colQuantity": "Aantal",
   "colPriceExclVat": "Prijs excl. {{vat}}",
