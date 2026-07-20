@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { computeInvoiceTotals } from './computeInvoiceTotals.js'
 import { logger } from './logger.js'
 import { getRegistrationLabel, getRegistrationOfficeLabel, requiresCompanyDisclosure } from '../../shared/businessRegistry.js'
-import { normalizeVatCountry, getVatLabel, getVatIdLabel, korApplies } from '../../shared/vatRates.js'
+import { resolveVatCountry, getVatLabel, getVatIdLabel, korApplies } from '../../shared/vatRates.js'
 import { resolveInvoiceLng, getInvoiceT, invoiceIntlLocale } from './invoiceI18n.js'
 
 const PAGE_MARGIN = 48
@@ -236,7 +236,7 @@ function drawAddresses(doc, invoice, tenant, startY, { t }) {
     rightY += 12
   }
 
-  const custCountry = normalizeVatCountry(invoice.customer_address_country)
+  const custCountry = resolveVatCountry(invoice.customer_address_country)
   const customerRegLabel = (custCountry && getRegistrationLabel(custCountry)) || 'Reg.'
   const customerVatIdLabel = custCountry ? getVatIdLabel(custCountry) : 'VAT no.'
   for (const line of [

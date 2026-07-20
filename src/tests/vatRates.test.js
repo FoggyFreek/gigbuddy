@@ -17,6 +17,7 @@ import {
   isEuVatCountry,
   korApplies,
   normalizeVatCountry,
+  resolveVatCountry,
   snapVatRate,
 } from '../../shared/vatRates.js'
 
@@ -120,6 +121,18 @@ describe('vatRates country config', () => {
         for (const sample of samples) expect(isValidVatId(other, sample)).toBe(false)
       }
     }
+  })
+
+  it('resolves a country given as a code or a localized name', () => {
+    expect(resolveVatCountry('de')).toBe('de')
+    expect(resolveVatCountry('DE')).toBe('de')
+    expect(resolveVatCountry('Germany')).toBe('de')
+    expect(resolveVatCountry('Deutschland')).toBe('de')
+    expect(resolveVatCountry('Duitsland')).toBe('de') // Dutch name
+    expect(resolveVatCountry('Frankrijk')).toBe('fr')
+    expect(resolveVatCountry('Netherlands')).toBe('nl')
+    expect(resolveVatCountry('Xanadu')).toBeNull()
+    expect(resolveVatCountry('')).toBeNull()
   })
 
   it('marks EU membership (UK is supported but not EU)', () => {

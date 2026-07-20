@@ -1,6 +1,6 @@
 // Pure request/parameter validation for invoice routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
-import { normalizeVatCountry, isEuVatCountry, isValidVatId } from '../../shared/vatRates.js'
+import { normalizeVatCountry, resolveVatCountry, isEuVatCountry, isValidVatId } from '../../shared/vatRates.js'
 export { formatInvoiceNumber } from '../domain/invoice.js'
 
 // Validates that an invoice actually qualifies for the intra-EU Art. 196 reverse
@@ -12,7 +12,9 @@ export function validateReverseCharge({ supplierCountry, customerCountry, custom
   const taxId = String(customerTaxId ?? '').replace(/\s+/g, '').toUpperCase()
   if (!taxId) return 'customer_tax_id_required_for_reverse_charge'
   const supplier = normalizeVatCountry(supplierCountry)
-  const customer = normalizeVatCountry(customerCountry)
+  // The customer country is free text on the invoice (and copied from venue/gig
+  // records), so accept a country name as well as a code.
+  const customer = resolveVatCountry(customerCountry)
   if (!supplier || !isEuVatCountry(supplier)) return 'reverse_charge_requires_eu_supplier'
   if (!customer || !isEuVatCountry(customer)) return 'reverse_charge_requires_eu_customer'
   if (customer === supplier) return 'reverse_charge_requires_cross_border'

@@ -245,6 +245,18 @@ describe('invoices — reverse charge & supply date', () => {
     expect(r.body.error).toBe('customer_tax_id_required_for_reverse_charge')
   })
 
+  it('accepts reverse charge when the customer country is a name, not a code', async () => {
+    // Venue/gig records copy the country name into the draft, so "Germany" (not
+    // "DE") must still resolve for a valid intra-EU reverse charge.
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'Germany',
+      customer_tax_id: 'DE123456789',
+      lines: [{ description: 'Gig in DE', quantity: 1, unit_price_cents: 100000, tax_percentage: 21 }],
+    })).expect(201)
+    expect(r.body.tax_cents).toBe(0)
+  })
+
   it('rejects reverse charge for a domestic customer (same country)', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
       reverse_charge: true,

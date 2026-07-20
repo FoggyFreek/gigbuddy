@@ -100,6 +100,33 @@ export function normalizeVatCountry(code) {
   return isKnownVatCountry(c) ? c : null
 }
 
+// Localized-name → code index for the supported countries, built once from the
+// platform's region names (Germany / Deutschland / Duitsland / Allemagne → de).
+// Lets us resolve the free-text customer country on an invoice, and gig drafts
+// that copy a venue's country *name* rather than a code.
+const VAT_COUNTRY_NAME_INDEX = (() => {
+  const index = new Map()
+  const locales = ['en', 'nl', 'de', 'fr', 'es', 'it']
+  for (const code of VAT_COUNTRY_CODES) {
+    for (const locale of locales) {
+      try {
+        const name = new Intl.DisplayNames([locale], { type: 'region' }).of(code.toUpperCase())
+        if (name) index.set(name.toLowerCase(), code)
+      } catch { /* locale unavailable — skip */ }
+    }
+  }
+  return index
+})()
+
+// Resolves a country given as either an ISO alpha-2 code OR a country name (in
+// any of the common languages) to a supported VAT country code, else null.
+export function resolveVatCountry(input) {
+  const code = normalizeVatCountry(input)
+  if (code) return code
+  if (typeof input !== 'string') return null
+  return VAT_COUNTRY_NAME_INDEX.get(input.trim().toLowerCase()) ?? null
+}
+
 function configFor(country) {
   return VAT_COUNTRIES[normalizeVatCountry(country) ?? DEFAULT_VAT_COUNTRY]
 }
