@@ -22,9 +22,7 @@ import {
   insertImport,
   setImportLedgerTransaction,
 } from '../repositories/shopifyImportRepository.js'
-import { ALLOWED_TAX_RATES } from '../validators/purchaseValidators.js'
-
-const ALLOWED_TAX_RATES_SET = new Set(ALLOWED_TAX_RATES)
+import { isKnownVatRate } from '../../shared/vatRates.js'
 
 function parsePositiveInt(val) {
   const n = Number(val)
@@ -86,7 +84,7 @@ async function importRevenueLine(client, tenantId, order, line, mapping, actorUs
   const accountCode = String(mapping.account_code ?? '').trim()
   if (!accountCode) return 'skipped_invalid_mapping'
   const vatRate = Number(mapping.vat_rate ?? 0)
-  if (!ALLOWED_TAX_RATES_SET.has(vatRate)) return 'skipped_invalid_mapping'
+  if (!isKnownVatRate(vatRate)) return 'skipped_invalid_mapping'
 
   if (!(await accountExistsOfType(client, tenantId, accountCode, 'revenue'))) {
     return 'skipped_invalid_account'

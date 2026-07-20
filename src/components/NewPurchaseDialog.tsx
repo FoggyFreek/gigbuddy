@@ -13,6 +13,7 @@ import DateEntryField from './DateEntryField.tsx'
 import SupplierAutocomplete from './purchases/SupplierAutocomplete.tsx'
 import { emptyLine } from './purchases/purchaseFormHelpers.ts'
 import { createPurchase } from '../api/purchases.ts'
+import { useProfile } from '../contexts/profileContext.ts'
 
 // Collects the mandatory fields (supplier + receipt date), creates the draft
 // purchase, then hands its id back so the page can open it in the split-view
@@ -25,6 +26,7 @@ interface NewPurchaseDialogProps {
 
 export default function NewPurchaseDialog({ onClose, onCreated }: Readonly<NewPurchaseDialogProps>) {
   const { t } = useTranslation(['purchases', 'common'])
+  const { defaultVatRate } = useProfile()
   const [supplierName, setSupplierName] = useState('')
   const [supplierContactId, setSupplierContactId] = useState<Id | null>(null)
   const [receiptDate, setReceiptDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -46,7 +48,7 @@ export default function NewPurchaseDialog({ onClose, onCreated }: Readonly<NewPu
         currency: 'EUR',
         memo: null,
         status: 'draft',
-        lines: [emptyLine(0)],
+        lines: [emptyLine(0, defaultVatRate)],
       })
       onCreated(created.id!)
     } catch (e) {

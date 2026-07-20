@@ -1,6 +1,7 @@
 // Input parsing and validation for profile routes. No DB access here.
 import { parsePositiveId as parseId } from './common.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
+import { normalizeVatCountry } from '../../shared/vatRates.js'
 
 // Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
 export const MOLLIE_KEY_RE = /^(live|test)_[A-Za-z0-9]{25,}$/
@@ -92,6 +93,7 @@ export const FINANCIAL_FIELDS = [
   'tax_id',
   'tax_percentage',
   'applies_kor',
+  'vat_country',
 ]
 
 export const FINANCIAL_FIELDS_SET = new Set(FINANCIAL_FIELDS)
@@ -128,6 +130,13 @@ function validateAppliesKor(raw) {
   return { value: raw }
 }
 
+function validateVatCountry(raw) {
+  if (raw === null || raw === undefined || raw === '') return { skip: true }
+  const code = normalizeVatCountry(raw)
+  if (!code) return { error: 'invalid_vat_country' }
+  return { value: code }
+}
+
 function validateTaxPercentage(raw) {
   if (raw === null || raw === undefined) return { value: null }
   if (raw === '') return { skip: true }
@@ -160,6 +169,7 @@ function validateBoundedText(key, raw) {
 const FINANCIAL_VALIDATORS = {
   applies_kor: validateAppliesKor,
   tax_percentage: validateTaxPercentage,
+  vat_country: validateVatCountry,
   kvk_number: makeStrippedValidator('kvk_number', KVK_RE, false),
   iban: makeStrippedValidator('iban', IBAN_RE, true),
   tax_id: makeStrippedValidator('tax_id', TAX_ID_RE, true),

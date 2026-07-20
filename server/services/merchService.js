@@ -10,7 +10,7 @@
 // sale snapshots the average at sale time so voids reverse exactly and later
 // cost changes don't rewrite history. Inventory in the ledger therefore always
 // matches quantity × average cost.
-import { ALLOWED_TAX_RATES } from '../validators/purchaseValidators.js'
+import { getStandardVatRate, isKnownVatRate } from '../../shared/vatRates.js'
 import { isValidCalendarDate } from '../validators/accountValidators.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import { validateGigIdForTenant } from '../repositories/invoiceRepository.js'
@@ -31,6 +31,7 @@ import {
   setProductStock,
 } from '../repositories/merchRepository.js'
 import { getSettings } from './accountService.js'
+import { fetchTenantVatCountry } from '../repositories/tenantRepository.js'
 import {
   ledgerErrorResult,
   postMerchSaleRecorded,
@@ -38,7 +39,6 @@ import {
 } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 
-const ALLOWED_TAX_RATES_SET = new Set(ALLOWED_TAX_RATES)
 const PAYMENT_METHODS = new Set(['bank', 'cash'])
 
 function parseCents(val) {
@@ -94,7 +94,7 @@ function shouldSet(partial, body, field) {
   return !partial || field in body
 }
 
-function validateProductBody(body, { partial = false } = {}) {
+function validateProductBody(body, vatCountry, { partial = false } = {}) {
   const errors = []
   const out = {}
 
@@ -111,8 +111,10 @@ function validateProductBody(body, { partial = false } = {}) {
     }
   }
   if (shouldSet(partial, body, 'vat_rate')) {
-    const rate = Number(body.vat_rate ?? 21)
-    if (ALLOWED_TAX_RATES_SET.has(rate)) out.vat_rate = rate
+    // Default to the home country's standard rate, but accept any real VAT rate
+    // so a product sold at a foreign gig can carry that country's rate.
+    const rate = Number(body.vat_rate ?? getStandardVatRate(vatCountry))
+    if (isKnownVatRate(rate)) out.vat_rate = rate
     else errors.push({ field: 'vat_rate', message: 'Invalid VAT rate' })
   }
 
@@ -123,7 +125,8 @@ function validateProductBody(body, { partial = false } = {}) {
 }
 
 export async function createProduct(executor, tenantId, body) {
-  const validated = validateProductBody(body)
+  const vatCountry = await fetchTenantVatCountry(executor, tenantId)
+  const validated = validateProductBody(body, vatCountry)
   if (validated.error) return validated
   const v = validated.values
   const revenue = await resolveProductRevenueAccount(executor, tenantId, body.revenue_account_code)
@@ -133,7 +136,8 @@ export async function createProduct(executor, tenantId, body) {
 }
 
 export async function updateProduct(executor, tenantId, id, body) {
-  const validated = validateProductBody(body, { partial: true })
+  const vatCountry = await fetchTenantVatCountry(executor, tenantId)
+  const validated = validateProductBody(body, vatCountry, { partial: true })
   if (validated.error) return validated
   const values = { ...validated.values }
   if ('revenue_account_code' in body) {
@@ -239,7 +243,7 @@ export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = 
     return { error: { status: 400, body: { error: 'Invalid unit_price_incl_cents' } } }
   }
   const vatRate = Number(body.vat_rate ?? product.vat_rate)
-  if (!ALLOWED_TAX_RATES_SET.has(vatRate)) {
+  if (!isKnownVatRate(vatRate)) {
     return { error: { status: 400, body: { error: 'Invalid vat_rate' } } }
   }
 

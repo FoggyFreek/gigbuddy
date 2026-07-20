@@ -44,6 +44,7 @@ export interface ProfileForm {
   tax_id: string
   tax_percentage: number
   applies_kor: boolean
+  vat_country: string
 }
 
 export const EMPTY_FORM: ProfileForm = {
@@ -66,6 +67,7 @@ export const EMPTY_FORM: ProfileForm = {
   tax_id: '',
   tax_percentage: 9,
   applies_kor: false,
+  vat_country: 'nl',
 }
 
 export function profileToForm(data: Record<string, unknown>): ProfileForm {
@@ -89,5 +91,6 @@ export function profileToForm(data: Record<string, unknown>): ProfileForm {
     tax_id: String(data.tax_id || ''),
     tax_percentage: data.tax_percentage != null ? Number(data.tax_percentage) : 9,
     applies_kor: !!data.applies_kor,
+    vat_country: String(data.vat_country || 'nl'),
   }
 }

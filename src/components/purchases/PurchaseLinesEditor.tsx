@@ -16,7 +16,8 @@ import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import MoneyInput from '../invoices/MoneyInput.tsx'
 import { centsToEditableEuro } from '../invoices/invoiceFormHelpers.ts'
-import { TAX_RATES } from './purchaseFormHelpers.ts'
+import { useProfile } from '../../contexts/profileContext.ts'
+import { vatRateMenuItems } from '../shared/vatRateMenuItems.tsx'
 
 type AccountGroupKey = 'asset' | 'cost_of_goods_sold' | 'expense'
 
@@ -46,7 +47,8 @@ interface PurchaseLineRowProps {
 }
 
 function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, errors = {}, readOnly, canRemove, patchLine, removeLine }: Readonly<PurchaseLineRowProps>) {
-  const { t } = useTranslation('purchases')
+  const { t } = useTranslation(['purchases', 'common'])
+  const { vatCountry } = useProfile()
   const accountGroup = (account: AccountOption) => {
     const type = isAccountGroupKey(account.type) ? account.type : 'expense'
     return t($ => $.lines.accountGroups[type])
@@ -174,13 +176,11 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
             <InputLabel>{t($ => $.lines.taxRate)}</InputLabel>
             <Select
               label={t($ => $.lines.taxRate)}
-              value={TAX_RATES.includes(Number(line.tax_rate)) ? Number(line.tax_rate) : -1}
+              value={Number.isFinite(Number(line.tax_rate)) ? Number(line.tax_rate) : -1}
               onChange={(e) => patchLine(idx, { tax_rate: Number(e.target.value) })}
               renderValue={(v) => (v === -1 ? t($ => $.lines.select) : `${v}%`)}
             >
-              {TAX_RATES.map((rate) => (
-                <MenuItem key={rate} value={rate}>{rate}%</MenuItem>
-              ))}
+              {vatRateMenuItems(vatCountry, Number(line.tax_rate), t($ => $.vat.otherCountries, { ns: 'common' }))}
             </Select>
           </FormControl>
         </Box>

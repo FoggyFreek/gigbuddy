@@ -6,6 +6,7 @@ import Button from '@mui/material/Button'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Grid from '@mui/material/Grid'
 import InputAdornment from '@mui/material/InputAdornment'
+import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
@@ -14,6 +15,18 @@ import Typography from '@mui/material/Typography'
 import CheckIcon from '@mui/icons-material/Check'
 import EditIcon from '@mui/icons-material/Edit'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import { VAT_COUNTRY_CODES } from '../../utils/vatRates.ts'
+
+// Localized country names from the 2-letter code (e.g. 'nl' → 'Netherlands'),
+// so the VAT-country dropdown reads naturally without hand-maintained i18n keys.
+function vatCountryLabel(code: string, locale: string): string {
+  try {
+    const name = new Intl.DisplayNames([locale], { type: 'region' }).of(code.toUpperCase())
+    return name ? `${name} (${code.toUpperCase()})` : code.toUpperCase()
+  } catch {
+    return code.toUpperCase()
+  }
+}
 
 interface FinancialsEditFormProps {
   form: ProfileForm
@@ -23,7 +36,7 @@ interface FinancialsEditFormProps {
 }
 
 export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: Readonly<FinancialsEditFormProps>) {
-  const { t } = useTranslation('profile')
+  const { t, i18n } = useTranslation('profile')
   function handleTaxPercentageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value
     onFormChange((prev) => ({ ...prev, tax_percentage: raw as unknown as number }))
@@ -109,6 +122,20 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
           helperText={t($ => $.financials.ibanHelper)}
         />
       </Grid>
+      <Grid size={{ xs: 12, md: 6 }}>
+        <TextField
+          select
+          label={t($ => $.financials.vatCountry)}
+          fullWidth
+          value={form.vat_country}
+          onChange={(e) => onChange('vat_country', e.target.value)}
+          helperText={t($ => $.financials.vatCountryHelper)}
+        >
+          {VAT_COUNTRY_CODES.map((code) => (
+            <MenuItem key={code} value={code}>{vatCountryLabel(code, i18n.language)}</MenuItem>
+          ))}
+        </TextField>
+      </Grid>
       <Grid size={{ xs: 8, md: 4 }}>
         <TextField
           label={t($ => $.financials.taxId)}
@@ -131,6 +158,7 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
             htmlInput: { min: 0, max: 100, step: 0.1 },
             input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
           }}
+          helperText={t($ => $.financials.taxPercentHelper)}
         />
       </Grid>
       <Grid size={12}>
@@ -158,7 +186,7 @@ interface FinancialsViewProps {
 }
 
 function FinancialsView({ form }: Readonly<FinancialsViewProps>) {
-  const { t } = useTranslation(['profile', 'common'])
+  const { t, i18n } = useTranslation(['profile', 'common'])
   const taxPercentageDisplay = form.tax_percentage != null && form.tax_percentage !== ('' as unknown as number)
     ? `${form.tax_percentage}%`
     : '—'
@@ -185,6 +213,10 @@ function FinancialsView({ form }: Readonly<FinancialsViewProps>) {
       <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="caption" color="text.secondary">{t($ => $.financials.iban)}</Typography>
         <Typography sx={{ wordBreak: 'break-all' }}>{form.iban || '—'}</Typography>
+      </Grid>
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="caption" color="text.secondary">{t($ => $.financials.vatCountry)}</Typography>
+        <Typography>{vatCountryLabel(form.vat_country || 'nl', i18n.language)}</Typography>
       </Grid>
       <Grid size={{ xs: 8, md: 4 }}>
         <Typography variant="caption" color="text.secondary">{t($ => $.financials.taxId)}</Typography>

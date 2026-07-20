@@ -123,6 +123,32 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body.error).toBe('invalid_tax_percentage')
   })
 
+  it('updates vat_country, normalizing it to a lowercase code', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: ' DE ' }),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('de')
+
+    const reread = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).get('/api/profile'),
+    ).expect(200)
+    expect(reread.body.vat_country).toBe('de')
+  })
+
+  it('defaults vat_country to nl for a freshly seeded tenant', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).get('/api/profile'),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('nl')
+  })
+
+  it('rejects an unknown vat_country with 400 invalid_vat_country', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'xx' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_vat_country')
+  })
+
   it('drops empty tax_percentage but updates other fields in the same patch', async () => {
     // The column defaults to 9.00; an empty string should be a no-op for that
     // column while a sibling non-financial field still updates.

@@ -137,6 +137,8 @@ export interface Tenant {
   memory_gig_id?: Id | null
   applies_kor?: boolean
   tax_percentage?: number | string
+  /** VAT jurisdiction (ISO 3166-1 alpha-2, lowercase); selects allowed VAT rates. */
+  vat_country?: string
   address_street?: string
   address_postal_code?: string
   address_city?: string

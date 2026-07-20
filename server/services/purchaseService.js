@@ -34,6 +34,7 @@ import {
   updatePurchase,
 } from '../repositories/purchaseRepository.js'
 import { markLineResult } from '../repositories/bankImportRepository.js'
+import { fetchTenantVatCountry } from '../repositories/tenantRepository.js'
 import { getTransactionBySource } from '../repositories/ledgerRepository.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import {
@@ -221,7 +222,8 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
     if (supplierContactId === null) return { error: { status: 400, body: { error: 'Invalid supplier_contact_id' } } }
   }
 
-  const lines = normalizeLines(body.lines)
+  const vatCountry = await fetchTenantVatCountry(pool, tenantId)
+  const lines = normalizeLines(body.lines, vatCountry)
   if (!lines.length) return { error: { status: 400, body: { error: 'At least one line is required' } } }
 
   const accountErr = await validateLineAccounts(pool, tenantId, lines)
@@ -340,7 +342,8 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
   const existing = await fetchPurchase(pool, tenantId, id)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
 
-  const preflightErr = await runPatchPreflightValidations(pool, tenantId, id, existing, body)
+  const vatCountry = await fetchTenantVatCountry(pool, tenantId)
+  const preflightErr = await runPatchPreflightValidations(pool, tenantId, id, existing, body, vatCountry)
   if (preflightErr) return preflightErr
 
   const supplierResult = await resolvePatchSupplierContactId(pool, tenantId, body)
@@ -351,7 +354,7 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
 
   return withTransaction(async (client) => {
     if ('lines' in body) {
-      const lines = normalizeLines(body.lines)
+      const lines = normalizeLines(body.lines, vatCountry)
       if (!lines.length) {
         abortTransaction({ error: { status: 400, body: { error: 'At least one line is required' } } })
       }
@@ -423,15 +426,15 @@ async function resolvePatchSupplierContactId(pool, tenantId, body) {
 
 // Validates the line accounts and products when `lines` is being patched.
 // Returns an error result or null.
-async function validatePatchedLines(pool, tenantId, body) {
+async function validatePatchedLines(pool, tenantId, body, vatCountry) {
   if (!('lines' in body)) return null
-  const normalized = normalizeLines(body.lines)
+  const normalized = normalizeLines(body.lines, vatCountry)
   const accountErr = await validateLineAccounts(pool, tenantId, normalized)
   if (accountErr) return accountErr
   return validateLineProducts(pool, tenantId, normalized)
 }
 
-async function runPatchPreflightValidations(pool, tenantId, id, existing, body) {
+async function runPatchPreflightValidations(pool, tenantId, id, existing, body, vatCountry) {
   const statusErr = validateStatusTransition(existing, body)
   if (statusErr) return statusErr
 
@@ -444,11 +447,11 @@ async function runPatchPreflightValidations(pool, tenantId, id, existing, body) 
     return { error: { status: 400, body: { error: 'Invalid receipt_number' } } }
   }
 
-  const lineErr = await validatePatchedLines(pool, tenantId, body)
+  const lineErr = await validatePatchedLines(pool, tenantId, body, vatCountry)
   if (lineErr) return lineErr
 
   if (body.status === 'approved' && existing.status !== 'approved') {
-    const approvalLines = 'lines' in body ? normalizeLines(body.lines) : await fetchPurchaseLines(pool, id, tenantId)
+    const approvalLines = 'lines' in body ? normalizeLines(body.lines, vatCountry) : await fetchPurchaseLines(pool, id, tenantId)
     const approvalErr = await validateApprovalLines(pool, tenantId, approvalLines)
     if (approvalErr) return approvalErr
   }

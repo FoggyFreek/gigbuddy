@@ -1,8 +1,11 @@
 // Pure request/parameter validation for purchase routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
+import { DEFAULT_VAT_COUNTRY, getVatRates, snapVatRate } from '../../shared/vatRates.js'
 
-export const ALLOWED_TAX_RATES = [21, 9, 0]
-const ALLOWED_TAX_RATES_SET = new Set(ALLOWED_TAX_RATES)
+// The NL rate set, exported for back-compat (some tests/callers reference it).
+// Country-specific rates live in shared/vatRates.js and reach the validators
+// through the optional `country` parameter, defaulted to NL.
+export const ALLOWED_TAX_RATES = getVatRates(DEFAULT_VAT_COUNTRY)
 
 export const STATUS_VALUES = new Set(['draft', 'approved', 'paid'])
 
@@ -27,9 +30,10 @@ export const SIMPLE_PATCH_FIELDS = CONTENT_FIELDS.filter((f) => !DERIVED_CONTENT
 
 export { parseId, parseSearchLimit }
 
-export function snapTaxRate(raw) {
-  const n = Number(raw)
-  return ALLOWED_TAX_RATES_SET.has(n) ? n : 21
+// Snaps to a rate valid for the tenant's VAT country; unknown rates fall back to
+// that country's standard rate.
+export function snapTaxRate(raw, country = DEFAULT_VAT_COUNTRY) {
+  return snapVatRate(country, raw)
 }
 
 // Returns a positive-integer receipt number, or null when the value is invalid.
@@ -38,7 +42,7 @@ export function parseReceiptNumber(val) {
   return Number.isInteger(n) && n > 0 ? n : null
 }
 
-export function normalizeLines(lines) {
+export function normalizeLines(lines, country = DEFAULT_VAT_COUNTRY) {
   if (!Array.isArray(lines)) return []
   return lines.map((raw, idx) => {
     const category = String(raw.expense_category ?? '').trim()
@@ -49,7 +53,7 @@ export function normalizeLines(lines) {
       description: String(raw.description ?? '').trim(),
       expense_category: category || null,
       account_code: code || null,
-      tax_rate: snapTaxRate(raw.tax_rate),
+      tax_rate: snapTaxRate(raw.tax_rate, country),
       amount_incl_cents: Number.isInteger(Number(raw.amount_incl_cents)) ? Number(raw.amount_incl_cents) : 0,
       position: Number.isInteger(Number(raw.position)) ? Number(raw.position) : idx,
       // A line that stocks a product carries which product and how many units.

@@ -54,6 +54,9 @@
     "yes": "Yes",
     "no": "No"
   },
+  "vat": {
+    "otherCountries": "Other countries"
+  },
   "picker": {
     "typeMinChars_one": "Type at least {{count}} character…",
     "typeMinChars_other": "Type at least {{count}} characters…",

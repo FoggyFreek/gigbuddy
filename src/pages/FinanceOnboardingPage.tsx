@@ -43,6 +43,7 @@ function financialFields(form: ProfileForm) {
     tax_id: form.tax_id,
     tax_percentage: form.tax_percentage,
     applies_kor: form.applies_kor,
+    vat_country: form.vat_country,
   }
 }
 

@@ -98,10 +98,19 @@ describe('merch products — CRUD & validation', () => {
   })
 
   it('rejects an invalid VAT rate and negative cost', async () => {
-    const badVat = await asUserA(request(app).post('/api/merch/products')).send(shirtPayload({ vat_rate: 19 }))
+    // 17.5 is not a real VAT rate in any supported country → rejected.
+    const badVat = await asUserA(request(app).post('/api/merch/products')).send(shirtPayload({ vat_rate: 17.5 }))
     expect(badVat.status).toBe(400)
     const badCost = await asUserA(request(app).post('/api/merch/products')).send(shirtPayload({ unit_cost_cents: -5 }))
     expect(badCost.status).toBe(400)
+  })
+
+  it('accepts a foreign VAT rate as an override (e.g. a gig in another country)', async () => {
+    // The seed tenant's VAT country is nl (rates 21/9/0), but a product sold at
+    // a German gig may carry 19% — a deliberate override, not an error.
+    const res = await asUserA(request(app).post('/api/merch/products')).send(shirtPayload({ vat_rate: 19 }))
+    expect(res.status).toBe(201)
+    expect(Number(res.body.product.vat_rate)).toBe(19)
   })
 
   it('updates a product', async () => {

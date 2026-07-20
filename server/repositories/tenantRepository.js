@@ -24,6 +24,17 @@ export async function fetchTenant(executor, tenantId) {
   return rows[0] || null
 }
 
+// Lightweight read of just the tenant's VAT country, used by finance services
+// to resolve the allowed VAT rates for a tenant without loading the full row.
+// Returns the stored code (defaulted to 'nl' at the column level).
+export async function fetchTenantVatCountry(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT vat_country FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  return rows[0]?.vat_country ?? null
+}
+
 export async function fetchTenantArchiveState(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT id, archived_at FROM tenants WHERE id = $1',
