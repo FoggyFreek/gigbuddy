@@ -116,6 +116,33 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body.error).toBe('invalid_tax_id')
   })
 
+  it('validates tax_id against the tenant stored VAT country (NL rejects a DE number)', async () => {
+    // Seed tenant's vat_country is nl, so a German number is not a valid tax_id.
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ tax_id: 'DE123456789' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_tax_id')
+  })
+
+  it('accepts a German tax_id when vat_country=de is set in the same patch', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: 'de123456789' }),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('de')
+    expect(res.body.tax_id).toBe('DE123456789')
+  })
+
+  it('accepts a German tax_id against the stored country after vat_country=de', async () => {
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(200)
+    // No vat_country in this patch → validated against the stored 'de'.
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ tax_id: 'DE987654321' }),
+    ).expect(200)
+    expect(res.body.tax_id).toBe('DE987654321')
+  })
+
   it('rejects an out-of-range tax_percentage with 400 invalid_tax_percentage', async () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ tax_percentage: 150 }),

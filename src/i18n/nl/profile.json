@@ -56,7 +56,7 @@
     "iban": "IBAN",
     "ibanHelper": "bijv. NL91 ABNA 0417 1643 00",
     "taxId": "Btw-nummer",
-    "taxIdHelper": "Formaat: NL123456789B01",
+    "taxIdHelper": "Formaat: {{example}}",
     "vatCountry": "Btw-land",
     "vatCountryHelper": "Bepaalt de beschikbare btw-tarieven",
     "taxPercent": "Standaard btw %",

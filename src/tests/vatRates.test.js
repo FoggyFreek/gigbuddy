@@ -5,9 +5,11 @@ import {
   VAT_RATE_VALUES,
   getVatRates,
   getStandardVatRate,
+  getVatIdExample,
   isAllowedVatRate,
   isKnownVatCountry,
   isKnownVatRate,
+  isValidVatId,
   normalizeVatCountry,
   snapVatRate,
 } from '../../shared/vatRates.js'
@@ -59,6 +61,24 @@ describe('vatRates country config', () => {
     expect(isKnownVatRate(17)).toBe(true) // Luxembourg standard
     expect(isKnownVatRate(19)).toBe(true) // German standard
     expect(isKnownVatRate(17.5)).toBe(false) // not a current rate anywhere
+  })
+
+  it('validates VAT identification numbers per country', () => {
+    expect(isValidVatId('nl', 'NL123456789B01')).toBe(true)
+    expect(isValidVatId('de', 'DE123456789')).toBe(true)
+    expect(isValidVatId('be', 'BE0123456789')).toBe(true)
+    expect(isValidVatId('fr', 'FRXX123456789')).toBe(true)
+    expect(isValidVatId('ie', 'IE1234567FA')).toBe(true)
+    expect(isValidVatId('gb', 'GB123456789')).toBe(true)
+    // A number from another country does not validate for the wrong country.
+    expect(isValidVatId('de', 'NL123456789B01')).toBe(false)
+    expect(isValidVatId('nl', 'DE123456789')).toBe(false)
+  })
+
+  it('gives a sample VAT number for each country', () => {
+    expect(getVatIdExample('nl')).toBe('NL123456789B01')
+    expect(getVatIdExample('de')).toMatch(/^DE/)
+    expect(getVatIdExample('xx')).toBe('NL123456789B01') // unknown → default
   })
 
   it('keeps a foreign rate as an override, snaps only genuine garbage', () => {

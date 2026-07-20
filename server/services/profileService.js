@@ -39,7 +39,8 @@ import {
   clearMemoryTile,
   gigBelongsToTenant,
 } from '../repositories/profileRepository.js'
-import { fetchTenant } from '../repositories/tenantRepository.js'
+import { fetchTenant, fetchTenantVatCountry } from '../repositories/tenantRepository.js'
+import { DEFAULT_VAT_COUNTRY, normalizeVatCountry } from '../../shared/vatRates.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import {
   clearIntegrationCredential,
@@ -116,7 +117,16 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
     if (!(await gigBelongsToTenant(db, tenantId, memoryGigId))) return notFound('Gig not found')
   }
 
-  const built = buildProfileUpdate(body || {})
+  // tax_id is validated against the tenant's VAT country: the value being set in
+  // this same PATCH, else the stored one. Only look it up when tax_id is present.
+  let vatCountry = DEFAULT_VAT_COUNTRY
+  if (body && 'tax_id' in body) {
+    vatCountry = normalizeVatCountry(body.vat_country)
+      ?? await fetchTenantVatCountry(db, tenantId)
+      ?? DEFAULT_VAT_COUNTRY
+  }
+
+  const built = buildProfileUpdate(body || {}, { vatCountry })
   if (built.error) return badRequest(built.error)
   if (!built.fields.length) return badRequest('No valid fields to update')
 

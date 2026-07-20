@@ -45,6 +45,25 @@ export const VAT_RATE_VALUES = Object.freeze(
 
 export const VAT_COUNTRY_CODES = Object.freeze(Object.keys(VAT_COUNTRIES))
 
+// VAT identification number format per country, for validating a tenant's
+// tax_id against its VAT country. Patterns match the whitespace-stripped,
+// uppercased number (prefixed with the country code, as VIES/HMRC print it).
+// `example` drives the input placeholder and helper text. Sources: EU VIES /
+// Wikipedia "VAT identification number" and HMRC (GB). Prefix always matches
+// the two-letter country code.
+export const VAT_ID_FORMATS = Object.freeze({
+  nl: { pattern: /^NL\d{9}B\d{2}$/, example: 'NL123456789B01' },
+  be: { pattern: /^BE[01]\d{9}$/, example: 'BE0123456789' },
+  de: { pattern: /^DE\d{9}$/, example: 'DE123456789' },
+  fr: { pattern: /^FR[A-Z0-9]{2}\d{9}$/, example: 'FRXX123456789' },
+  lu: { pattern: /^LU\d{8}$/, example: 'LU12345678' },
+  at: { pattern: /^ATU\d{8}$/, example: 'ATU12345678' },
+  es: { pattern: /^ES[A-Z0-9]\d{7}[A-Z0-9]$/, example: 'ESX1234567X' },
+  it: { pattern: /^IT\d{11}$/, example: 'IT12345678901' },
+  ie: { pattern: /^IE(\d{7}[A-W]{1,2}|\d[A-W0-9+*]\d{5}[A-W])$/, example: 'IE1234567FA' },
+  gb: { pattern: /^GB(\d{9}|\d{12}|GD\d{3}|HA\d{3})$/, example: 'GB123456789' },
+})
+
 export function isKnownVatCountry(code) {
   return typeof code === 'string' && Object.hasOwn(VAT_COUNTRIES, code)
 }
@@ -90,4 +109,19 @@ export function snapVatRate(country, rate, fallback) {
   const n = Number(rate)
   if (isKnownVatRate(n)) return n
   return fallback === undefined ? configFor(country).standard : fallback
+}
+
+function vatIdFormatFor(country) {
+  return VAT_ID_FORMATS[normalizeVatCountry(country) ?? DEFAULT_VAT_COUNTRY]
+}
+
+// A sample VAT identification number for the country (placeholder / helper text).
+export function getVatIdExample(country) {
+  return vatIdFormatFor(country).example
+}
+
+// True when `value` is a well-formed VAT identification number for the country.
+// `value` is expected already whitespace-stripped and uppercased.
+export function isValidVatId(country, value) {
+  return vatIdFormatFor(country).pattern.test(String(value))
 }

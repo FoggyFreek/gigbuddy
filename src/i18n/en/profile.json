@@ -56,7 +56,7 @@
     "iban": "IBAN",
     "ibanHelper": "e.g. NL91 ABNA 0417 1643 00",
     "taxId": "Tax ID (BTW)",
-    "taxIdHelper": "Format: NL123456789B01",
+    "taxIdHelper": "Format: {{example}}",
     "vatCountry": "VAT country",
     "vatCountryHelper": "Determines the available VAT rates",
     "taxPercent": "Default VAT %",

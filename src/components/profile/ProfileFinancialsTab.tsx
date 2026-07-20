@@ -15,7 +15,7 @@ import Typography from '@mui/material/Typography'
 import CheckIcon from '@mui/icons-material/Check'
 import EditIcon from '@mui/icons-material/Edit'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import { VAT_COUNTRY_CODES } from '../../utils/vatRates.ts'
+import { VAT_COUNTRY_CODES, getVatIdExample } from '../../utils/vatRates.ts'
 
 // Localized country names from the 2-letter code (e.g. 'nl' → 'Netherlands'),
 // so the VAT-country dropdown reads naturally without hand-maintained i18n keys.
@@ -142,8 +142,9 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
           fullWidth
           value={form.tax_id}
           onChange={(e) => onChange('tax_id', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14))}
-          slotProps={{ htmlInput: { maxLength: 14, style: { textTransform: 'uppercase' }, pattern: 'NL[0-9]{9}B[0-9]{2}' } }}
-          helperText={t($ => $.financials.taxIdHelper)}
+          slotProps={{ htmlInput: { maxLength: 14, style: { textTransform: 'uppercase' } } }}
+          placeholder={getVatIdExample(form.vat_country)}
+          helperText={t($ => $.financials.taxIdHelper, { example: getVatIdExample(form.vat_country) })}
         />
       </Grid>
       <Grid size={{ xs: 4, md: 2 }}>

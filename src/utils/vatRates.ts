@@ -10,6 +10,7 @@ import {
   getVatRates as getVatRatesJs,
   getStandardVatRate as getStandardVatRateJs,
   isAllowedVatRate as isAllowedVatRateJs,
+  getVatIdExample as getVatIdExampleJs,
 } from '../../shared/vatRates.js'
 
 export const VAT_COUNTRY_CODES: string[] = VAT_COUNTRY_CODES_JS as string[]
@@ -26,6 +27,11 @@ export function getStandardVatRate(country: string | null | undefined): number {
 
 export function isAllowedVatRate(country: string | null | undefined, rate: number): boolean {
   return isAllowedVatRateJs(country ?? undefined, rate) as boolean
+}
+
+// A sample VAT identification number for the country (input placeholder / hint).
+export function getVatIdExample(country: string | null | undefined): string {
+  return getVatIdExampleJs(country ?? undefined) as string
 }
 
 // Rate options for a select, guaranteeing `current` is present even when it is
