@@ -2,6 +2,7 @@ import './_envSetup.js'
 // @vitest-environment node
 import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
 import request from 'supertest'
+import { VAT_COUNTRY_CODES } from '../../../shared/vatRates.js'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let getAccessToken, resetShopifyTokenCacheForTests
@@ -174,6 +175,20 @@ describe('PATCH /api/profile — financial fields', () => {
       request(app).patch('/api/profile').send({ vat_country: 'xx' }),
     ).expect(400)
     expect(res.body.error).toBe('invalid_vat_country')
+  })
+
+  it('DB constraint rejects an unsupported vat_country stored via raw SQL', async () => {
+    // Defence in depth: even a path that bypasses the validator (raw SQL, an
+    // import, a future service) cannot persist a country with no rate table.
+    await expect(
+      pool.query('UPDATE tenants SET vat_country = $1 WHERE id = $2', ['us', seed.tenantA.id]),
+    ).rejects.toThrow()
+  })
+
+  it('DB constraint accepts every supported vat_country', async () => {
+    for (const code of VAT_COUNTRY_CODES) {
+      await pool.query('UPDATE tenants SET vat_country = $1 WHERE id = $2', [code, seed.tenantA.id])
+    }
   })
 
   it('drops empty tax_percentage but updates other fields in the same patch', async () => {
