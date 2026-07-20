@@ -57,6 +57,13 @@ beforeEach(async () => {
     `UPDATE gigs SET booking_fee_cents = 70000, venue_id = $1 WHERE id = $2`,
     [seed.venues[1].id, seed.gigB.id],
   )
+  // Both seed tenants default to vat_country 'nl'; give them a valid Dutch VAT
+  // ID so a VAT-charging invoice can satisfy the issuance-readiness invariant
+  // (art. 226 requires the supplier VAT number when VAT is charged).
+  await pool.query(
+    `UPDATE tenants SET tax_id = 'NL123456789B01' WHERE id = ANY($1)`,
+    [[seed.tenantA.id, seed.tenantB.id]],
+  )
 })
 
 afterAll(async () => {
@@ -79,6 +86,9 @@ function basePayload(overrides = {}) {
   return {
     gig_id: seed.gigA.id,
     customer_name: 'Alpha Hall',
+    customer_address_street: 'Hall Street 3',
+    customer_address_postal_code: '3000 CC',
+    customer_address_city: 'Utrecht',
     issue_date: '2026-05-01',
     payment_term_days: 14,
     tax_inclusive: false,
@@ -357,6 +367,73 @@ describe('invoices — finalization gate', () => {
     expect(del.status).toBe(204)
     const { rows } = await pool.query('SELECT id FROM invoices WHERE id = $1', [r.body.id])
     expect(rows).toHaveLength(0)
+  })
+})
+
+describe('invoices — issuance-readiness invariant', () => {
+  // An invoice may only be finalized (draft → sent/paid, payment-link) when it
+  // holds the art. 226 mandatory content. The guard runs on the effective
+  // persisted state inside the finalizing transaction, so a failure rolls back
+  // and the invoice stays a draft.
+  it('rejects finalization when the customer address is incomplete', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      customer_address_street: null,
+      customer_address_city: null,
+    })).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.error).toBe('incomplete_customer_details')
+    // The transition rolled back: still a draft, not finalized.
+    const { rows } = await pool.query('SELECT status, finalized_at FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].status).toBe('draft')
+    expect(rows[0].finalized_at).toBeNull()
+  })
+
+  it('rejects finalization when the supplier postal address is incomplete', async () => {
+    await pool.query('UPDATE tenants SET address_street = NULL WHERE id = $1', [seed.tenantA.id])
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.error).toBe('incomplete_supplier_details')
+  })
+
+  it('rejects finalization when VAT is charged but the supplier has no VAT ID', async () => {
+    await pool.query('UPDATE tenants SET tax_id = NULL WHERE id = $1', [seed.tenantA.id])
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.error).toBe('missing_supplier_vat_id')
+  })
+
+  it('rejects finalization when an incorporated band has no registration number', async () => {
+    await pool.query(
+      "UPDATE tenants SET legal_form = 'company', kvk_number = NULL WHERE id = $1",
+      [seed.tenantA.id],
+    )
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.error).toBe('missing_registration_info')
+  })
+
+  it('accepts finalization when all mandatory content is present', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
+    expect(res.body.status).toBe('sent')
+    expect(res.body.finalized_at).not.toBeNull()
+  })
+
+  it('blocks payment-link finalization of an incomplete invoice', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      customer_address_city: null,
+    })).expect(201)
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/payment-link`)).send({})
+    expect(res.status).toBe(422)
+    expect(res.body.error).toBe('incomplete_customer_details')
+    // Not finalized — a later completed draft can still be issued.
+    const { rows } = await pool.query('SELECT status, finalized_at FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].status).toBe('draft')
+    expect(rows[0].finalized_at).toBeNull()
   })
 })
 

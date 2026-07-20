@@ -18,5 +18,7 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS vat_country TEXT NOT NULL DEFAULT '
 -- enforced in the service layer against shared/vatRates.js, so the NL-only
 -- CHECK constraints baked into the merch tables (021.00 / 9.00 / 0.00) must go —
 -- a German product at 19% would otherwise be rejected (was CHECK IN 21/9/0).
-ALTER TABLE merch_products DROP CONSTRAINT IF EXISTS merch_products_vat_rate_check;
+-- The products table is named `products` (not `merch_products`); its inline
+-- unnamed CHECK is auto-named `products_vat_rate_check`.
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_vat_rate_check;
 ALTER TABLE merch_sales DROP CONSTRAINT IF EXISTS merch_sales_vat_rate_check;

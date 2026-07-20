@@ -27,6 +27,18 @@ export async function fetchTenant(executor, tenantId) {
 // Lightweight read of just the tenant's VAT country, used by finance services
 // to resolve the allowed VAT rates for a tenant without loading the full row.
 // Returns the stored code (defaulted to 'nl' at the column level).
+// Locks the tenant row FOR UPDATE and returns the safe projection. Lets a
+// read-validate-write sequence (the profile VAT/registration consistency check)
+// run atomically so a concurrent PATCH can't slip an incompatible tax_id or
+// kvk_number between the check and the write.
+export async function lockTenantRow(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT ${tenantSafeProjection()} FROM tenants WHERE id = $1 FOR UPDATE`,
+    [tenantId],
+  )
+  return rows[0] || null
+}
+
 export async function fetchTenantVatCountry(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT vat_country FROM tenants WHERE id = $1',

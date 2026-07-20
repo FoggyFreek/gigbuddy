@@ -1,7 +1,58 @@
 // Pure request/parameter validation for invoice routes. No DB or IO here.
-import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
+import { parsePositiveId as parseId, parseSearchLimit, isValidIsoDate } from './common.js'
 import { normalizeVatCountry, resolveVatCountry, isEuVatCountry, isValidVatId } from '../../shared/vatRates.js'
+import { requiresCompanyDisclosure, registrationUsesOffice } from '../../shared/businessRegistry.js'
 export { formatInvoiceNumber } from '../domain/invoice.js'
+
+const nonEmpty = (v) => String(v ?? '').trim().length > 0
+
+// Issuance-readiness invariant (EU VAT Directive art. 226): an invoice may only
+// be finalized (draft → sent/paid, payment-link finalization) when it holds the
+// mandatory content. Runs on the EFFECTIVE persisted state under the finalizing
+// transaction/lock. Returns an error code string, or null when ready.
+export function validateInvoiceReadyForIssue(invoice, lines, tenant) {
+  // Supplier identity + postal address.
+  const supplierName = tenant.formal_name || tenant.band_name
+  if (!nonEmpty(supplierName) || !nonEmpty(tenant.address_street) || !nonEmpty(tenant.address_city)) {
+    return 'incomplete_supplier_details'
+  }
+  // Customer identity + postal address.
+  if (!nonEmpty(invoice.customer_name) || !nonEmpty(invoice.customer_address_street) || !nonEmpty(invoice.customer_address_city)) {
+    return 'incomplete_customer_details'
+  }
+  // Issue date.
+  if (!invoice.issue_date || !isValidIsoDate(String(invoice.issue_date).slice(0, 10))) {
+    return 'missing_issue_date'
+  }
+  // At least one line, each with a positive finite quantity and a description.
+  if (!Array.isArray(lines) || lines.length === 0) return 'invalid_lines'
+  for (const line of lines) {
+    const qty = Number(line.quantity)
+    if (!Number.isFinite(qty) || qty <= 0 || !nonEmpty(line.description)) return 'invalid_lines'
+  }
+  // Registration disclosure required of an incorporated band (GmbHG §35a etc.).
+  if (requiresCompanyDisclosure(tenant.legal_form)) {
+    if (!nonEmpty(tenant.kvk_number)) return 'missing_registration_info'
+    if (registrationUsesOffice(tenant.vat_country) && !nonEmpty(tenant.registration_office)) {
+      return 'missing_registration_info'
+    }
+  }
+  // Supplier VAT ID when VAT is charged or the reverse charge is claimed.
+  const vatCharged = Number(invoice.tax_cents) > 0
+  if ((vatCharged || invoice.reverse_charge) && !nonEmpty(tenant.tax_id)) {
+    return 'missing_supplier_vat_id'
+  }
+  // Reverse charge: a valid intra-EU customer VAT identity.
+  if (invoice.reverse_charge) {
+    const rcError = validateReverseCharge({
+      supplierCountry: tenant.vat_country,
+      customerCountry: invoice.customer_address_country,
+      customerTaxId: invoice.customer_tax_id,
+    })
+    if (rcError) return rcError
+  }
+  return null
+}
 
 // Validates that an invoice actually qualifies for the intra-EU Art. 196 reverse
 // charge before we zero the VAT and print the notation. A non-empty tax-id field

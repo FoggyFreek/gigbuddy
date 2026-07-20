@@ -39,7 +39,8 @@ import {
   clearMemoryTile,
   gigBelongsToTenant,
 } from '../repositories/profileRepository.js'
-import { fetchTenant } from '../repositories/tenantRepository.js'
+import { fetchTenant, lockTenantRow } from '../repositories/tenantRepository.js'
+import { withTransaction } from '../db/withTransaction.js'
 import { DEFAULT_VAT_COUNTRY, normalizeVatCountry, isValidVatId } from '../../shared/vatRates.js'
 import { isValidRegistrationNumber } from '../../shared/businessRegistry.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
@@ -118,25 +119,59 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
     if (!(await gigBelongsToTenant(db, tenantId, memoryGigId))) return notFound('Gig not found')
   }
 
-  // The VAT country, tax_id and registration number must stay consistent. tax_id
-  // and kvk_number are validated against the effective country (the value set in
-  // this PATCH, else the stored one); and changing the country alone must not
-  // leave an incompatible identifier behind — the UI sends the dropdown change on
-  // its own, so this is the only place to catch it.
-  const settingTaxId = body ? 'tax_id' in body : false
-  const settingKvk = body ? 'kvk_number' in body : false
-  const settingVatCountry = body ? 'vat_country' in body : false
+  const needsConsistencyCheck = body
+    ? ('tax_id' in body || 'kvk_number' in body || 'vat_country' in body)
+    : false
+
+  // accent_color and the memory tile are customization data: the guarded write
+  // closes the race with a concurrent downgrade purge (route-level gate already
+  // covers the common case).
+  const touchesCustomization = Object.keys(body || {}).some((key) => CUSTOMIZATION_PROFILE_FIELDS.has(key))
+
+  // The consistency check reads the stored tax_id/kvk/country and the write must
+  // see the same state, so both run in one transaction under a row lock (see
+  // runProfileWrite). The customization guard needs the tenant advisory lock +
+  // an in-transaction entitlement recheck, so route through withFeatureWriteGuard
+  // (which supplies the transaction) when either concern is present.
+  if (needsConsistencyCheck || touchesCustomization) {
+    if (touchesCustomization) {
+      return withFeatureWriteGuard(db, tenantId, FEATURES.CUSTOMIZATION,
+        (client) => runProfileWrite(client, tenantId, body, needsConsistencyCheck))
+    }
+    return withTransaction(
+      (client) => runProfileWrite(client, tenantId, body, needsConsistencyCheck),
+      { db },
+    )
+  }
+
+  // No consistency check and no customization data: a plain unlocked write.
+  return runProfileWrite(db, tenantId, body, false)
+}
+
+// The read-validate-write core of a profile PATCH, run on whatever executor the
+// caller provides (a locking transaction client for the financial/customization
+// paths, the pool for the plain path). When `lockForConsistency` is set it locks
+// the tenant row and enforces that VAT country, tax_id and registration number
+// stay compatible: tax_id/kvk_number are validated against the effective country
+// (the value set in this PATCH, else the stored one), and changing the country
+// alone must not leave an incompatible identifier behind (the UI sends the
+// dropdown change on its own, so this is the only place to catch it).
+async function runProfileWrite(executor, tenantId, body, lockForConsistency) {
   let vatCountry = DEFAULT_VAT_COUNTRY
-  if (settingTaxId || settingKvk || settingVatCountry) {
-    const tenant = await fetchTenant(db, tenantId)
+  if (lockForConsistency) {
+    const tenant = await lockTenantRow(executor, tenantId)
+    if (!tenant) return notFound('Profile not found')
+    const settingTaxId = 'tax_id' in body
+    const settingKvk = 'kvk_number' in body
+    const settingVatCountry = 'vat_country' in body
     const newCountry = normalizeVatCountry(body.vat_country)
-    vatCountry = newCountry ?? tenant?.vat_country ?? DEFAULT_VAT_COUNTRY
+    vatCountry = newCountry ?? tenant.vat_country ?? DEFAULT_VAT_COUNTRY
 
     if (settingVatCountry && newCountry) {
-      if (!settingTaxId && tenant?.tax_id && !isValidVatId(newCountry, tenant.tax_id)) {
+      if (!settingTaxId && tenant.tax_id && !isValidVatId(newCountry, tenant.tax_id)) {
         return badRequest('tax_id_incompatible_vat_country')
       }
-      if (!settingKvk && tenant?.kvk_number && !isValidRegistrationNumber(newCountry, tenant.kvk_number)) {
+      if (!settingKvk && tenant.kvk_number && !isValidRegistrationNumber(newCountry, tenant.kvk_number)) {
         return badRequest('kvk_incompatible_vat_country')
       }
     }
@@ -146,14 +181,7 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
   if (built.error) return badRequest(built.error)
   if (!built.fields.length) return badRequest('No valid fields to update')
 
-  // accent_color and the memory tile are customization data: the guarded write
-  // closes the race with a concurrent downgrade purge (route-level gate already
-  // covers the common case).
-  const touchesCustomization = Object.keys(body || {}).some((key) => CUSTOMIZATION_PROFILE_FIELDS.has(key))
-  const updated = touchesCustomization
-    ? await withFeatureWriteGuard(db, tenantId, FEATURES.CUSTOMIZATION,
-        (client) => updateTenantFields(client, tenantId, built.fields, built.values))
-    : await updateTenantFields(db, tenantId, built.fields, built.values)
+  const updated = await updateTenantFields(executor, tenantId, built.fields, built.values)
   if (!updated) return notFound('Profile not found')
   return { profile: updated }
 }

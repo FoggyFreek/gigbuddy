@@ -59,6 +59,7 @@ import {
   computeDueDate,
   validatePaymentLinkOptions,
   validateReverseCharge,
+  validateInvoiceReadyForIssue,
 } from '../validators/invoiceValidators.js'
 import {
   ledgerErrorResult,
@@ -270,6 +271,16 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
     await updateInvoiceFields(client, tenantId, invoiceId, builder.changes())
 
     if (body.status !== undefined) {
+      // Finalizing (draft → sent/paid) makes the invoice immutable and posts to
+      // the ledger, so enforce the issuance-readiness invariant on the effective
+      // persisted state first — the writes above are inside this transaction, so
+      // a failure rolls them back.
+      if (body.status !== 'draft' && existing.finalized_at === null) {
+        const effective = await fetchInvoice(client, tenantId, invoiceId)
+        const effectiveLines = await fetchLines(client, invoiceId, tenantId)
+        const readyError = validateInvoiceReadyForIssue(effective, effectiveLines, tenant)
+        if (readyError) abortTransaction({ error: { status: 422, body: { error: readyError } } })
+      }
       await postInvoiceTransition(client, tenantId, invoiceId, existing.status, body.status, actorUserId)
     }
 
@@ -426,6 +437,15 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
     if (current.status === 'void') abortTransaction({ error: { status: 400, body: { error: 'void_invoice' } } })
     if (current.total_cents <= 0) abortTransaction({ error: { status: 400, body: { error: 'zero_amount' } } })
     if (current.mollie_payment_link_id) abortTransaction({ alreadyLinked: current })
+    // Finalizing draft → sent makes the invoice immutable and posts the revenue
+    // leg, so a not-yet-finalized invoice must satisfy the issuance-readiness
+    // invariant (art. 226 mandatory content) before we let it become billable.
+    if (current.finalized_at === null) {
+      const tenant = await fetchTenant(client, tenantId)
+      const lines = await fetchLines(client, invoiceId, tenantId)
+      const readyError = validateInvoiceReadyForIssue(current, lines, tenant)
+      if (readyError) abortTransaction({ error: { status: 422, body: { error: readyError } } })
+    }
     const finalized = await finalizeInvoiceForPaymentLinkRow(client, tenantId, invoiceId)
     // The invoice is now sent (revenue recognised). Idempotent if already posted
     // by a prior PATCH-to-sent.

@@ -120,6 +120,25 @@ describe('merch products — CRUD & validation', () => {
     expect(res.body.unit_cost_cents).toBe(1500)
   })
 
+  it('DB constraint bounds vat_rate to [0, 100] but allows any foreign rate', async () => {
+    // Migration 124 dropped the NL-only enumerated CHECK (21/9/0) so foreign
+    // rates persist; migration 128 restored a permissive [0, 100] sanity bound.
+    // A real German 19% rate is accepted at the DB level...
+    await pool.query(
+      `INSERT INTO products (tenant_id, name, vat_rate) VALUES ($1, 'DE product', 19)`,
+      [seed.tenantA.id],
+    )
+    // ...but a negative or absurd (>100%) rate is rejected by the range CHECK.
+    await expect(pool.query(
+      `INSERT INTO products (tenant_id, name, vat_rate) VALUES ($1, 'Bad', -1)`,
+      [seed.tenantA.id],
+    )).rejects.toThrow(/products_vat_rate_range/)
+    await expect(pool.query(
+      `INSERT INTO products (tenant_id, name, vat_rate) VALUES ($1, 'Bad', 150)`,
+      [seed.tenantA.id],
+    )).rejects.toThrow(/products_vat_rate_range/)
+  })
+
   it('archives instead of deleting', async () => {
     const product = await createProduct(asUserA)
     const res = await asUserA(request(app).delete(`/api/merch/products/${product.id}`)).expect(200)
