@@ -4,6 +4,7 @@ import { computeInvoiceTotals } from './computeInvoiceTotals.js'
 import { logger } from './logger.js'
 import { getRegistrationLabel, getRegistrationOfficeLabel } from '../../shared/businessRegistry.js'
 import { normalizeVatCountry, getVatLabel, getVatIdLabel } from '../../shared/vatRates.js'
+import { resolveInvoiceLng, getInvoiceT, invoiceIntlLocale } from './invoiceI18n.js'
 
 const PAGE_MARGIN = 48
 const PAGE_W = 595.28   // A4 width in points
@@ -26,19 +27,15 @@ const TOT_VAL_X = RIGHT_EDGE - TOT_VAL_W
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function fmt(cents) {
-  const sign = cents < 0 ? '- ' : ''
-  const abs = Math.abs(cents)
-  const euros = Math.floor(abs / 100)
-  const rem = String(abs % 100).padStart(2, '0')
-  return `${sign}€ ${euros.toLocaleString('nl-NL')},${rem}`
+function fmt(cents, locale = 'nl-NL') {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format((Number(cents) || 0) / 100)
 }
 
-function fmtDate(value) {
+function fmtDate(value, locale = 'nl-NL') {
   if (!value) return ''
   const d = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(d.getTime())) return String(value)
-  return d.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function fmtQty(q) {
@@ -80,6 +77,11 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
   // Invoice is issued by the supplier, so the VAT term follows the supplier's
   // country (btw / USt / TVA / …).
   const vatLabel = getVatLabel(tenant.vat_country)
+  // The whole document is localized to the supplier's country language (Dutch
+  // for NL/BE, English otherwise); money and dates format for that locale.
+  const lng = resolveInvoiceLng(tenant.vat_country)
+  const t = getInvoiceT(lng)
+  const locale = invoiceIntlLocale(lng)
 
   // Generate QR code buffer if a payment link exists.
   let qrBuffer = null
@@ -96,13 +98,14 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
     }
   }
 
-  const titleBottom = drawTitle(doc, invoice, tenant, logoBuffer)
-  const addrBottom  = drawAddresses(doc, invoice, tenant, titleBottom + 20)
+  const ctx = { t, locale }
+  const titleBottom = drawTitle(doc, invoice, tenant, logoBuffer, ctx)
+  const addrBottom  = drawAddresses(doc, invoice, tenant, titleBottom + 20, ctx)
   hline(doc, PAGE_MARGIN, RIGHT_EDGE, addrBottom + 8)
-  const linesBottom = drawLinesTable(doc, lines, totals.perLine, invoice.tax_inclusive, noVat, vatLabel, addrBottom + 24)
-  const totalsBottom = drawTotals(doc, totals, noVat, vatLabel, linesBottom)
-  drawVatNotes(doc, invoice, tenant, totalsBottom)
-  drawFooter(doc, invoice, tenant, qrBuffer)
+  const linesBottom = drawLinesTable(doc, lines, totals.perLine, invoice.tax_inclusive, noVat, vatLabel, addrBottom + 24, ctx)
+  const totalsBottom = drawTotals(doc, totals, noVat, vatLabel, linesBottom, ctx)
+  drawVatNotes(doc, invoice, tenant, totalsBottom, ctx)
+  drawFooter(doc, invoice, tenant, qrBuffer, ctx)
 
   doc.end()
   return done
@@ -111,7 +114,7 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
 // ─── title row ────────────────────────────────────────────────────────────────
 // Logo top-left; "Factuur #xxx" large top-right; date + payment terms below.
 
-function drawTitle(doc, invoice, tenant, logoBuffer) {
+function drawTitle(doc, invoice, tenant, logoBuffer, { t, locale }) {
   const y = PAGE_MARGIN
 
   // Logo — top left, max 90×55 pt
@@ -124,26 +127,26 @@ function drawTitle(doc, invoice, tenant, logoBuffer) {
   }
 
   // Invoice title — large, right-aligned
-  const titleText = `Factuur #${invoice.invoice_number || 'concept'}`
+  const titleText = t('invoiceTitle', { number: invoice.invoice_number || t('draftNumber') })
   doc.fontSize(14).font('Helvetica-Bold').fillColor('#000')
   doc.text(titleText, PAGE_MARGIN, y, { width: USABLE_W, align: 'right' })
 
   // Date + payment terms — smaller, right-aligned below title
   doc.fontSize(9).font('Helvetica').fillColor('#444')
   let metaY = y + 30
-  doc.text(`Datum van uitgifte: ${fmtDate(invoice.issue_date)}`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
+  doc.text(`${t('issueDate')}: ${fmtDate(invoice.issue_date, locale)}`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
   metaY += 13
   // Date of supply (art. 226(7)) — shown when it differs from the issue date.
-  if (invoice.supply_date && fmtDate(invoice.supply_date) !== fmtDate(invoice.issue_date)) {
-    doc.text(`Prestatiedatum: ${fmtDate(invoice.supply_date)}`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
+  if (invoice.supply_date && fmtDate(invoice.supply_date, locale) !== fmtDate(invoice.issue_date, locale)) {
+    doc.text(`${t('supplyDate')}: ${fmtDate(invoice.supply_date, locale)}`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
     metaY += 13
   }
   if (invoice.payment_term_days) {
-    doc.text(`Betaalvoorwaarden: Binnen ${invoice.payment_term_days} dagen`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
+    doc.text(t('paymentTerm', { count: invoice.payment_term_days }), PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
     metaY += 13
   }
   if (invoice.due_date) {
-    doc.text(`Vervaldatum: ${fmtDate(invoice.due_date)}`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
+    doc.text(`${t('dueDate')}: ${fmtDate(invoice.due_date, locale)}`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
     metaY += 13
   }
 
@@ -154,7 +157,7 @@ function drawTitle(doc, invoice, tenant, logoBuffer) {
 // ─── address columns ──────────────────────────────────────────────────────────
 // Sender (band) details left-aligned; customer right-aligned.
 
-function drawAddresses(doc, invoice, tenant, startY) {
+function drawAddresses(doc, invoice, tenant, startY, { t }) {
   const colW = Math.floor(USABLE_W / 2) - 10
   const rightColX = PAGE_MARGIN + colW + 20
 
@@ -217,7 +220,7 @@ function drawAddresses(doc, invoice, tenant, startY) {
     invoice.customer_contact_family_name,
   ].filter(Boolean)
   if (contactParts.length) {
-    doc.text(`t.a.v. ${contactParts.join(' ')}`, rightColX, rightY, { width: colW, align: 'right' })
+    doc.text(`${t('attnPrefix')} ${contactParts.join(' ')}`, rightColX, rightY, { width: colW, align: 'right' })
     rightY += 12
   }
 
@@ -241,7 +244,7 @@ function drawAddresses(doc, invoice, tenant, startY) {
 
 // ─── line items table ─────────────────────────────────────────────────────────
 
-function drawLinesTable(doc, lines, perLine, taxInclusive, noVat, vatLabel, startY) {
+function drawLinesTable(doc, lines, perLine, taxInclusive, noVat, vatLabel, startY, { t, locale }) {
   const sx = PAGE_MARGIN
   let y = startY
 
@@ -255,11 +258,11 @@ function drawLinesTable(doc, lines, perLine, taxInclusive, noVat, vatLabel, star
 
   // Header
   doc.fontSize(9).font('Helvetica-Bold').fillColor('#888')
-  doc.text('Beschrijving', sx,     y, { width: COL_DESC - 8 })
-  doc.text('Aantal',       xQty,   y, { width: COL_QTY,   align: 'right' })
-  doc.text('Prijs excl. btw', xPrice, y, { width: COL_PRICE, align: 'right' })
+  doc.text(t('colDescription'), sx,     y, { width: COL_DESC - 8 })
+  doc.text(t('colQuantity'),    xQty,   y, { width: COL_QTY,   align: 'right' })
+  doc.text(t('colPriceExclVat', { vat: vatLabel }), xPrice, y, { width: COL_PRICE, align: 'right' })
   if (!noVat) doc.text(vatLabel, xVat, y, { width: COL_VAT, align: 'right' })
-  doc.text('Totaal', xTotal, y, { width: totalW, align: 'right' })
+  doc.text(t('colTotal'), xTotal, y, { width: totalW, align: 'right' })
 
   hline(doc, sx, RIGHT_EDGE, y + 14)
   y += 22
@@ -282,11 +285,11 @@ function drawLinesTable(doc, lines, perLine, taxInclusive, noVat, vatLabel, star
 
     doc.text(line.description || '', sx,     y, { width: COL_DESC - 8 })
     doc.text(fmtQty(line.quantity),  xQty,   y, { width: COL_QTY,   align: 'right' })
-    doc.text(fmt(displayUnit), xPrice, y, { width: COL_PRICE, align: 'right' })
+    doc.text(fmt(displayUnit, locale), xPrice, y, { width: COL_PRICE, align: 'right' })
     if (!noVat) {
       doc.text(`${Number(line.tax_percentage).toFixed(0)}%`, xVat, y, { width: COL_VAT, align: 'right' })
     }
-    doc.text(fmt(displayTotal), xTotal, y, { width: totalW, align: 'right' })
+    doc.text(fmt(displayTotal, locale), xTotal, y, { width: totalW, align: 'right' })
 
     y += Math.max(descH, 12) + 8
     hline(doc, sx, RIGHT_EDGE, y - 4, '#eeeeee')
@@ -303,20 +306,20 @@ function totRow(doc, label, value, y, { bold = false, fontSize = 10 } = {}) {
   doc.text(value, TOT_VAL_X, y, { width: TOT_VAL_W, align: 'right' })
 }
 
-function drawTotals(doc, totals, noVat, vatLabel, startY) {
+function drawTotals(doc, totals, noVat, vatLabel, startY, { t, locale }) {
   let y = startY
   hline(doc, TOT_X, RIGHT_EDGE, y)
   y += 10
 
-  totRow(doc, 'Subtotaal', fmt(totals.subtotalCents), y)
+  totRow(doc, t('subtotal'), fmt(totals.subtotalCents, locale), y)
   y += 16
 
   if (totals.discountCents > 0) {
-    totRow(doc, 'Korting', `- ${fmt(totals.discountCents)}`, y)
+    totRow(doc, t('discount'), `- ${fmt(totals.discountCents, locale)}`, y)
     y += 10
     hline(doc, TOT_X, RIGHT_EDGE, y)
     y += 8
-    totRow(doc, 'Subtotaal met korting', fmt(totals.subtotalCents - totals.discountCents), y)
+    totRow(doc, t('subtotalAfterDiscount'), fmt(totals.subtotalCents - totals.discountCents, locale), y)
     y += 16
   }
 
@@ -324,33 +327,33 @@ function drawTotals(doc, totals, noVat, vatLabel, startY) {
   // note below the totals (drawVatNotes), so no VAT rows are shown here.
   if (!noVat) {
     for (const { rate, cents } of totals.vatByRate) {
-      totRow(doc, `Totaal ${vatLabel} (${rate}%)`, fmt(cents), y)
+      totRow(doc, t('vatTotal', { vat: vatLabel, rate }), fmt(cents, locale), y)
       y += 16
     }
   }
 
   hline(doc, TOT_X, RIGHT_EDGE, y)
   y += 8
-  totRow(doc, 'Totaal (EUR)', fmt(totals.totalCents), y)
+  totRow(doc, t('total'), fmt(totals.totalCents, locale), y)
   y += 14
 
   hline(doc, TOT_X, RIGHT_EDGE, y)
   y += 8
-  totRow(doc, 'Totaal verschuldigd (EUR)', fmt(totals.totalCents), y, { bold: true, fontSize: 11 })
+  totRow(doc, t('amountDue'), fmt(totals.totalCents, locale), y, { bold: true, fontSize: 11 })
   return y + 20
 }
 
 // Legally-required VAT notes under the totals (EU VAT Directive art. 226):
 // reverse-charge notation, or the KOR exemption reference. Reverse charge takes
 // precedence (an invoice is one or the other, never both).
-function drawVatNotes(doc, invoice, tenant, startY) {
+function drawVatNotes(doc, invoice, tenant, startY, { t }) {
   let y = startY
   doc.fontSize(8).font('Helvetica').fillColor('#555')
   if (invoice.reverse_charge) {
-    doc.text('Btw verlegd — Reverse charge (Article 196 EU VAT Directive).', PAGE_MARGIN, y, { width: USABLE_W })
+    doc.text(t('reverseChargeNote'), PAGE_MARGIN, y, { width: USABLE_W })
     y += 12
   } else if (tenant.applies_kor) {
-    doc.text('Vrijgesteld van btw o.g.v. de kleineondernemersregeling (KOR).', PAGE_MARGIN, y, { width: USABLE_W })
+    doc.text(t('korNote'), PAGE_MARGIN, y, { width: USABLE_W })
     y += 12
   }
   return y
@@ -361,7 +364,7 @@ function drawVatNotes(doc, invoice, tenant, startY) {
 const QR_SIZE   = 65  // pt — rendered size of the QR code image in the PDF
 const QR_GAP    = 10  // pt — gap between QR code and text column
 
-function drawFooter(doc, invoice, tenant, qrBuffer) {
+function drawFooter(doc, invoice, tenant, qrBuffer, { t }) {
   const hasQr = Boolean(qrBuffer)
 
   // Reserve extra vertical space when a QR code is present.
@@ -378,7 +381,7 @@ function drawFooter(doc, invoice, tenant, qrBuffer) {
       // ignore render failure; fall through to text-only footer
     }
     doc.fontSize(7).font('Helvetica').fillColor('#888')
-    doc.text('Scan om online te betalen', PAGE_MARGIN, y + QR_SIZE + 3, {
+    doc.text(t('scanToPay'), PAGE_MARGIN, y + QR_SIZE + 3, {
       width: QR_SIZE,
       align: 'center',
     })
@@ -390,9 +393,15 @@ function drawFooter(doc, invoice, tenant, qrBuffer) {
   const textY = y + (hasQr ? 4 : 0)
 
   doc.fontSize(9).font('Helvetica').fillColor('#555')
+  const days = invoice.payment_term_days || 14
   const payLine = tenant.iban
-    ? `Gelieve te betalen binnen ${invoice.payment_term_days || 14} dagen op IBAN ${tenant.iban} t.a.v. ${tenant.formal_name || tenant.band_name || ''} o.v.v. factuurnummer ${invoice.invoice_number}.`
-    : `Gelieve te betalen binnen ${invoice.payment_term_days || 14} dagen o.v.v. factuurnummer ${invoice.invoice_number}.`
+    ? t('paymentInstructionIban', {
+        count: days,
+        iban: tenant.iban,
+        name: tenant.formal_name || tenant.band_name || '',
+        number: invoice.invoice_number,
+      })
+    : t('paymentInstruction', { count: days, number: invoice.invoice_number })
   doc.text(payLine, textX, textY, { width: textW })
 
   if (invoice.memo) {
