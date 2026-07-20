@@ -60,7 +60,9 @@ export const VAT_ID_FORMATS = Object.freeze({
   at: { pattern: /^ATU\d{8}$/, example: 'ATU12345678' },
   es: { pattern: /^ES[A-Z0-9]\d{7}[A-Z0-9]$/, example: 'ESX1234567X' },
   it: { pattern: /^IT\d{11}$/, example: 'IT12345678901' },
-  ie: { pattern: /^IE(\d{7}[A-W]{1,2}|\d[A-W0-9+*]\d{5}[A-W])$/, example: 'IE1234567FA' },
+  // Ireland: new format 7 digits + 1–2 letters (IE9999999WI), or the legacy
+  // digit + [letter/+/*] + 5 digits + letter (IE9S99999L). Per the EU VIES table.
+  ie: { pattern: /^IE(\d{7}[A-Z]{1,2}|\d[A-Z0-9+*]\d{5}[A-Z])$/, example: 'IE1234567FA' },
   gb: { pattern: /^GB(\d{9}|\d{12}|GD\d{3}|HA\d{3})$/, example: 'GB123456789' },
 })
 

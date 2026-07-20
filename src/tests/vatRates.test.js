@@ -63,16 +63,42 @@ describe('vatRates country config', () => {
     expect(isKnownVatRate(17.5)).toBe(false) // not a current rate anywhere
   })
 
-  it('validates VAT identification numbers per country', () => {
-    expect(isValidVatId('nl', 'NL123456789B01')).toBe(true)
-    expect(isValidVatId('de', 'DE123456789')).toBe(true)
-    expect(isValidVatId('be', 'BE0123456789')).toBe(true)
-    expect(isValidVatId('fr', 'FRXX123456789')).toBe(true)
-    expect(isValidVatId('ie', 'IE1234567FA')).toBe(true)
-    expect(isValidVatId('gb', 'GB123456789')).toBe(true)
-    // A number from another country does not validate for the wrong country.
-    expect(isValidVatId('de', 'NL123456789B01')).toBe(false)
-    expect(isValidVatId('nl', 'DE123456789')).toBe(false)
+  // Valid samples mirror the official EU VIES VAT-number table structures
+  // (and HMRC for GB): 9 = digit, letters/fixed chars as the country prescribes.
+  const VALID_VAT_IDS = {
+    nl: ['NL123456789B01'],
+    be: ['BE0123456789', 'BE1123456789'],
+    de: ['DE123456789'],
+    fr: ['FRXX123456789', 'FR12123456789'],
+    lu: ['LU12345678'],
+    at: ['ATU12345678'],
+    es: ['ESX1234567X', 'ES01234567A'],
+    it: ['IT12345678901'],
+    ie: ['IE1234567FA', 'IE1234567W', 'IE1A23456L', 'IE9S99999L', 'IE9999999WI'],
+    gb: ['GB123456789', 'GB123456789012', 'GBGD001', 'GBHA599'],
+  }
+
+  it.each(Object.entries(VALID_VAT_IDS))('accepts valid %s VAT numbers', (country, samples) => {
+    for (const sample of samples) expect(isValidVatId(country, sample)).toBe(true)
+  })
+
+  it('rejects malformed VAT numbers per country', () => {
+    expect(isValidVatId('nl', 'NL12345678B01')).toBe(false) // 8 digits, not 9
+    expect(isValidVatId('nl', 'NL123456789X01')).toBe(false) // missing literal B
+    expect(isValidVatId('be', 'BE2123456789')).toBe(false) // prefix must be 0/1
+    expect(isValidVatId('at', 'ATX12345678')).toBe(false) // needs U
+    expect(isValidVatId('it', 'IT1234567890')).toBe(false) // 10 digits, not 11
+    expect(isValidVatId('gb', 'GB1234567')).toBe(false) // 7 digits
+  })
+
+  it('does not accept a number from the wrong country', () => {
+    // Every country's valid samples must fail for every other country.
+    for (const [country, samples] of Object.entries(VALID_VAT_IDS)) {
+      for (const other of Object.keys(VALID_VAT_IDS)) {
+        if (other === country) continue
+        for (const sample of samples) expect(isValidVatId(other, sample)).toBe(false)
+      }
+    }
   })
 
   it('gives a sample VAT number for each country', () => {
