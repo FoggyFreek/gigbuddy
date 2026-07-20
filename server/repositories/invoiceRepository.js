@@ -148,7 +148,8 @@ export async function lockInvoice(executor, tenantId, invoiceId) {
 
 export async function lockInvoiceTotalsState(executor, tenantId, invoiceId) {
   const { rows } = await executor.query(
-    `SELECT tax_inclusive, reverse_charge, customer_tax_id, discount_type, discount_pct, discount_cents, finalized_at
+    `SELECT tax_inclusive, reverse_charge, customer_tax_id, customer_address_country,
+            discount_type, discount_pct, discount_cents, finalized_at
        FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
     [invoiceId, tenantId],
   )

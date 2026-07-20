@@ -14,6 +14,8 @@ import {
   isKnownVatCountry,
   isKnownVatRate,
   isValidVatId,
+  isEuVatCountry,
+  korApplies,
   normalizeVatCountry,
   snapVatRate,
 } from '../../shared/vatRates.js'
@@ -118,6 +120,20 @@ describe('vatRates country config', () => {
         for (const sample of samples) expect(isValidVatId(other, sample)).toBe(false)
       }
     }
+  })
+
+  it('marks EU membership (UK is supported but not EU)', () => {
+    expect(isEuVatCountry('nl')).toBe(true)
+    expect(isEuVatCountry('de')).toBe(true)
+    expect(isEuVatCountry('gb')).toBe(false)
+    expect(isEuVatCountry('xx')).toBe(false)
+  })
+
+  it('treats KOR as a Dutch-only exemption', () => {
+    expect(korApplies('nl')).toBe(true)
+    expect(korApplies('NL')).toBe(true)
+    expect(korApplies('de')).toBe(false)
+    expect(korApplies('be')).toBe(false)
   })
 
   it('localizes the VAT term and VAT-number label per country', () => {

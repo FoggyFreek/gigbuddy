@@ -84,7 +84,7 @@
     "removeLine": "remove line",
     "addItem": "Add item",
     "reverseCharge": "Reverse charge",
-    "reverseChargeHint": "0% VAT — the customer accounts for VAT. Requires the customer's VAT number."
+    "reverseChargeHint": "0% VAT — the customer accounts for VAT. Requires a valid VAT number for a customer in another EU country."
   },
   "totals": {
     "subtotal": "Subtotal",

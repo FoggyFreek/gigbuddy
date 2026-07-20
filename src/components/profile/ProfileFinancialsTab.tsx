@@ -16,7 +16,7 @@ import Typography from '@mui/material/Typography'
 import CheckIcon from '@mui/icons-material/Check'
 import EditIcon from '@mui/icons-material/Edit'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import { VAT_COUNTRY_CODES, getVatIdExample, isValidVatId } from '../../utils/vatRates.ts'
+import { VAT_COUNTRY_CODES, getVatIdExample, isValidVatId, korApplies } from '../../utils/vatRates.ts'
 import {
   getRegistrationLabel, getRegistrationExample, getRegistrationOfficeLabel, getRegistrationOfficeExample,
   registrationSameAsVat, registrationUsesOffice, isValidRegistrationNumber,
@@ -263,22 +263,25 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
           helperText={t($ => $.financials.taxPercentHelper)}
         />
       </Grid>
-      <Grid size={12}>
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <FormControlLabel
-            control={(
-              <Switch
-                checked={!!form.applies_kor}
-                onChange={(e) => onChange('applies_kor', e.target.checked)}
-              />
-            )}
-            label="KOR"
-          />
-          <Tooltip title="kleineondernemingsregeling">
-            <InfoOutlinedIcon fontSize="small" color="action" />
-          </Tooltip>
-        </Stack>
-      </Grid>
+      {/* KOR is a Dutch-only VAT exemption, so only offer it to NL tenants. */}
+      {korApplies(form.vat_country) && (
+        <Grid size={12}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <FormControlLabel
+              control={(
+                <Switch
+                  checked={!!form.applies_kor}
+                  onChange={(e) => onChange('applies_kor', e.target.checked)}
+                />
+              )}
+              label="KOR"
+            />
+            <Tooltip title="kleineondernemingsregeling">
+              <InfoOutlinedIcon fontSize="small" color="action" />
+            </Tooltip>
+          </Stack>
+        </Grid>
+      )}
     </Grid>
   )
 }
@@ -341,15 +344,17 @@ function FinancialsView({ form }: Readonly<FinancialsViewProps>) {
         <Typography variant="caption" color="text.secondary">{t($ => $.financials.taxPercent)}</Typography>
         <Typography>{taxPercentageDisplay}</Typography>
       </Grid>
-      <Grid size={12}>
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>KOR</Typography>
-          <Typography>{form.applies_kor ? t($ => $.answer.yes, { ns: 'common' }) : t($ => $.answer.no, { ns: 'common' })}</Typography>
-          <Tooltip title="kleineondernemingsregeling">
-            <InfoOutlinedIcon fontSize="small" color="action" />
-          </Tooltip>
-        </Stack>
-      </Grid>
+      {korApplies(form.vat_country) && (
+        <Grid size={12}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>KOR</Typography>
+            <Typography>{form.applies_kor ? t($ => $.answer.yes, { ns: 'common' }) : t($ => $.answer.no, { ns: 'common' })}</Typography>
+            <Tooltip title="kleineondernemingsregeling">
+              <InfoOutlinedIcon fontSize="small" color="action" />
+            </Tooltip>
+          </Stack>
+        </Grid>
+      )}
     </Grid>
   )
 }

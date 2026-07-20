@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { getObject, uploadObjectWithQuota, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from './storageService.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
+import { korApplies } from '../../shared/vatRates.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import {
@@ -57,6 +58,7 @@ import {
   parseSearchLimit,
   computeDueDate,
   validatePaymentLinkOptions,
+  validateReverseCharge,
 } from '../validators/invoiceValidators.js'
 import {
   ledgerErrorResult,
@@ -102,7 +104,8 @@ export function computeAndApply(invoiceFields, lines, tenant) {
     discountCents: invoiceFields.discount_cents,
     discountType: invoiceFields.discount_type,
     discountPct: invoiceFields.discount_pct,
-    appliesKor: tenant.applies_kor,
+    // KOR is a Dutch-only scheme; it never zeroes VAT for a non-NL tenant.
+    appliesKor: tenant.applies_kor && korApplies(tenant.vat_country),
     reverseCharge: invoiceFields.reverse_charge,
   })
 }
@@ -205,11 +208,15 @@ async function recomputeTotals(client, tenantId, invoiceId, body, tenant, reques
   const discountPct = 'discount_pct' in body ? clampNonNegative(body.discount_pct) : Number(current.discount_pct)
   const discountCents = 'discount_cents' in body ? clampNonNegative(body.discount_cents) : current.discount_cents
 
-  // Reverse charge needs the customer's VAT number (the value being set, else the
-  // stored one), mirroring the create-time check.
-  const customerTaxId = String(('customer_tax_id' in body ? body.customer_tax_id : current.customer_tax_id) ?? '').trim()
-  if (reverseCharge && !customerTaxId) {
-    return { error: { status: 400, body: { error: 'customer_tax_id_required_for_reverse_charge' } } }
+  // Reverse charge is validated against the effective customer identity (the
+  // values set in this PATCH, else the stored ones), mirroring create.
+  if (reverseCharge) {
+    const rcError = validateReverseCharge({
+      supplierCountry: tenant.vat_country,
+      customerCountry: 'customer_address_country' in body ? body.customer_address_country : current.customer_address_country,
+      customerTaxId: 'customer_tax_id' in body ? body.customer_tax_id : current.customer_tax_id,
+    })
+    if (rcError) return { error: { status: 400, body: { error: rcError } } }
   }
 
   const currentLines = await fetchLines(client, invoiceId, tenantId)
@@ -504,7 +511,7 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
 
   const issueDate = new Date().toISOString().slice(0, 10)
   const paymentTermDays = 14
-  const taxPercentage = tenant.applies_kor ? 0 : Number(tenant.tax_percentage ?? 9)
+  const taxPercentage = (tenant.applies_kor && korApplies(tenant.vat_country)) ? 0 : Number(tenant.tax_percentage ?? 9)
 
   const eventDateStr = gig.event_date
     ? new Date(gig.event_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -598,6 +605,15 @@ export async function createInvoice(pool, tenantId, userId, body) {
 
   const tenant = await fetchTenant(pool, tenantId)
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
+
+  if (parsed.reverseCharge) {
+    const rcError = validateReverseCharge({
+      supplierCountry: tenant.vat_country,
+      customerCountry: body.customer_address_country,
+      customerTaxId: body.customer_tax_id,
+    })
+    if (rcError) return { error: { status: 400, body: { error: rcError } } }
+  }
 
   const totals = computeAndApply(
     { tax_inclusive: parsed.taxInclusive, reverse_charge: parsed.reverseCharge, discount_type: parsed.discountType, discount_pct: parsed.discountPct, discount_cents: parsed.discountCents },

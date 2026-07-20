@@ -6,6 +6,7 @@ import {
   updateInvoice,
 } from '../../api/invoices.ts'
 import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
+import { korApplies } from '../../utils/vatRates.ts'
 import type { Invoice, InvoiceStatus, Tenant, Id } from '../../types/entities.ts'
 import {
   addDays,
@@ -97,7 +98,8 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
 
   const finalized = Boolean(invoice?.finalized_at)
   const readOnly = finalized
-  const appliesKor = Boolean(tenant?.applies_kor)
+  // KOR is a Dutch-only exemption; it never zeroes VAT for a non-NL supplier.
+  const appliesKor = Boolean(tenant?.applies_kor) && korApplies(tenant?.vat_country)
 
   const totals = useMemo(() => computeInvoiceTotals({
     lines: form.lines,

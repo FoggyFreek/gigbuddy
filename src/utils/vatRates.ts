@@ -13,6 +13,7 @@ import {
   getVatIdExample as getVatIdExampleJs,
   isValidVatId as isValidVatIdJs,
   getVatIdLabel as getVatIdLabelJs,
+  korApplies as korAppliesJs,
 } from '../../shared/vatRates.js'
 
 export const VAT_COUNTRY_CODES: string[] = VAT_COUNTRY_CODES_JS as string[]
@@ -39,6 +40,11 @@ export function getVatIdExample(country: string | null | undefined): string {
 // How the country labels a VAT identification number (Btw-nr. / USt-IdNr. / …).
 export function getVatIdLabel(country: string | null | undefined): string {
   return getVatIdLabelJs(country ?? undefined) as string
+}
+
+// True only for NL — the Dutch KOR small-business exemption is national.
+export function korApplies(country: string | null | undefined): boolean {
+  return korAppliesJs(country ?? undefined) as boolean
 }
 
 // True when `value` (whitespace/case-insensitive) is a valid VAT identification

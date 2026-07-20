@@ -28,17 +28,20 @@ export const DEFAULT_VAT_COUNTRY = 'nl'
 //                invoice (Dutch btw, German USt, French TVA, …).
 // `vatIdLabel` — how the VAT identification number is labelled (USt-IdNr., N° TVA,
 //                P.IVA, …). Both come from the national VAT terminology / VIES.
+// `eu` marks EU member states. The UK (gb) is supported for VAT rates and its
+// own VAT-number/registration format, but is NOT an EU member: EU-specific rules
+// (intra-EU Art. 196 reverse charge, the EU SME scheme) do not apply to it.
 export const VAT_COUNTRIES = Object.freeze({
-  nl: { standard: 21, rates: [21, 9, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.' },
-  be: { standard: 21, rates: [21, 12, 6, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.' },
-  de: { standard: 19, rates: [19, 7, 0], vatLabel: 'USt', vatIdLabel: 'USt-IdNr.' },
-  fr: { standard: 20, rates: [20, 10, 5.5, 2.1, 0], vatLabel: 'TVA', vatIdLabel: 'N° TVA' },
-  lu: { standard: 17, rates: [17, 14, 8, 3, 0], vatLabel: 'TVA', vatIdLabel: 'No. TVA' },
-  at: { standard: 20, rates: [20, 13, 10, 0], vatLabel: 'USt', vatIdLabel: 'UID' },
-  es: { standard: 21, rates: [21, 10, 4, 0], vatLabel: 'IVA', vatIdLabel: 'NIF' },
-  it: { standard: 22, rates: [22, 10, 5, 4, 0], vatLabel: 'IVA', vatIdLabel: 'P.IVA' },
-  ie: { standard: 23, rates: [23, 13.5, 9, 4.8, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.' },
-  gb: { standard: 20, rates: [20, 5, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.' },
+  nl: { standard: 21, rates: [21, 9, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.', eu: true },
+  be: { standard: 21, rates: [21, 12, 6, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.', eu: true },
+  de: { standard: 19, rates: [19, 7, 0], vatLabel: 'USt', vatIdLabel: 'USt-IdNr.', eu: true },
+  fr: { standard: 20, rates: [20, 10, 5.5, 2.1, 0], vatLabel: 'TVA', vatIdLabel: 'N° TVA', eu: true },
+  lu: { standard: 17, rates: [17, 14, 8, 3, 0], vatLabel: 'TVA', vatIdLabel: 'No. TVA', eu: true },
+  at: { standard: 20, rates: [20, 13, 10, 0], vatLabel: 'USt', vatIdLabel: 'UID', eu: true },
+  es: { standard: 21, rates: [21, 10, 4, 0], vatLabel: 'IVA', vatIdLabel: 'NIF', eu: true },
+  it: { standard: 22, rates: [22, 10, 5, 4, 0], vatLabel: 'IVA', vatIdLabel: 'P.IVA', eu: true },
+  ie: { standard: 23, rates: [23, 13.5, 9, 4.8, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.', eu: true },
+  gb: { standard: 20, rates: [20, 5, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.', eu: false },
 })
 
 // Every distinct VAT rate across all supported countries, high→low. Used as the
@@ -73,6 +76,20 @@ export const VAT_ID_FORMATS = Object.freeze({
 
 export function isKnownVatCountry(code) {
   return typeof code === 'string' && Object.hasOwn(VAT_COUNTRIES, code)
+}
+
+// True when the (normalized) country is an EU member — the precondition for
+// intra-EU rules such as Art. 196 reverse charge.
+export function isEuVatCountry(code) {
+  const c = normalizeVatCountry(code)
+  return c !== null && VAT_COUNTRIES[c].eu === true
+}
+
+// The Dutch KOR is a NATIONAL small-business VAT exemption; it only applies when
+// the tenant's VAT country is the Netherlands. (The EU-wide SME scheme is a
+// separate, per-country enrolment and is not modelled by the applies_kor flag.)
+export function korApplies(country) {
+  return normalizeVatCountry(country) === 'nl'
 }
 
 // Trims + lowercases a country code and returns it only when it is a known VAT

@@ -220,9 +220,12 @@ describe('invoices — totals are stored authoritatively', () => {
 })
 
 describe('invoices — reverse charge & supply date', () => {
-  it('reverse charge zeroes VAT and keeps the net total', async () => {
+  // Seed tenant A's VAT country is nl, so a valid intra-EU reverse charge is a
+  // customer in another EU state with a country-matching VAT number.
+  it('reverse charge zeroes VAT for a valid intra-EU B2B supply', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
       reverse_charge: true,
+      customer_address_country: 'DE',
       customer_tax_id: 'DE123456789',
       lines: [{ description: 'Gig in DE', quantity: 1, unit_price_cents: 100000, tax_percentage: 21 }],
     })).expect(201)
@@ -235,10 +238,41 @@ describe('invoices — reverse charge & supply date', () => {
   it('rejects reverse charge without a customer VAT number', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
       reverse_charge: true,
+      customer_address_country: 'DE',
       customer_tax_id: '',
     }))
     expect(r.status).toBe(400)
     expect(r.body.error).toBe('customer_tax_id_required_for_reverse_charge')
+  })
+
+  it('rejects reverse charge for a domestic customer (same country)', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'NL',
+      customer_tax_id: 'NL123456789B01',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.error).toBe('reverse_charge_requires_cross_border')
+  })
+
+  it('rejects reverse charge when the VAT number does not match the customer country', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: 'abc123',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.error).toBe('invalid_customer_vat_number')
+  })
+
+  it('rejects reverse charge for a non-EU customer country', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'GB',
+      customer_tax_id: 'GB123456789',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.error).toBe('reverse_charge_requires_eu_customer')
   })
 
   it('rejects turning on reverse charge via PATCH when no customer VAT number is stored', async () => {
@@ -254,6 +288,18 @@ describe('invoices — reverse charge & supply date', () => {
       supply_date: '2026-04-15',
     })).expect(201)
     expect(String(r.body.supply_date).slice(0, 10)).toBe('2026-04-15')
+  })
+
+  it('does not apply the Dutch KOR exemption for a non-NL tenant', async () => {
+    // applies_kor is a Dutch-only scheme, so a German tenant still charges VAT.
+    await pool.query(
+      "UPDATE tenants SET vat_country = 'de', applies_kor = true WHERE id = $1",
+      [seed.tenantA.id],
+    )
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      lines: [{ description: 'x', quantity: 1, unit_price_cents: 100000, tax_percentage: 19 }],
+    })).expect(201)
+    expect(r.body.tax_cents).toBe(19000)
   })
 })
 

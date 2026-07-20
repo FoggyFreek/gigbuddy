@@ -1,6 +1,24 @@
 // Pure request/parameter validation for invoice routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
+import { normalizeVatCountry, isEuVatCountry, isValidVatId } from '../../shared/vatRates.js'
 export { formatInvoiceNumber } from '../domain/invoice.js'
+
+// Validates that an invoice actually qualifies for the intra-EU Art. 196 reverse
+// charge before we zero the VAT and print the notation. A non-empty tax-id field
+// is not enough: the customer must be VAT-registered in ANOTHER EU member state,
+// both parties must be in the EU, and the number must match that country's VAT
+// format. Returns an error code string, or null when the treatment is valid.
+export function validateReverseCharge({ supplierCountry, customerCountry, customerTaxId }) {
+  const taxId = String(customerTaxId ?? '').replace(/\s+/g, '').toUpperCase()
+  if (!taxId) return 'customer_tax_id_required_for_reverse_charge'
+  const supplier = normalizeVatCountry(supplierCountry)
+  const customer = normalizeVatCountry(customerCountry)
+  if (!supplier || !isEuVatCountry(supplier)) return 'reverse_charge_requires_eu_supplier'
+  if (!customer || !isEuVatCountry(customer)) return 'reverse_charge_requires_eu_customer'
+  if (customer === supplier) return 'reverse_charge_requires_cross_border'
+  if (!isValidVatId(customer, taxId)) return 'invalid_customer_vat_number'
+  return null
+}
 
 export const CONTENT_FIELDS = [
   'gig_id',
@@ -95,11 +113,8 @@ export function parseCreateInvoiceBody(body) {
   const lines = normalizeLines(body.lines)
   if (!lines.length) return { error: 'At least one line is required' }
 
-  // Reverse charge shifts the VAT liability to the customer, so their VAT number
-  // is mandatory (EU VAT Directive art. 226 / art. 196).
-  const customerTaxId = String(body.customer_tax_id ?? '').trim()
-  if (reverseCharge && !customerTaxId) return { error: 'customer_tax_id_required_for_reverse_charge' }
-
+  // Reverse-charge eligibility depends on the supplier + customer countries
+  // (which the service knows), so it is validated there via validateReverseCharge.
   return { customerName, paymentTermDays, issueDate, dueDate, taxInclusive, reverseCharge, supplyDate, discountType, discountPct, discountCents, lines }
 }
 

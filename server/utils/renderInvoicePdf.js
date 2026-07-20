@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { computeInvoiceTotals } from './computeInvoiceTotals.js'
 import { logger } from './logger.js'
 import { getRegistrationLabel, getRegistrationOfficeLabel, requiresCompanyDisclosure } from '../../shared/businessRegistry.js'
-import { normalizeVatCountry, getVatLabel, getVatIdLabel } from '../../shared/vatRates.js'
+import { normalizeVatCountry, getVatLabel, getVatIdLabel, korApplies } from '../../shared/vatRates.js'
 import { resolveInvoiceLng, getInvoiceT, invoiceIntlLocale } from './invoiceI18n.js'
 
 const PAGE_MARGIN = 48
@@ -43,6 +43,12 @@ function fmtQty(q) {
   return Number.isInteger(n) ? String(n) : n.toFixed(2)
 }
 
+// VAT rate for display — keeps meaningful decimals (5.5, 2.1, 13.5, 4.8) instead
+// of rounding them to an integer, and localizes the decimal separator.
+function fmtRate(rate, locale = 'nl-NL') {
+  return Number(rate || 0).toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
 function hline(doc, x1, x2, y, color = '#cccccc') {
   doc.moveTo(x1, y).lineTo(x2, y).strokeColor(color).lineWidth(0.5).stroke()
 }
@@ -68,12 +74,14 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
     discountType: invoice.discount_type,
     discountPct:  invoice.discount_pct,
     discountCents: invoice.discount_cents,
-    appliesKor: tenant.applies_kor,
+    appliesKor: tenant.applies_kor && korApplies(tenant.vat_country),
     reverseCharge: invoice.reverse_charge,
   })
+  // KOR is a Dutch-only exemption, so it only takes effect for an NL supplier.
+  const appliesKor = Boolean(tenant.applies_kor) && korApplies(tenant.vat_country)
   // Both KOR and reverse charge zero the VAT, so the line table and totals hide
   // the VAT column; the reason is spelled out in a note under the totals.
-  const noVat = Boolean(tenant.applies_kor) || Boolean(invoice.reverse_charge)
+  const noVat = appliesKor || Boolean(invoice.reverse_charge)
   // Invoice is issued by the supplier, so the VAT term follows the supplier's
   // country (btw / USt / TVA / …).
   const vatLabel = getVatLabel(tenant.vat_country)
@@ -291,7 +299,7 @@ function drawLinesTable(doc, lines, perLine, taxInclusive, noVat, vatLabel, star
     doc.text(fmtQty(line.quantity),  xQty,   y, { width: COL_QTY,   align: 'right' })
     doc.text(fmt(displayUnit, locale), xPrice, y, { width: COL_PRICE, align: 'right' })
     if (!noVat) {
-      doc.text(`${Number(line.tax_percentage).toFixed(0)}%`, xVat, y, { width: COL_VAT, align: 'right' })
+      doc.text(`${fmtRate(line.tax_percentage, locale)}%`, xVat, y, { width: COL_VAT, align: 'right' })
     }
     doc.text(fmt(displayTotal, locale), xTotal, y, { width: totalW, align: 'right' })
 
@@ -331,7 +339,7 @@ function drawTotals(doc, totals, noVat, vatLabel, startY, { t, locale }) {
   // note below the totals (drawVatNotes), so no VAT rows are shown here.
   if (!noVat) {
     for (const { rate, cents } of totals.vatByRate) {
-      totRow(doc, t('vatTotal', { vat: vatLabel, rate }), fmt(cents, locale), y)
+      totRow(doc, t('vatTotal', { vat: vatLabel, rate: fmtRate(rate, locale) }), fmt(cents, locale), y)
       y += 16
     }
   }
@@ -356,7 +364,8 @@ function drawVatNotes(doc, invoice, tenant, startY, { t }) {
   if (invoice.reverse_charge) {
     doc.text(t('reverseChargeNote'), PAGE_MARGIN, y, { width: USABLE_W })
     y += 12
-  } else if (tenant.applies_kor) {
+  } else if (tenant.applies_kor && korApplies(tenant.vat_country)) {
+    // The KOR note is Dutch-specific; never printed for a non-NL supplier.
     doc.text(t('korNote'), PAGE_MARGIN, y, { width: USABLE_W })
     y += 12
   }
