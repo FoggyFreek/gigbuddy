@@ -196,6 +196,22 @@ const FIXTURES = [
     },
   },
   {
+    name: 'reverse charge forces zero VAT (customer accounts for VAT)',
+    input: {
+      lines: [{ quantity: 2, unit_price_cents: 30000, tax_percentage: 21 }],
+      taxInclusive: false,
+      discountCents: 0,
+      appliesKor: false,
+      reverseCharge: true,
+    },
+    expected: {
+      subtotalCents: 60000,
+      taxCents: 0,
+      totalCents: 60000,
+      vatByRate: [],
+    },
+  },
+  {
     name: 'rounding edge: inclusive VAT with awkward gross, no discount',
     input: {
       lines: [{ quantity: 1, unit_price_cents: 12345, tax_percentage: 21 }],

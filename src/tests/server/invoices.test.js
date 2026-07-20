@@ -219,6 +219,44 @@ describe('invoices — totals are stored authoritatively', () => {
   })
 })
 
+describe('invoices — reverse charge & supply date', () => {
+  it('reverse charge zeroes VAT and keeps the net total', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_tax_id: 'DE123456789',
+      lines: [{ description: 'Gig in DE', quantity: 1, unit_price_cents: 100000, tax_percentage: 21 }],
+    })).expect(201)
+    expect(r.body.reverse_charge).toBe(true)
+    expect(r.body.subtotal_cents).toBe(100000)
+    expect(r.body.tax_cents).toBe(0)
+    expect(r.body.total_cents).toBe(100000)
+  })
+
+  it('rejects reverse charge without a customer VAT number', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_tax_id: '',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.error).toBe('customer_tax_id_required_for_reverse_charge')
+  })
+
+  it('rejects turning on reverse charge via PATCH when no customer VAT number is stored', async () => {
+    const created = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
+      .send({ reverse_charge: true })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('customer_tax_id_required_for_reverse_charge')
+  })
+
+  it('stores an explicit supply_date', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      supply_date: '2026-04-15',
+    })).expect(201)
+    expect(String(r.body.supply_date).slice(0, 10)).toBe('2026-04-15')
+  })
+})
+
 describe('invoices — finalization gate', () => {
   it('PATCH with status sent finalizes the invoice', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)

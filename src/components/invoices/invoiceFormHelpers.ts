@@ -19,6 +19,8 @@ export interface InvoiceForm {
   customer_tax_id: string
   memo: string | null
   tax_inclusive: boolean
+  reverse_charge: boolean
+  supply_date: string | null
   invert_logo: boolean
   discount_type: 'pct' | 'eur'
   discount_pct: number
@@ -56,6 +58,8 @@ export function emptyDraft(taxPct = 9): InvoiceForm {
     customer_tax_id: '',
     memo: null,
     tax_inclusive: false,
+    reverse_charge: false,
+    supply_date: issueDate,
     invert_logo: false,
     discount_type: 'pct',
     discount_pct: 0,
@@ -106,6 +110,8 @@ export function invoiceToForm(data: Record<string, unknown> & { lines?: InvoiceL
     customer_tax_id: String(data.customer_tax_id || ''),
     memo: data.memo ? String(data.memo) : null,
     tax_inclusive: !!data.tax_inclusive,
+    reverse_charge: !!data.reverse_charge,
+    supply_date: data.supply_date ? String(data.supply_date).slice(0, 10) : null,
     invert_logo: !!data.invert_logo,
     discount_type: data.discount_type === 'pct' ? 'pct' : 'eur',
     discount_pct: Number(data.discount_pct) || 0,
@@ -141,6 +147,8 @@ export function buildInvoicePayload(form: InvoiceForm): Record<string, unknown> 
     customer_tax_id: form.customer_tax_id || null,
     memo: form.memo || null,
     tax_inclusive: !!form.tax_inclusive,
+    reverse_charge: !!form.reverse_charge,
+    supply_date: form.supply_date || null,
     invert_logo: !!form.invert_logo,
     discount_type: form.discount_type,
     discount_pct: form.discount_type === 'pct' ? Math.max(0, Number(form.discount_pct) || 0) : 0,

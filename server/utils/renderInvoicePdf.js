@@ -72,7 +72,11 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
     discountPct:  invoice.discount_pct,
     discountCents: invoice.discount_cents,
     appliesKor: tenant.applies_kor,
+    reverseCharge: invoice.reverse_charge,
   })
+  // Both KOR and reverse charge zero the VAT, so the line table and totals hide
+  // the VAT column; the reason is spelled out in a note under the totals.
+  const noVat = Boolean(tenant.applies_kor) || Boolean(invoice.reverse_charge)
 
   // Generate QR code buffer if a payment link exists.
   let qrBuffer = null
@@ -92,8 +96,9 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
   const titleBottom = drawTitle(doc, invoice, tenant, logoBuffer)
   const addrBottom  = drawAddresses(doc, invoice, tenant, titleBottom + 20)
   hline(doc, PAGE_MARGIN, RIGHT_EDGE, addrBottom + 8)
-  const linesBottom = drawLinesTable(doc, lines, totals.perLine, invoice.tax_inclusive, tenant.applies_kor, addrBottom + 24)
-  drawTotals(doc, totals, tenant.applies_kor, linesBottom)
+  const linesBottom = drawLinesTable(doc, lines, totals.perLine, invoice.tax_inclusive, noVat, addrBottom + 24)
+  const totalsBottom = drawTotals(doc, totals, noVat, linesBottom)
+  drawVatNotes(doc, invoice, tenant, totalsBottom)
   drawFooter(doc, invoice, tenant, qrBuffer)
 
   doc.end()
@@ -125,6 +130,11 @@ function drawTitle(doc, invoice, tenant, logoBuffer) {
   let metaY = y + 30
   doc.text(`Datum van uitgifte: ${fmtDate(invoice.issue_date)}`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
   metaY += 13
+  // Date of supply (art. 226(7)) — shown when it differs from the issue date.
+  if (invoice.supply_date && fmtDate(invoice.supply_date) !== fmtDate(invoice.issue_date)) {
+    doc.text(`Prestatiedatum: ${fmtDate(invoice.supply_date)}`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
+    metaY += 13
+  }
   if (invoice.payment_term_days) {
     doc.text(`Betaalvoorwaarden: Binnen ${invoice.payment_term_days} dagen`, PAGE_MARGIN, metaY, { width: USABLE_W, align: 'right' })
     metaY += 13
@@ -227,7 +237,7 @@ function drawAddresses(doc, invoice, tenant, startY) {
 
 // ─── line items table ─────────────────────────────────────────────────────────
 
-function drawLinesTable(doc, lines, perLine, taxInclusive, appliesKor, startY) {
+function drawLinesTable(doc, lines, perLine, taxInclusive, noVat, startY) {
   const sx = PAGE_MARGIN
   let y = startY
 
@@ -235,16 +245,16 @@ function drawLinesTable(doc, lines, perLine, taxInclusive, appliesKor, startY) {
   const xQty   = sx + COL_DESC
   const xPrice = xQty + COL_QTY
   const xVat   = xPrice + COL_PRICE
-  const xTotal = xVat + (appliesKor ? 0 : COL_VAT)
-  // When KOR, merge the VAT column into total width
-  const totalW = appliesKor ? COL_VAT + COL_TOTAL : COL_TOTAL
+  const xTotal = xVat + (noVat ? 0 : COL_VAT)
+  // With no VAT (KOR / reverse charge), merge the VAT column into total width
+  const totalW = noVat ? COL_VAT + COL_TOTAL : COL_TOTAL
 
   // Header
   doc.fontSize(9).font('Helvetica-Bold').fillColor('#888')
   doc.text('Beschrijving', sx,     y, { width: COL_DESC - 8 })
   doc.text('Aantal',       xQty,   y, { width: COL_QTY,   align: 'right' })
-  doc.text('Prijs',        xPrice, y, { width: COL_PRICE, align: 'right' })
-  if (!appliesKor) doc.text('BTW', xVat, y, { width: COL_VAT, align: 'right' })
+  doc.text('Prijs excl. btw', xPrice, y, { width: COL_PRICE, align: 'right' })
+  if (!noVat) doc.text('BTW', xVat, y, { width: COL_VAT, align: 'right' })
   doc.text('Totaal', xTotal, y, { width: totalW, align: 'right' })
 
   hline(doc, sx, RIGHT_EDGE, y + 14)
@@ -254,14 +264,22 @@ function drawLinesTable(doc, lines, perLine, taxInclusive, appliesKor, startY) {
   doc.fontSize(10).font('Helvetica').fillColor('#000')
   lines.forEach((line, idx) => {
     const lt = perLine[idx] || { netCents: 0, grossCents: 0 }
-    // Show the entered price × qty: net for exclusive VAT, gross for inclusive
-    const displayTotal = taxInclusive ? lt.grossCents : lt.netCents
+    // Always show the line total net of VAT (the VAT is broken out in the totals);
+    // under KOR / reverse charge net == gross since no VAT is charged.
+    const displayTotal = lt.netCents
+    // Art. 226(10): the unit price must be shown EXCLUDING VAT. In tax-inclusive
+    // mode the entered price is gross, so derive the net unit price.
+    const rate = Number(line.tax_percentage) || 0
+    const unitCents = Number(line.unit_price_cents) || 0
+    const displayUnit = (taxInclusive && !noVat && rate > 0)
+      ? Math.round((unitCents * 100) / (100 + rate))
+      : unitCents
     const descH = doc.heightOfString(line.description || '', { width: COL_DESC - 8 })
 
     doc.text(line.description || '', sx,     y, { width: COL_DESC - 8 })
     doc.text(fmtQty(line.quantity),  xQty,   y, { width: COL_QTY,   align: 'right' })
-    doc.text(fmt(line.unit_price_cents), xPrice, y, { width: COL_PRICE, align: 'right' })
-    if (!appliesKor) {
+    doc.text(fmt(displayUnit), xPrice, y, { width: COL_PRICE, align: 'right' })
+    if (!noVat) {
       doc.text(`${Number(line.tax_percentage).toFixed(0)}%`, xVat, y, { width: COL_VAT, align: 'right' })
     }
     doc.text(fmt(displayTotal), xTotal, y, { width: totalW, align: 'right' })
@@ -281,7 +299,7 @@ function totRow(doc, label, value, y, { bold = false, fontSize = 10 } = {}) {
   doc.text(value, TOT_VAL_X, y, { width: TOT_VAL_W, align: 'right' })
 }
 
-function drawTotals(doc, totals, appliesKor, startY) {
+function drawTotals(doc, totals, noVat, startY) {
   let y = startY
   hline(doc, TOT_X, RIGHT_EDGE, y)
   y += 10
@@ -298,15 +316,13 @@ function drawTotals(doc, totals, appliesKor, startY) {
     y += 16
   }
 
-  if (!appliesKor) {
+  // No VAT is charged under KOR or reverse charge; the reason is stated in the
+  // note below the totals (drawVatNotes), so no VAT rows are shown here.
+  if (!noVat) {
     for (const { rate, cents } of totals.vatByRate) {
       totRow(doc, `Totaal BTW (${rate}%)`, fmt(cents), y)
       y += 16
     }
-  } else {
-    doc.fontSize(8).font('Helvetica').fillColor('#666')
-    doc.text('Kleine ondernemersregeling — geen BTW in rekening gebracht.', TOT_X, y, { width: TOT_W })
-    y += 14
   }
 
   hline(doc, TOT_X, RIGHT_EDGE, y)
@@ -317,6 +333,23 @@ function drawTotals(doc, totals, appliesKor, startY) {
   hline(doc, TOT_X, RIGHT_EDGE, y)
   y += 8
   totRow(doc, 'Totaal verschuldigd (EUR)', fmt(totals.totalCents), y, { bold: true, fontSize: 11 })
+  return y + 20
+}
+
+// Legally-required VAT notes under the totals (EU VAT Directive art. 226):
+// reverse-charge notation, or the KOR exemption reference. Reverse charge takes
+// precedence (an invoice is one or the other, never both).
+function drawVatNotes(doc, invoice, tenant, startY) {
+  let y = startY
+  doc.fontSize(8).font('Helvetica').fillColor('#555')
+  if (invoice.reverse_charge) {
+    doc.text('Btw verlegd — Reverse charge (Article 196 EU VAT Directive).', PAGE_MARGIN, y, { width: USABLE_W })
+    y += 12
+  } else if (tenant.applies_kor) {
+    doc.text('Vrijgesteld van btw o.g.v. de kleineondernemersregeling (KOR).', PAGE_MARGIN, y, { width: USABLE_W })
+    y += 12
+  }
+  return y
 }
 
 // ─── footer ───────────────────────────────────────────────────────────────────

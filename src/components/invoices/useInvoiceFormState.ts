@@ -106,7 +106,8 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     discountPct: form.discount_pct,
     discountCents: form.discount_cents,
     appliesKor,
-  }), [form.lines, form.tax_inclusive, form.discount_type, form.discount_pct, form.discount_cents, appliesKor])
+    reverseCharge: form.reverse_charge,
+  }), [form.lines, form.tax_inclusive, form.discount_type, form.discount_pct, form.discount_cents, appliesKor, form.reverse_charge])
 
   // due_date is derived from issue_date + payment_term_days. Recompute it in the
   // same transition that changes either input, rather than in a post-render

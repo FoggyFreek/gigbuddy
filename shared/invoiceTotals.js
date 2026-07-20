@@ -24,11 +24,14 @@ export function computeLineTotals(line, taxInclusive) {
   return { netCents, taxCents, grossCents }
 }
 
-export function computeInvoiceTotals({ lines, taxInclusive, discountCents, discountType, discountPct, appliesKor }) {
-  const effectiveLines = appliesKor
+export function computeInvoiceTotals({ lines, taxInclusive, discountCents, discountType, discountPct, appliesKor, reverseCharge }) {
+  // Both the KOR exemption and the reverse-charge mechanism zero the VAT: under
+  // reverse charge the customer accounts for the VAT, so the supplier charges 0.
+  const zeroVat = appliesKor || reverseCharge
+  const effectiveLines = zeroVat
     ? lines.map((line) => ({ ...line, tax_percentage: 0 }))
     : lines
-  const effectiveInclusive = appliesKor ? false : Boolean(taxInclusive)
+  const effectiveInclusive = zeroVat ? false : Boolean(taxInclusive)
 
   // Compute per-line net amounts (taxable base) and accumulate by VAT rate.
   let subtotalCents = 0

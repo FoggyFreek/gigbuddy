@@ -51,6 +51,9 @@
   "customerFields": {
     "issueDate": "Factuurdatum",
     "openIssueDatePicker": "factuurdatumkiezer openen",
+    "supplyDate": "Prestatiedatum",
+    "openSupplyDatePicker": "prestatiedatumkiezer openen",
+    "supplyDateHelper": "Wanneer de dienst is verricht",
     "paymentTerm": "Betalingstermijn",
     "paymentTermDays_one": "{{count}} dag",
     "paymentTermDays_other": "{{count}} dagen",
@@ -79,7 +82,9 @@
     "vatPercentage": "Btw %",
     "descriptionPlaceholder": "Begin met typen…",
     "removeLine": "regel verwijderen",
-    "addItem": "Regel toevoegen"
+    "addItem": "Regel toevoegen",
+    "reverseCharge": "Btw verlegd",
+    "reverseChargeHint": "0% btw — de klant draagt de btw af. Vereist het btw-nummer van de klant."
   },
   "totals": {
     "subtotal": "Subtotaal",
@@ -87,7 +92,8 @@
     "removeDiscount": "korting verwijderen",
     "addDiscount": "Korting toevoegen",
     "vatRate": "Btw {{rate}}%",
-    "korNotice": "Kleineondernemersregeling — er wordt geen btw berekend."
+    "korNotice": "Kleineondernemersregeling — er wordt geen btw berekend.",
+    "reverseChargeNotice": "Btw verlegd — artikel 196 EU-btw-richtlijn."
   },
   "logo": {
     "alt": "Factuurlogo",

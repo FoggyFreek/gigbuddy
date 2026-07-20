@@ -51,6 +51,9 @@
   "customerFields": {
     "issueDate": "Issue date",
     "openIssueDatePicker": "open issue date picker",
+    "supplyDate": "Date of supply",
+    "openSupplyDatePicker": "open date of supply picker",
+    "supplyDateHelper": "When the service was performed",
     "paymentTerm": "Payment term",
     "paymentTermDays_one": "{{count}} day",
     "paymentTermDays_other": "{{count}} days",
@@ -79,7 +82,9 @@
     "vatPercentage": "VAT %",
     "descriptionPlaceholder": "Start typing…",
     "removeLine": "remove line",
-    "addItem": "Add item"
+    "addItem": "Add item",
+    "reverseCharge": "Reverse charge",
+    "reverseChargeHint": "0% VAT — the customer accounts for VAT. Requires the customer's VAT number."
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -87,7 +92,8 @@
     "removeDiscount": "remove discount",
     "addDiscount": "Add discount",
     "vatRate": "VAT {{rate}}%",
-    "korNotice": "Kleine ondernemersregeling — no VAT charged."
+    "korNotice": "Kleine ondernemersregeling — no VAT charged.",
+    "reverseChargeNotice": "VAT reverse-charged — Article 196 EU VAT Directive."
   },
   "logo": {
     "alt": "Invoice logo",

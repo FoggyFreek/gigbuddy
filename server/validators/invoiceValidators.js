@@ -20,6 +20,8 @@ export const CONTENT_FIELDS = [
   'customer_tax_id',
   'memo',
   'tax_inclusive',
+  'reverse_charge',
+  'supply_date',
   'discount_type',
   'discount_pct',
   'discount_cents',
@@ -85,13 +87,20 @@ export function parseCreateInvoiceBody(body) {
   const issueDate = body.issue_date || new Date().toISOString().slice(0, 10)
   const dueDate = body.due_date || computeDueDate(issueDate, paymentTermDays)
   const taxInclusive = Boolean(body.tax_inclusive)
+  const reverseCharge = Boolean(body.reverse_charge)
+  const supplyDate = body.supply_date || null
   const discountType = body.discount_type === 'pct' ? 'pct' : 'eur'
   const discountPct = Math.max(0, Number(body.discount_pct) || 0)
   const discountCents = Math.max(0, Number.isInteger(Number(body.discount_cents)) ? Number(body.discount_cents) : 0)
   const lines = normalizeLines(body.lines)
   if (!lines.length) return { error: 'At least one line is required' }
 
-  return { customerName, paymentTermDays, issueDate, dueDate, taxInclusive, discountType, discountPct, discountCents, lines }
+  // Reverse charge shifts the VAT liability to the customer, so their VAT number
+  // is mandatory (EU VAT Directive art. 226 / art. 196).
+  const customerTaxId = String(body.customer_tax_id ?? '').trim()
+  if (reverseCharge && !customerTaxId) return { error: 'customer_tax_id_required_for_reverse_charge' }
+
+  return { customerName, paymentTermDays, issueDate, dueDate, taxInclusive, reverseCharge, supplyDate, discountType, discountPct, discountCents, lines }
 }
 
 function validateExpiresAt(value) {

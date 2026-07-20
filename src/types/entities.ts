@@ -246,6 +246,8 @@ export interface Invoice {
   // (invoices.gig_id → gigs). Null when the invoice isn't linked to a gig.
   gig_event_description?: string | null
   total_cents?: number
+  supply_date?: string | null
+  reverse_charge?: boolean
   pdf_path?: string
   custom_logo_path?: string
   invert_logo?: boolean

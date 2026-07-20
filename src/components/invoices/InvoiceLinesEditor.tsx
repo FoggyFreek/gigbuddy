@@ -4,8 +4,10 @@ import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
 import { computeInvoiceTotals, formatEur } from '../../utils/invoiceTotals.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import FormControlLabel from '@mui/material/FormControlLabel'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
+import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
@@ -157,11 +159,27 @@ interface InvoiceLinesEditorProps {
 export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly, patchForm, patchLine, addLine, removeLine }: Readonly<InvoiceLinesEditorProps>) {
   const { t } = useTranslation('invoices')
   const compact = useCompactLayout()
+  // KOR and reverse charge both remove VAT from the invoice, so the VAT controls
+  // and column are hidden in either case.
+  const noVat = Boolean(appliesKor) || Boolean(form.reverse_charge)
   return (
     <>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 1 }}>
         <Typography variant="h6" sx={{ flexGrow: 1 }}>{t($ => $.lines.title)}</Typography>
         {!appliesKor && (
+          <FormControlLabel
+            control={(
+              <Switch
+                size="small"
+                checked={!!form.reverse_charge}
+                onChange={(e) => patchForm({ reverse_charge: e.target.checked })}
+                disabled={readOnly}
+              />
+            )}
+            label={t($ => $.lines.reverseCharge)}
+          />
+        )}
+        {!noVat && (
           <ToggleButtonGroup
             value={form.tax_inclusive ? 'inclusive' : 'exclusive'}
             exclusive
@@ -174,13 +192,18 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
           </ToggleButtonGroup>
         )}
       </Box>
+      {form.reverse_charge && !appliesKor && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          {t($ => $.lines.reverseChargeHint)}
+        </Typography>
+      )}
 
       {!compact && (
         <Box sx={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 1, alignItems: 'center', mb: 0.5 }}>
           <Typography variant="caption" color="text.secondary">{t($ => $.lines.description)}</Typography>
           <Typography variant="caption" color="text.secondary" align="right">{t($ => $.lines.quantity)}</Typography>
           <Typography variant="caption" color="text.secondary" align="right">{t($ => $.lines.price)}</Typography>
-          {!appliesKor
+          {!noVat
             ? <Typography variant="caption" color="text.secondary" align="right">{t($ => $.lines.vatPercentage)}</Typography>
             : <span />}
           <Typography variant="caption" color="text.secondary" align="right">{t($ => $.labels.total)}</Typography>
@@ -195,7 +218,7 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
           idx={idx}
           lineTotals={totals.perLine[idx] || { grossCents: 0, netCents: 0, taxCents: 0 }}
           taxInclusive={form.tax_inclusive}
-          appliesKor={appliesKor}
+          appliesKor={noVat}
           readOnly={readOnly}
           canRemove={form.lines.length > 1}
           compact={compact}

@@ -103,6 +103,7 @@ export function computeAndApply(invoiceFields, lines, tenant) {
     discountType: invoiceFields.discount_type,
     discountPct: invoiceFields.discount_pct,
     appliesKor: tenant.applies_kor,
+    reverseCharge: invoiceFields.reverse_charge,
   })
 }
 
@@ -199,12 +200,21 @@ async function recomputeTotals(client, tenantId, invoiceId, body, tenant, reques
     return { error: FINALIZED_ERROR }
   }
   const taxInclusive = 'tax_inclusive' in body ? Boolean(body.tax_inclusive) : current.tax_inclusive
+  const reverseCharge = 'reverse_charge' in body ? Boolean(body.reverse_charge) : current.reverse_charge
   const discountType = 'discount_type' in body ? normalizeDiscountType(body.discount_type) : current.discount_type
   const discountPct = 'discount_pct' in body ? clampNonNegative(body.discount_pct) : Number(current.discount_pct)
   const discountCents = 'discount_cents' in body ? clampNonNegative(body.discount_cents) : current.discount_cents
+
+  // Reverse charge needs the customer's VAT number (the value being set, else the
+  // stored one), mirroring the create-time check.
+  const customerTaxId = String(('customer_tax_id' in body ? body.customer_tax_id : current.customer_tax_id) ?? '').trim()
+  if (reverseCharge && !customerTaxId) {
+    return { error: { status: 400, body: { error: 'customer_tax_id_required_for_reverse_charge' } } }
+  }
+
   const currentLines = await fetchLines(client, invoiceId, tenantId)
   const totals = computeAndApply(
-    { tax_inclusive: taxInclusive, discount_type: discountType, discount_pct: discountPct, discount_cents: discountCents },
+    { tax_inclusive: taxInclusive, reverse_charge: reverseCharge, discount_type: discountType, discount_pct: discountPct, discount_cents: discountCents },
     currentLines,
     tenant,
   )
@@ -554,6 +564,9 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         customer_tax_id: null,
         memo: null,
         tax_inclusive: false,
+        reverse_charge: false,
+        // Date of supply (art. 226(7)) defaults to the gig's performance date.
+        supply_date: gig.event_date ? new Date(gig.event_date).toISOString().slice(0, 10) : null,
         discount_cents: 0,
         lines: [
           {
@@ -587,7 +600,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
 
   const totals = computeAndApply(
-    { tax_inclusive: parsed.taxInclusive, discount_type: parsed.discountType, discount_pct: parsed.discountPct, discount_cents: parsed.discountCents },
+    { tax_inclusive: parsed.taxInclusive, reverse_charge: parsed.reverseCharge, discount_type: parsed.discountType, discount_pct: parsed.discountPct, discount_cents: parsed.discountCents },
     parsed.lines,
     tenant,
   )
@@ -621,6 +634,8 @@ export async function createInvoice(pool, tenantId, userId, body) {
       customer_tax_id: body.customer_tax_id || null,
       memo: body.memo || null,
       tax_inclusive: parsed.taxInclusive,
+      reverse_charge: parsed.reverseCharge,
+      supply_date: parsed.supplyDate,
       discount_type: parsed.discountType,
       discount_pct: parsed.discountPct,
       discount_cents: totals.discountCents,
