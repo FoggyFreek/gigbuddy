@@ -191,6 +191,41 @@ describe('PATCH /api/profile — financial fields', () => {
     }
   })
 
+  it('rejects a vat_country-only change that would orphan an incompatible tax_id', async () => {
+    // Store a Dutch VAT number under the default nl country.
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ tax_id: 'NL123456789B01' }),
+    ).expect(200)
+    // Switching country alone, without touching the (now-incompatible) tax_id.
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(400)
+    expect(res.body.error).toBe('tax_id_incompatible_vat_country')
+    // The country was not changed.
+    const reread = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).get('/api/profile'),
+    ).expect(200)
+    expect(reread.body.vat_country).toBe('nl')
+  })
+
+  it('allows a vat_country-only change when no tax_id is stored', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('de')
+  })
+
+  it('allows switching country while clearing the incompatible tax_id in one patch', async () => {
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ tax_id: 'NL123456789B01' }),
+    ).expect(200)
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: '' }),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('de')
+    expect(res.body.tax_id).toBe('')
+  })
+
   it('drops empty tax_percentage but updates other fields in the same patch', async () => {
     // The column defaults to 9.00; an empty string should be a no-op for that
     // column while a sibling non-financial field still updates.

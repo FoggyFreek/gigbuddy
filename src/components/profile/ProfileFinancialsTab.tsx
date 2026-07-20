@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ProfileForm } from './profileForm.ts'
@@ -15,7 +16,7 @@ import Typography from '@mui/material/Typography'
 import CheckIcon from '@mui/icons-material/Check'
 import EditIcon from '@mui/icons-material/Edit'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import { VAT_COUNTRY_CODES, getVatIdExample } from '../../utils/vatRates.ts'
+import { VAT_COUNTRY_CODES, getVatIdExample, isValidVatId } from '../../utils/vatRates.ts'
 
 // Localized country names from the 2-letter code (e.g. 'nl' → 'Netherlands'),
 // so the VAT-country dropdown reads naturally without hand-maintained i18n keys.
@@ -37,6 +38,25 @@ interface FinancialsEditFormProps {
 
 export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: Readonly<FinancialsEditFormProps>) {
   const { t, i18n } = useTranslation('profile')
+  const [vatCountryConflict, setVatCountryConflict] = useState(false)
+
+  // Switching VAT country must not orphan an incompatible VAT number (the
+  // backend rejects that). Block the change and flag the tax_id field until the
+  // number is updated or cleared for the newly chosen country.
+  function handleVatCountryChange(code: string) {
+    if (form.tax_id && !isValidVatId(code, form.tax_id)) {
+      setVatCountryConflict(true)
+      return
+    }
+    setVatCountryConflict(false)
+    onChange('vat_country', code)
+  }
+
+  function handleTaxIdChange(value: string) {
+    setVatCountryConflict(false)
+    onChange('tax_id', value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14))
+  }
+
   function handleTaxPercentageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value
     onFormChange((prev) => ({ ...prev, tax_percentage: raw as unknown as number }))
@@ -128,7 +148,7 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
           label={t($ => $.financials.vatCountry)}
           fullWidth
           value={form.vat_country}
-          onChange={(e) => onChange('vat_country', e.target.value)}
+          onChange={(e) => handleVatCountryChange(e.target.value)}
           helperText={t($ => $.financials.vatCountryHelper)}
         >
           {VAT_COUNTRY_CODES.map((code) => (
@@ -141,10 +161,13 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
           label={t($ => $.financials.taxId)}
           fullWidth
           value={form.tax_id}
-          onChange={(e) => onChange('tax_id', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14))}
+          onChange={(e) => handleTaxIdChange(e.target.value)}
+          error={vatCountryConflict}
           slotProps={{ htmlInput: { maxLength: 14, style: { textTransform: 'uppercase' } } }}
           placeholder={getVatIdExample(form.vat_country)}
-          helperText={t($ => $.financials.taxIdHelper, { example: getVatIdExample(form.vat_country) })}
+          helperText={vatCountryConflict
+            ? t($ => $.financials.vatCountryTaxIdConflict)
+            : t($ => $.financials.taxIdHelper, { example: getVatIdExample(form.vat_country) })}
         />
       </Grid>
       <Grid size={{ xs: 4, md: 2 }}>

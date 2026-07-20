@@ -39,8 +39,8 @@ import {
   clearMemoryTile,
   gigBelongsToTenant,
 } from '../repositories/profileRepository.js'
-import { fetchTenant, fetchTenantVatCountry } from '../repositories/tenantRepository.js'
-import { DEFAULT_VAT_COUNTRY, normalizeVatCountry } from '../../shared/vatRates.js'
+import { fetchTenant } from '../repositories/tenantRepository.js'
+import { DEFAULT_VAT_COUNTRY, normalizeVatCountry, isValidVatId } from '../../shared/vatRates.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import {
   clearIntegrationCredential,
@@ -117,13 +117,24 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
     if (!(await gigBelongsToTenant(db, tenantId, memoryGigId))) return notFound('Gig not found')
   }
 
-  // tax_id is validated against the tenant's VAT country: the value being set in
-  // this same PATCH, else the stored one. Only look it up when tax_id is present.
+  // The VAT country and tax_id must stay consistent. tax_id is validated against
+  // the effective country (the value set in this PATCH, else the stored one);
+  // and changing the country alone must not leave an incompatible tax_id behind.
+  const settingTaxId = body ? 'tax_id' in body : false
+  const settingVatCountry = body ? 'vat_country' in body : false
   let vatCountry = DEFAULT_VAT_COUNTRY
-  if (body && 'tax_id' in body) {
-    vatCountry = normalizeVatCountry(body.vat_country)
-      ?? await fetchTenantVatCountry(db, tenantId)
-      ?? DEFAULT_VAT_COUNTRY
+  if (settingTaxId || settingVatCountry) {
+    const tenant = await fetchTenant(db, tenantId)
+    const newCountry = normalizeVatCountry(body.vat_country)
+    vatCountry = newCountry ?? tenant?.vat_country ?? DEFAULT_VAT_COUNTRY
+
+    // Country changing, tax_id not part of this request: the stored number must
+    // still be valid for the new country, otherwise reject (the UI sends the
+    // dropdown change on its own, so this is the only place to catch it).
+    if (settingVatCountry && !settingTaxId && newCountry && tenant?.tax_id
+        && !isValidVatId(newCountry, tenant.tax_id)) {
+      return badRequest('tax_id_incompatible_vat_country')
+    }
   }
 
   const built = buildProfileUpdate(body || {}, { vatCountry })

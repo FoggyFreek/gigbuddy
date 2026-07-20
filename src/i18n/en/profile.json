@@ -59,6 +59,7 @@
     "taxIdHelper": "Format: {{example}}",
     "vatCountry": "VAT country",
     "vatCountryHelper": "Determines the available VAT rates",
+    "vatCountryTaxIdConflict": "This VAT number isn't valid for the selected country — update or clear it first",
     "taxPercent": "Default VAT %",
     "taxPercentHelper": "Prefilled on new invoice, purchase and sale lines"
   },

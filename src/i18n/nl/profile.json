@@ -59,6 +59,7 @@
     "taxIdHelper": "Formaat: {{example}}",
     "vatCountry": "Btw-land",
     "vatCountryHelper": "Bepaalt de beschikbare btw-tarieven",
+    "vatCountryTaxIdConflict": "Dit btw-nummer is niet geldig voor het gekozen land — werk het eerst bij of wis het",
     "taxPercent": "Standaard btw %",
     "taxPercentHelper": "Vooringevuld op nieuwe factuur-, inkoop- en verkoopregels"
   },
