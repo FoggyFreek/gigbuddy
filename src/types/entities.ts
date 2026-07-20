@@ -144,6 +144,8 @@ export interface Tenant {
   address_city?: string
   address_country?: string
   kvk_number?: string
+  /** Court/city/province the registration number is scoped to (DE/FR/AT/IT). */
+  registration_office?: string
   iban?: string
   tax_id?: string
   accent_color?: string | null

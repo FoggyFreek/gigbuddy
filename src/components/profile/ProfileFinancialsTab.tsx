@@ -17,6 +17,10 @@ import CheckIcon from '@mui/icons-material/Check'
 import EditIcon from '@mui/icons-material/Edit'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { VAT_COUNTRY_CODES, getVatIdExample, isValidVatId } from '../../utils/vatRates.ts'
+import {
+  getRegistrationLabel, getRegistrationExample, getRegistrationOfficeLabel, getRegistrationOfficeExample,
+  registrationSameAsVat, registrationUsesOffice, isValidRegistrationNumber,
+} from '../../utils/businessRegistry.ts'
 
 // Localized country names from the 2-letter code (e.g. 'nl' → 'Netherlands'),
 // so the VAT-country dropdown reads naturally without hand-maintained i18n keys.
@@ -38,23 +42,39 @@ interface FinancialsEditFormProps {
 
 export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: Readonly<FinancialsEditFormProps>) {
   const { t, i18n } = useTranslation('profile')
-  const [vatCountryConflict, setVatCountryConflict] = useState(false)
+  const [taxIdConflict, setTaxIdConflict] = useState(false)
+  const [kvkConflict, setKvkConflict] = useState(false)
 
-  // Switching VAT country must not orphan an incompatible VAT number (the
-  // backend rejects that). Block the change and flag the tax_id field until the
-  // number is updated or cleared for the newly chosen country.
+  const registrationLabel = getRegistrationLabel(form.vat_country)
+  const usesOffice = registrationUsesOffice(form.vat_country)
+  const sameAsVat = registrationSameAsVat(form.vat_country)
+
+  // Switching VAT country must not orphan an incompatible tax_id or registration
+  // number (the backend rejects that). Block the change and flag the offending
+  // field(s) until each is updated or cleared for the newly chosen country.
   function handleVatCountryChange(code: string) {
-    if (form.tax_id && !isValidVatId(code, form.tax_id)) {
-      setVatCountryConflict(true)
+    const taxBad = Boolean(form.tax_id) && !isValidVatId(code, form.tax_id)
+    const kvkBad = Boolean(form.kvk_number) && !isValidRegistrationNumber(code, form.kvk_number)
+    if (taxBad || kvkBad) {
+      setTaxIdConflict(taxBad)
+      setKvkConflict(kvkBad)
       return
     }
-    setVatCountryConflict(false)
+    setTaxIdConflict(false)
+    setKvkConflict(false)
     onChange('vat_country', code)
   }
 
   function handleTaxIdChange(value: string) {
-    setVatCountryConflict(false)
+    setTaxIdConflict(false)
     onChange('tax_id', value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14))
+  }
+
+  function handleRegistrationChange(value: string) {
+    setKvkConflict(false)
+    // Registration numbers keep letters/case (e.g. Austria's check letter), so
+    // only cap the length; the backend validates the per-country format.
+    onChange('kvk_number', value.slice(0, 20))
   }
 
   function handleTaxPercentageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -86,15 +106,44 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
           placeholder={t($ => $.financials.formalNamePlaceholder)}
         />
       </Grid>
-      <Grid size={{ xs: 12, md: 6 }}>
-        <TextField
-          label={t($ => $.financials.kvkNumber)}
-          fullWidth
-          value={form.kvk_number}
-          onChange={(e) => onChange('kvk_number', e.target.value.replace(/\D/g, '').slice(0, 8))}
-          slotProps={{ htmlInput: { maxLength: 8, inputMode: 'numeric', pattern: '[0-9]{8}' } }}
-        />
-      </Grid>
+      {sameAsVat ? (
+        <Grid size={{ xs: 12, md: 6 }}>
+          <TextField
+            label={t($ => $.financials.registrationNumber)}
+            fullWidth
+            disabled
+            value=""
+            helperText={t($ => $.financials.registrationSameAsVat)}
+          />
+        </Grid>
+      ) : (
+        <Grid size={{ xs: 12, md: usesOffice ? 4 : 6 }}>
+          <TextField
+            label={registrationLabel ?? t($ => $.financials.registrationNumber)}
+            fullWidth
+            value={form.kvk_number}
+            onChange={(e) => handleRegistrationChange(e.target.value)}
+            error={kvkConflict}
+            slotProps={{ htmlInput: { maxLength: 20 } }}
+            placeholder={getRegistrationExample(form.vat_country)}
+            helperText={kvkConflict
+              ? t($ => $.financials.vatCountryIdentifierConflict)
+              : t($ => $.financials.registrationHelper, { example: getRegistrationExample(form.vat_country) })}
+          />
+        </Grid>
+      )}
+      {!sameAsVat && usesOffice && (
+        <Grid size={{ xs: 12, md: 2 }}>
+          <TextField
+            label={getRegistrationOfficeLabel(form.vat_country) ?? ''}
+            fullWidth
+            value={form.registration_office}
+            onChange={(e) => onChange('registration_office', e.target.value.slice(0, 120))}
+            slotProps={{ htmlInput: { maxLength: 120 } }}
+            placeholder={getRegistrationOfficeExample(form.vat_country)}
+          />
+        </Grid>
+      )}
       <Grid size={{ xs: 12, md: 8 }}>
         <TextField
           label={t($ => $.financials.street)}
@@ -162,11 +211,11 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
           fullWidth
           value={form.tax_id}
           onChange={(e) => handleTaxIdChange(e.target.value)}
-          error={vatCountryConflict}
+          error={taxIdConflict}
           slotProps={{ htmlInput: { maxLength: 14, style: { textTransform: 'uppercase' } } }}
           placeholder={getVatIdExample(form.vat_country)}
-          helperText={vatCountryConflict
-            ? t($ => $.financials.vatCountryTaxIdConflict)
+          helperText={taxIdConflict
+            ? t($ => $.financials.vatCountryIdentifierConflict)
             : t($ => $.financials.taxIdHelper, { example: getVatIdExample(form.vat_country) })}
         />
       </Grid>
@@ -227,8 +276,14 @@ function FinancialsView({ form }: Readonly<FinancialsViewProps>) {
         <Typography>{form.formal_name || '—'}</Typography>
       </Grid>
       <Grid size={{ xs: 12, md: 6 }}>
-        <Typography variant="caption" color="text.secondary">{t($ => $.financials.kvkNumber)}</Typography>
-        <Typography>{form.kvk_number || '—'}</Typography>
+        <Typography variant="caption" color="text.secondary">
+          {getRegistrationLabel(form.vat_country) ?? t($ => $.financials.registrationNumber)}
+        </Typography>
+        <Typography>
+          {registrationSameAsVat(form.vat_country)
+            ? t($ => $.financials.registrationSameAsVat)
+            : [form.kvk_number, form.registration_office].filter(Boolean).join(' · ') || '—'}
+        </Typography>
       </Grid>
       <Grid size={12}>
         <Typography variant="caption" color="text.secondary">{t($ => $.financials.address)}</Typography>

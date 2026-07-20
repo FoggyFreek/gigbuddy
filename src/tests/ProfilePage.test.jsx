@@ -208,7 +208,7 @@ describe('ProfilePage', () => {
     expect(label.parentElement).toHaveTextContent('The Testers')
   })
 
-  it('auto-saves KvK edits for tenant admins (stripping non-digits)', async () => {
+  it('auto-saves company registration edits for tenant admins', async () => {
     const user = userEvent.setup()
     wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin' } })
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
@@ -218,8 +218,9 @@ describe('ProfilePage', () => {
     const editBtn = await screen.findByRole('button', { name: /edit financial details/i })
     await user.click(editBtn)
 
-    const kvkInput = await screen.findByLabelText(/kvk number/i)
-    await user.type(kvkInput, '12-34a5678')
+    // Default VAT country is NL, so the register field is the KvK-nummer.
+    const kvkInput = await screen.findByLabelText(/kvk-nummer/i)
+    await user.type(kvkInput, '12345678')
 
     await waitFor(
       () => expect(updateProfile).toHaveBeenCalledWith(

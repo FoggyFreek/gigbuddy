@@ -39,6 +39,7 @@ function financialFields(form: ProfileForm) {
     address_city: form.address_city,
     address_country: form.address_country,
     kvk_number: form.kvk_number,
+    registration_office: form.registration_office,
     iban: form.iban,
     tax_id: form.tax_id,
     tax_percentage: form.tax_percentage,

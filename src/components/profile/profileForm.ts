@@ -40,6 +40,7 @@ export interface ProfileForm {
   address_city: string
   address_country: string
   kvk_number: string
+  registration_office: string
   iban: string
   tax_id: string
   tax_percentage: number
@@ -63,6 +64,7 @@ export const EMPTY_FORM: ProfileForm = {
   address_city: '',
   address_country: 'Netherlands',
   kvk_number: '',
+  registration_office: '',
   iban: '',
   tax_id: '',
   tax_percentage: 9,
@@ -87,6 +89,7 @@ export function profileToForm(data: Record<string, unknown>): ProfileForm {
     address_city: String(data.address_city || ''),
     address_country: String(data.address_country || 'Netherlands'),
     kvk_number: String(data.kvk_number || ''),
+    registration_office: String(data.registration_office || ''),
     iban: String(data.iban || ''),
     tax_id: String(data.tax_id || ''),
     tax_percentage: data.tax_percentage != null ? Number(data.tax_percentage) : 9,

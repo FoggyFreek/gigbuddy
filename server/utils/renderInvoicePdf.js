@@ -2,6 +2,8 @@ import PDFDocument from 'pdfkit'
 import QRCode from 'qrcode'
 import { computeInvoiceTotals } from './computeInvoiceTotals.js'
 import { logger } from './logger.js'
+import { getRegistrationLabel, getRegistrationOfficeLabel } from '../../shared/businessRegistry.js'
+import { normalizeVatCountry } from '../../shared/vatRates.js'
 
 const PAGE_MARGIN = 48
 const PAGE_W = 595.28   // A4 width in points
@@ -168,9 +170,14 @@ function drawAddresses(doc, invoice, tenant, startY) {
     leftY += 12
   }
 
-  // Registration numbers
+  // Registration numbers — labelled by the supplier's VAT country (KvK,
+  // Handelsregister, SIREN, …) with the court/city/province where applicable.
+  const regLabel = getRegistrationLabel(tenant.vat_country)
+  const officeLabel = getRegistrationOfficeLabel(tenant.vat_country)
   const regLines = [
-    tenant.kvk_number ? `KVK: ${tenant.kvk_number}` : null,
+    tenant.kvk_number && regLabel ? `${regLabel}: ${tenant.kvk_number}` : null,
+    tenant.kvk_number && tenant.registration_office && officeLabel
+      ? `${officeLabel}: ${tenant.registration_office}` : null,
     tenant.tax_id     ? `BTW: ${tenant.tax_id}`      : null,
   ].filter(Boolean)
   if (regLines.length) {
@@ -201,12 +208,14 @@ function drawAddresses(doc, invoice, tenant, startY) {
     rightY += 12
   }
 
+  const custCountry = normalizeVatCountry(invoice.customer_address_country)
+  const customerRegLabel = (custCountry && getRegistrationLabel(custCountry)) || 'Reg.'
   for (const line of [
     invoice.customer_address_street,
     [invoice.customer_address_postal_code, invoice.customer_address_city].filter(Boolean).join(' '),
     invoice.customer_address_country,
     invoice.customer_email,
-    invoice.customer_kvk ? `KVK: ${invoice.customer_kvk}` : null,
+    invoice.customer_kvk ? `${customerRegLabel}: ${invoice.customer_kvk}` : null,
     invoice.customer_tax_id ? `BTW: ${invoice.customer_tax_id}` : null,
   ].filter(Boolean)) {
     doc.text(line, rightColX, rightY, { width: colW, align: 'right' })

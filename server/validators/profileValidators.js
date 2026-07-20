@@ -2,6 +2,7 @@
 import { parsePositiveId as parseId } from './common.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 import { DEFAULT_VAT_COUNTRY, normalizeVatCountry, isValidVatId } from '../../shared/vatRates.js'
+import { isValidRegistrationNumber, normalizeRegistrationNumber } from '../../shared/businessRegistry.js'
 
 // Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
 export const MOLLIE_KEY_RE = /^(live|test)_[A-Za-z0-9]{25,}$/
@@ -89,6 +90,7 @@ export const FINANCIAL_FIELDS = [
   'address_city',
   'address_country',
   'kvk_number',
+  'registration_office',
   'iban',
   'tax_id',
   'tax_percentage',
@@ -106,9 +108,10 @@ const TEXT_MAX_LENGTHS = {
   address_postal_code: 10,
   address_city: 200,
   address_country: 200,
+  // Court / city / province the registration number is scoped to (DE/FR/AT/IT).
+  registration_office: 120,
 }
 
-const KVK_RE = /^\d{8}$/
 const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/
 
 export { parseId }
@@ -134,6 +137,18 @@ function validateVatCountry(raw) {
   const code = normalizeVatCountry(raw)
   if (!code) return { error: 'invalid_vat_country' }
   return { value: code }
+}
+
+// The company registration number (KvK/Handelsregister/SIREN/…) is validated
+// against the tenant's VAT country: each register has its own format, and for
+// countries where the enterprise/tax number IS the registration identifier
+// (Belgium, Spain) only an empty value is accepted.
+function validateKvkNumber(raw, vatCountry) {
+  if (raw === null || raw === undefined) return { value: null }
+  if (typeof raw !== 'string') return { error: 'invalid_kvk_number' }
+  const v = normalizeRegistrationNumber(raw)
+  if (!isValidRegistrationNumber(vatCountry, v)) return { error: 'invalid_kvk_number' }
+  return { value: v }
 }
 
 // The VAT identification number is validated against the tenant's VAT country
@@ -181,14 +196,14 @@ const FINANCIAL_VALIDATORS = {
   applies_kor: validateAppliesKor,
   tax_percentage: validateTaxPercentage,
   vat_country: validateVatCountry,
-  kvk_number: makeStrippedValidator('kvk_number', KVK_RE, false),
   iban: makeStrippedValidator('iban', IBAN_RE, true),
 }
 
 function normalizeFinancialValue(key, raw, vatCountry) {
-  // tax_id's format depends on the tenant's VAT country, so it is resolved
-  // against `vatCountry` rather than a fixed regex in the map above.
+  // tax_id and kvk_number formats depend on the tenant's VAT country, so they are
+  // resolved against `vatCountry` rather than a fixed regex in the map above.
   if (key === 'tax_id') return validateTaxId(raw, vatCountry)
+  if (key === 'kvk_number') return validateKvkNumber(raw, vatCountry)
   const validator = FINANCIAL_VALIDATORS[key]
   return validator ? validator(raw) : validateBoundedText(key, raw)
 }

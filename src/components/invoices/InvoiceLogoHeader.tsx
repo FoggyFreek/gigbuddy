@@ -2,6 +2,7 @@ import type { RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Invoice, Tenant } from '../../types/entities.ts'
 import type { InvoiceForm } from './invoiceFormHelpers.ts'
+import { getRegistrationLabel } from '../../utils/businessRegistry.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import FormControlLabel from '@mui/material/FormControlLabel'
@@ -101,7 +102,10 @@ export default function InvoiceLogoHeader({
           <Typography variant="body2">{tenant.address_country}</Typography>
         )}
         {tenant?.kvk_number && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>KVK {tenant.kvk_number}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            {getRegistrationLabel(tenant.vat_country) ?? 'Reg.'} {tenant.kvk_number}
+            {tenant.registration_office ? ` · ${tenant.registration_office}` : ''}
+          </Typography>
         )}
         {tenant?.tax_id && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>BTW {tenant.tax_id}</Typography>

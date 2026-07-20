@@ -270,6 +270,41 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(other.body.tax_id).toBe('DE987654321')
   })
 
+  it('accepts a German registration number and office when vat_country=de', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({
+        vat_country: 'de', kvk_number: 'HRB 12345', registration_office: 'Amtsgericht München',
+      }),
+    ).expect(200)
+    expect(res.body.kvk_number).toBe('HRB 12345')
+    expect(res.body.registration_office).toBe('Amtsgericht München')
+  })
+
+  it('rejects a registration number invalid for the VAT country', async () => {
+    // An NL 8-digit KvK number is not a valid German Handelsregisternummer.
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de', kvk_number: '12345678' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_kvk_number')
+  })
+
+  it('rejects a registration number for a sameAsVat country (BE)', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'be', kvk_number: '0123456789' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_kvk_number')
+  })
+
+  it('rejects a vat_country-only change that would orphan an incompatible registration number', async () => {
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ kvk_number: '12345678' }),
+    ).expect(200)
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(400)
+    expect(res.body.error).toBe('kvk_incompatible_vat_country')
+  })
+
   it('drops empty tax_percentage but updates other fields in the same patch', async () => {
     // The column defaults to 9.00; an empty string should be a no-op for that
     // column while a sibling non-financial field still updates.
