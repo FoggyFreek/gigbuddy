@@ -226,6 +226,50 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body.tax_id).toBe('')
   })
 
+  it('integration: full NL → DE VAT identity lifecycle', async () => {
+    const admin = (req) => as(seed.superUser.id, seed.tenantA.id)(req)
+
+    // 1. Tenant starts as NL with a valid Dutch VAT ID.
+    const start = await admin(
+      request(app).patch('/api/profile').send({ tax_id: 'nl123456789b01' }),
+    ).expect(200)
+    expect(start.body.vat_country).toBe('nl')
+    expect(start.body.tax_id).toBe('NL123456789B01')
+
+    // 2. Change vat_country to DE on its own. The Dutch ID is invalid for DE, so
+    //    (chosen behavior) the change is REJECTED rather than silently kept.
+    const rejected = await admin(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(400)
+    expect(rejected.body.error).toBe('tax_id_incompatible_vat_country')
+
+    // 3. Nothing changed: still NL with the original Dutch ID.
+    const afterReject = await admin(request(app).get('/api/profile')).expect(200)
+    expect(afterReject.body.vat_country).toBe('nl')
+    expect(afterReject.body.tax_id).toBe('NL123456789B01')
+
+    // 4. Switch to DE and save a valid German VAT ID together.
+    const moved = await admin(
+      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: 'de123456789' }),
+    ).expect(200)
+    expect(moved.body.vat_country).toBe('de')
+    expect(moved.body.tax_id).toBe('DE123456789')
+
+    // 5. Subsequent updates succeed: another German number (validated against the
+    //    now-stored 'de'), and an unrelated financial field.
+    const nextId = await admin(
+      request(app).patch('/api/profile').send({ tax_id: 'DE987654321' }),
+    ).expect(200)
+    expect(nextId.body.tax_id).toBe('DE987654321')
+
+    const other = await admin(
+      request(app).patch('/api/profile').send({ formal_name: 'Die Tester GmbH' }),
+    ).expect(200)
+    expect(other.body.formal_name).toBe('Die Tester GmbH')
+    expect(other.body.vat_country).toBe('de')
+    expect(other.body.tax_id).toBe('DE987654321')
+  })
+
   it('drops empty tax_percentage but updates other fields in the same patch', async () => {
     // The column defaults to 9.00; an empty string should be a no-op for that
     // column while a sibling non-financial field still updates.
