@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { computeInvoiceTotals } from './computeInvoiceTotals.js'
 import { logger } from './logger.js'
 import { getRegistrationLabel, getRegistrationOfficeLabel } from '../../shared/businessRegistry.js'
-import { normalizeVatCountry } from '../../shared/vatRates.js'
+import { normalizeVatCountry, getVatLabel, getVatIdLabel } from '../../shared/vatRates.js'
 
 const PAGE_MARGIN = 48
 const PAGE_W = 595.28   // A4 width in points
@@ -77,6 +77,9 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
   // Both KOR and reverse charge zero the VAT, so the line table and totals hide
   // the VAT column; the reason is spelled out in a note under the totals.
   const noVat = Boolean(tenant.applies_kor) || Boolean(invoice.reverse_charge)
+  // Invoice is issued by the supplier, so the VAT term follows the supplier's
+  // country (btw / USt / TVA / …).
+  const vatLabel = getVatLabel(tenant.vat_country)
 
   // Generate QR code buffer if a payment link exists.
   let qrBuffer = null
@@ -96,8 +99,8 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer }) {
   const titleBottom = drawTitle(doc, invoice, tenant, logoBuffer)
   const addrBottom  = drawAddresses(doc, invoice, tenant, titleBottom + 20)
   hline(doc, PAGE_MARGIN, RIGHT_EDGE, addrBottom + 8)
-  const linesBottom = drawLinesTable(doc, lines, totals.perLine, invoice.tax_inclusive, noVat, addrBottom + 24)
-  const totalsBottom = drawTotals(doc, totals, noVat, linesBottom)
+  const linesBottom = drawLinesTable(doc, lines, totals.perLine, invoice.tax_inclusive, noVat, vatLabel, addrBottom + 24)
+  const totalsBottom = drawTotals(doc, totals, noVat, vatLabel, linesBottom)
   drawVatNotes(doc, invoice, tenant, totalsBottom)
   drawFooter(doc, invoice, tenant, qrBuffer)
 
@@ -188,7 +191,7 @@ function drawAddresses(doc, invoice, tenant, startY) {
     tenant.kvk_number && regLabel ? `${regLabel}: ${tenant.kvk_number}` : null,
     tenant.kvk_number && tenant.registration_office && officeLabel
       ? `${officeLabel}: ${tenant.registration_office}` : null,
-    tenant.tax_id     ? `BTW: ${tenant.tax_id}`      : null,
+    tenant.tax_id     ? `${getVatIdLabel(tenant.vat_country)}: ${tenant.tax_id}` : null,
   ].filter(Boolean)
   if (regLines.length) {
     leftY += 4
@@ -220,13 +223,14 @@ function drawAddresses(doc, invoice, tenant, startY) {
 
   const custCountry = normalizeVatCountry(invoice.customer_address_country)
   const customerRegLabel = (custCountry && getRegistrationLabel(custCountry)) || 'Reg.'
+  const customerVatIdLabel = custCountry ? getVatIdLabel(custCountry) : 'VAT no.'
   for (const line of [
     invoice.customer_address_street,
     [invoice.customer_address_postal_code, invoice.customer_address_city].filter(Boolean).join(' '),
     invoice.customer_address_country,
     invoice.customer_email,
     invoice.customer_kvk ? `${customerRegLabel}: ${invoice.customer_kvk}` : null,
-    invoice.customer_tax_id ? `BTW: ${invoice.customer_tax_id}` : null,
+    invoice.customer_tax_id ? `${customerVatIdLabel}: ${invoice.customer_tax_id}` : null,
   ].filter(Boolean)) {
     doc.text(line, rightColX, rightY, { width: colW, align: 'right' })
     rightY += 12
@@ -237,7 +241,7 @@ function drawAddresses(doc, invoice, tenant, startY) {
 
 // ─── line items table ─────────────────────────────────────────────────────────
 
-function drawLinesTable(doc, lines, perLine, taxInclusive, noVat, startY) {
+function drawLinesTable(doc, lines, perLine, taxInclusive, noVat, vatLabel, startY) {
   const sx = PAGE_MARGIN
   let y = startY
 
@@ -254,7 +258,7 @@ function drawLinesTable(doc, lines, perLine, taxInclusive, noVat, startY) {
   doc.text('Beschrijving', sx,     y, { width: COL_DESC - 8 })
   doc.text('Aantal',       xQty,   y, { width: COL_QTY,   align: 'right' })
   doc.text('Prijs excl. btw', xPrice, y, { width: COL_PRICE, align: 'right' })
-  if (!noVat) doc.text('BTW', xVat, y, { width: COL_VAT, align: 'right' })
+  if (!noVat) doc.text(vatLabel, xVat, y, { width: COL_VAT, align: 'right' })
   doc.text('Totaal', xTotal, y, { width: totalW, align: 'right' })
 
   hline(doc, sx, RIGHT_EDGE, y + 14)
@@ -299,7 +303,7 @@ function totRow(doc, label, value, y, { bold = false, fontSize = 10 } = {}) {
   doc.text(value, TOT_VAL_X, y, { width: TOT_VAL_W, align: 'right' })
 }
 
-function drawTotals(doc, totals, noVat, startY) {
+function drawTotals(doc, totals, noVat, vatLabel, startY) {
   let y = startY
   hline(doc, TOT_X, RIGHT_EDGE, y)
   y += 10
@@ -320,7 +324,7 @@ function drawTotals(doc, totals, noVat, startY) {
   // note below the totals (drawVatNotes), so no VAT rows are shown here.
   if (!noVat) {
     for (const { rate, cents } of totals.vatByRate) {
-      totRow(doc, `Totaal BTW (${rate}%)`, fmt(cents), y)
+      totRow(doc, `Totaal ${vatLabel} (${rate}%)`, fmt(cents), y)
       y += 16
     }
   }

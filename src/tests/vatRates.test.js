@@ -8,6 +8,8 @@ import {
   getVatRates,
   getStandardVatRate,
   getVatIdExample,
+  getVatLabel,
+  getVatIdLabel,
   isAllowedVatRate,
   isKnownVatCountry,
   isKnownVatRate,
@@ -116,6 +118,15 @@ describe('vatRates country config', () => {
         for (const sample of samples) expect(isValidVatId(other, sample)).toBe(false)
       }
     }
+  })
+
+  it('localizes the VAT term and VAT-number label per country', () => {
+    expect(getVatLabel('nl')).toBe('btw')
+    expect(getVatLabel('de')).toBe('USt')
+    expect(getVatLabel('fr')).toBe('TVA')
+    expect(getVatIdLabel('de')).toBe('USt-IdNr.')
+    expect(getVatIdLabel('it')).toBe('P.IVA')
+    expect(getVatLabel('xx')).toBe('btw') // unknown → default country
   })
 
   it('gives a sample VAT number for each country', () => {

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { Invoice, Tenant } from '../../types/entities.ts'
 import type { InvoiceForm } from './invoiceFormHelpers.ts'
 import { getRegistrationLabel } from '../../utils/businessRegistry.ts'
+import { getVatIdLabel } from '../../utils/vatRates.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import FormControlLabel from '@mui/material/FormControlLabel'
@@ -108,7 +109,7 @@ export default function InvoiceLogoHeader({
           </Typography>
         )}
         {tenant?.tax_id && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>BTW {tenant.tax_id}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{getVatIdLabel(tenant.vat_country)} {tenant.tax_id}</Typography>
         )}
       </Box>
     </Box>

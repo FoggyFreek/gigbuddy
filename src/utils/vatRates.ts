@@ -12,6 +12,7 @@ import {
   isAllowedVatRate as isAllowedVatRateJs,
   getVatIdExample as getVatIdExampleJs,
   isValidVatId as isValidVatIdJs,
+  getVatIdLabel as getVatIdLabelJs,
 } from '../../shared/vatRates.js'
 
 export const VAT_COUNTRY_CODES: string[] = VAT_COUNTRY_CODES_JS as string[]
@@ -33,6 +34,11 @@ export function isAllowedVatRate(country: string | null | undefined, rate: numbe
 // A sample VAT identification number for the country (input placeholder / hint).
 export function getVatIdExample(country: string | null | undefined): string {
   return getVatIdExampleJs(country ?? undefined) as string
+}
+
+// How the country labels a VAT identification number (Btw-nr. / USt-IdNr. / …).
+export function getVatIdLabel(country: string | null | undefined): string {
+  return getVatIdLabelJs(country ?? undefined) as string
 }
 
 // True when `value` (whitespace/case-insensitive) is a valid VAT identification

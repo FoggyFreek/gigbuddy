@@ -23,17 +23,22 @@ export const DEFAULT_VAT_COUNTRY = 'nl'
 //   https://europa.eu/youreurope/business/taxation/vat/vat-rules-rates/
 //   https://taxfoundation.org/data/all/eu/value-added-tax-vat-rates-europe/
 // Update the rate set (and this note) when a country changes its rates.
+//
+// `vatLabel`   — the country's VAT tax term, for the VAT column and totals on an
+//                invoice (Dutch btw, German USt, French TVA, …).
+// `vatIdLabel` — how the VAT identification number is labelled (USt-IdNr., N° TVA,
+//                P.IVA, …). Both come from the national VAT terminology / VIES.
 export const VAT_COUNTRIES = Object.freeze({
-  nl: { standard: 21, rates: [21, 9, 0] },
-  be: { standard: 21, rates: [21, 12, 6, 0] },
-  de: { standard: 19, rates: [19, 7, 0] },
-  fr: { standard: 20, rates: [20, 10, 5.5, 2.1, 0] },
-  lu: { standard: 17, rates: [17, 14, 8, 3, 0] },
-  at: { standard: 20, rates: [20, 13, 10, 0] },
-  es: { standard: 21, rates: [21, 10, 4, 0] },
-  it: { standard: 22, rates: [22, 10, 5, 4, 0] },
-  ie: { standard: 23, rates: [23, 13.5, 9, 4.8, 0] },
-  gb: { standard: 20, rates: [20, 5, 0] },
+  nl: { standard: 21, rates: [21, 9, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.' },
+  be: { standard: 21, rates: [21, 12, 6, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.' },
+  de: { standard: 19, rates: [19, 7, 0], vatLabel: 'USt', vatIdLabel: 'USt-IdNr.' },
+  fr: { standard: 20, rates: [20, 10, 5.5, 2.1, 0], vatLabel: 'TVA', vatIdLabel: 'N° TVA' },
+  lu: { standard: 17, rates: [17, 14, 8, 3, 0], vatLabel: 'TVA', vatIdLabel: 'No. TVA' },
+  at: { standard: 20, rates: [20, 13, 10, 0], vatLabel: 'USt', vatIdLabel: 'UID' },
+  es: { standard: 21, rates: [21, 10, 4, 0], vatLabel: 'IVA', vatIdLabel: 'NIF' },
+  it: { standard: 22, rates: [22, 10, 5, 4, 0], vatLabel: 'IVA', vatIdLabel: 'P.IVA' },
+  ie: { standard: 23, rates: [23, 13.5, 9, 4.8, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.' },
+  gb: { standard: 20, rates: [20, 5, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.' },
 })
 
 // Every distinct VAT rate across all supported countries, high→low. Used as the
@@ -90,6 +95,17 @@ export function getVatRates(country) {
 // The standard rate for a country — the default for new purchase/merch lines.
 export function getStandardVatRate(country) {
   return configFor(country).standard
+}
+
+// The country's VAT tax term (btw / USt / TVA / IVA / VAT), for VAT columns and
+// totals on an invoice issued from that country.
+export function getVatLabel(country) {
+  return configFor(country).vatLabel
+}
+
+// How the country labels a VAT identification number (Btw-nr. / USt-IdNr. / …).
+export function getVatIdLabel(country) {
+  return configFor(country).vatIdLabel
 }
 
 // True when `rate` is one of the country's own allowed rates.
