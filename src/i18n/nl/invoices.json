@@ -84,7 +84,11 @@
     "removeLine": "regel verwijderen",
     "addItem": "Regel toevoegen",
     "reverseCharge": "Btw verlegd",
-    "reverseChargeHint": "0% btw — de klant draagt de btw af. Vereist een geldig btw-nummer van een klant in een ander EU-land."
+    "reverseChargeHint": "0% btw — de klant draagt de btw af. Vereist een geldig btw-nummer van een klant in een ander EU-land.",
+    "viesChecked": "Btw-nummer gecontroleerd in VIES",
+    "viesOpen": "VIES openen",
+    "viesHint": "Controleer vóór het uitgeven het btw-nummer van de klant in VIES. De bevestiging en het nummer worden als bewijs bewaard; bij wijziging van het btw-nummer is een nieuwe controle vereist.",
+    "viesConsultation": "VIES-raadplegingsnummer (optioneel)"
   },
   "totals": {
     "subtotal": "Subtotaal",

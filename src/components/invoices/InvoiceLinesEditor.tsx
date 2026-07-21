@@ -4,9 +4,11 @@ import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
 import { computeInvoiceTotals, formatEur } from '../../utils/invoiceTotals.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Checkbox from '@mui/material/Checkbox'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
+import Link from '@mui/material/Link'
 import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import ToggleButton from '@mui/material/ToggleButton'
@@ -17,6 +19,10 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import MoneyInput from './MoneyInput.tsx'
 
 const GRID_COLUMNS = '2fr 0.6fr 1fr 0.7fr 1fr 32px'
+
+// The EU VIES VAT-number validation service. We link users here rather than
+// integrating: they confirm the check, we retain the attestation.
+const VIES_URL = 'https://ec.europa.eu/taxation_customs/vies/'
 
 type LineTotals = ReturnType<typeof computeInvoiceTotals>['perLine'][number]
 
@@ -196,6 +202,40 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
           {t($ => $.lines.reverseChargeHint)}
         </Typography>
+      )}
+      {form.reverse_charge && !appliesKor && (
+        <Box sx={{ mb: 1.5, pl: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  size="small"
+                  checked={!!form.vies_checked}
+                  onChange={(e) => patchForm({ vies_checked: e.target.checked })}
+                  disabled={readOnly}
+                />
+              )}
+              label={t($ => $.lines.viesChecked)}
+            />
+            <Link href={VIES_URL} target="_blank" rel="noopener" variant="body2">
+              {t($ => $.lines.viesOpen)}
+            </Link>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            {t($ => $.lines.viesHint)}
+          </Typography>
+          {form.vies_checked && (
+            <TextField
+              size="small"
+              label={t($ => $.lines.viesConsultation)}
+              value={form.vies_consultation_number}
+              onChange={(e) => patchForm({ vies_consultation_number: e.target.value })}
+              disabled={readOnly}
+              slotProps={{ htmlInput: { maxLength: 64 } }}
+              sx={{ maxWidth: 320 }}
+            />
+          )}
+        </Box>
       )}
 
       {!compact && (

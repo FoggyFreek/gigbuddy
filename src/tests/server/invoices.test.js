@@ -357,6 +357,66 @@ describe('invoices — reverse charge & supply date', () => {
   })
 })
 
+describe('invoices — VIES reverse-charge attestation', () => {
+  // A valid intra-EU reverse-charge invoice for tenant A (nl supplier). The only
+  // thing standing between it and issuance is the VIES check confirmation.
+  function rcPayload(extra = {}) {
+    return basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: 'DE136695976',
+      lines: [{ description: 'Gig in DE', quantity: 1, unit_price_cents: 100000, tax_percentage: 21 }],
+      ...extra,
+    })
+  }
+
+  it('blocks issuing a reverse-charge invoice without a VIES confirmation', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(rcPayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.error).toBe('reverse_charge_vies_check_required')
+    const { rows } = await pool.query('SELECT status FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].status).toBe('draft')
+  })
+
+  it('records the attestation at create and allows issuing', async () => {
+    const r = await asUserA(request(app).post('/api/invoices'))
+      .send(rcPayload({ vies_checked: true, vies_consultation_number: 'WAPIAAAA123' })).expect(201)
+    const { rows } = await pool.query(
+      'SELECT vies_checked_at, vies_checked_vat_number, vies_consultation_number FROM invoices WHERE id = $1',
+      [r.body.id],
+    )
+    expect(rows[0].vies_checked_at).not.toBeNull()
+    expect(rows[0].vies_checked_vat_number).toBe('DE136695976') // snapshot, normalized
+    expect(rows[0].vies_consultation_number).toBe('WAPIAAAA123')
+    const sent = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
+    expect(sent.body.status).toBe('sent')
+  })
+
+  it('can confirm the VIES check via PATCH before issuing', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(rcPayload()).expect(201)
+    await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ vies_checked: true }).expect(200)
+    const sent = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
+    expect(sent.body.status).toBe('sent')
+  })
+
+  it('goes stale when the VAT number changes after the check', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(rcPayload({ vies_checked: true })).expect(201)
+    // Change to a different (still valid) DE number without re-confirming.
+    await asUserA(request(app).patch(`/api/invoices/${r.body.id}`))
+      .send({ customer_tax_id: 'DE100000008' }).expect(200)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.error).toBe('reverse_charge_vies_check_stale')
+  })
+
+  it('does not require a VIES check for a normal (non-reverse-charge) invoice', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const sent = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
+    expect(sent.body.status).toBe('sent')
+  })
+})
+
 describe('invoices — finalization gate', () => {
   it('PATCH with status sent finalizes the invoice', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)

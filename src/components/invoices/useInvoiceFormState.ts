@@ -121,6 +121,11 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
         const computed = addDays(next.issue_date, next.payment_term_days || 14)
         if (computed) next.due_date = computed
       }
+      // Changing the customer VAT number invalidates a prior VIES confirmation:
+      // the issuer must re-check the new number before issuing.
+      if ('customer_tax_id' in patch && !('vies_checked' in patch)) {
+        next.vies_checked = false
+      }
       return next
     })
   }

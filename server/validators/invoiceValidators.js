@@ -6,6 +6,23 @@ export { formatInvoiceNumber } from '../domain/invoice.js'
 
 const nonEmpty = (v) => String(v ?? '').trim().length > 0
 
+// Canonical form of a VAT number for comparison/storage: no spaces, uppercase.
+export const normalizeVatNumber = (v) => String(v ?? '').replace(/\s+/g, '').toUpperCase()
+
+// Reverse-charge due diligence: before a reverse-charge invoice may be issued the
+// issuer must have confirmed they checked the customer's VAT number in VIES, and
+// that confirmation must still apply to the CURRENT number (a later change to
+// customer_tax_id makes a prior check stale — FR-VIES-010). We store the
+// attestation rather than calling VIES ourselves. Returns an error code or null.
+export function validateViesAttestation(invoice) {
+  if (!invoice.vies_checked_at) return 'reverse_charge_vies_check_required'
+  const attested = normalizeVatNumber(invoice.vies_checked_vat_number)
+  if (!attested || attested !== normalizeVatNumber(invoice.customer_tax_id)) {
+    return 'reverse_charge_vies_check_stale'
+  }
+  return null
+}
+
 // Issuance-readiness invariant (EU VAT Directive art. 226): an invoice may only
 // be finalized (draft → sent/paid, payment-link finalization) when it holds the
 // mandatory content. Runs on the EFFECTIVE persisted state under the finalizing
@@ -42,7 +59,8 @@ export function validateInvoiceReadyForIssue(invoice, lines, tenant) {
   if ((vatCharged || invoice.reverse_charge) && !nonEmpty(tenant.tax_id)) {
     return 'missing_supplier_vat_id'
   }
-  // Reverse charge: a valid intra-EU customer VAT identity.
+  // Reverse charge: a valid intra-EU customer VAT identity AND a retained VIES
+  // check attestation for that exact number.
   if (invoice.reverse_charge) {
     const rcError = validateReverseCharge({
       supplierCountry: tenant.vat_country,
@@ -50,6 +68,8 @@ export function validateInvoiceReadyForIssue(invoice, lines, tenant) {
       customerTaxId: invoice.customer_tax_id,
     })
     if (rcError) return rcError
+    const viesError = validateViesAttestation(invoice)
+    if (viesError) return viesError
   }
   return null
 }
@@ -175,9 +195,14 @@ export function parseCreateInvoiceBody(body) {
   const lines = normalizeLines(body.lines)
   if (!lines.length) return { error: 'At least one line is required' }
 
+  const viesChecked = Boolean(body.vies_checked)
+  const viesConsultationNumber = body.vies_consultation_number != null
+    ? (String(body.vies_consultation_number).trim() || null)
+    : null
+
   // Reverse-charge eligibility depends on the supplier + customer countries
   // (which the service knows), so it is validated there via validateReverseCharge.
-  return { customerName, paymentTermDays, issueDate, dueDate, taxInclusive, reverseCharge, supplyDate, discountType, discountPct, discountCents, lines }
+  return { customerName, paymentTermDays, issueDate, dueDate, taxInclusive, reverseCharge, supplyDate, discountType, discountPct, discountCents, lines, viesChecked, viesConsultationNumber }
 }
 
 function validateExpiresAt(value) {

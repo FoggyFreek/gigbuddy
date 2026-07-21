@@ -255,7 +255,8 @@ export async function insertInvoice(executor, invoice) {
        discount_type, discount_pct, discount_cents,
        invert_logo,
        subtotal_cents, tax_cents, total_cents,
-       created_by_user_id
+       created_by_user_id,
+       vies_checked_at, vies_checked_vat_number, vies_consultation_number
      ) VALUES (
        $1, $2, $3, $4, $5, $6,
        $7, $8, $9, $10,
@@ -266,7 +267,8 @@ export async function insertInvoice(executor, invoice) {
        $22, $23, $24,
        $25,
        $26, $27, $28,
-       $29
+       $29,
+       $30, $31, $32
      ) RETURNING id`,
     [
       invoice.tenant_id, invoice.gig_id, invoice.invoice_number, invoice.issue_date, invoice.due_date, invoice.payment_term_days,
@@ -279,6 +281,7 @@ export async function insertInvoice(executor, invoice) {
       invoice.invert_logo,
       invoice.subtotal_cents, invoice.tax_cents, invoice.total_cents,
       invoice.created_by_user_id,
+      invoice.vies_checked_at ?? null, invoice.vies_checked_vat_number ?? null, invoice.vies_consultation_number ?? null,
     ],
   )
   return rows[0].id

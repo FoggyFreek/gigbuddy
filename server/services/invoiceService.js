@@ -60,6 +60,7 @@ import {
   validatePaymentLinkOptions,
   validateReverseCharge,
   validateInvoiceReadyForIssue,
+  normalizeVatNumber,
 } from '../validators/invoiceValidators.js'
 import {
   ledgerErrorResult,
@@ -93,6 +94,34 @@ async function withAccountingSettingsSessionLock(pool, tenantId, fn) {
       logger.error('invoice.accounting_lock_release_failed', { err })
     }
     client.release(releaseError)
+  }
+}
+
+// ---------- VIES check attestation ----------
+
+const MAX_CONSULTATION_LEN = 64
+
+// Builds the three vies_* column values for a desired attestation state. When the
+// issuer confirms the VIES check we snapshot the exact (normalized) number and
+// stamp checked_at — idempotently: an already-valid attestation for the same
+// number keeps its original timestamp, so re-saving a draft doesn't reset the
+// proof time. Unchecking clears all three. `consultation` is only overwritten
+// when explicitly supplied; otherwise a prior value is retained.
+function viesAttestationColumns(desiredChecked, effectiveTaxId, consultation, existing = null) {
+  if (!desiredChecked) {
+    return { vies_checked_at: null, vies_checked_vat_number: null, vies_consultation_number: null }
+  }
+  const number = normalizeVatNumber(effectiveTaxId)
+  const consult = consultation != null
+    ? (String(consultation).trim().slice(0, MAX_CONSULTATION_LEN) || null)
+    : (existing?.vies_consultation_number ?? null)
+  const alreadyValid = Boolean(existing?.vies_checked_at)
+    && number !== ''
+    && normalizeVatNumber(existing.vies_checked_vat_number) === number
+  return {
+    vies_checked_at: alreadyValid ? existing.vies_checked_at : new Date(),
+    vies_checked_vat_number: number,
+    vies_consultation_number: consult,
   }
 }
 
@@ -266,6 +295,17 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
       if (guard?.error) abortTransaction(guard)
     }
 
+    // VIES check attestation, snapshotted against the effective customer VAT
+    // number (the value this PATCH sets, else the stored one).
+    if ('vies_checked' in body || 'vies_consultation_number' in body) {
+      const effectiveTaxId = 'customer_tax_id' in body ? body.customer_tax_id : existing.customer_tax_id
+      const desired = 'vies_checked' in body ? Boolean(body.vies_checked) : Boolean(existing.vies_checked_at)
+      const cols = viesAttestationColumns(desired, effectiveTaxId, body.vies_consultation_number, existing)
+      builder.set('vies_checked_at', cols.vies_checked_at)
+      builder.set('vies_checked_vat_number', cols.vies_checked_vat_number)
+      builder.set('vies_consultation_number', cols.vies_consultation_number)
+    }
+
     applyStatusFields(body, existing, builder)
 
     if (builder.size === 0) {
@@ -316,6 +356,11 @@ const ALLOWED_TRANSITIONS = {
 function validatePatchRequest(body, existing) {
   const requestedContentFields = Object.keys(body).filter((k) => FINALIZED_LOCKED_FIELDS_SET.has(k))
   if (existing.finalized_at !== null && requestedContentFields.length > 0) {
+    return { error: FINALIZED_ERROR }
+  }
+  // The VIES attestation is part of the immutable issued record — it may only be
+  // set/changed while the invoice is still a draft.
+  if (existing.finalized_at !== null && ('vies_checked' in body || 'vies_consultation_number' in body)) {
     return { error: FINALIZED_ERROR }
   }
   if (body.status !== undefined && !STATUS_VALUES.has(body.status)) {
@@ -657,6 +702,8 @@ export async function createInvoice(pool, tenantId, userId, body) {
     if (gigId === null) return { error: { status: 400, body: { error: 'Invalid gig_id' } } }
   }
 
+  const vies = viesAttestationColumns(parsed.viesChecked, body.customer_tax_id, parsed.viesConsultationNumber)
+
   const invoiceId = await withTransaction(async (client) => {
     const invoiceNumber = await nextInvoiceNumber(client, tenantId, year)
     const id = await insertInvoice(client, {
@@ -689,6 +736,9 @@ export async function createInvoice(pool, tenantId, userId, body) {
       tax_cents: totals.taxCents,
       total_cents: totals.totalCents,
       created_by_user_id: userId,
+      vies_checked_at: vies.vies_checked_at,
+      vies_checked_vat_number: vies.vies_checked_vat_number,
+      vies_consultation_number: vies.vies_consultation_number,
     })
     await insertInvoiceLines(client, id, tenantId, parsed.lines)
     return id

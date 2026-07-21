@@ -9,6 +9,7 @@ const INVOICE_COLUMNS = Object.freeze([
   'invert_logo', 'mollie_payment_link_id', 'mollie_payment_link_url',
   'mollie_payment_link_created_at', 'mollie_payment_link_expires_at', 'mollie_payment_status',
   'mollie_payment_id', 'mollie_paid_at', 'created_by_user_id',
+  'vies_checked_at', 'vies_checked_vat_number', 'vies_consultation_number',
 ])
 
 export function invoiceProjection(alias = null) {

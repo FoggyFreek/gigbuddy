@@ -84,7 +84,11 @@
     "removeLine": "remove line",
     "addItem": "Add item",
     "reverseCharge": "Reverse charge",
-    "reverseChargeHint": "0% VAT — the customer accounts for VAT. Requires a valid VAT number for a customer in another EU country."
+    "reverseChargeHint": "0% VAT — the customer accounts for VAT. Requires a valid VAT number for a customer in another EU country.",
+    "viesChecked": "VAT number checked in VIES",
+    "viesOpen": "Open VIES",
+    "viesHint": "Before issuing, confirm the customer's VAT number is valid in VIES. The confirmation and number are stored as evidence; changing the VAT number requires a new check.",
+    "viesConsultation": "VIES consultation number (optional)"
   },
   "totals": {
     "subtotal": "Subtotal",
