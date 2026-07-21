@@ -12,6 +12,7 @@ import Typography from '@mui/material/Typography'
 import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined'
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined'
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined'
+import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined'
 import type { TutorialCardProps } from '../types.ts'
 
 // The finance welcome tutorial: shown once to finance managers of a tenant with
@@ -33,6 +34,13 @@ export default function FinanceWelcomeCard({ onDismiss, onAccept }: Readonly<Tut
           <ListItem disableGutters>
             <ListItemIcon sx={{ minWidth: 36 }}><BadgeOutlinedIcon fontSize="small" /></ListItemIcon>
             <ListItemText primary={t($ => $.financeWelcome.points.profile)} />
+          </ListItem>
+          <ListItem disableGutters>
+            <ListItemIcon sx={{ minWidth: 36 }}><PublicOutlinedIcon fontSize="small" /></ListItemIcon>
+            <ListItemText
+              primary={t($ => $.financeWelcome.points.invoicing)}
+              secondary={t($ => $.financeWelcome.points.invoicingDetail)}
+            />
           </ListItem>
           <ListItem disableGutters>
             <ListItemIcon sx={{ minWidth: 36 }}><AccountTreeOutlinedIcon fontSize="small" /></ListItemIcon>

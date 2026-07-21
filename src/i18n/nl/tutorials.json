@@ -4,7 +4,9 @@
     "intro": "gigBuddy voert de boekhouding van je band met een volledig dubbel boekhoudsysteem — facturen, inkopen, merch, btw-aangiften en rapporten, allemaal op één plek.",
     "points": {
       "openingBalance": "Stel je beginsaldo in zodat je banktotaal vanaf dag één klopt.",
-      "profile": "Vul je financiële profiel in (KvK, btw-nummer, IBAN) voor facturen en aangiften.",
+      "profile": "Vul je bedrijfsgegevens in — btw-land, btw-nummer, KvK-registratie, rechtsvorm en IBAN — voor facturen en aangiften.",
+      "invoicing": "Factureer compliant door heel Europa.",
+      "invoicingDetail": "Landspecifieke btw-tarieven en -labels, de KOR-vrijstelling en de grensoverschrijdende verleggingsregeling — met een VIES-controle voordat je verstuurt.",
       "accounts": "Controleer de standaardrekeningen waarop je boekingen terechtkomen."
     },
     "getStarted": "Aan de slag",
