@@ -18,6 +18,7 @@
 //   sameAsVat — true where there is no separate number: the enterprise/tax number
 //               IS the registration identifier (Belgium, Spain). No field shown.
 import { DEFAULT_VAT_COUNTRY, normalizeVatCountry } from './vatRates.js'
+import { luhnValid } from './vatChecksum.js'
 
 export const BUSINESS_REGISTRY = Object.freeze({
   nl: { label: 'KvK-nummer', pattern: /^\d{8}$/, example: '12345678' },
@@ -27,7 +28,7 @@ export const BUSINESS_REGISTRY = Object.freeze({
     office: { label: 'Registergericht', example: 'Amtsgericht München' },
   },
   fr: {
-    label: 'SIREN', pattern: /^\d{9}$/, example: '123456789',
+    label: 'SIREN', pattern: /^\d{9}$/, checksum: 'siren', example: '732829320',
     office: { label: 'RCS (ville)', example: 'RCS Paris' },
   },
   lu: { label: 'RCS', pattern: /^B\d{1,7}$/i, example: 'B123456' },
@@ -110,5 +111,9 @@ export function isValidRegistrationNumber(country, value) {
   const v = normalizeRegistrationNumber(value)
   if (cfg.sameAsVat) return v === ''
   if (v === '') return true // empty clears the field
-  return cfg.pattern.test(v)
+  if (!cfg.pattern.test(v)) return false
+  // The French SIREN carries a Luhn control (FR-ID-005): a structurally valid
+  // but mistyped nine digits is rejected, not just any nine digits.
+  if (cfg.checksum === 'siren') return luhnValid(v)
+  return true
 }

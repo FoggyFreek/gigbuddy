@@ -16,7 +16,7 @@ describe('businessRegistry', () => {
   const VALID = {
     nl: ['12345678'],
     de: ['HRB 12345', 'hrb12345', 'HRA 6'],
-    fr: ['123456789'],
+    fr: ['732829320'], // SIREN with a valid Luhn control
     lu: ['B123456'],
     at: ['FN 123456a', 'FN123456A'],
     it: ['1234567'],
@@ -32,6 +32,7 @@ describe('businessRegistry', () => {
     expect(isValidRegistrationNumber('nl', '1234567')).toBe(false) // 7 digits
     expect(isValidRegistrationNumber('de', '12345')).toBe(false) // no HRA/HRB
     expect(isValidRegistrationNumber('fr', '12345')).toBe(false)
+    expect(isValidRegistrationNumber('fr', '123456789')).toBe(false) // 9 digits but bad Luhn
     expect(isValidRegistrationNumber('lu', '123456')).toBe(false) // missing B
     expect(isValidRegistrationNumber('gb', '1234567')).toBe(false) // 7 digits
     expect(isValidRegistrationNumber('nl', 'DE123456789')).toBe(false) // wrong country

@@ -19,6 +19,8 @@ import {
   normalizeVatCountry,
   resolveVatCountry,
   snapVatRate,
+  vatIdPrefixCountry,
+  describeVatIdValidation,
 } from '../../shared/vatRates.js'
 
 describe('vatRates country config', () => {
@@ -85,19 +87,20 @@ describe('vatRates country config', () => {
     expect(isKnownVatRate(17.5)).toBe(false) // not a current rate anywhere
   })
 
-  // Valid samples mirror the official EU VIES VAT-number table structures
-  // (and HMRC for GB): 9 = digit, letters/fixed chars as the country prescribes.
+  // Valid samples are genuinely CHECKSUM-valid, not merely regex-shaped: real
+  // published numbers where possible (AT/BE/DE/FR/IT/LU/IE/GB/ES known-valid),
+  // plus generated ones. NL is checksum-exempt (format-only) by design.
   const VALID_VAT_IDS = {
     nl: ['NL123456789B01'],
-    be: ['BE0123456789', 'BE1123456789'],
-    de: ['DE123456789'],
-    fr: ['FRXX123456789', 'FR12123456789'],
-    lu: ['LU12345678'],
-    at: ['ATU12345678'],
-    es: ['ESX1234567X', 'ES01234567A'],
-    it: ['IT12345678901'],
-    ie: ['IE1234567FA', 'IE1234567W', 'IE1A23456L', 'IE9S99999L', 'IE9999999WI'],
-    gb: ['GB123456789', 'GB123456789012', 'GBGD001', 'GBHA599'],
+    be: ['BE0411905847', 'BE0100000070'],
+    de: ['DE136695976', 'DE100000008'],
+    fr: ['FR40303265045', 'FR88100000009'],
+    lu: ['LU10000356', 'LU10000053'],
+    at: ['ATU13585627', 'ATU10000005'],
+    es: ['ESA28015865', 'ES12345678Z', 'ESX1234567L'], // CIF, NIF (DNI), NIE
+    it: ['IT00743110157', 'IT01000000008'],
+    ie: ['IE6388047V', 'IE8Z49289F', 'IE1000000H'], // new, legacy, generated
+    gb: ['GB980780684', 'GB100000034', 'GBGD001', 'GBHA599'],
   }
 
   it.each(Object.entries(VALID_VAT_IDS))('accepts valid %s VAT numbers', (country, samples) => {
@@ -111,6 +114,42 @@ describe('vatRates country config', () => {
     expect(isValidVatId('at', 'ATX12345678')).toBe(false) // needs U
     expect(isValidVatId('it', 'IT1234567890')).toBe(false) // 10 digits, not 11
     expect(isValidVatId('gb', 'GB1234567')).toBe(false) // 7 digits
+  })
+
+  it('rejects regex-valid numbers that FAIL the checksum (not format-only)', () => {
+    // Each is structurally correct but has a bad check digit/character.
+    expect(isValidVatId('be', 'BE0411905848')).toBe(false)
+    expect(isValidVatId('de', 'DE123456789')).toBe(false)
+    expect(isValidVatId('fr', 'FR40303265046')).toBe(false)
+    expect(isValidVatId('it', 'IT00743110158')).toBe(false)
+    expect(isValidVatId('at', 'ATU13585628')).toBe(false)
+    expect(isValidVatId('lu', 'LU10000357')).toBe(false)
+    expect(isValidVatId('ie', 'IE6388047W')).toBe(false)
+    expect(isValidVatId('gb', 'GB980780685')).toBe(false)
+    expect(isValidVatId('es', 'ESA28015866')).toBe(false)
+  })
+
+  it('never wildcard-passes an unknown jurisdiction (FR-ID-009)', () => {
+    // No fallback to the default country's format: an unknown country fails.
+    expect(isValidVatId('us', 'US123456789')).toBe(false)
+    expect(isValidVatId('xx', 'NL123456789B01')).toBe(false)
+    expect(isValidVatId('', 'NL123456789B01')).toBe(false)
+  })
+
+  it('validates Northern Ireland (XI) distinctly from GB', () => {
+    expect(isValidVatId('xi', 'XI980780684')).toBe(true)
+    expect(isValidVatId('xi', 'XI980780685')).toBe(false) // bad checksum
+    expect(isValidVatId('gb', 'XI980780684')).toBe(false) // XI number is not GB
+    expect(isValidVatId('xi', 'GB980780684')).toBe(false) // GB number is not XI
+    expect(vatIdPrefixCountry('XI980780684')).toBe('xi')
+    expect(vatIdPrefixCountry('GB980780684')).toBe('gb')
+  })
+
+  it('reports local validation depth (FORMAT_VALID, never AUTHORITY_VERIFIED)', () => {
+    // We never call VIES here, so nothing is authority-verified.
+    expect(describeVatIdValidation('de')).toEqual({ level: 'format', checksum: true, authorityVerified: false })
+    expect(describeVatIdValidation('nl')).toEqual({ level: 'format', checksum: false, authorityVerified: false })
+    expect(describeVatIdValidation('us').authorityVerified).toBe(false)
   })
 
   it('does not accept a number from the wrong country', () => {

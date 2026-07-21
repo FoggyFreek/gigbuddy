@@ -1,6 +1,6 @@
 // Pure request/parameter validation for invoice routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit, isValidIsoDate } from './common.js'
-import { normalizeVatCountry, resolveVatCountry, isEuVatCountry, isValidVatId } from '../../shared/vatRates.js'
+import { normalizeVatCountry, resolveVatCountry, isEuVatCountry, isValidVatId, vatIdPrefixCountry } from '../../shared/vatRates.js'
 import { requiresCompanyDisclosure, registrationUsesOffice } from '../../shared/businessRegistry.js'
 export { formatInvoiceNumber } from '../domain/invoice.js'
 
@@ -62,6 +62,11 @@ export function validateInvoiceReadyForIssue(invoice, lines, tenant) {
 export function validateReverseCharge({ supplierCountry, customerCountry, customerTaxId }) {
   const taxId = String(customerTaxId ?? '').replace(/\s+/g, '').toUpperCase()
   if (!taxId) return 'customer_tax_id_required_for_reverse_charge'
+  // Northern Ireland (XI) VAT numbers are in the EU VAT area for GOODS only; a
+  // band's supply is a service, so an XI number must not unlock an intra-EU
+  // reverse charge. Routed distinctly from GB (FR-VIES-002 / FR-GB-001).
+  const prefix = vatIdPrefixCountry(taxId)
+  if (prefix === 'xi') return 'reverse_charge_xi_services_unsupported'
   const supplier = normalizeVatCountry(supplierCountry)
   // The customer country is free text on the invoice (and copied from venue/gig
   // records), so accept a country name as well as a code.
@@ -69,6 +74,10 @@ export function validateReverseCharge({ supplierCountry, customerCountry, custom
   if (!supplier || !isEuVatCountry(supplier)) return 'reverse_charge_requires_eu_supplier'
   if (!customer || !isEuVatCountry(customer)) return 'reverse_charge_requires_eu_customer'
   if (customer === supplier) return 'reverse_charge_requires_cross_border'
+  // Prefix/jurisdiction consistency: a well-formed number for a DIFFERENT country
+  // than the customer's is a mismatch, reported distinctly from a malformed one
+  // (FR-ID-002). An unrecognized prefix falls through to the checksum failure.
+  if (prefix && prefix !== customer) return 'customer_vat_number_country_mismatch'
   if (!isValidVatId(customer, taxId)) return 'invalid_customer_vat_number'
   return null
 }

@@ -236,7 +236,7 @@ describe('invoices — reverse charge & supply date', () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
       reverse_charge: true,
       customer_address_country: 'DE',
-      customer_tax_id: 'DE123456789',
+      customer_tax_id: 'DE136695976',
       lines: [{ description: 'Gig in DE', quantity: 1, unit_price_cents: 100000, tax_percentage: 21 }],
     })).expect(201)
     expect(r.body.reverse_charge).toBe(true)
@@ -261,7 +261,7 @@ describe('invoices — reverse charge & supply date', () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
       reverse_charge: true,
       customer_address_country: 'Germany',
-      customer_tax_id: 'DE123456789',
+      customer_tax_id: 'DE136695976',
       lines: [{ description: 'Gig in DE', quantity: 1, unit_price_cents: 100000, tax_percentage: 21 }],
     })).expect(201)
     expect(r.body.tax_cents).toBe(0)
@@ -291,10 +291,42 @@ describe('invoices — reverse charge & supply date', () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
       reverse_charge: true,
       customer_address_country: 'GB',
-      customer_tax_id: 'GB123456789',
+      customer_tax_id: 'GB980780684',
     }))
     expect(r.status).toBe(400)
     expect(r.body.error).toBe('reverse_charge_requires_eu_customer')
+  })
+
+  it('rejects a Northern Ireland (XI) VAT number for a service reverse charge', async () => {
+    // XI is in the EU VAT area for goods only; a gig fee is a service, so an XI
+    // number must route distinctly from a plain EU number.
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'IE',
+      customer_tax_id: 'XI980780684',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.error).toBe('reverse_charge_xi_services_unsupported')
+  })
+
+  it('rejects a customer VAT number whose country prefix ≠ the customer country', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: 'FR40303265045', // valid FR number, wrong country
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.error).toBe('customer_vat_number_country_mismatch')
+  })
+
+  it('rejects a regex-valid but checksum-invalid customer VAT number', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: 'DE123456789', // right shape, bad check digit
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.error).toBe('invalid_customer_vat_number')
   })
 
   it('rejects turning on reverse charge via PATCH when no customer VAT number is stored', async () => {

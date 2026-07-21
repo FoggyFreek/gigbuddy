@@ -11,6 +11,8 @@
 // duplicated across the purchase/journal/merch validators and their frontend
 // counterparts. Add or correct a country here and every consumer follows.
 
+import { vatChecksumValid, hasVatChecksum } from './vatChecksum.js'
+
 export const DEFAULT_VAT_COUNTRY = 'nl'
 
 // country code (ISO 3166-1 alpha-2, lowercase) -> { standard, rates }
@@ -56,23 +58,32 @@ export const VAT_COUNTRY_CODES = Object.freeze(Object.keys(VAT_COUNTRIES))
 // VAT identification number format per country, for validating a tenant's
 // tax_id against its VAT country. Patterns match the whitespace-stripped,
 // uppercased number (prefixed with the country code, as VIES/HMRC print it).
-// `example` drives the input placeholder and helper text. Sources: EU VIES /
-// Wikipedia "VAT identification number" and HMRC (GB). Prefix always matches
-// the two-letter country code.
+// The regex is only the FIRST gate (structural plausibility); a country-specific
+// checksum in shared/vatChecksum.js is the second (so a mistyped/transposed but
+// well-shaped number is rejected — FR-ID-003…008 of the compliance spec). The
+// `example` numbers below are genuinely checksum-valid so they double as fixtures
+// and honest placeholders. `xi` (Northern Ireland) is a distinct VAT prefix that
+// shares the UK number algorithm but must never be treated as a GB number or as
+// a general EU-services identifier (FR-VIES-002). Prefix always matches the code.
 export const VAT_ID_FORMATS = Object.freeze({
   nl: { pattern: /^NL\d{9}B\d{2}$/, example: 'NL123456789B01' },
-  be: { pattern: /^BE[01]\d{9}$/, example: 'BE0123456789' },
-  de: { pattern: /^DE\d{9}$/, example: 'DE123456789' },
-  fr: { pattern: /^FR[A-Z0-9]{2}\d{9}$/, example: 'FRXX123456789' },
-  lu: { pattern: /^LU\d{8}$/, example: 'LU12345678' },
-  at: { pattern: /^ATU\d{8}$/, example: 'ATU12345678' },
-  es: { pattern: /^ES[A-Z0-9]\d{7}[A-Z0-9]$/, example: 'ESX1234567X' },
-  it: { pattern: /^IT\d{11}$/, example: 'IT12345678901' },
+  be: { pattern: /^BE[01]\d{9}$/, example: 'BE0411905847' },
+  de: { pattern: /^DE\d{9}$/, example: 'DE136695976' },
+  fr: { pattern: /^FR[A-Z0-9]{2}\d{9}$/, example: 'FR40303265045' },
+  lu: { pattern: /^LU\d{8}$/, example: 'LU10000356' },
+  at: { pattern: /^ATU\d{8}$/, example: 'ATU13585627' },
+  es: { pattern: /^ES[A-Z0-9]\d{7}[A-Z0-9]$/, example: 'ESA28015865' },
+  it: { pattern: /^IT\d{11}$/, example: 'IT00743110157' },
   // Ireland: new format 7 digits + 1–2 letters (IE9999999WI), or the legacy
   // digit + [letter/+/*] + 5 digits + letter (IE9S99999L). Per the EU VIES table.
-  ie: { pattern: /^IE(\d{7}[A-Z]{1,2}|\d[A-Z0-9+*]\d{5}[A-Z])$/, example: 'IE1234567FA' },
-  gb: { pattern: /^GB(\d{9}|\d{12}|GD\d{3}|HA\d{3})$/, example: 'GB123456789' },
+  ie: { pattern: /^IE(\d{7}[A-Z]{1,2}|\d[A-Z0-9+*]\d{5}[A-Z])$/, example: 'IE6388047V' },
+  gb: { pattern: /^GB(\d{9}|\d{12}|GD\d{3}|HA\d{3})$/, example: 'GB980780684' },
+  xi: { pattern: /^XI(\d{9}|\d{12}|GD\d{3}|HA\d{3})$/, example: 'XI980780684' },
 })
+
+// Codes accepted by isValidVatId: the configured VAT countries plus Northern
+// Ireland (xi). Used to keep prefix consistency checks honest.
+export const VAT_ID_CODES = Object.freeze(new Set([...Object.keys(VAT_ID_FORMATS)]))
 
 export function isKnownVatCountry(code) {
   return typeof code === 'string' && Object.hasOwn(VAT_COUNTRIES, code)
@@ -173,17 +184,50 @@ export function snapVatRate(country, rate, fallback) {
   return fallback === undefined ? configFor(country).standard : fallback
 }
 
-function vatIdFormatFor(country) {
-  return VAT_ID_FORMATS[normalizeVatCountry(country) ?? DEFAULT_VAT_COUNTRY]
+// Normalizes an id-country argument to a code that has a VAT-id format: the
+// configured VAT countries plus `xi`. Returns null for anything else — unlike
+// the rate helpers there is NO fallback to the default country, so an unknown
+// jurisdiction never borrows another country's format and passes (FR-ID-009).
+function normalizeVatIdCountry(country) {
+  if (typeof country !== 'string') return null
+  const c = country.trim().toLowerCase()
+  return VAT_ID_CODES.has(c) ? c : null
 }
 
 // A sample VAT identification number for the country (placeholder / helper text).
+// Placeholders are advisory, so an unknown country still shows the default one.
 export function getVatIdExample(country) {
-  return vatIdFormatFor(country).example
+  return (VAT_ID_FORMATS[normalizeVatIdCountry(country)] ?? VAT_ID_FORMATS[DEFAULT_VAT_COUNTRY]).example
 }
 
-// True when `value` is a well-formed VAT identification number for the country.
-// `value` is expected already whitespace-stripped and uppercased.
+// True when `value` is a well-formed VAT identification number for the country
+// AND passes that country's checksum/control algorithm. `value` is expected
+// already whitespace-stripped and uppercased. An unknown country returns false
+// (no wildcard fallback). Countries without a checksum (nl) pass on the regex.
 export function isValidVatId(country, value) {
-  return vatIdFormatFor(country).pattern.test(String(value))
+  const code = normalizeVatIdCountry(country)
+  if (!code) return false
+  const v = String(value)
+  if (!VAT_ID_FORMATS[code].pattern.test(v)) return false
+  return vatChecksumValid(code, v)
+}
+
+// The two-letter jurisdiction a VAT number declares by its prefix (lowercased),
+// or null when it isn't one we recognize. Distinguishes gb from xi (FR-ID-002).
+export function vatIdPrefixCountry(value) {
+  const p = String(value ?? '').trim().slice(0, 2).toLowerCase()
+  return VAT_ID_CODES.has(p) ? p : null
+}
+
+// Validation depth actually achieved for a VAT id, so a report can distinguish
+// FORMAT_VALID from AUTHORITY_VERIFIED (FR-REG-007 / FR-VIES-003). We perform
+// local checks only; a number is NEVER authority-verified until a VIES lookup is
+// added, so `authorityVerified` is always false here.
+export function describeVatIdValidation(country) {
+  const code = normalizeVatIdCountry(country)
+  return {
+    level: 'format', // 'format' (+checksum) — never 'authority' without VIES
+    checksum: code ? hasVatChecksum(code) : false,
+    authorityVerified: false,
+  }
 }

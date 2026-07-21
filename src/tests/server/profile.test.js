@@ -127,10 +127,10 @@ describe('PATCH /api/profile — financial fields', () => {
 
   it('accepts a German tax_id when vat_country=de is set in the same patch', async () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
-      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: 'de123456789' }),
+      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: 'de136695976' }),
     ).expect(200)
     expect(res.body.vat_country).toBe('de')
-    expect(res.body.tax_id).toBe('DE123456789')
+    expect(res.body.tax_id).toBe('DE136695976')
   })
 
   it('accepts a German tax_id against the stored country after vat_country=de', async () => {
@@ -139,9 +139,9 @@ describe('PATCH /api/profile — financial fields', () => {
     ).expect(200)
     // No vat_country in this patch → validated against the stored 'de'.
     const res = await as(seed.superUser.id, seed.tenantA.id)(
-      request(app).patch('/api/profile').send({ tax_id: 'DE987654321' }),
+      request(app).patch('/api/profile').send({ tax_id: 'DE100000008' }),
     ).expect(200)
-    expect(res.body.tax_id).toBe('DE987654321')
+    expect(res.body.tax_id).toBe('DE100000008')
   })
 
   it('rejects an out-of-range tax_percentage with 400 invalid_tax_percentage', async () => {
@@ -271,17 +271,17 @@ describe('PATCH /api/profile — financial fields', () => {
 
     // 4. Switch to DE and save a valid German VAT ID together.
     const moved = await admin(
-      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: 'de123456789' }),
+      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: 'de136695976' }),
     ).expect(200)
     expect(moved.body.vat_country).toBe('de')
-    expect(moved.body.tax_id).toBe('DE123456789')
+    expect(moved.body.tax_id).toBe('DE136695976')
 
     // 5. Subsequent updates succeed: another German number (validated against the
     //    now-stored 'de'), and an unrelated financial field.
     const nextId = await admin(
-      request(app).patch('/api/profile').send({ tax_id: 'DE987654321' }),
+      request(app).patch('/api/profile').send({ tax_id: 'DE100000008' }),
     ).expect(200)
-    expect(nextId.body.tax_id).toBe('DE987654321')
+    expect(nextId.body.tax_id).toBe('DE100000008')
 
     const other = await admin(
       request(app).patch('/api/profile').send({ formal_name: 'Die Tester GmbH' }),
