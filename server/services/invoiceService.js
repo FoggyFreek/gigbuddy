@@ -188,7 +188,11 @@ function hasContentChange(body) {
 function applyStatusFields(body, existing, builder) {
   if (body.status === undefined) return
   builder.set('status', body.status)
-  if (body.status !== 'draft' && existing.finalized_at === null) {
+  // Any move off draft (sent/paid/void) makes the invoice immutable. This is a
+  // broader condition than "issued": a voided draft is locked too, but issuance
+  // readiness is enforced separately and only for the issuing transitions.
+  const becomesImmutable = body.status !== 'draft'
+  if (becomesImmutable && existing.finalized_at === null) {
     builder.finalize()
   }
 }
@@ -271,11 +275,16 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
     await updateInvoiceFields(client, tenantId, invoiceId, builder.changes())
 
     if (body.status !== undefined) {
-      // Finalizing (draft → sent/paid) makes the invoice immutable and posts to
-      // the ledger, so enforce the issuance-readiness invariant on the effective
-      // persisted state first — the writes above are inside this transaction, so
-      // a failure rolls them back.
-      if (body.status !== 'draft' && existing.finalized_at === null) {
+      // Issuance readiness applies only to transitions that actually ISSUE the
+      // invoice (draft → sent/paid): those recognise revenue and print a legal
+      // document, so the art. 226 mandatory content must be present. Voiding a
+      // draft (draft → void) is NOT an issue — an abandoned, incomplete draft
+      // must stay voidable — even though it, like any non-draft transition, still
+      // sets finalized_at for immutability (see applyStatusFields). The check
+      // runs on the effective persisted state; the writes above are inside this
+      // transaction, so a failure rolls them back.
+      const becomesIssued = body.status === 'sent' || body.status === 'paid'
+      if (becomesIssued && existing.finalized_at === null) {
         const effective = await fetchInvoice(client, tenantId, invoiceId)
         const effectiveLines = await fetchLines(client, invoiceId, tenantId)
         const readyError = validateInvoiceReadyForIssue(effective, effectiveLines, tenant)

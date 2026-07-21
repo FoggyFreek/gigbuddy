@@ -423,6 +423,17 @@ describe('invoices — issuance-readiness invariant', () => {
     expect(res.body.finalized_at).not.toBeNull()
   })
 
+  it('still allows voiding an incomplete draft (void is not an issuance)', async () => {
+    // Abandoning a half-filled draft must not require art. 226 content — the
+    // readiness guard applies only to issuing transitions (sent/paid).
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      customer_address_street: null,
+      customer_address_city: null,
+    })).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'void' }).expect(200)
+    expect(res.body.status).toBe('void')
+  })
+
   it('blocks payment-link finalization of an incomplete invoice', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
       customer_address_city: null,
