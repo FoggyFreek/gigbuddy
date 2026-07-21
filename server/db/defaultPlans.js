@@ -20,8 +20,9 @@ export const DEFAULT_PLANS = Object.freeze([
         song_files: false,
         chordpro: false,
         public_promotion: false,
+        linkpage: false,
       },
-      limits: { storage_mb: 50, members: 5, bands: 1 },
+      limits: { storage_mb: 50, members: 5, bands: 1, linkpage_pages: 0, linkpage_stats_days: 30 },
     },
   },
   {
@@ -40,8 +41,9 @@ export const DEFAULT_PLANS = Object.freeze([
         song_files: true,
         chordpro: true,
         public_promotion: true,
+        linkpage: true,
       },
-      limits: { storage_mb: 150, members: null, bands: 3 },
+      limits: { storage_mb: 150, members: null, bands: 3, linkpage_pages: 3, linkpage_stats_days: 30 },
     },
   },
   {
@@ -59,8 +61,9 @@ export const DEFAULT_PLANS = Object.freeze([
         song_files: true,
         chordpro: true,
         public_promotion: true,
+        linkpage: true,
       },
-      limits: { storage_mb: 500, members: null, bands: null },
+      limits: { storage_mb: 500, members: null, bands: null, linkpage_pages: 30, linkpage_stats_days: 90 },
     },
   },
 ])
