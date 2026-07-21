@@ -1,6 +1,5 @@
-// Link-page integration: content export for the decoupled linkpage app and
-// the editor handoff for signed-in members. See linkpage/README.md for the
-// full integration contract (the linkpage app is the only consumer).
+// Link-page integration: content export for the decoupled link-page app (a
+// separate repo) and the editor handoff for signed-in members.
 import {
   getTenantBySlug,
   getTenantSlug,

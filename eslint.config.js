@@ -14,8 +14,7 @@ const unusedVarsOptions = {
 
 export default defineConfig([
   // .claude holds agent worktrees (full repo copies) — outside our lint scope.
-  // linkpage is the decoupled link-page app with its own tooling (see linkpage/README.md).
-  globalIgnores(['dist', 'coverage', '.claude', 'linkpage']),
+  globalIgnores(['dist', 'coverage', '.claude']),
   // JS/JSX: tests (src/tests/**), the server, the service worker, and config files.
   {
     files: ['**/*.{js,jsx}'],

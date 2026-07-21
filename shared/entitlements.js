@@ -17,8 +17,6 @@ export const FEATURES = Object.freeze({
   SONG_FILES: 'song_files',
   CHORDPRO: 'chordpro',
   PUBLIC_PROMOTION: 'public_promotion',
-  // The decoupled link-page app (linkpage/): public band link pages + smart
-  // release landing pages. Silver and gold tiers.
   LINKPAGE: 'linkpage',
 })
 

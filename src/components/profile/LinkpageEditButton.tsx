@@ -5,7 +5,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { getLinkpageStatus, createLinkpageHandoff } from '../../api/linkpage.ts'
 import { useToast } from '../../contexts/toastContext.ts'
 
-// Opens the decoupled link-page editor (linkpage/ app) with a fresh handoff
+// Opens the decoupled link-page editor (separate app) with a fresh handoff
 // token. Hidden entirely while the integration isn't configured server-side.
 export default function LinkpageEditButton() {
   const { t } = useTranslation('profile')

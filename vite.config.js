@@ -84,8 +84,7 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/tests/setup.js',
     // Keep agent worktrees under .claude (full repo copies) out of test discovery.
-    // linkpage/ is the decoupled link-page app — it runs its own vitest suite.
-    exclude: ['**/node_modules/**', '**/dist/**', '.claude/**', 'linkpage/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'],
     // Frontend coverage. The server suite uses vitest.server.config.js so each
     // run emits its own lcov (coverage/frontend, coverage/server), merged by Sonar.
     coverage: {

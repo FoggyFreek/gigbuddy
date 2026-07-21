@@ -1,4 +1,4 @@
-// Compact HMAC-signed tokens for the decoupled link-page app (linkpage/).
+// Compact HMAC-signed tokens for the decoupled link-page app.
 //
 // One shared secret (LINKPAGE_SECRET) covers all three integration surfaces:
 //   - editor handoff tokens minted for signed-in members (short-lived),
