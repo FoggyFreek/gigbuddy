@@ -12,6 +12,7 @@ import {
   isAllowedVatRate as isAllowedVatRateJs,
   getVatIdExample as getVatIdExampleJs,
   isValidVatId as isValidVatIdJs,
+  normalizeVatNumber as normalizeVatNumberJs,
   getVatIdLabel as getVatIdLabelJs,
   korApplies as korAppliesJs,
 } from '../../shared/vatRates.js'
@@ -49,8 +50,14 @@ export function korApplies(country: string | null | undefined): boolean {
 
 // True when `value` (whitespace/case-insensitive) is a valid VAT identification
 // number for the country.
+/** Canonical VAT-number form (no whitespace, uppercased). */
+export function normalizeVatNumber(value: unknown): string {
+  return normalizeVatNumberJs(value) as string
+}
+
 export function isValidVatId(country: string | null | undefined, value: string): boolean {
-  return isValidVatIdJs(country ?? undefined, value.replace(/\s+/g, '').toUpperCase()) as boolean
+  // isValidVatId normalizes internally — no pre-cleaning needed here.
+  return isValidVatIdJs(country ?? undefined, value) as boolean
 }
 
 // Rate options for a select, guaranteeing `current` is present even when it is

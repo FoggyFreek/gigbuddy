@@ -1,7 +1,7 @@
 // Input parsing and validation for profile routes. No DB access here.
 import { parsePositiveId as parseId } from './common.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
-import { DEFAULT_VAT_COUNTRY, normalizeVatCountry, isValidVatId } from '../../shared/vatRates.js'
+import { DEFAULT_VAT_COUNTRY, normalizeVatCountry, isValidVatId, normalizeVatNumber } from '../../shared/vatRates.js'
 import { isValidRegistrationNumber, normalizeRegistrationNumber, isKnownLegalForm } from '../../shared/businessRegistry.js'
 
 // Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
@@ -167,7 +167,7 @@ function validateKvkNumber(raw, vatCountry) {
 function validateTaxId(raw, vatCountry) {
   if (raw === null || raw === undefined) return { value: null }
   if (typeof raw !== 'string') return { error: 'invalid_tax_id' }
-  const stripped = raw.replace(/\s+/g, '').toUpperCase()
+  const stripped = normalizeVatNumber(raw)
   if (stripped === '') return { value: '' }
   if (!isValidVatId(vatCountry, stripped)) return { error: 'invalid_tax_id' }
   return { value: stripped }

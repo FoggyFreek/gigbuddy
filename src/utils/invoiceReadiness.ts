@@ -5,6 +5,7 @@
 import {
   INVOICE_ISSUE_ERROR_CODES as CODES_JS,
   checkInvoiceReadyForIssue as checkJs,
+  storedViesConfirmation as storedViesConfirmationJs,
 } from '../../shared/invoiceReadiness.js'
 import type { InvoiceLine, Tenant } from '../types/entities.ts'
 
@@ -22,8 +23,16 @@ export interface InvoiceReadinessInput {
   issue_date?: string | null
   reverse_charge?: boolean
   tax_cents?: number | null
-  vies_checked_at?: string | null
-  vies_checked_vat_number?: string | null
+  /** The VAT number a VIES confirmation covers; null when there is none. */
+  vies_confirmed_for?: string | null
+}
+
+/**
+ * The VAT number a stored (server-side) VIES confirmation covers, or null.
+ * Takes a loose record so a raw invoice payload can be passed straight in.
+ */
+export function storedViesConfirmation(row: Readonly<Record<string, unknown>>): string | null {
+  return (storedViesConfirmationJs(row) as string | null) ?? null
 }
 
 export type InvoiceIssueErrorCode =

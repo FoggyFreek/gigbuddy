@@ -37,6 +37,13 @@ afterAll(async () => {
   await pool.end()
 })
 
+// seedTwoTenants() gives both tenants an NL VAT number so finance tests can issue
+// invoices. A test that switches vat_country for some OTHER reason must clear it
+// first, or the tax_id/country consistency guard is the rule that fires.
+function clearStoredVatId() {
+  return pool.query('UPDATE tenants SET tax_id = NULL WHERE id = $1', [seed.tenantA.id])
+}
+
 function as(userId, tenantId) {
   return (req) =>
     req
@@ -134,6 +141,7 @@ describe('PATCH /api/profile — financial fields', () => {
   })
 
   it('accepts a German tax_id against the stored country after vat_country=de', async () => {
+    await clearStoredVatId()
     await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ vat_country: 'de' }),
     ).expect(200)
@@ -152,6 +160,7 @@ describe('PATCH /api/profile — financial fields', () => {
   })
 
   it('updates vat_country, normalizing it to a lowercase code', async () => {
+    await clearStoredVatId()
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ vat_country: ' DE ' }),
     ).expect(200)
@@ -230,6 +239,7 @@ describe('PATCH /api/profile — financial fields', () => {
   })
 
   it('allows a vat_country-only change when no tax_id is stored', async () => {
+    await clearStoredVatId()
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ vat_country: 'de' }),
     ).expect(200)
@@ -292,6 +302,7 @@ describe('PATCH /api/profile — financial fields', () => {
   })
 
   it('accepts a German registration number and office when vat_country=de', async () => {
+    await clearStoredVatId()
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({
         vat_country: 'de', kvk_number: 'HRB 12345', registration_office: 'Amtsgericht München',
@@ -302,6 +313,7 @@ describe('PATCH /api/profile — financial fields', () => {
   })
 
   it('rejects a registration number invalid for the VAT country', async () => {
+    await clearStoredVatId()
     // An NL 8-digit KvK number is not a valid German Handelsregisternummer.
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ vat_country: 'de', kvk_number: '12345678' }),
@@ -310,6 +322,7 @@ describe('PATCH /api/profile — financial fields', () => {
   })
 
   it('rejects a registration number for a sameAsVat country (BE)', async () => {
+    await clearStoredVatId()
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ vat_country: 'be', kvk_number: '0123456789' }),
     ).expect(400)
@@ -317,6 +330,7 @@ describe('PATCH /api/profile — financial fields', () => {
   })
 
   it('rejects a vat_country-only change that would orphan an incompatible registration number', async () => {
+    await clearStoredVatId()
     await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ kvk_number: '12345678' }),
     ).expect(200)

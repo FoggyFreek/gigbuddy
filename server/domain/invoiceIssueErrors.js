@@ -6,8 +6,6 @@
 // fallback, `code` is what clients branch on. The SPA translates `code` via the
 // invoices i18n `issueErrors` block; these English sentences are what non-SPA
 // consumers and logs see, so they must stay meaningful on their own.
-import { INVOICE_ISSUE_ERROR_CODES } from '../../shared/invoiceReadiness.js'
-
 const MESSAGES = Object.freeze({
   incomplete_supplier_details: 'Your band\'s name, street and city are required on an invoice. Complete them in the financial profile.',
   incomplete_customer_details: 'The customer\'s name, street and city are required on an invoice.',
@@ -26,14 +24,10 @@ const MESSAGES = Object.freeze({
   reverse_charge_vies_check_stale: 'The customer\'s VAT number changed since the VIES check. Check the new number in VIES and confirm again.',
 })
 
-// Fail loudly at import time if a code gains no message (or a message outlives
-// its code) — the SPA i18n block is proven complete against the same list.
-const missing = INVOICE_ISSUE_ERROR_CODES.filter((code) => !MESSAGES[code])
-const stale = Object.keys(MESSAGES).filter((code) => !INVOICE_ISSUE_ERROR_CODES.includes(code))
-if (missing.length || stale.length) {
-  throw new Error(`invoiceIssueErrors out of sync — missing: ${missing}, stale: ${stale}`)
-}
-
+// Completeness against INVOICE_ISSUE_ERROR_CODES (and the SPA's i18n block) is
+// asserted by src/tests/invoiceReadiness.test.js. It is deliberately NOT checked
+// at import time: a missing message degrades to showing the bare code, which must
+// never be escalated into a failure to boot the server.
 export function invoiceIssueMessage(code) {
   return MESSAGES[code] ?? code
 }

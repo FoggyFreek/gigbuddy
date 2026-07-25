@@ -1,23 +1,12 @@
 // Pure request/parameter validation for invoice routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
-import {
-  checkInvoiceReadyForIssue,
-  checkReverseCharge,
-  checkViesAttestation,
-  normalizeVatNumber,
-} from '../../shared/invoiceReadiness.js'
 export { formatInvoiceNumber } from '../domain/invoice.js'
 
-// The art. 226 / art. 196 / VIES rules live in shared/invoiceReadiness.js so the
-// frontend can preview the same answer (see src/utils/invoiceReadiness.ts); the
-// backend remains authoritative, running them on the persisted state inside the
-// finalizing transaction. Re-exported under the validator names the services use.
-export {
-  checkInvoiceReadyForIssue as validateInvoiceReadyForIssue,
-  checkReverseCharge as validateReverseCharge,
-  checkViesAttestation as validateViesAttestation,
-  normalizeVatNumber,
-}
+// The art. 226 / art. 196 / VIES rules live in shared/invoiceReadiness.js (the
+// frontend previews the same answer via src/utils/invoiceReadiness.ts, while the
+// backend stays authoritative by running them on the persisted state inside the
+// finalizing transaction). Services import them from there directly — this file
+// keeps only the request-parsing duties.
 
 export const CONTENT_FIELDS = [
   'gig_id',

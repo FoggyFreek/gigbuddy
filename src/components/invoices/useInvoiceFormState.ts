@@ -137,16 +137,14 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
         issue_date: form.issue_date,
         reverse_charge: form.reverse_charge,
         tax_cents: totals.taxCents,
-        // The form holds the intent; the server holds the timestamp. A ticked box
-        // stands in for an attestation covering the number now in the form.
-        vies_checked_at: form.vies_checked ? (invoice?.vies_checked_at ?? 'pending') : null,
-        vies_checked_vat_number: form.vies_checked ? form.customer_tax_id : null,
+        // A ticked box means the issuer confirmed the number currently in the form.
+        vies_confirmed_for: form.vies_checked ? form.customer_tax_id : null,
       },
       form.lines,
       tenant,
     )
     return code ? { code, message: t($ => $.issueErrors[code]) } : null
-  }, [finalized, form, totals.taxCents, tenant, invoice?.vies_checked_at, t])
+  }, [finalized, form, totals.taxCents, tenant, t])
 
   // due_date is derived from issue_date + payment_term_days. Recompute it in the
   // same transition that changes either input, rather than in a post-render

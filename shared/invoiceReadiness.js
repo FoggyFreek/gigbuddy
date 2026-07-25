@@ -6,7 +6,7 @@
 // enforces it (authoritatively, on the persisted state inside the finalizing
 // transaction) and the frontend previews it (so "Mark as sent" can say what is
 // missing instead of letting the user hit a 422). Pure — no DB, no IO.
-import { normalizeVatCountry, resolveVatCountry, isEuVatCountry, isValidVatId, vatIdPrefixCountry } from './vatRates.js'
+import { normalizeVatCountry, resolveVatCountry, isEuVatCountry, isValidVatId, vatIdPrefixCountry, normalizeVatNumber } from './vatRates.js'
 import { requiresCompanyDisclosure, registrationUsesOffice } from './businessRegistry.js'
 
 // Every code these checks can return. Kept as one list so the server error
@@ -32,11 +32,6 @@ export const INVOICE_ISSUE_ERROR_CODES = Object.freeze([
 const nonEmpty = (v) => String(v ?? '').trim().length > 0
 
 const isParsableDate = (v) => typeof v === 'string' && !Number.isNaN(Date.parse(v))
-
-// Canonical form of a VAT number for comparison/storage: no spaces, uppercase.
-export function normalizeVatNumber(v) {
-  return String(v ?? '').replace(/\s+/g, '').toUpperCase()
-}
 
 // Validates that an invoice actually qualifies for the intra-EU Art. 196 reverse
 // charge before we zero the VAT and print the notation. A non-empty tax-id field
@@ -66,17 +61,24 @@ export function checkReverseCharge({ supplierCountry, customerCountry, customerT
   return null
 }
 
+// The VAT number a STORED confirmation covers, or null when there is none.
+// Callers holding a database row use this to derive `vies_confirmed_for`; the
+// invoice form derives the same value from its checkbox instead, so neither side
+// has to fabricate the storage shape.
+export function storedViesConfirmation(row) {
+  return row.vies_checked_at ? row.vies_checked_vat_number : null
+}
+
 // Reverse-charge due diligence: before a reverse-charge invoice may be issued the
 // issuer must have confirmed they checked the customer's VAT number in VIES, and
 // that confirmation must still apply to the CURRENT number (a later change to
-// customer_tax_id makes a prior check stale). We store the attestation rather
-// than calling VIES ourselves. Returns an error code, or null.
-export function checkViesAttestation(invoice) {
-  if (!invoice.vies_checked_at) return 'reverse_charge_vies_check_required'
-  const attested = normalizeVatNumber(invoice.vies_checked_vat_number)
-  if (!attested || attested !== normalizeVatNumber(invoice.customer_tax_id)) {
-    return 'reverse_charge_vies_check_stale'
-  }
+// customer_tax_id makes a prior check stale). `viesConfirmedFor` is the number the
+// confirmation covers. We retain the attestation rather than calling VIES
+// ourselves. Returns an error code, or null.
+export function checkViesAttestation({ customerTaxId, viesConfirmedFor }) {
+  const confirmed = normalizeVatNumber(viesConfirmedFor)
+  if (!confirmed) return 'reverse_charge_vies_check_required'
+  if (confirmed !== normalizeVatNumber(customerTaxId)) return 'reverse_charge_vies_check_stale'
   return null
 }
 
@@ -123,7 +125,10 @@ export function checkInvoiceReadyForIssue(invoice, lines, tenant) {
       customerTaxId: invoice.customer_tax_id,
     })
     if (rcError) return rcError
-    const viesError = checkViesAttestation(invoice)
+    const viesError = checkViesAttestation({
+      customerTaxId: invoice.customer_tax_id,
+      viesConfirmedFor: invoice.vies_confirmed_for,
+    })
     if (viesError) return viesError
   }
   return null

@@ -8,7 +8,12 @@ import { randomUUID } from 'node:crypto'
 import { getObject, uploadObjectWithQuota, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from './storageService.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
-import { korApplies } from '../../shared/vatRates.js'
+import { korApplies, normalizeVatNumber } from '../../shared/vatRates.js'
+import {
+  checkInvoiceReadyForIssue,
+  checkReverseCharge,
+  storedViesConfirmation,
+} from '../../shared/invoiceReadiness.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import {
@@ -58,9 +63,6 @@ import {
   parseSearchLimit,
   computeDueDate,
   validatePaymentLinkOptions,
-  validateReverseCharge,
-  validateInvoiceReadyForIssue,
-  normalizeVatNumber,
 } from '../validators/invoiceValidators.js'
 import {
   ledgerErrorResult,
@@ -247,7 +249,7 @@ async function recomputeTotals(client, tenantId, invoiceId, body, tenant, reques
   // Reverse charge is validated against the effective customer identity (the
   // values set in this PATCH, else the stored ones), mirroring create.
   if (reverseCharge) {
-    const rcError = validateReverseCharge({
+    const rcError = checkReverseCharge({
       supplierCountry: tenant.vat_country,
       customerCountry: 'customer_address_country' in body ? body.customer_address_country : current.customer_address_country,
       customerTaxId: 'customer_tax_id' in body ? body.customer_tax_id : current.customer_tax_id,
@@ -329,7 +331,11 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
       if (becomesIssued && existing.finalized_at === null) {
         const effective = await fetchInvoice(client, tenantId, invoiceId)
         const effectiveLines = await fetchLines(client, invoiceId, tenantId)
-        const readyError = validateInvoiceReadyForIssue(effective, effectiveLines, tenant)
+        const readyError = checkInvoiceReadyForIssue(
+          { ...effective, vies_confirmed_for: storedViesConfirmation(effective) },
+          effectiveLines,
+          tenant,
+        )
         if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
       }
       await postInvoiceTransition(client, tenantId, invoiceId, existing.status, body.status, actorUserId)
@@ -499,7 +505,11 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
     if (current.finalized_at === null) {
       const tenant = await fetchTenant(client, tenantId)
       const lines = await fetchLines(client, invoiceId, tenantId)
-      const readyError = validateInvoiceReadyForIssue(current, lines, tenant)
+      const readyError = checkInvoiceReadyForIssue(
+        { ...current, vies_confirmed_for: storedViesConfirmation(current) },
+        lines,
+        tenant,
+      )
       if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
     }
     const finalized = await finalizeInvoiceForPaymentLinkRow(client, tenantId, invoiceId)
@@ -683,7 +693,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
 
   if (parsed.reverseCharge) {
-    const rcError = validateReverseCharge({
+    const rcError = checkReverseCharge({
       supplierCountry: tenant.vat_country,
       customerCountry: body.customer_address_country,
       customerTaxId: body.customer_tax_id,

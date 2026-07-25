@@ -6,8 +6,9 @@ import {
   checkInvoiceReadyForIssue,
   checkReverseCharge,
   checkViesAttestation,
-  normalizeVatNumber,
+  storedViesConfirmation,
 } from '../../shared/invoiceReadiness.js'
+import { normalizeVatNumber } from '../../shared/vatRates.js'
 import { invoiceIssueMessage } from '../../server/domain/invoiceIssueErrors.js'
 
 const TENANT = {
@@ -84,10 +85,7 @@ describe('invoiceReadiness — art. 226 mandatory content', () => {
 
 describe('invoiceReadiness — reverse charge & VIES attestation', () => {
   it('accepts a valid intra-EU supply with a current attestation', () => {
-    const invoice = reverseChargeInvoice({
-      vies_checked_at: '2026-05-01T10:00:00Z',
-      vies_checked_vat_number: 'DE136695976',
-    })
+    const invoice = reverseChargeInvoice({ vies_confirmed_for: 'DE136695976' })
     expect(checkInvoiceReadyForIssue(invoice, LINES, TENANT)).toBeNull()
   })
 
@@ -97,19 +95,25 @@ describe('invoiceReadiness — reverse charge & VIES attestation', () => {
   })
 
   it('treats an attestation for a different number as stale', () => {
-    const invoice = reverseChargeInvoice({
-      vies_checked_at: '2026-05-01T10:00:00Z',
-      vies_checked_vat_number: 'DE100000008',
-    })
+    const invoice = reverseChargeInvoice({ vies_confirmed_for: 'DE100000008' })
     expect(checkInvoiceReadyForIssue(invoice, LINES, TENANT)).toBe('reverse_charge_vies_check_stale')
   })
 
   it('ignores formatting differences when matching the attested number', () => {
     expect(checkViesAttestation({
-      customer_tax_id: 'de 136 695 976',
-      vies_checked_at: 'x',
-      vies_checked_vat_number: 'DE136695976',
+      customerTaxId: 'de 136 695 976',
+      viesConfirmedFor: 'DE136695976',
     })).toBeNull()
+  })
+
+  it('derives the confirmed number from a stored row, or null when unconfirmed', () => {
+    // The server reads DB columns; the form supplies its checkbox. Both funnel
+    // into the same `vies_confirmed_for` input, so neither fabricates the other's
+    // shape.
+    expect(storedViesConfirmation({
+      vies_checked_at: '2026-05-01T10:00:00Z', vies_checked_vat_number: 'DE136695976',
+    })).toBe('DE136695976')
+    expect(storedViesConfirmation({ vies_checked_at: null, vies_checked_vat_number: 'DE136695976' })).toBeNull()
   })
 
   it.each([

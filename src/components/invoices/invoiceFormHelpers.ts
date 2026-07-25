@@ -1,3 +1,5 @@
+import { normalizeVatNumber } from '../../utils/vatRates.ts'
+import { storedViesConfirmation } from '../../utils/invoiceReadiness.ts'
 import type { InvoiceLine } from '../../types/entities.ts'
 
 /** The editable form shape used by useInvoiceFormState. */
@@ -96,19 +98,12 @@ export function addDays(isoDate: string | null | undefined, days: number): strin
   return d.toISOString().slice(0, 10)
 }
 
-/** Canonical VAT-number form (no spaces, uppercase) for comparison. */
-function normalizeVatNumber(value: unknown): string {
-  return String(value ?? '').replace(/\s+/g, '').toUpperCase()
-}
-
 /** Maps a loaded invoice row to the editable form shape. */
 export function invoiceToForm(data: Record<string, unknown> & { lines?: InvoiceLine[] }): InvoiceForm {
-  // The stored attestation counts as "checked" only while it still matches the
+  // The stored attestation counts as "checked" only while it still covers the
   // current customer VAT number (a changed number makes it stale).
-  const attested = normalizeVatNumber(data.vies_checked_vat_number)
-  const viesChecked = Boolean(data.vies_checked_at)
-    && attested !== ''
-    && attested === normalizeVatNumber(data.customer_tax_id)
+  const attested = normalizeVatNumber(storedViesConfirmation(data))
+  const viesChecked = attested !== '' && attested === normalizeVatNumber(data.customer_tax_id)
   return {
     gig_id: (data.gig_id as number | null) ?? null,
     issue_date: data.issue_date ? String(data.issue_date).slice(0, 10) : null,

@@ -85,6 +85,14 @@ export const VAT_ID_FORMATS = Object.freeze({
 // Ireland (xi). Used to keep prefix consistency checks honest.
 export const VAT_ID_CODES = Object.freeze(new Set([...Object.keys(VAT_ID_FORMATS)]))
 
+// Canonical form of a VAT identification number: no whitespace, uppercased —
+// the shape VIES/HMRC print and the shape VAT_ID_FORMATS patterns match. This is
+// the ONE owner of that normalization; callers (validators, services, the frontend
+// wrapper) must use it rather than re-deriving the regex.
+export function normalizeVatNumber(value) {
+  return String(value ?? '').replace(/\s+/g, '').toUpperCase()
+}
+
 export function isKnownVatCountry(code) {
   return typeof code === 'string' && Object.hasOwn(VAT_COUNTRIES, code)
 }
@@ -201,13 +209,14 @@ export function getVatIdExample(country) {
 }
 
 // True when `value` is a well-formed VAT identification number for the country
-// AND passes that country's checksum/control algorithm. `value` is expected
-// already whitespace-stripped and uppercased. An unknown country returns false
-// (no wildcard fallback). Countries without a checksum (nl) pass on the regex.
+// AND passes that country's checksum/control algorithm. Input may carry any
+// spacing/case — it is normalized here, so no caller needs to pre-clean it. An
+// unknown country returns false (no wildcard fallback). Countries without a
+// checksum (nl) pass on the regex alone.
 export function isValidVatId(country, value) {
   const code = normalizeVatIdCountry(country)
   if (!code) return false
-  const v = String(value)
+  const v = normalizeVatNumber(value)
   if (!VAT_ID_FORMATS[code].pattern.test(v)) return false
   return vatChecksumValid(code, v)
 }
