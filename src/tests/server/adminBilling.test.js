@@ -52,8 +52,9 @@ function completeEntitlements() {
       song_files: true,
       chordpro: true,
       public_promotion: false,
+      linkpage: true,
     },
-    limits: { storage_mb: 250, members: 10, bands: 2 },
+    limits: { storage_mb: 250, members: 10, bands: 2, linkpage_pages: 5, linkpage_stats_days: 30 },
   }
 }
 
@@ -135,7 +136,9 @@ describe('seeded default plans', () => {
     expect(bronze.is_active).toBe(true)
     expect(bronze.monthly_price_cents).toBe(0)
     expect(bronze.yearly_price_cents).toBe(0)
-    expect(bronze.entitlements.limits).toEqual({ storage_mb: 50, members: 5, bands: 1 })
+    expect(bronze.entitlements.limits).toEqual({
+      storage_mb: 50, members: 5, bands: 1, linkpage_pages: 0, linkpage_stats_days: 30,
+    })
     for (const key of FEATURE_KEYS) expect(bronze.entitlements.features[key]).toBe(false)
   })
 
@@ -162,9 +165,13 @@ describe('seeded default plans', () => {
     const silver = res.body.find((p) => p.slug === 'silver')
     const gold = res.body.find((p) => p.slug === 'gold')
     expect(silver.entitlements.features.finance).toBe(false)
-    expect(silver.entitlements.limits).toEqual({ storage_mb: 150, members: null, bands: 3 })
+    expect(silver.entitlements.limits).toEqual({
+      storage_mb: 150, members: null, bands: 3, linkpage_pages: 3, linkpage_stats_days: 30,
+    })
     for (const key of FEATURE_KEYS) expect(gold.entitlements.features[key]).toBe(true)
-    expect(gold.entitlements.limits).toEqual({ storage_mb: 500, members: null, bands: null })
+    expect(gold.entitlements.limits).toEqual({
+      storage_mb: 500, members: null, bands: null, linkpage_pages: 30, linkpage_stats_days: 90,
+    })
   })
 })
 

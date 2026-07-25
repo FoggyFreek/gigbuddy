@@ -383,7 +383,9 @@ describe('/auth/me entitlements payload', () => {
     expect(ent.subscriptionStatus).toBeNull()
     expect(ent.financeReadOnly).toBe(true)
     for (const key of FEATURE_KEYS) expect(ent.flags[key]).toBe(false)
-    expect(ent.limits).toEqual({ storage_mb: 50, members: 5, bands: 1 })
+    expect(ent.limits).toEqual({
+      storage_mb: 50, members: 5, bands: 1, linkpage_pages: 0, linkpage_stats_days: 30,
+    })
   })
 
   it('live plan shape, with limits reflecting a pending-downgrade snapshot', async () => {
@@ -399,7 +401,11 @@ describe('/auth/me entitlements payload', () => {
     expect(ent.locked).toBe(false)
     expect(ent.subscriptionStatus).toBe('active')
     for (const key of FEATURE_KEYS) expect(ent.flags[key]).toBe(true)
-    expect(ent.limits).toEqual({ storage_mb: 50, members: 5, bands: 1 })
+    // linkpage_pages/linkpage_stats_days aren't in the snapshot, so they stay at
+    // the current (gold) plan's values.
+    expect(ent.limits).toEqual({
+      storage_mb: 50, members: 5, bands: 1, linkpage_pages: 30, linkpage_stats_days: 90,
+    })
   })
 })
 
