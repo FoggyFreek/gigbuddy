@@ -63,6 +63,7 @@ export default function LedgerEntryDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams()
   const { canManageFinance } = usePermissions()
+  const isCompact = useCompactLayout()
   const [entry, setEntry] = useState<LedgerEntry | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [voidOpen, setVoidOpen] = useState(false)
@@ -174,34 +175,60 @@ export default function LedgerEntryDetailPage() {
     }
   }
 
+  const backButton = (
+    <IconButton aria-label={t($ => $.aria.back, { ns: 'common' })} onClick={() => navigate('/ledger')}>
+      <ArrowBackIcon />
+    </IconButton>
+  )
+  const title = (
+    <Typography variant="h5" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }}>
+      {t($ => $.detail.heading, { name: entry.description || `#${entry.id}` })}
+    </Typography>
+  )
+  const actionButtons = (
+    <>
+      <Button variant="outlined" onClick={copyToJournal} disabled={busy}>
+        {t($ => $.actions.copy, { ns: 'common' })}
+      </Button>
+      {canReclassify && (
+        <Button variant="outlined" onClick={() => setReclassifyOpen(true)} disabled={busy}>
+          {t($ => $.detail.actions.reclassify)}
+        </Button>
+      )}
+      {actionable && entry.period_open && (
+        <Button variant="contained" color="error" onClick={() => setVoidOpen(true)} disabled={busy}>
+          {t($ => $.detail.actions.void)}
+        </Button>
+      )}
+      {actionable && !entry.period_open && (
+        <Button variant="contained" color="warning" onClick={() => setReverseOpen(true)} disabled={busy}>
+          {t($ => $.detail.actions.reverse)}
+        </Button>
+      )}
+    </>
+  )
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <IconButton aria-label={t($ => $.aria.back, { ns: 'common' })} onClick={() => navigate('/ledger')}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h5" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }}>
-          {t($ => $.detail.heading, { name: entry.description || `#${entry.id}` })}
-        </Typography>
-        <Button variant="outlined" onClick={copyToJournal} disabled={busy}>
-          {t($ => $.actions.copy, { ns: 'common' })}
-        </Button>
-        {canReclassify && (
-          <Button variant="outlined" onClick={() => setReclassifyOpen(true)} disabled={busy}>
-            {t($ => $.detail.actions.reclassify)}
-          </Button>
-        )}
-        {actionable && entry.period_open && (
-          <Button variant="contained" color="error" onClick={() => setVoidOpen(true)} disabled={busy}>
-            {t($ => $.detail.actions.void)}
-          </Button>
-        )}
-        {actionable && !entry.period_open && (
-          <Button variant="contained" color="warning" onClick={() => setReverseOpen(true)} disabled={busy}>
-            {t($ => $.detail.actions.reverse)}
-          </Button>
-        )}
-      </Box>
+      {/* Compact: the description can be long, so the title owns its row and
+          the actions sit on the row below it. Desktop keeps one row. */}
+      {isCompact ? (
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {backButton}
+            {title}
+          </Box>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+            {actionButtons}
+          </Box>
+        </Box>
+      ) : (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          {backButton}
+          {title}
+          {actionButtons}
+        </Box>
+      )}
 
       {actionError && <Alert severity="error" sx={{ mb: 2 }}>{actionError}</Alert>}
 

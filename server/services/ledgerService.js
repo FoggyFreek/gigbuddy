@@ -759,18 +759,29 @@ export async function postInvoicePaid(client, tenantId, invoice, opts = {}) {
   })
 }
 
-// Invoice voided: reverses the `sent` journal (CR receivable, DR revenue, DR VAT).
+// Invoice voided: reverses the `sent` journal (CR receivable, DR revenue, DR
+// VAT) and marks that original, so the void is reflected on both halves in the
+// ledger browser. Splits on the original's booking period like a manual
+// correction (and like postMerchSaleVoided):
+//   open period   → the original is *voided*: both halves hide from the default
+//                   list and drop from reports. The compensating journal carries
+//                   its own voided_at so the pair still nets to zero.
+//   closed period → the original is *reversed*: a visible 'reversal' correction
+//                   that stays in the ledger and in reports, never mutating the
+//                   closed period.
 export async function postInvoiceVoid(client, tenantId, invoice, opts = {}) {
   // The compensation cancels the `sent` posting, so that posting's lines must
   // not carry an active reclassification (lock + guard, like a manual void).
   const original = await getTransactionBySource(client, tenantId, 'invoice', invoice.id, 'sent')
   await assertNoActiveReclassifications(client, tenantId, original?.id)
+  const closedThrough = await fetchBooksClosedThrough(client, tenantId)
+  const isClosed = Boolean(original && closedThrough && original.entry_date <= closedThrough)
 
   const settings = await loadAccountingSettings(client, tenantId)
   const receivable = requireCode(settings, 'receivable_account_code')
   const revenue = requireCode(settings, 'default_revenue_account_code')
   const netCents = invoice.subtotal_cents - invoice.discount_cents
-  const memo = `Invoice ${invoice.invoice_number} voided`
+  const memo = `Invoice ${invoice.invoice_number} ${isClosed ? 'reversed' : 'voided'}`
 
   const lines = [
     { account_code: receivable, credit_cents: invoice.total_cents, memo },
@@ -780,11 +791,22 @@ export async function postInvoiceVoid(client, tenantId, invoice, opts = {}) {
     lines.push({ account_code: requireCode(settings, 'output_vat_account_code'), debit_cents: invoice.tax_cents, memo })
   }
 
-  return postJournal(client, tenantId, {
+  const result = await postJournal(client, tenantId, {
     entryDate: today(),
-    description: `Invoice ${invoice.invoice_number} voided`,
-    sourceType: 'invoice', sourceId: invoice.id, sourceEvent: 'void', lines, ...opts,
+    description: memo,
+    sourceType: 'invoice', sourceId: invoice.id,
+    sourceEvent: isClosed ? 'reversal' : 'void', lines, ...opts,
   })
+
+  if (result.posted && original) {
+    if (isClosed) {
+      await markTransactionReversed(client, tenantId, original.id, result.transactionId)
+    } else {
+      await markTransactionVoided(client, tenantId, original.id, result.transactionId)
+      await markTransactionVoidedAt(client, tenantId, result.transactionId)
+    }
+  }
+  return result
 }
 
 // ---------- purchase journals (expenses) ----------

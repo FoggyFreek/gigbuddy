@@ -8,6 +8,9 @@ const TYPE_MAP = {
   'invoice/sent':       { type: 'Invoice',          group: 'invoices',  voided: false, sign: 1 },
   'invoice/paid':       { type: 'Ingoing payment',  group: 'payments',  voided: false, sign: 1 },
   'invoice/void':       { type: 'Invoice (void)',   group: 'invoices',  voided: true,  sign: -1 },
+  // Closed-period counterpart of invoice/void: a *visible* correction that
+  // stays in the ledger and in financial reports (see postInvoiceVoid).
+  'invoice/reversal':   { type: 'Invoice (reversal)', group: 'invoices', voided: false, sign: -1 },
   'purchase/accrued':   { type: 'Purchase',         group: 'purchases', voided: false, sign: -1 },
   'purchase/paid':      { type: 'Outgoing payment', group: 'payments',  voided: false, sign: -1 },
   'reimbursement/paid': { type: 'Reimbursement',    group: 'payments',  voided: false, sign: -1 },
@@ -54,6 +57,9 @@ export function describe(row) {
     case 'invoice/void':
       if (!row.invoice_number) return fallback
       return `Invoice ${row.invoice_number} voided`
+    case 'invoice/reversal':
+      if (!row.invoice_number) return fallback
+      return `Invoice ${row.invoice_number} reversed`
     case 'purchase/accrued':
       if (!row.purchase_supplier_name) return fallback
       return `Bill from ${row.purchase_supplier_name}${row.purchase_memo ? `: ${row.purchase_memo}` : ''}`
