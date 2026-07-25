@@ -252,7 +252,7 @@ describe('invoices — reverse charge & supply date', () => {
       customer_tax_id: '',
     }))
     expect(r.status).toBe(400)
-    expect(r.body.error).toBe('customer_tax_id_required_for_reverse_charge')
+    expect(r.body.code).toBe('customer_tax_id_required_for_reverse_charge')
   })
 
   it('accepts reverse charge when the customer country is a name, not a code', async () => {
@@ -274,7 +274,7 @@ describe('invoices — reverse charge & supply date', () => {
       customer_tax_id: 'NL123456789B01',
     }))
     expect(r.status).toBe(400)
-    expect(r.body.error).toBe('reverse_charge_requires_cross_border')
+    expect(r.body.code).toBe('reverse_charge_requires_cross_border')
   })
 
   it('rejects reverse charge when the VAT number does not match the customer country', async () => {
@@ -284,7 +284,7 @@ describe('invoices — reverse charge & supply date', () => {
       customer_tax_id: 'abc123',
     }))
     expect(r.status).toBe(400)
-    expect(r.body.error).toBe('invalid_customer_vat_number')
+    expect(r.body.code).toBe('invalid_customer_vat_number')
   })
 
   it('rejects reverse charge for a non-EU customer country', async () => {
@@ -294,7 +294,7 @@ describe('invoices — reverse charge & supply date', () => {
       customer_tax_id: 'GB980780684',
     }))
     expect(r.status).toBe(400)
-    expect(r.body.error).toBe('reverse_charge_requires_eu_customer')
+    expect(r.body.code).toBe('reverse_charge_requires_eu_customer')
   })
 
   it('rejects a Northern Ireland (XI) VAT number for a service reverse charge', async () => {
@@ -306,7 +306,7 @@ describe('invoices — reverse charge & supply date', () => {
       customer_tax_id: 'XI980780684',
     }))
     expect(r.status).toBe(400)
-    expect(r.body.error).toBe('reverse_charge_xi_services_unsupported')
+    expect(r.body.code).toBe('reverse_charge_xi_services_unsupported')
   })
 
   it('rejects a customer VAT number whose country prefix ≠ the customer country', async () => {
@@ -316,7 +316,7 @@ describe('invoices — reverse charge & supply date', () => {
       customer_tax_id: 'FR40303265045', // valid FR number, wrong country
     }))
     expect(r.status).toBe(400)
-    expect(r.body.error).toBe('customer_vat_number_country_mismatch')
+    expect(r.body.code).toBe('customer_vat_number_country_mismatch')
   })
 
   it('rejects a regex-valid but checksum-invalid customer VAT number', async () => {
@@ -326,7 +326,7 @@ describe('invoices — reverse charge & supply date', () => {
       customer_tax_id: 'DE123456789', // right shape, bad check digit
     }))
     expect(r.status).toBe(400)
-    expect(r.body.error).toBe('invalid_customer_vat_number')
+    expect(r.body.code).toBe('invalid_customer_vat_number')
   })
 
   it('rejects turning on reverse charge via PATCH when no customer VAT number is stored', async () => {
@@ -334,7 +334,7 @@ describe('invoices — reverse charge & supply date', () => {
     const res = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
       .send({ reverse_charge: true })
     expect(res.status).toBe(400)
-    expect(res.body.error).toBe('customer_tax_id_required_for_reverse_charge')
+    expect(res.body.code).toBe('customer_tax_id_required_for_reverse_charge')
   })
 
   it('stores an explicit supply_date', async () => {
@@ -374,7 +374,7 @@ describe('invoices — VIES reverse-charge attestation', () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(rcPayload()).expect(201)
     const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
     expect(res.status).toBe(422)
-    expect(res.body.error).toBe('reverse_charge_vies_check_required')
+    expect(res.body.code).toBe('reverse_charge_vies_check_required')
     const { rows } = await pool.query('SELECT status FROM invoices WHERE id = $1', [r.body.id])
     expect(rows[0].status).toBe('draft')
   })
@@ -407,7 +407,7 @@ describe('invoices — VIES reverse-charge attestation', () => {
       .send({ customer_tax_id: 'DE100000008' }).expect(200)
     const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
     expect(res.status).toBe(422)
-    expect(res.body.error).toBe('reverse_charge_vies_check_stale')
+    expect(res.body.code).toBe('reverse_charge_vies_check_stale')
   })
 
   it('does not require a VIES check for a normal (non-reverse-charge) invoice', async () => {
@@ -474,7 +474,7 @@ describe('invoices — issuance-readiness invariant', () => {
     })).expect(201)
     const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
     expect(res.status).toBe(422)
-    expect(res.body.error).toBe('incomplete_customer_details')
+    expect(res.body.code).toBe('incomplete_customer_details')
     // The transition rolled back: still a draft, not finalized.
     const { rows } = await pool.query('SELECT status, finalized_at FROM invoices WHERE id = $1', [r.body.id])
     expect(rows[0].status).toBe('draft')
@@ -486,7 +486,7 @@ describe('invoices — issuance-readiness invariant', () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
     const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
     expect(res.status).toBe(422)
-    expect(res.body.error).toBe('incomplete_supplier_details')
+    expect(res.body.code).toBe('incomplete_supplier_details')
   })
 
   it('rejects finalization when VAT is charged but the supplier has no VAT ID', async () => {
@@ -494,7 +494,7 @@ describe('invoices — issuance-readiness invariant', () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
     const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
     expect(res.status).toBe(422)
-    expect(res.body.error).toBe('missing_supplier_vat_id')
+    expect(res.body.code).toBe('missing_supplier_vat_id')
   })
 
   it('rejects finalization when an incorporated band has no registration number', async () => {
@@ -505,7 +505,7 @@ describe('invoices — issuance-readiness invariant', () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
     const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
     expect(res.status).toBe(422)
-    expect(res.body.error).toBe('missing_registration_info')
+    expect(res.body.code).toBe('missing_registration_info')
   })
 
   it('accepts finalization when all mandatory content is present', async () => {
@@ -532,7 +532,7 @@ describe('invoices — issuance-readiness invariant', () => {
     })).expect(201)
     const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/payment-link`)).send({})
     expect(res.status).toBe(422)
-    expect(res.body.error).toBe('incomplete_customer_details')
+    expect(res.body.code).toBe('incomplete_customer_details')
     // Not finalized — a later completed draft can still be issued.
     const { rows } = await pool.query('SELECT status, finalized_at FROM invoices WHERE id = $1', [r.body.id])
     expect(rows[0].status).toBe('draft')

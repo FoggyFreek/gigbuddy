@@ -1,3 +1,4 @@
+import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
 import { useTranslation } from 'react-i18next'
 import Dialog from '@mui/material/Dialog'
@@ -14,14 +15,17 @@ interface InvoiceSentDialogProps {
   invoiceNumber?: string
   onCancel: () => void
   onConfirm: () => void
+  /** Why the invoice cannot be issued yet; blocks confirmation when set. */
+  blockedReason?: string | null
 }
 
-export default function InvoiceSentDialog({ open, invoiceNumber, onCancel, onConfirm }: Readonly<InvoiceSentDialogProps>) {
+export default function InvoiceSentDialog({ open, invoiceNumber, onCancel, onConfirm, blockedReason = null }: Readonly<InvoiceSentDialogProps>) {
   const { t } = useTranslation(['invoices', 'common'])
   return (
     <Dialog open={open} onClose={onCancel}>
       <DialogTitle>{t($ => $.sentDialog.title, { number: invoiceNumber || '' })}</DialogTitle>
       <DialogContent>
+        {blockedReason && <Alert severity="warning" sx={{ mb: 2 }}>{blockedReason}</Alert>}
         <DialogContentText>{t($ => $.sentDialog.intro)}</DialogContentText>
         <List dense sx={{ listStyleType: 'disc', pl: 3 }}>
           <ListItem sx={{ display: 'list-item', pl: 0 }}>
@@ -37,7 +41,7 @@ export default function InvoiceSentDialog({ open, invoiceNumber, onCancel, onCon
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel}>{t($ => $.common.actions.cancel)}</Button>
-        <Button variant="contained" onClick={onConfirm}>{t($ => $.sentDialog.confirm)}</Button>
+        <Button variant="contained" onClick={onConfirm} disabled={Boolean(blockedReason)}>{t($ => $.sentDialog.confirm)}</Button>
       </DialogActions>
     </Dialog>
   )

@@ -11,7 +11,7 @@
 // duplicated across the purchase/journal/merch validators and their frontend
 // counterparts. Add or correct a country here and every consumer follows.
 
-import { vatChecksumValid, hasVatChecksum } from './vatChecksum.js'
+import { vatChecksumValid } from './vatChecksum.js'
 
 export const DEFAULT_VAT_COUNTRY = 'nl'
 
@@ -217,17 +217,4 @@ export function isValidVatId(country, value) {
 export function vatIdPrefixCountry(value) {
   const p = String(value ?? '').trim().slice(0, 2).toLowerCase()
   return VAT_ID_CODES.has(p) ? p : null
-}
-
-// Validation depth actually achieved for a VAT id, so a report can distinguish
-// FORMAT_VALID from AUTHORITY_VERIFIED (FR-REG-007 / FR-VIES-003). We perform
-// local checks only; a number is NEVER authority-verified until a VIES lookup is
-// added, so `authorityVerified` is always false here.
-export function describeVatIdValidation(country) {
-  const code = normalizeVatIdCountry(country)
-  return {
-    level: 'format', // 'format' (+checksum) — never 'authority' without VIES
-    checksum: code ? hasVatChecksum(code) : false,
-    authorityVerified: false,
-  }
 }

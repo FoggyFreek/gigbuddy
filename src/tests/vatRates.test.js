@@ -20,7 +20,6 @@ import {
   resolveVatCountry,
   snapVatRate,
   vatIdPrefixCountry,
-  describeVatIdValidation,
 } from '../../shared/vatRates.js'
 
 describe('vatRates country config', () => {
@@ -143,13 +142,6 @@ describe('vatRates country config', () => {
     expect(isValidVatId('xi', 'GB980780684')).toBe(false) // GB number is not XI
     expect(vatIdPrefixCountry('XI980780684')).toBe('xi')
     expect(vatIdPrefixCountry('GB980780684')).toBe('gb')
-  })
-
-  it('reports local validation depth (FORMAT_VALID, never AUTHORITY_VERIFIED)', () => {
-    // We never call VIES here, so nothing is authority-verified.
-    expect(describeVatIdValidation('de')).toEqual({ level: 'format', checksum: true, authorityVerified: false })
-    expect(describeVatIdValidation('nl')).toEqual({ level: 'format', checksum: false, authorityVerified: false })
-    expect(describeVatIdValidation('us').authorityVerified).toBe(false)
   })
 
   it('does not accept a number from the wrong country', () => {

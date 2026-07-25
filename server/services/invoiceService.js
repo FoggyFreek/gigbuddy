@@ -72,6 +72,7 @@ import {
 } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { notFound } from './serviceErrors.js'
+import { invoiceIssueError } from '../domain/invoiceIssueErrors.js'
 
 // Holds a session-level per-tenant accounting-settings advisory lock for the
 // duration of `fn`, which receives the lock-holding client. Session and
@@ -106,14 +107,15 @@ const MAX_CONSULTATION_LEN = 64
 // stamp checked_at — idempotently: an already-valid attestation for the same
 // number keeps its original timestamp, so re-saving a draft doesn't reset the
 // proof time. Unchecking clears all three. `consultation` is only overwritten
-// when explicitly supplied; otherwise a prior value is retained.
+// when the caller supplies the key at all: `undefined` retains a prior value,
+// while an explicit null/'' clears it (so a mistyped number can be corrected).
 function viesAttestationColumns(desiredChecked, effectiveTaxId, consultation, existing = null) {
   if (!desiredChecked) {
     return { vies_checked_at: null, vies_checked_vat_number: null, vies_consultation_number: null }
   }
   const number = normalizeVatNumber(effectiveTaxId)
-  const consult = consultation != null
-    ? (String(consultation).trim().slice(0, MAX_CONSULTATION_LEN) || null)
+  const consult = consultation !== undefined
+    ? (String(consultation ?? '').trim().slice(0, MAX_CONSULTATION_LEN) || null)
     : (existing?.vies_consultation_number ?? null)
   const alreadyValid = Boolean(existing?.vies_checked_at)
     && number !== ''
@@ -250,7 +252,7 @@ async function recomputeTotals(client, tenantId, invoiceId, body, tenant, reques
       customerCountry: 'customer_address_country' in body ? body.customer_address_country : current.customer_address_country,
       customerTaxId: 'customer_tax_id' in body ? body.customer_tax_id : current.customer_tax_id,
     })
-    if (rcError) return { error: { status: 400, body: { error: rcError } } }
+    if (rcError) return { error: invoiceIssueError(rcError, 400) }
   }
 
   const currentLines = await fetchLines(client, invoiceId, tenantId)
@@ -328,7 +330,7 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
         const effective = await fetchInvoice(client, tenantId, invoiceId)
         const effectiveLines = await fetchLines(client, invoiceId, tenantId)
         const readyError = validateInvoiceReadyForIssue(effective, effectiveLines, tenant)
-        if (readyError) abortTransaction({ error: { status: 422, body: { error: readyError } } })
+        if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
       }
       await postInvoiceTransition(client, tenantId, invoiceId, existing.status, body.status, actorUserId)
     }
@@ -498,7 +500,7 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
       const tenant = await fetchTenant(client, tenantId)
       const lines = await fetchLines(client, invoiceId, tenantId)
       const readyError = validateInvoiceReadyForIssue(current, lines, tenant)
-      if (readyError) abortTransaction({ error: { status: 422, body: { error: readyError } } })
+      if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
     }
     const finalized = await finalizeInvoiceForPaymentLinkRow(client, tenantId, invoiceId)
     // The invoice is now sent (revenue recognised). Idempotent if already posted
@@ -686,7 +688,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
       customerCountry: body.customer_address_country,
       customerTaxId: body.customer_tax_id,
     })
-    if (rcError) return { error: { status: 400, body: { error: rcError } } }
+    if (rcError) return { error: invoiceIssueError(rcError, 400) }
   }
 
   const totals = computeAndApply(

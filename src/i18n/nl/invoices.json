@@ -183,5 +183,22 @@
   "validation": {
     "customerRequired": "Naam van de klant is verplicht",
     "lineRequired": "Minstens één regel met een omschrijving is verplicht"
+  },
+  "issueErrors": {
+    "incomplete_supplier_details": "Vul de naam, straat en plaats van je band in bij het financiële profiel — die moeten op een factuur staan.",
+    "incomplete_customer_details": "Vul de naam, straat en plaats van de klant in — die moeten op een factuur staan.",
+    "missing_issue_date": "Stel een geldige factuurdatum in.",
+    "invalid_lines": "Voeg minstens één regel toe met een omschrijving en een aantal groter dan nul.",
+    "missing_registration_info": "Vul je inschrijvingsnummer (en registerkantoor, als je land dat vereist) in bij het financiële profiel.",
+    "missing_supplier_vat_id": "Vul je btw-nummer in bij het financiële profiel — het moet op een factuur met btw of verlegging staan.",
+    "customer_tax_id_required_for_reverse_charge": "Vul het btw-nummer van de klant in — dat is vereist voor verlegging.",
+    "reverse_charge_xi_services_unsupported": "Een Noord-Iers (XI) btw-nummer geldt alleen voor goederen en kan dus geen verlegging dragen voor een optreden.",
+    "reverse_charge_requires_eu_supplier": "Verlegging geldt alleen als het btw-land van je band in de EU ligt.",
+    "reverse_charge_requires_eu_customer": "Verlegging geldt alleen voor een klant in een EU-land.",
+    "reverse_charge_requires_cross_border": "Verlegging geldt alleen voor een klant in een ander EU-land dan het jouwe.",
+    "customer_vat_number_country_mismatch": "Het btw-nummer van de klant hoort bij een ander land dan het adres.",
+    "invalid_customer_vat_number": "Het btw-nummer van de klant is niet geldig voor dat land.",
+    "reverse_charge_vies_check_required": "Controleer het btw-nummer van de klant in VIES en vink de bevestiging aan.",
+    "reverse_charge_vies_check_stale": "Het btw-nummer is gewijzigd na de VIES-controle. Controleer het nieuwe nummer en bevestig opnieuw."
   }
 }

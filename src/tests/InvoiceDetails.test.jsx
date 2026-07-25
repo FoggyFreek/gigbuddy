@@ -39,14 +39,35 @@ const EDIT_INVOICE = {
   due_date: '2026-05-15',
   payment_term_days: 14,
   customer_name: 'Venue BV',
+  // Address + supplier VAT id are art. 226 mandatory content: without them the
+  // issuance-readiness preview blocks "Send invoice" (see ISSUE_BLOCKED_INVOICE).
+  customer_address_street: 'Venue Street 5',
+  customer_address_postal_code: '3000 CC',
+  customer_address_city: 'Utrecht',
   tax_inclusive: false,
   discount_type: 'pct',
   discount_pct: 0,
   discount_cents: 0,
   total_cents: 54500,
   pdf_path: null,
-  tenant: { id: 1, band_name: 'The Band', applies_kor: false, tax_percentage: 9 },
+  tenant: {
+    id: 1,
+    band_name: 'The Band',
+    applies_kor: false,
+    tax_percentage: 9,
+    address_street: 'Band Street 1',
+    address_city: 'Amsterdam',
+    vat_country: 'nl',
+    tax_id: 'NL123456789B01',
+  },
   lines: [{ description: 'Optreden', quantity: 1, unit_price_cents: 50000, tax_percentage: 9, position: 0 }],
+}
+
+// A draft still missing the customer's postal address — not issuable.
+const ISSUE_BLOCKED_INVOICE = {
+  ...EDIT_INVOICE,
+  customer_address_street: '',
+  customer_address_city: '',
 }
 
 const LINKED_INVOICE = {
@@ -271,6 +292,18 @@ describe('InvoiceDetails', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Send invoice' }))
     await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(7, { status: 'sent' }))
+  })
+
+  it('blocks sending an invoice that is missing mandatory content, and explains why', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(ISSUE_BLOCKED_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mark as sent' }))
+    // The dialog names the missing content instead of letting the PATCH 422.
+    expect(await screen.findByText(/Add the customer's name, street and city/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send invoice' })).toBeDisabled()
+    expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
   })
 
   it('hides the "Use alternative logo" toggle when the tenant has no alternative logo', async () => {

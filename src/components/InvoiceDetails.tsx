@@ -70,12 +70,14 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
         invoiceNumber={s.invoice?.invoice_number}
         onCancel={() => s.setSentDialogOpen(false)}
         onConfirm={s.confirmSent}
+        blockedReason={s.issueBlocker?.message ?? null}
       />
       <InvoicePaidDialog
         open={s.paidDialogOpen}
         invoiceNumber={s.invoice?.invoice_number}
         onCancel={() => s.setPaidDialogOpen(false)}
         onConfirm={s.confirmPaid}
+        blockedReason={s.issueBlocker?.message ?? null}
       />
       <InvoiceVoidDialog
         open={s.voidDialogOpen}

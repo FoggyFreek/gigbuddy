@@ -7,6 +7,7 @@ import {
 } from '../../api/invoices.ts'
 import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
 import { korApplies } from '../../utils/vatRates.ts'
+import { checkInvoiceReadyForIssue, isInvoiceIssueErrorCode } from '../../utils/invoiceReadiness.ts'
 import type { Invoice, InvoiceStatus, Tenant, Id } from '../../types/entities.ts'
 import {
   addDays,
@@ -34,6 +35,8 @@ export interface UseInvoiceFormStateResult {
   finalized: boolean
   readOnly: boolean
   appliesKor: boolean
+  /** Why this invoice cannot be issued yet (advisory preview), or null. */
+  issueBlocker: { code: string, message: string } | null
   totals: ReturnType<typeof computeInvoiceTotals>
   memoOpen: boolean
   setMemoOpen: (open: boolean) => void
@@ -101,6 +104,14 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
   // KOR is a Dutch-only exemption; it never zeroes VAT for a non-NL supplier.
   const appliesKor = Boolean(tenant?.applies_kor) && korApplies(tenant?.vat_country)
 
+  // Server error codes ({ error, code }) are turned into a friendly, localized
+  // sentence; anything else falls back to the message the API gave us.
+  function describeError(e: unknown): string {
+    const code = (e as { code?: unknown } | null)?.code
+    if (isInvoiceIssueErrorCode(code)) return t($ => $.issueErrors[code])
+    return e instanceof Error ? e.message : String(e)
+  }
+
   const totals = useMemo(() => computeInvoiceTotals({
     lines: form.lines,
     taxInclusive: form.tax_inclusive,
@@ -110,6 +121,32 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     appliesKor,
     reverseCharge: form.reverse_charge,
   }), [form.lines, form.tax_inclusive, form.discount_type, form.discount_pct, form.discount_cents, appliesKor, form.reverse_charge])
+
+  // Live preview of the server's issuance-readiness invariant, so the send/paid
+  // confirmations can name what is missing instead of letting the user hit a 422.
+  // Advisory only — the backend re-checks the persisted state authoritatively.
+  const issueBlocker = useMemo(() => {
+    if (finalized) return null // already issued; the guard no longer applies
+    const code = checkInvoiceReadyForIssue(
+      {
+        customer_name: form.customer_name,
+        customer_address_street: form.customer_address_street,
+        customer_address_city: form.customer_address_city,
+        customer_address_country: form.customer_address_country,
+        customer_tax_id: form.customer_tax_id,
+        issue_date: form.issue_date,
+        reverse_charge: form.reverse_charge,
+        tax_cents: totals.taxCents,
+        // The form holds the intent; the server holds the timestamp. A ticked box
+        // stands in for an attestation covering the number now in the form.
+        vies_checked_at: form.vies_checked ? (invoice?.vies_checked_at ?? 'pending') : null,
+        vies_checked_vat_number: form.vies_checked ? form.customer_tax_id : null,
+      },
+      form.lines,
+      tenant,
+    )
+    return code ? { code, message: t($ => $.issueErrors[code]) } : null
+  }, [finalized, form, totals.taxCents, tenant, invoice?.vies_checked_at, t])
 
   // due_date is derived from issue_date + payment_term_days. Recompute it in the
   // same transition that changes either input, rather than in a post-render
@@ -173,7 +210,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
       await updateInvoice(invoiceId, buildInvoicePayload(form))
       onClose(true)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(describeError(e))
     } finally {
       setSaving(false)
     }
@@ -187,7 +224,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
       setInvoice(updated)
       onInvoiceUpdate?.(invoiceId, { status: updated.status })
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(describeError(e))
     } finally {
       setSaving(false)
     }
@@ -236,7 +273,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
       await deleteInvoice(invoiceId)
       onClose(true)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(describeError(e))
     }
   }
 
@@ -252,6 +289,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     finalized,
     readOnly,
     appliesKor,
+    issueBlocker,
     totals,
     memoOpen,
     setMemoOpen,

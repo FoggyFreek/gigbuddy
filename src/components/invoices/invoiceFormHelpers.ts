@@ -170,7 +170,9 @@ export function buildInvoicePayload(form: InvoiceForm): Record<string, unknown> 
     // Only meaningful for a reverse charge; the server snapshots checked_at + the
     // number against the customer_tax_id sent in this same payload.
     vies_checked: !!form.reverse_charge && !!form.vies_checked,
-    vies_consultation_number: form.vies_consultation_number?.trim() || null,
+    // Always sent as a string (never null/omitted) so clearing the field really
+    // clears it — the server retains a prior value only when the key is absent.
+    vies_consultation_number: form.vies_consultation_number?.trim() ?? '',
     supply_date: form.supply_date || null,
     invert_logo: !!form.invert_logo,
     discount_type: form.discount_type,

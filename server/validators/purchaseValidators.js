@@ -1,11 +1,10 @@
 // Pure request/parameter validation for purchase routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
-import { DEFAULT_VAT_COUNTRY, getVatRates, snapVatRate } from '../../shared/vatRates.js'
+import { DEFAULT_VAT_COUNTRY, snapVatRate } from '../../shared/vatRates.js'
 
 // The NL rate set, exported for back-compat (some tests/callers reference it).
 // Country-specific rates live in shared/vatRates.js and reach the validators
 // through the optional `country` parameter, defaulted to NL.
-export const ALLOWED_TAX_RATES = getVatRates(DEFAULT_VAT_COUNTRY)
 
 export const STATUS_VALUES = new Set(['draft', 'approved', 'paid'])
 
