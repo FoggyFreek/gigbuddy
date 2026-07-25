@@ -90,6 +90,17 @@ describe('PlanCatalogSection — table', () => {
     expect(within(bronzeRow).queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
     expect(within(goldRow).getByRole('button', { name: /delete/i })).toBeInTheDocument()
   })
+
+  it('shows the linkpage feature with its friendly label, not the raw key', async () => {
+    const user = userEvent.setup()
+    wrap(<PlanCatalogSection plans={PLANS} onChanged={onChanged} />)
+
+    await user.click(within(screen.getByText('Gold').closest('tr')).getByRole('button', { name: /edit/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(within(dialog).getByLabelText('Link & release pages')).toBeInTheDocument()
+    expect(within(dialog).queryByLabelText('Linkpage')).not.toBeInTheDocument()
+  })
 })
 
 describe('PlanCatalogSection — create', () => {

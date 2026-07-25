@@ -47,6 +47,13 @@ function labelFor(key: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
+// Overrides for keys whose generic labelFor() output reads worse than the
+// wording already used elsewhere (billing i18n). Keys not listed here fall
+// through to labelFor().
+const FEATURE_LABELS: Record<string, string> = {
+  linkpage: 'Link & release pages',
+}
+
 const LIMIT_LABELS: Record<string, string> = {
   storage_mb: 'Storage (MB)',
   members: 'Members',
@@ -242,7 +249,9 @@ export default function PlanCatalogSection({ plans, onChanged }: Readonly<PlanCa
                   {plan.yearly_price_cents === null ? '—' : formatEur(plan.yearly_price_cents)}
                 </TableCell>
                 <TableCell>
-                  {FEATURE_KEYS.filter((k) => plan.entitlements.features[k]).map(labelFor).join(', ') || '—'}
+                  {FEATURE_KEYS.filter((k) => plan.entitlements.features[k])
+                    .map((k) => FEATURE_LABELS[k] ?? labelFor(k))
+                    .join(', ') || '—'}
                 </TableCell>
                 <TableCell>
                   {LIMIT_KEYS.map((k) => {
@@ -323,10 +332,10 @@ export default function PlanCatalogSection({ plans, onChanged }: Readonly<PlanCa
                     <Switch
                       checked={form.features[key]}
                       onChange={(e) => setField('features', { ...form.features, [key]: e.target.checked })}
-                      slotProps={{ input: { 'aria-label': labelFor(key) } }}
+                      slotProps={{ input: { 'aria-label': FEATURE_LABELS[key] ?? labelFor(key) } }}
                     />
                   }
-                  label={labelFor(key)}
+                  label={FEATURE_LABELS[key] ?? labelFor(key)}
                 />
               ))}
             </Box>
