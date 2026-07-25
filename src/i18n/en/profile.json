@@ -5,6 +5,10 @@
     "links": "Links",
     "financials": "Financials"
   },
+  "linkpage": {
+    "edit": "Edit link page",
+    "error": "Could not open the link page editor"
+  },
   "crop": {
     "logo": "Crop band logo",
     "logoDark": "Crop dark logo",

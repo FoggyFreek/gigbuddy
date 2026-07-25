@@ -25,6 +25,7 @@ import ProfileSocialsTab from '../components/profile/ProfileSocialsTab.tsx'
 import ProfileLinksTab from '../components/profile/ProfileLinksTab.tsx'
 import ProfileFinancialsTab from '../components/profile/ProfileFinancialsTab.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
+import LinkpageEditButton from '../components/profile/LinkpageEditButton.tsx'
 import type { Id } from '../types/entities.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
@@ -152,6 +153,7 @@ export default function ProfilePage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>{t($ => $.title)}</Typography>
+        {isAdmin && <LinkpageEditButton />}
         {canWritePlanning && <SaveStatusLabel status={saveStatus} />}
       </Box>
 

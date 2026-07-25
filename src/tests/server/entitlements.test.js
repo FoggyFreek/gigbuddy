@@ -61,7 +61,9 @@ describe('fallback-lock states', () => {
     expect(resolved.planSlug).toBe('bronze')
     expect(resolved.subscriptionStatus).toBeNull()
     for (const key of FEATURE_KEYS) expect(resolved.entitlements.features[key]).toBe(false)
-    expect(resolved.entitlements.limits).toEqual({ storage_mb: 50, members: 5, bands: 1 })
+    expect(resolved.entitlements.limits).toEqual({
+      storage_mb: 50, members: 5, bands: 1, linkpage_pages: 0, linkpage_stats_days: 30,
+    })
   })
 
   it('pending_mandate and pending_activation grant nothing', async () => {
@@ -85,7 +87,9 @@ describe('active subscriptions', () => {
     expect(resolved.planSlug).toBe('gold')
     expect(resolved.subscriptionStatus).toBe('active')
     for (const key of FEATURE_KEYS) expect(resolved.entitlements.features[key]).toBe(true)
-    expect(resolved.entitlements.limits).toEqual({ storage_mb: 500, members: null, bands: null })
+    expect(resolved.entitlements.limits).toEqual({
+      storage_mb: 500, members: null, bands: null, linkpage_pages: 30, linkpage_stats_days: 90,
+    })
   })
 
   it('stays unlocked for 2 days past period end, then locks', async () => {
@@ -232,7 +236,11 @@ describe('pending-downgrade limits snapshot', () => {
     expect(resolved.locked).toBe(false)
     expect(resolved.planSlug).toBe('gold')
     for (const key of FEATURE_KEYS) expect(resolved.entitlements.features[key]).toBe(true)
-    expect(resolved.entitlements.limits).toEqual({ storage_mb: 50, members: 5, bands: 1 })
+    // linkpage_pages/linkpage_stats_days aren't in the snapshot, so they stay at
+    // the current (gold) plan's values — same "missing keys stay current" rule.
+    expect(resolved.entitlements.limits).toEqual({
+      storage_mb: 50, members: 5, bands: 1, linkpage_pages: 30, linkpage_stats_days: 90,
+    })
   })
 
   it('an unlimited snapshot value never lowers a limit; missing keys stay current', async () => {
@@ -243,7 +251,9 @@ describe('pending-downgrade limits snapshot', () => {
       pending_limits_snapshot: { storage_mb: 500, members: null },
     })
     const resolved = await resolve(tenantId)
-    expect(resolved.entitlements.limits).toEqual({ storage_mb: 150, members: null, bands: 3 })
+    expect(resolved.entitlements.limits).toEqual({
+      storage_mb: 150, members: null, bands: 3, linkpage_pages: 3, linkpage_stats_days: 30,
+    })
   })
 })
 

@@ -21,10 +21,14 @@ function wrap(ui) {
 const entitlements = (features = {}, limits = {}) => ({
   features: {
     finance: false, integrations: false, customization: false,
-    song_files: false, chordpro: false, public_promotion: false,
+    song_files: false, chordpro: false, public_promotion: false, linkpage: false,
     ...features,
   },
-  limits: { storage_mb: null, members: null, bands: null, ...limits },
+  limits: {
+    storage_mb: null, members: null, bands: null,
+    linkpage_pages: null, linkpage_stats_days: null,
+    ...limits,
+  },
 })
 
 const PLANS = [
@@ -85,6 +89,17 @@ describe('PlanCatalogSection — table', () => {
     const goldRow = screen.getByText('Gold').closest('tr')
     expect(within(bronzeRow).queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
     expect(within(goldRow).getByRole('button', { name: /delete/i })).toBeInTheDocument()
+  })
+
+  it('shows the linkpage feature with its friendly label, not the raw key', async () => {
+    const user = userEvent.setup()
+    wrap(<PlanCatalogSection plans={PLANS} onChanged={onChanged} />)
+
+    await user.click(within(screen.getByText('Gold').closest('tr')).getByRole('button', { name: /edit/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(within(dialog).getByLabelText('Link & release pages')).toBeInTheDocument()
+    expect(within(dialog).queryByLabelText('Linkpage')).not.toBeInTheDocument()
   })
 })
 

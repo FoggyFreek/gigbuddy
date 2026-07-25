@@ -27,12 +27,15 @@
     "song_files": "Song files",
     "chordpro": "Chord charts",
     "customization": "Custom branding",
-    "public_promotion": "Public promotion"
+    "public_promotion": "Public promotion",
+    "linkpage": "Link & release pages"
   },
   "limits": {
     "storage_mb": "Storage (MB)",
     "members": "Members",
     "bands": "Bands",
+    "linkpage_pages": "Release link pages",
+    "linkpage_stats_days": "Link statistics history (days)",
     "unlimited": "unlimited"
   },
   "current": {

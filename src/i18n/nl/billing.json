@@ -27,12 +27,15 @@
     "song_files": "Songbestanden",
     "chordpro": "Akkoordenschema's",
     "customization": "Eigen huisstijl",
-    "public_promotion": "Publieke promotie"
+    "public_promotion": "Publieke promotie",
+    "linkpage": "Link- & releasepagina's"
   },
   "limits": {
     "storage_mb": "Opslag (MB)",
     "members": "Leden",
     "bands": "Bands",
+    "linkpage_pages": "Release-linkpagina's",
+    "linkpage_stats_days": "Linkstatistiek-historie (dagen)",
     "unlimited": "onbeperkt"
   },
   "current": {

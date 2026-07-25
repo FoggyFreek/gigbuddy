@@ -45,6 +45,8 @@ import { tenantRouter as statisticsRouter, adminRouter as adminStatisticsRouter 
 import publicMollieRouter from './publicMollie.js'
 import publicInvoicesRouter from './publicInvoices.js'
 import publicCalendarRouter from './publicCalendar.js'
+import publicLinkpageRouter from './publicLinkpage.js'
+import linkpageRouter from './linkpage.js'
 import calendarFeedRouter from './calendarFeed.js'
 import { loadUser, requireApproved, requireCurrentTerms } from '../middleware/auth.js'
 import {
@@ -123,6 +125,7 @@ router.use('/public/mollie', publicWebhookLimiter, publicMollieRouter)
 router.use('/public/billing', publicWebhookLimiter, publicBillingMollieRouter)
 router.use('/public/invoices', publicWebhookLimiter, publicInvoicesRouter)
 router.use('/public/calendar', publicWebhookLimiter, publicCalendarRouter)
+router.use('/public/linkpage', publicWebhookLimiter, publicLinkpageRouter)
 
 router.use(apiLimiter)
 router.use(csrf)
@@ -207,6 +210,10 @@ router.use('/tutorials', currentTermsUser, tutorialsRouter)
 // The public feed itself 404s while the entitlement is missing.
 router.use('/calendar-feed', tenantMember, calendarFeedRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)
+// Link-page management is reserved to tenant admins and gated on the linkpage
+// feature (silver/gold). The public export/image routes above stay open — the
+// linkpage app enforces plan state from the entitlements in the export.
+router.use('/linkpage', tenantManage, requireEntitlement(FEATURES.LINKPAGE), linkpageRouter)
 router.use('/files', tenantMember, filesRouter)
 
 export default router
