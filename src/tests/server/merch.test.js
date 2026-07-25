@@ -110,7 +110,7 @@ describe('merch products — CRUD & validation', () => {
     // a German gig may carry 19% — a deliberate override, not an error.
     const res = await asUserA(request(app).post('/api/merch/products')).send(shirtPayload({ vat_rate: 19 }))
     expect(res.status).toBe(201)
-    expect(Number(res.body.product.vat_rate)).toBe(19)
+    expect(Number(res.body.vat_rate)).toBe(19)
   })
 
   it('updates a product', async () => {

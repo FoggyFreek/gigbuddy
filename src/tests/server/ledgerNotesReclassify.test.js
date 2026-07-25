@@ -364,6 +364,8 @@ describe('reclassification — POST /api/ledger/:id/reclassify', () => {
   it('blocks the invoice void workflow while the sent posting has an active reclassification', async () => {
     const inv = await asUserA(request(app).post('/api/invoices')).send({
       customer_name: 'Texel Buitengewoon',
+      customer_address_street: 'Hall Street 3',
+      customer_address_city: 'Utrecht',
       issue_date: '2026-06-09',
       payment_term_days: 14,
       tax_inclusive: false,

@@ -49,6 +49,8 @@ function asUserB(req) {
 function invoicePayload(overrides = {}) {
   return {
     customer_name: 'Texel Buitengewoon',
+    customer_address_street: 'Hall Street 3',
+    customer_address_city: 'Utrecht',
     issue_date: '2026-06-09',
     payment_term_days: 14,
     tax_inclusive: false,

@@ -80,6 +80,8 @@ function expectBalanced(j) {
 function invoicePayload(overrides = {}) {
   return {
     customer_name: 'Alpha Hall',
+    customer_address_street: 'Hall Street 3',
+    customer_address_city: 'Utrecht',
     issue_date: '2026-05-01',
     payment_term_days: 14,
     tax_inclusive: false,

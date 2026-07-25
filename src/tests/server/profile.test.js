@@ -288,7 +288,7 @@ describe('PATCH /api/profile — financial fields', () => {
     ).expect(200)
     expect(other.body.formal_name).toBe('Die Tester GmbH')
     expect(other.body.vat_country).toBe('de')
-    expect(other.body.tax_id).toBe('DE987654321')
+    expect(other.body.tax_id).toBe('DE100000008')
   })
 
   it('accepts a German registration number and office when vat_country=de', async () => {

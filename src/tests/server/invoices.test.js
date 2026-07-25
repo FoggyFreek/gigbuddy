@@ -57,13 +57,6 @@ beforeEach(async () => {
     `UPDATE gigs SET booking_fee_cents = 70000, venue_id = $1 WHERE id = $2`,
     [seed.venues[1].id, seed.gigB.id],
   )
-  // Both seed tenants default to vat_country 'nl'; give them a valid Dutch VAT
-  // ID so a VAT-charging invoice can satisfy the issuance-readiness invariant
-  // (art. 226 requires the supplier VAT number when VAT is charged).
-  await pool.query(
-    `UPDATE tenants SET tax_id = 'NL123456789B01' WHERE id = ANY($1)`,
-    [[seed.tenantA.id, seed.tenantB.id]],
-  )
 })
 
 afterAll(async () => {

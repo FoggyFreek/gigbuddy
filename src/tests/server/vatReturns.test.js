@@ -92,6 +92,8 @@ async function accountBalance(tenantId, code) {
 async function createSentInvoice({ unitPriceCents = 200000, issueDate = '2026-02-01' } = {}) {
   const r = await asUserA(request(app).post('/api/invoices')).send({
     customer_name: 'Alpha Hall',
+    customer_address_street: 'Hall Street 3',
+    customer_address_city: 'Utrecht',
     issue_date: issueDate,
     payment_term_days: 14,
     tax_inclusive: false,
@@ -270,7 +272,7 @@ describe('VAT returns — filing (settlement journal)', () => {
 
     // A new posting dated inside the settled quarter is rejected.
     const inv = await asUserA(request(app).post('/api/invoices')).send({
-      customer_name: 'Late Hall', issue_date: '2026-03-15', payment_term_days: 14,
+      customer_name: 'Late Hall', customer_address_street: 'Hall Street 3', customer_address_city: 'Utrecht', issue_date: '2026-03-15', payment_term_days: 14,
       tax_inclusive: false, discount_cents: 0,
       lines: [{ description: 'Late', quantity: 1, unit_price_cents: 1000, tax_percentage: 21 }],
     }).expect(201)
