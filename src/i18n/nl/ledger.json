@@ -142,7 +142,7 @@
     "actions": {
       "void": "Storneren",
       "reverse": "Terugboeken",
-      "reclassify": "Rekening herrubriceren"
+      "reclassify": "Herrubriceren"
     },
     "reclassifyDialog": {
       "title": "Rekening herrubriceren",

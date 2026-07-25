@@ -146,6 +146,29 @@ describe('LedgerEntryDetailPage', () => {
     expect(screen.getByRole('link', { name: /bill from mi5 studios: test/i })).toBeInTheDocument()
   })
 
+  // A long description used to wrap under the action buttons, which sat on the
+  // same row: on compact the title gets a row of its own.
+  it('compact layout puts the action buttons on a row below the title', async () => {
+    wrap({ compact: true })
+    await waitFor(() => expect(screen.getByRole('button', { name: /^copy$/i })).toBeInTheDocument())
+
+    const heading = screen.getByRole('heading', { name: /ledger entry:/i })
+    const actionsRow = screen.getByRole('button', { name: /^copy$/i }).parentElement
+    expect(actionsRow).not.toContainElement(heading)
+    expect(actionsRow).toContainElement(screen.getByRole('button', { name: /reclassify account/i }))
+    expect(actionsRow).toContainElement(screen.getByRole('button', { name: /^void$/i }))
+    // ...and that row follows the title.
+    expect(heading.compareDocumentPosition(actionsRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('desktop layout keeps the action buttons on the title row', async () => {
+    wrap()
+    await waitFor(() => expect(screen.getByRole('button', { name: /^copy$/i })).toBeInTheDocument())
+
+    const heading = screen.getByRole('heading', { name: /ledger entry:/i })
+    expect(screen.getByRole('button', { name: /^copy$/i }).parentElement).toContainElement(heading)
+  })
+
   it('void action confirms, posts the void, and navigates to the reversing entry', async () => {
     voidLedgerEntry.mockResolvedValue({ id: 77 })
     wrap()
