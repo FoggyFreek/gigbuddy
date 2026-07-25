@@ -14,6 +14,6 @@
 --   vies_consultation_number — optional VIES request/consultation identifier the
 --                              issuer can record as stronger evidence.
 ALTER TABLE invoices
-  ADD COLUMN vies_checked_at TIMESTAMPTZ,
-  ADD COLUMN vies_checked_vat_number TEXT,
-  ADD COLUMN vies_consultation_number TEXT;
+  ADD COLUMN IF NOT EXISTS vies_checked_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS vies_checked_vat_number TEXT,
+  ADD COLUMN IF NOT EXISTS vies_consultation_number TEXT;

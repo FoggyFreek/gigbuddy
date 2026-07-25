@@ -48,7 +48,7 @@ describe('vatRates country config', () => {
     // added to VAT_COUNTRIES without extending the migration constraint, the DB
     // would reject saving it — this guards against that drift.
     const migration = readFileSync(
-      resolve(globalThis.process.cwd(), 'server/db/migrations/124_tenant_vat_country.sql'),
+      resolve(globalThis.process.cwd(), 'server/db/migrations/125_tenant_vat_country.sql'),
       'utf8',
     )
     const inClause = migration.match(/vat_country IN \(([^)]*)\)/)

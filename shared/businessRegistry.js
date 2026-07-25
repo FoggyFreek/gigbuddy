@@ -50,7 +50,7 @@ export const BUSINESS_REGISTRY = Object.freeze({
 // the national company-law invoice disclosures — managing directors and the
 // register court/number (Germany GmbHG §35a, France société mentions, …). Sole
 // traders and partnerships owe only the EU Art. 226 essentials. Mirrors the
-// CHECK in migration 127_tenant_legal_form.sql.
+// CHECK in migration 128_tenant_legal_form.sql.
 export const LEGAL_FORMS = Object.freeze([
   'sole_trader', 'partnership', 'company', 'association', 'other',
 ])

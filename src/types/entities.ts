@@ -252,7 +252,7 @@ export interface Invoice {
   total_cents?: number
   supply_date?: string | null
   reverse_charge?: boolean
-  // Reverse-charge VIES due-diligence attestation (see migration 129).
+  // Reverse-charge VIES due-diligence attestation (see migration 130).
   vies_checked_at?: string | null
   vies_checked_vat_number?: string | null
   vies_consultation_number?: string | null

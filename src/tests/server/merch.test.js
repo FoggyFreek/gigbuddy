@@ -121,8 +121,8 @@ describe('merch products — CRUD & validation', () => {
   })
 
   it('DB constraint bounds vat_rate to [0, 100] but allows any foreign rate', async () => {
-    // Migration 124 dropped the NL-only enumerated CHECK (21/9/0) so foreign
-    // rates persist; migration 128 restored a permissive [0, 100] sanity bound.
+    // Migration 125 dropped the NL-only enumerated CHECK (21/9/0) so foreign
+    // rates persist; migration 129 restored a permissive [0, 100] sanity bound.
     // A real German 19% rate is accepted at the DB level...
     await pool.query(
       `INSERT INTO products (tenant_id, name, vat_rate) VALUES ($1, 'DE product', 19)`,
