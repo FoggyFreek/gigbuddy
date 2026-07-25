@@ -154,7 +154,7 @@ describe('ledger browser — list', () => {
     expect(posted.description).toBe('First line memo')
   })
 
-  it('marks invoice void rows as voided', async () => {
+  it('marks both halves of an invoice void as voided', async () => {
     const inv = await createSentInvoice()
     await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({ status: 'void' }).expect(200)
 
@@ -163,6 +163,10 @@ describe('ledger browser — list', () => {
     expect(voidRow.type).toBe('Invoice (void)')
     expect(voidRow.voided).toBe(true)
     expect(voidRow.description).toBe(`Invoice ${inv.invoice_number} voided`)
+
+    // The original 'sent' journal hides with it — the default view shows neither.
+    const sentRow = res.body.find((r) => r.source_event === 'sent')
+    expect(sentRow.voided).toBe(true)
   })
 
   it('filters by period query params and 400s on an invalid period', async () => {

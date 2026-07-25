@@ -118,6 +118,14 @@ async function runInvoiceLedgerBackfill() {
   await pool.query(sql)
 }
 
+async function runInvoiceVoidMarkBackfill() {
+  const sql = await readFile(
+    new URL('../../../server/db/migrations/131_backfill_invoice_void_marks.sql', import.meta.url),
+    'utf8',
+  )
+  await pool.query(sql)
+}
+
 // ============================================================
 describe('ledger — invoicing (revenue)', () => {
   it('invoice sent posts DR receivable / CR revenue / CR output VAT', async () => {
@@ -159,6 +167,56 @@ describe('ledger — invoicing (revenue)', () => {
     expect(line(voided, '11200').credit_cents).toBe(121000)
     expect(line(voided, '41000').debit_cents).toBe(100000)
     expect(line(voided, '24000').debit_cents).toBe(21000)
+  })
+
+  // Both halves of a void must hide from the ledger, not just the compensating
+  // journal — otherwise the original keeps showing as live revenue.
+  it('invoice void in an open period marks the original sent journal voided too', async () => {
+    const inv = await createInvoice()
+    await setInvoiceStatus(inv.id, 'sent').expect(200)
+    await setInvoiceStatus(inv.id, 'void').expect(200)
+
+    const journals = await journalsFor(seed.tenantA.id, 'invoice', inv.id)
+    const sent = byEvent(journals, 'sent')
+    const voided = byEvent(journals, 'void')
+    expect(sent.voided_at).not.toBeNull()
+    expect(sent.voided_by_transaction_id).toBe(voided.id)
+    expect(sent.reversed_by_transaction_id).toBeNull()
+    // The compensating journal carries its own marker so the pair nets to zero
+    // in reports (one half excluded without the other would skew them).
+    expect(voided.voided_at).not.toBeNull()
+
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const invoiceRows = list.body.filter((r) => r.source_type === 'invoice')
+    expect(invoiceRows).toHaveLength(2)
+    expect(invoiceRows.every((r) => r.voided)).toBe(true)
+  })
+
+  it('invoice void of a closed-period invoice posts a visible reversal', async () => {
+    const inv = await createInvoice() // issue_date 2026-05-01
+    await setInvoiceStatus(inv.id, 'sent').expect(200)
+    await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ books_closed_through: '2026-05-31' }).expect(200)
+
+    await setInvoiceStatus(inv.id, 'void').expect(200)
+
+    const journals = await journalsFor(seed.tenantA.id, 'invoice', inv.id)
+    const sent = byEvent(journals, 'sent')
+    const reversal = byEvent(journals, 'reversal')
+    expect(reversal).toBeTruthy()
+    expectBalanced(reversal)
+    expect(byEvent(journals, 'void')).toBeUndefined()
+    // The closed period is never mutated: the original stays live, only marked.
+    expect(sent.voided_at).toBeNull()
+    expect(sent.reversed_by_transaction_id).toBe(reversal.id)
+    expect(reversal.voided_at).toBeNull()
+
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    const invoiceRows = list.body.filter((r) => r.source_type === 'invoice')
+    expect(invoiceRows).toHaveLength(2)
+    expect(invoiceRows.every((r) => r.voided)).toBe(false)
+    expect(invoiceRows.find((r) => r.source_event === 'reversal').type)
+      .toBe('Invoice (reversal)')
   })
 
   it('invoice void from draft posts no journal', async () => {
@@ -273,6 +331,59 @@ describe('ledger — invoicing (revenue)', () => {
 
     expect(await journalsFor(seed.tenantA.id, 'invoice', draftInv.id)).toHaveLength(0)
     expect(await journalsFor(seed.tenantA.id, 'invoice', voidInv.id)).toHaveLength(0)
+  })
+
+  it('void-mark backfill hides both halves of legacy open-period invoice voids', async () => {
+    const inv = await createInvoice()
+    await setInvoiceStatus(inv.id, 'sent').expect(200)
+    await setInvoiceStatus(inv.id, 'void').expect(200)
+    // Legacy shape: only the compensating journal existed, the original 'sent'
+    // journal was never marked.
+    await pool.query(
+      `UPDATE ledger_transactions
+          SET voided_at = NULL, voided_by_transaction_id = NULL
+        WHERE tenant_id = $1 AND source_type = 'invoice' AND source_id = $2`,
+      [seed.tenantA.id, inv.id],
+    )
+
+    await runInvoiceVoidMarkBackfill()
+    await runInvoiceVoidMarkBackfill() // idempotent
+
+    const journals = await journalsFor(seed.tenantA.id, 'invoice', inv.id)
+    const sent = byEvent(journals, 'sent')
+    const voided = byEvent(journals, 'void')
+    expect(sent.voided_at).not.toBeNull()
+    expect(sent.voided_by_transaction_id).toBe(voided.id)
+    expect(voided.voided_at).not.toBeNull()
+
+    const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+    expect(list.body.filter((r) => r.source_type === 'invoice').every((r) => r.voided)).toBe(true)
+  })
+
+  it('void-mark backfill leaves a closed-period invoice void as a visible reversal', async () => {
+    const inv = await createInvoice() // issue_date 2026-05-01
+    await setInvoiceStatus(inv.id, 'sent').expect(200)
+    await setInvoiceStatus(inv.id, 'void').expect(200)
+    await pool.query(
+      `UPDATE ledger_transactions
+          SET voided_at = NULL, voided_by_transaction_id = NULL
+        WHERE tenant_id = $1 AND source_type = 'invoice' AND source_id = $2`,
+      [seed.tenantA.id, inv.id],
+    )
+    // The books were closed over the original after the void was posted.
+    await pool.query(
+      `UPDATE tenant_accounting_settings SET books_closed_through = '2026-05-31' WHERE tenant_id = $1`,
+      [seed.tenantA.id],
+    )
+
+    await runInvoiceVoidMarkBackfill()
+
+    const journals = await journalsFor(seed.tenantA.id, 'invoice', inv.id)
+    const sent = byEvent(journals, 'sent')
+    const voided = byEvent(journals, 'void')
+    expect(sent.voided_at).toBeNull()
+    expect(sent.reversed_by_transaction_id).toBe(voided.id)
+    expect(voided.voided_at).toBeNull()
   })
 
   it('backfill migration aborts and rolls back on inconsistent invoice amounts', async () => {
