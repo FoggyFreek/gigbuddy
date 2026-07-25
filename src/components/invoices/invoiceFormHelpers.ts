@@ -1,3 +1,5 @@
+import { normalizeVatNumber } from '../../utils/vatRates.ts'
+import { storedViesConfirmation } from '../../utils/invoiceReadiness.ts'
 import type { InvoiceLine } from '../../types/entities.ts'
 
 /** The editable form shape used by useInvoiceFormState. */
@@ -19,6 +21,12 @@ export interface InvoiceForm {
   customer_tax_id: string
   memo: string | null
   tax_inclusive: boolean
+  reverse_charge: boolean
+  // The issuer has confirmed they checked the customer VAT number in VIES, and
+  // the confirmation still applies to the current customer_tax_id.
+  vies_checked: boolean
+  vies_consultation_number: string
+  supply_date: string | null
   invert_logo: boolean
   discount_type: 'pct' | 'eur'
   discount_pct: number
@@ -56,6 +64,10 @@ export function emptyDraft(taxPct = 9): InvoiceForm {
     customer_tax_id: '',
     memo: null,
     tax_inclusive: false,
+    reverse_charge: false,
+    vies_checked: false,
+    vies_consultation_number: '',
+    supply_date: issueDate,
     invert_logo: false,
     discount_type: 'pct',
     discount_pct: 0,
@@ -88,6 +100,10 @@ export function addDays(isoDate: string | null | undefined, days: number): strin
 
 /** Maps a loaded invoice row to the editable form shape. */
 export function invoiceToForm(data: Record<string, unknown> & { lines?: InvoiceLine[] }): InvoiceForm {
+  // The stored attestation counts as "checked" only while it still covers the
+  // current customer VAT number (a changed number makes it stale).
+  const attested = normalizeVatNumber(storedViesConfirmation(data))
+  const viesChecked = attested !== '' && attested === normalizeVatNumber(data.customer_tax_id)
   return {
     gig_id: (data.gig_id as number | null) ?? null,
     issue_date: data.issue_date ? String(data.issue_date).slice(0, 10) : null,
@@ -106,6 +122,10 @@ export function invoiceToForm(data: Record<string, unknown> & { lines?: InvoiceL
     customer_tax_id: String(data.customer_tax_id || ''),
     memo: data.memo ? String(data.memo) : null,
     tax_inclusive: !!data.tax_inclusive,
+    reverse_charge: !!data.reverse_charge,
+    vies_checked: viesChecked,
+    vies_consultation_number: String(data.vies_consultation_number || ''),
+    supply_date: data.supply_date ? String(data.supply_date).slice(0, 10) : null,
     invert_logo: !!data.invert_logo,
     discount_type: data.discount_type === 'pct' ? 'pct' : 'eur',
     discount_pct: Number(data.discount_pct) || 0,
@@ -141,6 +161,14 @@ export function buildInvoicePayload(form: InvoiceForm): Record<string, unknown> 
     customer_tax_id: form.customer_tax_id || null,
     memo: form.memo || null,
     tax_inclusive: !!form.tax_inclusive,
+    reverse_charge: !!form.reverse_charge,
+    // Only meaningful for a reverse charge; the server snapshots checked_at + the
+    // number against the customer_tax_id sent in this same payload.
+    vies_checked: !!form.reverse_charge && !!form.vies_checked,
+    // Always sent as a string (never null/omitted) so clearing the field really
+    // clears it — the server retains a prior value only when the key is absent.
+    vies_consultation_number: form.vies_consultation_number?.trim() ?? '',
+    supply_date: form.supply_date || null,
     invert_logo: !!form.invert_logo,
     discount_type: form.discount_type,
     discount_pct: form.discount_type === 'pct' ? Math.max(0, Number(form.discount_pct) || 0) : 0,

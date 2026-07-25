@@ -2,6 +2,7 @@ import './_envSetup.js'
 // @vitest-environment node
 import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
 import request from 'supertest'
+import { VAT_COUNTRY_CODES } from '../../../shared/vatRates.js'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let getAccessToken, resetShopifyTokenCacheForTests
@@ -35,6 +36,13 @@ beforeEach(async () => {
 afterAll(async () => {
   await pool.end()
 })
+
+// seedTwoTenants() gives both tenants an NL VAT number so finance tests can issue
+// invoices. A test that switches vat_country for some OTHER reason must clear it
+// first, or the tax_id/country consistency guard is the rule that fires.
+function clearStoredVatId() {
+  return pool.query('UPDATE tenants SET tax_id = NULL WHERE id = $1', [seed.tenantA.id])
+}
 
 function as(userId, tenantId) {
   return (req) =>
@@ -116,11 +124,220 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body.error).toBe('invalid_tax_id')
   })
 
+  it('validates tax_id against the tenant stored VAT country (NL rejects a DE number)', async () => {
+    // Seed tenant's vat_country is nl, so a German number is not a valid tax_id.
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ tax_id: 'DE123456789' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_tax_id')
+  })
+
+  it('accepts a German tax_id when vat_country=de is set in the same patch', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: 'de136695976' }),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('de')
+    expect(res.body.tax_id).toBe('DE136695976')
+  })
+
+  it('accepts a German tax_id against the stored country after vat_country=de', async () => {
+    await clearStoredVatId()
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(200)
+    // No vat_country in this patch → validated against the stored 'de'.
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ tax_id: 'DE100000008' }),
+    ).expect(200)
+    expect(res.body.tax_id).toBe('DE100000008')
+  })
+
   it('rejects an out-of-range tax_percentage with 400 invalid_tax_percentage', async () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ tax_percentage: 150 }),
     ).expect(400)
     expect(res.body.error).toBe('invalid_tax_percentage')
+  })
+
+  it('updates vat_country, normalizing it to a lowercase code', async () => {
+    await clearStoredVatId()
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: ' DE ' }),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('de')
+
+    const reread = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).get('/api/profile'),
+    ).expect(200)
+    expect(reread.body.vat_country).toBe('de')
+  })
+
+  it('defaults vat_country to nl for a freshly seeded tenant', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).get('/api/profile'),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('nl')
+  })
+
+  it('rejects an unknown vat_country with 400 invalid_vat_country', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'xx' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_vat_country')
+  })
+
+  it('DB constraint rejects an unsupported vat_country stored via raw SQL', async () => {
+    // Defence in depth: even a path that bypasses the validator (raw SQL, an
+    // import, a future service) cannot persist a country with no rate table.
+    await expect(
+      pool.query('UPDATE tenants SET vat_country = $1 WHERE id = $2', ['us', seed.tenantA.id]),
+    ).rejects.toThrow()
+  })
+
+  it('DB constraint accepts every supported vat_country', async () => {
+    for (const code of VAT_COUNTRY_CODES) {
+      await pool.query('UPDATE tenants SET vat_country = $1 WHERE id = $2', [code, seed.tenantA.id])
+    }
+  })
+
+  it('stores legal_form and directors for an incorporated band', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ legal_form: 'company', directors: 'Anna Müller, Ben Klein' }),
+    ).expect(200)
+    expect(res.body.legal_form).toBe('company')
+    expect(res.body.directors).toBe('Anna Müller, Ben Klein')
+  })
+
+  it('rejects an unknown legal_form with 400 invalid_legal_form', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ legal_form: 'llc' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_legal_form')
+  })
+
+  it('DB constraint rejects an unsupported legal_form via raw SQL', async () => {
+    await expect(
+      pool.query('UPDATE tenants SET legal_form = $1 WHERE id = $2', ['llc', seed.tenantA.id]),
+    ).rejects.toThrow()
+  })
+
+  it('rejects a vat_country-only change that would orphan an incompatible tax_id', async () => {
+    // Store a Dutch VAT number under the default nl country.
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ tax_id: 'NL123456789B01' }),
+    ).expect(200)
+    // Switching country alone, without touching the (now-incompatible) tax_id.
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(400)
+    expect(res.body.error).toBe('tax_id_incompatible_vat_country')
+    // The country was not changed.
+    const reread = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).get('/api/profile'),
+    ).expect(200)
+    expect(reread.body.vat_country).toBe('nl')
+  })
+
+  it('allows a vat_country-only change when no tax_id is stored', async () => {
+    await clearStoredVatId()
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('de')
+  })
+
+  it('allows switching country while clearing the incompatible tax_id in one patch', async () => {
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ tax_id: 'NL123456789B01' }),
+    ).expect(200)
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: '' }),
+    ).expect(200)
+    expect(res.body.vat_country).toBe('de')
+    expect(res.body.tax_id).toBe('')
+  })
+
+  it('integration: full NL → DE VAT identity lifecycle', async () => {
+    const admin = (req) => as(seed.superUser.id, seed.tenantA.id)(req)
+
+    // 1. Tenant starts as NL with a valid Dutch VAT ID.
+    const start = await admin(
+      request(app).patch('/api/profile').send({ tax_id: 'nl123456789b01' }),
+    ).expect(200)
+    expect(start.body.vat_country).toBe('nl')
+    expect(start.body.tax_id).toBe('NL123456789B01')
+
+    // 2. Change vat_country to DE on its own. The Dutch ID is invalid for DE, so
+    //    (chosen behavior) the change is REJECTED rather than silently kept.
+    const rejected = await admin(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(400)
+    expect(rejected.body.error).toBe('tax_id_incompatible_vat_country')
+
+    // 3. Nothing changed: still NL with the original Dutch ID.
+    const afterReject = await admin(request(app).get('/api/profile')).expect(200)
+    expect(afterReject.body.vat_country).toBe('nl')
+    expect(afterReject.body.tax_id).toBe('NL123456789B01')
+
+    // 4. Switch to DE and save a valid German VAT ID together.
+    const moved = await admin(
+      request(app).patch('/api/profile').send({ vat_country: 'de', tax_id: 'de136695976' }),
+    ).expect(200)
+    expect(moved.body.vat_country).toBe('de')
+    expect(moved.body.tax_id).toBe('DE136695976')
+
+    // 5. Subsequent updates succeed: another German number (validated against the
+    //    now-stored 'de'), and an unrelated financial field.
+    const nextId = await admin(
+      request(app).patch('/api/profile').send({ tax_id: 'DE100000008' }),
+    ).expect(200)
+    expect(nextId.body.tax_id).toBe('DE100000008')
+
+    const other = await admin(
+      request(app).patch('/api/profile').send({ formal_name: 'Die Tester GmbH' }),
+    ).expect(200)
+    expect(other.body.formal_name).toBe('Die Tester GmbH')
+    expect(other.body.vat_country).toBe('de')
+    expect(other.body.tax_id).toBe('DE100000008')
+  })
+
+  it('accepts a German registration number and office when vat_country=de', async () => {
+    await clearStoredVatId()
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({
+        vat_country: 'de', kvk_number: 'HRB 12345', registration_office: 'Amtsgericht München',
+      }),
+    ).expect(200)
+    expect(res.body.kvk_number).toBe('HRB 12345')
+    expect(res.body.registration_office).toBe('Amtsgericht München')
+  })
+
+  it('rejects a registration number invalid for the VAT country', async () => {
+    await clearStoredVatId()
+    // An NL 8-digit KvK number is not a valid German Handelsregisternummer.
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de', kvk_number: '12345678' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_kvk_number')
+  })
+
+  it('rejects a registration number for a sameAsVat country (BE)', async () => {
+    await clearStoredVatId()
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'be', kvk_number: '0123456789' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_kvk_number')
+  })
+
+  it('rejects a vat_country-only change that would orphan an incompatible registration number', async () => {
+    await clearStoredVatId()
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ kvk_number: '12345678' }),
+    ).expect(200)
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ vat_country: 'de' }),
+    ).expect(400)
+    expect(res.body.error).toBe('kvk_incompatible_vat_country')
   })
 
   it('drops empty tax_percentage but updates other fields in the same patch', async () => {

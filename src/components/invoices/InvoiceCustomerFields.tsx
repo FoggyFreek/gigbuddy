@@ -50,6 +50,17 @@ export default function InvoiceCustomerFields({
             ))}
           </Select>
         </FormControl>
+        <DateEntryField
+          label={t($ => $.customerFields.supplyDate)}
+          openPickerLabel={t($ => $.customerFields.openSupplyDatePicker)}
+          size="small"
+          fullWidth
+          value={form.supply_date || ''}
+          onChange={(e) => patchForm({ supply_date: e.target.value })}
+          disabled={readOnly}
+          helperText={t($ => $.customerFields.supplyDateHelper)}
+          sx={{}}
+        />
       </Box>
 
       <Typography variant="subtitle2" sx={{ mb: 1 }}>{t($ => $.labels.customer)}</Typography>

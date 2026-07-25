@@ -98,10 +98,19 @@ describe('merch products — CRUD & validation', () => {
   })
 
   it('rejects an invalid VAT rate and negative cost', async () => {
-    const badVat = await asUserA(request(app).post('/api/merch/products')).send(shirtPayload({ vat_rate: 19 }))
+    // 17.5 is not a real VAT rate in any supported country → rejected.
+    const badVat = await asUserA(request(app).post('/api/merch/products')).send(shirtPayload({ vat_rate: 17.5 }))
     expect(badVat.status).toBe(400)
     const badCost = await asUserA(request(app).post('/api/merch/products')).send(shirtPayload({ unit_cost_cents: -5 }))
     expect(badCost.status).toBe(400)
+  })
+
+  it('accepts a foreign VAT rate as an override (e.g. a gig in another country)', async () => {
+    // The seed tenant's VAT country is nl (rates 21/9/0), but a product sold at
+    // a German gig may carry 19% — a deliberate override, not an error.
+    const res = await asUserA(request(app).post('/api/merch/products')).send(shirtPayload({ vat_rate: 19 }))
+    expect(res.status).toBe(201)
+    expect(Number(res.body.vat_rate)).toBe(19)
   })
 
   it('updates a product', async () => {
@@ -109,6 +118,25 @@ describe('merch products — CRUD & validation', () => {
     const res = await asUserA(request(app).patch(`/api/merch/products/${product.id}`))
       .send({ unit_cost_cents: 1500 }).expect(200)
     expect(res.body.unit_cost_cents).toBe(1500)
+  })
+
+  it('DB constraint bounds vat_rate to [0, 100] but allows any foreign rate', async () => {
+    // Migration 125 dropped the NL-only enumerated CHECK (21/9/0) so foreign
+    // rates persist; migration 129 restored a permissive [0, 100] sanity bound.
+    // A real German 19% rate is accepted at the DB level...
+    await pool.query(
+      `INSERT INTO products (tenant_id, name, vat_rate) VALUES ($1, 'DE product', 19)`,
+      [seed.tenantA.id],
+    )
+    // ...but a negative or absurd (>100%) rate is rejected by the range CHECK.
+    await expect(pool.query(
+      `INSERT INTO products (tenant_id, name, vat_rate) VALUES ($1, 'Bad', -1)`,
+      [seed.tenantA.id],
+    )).rejects.toThrow(/products_vat_rate_range/)
+    await expect(pool.query(
+      `INSERT INTO products (tenant_id, name, vat_rate) VALUES ($1, 'Bad', 150)`,
+      [seed.tenantA.id],
+    )).rejects.toThrow(/products_vat_rate_range/)
   })
 
   it('archives instead of deleting', async () => {

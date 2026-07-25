@@ -54,7 +54,7 @@ export default function ProfilePage() {
   const [editingFinancials, setEditingFinancials] = useState(false)
   const [activeTab, setActiveTab] = useState('socials')
   const [snackbar, setSnackbar] = useState<string | null>(null)
-  const { setBandName } = useProfile()
+  const { setBandName, setVatSettings } = useProfile()
 
   const logo = useImageUpload({
     compress: compressLogo,
@@ -115,6 +115,8 @@ export default function ProfilePage() {
     if (!canWritePlanning) return
     setForm((prev) => ({ ...prev, [field]: value }))
     if (field === 'band_name') setBandName(String(value))
+    if (field === 'vat_country') setVatSettings(String(value), Number(form.tax_percentage))
+    if (field === 'tax_percentage') setVatSettings(form.vat_country, Number(value))
     schedule({ [field]: value } as Partial<ProfileForm>)
   }
 

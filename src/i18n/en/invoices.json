@@ -51,6 +51,9 @@
   "customerFields": {
     "issueDate": "Issue date",
     "openIssueDatePicker": "open issue date picker",
+    "supplyDate": "Date of supply",
+    "openSupplyDatePicker": "open date of supply picker",
+    "supplyDateHelper": "When the service was performed",
     "paymentTerm": "Payment term",
     "paymentTermDays_one": "{{count}} day",
     "paymentTermDays_other": "{{count}} days",
@@ -79,7 +82,13 @@
     "vatPercentage": "VAT %",
     "descriptionPlaceholder": "Start typing…",
     "removeLine": "remove line",
-    "addItem": "Add item"
+    "addItem": "Add item",
+    "reverseCharge": "Reverse charge",
+    "reverseChargeHint": "0% VAT — the customer accounts for VAT. Requires a valid VAT number for a customer in another EU country.",
+    "viesChecked": "VAT number checked in VIES",
+    "viesOpen": "Open VIES",
+    "viesHint": "Before issuing, confirm the customer's VAT number is valid in VIES. The confirmation and number are stored as evidence; changing the VAT number requires a new check.",
+    "viesConsultation": "VIES consultation number (optional)"
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -87,7 +96,8 @@
     "removeDiscount": "remove discount",
     "addDiscount": "Add discount",
     "vatRate": "VAT {{rate}}%",
-    "korNotice": "Kleine ondernemersregeling — no VAT charged."
+    "korNotice": "Kleine ondernemersregeling — no VAT charged.",
+    "reverseChargeNotice": "VAT reverse-charged — Article 196 EU VAT Directive."
   },
   "logo": {
     "alt": "Invoice logo",
@@ -173,5 +183,22 @@
   "validation": {
     "customerRequired": "Customer name is required",
     "lineRequired": "At least one line with a description is required"
+  },
+  "issueErrors": {
+    "incomplete_supplier_details": "Add your band's name, street and city in the financial profile — an invoice must show them.",
+    "incomplete_customer_details": "Add the customer's name, street and city — an invoice must show them.",
+    "missing_issue_date": "Set a valid issue date.",
+    "invalid_lines": "Add at least one line with a description and a quantity above zero.",
+    "missing_registration_info": "Add your company registration number (and register office, where your country requires it) in the financial profile.",
+    "missing_supplier_vat_id": "Add your VAT number in the financial profile — it must appear on an invoice that charges VAT or applies the reverse charge.",
+    "customer_tax_id_required_for_reverse_charge": "Add the customer's VAT number — the reverse charge requires it.",
+    "reverse_charge_xi_services_unsupported": "A Northern Ireland (XI) VAT number covers goods only, so it cannot carry the reverse charge for a performance.",
+    "reverse_charge_requires_eu_supplier": "The reverse charge only applies when your band's VAT country is in the EU.",
+    "reverse_charge_requires_eu_customer": "The reverse charge only applies to a customer in an EU country.",
+    "reverse_charge_requires_cross_border": "The reverse charge only applies to a customer in a different EU country than your own.",
+    "customer_vat_number_country_mismatch": "The customer's VAT number belongs to a different country than their address.",
+    "invalid_customer_vat_number": "The customer's VAT number is not valid for their country.",
+    "reverse_charge_vies_check_required": "Check the customer's VAT number in VIES and tick the confirmation.",
+    "reverse_charge_vies_check_stale": "The VAT number changed since the VIES check. Check the new number in VIES and confirm again."
   }
 }

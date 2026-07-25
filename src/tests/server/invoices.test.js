@@ -79,6 +79,9 @@ function basePayload(overrides = {}) {
   return {
     gig_id: seed.gigA.id,
     customer_name: 'Alpha Hall',
+    customer_address_street: 'Hall Street 3',
+    customer_address_postal_code: '3000 CC',
+    customer_address_city: 'Utrecht',
     issue_date: '2026-05-01',
     payment_term_days: 14,
     tax_inclusive: false,
@@ -219,6 +222,194 @@ describe('invoices — totals are stored authoritatively', () => {
   })
 })
 
+describe('invoices — reverse charge & supply date', () => {
+  // Seed tenant A's VAT country is nl, so a valid intra-EU reverse charge is a
+  // customer in another EU state with a country-matching VAT number.
+  it('reverse charge zeroes VAT for a valid intra-EU B2B supply', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: 'DE136695976',
+      lines: [{ description: 'Gig in DE', quantity: 1, unit_price_cents: 100000, tax_percentage: 21 }],
+    })).expect(201)
+    expect(r.body.reverse_charge).toBe(true)
+    expect(r.body.subtotal_cents).toBe(100000)
+    expect(r.body.tax_cents).toBe(0)
+    expect(r.body.total_cents).toBe(100000)
+  })
+
+  it('rejects reverse charge without a customer VAT number', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: '',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.code).toBe('customer_tax_id_required_for_reverse_charge')
+  })
+
+  it('accepts reverse charge when the customer country is a name, not a code', async () => {
+    // Venue/gig records copy the country name into the draft, so "Germany" (not
+    // "DE") must still resolve for a valid intra-EU reverse charge.
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'Germany',
+      customer_tax_id: 'DE136695976',
+      lines: [{ description: 'Gig in DE', quantity: 1, unit_price_cents: 100000, tax_percentage: 21 }],
+    })).expect(201)
+    expect(r.body.tax_cents).toBe(0)
+  })
+
+  it('rejects reverse charge for a domestic customer (same country)', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'NL',
+      customer_tax_id: 'NL123456789B01',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.code).toBe('reverse_charge_requires_cross_border')
+  })
+
+  it('rejects reverse charge when the VAT number does not match the customer country', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: 'abc123',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.code).toBe('invalid_customer_vat_number')
+  })
+
+  it('rejects reverse charge for a non-EU customer country', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'GB',
+      customer_tax_id: 'GB980780684',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.code).toBe('reverse_charge_requires_eu_customer')
+  })
+
+  it('rejects a Northern Ireland (XI) VAT number for a service reverse charge', async () => {
+    // XI is in the EU VAT area for goods only; a gig fee is a service, so an XI
+    // number must route distinctly from a plain EU number.
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'IE',
+      customer_tax_id: 'XI980780684',
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.code).toBe('reverse_charge_xi_services_unsupported')
+  })
+
+  it('rejects a customer VAT number whose country prefix ≠ the customer country', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: 'FR40303265045', // valid FR number, wrong country
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.code).toBe('customer_vat_number_country_mismatch')
+  })
+
+  it('rejects a regex-valid but checksum-invalid customer VAT number', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: 'DE123456789', // right shape, bad check digit
+    }))
+    expect(r.status).toBe(400)
+    expect(r.body.code).toBe('invalid_customer_vat_number')
+  })
+
+  it('rejects turning on reverse charge via PATCH when no customer VAT number is stored', async () => {
+    const created = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
+      .send({ reverse_charge: true })
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('customer_tax_id_required_for_reverse_charge')
+  })
+
+  it('stores an explicit supply_date', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      supply_date: '2026-04-15',
+    })).expect(201)
+    expect(String(r.body.supply_date).slice(0, 10)).toBe('2026-04-15')
+  })
+
+  it('does not apply the Dutch KOR exemption for a non-NL tenant', async () => {
+    // applies_kor is a Dutch-only scheme, so a German tenant still charges VAT.
+    await pool.query(
+      "UPDATE tenants SET vat_country = 'de', applies_kor = true WHERE id = $1",
+      [seed.tenantA.id],
+    )
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      lines: [{ description: 'x', quantity: 1, unit_price_cents: 100000, tax_percentage: 19 }],
+    })).expect(201)
+    expect(r.body.tax_cents).toBe(19000)
+  })
+})
+
+describe('invoices — VIES reverse-charge attestation', () => {
+  // A valid intra-EU reverse-charge invoice for tenant A (nl supplier). The only
+  // thing standing between it and issuance is the VIES check confirmation.
+  function rcPayload(extra = {}) {
+    return basePayload({
+      reverse_charge: true,
+      customer_address_country: 'DE',
+      customer_tax_id: 'DE136695976',
+      lines: [{ description: 'Gig in DE', quantity: 1, unit_price_cents: 100000, tax_percentage: 21 }],
+      ...extra,
+    })
+  }
+
+  it('blocks issuing a reverse-charge invoice without a VIES confirmation', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(rcPayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.code).toBe('reverse_charge_vies_check_required')
+    const { rows } = await pool.query('SELECT status FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].status).toBe('draft')
+  })
+
+  it('records the attestation at create and allows issuing', async () => {
+    const r = await asUserA(request(app).post('/api/invoices'))
+      .send(rcPayload({ vies_checked: true, vies_consultation_number: 'WAPIAAAA123' })).expect(201)
+    const { rows } = await pool.query(
+      'SELECT vies_checked_at, vies_checked_vat_number, vies_consultation_number FROM invoices WHERE id = $1',
+      [r.body.id],
+    )
+    expect(rows[0].vies_checked_at).not.toBeNull()
+    expect(rows[0].vies_checked_vat_number).toBe('DE136695976') // snapshot, normalized
+    expect(rows[0].vies_consultation_number).toBe('WAPIAAAA123')
+    const sent = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
+    expect(sent.body.status).toBe('sent')
+  })
+
+  it('can confirm the VIES check via PATCH before issuing', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(rcPayload()).expect(201)
+    await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ vies_checked: true }).expect(200)
+    const sent = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
+    expect(sent.body.status).toBe('sent')
+  })
+
+  it('goes stale when the VAT number changes after the check', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(rcPayload({ vies_checked: true })).expect(201)
+    // Change to a different (still valid) DE number without re-confirming.
+    await asUserA(request(app).patch(`/api/invoices/${r.body.id}`))
+      .send({ customer_tax_id: 'DE100000008' }).expect(200)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.code).toBe('reverse_charge_vies_check_stale')
+  })
+
+  it('does not require a VIES check for a normal (non-reverse-charge) invoice', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const sent = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
+    expect(sent.body.status).toBe('sent')
+  })
+})
+
 describe('invoices — finalization gate', () => {
   it('PATCH with status sent finalizes the invoice', async () => {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
@@ -261,6 +452,84 @@ describe('invoices — finalization gate', () => {
     expect(del.status).toBe(204)
     const { rows } = await pool.query('SELECT id FROM invoices WHERE id = $1', [r.body.id])
     expect(rows).toHaveLength(0)
+  })
+})
+
+describe('invoices — issuance-readiness invariant', () => {
+  // An invoice may only be finalized (draft → sent/paid, payment-link) when it
+  // holds the art. 226 mandatory content. The guard runs on the effective
+  // persisted state inside the finalizing transaction, so a failure rolls back
+  // and the invoice stays a draft.
+  it('rejects finalization when the customer address is incomplete', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      customer_address_street: null,
+      customer_address_city: null,
+    })).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.code).toBe('incomplete_customer_details')
+    // The transition rolled back: still a draft, not finalized.
+    const { rows } = await pool.query('SELECT status, finalized_at FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].status).toBe('draft')
+    expect(rows[0].finalized_at).toBeNull()
+  })
+
+  it('rejects finalization when the supplier postal address is incomplete', async () => {
+    await pool.query('UPDATE tenants SET address_street = NULL WHERE id = $1', [seed.tenantA.id])
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.code).toBe('incomplete_supplier_details')
+  })
+
+  it('rejects finalization when VAT is charged but the supplier has no VAT ID', async () => {
+    await pool.query('UPDATE tenants SET tax_id = NULL WHERE id = $1', [seed.tenantA.id])
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.code).toBe('missing_supplier_vat_id')
+  })
+
+  it('rejects finalization when an incorporated band has no registration number', async () => {
+    await pool.query(
+      "UPDATE tenants SET legal_form = 'company', kvk_number = NULL WHERE id = $1",
+      [seed.tenantA.id],
+    )
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
+    expect(res.status).toBe(422)
+    expect(res.body.code).toBe('missing_registration_info')
+  })
+
+  it('accepts finalization when all mandatory content is present', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' }).expect(200)
+    expect(res.body.status).toBe('sent')
+    expect(res.body.finalized_at).not.toBeNull()
+  })
+
+  it('still allows voiding an incomplete draft (void is not an issuance)', async () => {
+    // Abandoning a half-filled draft must not require art. 226 content — the
+    // readiness guard applies only to issuing transitions (sent/paid).
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      customer_address_street: null,
+      customer_address_city: null,
+    })).expect(201)
+    const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'void' }).expect(200)
+    expect(res.body.status).toBe('void')
+  })
+
+  it('blocks payment-link finalization of an incomplete invoice', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({
+      customer_address_city: null,
+    })).expect(201)
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/payment-link`)).send({})
+    expect(res.status).toBe(422)
+    expect(res.body.code).toBe('incomplete_customer_details')
+    // Not finalized — a later completed draft can still be issued.
+    const { rows } = await pool.query('SELECT status, finalized_at FROM invoices WHERE id = $1', [r.body.id])
+    expect(rows[0].status).toBe('draft')
+    expect(rows[0].finalized_at).toBeNull()
   })
 })
 

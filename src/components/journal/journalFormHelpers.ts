@@ -1,8 +1,5 @@
 import type { Journal, JournalLine, Id } from '../../types/entities.ts'
 
-// VAT rates a journal line may carry — same domain constants as purchases.
-export const VAT_RATES: number[] = [21, 9, 0]
-
 /** The editable form shape for a single journal line (includes React key). */
 export interface JournalFormLine extends Omit<JournalLine, 'id'> {
   _key: string

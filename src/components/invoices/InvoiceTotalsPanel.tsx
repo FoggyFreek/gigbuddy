@@ -116,12 +116,17 @@ export default function InvoiceTotalsPanel({
             {t($ => $.totals.addDiscount)}
           </Button>
         )}
-        {!appliesKor && totals.vatByRate.map(({ rate, cents }) => (
+        {!appliesKor && !form.reverse_charge && totals.vatByRate.map(({ rate, cents }) => (
           <SummaryRow key={rate} label={t($ => $.totals.vatRate, { rate })} value={formatEur(cents)} />
         ))}
         {appliesKor && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'right' }}>
             {t($ => $.totals.korNotice)}
+          </Typography>
+        )}
+        {!appliesKor && form.reverse_charge && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'right' }}>
+            {t($ => $.totals.reverseChargeNotice)}
           </Typography>
         )}
         <Divider sx={{ my: 1 }} />

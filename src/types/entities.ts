@@ -137,11 +137,19 @@ export interface Tenant {
   memory_gig_id?: Id | null
   applies_kor?: boolean
   tax_percentage?: number | string
+  /** VAT jurisdiction (ISO 3166-1 alpha-2, lowercase); selects allowed VAT rates. */
+  vat_country?: string
   address_street?: string
   address_postal_code?: string
   address_city?: string
   address_country?: string
   kvk_number?: string
+  /** Court/city/province the registration number is scoped to (DE/FR/AT/IT). */
+  registration_office?: string
+  /** Legal form of the band; 'company' triggers extra invoice disclosures. */
+  legal_form?: string
+  /** Managing directors / board — disclosed on invoices by incorporated bands. */
+  directors?: string
   iban?: string
   tax_id?: string
   accent_color?: string | null
@@ -242,6 +250,12 @@ export interface Invoice {
   // (invoices.gig_id → gigs). Null when the invoice isn't linked to a gig.
   gig_event_description?: string | null
   total_cents?: number
+  supply_date?: string | null
+  reverse_charge?: boolean
+  // Reverse-charge VIES due-diligence attestation (see migration 130).
+  vies_checked_at?: string | null
+  vies_checked_vat_number?: string | null
+  vies_consultation_number?: string | null
   pdf_path?: string
   custom_logo_path?: string
   invert_logo?: boolean

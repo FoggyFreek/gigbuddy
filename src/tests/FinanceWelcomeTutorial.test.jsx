@@ -57,6 +57,16 @@ describe('finance welcome tutorial', () => {
     expect(await screen.findByText(TITLE)).toBeInTheDocument()
   })
 
+  it('presents the country-aware VAT & compliant-invoicing capabilities', async () => {
+    wrap(FINANCE_USER)
+    await screen.findByText(TITLE)
+    // The cross-border invoicing point and its reverse-charge/VIES detail.
+    expect(screen.getByText('Invoice compliantly across Europe.')).toBeInTheDocument()
+    expect(screen.getByText(/reverse charge — with a VIES check/i)).toBeInTheDocument()
+    // The profile point now names the VAT country / registration details.
+    expect(screen.getByText(/VAT country.*Chamber of Commerce registration/i)).toBeInTheDocument()
+  })
+
   it('does not show once the tutorial is dismissed', async () => {
     wrap({ ...FINANCE_USER, dismissedTutorials: ['finance_welcome'] })
     await waitFor(() => expect(getFinanceOnboardingStatus).not.toHaveBeenCalled())

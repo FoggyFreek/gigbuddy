@@ -28,13 +28,13 @@ import { fetchShopifyOrders, importShopifyOrders } from '../../api/merch.ts'
 import { listAccounts } from '../../api/accounts.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import { formatEur } from '../../utils/purchaseTotals.ts'
+import { useProfile } from '../../contexts/profileContext.ts'
+import { vatRateMenuItems } from '../shared/vatRateMenuItems.tsx'
 import type {
   Account, Product, ShopifyOrder, ShopifyLineItem, ShopifyLineMapping, ShopifyImportResult,
 } from '../../types/entities.ts'
 
 type Step = 'select' | 'map' | 'importing' | 'done'
-
-const VAT_RATES = [21, 9, 0]
 
 // The per-line import status keys the backend returns; their human labels live
 // under shopify.lineStatus in the merch namespace.
@@ -130,6 +130,7 @@ interface ShopifyImportDialogProps {
 
 export default function ShopifyImportDialog({ products, onClose }: Readonly<ShopifyImportDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
+  const { defaultVatRate } = useProfile()
   const shopifyErrorMessage = useShopifyErrorMessage()
   const [step, setStep] = useState<Step>('select')
   const [orders, setOrders] = useState<ShopifyOrder[]>([])
@@ -219,7 +220,7 @@ export default function ShopifyImportDialog({ products, onClose }: Readonly<Shop
     }
     const code = value.slice('revenue:'.length)
     const existing = mappings[line.id]
-    const vat = existing?.type === 'revenue' ? existing.vat_rate : 21
+    const vat = existing?.type === 'revenue' ? existing.vat_rate : defaultVatRate
     setLineMapping(line.id, { type: 'revenue', account_code: code, vat_rate: vat })
   }
 
@@ -456,7 +457,8 @@ interface LineMapControlProps {
 function LineMapControl({
   line, mapping, activeProducts, revenueAccounts, mappingValue, onMappingSelect, onVatChange, compact = false,
 }: Readonly<LineMapControlProps>) {
-  const { t } = useTranslation('merch')
+  const { t } = useTranslation(['merch', 'common'])
+  const { vatCountry } = useProfile()
   if (!lineMappable(line)) {
     return (
       <Chip
@@ -494,7 +496,7 @@ function LineMapControl({
             value={mapping.vat_rate}
             onChange={(e) => onVatChange(line.id, mapping.account_code, Number(e.target.value))}
           >
-            {VAT_RATES.map((r) => <MenuItem key={r} value={r}>{r}%</MenuItem>)}
+            {vatRateMenuItems(vatCountry, Number(mapping.vat_rate), t($ => $.vat.otherCountries, { ns: 'common' }))}
           </Select>
         </FormControl>
       )}

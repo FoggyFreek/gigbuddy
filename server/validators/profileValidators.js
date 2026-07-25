@@ -1,6 +1,8 @@
 // Input parsing and validation for profile routes. No DB access here.
 import { parsePositiveId as parseId } from './common.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
+import { DEFAULT_VAT_COUNTRY, normalizeVatCountry, isValidVatId, normalizeVatNumber } from '../../shared/vatRates.js'
+import { isValidRegistrationNumber, normalizeRegistrationNumber, isKnownLegalForm } from '../../shared/businessRegistry.js'
 
 // Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
 export const MOLLIE_KEY_RE = /^(live|test)_[A-Za-z0-9]{25,}$/
@@ -88,10 +90,14 @@ export const FINANCIAL_FIELDS = [
   'address_city',
   'address_country',
   'kvk_number',
+  'registration_office',
+  'legal_form',
+  'directors',
   'iban',
   'tax_id',
   'tax_percentage',
   'applies_kor',
+  'vat_country',
 ]
 
 export const FINANCIAL_FIELDS_SET = new Set(FINANCIAL_FIELDS)
@@ -104,11 +110,13 @@ const TEXT_MAX_LENGTHS = {
   address_postal_code: 10,
   address_city: 200,
   address_country: 200,
+  // Court / city / province the registration number is scoped to (DE/FR/AT/IT).
+  registration_office: 120,
+  // Managing directors / board, disclosed on invoices by incorporated bands.
+  directors: 300,
 }
 
-const KVK_RE = /^\d{8}$/
 const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/
-const TAX_ID_RE = /^NL\d{9}B\d{2}$/
 
 export { parseId }
 
@@ -126,6 +134,43 @@ function validateAppliesKor(raw) {
   if (raw === null || raw === undefined) return { skip: true }
   if (typeof raw !== 'boolean') return { error: 'invalid_applies_kor' }
   return { value: raw }
+}
+
+function validateVatCountry(raw) {
+  if (raw === null || raw === undefined || raw === '') return { skip: true }
+  const code = normalizeVatCountry(raw)
+  if (!code) return { error: 'invalid_vat_country' }
+  return { value: code }
+}
+
+function validateLegalForm(raw) {
+  if (raw === null || raw === undefined || raw === '') return { value: null }
+  if (!isKnownLegalForm(raw)) return { error: 'invalid_legal_form' }
+  return { value: raw }
+}
+
+// The company registration number (KvK/Handelsregister/SIREN/…) is validated
+// against the tenant's VAT country: each register has its own format, and for
+// countries where the enterprise/tax number IS the registration identifier
+// (Belgium, Spain) only an empty value is accepted.
+function validateKvkNumber(raw, vatCountry) {
+  if (raw === null || raw === undefined) return { value: null }
+  if (typeof raw !== 'string') return { error: 'invalid_kvk_number' }
+  const v = normalizeRegistrationNumber(raw)
+  if (!isValidRegistrationNumber(vatCountry, v)) return { error: 'invalid_kvk_number' }
+  return { value: v }
+}
+
+// The VAT identification number is validated against the tenant's VAT country
+// (resolved by the service): a German tenant stores a DE… number, a Dutch tenant
+// an NL…B.. number, etc. Whitespace is stripped and letters uppercased first.
+function validateTaxId(raw, vatCountry) {
+  if (raw === null || raw === undefined) return { value: null }
+  if (typeof raw !== 'string') return { error: 'invalid_tax_id' }
+  const stripped = normalizeVatNumber(raw)
+  if (stripped === '') return { value: '' }
+  if (!isValidVatId(vatCountry, stripped)) return { error: 'invalid_tax_id' }
+  return { value: stripped }
 }
 
 function validateTaxPercentage(raw) {
@@ -160,19 +205,25 @@ function validateBoundedText(key, raw) {
 const FINANCIAL_VALIDATORS = {
   applies_kor: validateAppliesKor,
   tax_percentage: validateTaxPercentage,
-  kvk_number: makeStrippedValidator('kvk_number', KVK_RE, false),
+  vat_country: validateVatCountry,
+  legal_form: validateLegalForm,
   iban: makeStrippedValidator('iban', IBAN_RE, true),
-  tax_id: makeStrippedValidator('tax_id', TAX_ID_RE, true),
 }
 
-function normalizeFinancialValue(key, raw) {
+function normalizeFinancialValue(key, raw, vatCountry) {
+  // tax_id and kvk_number formats depend on the tenant's VAT country, so they are
+  // resolved against `vatCountry` rather than a fixed regex in the map above.
+  if (key === 'tax_id') return validateTaxId(raw, vatCountry)
+  if (key === 'kvk_number') return validateKvkNumber(raw, vatCountry)
   const validator = FINANCIAL_VALIDATORS[key]
   return validator ? validator(raw) : validateBoundedText(key, raw)
 }
 
 // Builds the tenant-profile UPDATE SET fragments from PROFILE + FINANCIAL fields.
-// Returns { error } when a financial value is invalid, otherwise { fields, values }.
-export function buildProfileUpdate(body) {
+// `vatCountry` is the tenant's effective VAT country (the value being set, or the
+// stored one), used to validate tax_id. Returns { error } when a financial value
+// is invalid, otherwise { fields, values }.
+export function buildProfileUpdate(body, { vatCountry = DEFAULT_VAT_COUNTRY } = {}) {
   const fields = []
   const values = []
   let idx = 1
@@ -186,7 +237,7 @@ export function buildProfileUpdate(body) {
 
   for (const key of FINANCIAL_FIELDS) {
     if (!(key in body)) continue
-    const result = normalizeFinancialValue(key, body[key])
+    const result = normalizeFinancialValue(key, body[key], vatCountry)
     if (result.error) return { error: result.error }
     if (result.skip) continue
     fields.push(`${key} = $${idx++}`)

@@ -54,6 +54,9 @@
     "yes": "Ja",
     "no": "Nee"
   },
+  "vat": {
+    "otherCountries": "Andere landen"
+  },
   "picker": {
     "typeMinChars_one": "Typ minstens {{count}} teken…",
     "typeMinChars_other": "Typ minstens {{count}} tekens…",

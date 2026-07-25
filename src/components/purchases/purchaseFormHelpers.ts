@@ -1,7 +1,5 @@
 import type { PurchaseLine, PurchaseStatus, Id } from '../../types/entities.ts'
 
-export const TAX_RATES: number[] = [21, 9, 0]
-
 /** One editable line inside the purchase form (includes React key and merch fields). */
 export interface PurchaseFormLine extends Omit<PurchaseLine, 'id' | 'expense_category'> {
   _key: string
@@ -34,8 +32,10 @@ export function nextLineKey(): string {
   return `pl${lineKeySeq}`
 }
 
-export function emptyLine(position = 0): PurchaseFormLine {
-  return { _key: nextLineKey(), description: '', account_code: '', tax_rate: 21, amount_incl_cents: 0, position, product_id: null, quantity: null }
+// `taxRate` defaults new lines to the tenant's default VAT rate (callers pass it
+// from the profile context); it falls back to the NL standard when unspecified.
+export function emptyLine(position = 0, taxRate = 21): PurchaseFormLine {
+  return { _key: nextLineKey(), description: '', account_code: '', tax_rate: taxRate, amount_incl_cents: 0, position, product_id: null, quantity: null }
 }
 
 export function emptyDraft(): PurchaseForm {

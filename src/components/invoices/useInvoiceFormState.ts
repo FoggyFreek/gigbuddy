@@ -6,6 +6,8 @@ import {
   updateInvoice,
 } from '../../api/invoices.ts'
 import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
+import { korApplies } from '../../utils/vatRates.ts'
+import { checkInvoiceReadyForIssue, isInvoiceIssueErrorCode } from '../../utils/invoiceReadiness.ts'
 import type { Invoice, InvoiceStatus, Tenant, Id } from '../../types/entities.ts'
 import {
   addDays,
@@ -33,6 +35,8 @@ export interface UseInvoiceFormStateResult {
   finalized: boolean
   readOnly: boolean
   appliesKor: boolean
+  /** Why this invoice cannot be issued yet (advisory preview), or null. */
+  issueBlocker: { code: string, message: string } | null
   totals: ReturnType<typeof computeInvoiceTotals>
   memoOpen: boolean
   setMemoOpen: (open: boolean) => void
@@ -97,7 +101,16 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
 
   const finalized = Boolean(invoice?.finalized_at)
   const readOnly = finalized
-  const appliesKor = Boolean(tenant?.applies_kor)
+  // KOR is a Dutch-only exemption; it never zeroes VAT for a non-NL supplier.
+  const appliesKor = Boolean(tenant?.applies_kor) && korApplies(tenant?.vat_country)
+
+  // Server error codes ({ error, code }) are turned into a friendly, localized
+  // sentence; anything else falls back to the message the API gave us.
+  function describeError(e: unknown): string {
+    const code = (e as { code?: unknown } | null)?.code
+    if (isInvoiceIssueErrorCode(code)) return t($ => $.issueErrors[code])
+    return e instanceof Error ? e.message : String(e)
+  }
 
   const totals = useMemo(() => computeInvoiceTotals({
     lines: form.lines,
@@ -106,7 +119,32 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     discountPct: form.discount_pct,
     discountCents: form.discount_cents,
     appliesKor,
-  }), [form.lines, form.tax_inclusive, form.discount_type, form.discount_pct, form.discount_cents, appliesKor])
+    reverseCharge: form.reverse_charge,
+  }), [form.lines, form.tax_inclusive, form.discount_type, form.discount_pct, form.discount_cents, appliesKor, form.reverse_charge])
+
+  // Live preview of the server's issuance-readiness invariant, so the send/paid
+  // confirmations can name what is missing instead of letting the user hit a 422.
+  // Advisory only — the backend re-checks the persisted state authoritatively.
+  const issueBlocker = useMemo(() => {
+    if (finalized) return null // already issued; the guard no longer applies
+    const code = checkInvoiceReadyForIssue(
+      {
+        customer_name: form.customer_name,
+        customer_address_street: form.customer_address_street,
+        customer_address_city: form.customer_address_city,
+        customer_address_country: form.customer_address_country,
+        customer_tax_id: form.customer_tax_id,
+        issue_date: form.issue_date,
+        reverse_charge: form.reverse_charge,
+        tax_cents: totals.taxCents,
+        // A ticked box means the issuer confirmed the number currently in the form.
+        vies_confirmed_for: form.vies_checked ? form.customer_tax_id : null,
+      },
+      form.lines,
+      tenant,
+    )
+    return code ? { code, message: t($ => $.issueErrors[code]) } : null
+  }, [finalized, form, totals.taxCents, tenant, t])
 
   // due_date is derived from issue_date + payment_term_days. Recompute it in the
   // same transition that changes either input, rather than in a post-render
@@ -117,6 +155,11 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
       if ('issue_date' in patch || 'payment_term_days' in patch) {
         const computed = addDays(next.issue_date, next.payment_term_days || 14)
         if (computed) next.due_date = computed
+      }
+      // Changing the customer VAT number invalidates a prior VIES confirmation:
+      // the issuer must re-check the new number before issuing.
+      if ('customer_tax_id' in patch && !('vies_checked' in patch)) {
+        next.vies_checked = false
       }
       return next
     })
@@ -165,7 +208,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
       await updateInvoice(invoiceId, buildInvoicePayload(form))
       onClose(true)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(describeError(e))
     } finally {
       setSaving(false)
     }
@@ -179,7 +222,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
       setInvoice(updated)
       onInvoiceUpdate?.(invoiceId, { status: updated.status })
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(describeError(e))
     } finally {
       setSaving(false)
     }
@@ -228,7 +271,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
       await deleteInvoice(invoiceId)
       onClose(true)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(describeError(e))
     }
   }
 
@@ -244,6 +287,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
     finalized,
     readOnly,
     appliesKor,
+    issueBlocker,
     totals,
     memoOpen,
     setMemoOpen,

@@ -8,6 +8,12 @@ import { randomUUID } from 'node:crypto'
 import { getObject, uploadObjectWithQuota, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from './storageService.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
+import { korApplies, normalizeVatNumber } from '../../shared/vatRates.js'
+import {
+  checkInvoiceReadyForIssue,
+  checkReverseCharge,
+  storedViesConfirmation,
+} from '../../shared/invoiceReadiness.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import {
@@ -68,6 +74,7 @@ import {
 } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { notFound } from './serviceErrors.js'
+import { invoiceIssueError } from '../domain/invoiceIssueErrors.js'
 
 // Holds a session-level per-tenant accounting-settings advisory lock for the
 // duration of `fn`, which receives the lock-holding client. Session and
@@ -93,6 +100,35 @@ async function withAccountingSettingsSessionLock(pool, tenantId, fn) {
   }
 }
 
+// ---------- VIES check attestation ----------
+
+const MAX_CONSULTATION_LEN = 64
+
+// Builds the three vies_* column values for a desired attestation state. When the
+// issuer confirms the VIES check we snapshot the exact (normalized) number and
+// stamp checked_at — idempotently: an already-valid attestation for the same
+// number keeps its original timestamp, so re-saving a draft doesn't reset the
+// proof time. Unchecking clears all three. `consultation` is only overwritten
+// when the caller supplies the key at all: `undefined` retains a prior value,
+// while an explicit null/'' clears it (so a mistyped number can be corrected).
+function viesAttestationColumns(desiredChecked, effectiveTaxId, consultation, existing = null) {
+  if (!desiredChecked) {
+    return { vies_checked_at: null, vies_checked_vat_number: null, vies_consultation_number: null }
+  }
+  const number = normalizeVatNumber(effectiveTaxId)
+  const consult = consultation !== undefined
+    ? (String(consultation ?? '').trim().slice(0, MAX_CONSULTATION_LEN) || null)
+    : (existing?.vies_consultation_number ?? null)
+  const alreadyValid = Boolean(existing?.vies_checked_at)
+    && number !== ''
+    && normalizeVatNumber(existing.vies_checked_vat_number) === number
+  return {
+    vies_checked_at: alreadyValid ? existing.vies_checked_at : new Date(),
+    vies_checked_vat_number: number,
+    vies_consultation_number: consult,
+  }
+}
+
 // ---------- totals ----------
 
 export function computeAndApply(invoiceFields, lines, tenant) {
@@ -102,7 +138,9 @@ export function computeAndApply(invoiceFields, lines, tenant) {
     discountCents: invoiceFields.discount_cents,
     discountType: invoiceFields.discount_type,
     discountPct: invoiceFields.discount_pct,
-    appliesKor: tenant.applies_kor,
+    // KOR is a Dutch-only scheme; it never zeroes VAT for a non-NL tenant.
+    appliesKor: tenant.applies_kor && korApplies(tenant.vat_country),
+    reverseCharge: invoiceFields.reverse_charge,
   })
 }
 
@@ -183,7 +221,11 @@ function hasContentChange(body) {
 function applyStatusFields(body, existing, builder) {
   if (body.status === undefined) return
   builder.set('status', body.status)
-  if (body.status !== 'draft' && existing.finalized_at === null) {
+  // Any move off draft (sent/paid/void) makes the invoice immutable. This is a
+  // broader condition than "issued": a voided draft is locked too, but issuance
+  // readiness is enforced separately and only for the issuing transitions.
+  const becomesImmutable = body.status !== 'draft'
+  if (becomesImmutable && existing.finalized_at === null) {
     builder.finalize()
   }
 }
@@ -199,12 +241,25 @@ async function recomputeTotals(client, tenantId, invoiceId, body, tenant, reques
     return { error: FINALIZED_ERROR }
   }
   const taxInclusive = 'tax_inclusive' in body ? Boolean(body.tax_inclusive) : current.tax_inclusive
+  const reverseCharge = 'reverse_charge' in body ? Boolean(body.reverse_charge) : current.reverse_charge
   const discountType = 'discount_type' in body ? normalizeDiscountType(body.discount_type) : current.discount_type
   const discountPct = 'discount_pct' in body ? clampNonNegative(body.discount_pct) : Number(current.discount_pct)
   const discountCents = 'discount_cents' in body ? clampNonNegative(body.discount_cents) : current.discount_cents
+
+  // Reverse charge is validated against the effective customer identity (the
+  // values set in this PATCH, else the stored ones), mirroring create.
+  if (reverseCharge) {
+    const rcError = checkReverseCharge({
+      supplierCountry: tenant.vat_country,
+      customerCountry: 'customer_address_country' in body ? body.customer_address_country : current.customer_address_country,
+      customerTaxId: 'customer_tax_id' in body ? body.customer_tax_id : current.customer_tax_id,
+    })
+    if (rcError) return { error: invoiceIssueError(rcError, 400) }
+  }
+
   const currentLines = await fetchLines(client, invoiceId, tenantId)
   const totals = computeAndApply(
-    { tax_inclusive: taxInclusive, discount_type: discountType, discount_pct: discountPct, discount_cents: discountCents },
+    { tax_inclusive: taxInclusive, reverse_charge: reverseCharge, discount_type: discountType, discount_pct: discountPct, discount_cents: discountCents },
     currentLines,
     tenant,
   )
@@ -244,6 +299,17 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
       if (guard?.error) abortTransaction(guard)
     }
 
+    // VIES check attestation, snapshotted against the effective customer VAT
+    // number (the value this PATCH sets, else the stored one).
+    if ('vies_checked' in body || 'vies_consultation_number' in body) {
+      const effectiveTaxId = 'customer_tax_id' in body ? body.customer_tax_id : existing.customer_tax_id
+      const desired = 'vies_checked' in body ? Boolean(body.vies_checked) : Boolean(existing.vies_checked_at)
+      const cols = viesAttestationColumns(desired, effectiveTaxId, body.vies_consultation_number, existing)
+      builder.set('vies_checked_at', cols.vies_checked_at)
+      builder.set('vies_checked_vat_number', cols.vies_checked_vat_number)
+      builder.set('vies_consultation_number', cols.vies_consultation_number)
+    }
+
     applyStatusFields(body, existing, builder)
 
     if (builder.size === 0) {
@@ -253,6 +319,25 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
     await updateInvoiceFields(client, tenantId, invoiceId, builder.changes())
 
     if (body.status !== undefined) {
+      // Issuance readiness applies only to transitions that actually ISSUE the
+      // invoice (draft → sent/paid): those recognise revenue and print a legal
+      // document, so the art. 226 mandatory content must be present. Voiding a
+      // draft (draft → void) is NOT an issue — an abandoned, incomplete draft
+      // must stay voidable — even though it, like any non-draft transition, still
+      // sets finalized_at for immutability (see applyStatusFields). The check
+      // runs on the effective persisted state; the writes above are inside this
+      // transaction, so a failure rolls them back.
+      const becomesIssued = body.status === 'sent' || body.status === 'paid'
+      if (becomesIssued && existing.finalized_at === null) {
+        const effective = await fetchInvoice(client, tenantId, invoiceId)
+        const effectiveLines = await fetchLines(client, invoiceId, tenantId)
+        const readyError = checkInvoiceReadyForIssue(
+          { ...effective, vies_confirmed_for: storedViesConfirmation(effective) },
+          effectiveLines,
+          tenant,
+        )
+        if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
+      }
       await postInvoiceTransition(client, tenantId, invoiceId, existing.status, body.status, actorUserId)
     }
 
@@ -279,6 +364,11 @@ const ALLOWED_TRANSITIONS = {
 function validatePatchRequest(body, existing) {
   const requestedContentFields = Object.keys(body).filter((k) => FINALIZED_LOCKED_FIELDS_SET.has(k))
   if (existing.finalized_at !== null && requestedContentFields.length > 0) {
+    return { error: FINALIZED_ERROR }
+  }
+  // The VIES attestation is part of the immutable issued record — it may only be
+  // set/changed while the invoice is still a draft.
+  if (existing.finalized_at !== null && ('vies_checked' in body || 'vies_consultation_number' in body)) {
     return { error: FINALIZED_ERROR }
   }
   if (body.status !== undefined && !STATUS_VALUES.has(body.status)) {
@@ -409,6 +499,19 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
     if (current.status === 'void') abortTransaction({ error: { status: 400, body: { error: 'void_invoice' } } })
     if (current.total_cents <= 0) abortTransaction({ error: { status: 400, body: { error: 'zero_amount' } } })
     if (current.mollie_payment_link_id) abortTransaction({ alreadyLinked: current })
+    // Finalizing draft → sent makes the invoice immutable and posts the revenue
+    // leg, so a not-yet-finalized invoice must satisfy the issuance-readiness
+    // invariant (art. 226 mandatory content) before we let it become billable.
+    if (current.finalized_at === null) {
+      const tenant = await fetchTenant(client, tenantId)
+      const lines = await fetchLines(client, invoiceId, tenantId)
+      const readyError = checkInvoiceReadyForIssue(
+        { ...current, vies_confirmed_for: storedViesConfirmation(current) },
+        lines,
+        tenant,
+      )
+      if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
+    }
     const finalized = await finalizeInvoiceForPaymentLinkRow(client, tenantId, invoiceId)
     // The invoice is now sent (revenue recognised). Idempotent if already posted
     // by a prior PATCH-to-sent.
@@ -494,7 +597,7 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
 
   const issueDate = new Date().toISOString().slice(0, 10)
   const paymentTermDays = 14
-  const taxPercentage = tenant.applies_kor ? 0 : Number(tenant.tax_percentage ?? 9)
+  const taxPercentage = (tenant.applies_kor && korApplies(tenant.vat_country)) ? 0 : Number(tenant.tax_percentage ?? 9)
 
   const eventDateStr = gig.event_date
     ? new Date(gig.event_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -554,6 +657,9 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         customer_tax_id: null,
         memo: null,
         tax_inclusive: false,
+        reverse_charge: false,
+        // Date of supply (art. 226(7)) defaults to the gig's performance date.
+        supply_date: gig.event_date ? new Date(gig.event_date).toISOString().slice(0, 10) : null,
         discount_cents: 0,
         lines: [
           {
@@ -586,8 +692,17 @@ export async function createInvoice(pool, tenantId, userId, body) {
   const tenant = await fetchTenant(pool, tenantId)
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
 
+  if (parsed.reverseCharge) {
+    const rcError = checkReverseCharge({
+      supplierCountry: tenant.vat_country,
+      customerCountry: body.customer_address_country,
+      customerTaxId: body.customer_tax_id,
+    })
+    if (rcError) return { error: invoiceIssueError(rcError, 400) }
+  }
+
   const totals = computeAndApply(
-    { tax_inclusive: parsed.taxInclusive, discount_type: parsed.discountType, discount_pct: parsed.discountPct, discount_cents: parsed.discountCents },
+    { tax_inclusive: parsed.taxInclusive, reverse_charge: parsed.reverseCharge, discount_type: parsed.discountType, discount_pct: parsed.discountPct, discount_cents: parsed.discountCents },
     parsed.lines,
     tenant,
   )
@@ -598,6 +713,8 @@ export async function createInvoice(pool, tenantId, userId, body) {
     gigId = await validateGigIdForTenant(pool, body.gig_id, tenantId)
     if (gigId === null) return { error: { status: 400, body: { error: 'Invalid gig_id' } } }
   }
+
+  const vies = viesAttestationColumns(parsed.viesChecked, body.customer_tax_id, parsed.viesConsultationNumber)
 
   const invoiceId = await withTransaction(async (client) => {
     const invoiceNumber = await nextInvoiceNumber(client, tenantId, year)
@@ -621,6 +738,8 @@ export async function createInvoice(pool, tenantId, userId, body) {
       customer_tax_id: body.customer_tax_id || null,
       memo: body.memo || null,
       tax_inclusive: parsed.taxInclusive,
+      reverse_charge: parsed.reverseCharge,
+      supply_date: parsed.supplyDate,
       discount_type: parsed.discountType,
       discount_pct: parsed.discountPct,
       discount_cents: totals.discountCents,
@@ -629,6 +748,9 @@ export async function createInvoice(pool, tenantId, userId, body) {
       tax_cents: totals.taxCents,
       total_cents: totals.totalCents,
       created_by_user_id: userId,
+      vies_checked_at: vies.vies_checked_at,
+      vies_checked_vat_number: vies.vies_checked_vat_number,
+      vies_consultation_number: vies.vies_consultation_number,
     })
     await insertInvoiceLines(client, id, tenantId, parsed.lines)
     return id

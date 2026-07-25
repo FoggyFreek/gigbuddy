@@ -16,6 +16,7 @@ import { computePurchaseTotals } from '../../utils/purchaseTotals.ts'
 import { compressReceipt } from '../../utils/compressImage.ts'
 import type { Purchase, PurchaseAttachment, PurchasePaymentCandidate, PurchasePaymentMethod, PurchaseStatus, Account, AccountingSettings, Member, Product, Id } from '../../types/entities.ts'
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.ts'
+import { useProfile } from '../../contexts/profileContext.ts'
 import type { PurchaseForm, PurchaseFormLine } from './purchaseFormHelpers.ts'
 
 function todayIso(): string {
@@ -86,6 +87,7 @@ export interface UsePurchaseFormStateResult {
 // edited here, so this hook only deals with an existing purchase.
 export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: UsePurchaseFormStateArgs): UsePurchaseFormStateResult {
   const { t } = useTranslation('purchases')
+  const { defaultVatRate } = useProfile()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -218,7 +220,7 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
 
   function addLine() {
     setError(null)
-    setForm((prev) => prev ? ({ ...prev, lines: [...prev.lines, emptyLine(prev.lines.length)] }) : prev)
+    setForm((prev) => prev ? ({ ...prev, lines: [...prev.lines, emptyLine(prev.lines.length, defaultVatRate)] }) : prev)
   }
 
   function removeLine(index: number) {

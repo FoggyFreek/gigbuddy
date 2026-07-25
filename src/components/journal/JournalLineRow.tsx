@@ -14,7 +14,8 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import AccountAutocomplete from './AccountAutocomplete.tsx'
 import AmountCell from './AmountCell.tsx'
 import JournalLinePopper from './JournalLinePopper.tsx'
-import { VAT_RATES } from './journalFormHelpers.ts'
+import { useProfile } from '../../contexts/profileContext.ts'
+import { vatRateMenuItems } from '../shared/vatRateMenuItems.tsx'
 
 // Description · Account · VAT · Debit · Credit read as one connected segmented
 // control; a connector line then bridges to the standalone balancing account.
@@ -52,7 +53,8 @@ export default function JournalLineRow({
   line, idx, accounts, readOnly, canDelete,
   patchLine, addLine, removeLine, duplicateLine,
 }: Readonly<JournalLineRowProps>) {
-  const { t } = useTranslation('journal')
+  const { t } = useTranslation(['journal', 'common'])
+  const { vatCountry } = useProfile()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
 
   const commitDebit = (cents: number) => {
@@ -87,13 +89,11 @@ export default function JournalLineRow({
         <InputLabel>{t($ => $.line.vatRate)}</InputLabel>
         <Select
           label={t($ => $.line.vatRate)}
-          value={VAT_RATES.includes(Number(line.vat_rate)) ? Number(line.vat_rate) : 0}
+          value={Number.isFinite(Number(line.vat_rate)) ? Number(line.vat_rate) : 0}
           onChange={(e) => patchLine(idx, { vat_rate: Number(e.target.value) })}
           renderValue={(v) => `${v}%`}
         >
-          {VAT_RATES.map((rate) => (
-            <MenuItem key={rate} value={rate}>{rate}%</MenuItem>
-          ))}
+          {vatRateMenuItems(vatCountry, Number(line.vat_rate), t($ => $.vat.otherCountries, { ns: 'common' }))}
         </Select>
       </FormControl>
       <AmountCell

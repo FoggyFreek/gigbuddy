@@ -1,15 +1,17 @@
 // Pure request/parameter validation for journal routes. No DB or IO here.
 import { isValidIsoDate, parsePositiveId as parseId } from './common.js'
-import { ALLOWED_TAX_RATES } from './purchaseValidators.js'
+import { isKnownVatRate } from '../../shared/vatRates.js'
 
-const ALLOWED_VAT_RATES_SET = new Set(ALLOWED_TAX_RATES)
 export const SIDES = new Set(['debit', 'credit'])
 
 export { isValidIsoDate, parseId }
 
+// Journal lines default to 0% (balanced entries), so anything that is not a real
+// VAT rate snaps to 0. Any known rate is kept — including a foreign one, which
+// lets a line carry an override for a performance in another country.
 function snapVatRate(raw) {
   const n = Number(raw)
-  return ALLOWED_VAT_RATES_SET.has(n) ? n : 0
+  return isKnownVatRate(n) ? n : 0
 }
 
 // Draft normalization: permissive. Trims strings, coerces numbers, leaves

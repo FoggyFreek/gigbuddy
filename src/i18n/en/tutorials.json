@@ -4,7 +4,9 @@
     "intro": "gigBuddy keeps your band's books with a full double-entry ledger — invoices, purchases, merch, VAT returns and reports, all in one place.",
     "points": {
       "openingBalance": "Set your opening balance so your bank total is right from day one.",
-      "profile": "Add your financial profile (KVK, VAT number, IBAN) used on invoices and filings.",
+      "profile": "Add your business details — VAT country, VAT number, Chamber of Commerce registration, legal form and IBAN — used on invoices and filings.",
+      "invoicing": "Invoice compliantly across Europe.",
+      "invoicingDetail": "Country-specific VAT rates and labels, the KOR exemption, and the cross-border reverse charge — with a VIES check before you issue.",
       "accounts": "Review the default accounts your bookings post to."
     },
     "getStarted": "Get started",

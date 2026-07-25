@@ -10,7 +10,8 @@ import DialogTitle from '@mui/material/DialogTitle'
 import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import MoneyInput from '../invoices/MoneyInput.tsx'
-import { VAT_RATES } from './vatRates.ts'
+import { useProfile } from '../../contexts/profileContext.ts'
+import { vatRateMenuItems } from '../shared/vatRateMenuItems.tsx'
 import type { Product, Account } from '../../types/entities.ts'
 
 interface ProductBody {
@@ -33,10 +34,11 @@ interface ProductDialogProps {
 // cost for stock added before any purchase) and read-only afterwards.
 export default function ProductDialog({ product, revenueAccounts = [], onSubmit, onClose }: Readonly<ProductDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
+  const { vatCountry, defaultVatRate } = useProfile()
   const [name, setName] = useState(product?.name ?? '')
   const [unitCostCents, setUnitCostCents] = useState(product?.unit_cost_cents ?? 0)
   const [priceInclCents, setPriceInclCents] = useState(product?.default_price_incl_cents ?? 0)
-  const [vatRate, setVatRate] = useState(Number(product?.vat_rate ?? 21))
+  const [vatRate, setVatRate] = useState(Number(product?.vat_rate ?? defaultVatRate))
   const [revenueAccountCode, setRevenueAccountCode] = useState(product?.revenue_account_code ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -101,9 +103,7 @@ export default function ProductDialog({ product, revenueAccounts = [], onSubmit,
             value={vatRate}
             onChange={(e) => setVatRate(Number(e.target.value))}
           >
-            {VAT_RATES.map((rate) => (
-              <MenuItem key={rate} value={rate}>{rate}%</MenuItem>
-            ))}
+            {vatRateMenuItems(vatCountry, vatRate, t($ => $.vat.otherCountries, { ns: 'common' }))}
           </TextField>
           {revenueAccounts.length > 0 && (
             <TextField

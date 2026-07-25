@@ -148,7 +148,8 @@ export async function lockInvoice(executor, tenantId, invoiceId) {
 
 export async function lockInvoiceTotalsState(executor, tenantId, invoiceId) {
   const { rows } = await executor.query(
-    `SELECT tax_inclusive, discount_type, discount_pct, discount_cents, finalized_at
+    `SELECT tax_inclusive, reverse_charge, customer_tax_id, customer_address_country,
+            discount_type, discount_pct, discount_cents, finalized_at
        FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
     [invoiceId, tenantId],
   )
@@ -250,20 +251,24 @@ export async function insertInvoice(executor, invoice) {
        customer_address_street, customer_address_postal_code,
        customer_address_city, customer_address_country, customer_email,
        customer_kvk, customer_tax_id, memo, tax_inclusive,
+       reverse_charge, supply_date,
        discount_type, discount_pct, discount_cents,
        invert_logo,
        subtotal_cents, tax_cents, total_cents,
-       created_by_user_id
+       created_by_user_id,
+       vies_checked_at, vies_checked_vat_number, vies_consultation_number
      ) VALUES (
        $1, $2, $3, $4, $5, $6,
        $7, $8, $9, $10,
        $11, $12,
        $13, $14, $15,
        $16, $17, $18, $19,
-       $20, $21, $22,
-       $23,
-       $24, $25, $26,
-       $27
+       $20, $21,
+       $22, $23, $24,
+       $25,
+       $26, $27, $28,
+       $29,
+       $30, $31, $32
      ) RETURNING id`,
     [
       invoice.tenant_id, invoice.gig_id, invoice.invoice_number, invoice.issue_date, invoice.due_date, invoice.payment_term_days,
@@ -271,10 +276,12 @@ export async function insertInvoice(executor, invoice) {
       invoice.customer_address_street, invoice.customer_address_postal_code,
       invoice.customer_address_city, invoice.customer_address_country, invoice.customer_email,
       invoice.customer_kvk, invoice.customer_tax_id, invoice.memo, invoice.tax_inclusive,
+      invoice.reverse_charge, invoice.supply_date,
       invoice.discount_type, invoice.discount_pct, invoice.discount_cents,
       invoice.invert_logo,
       invoice.subtotal_cents, invoice.tax_cents, invoice.total_cents,
       invoice.created_by_user_id,
+      invoice.vies_checked_at ?? null, invoice.vies_checked_vat_number ?? null, invoice.vies_consultation_number ?? null,
     ],
   )
   return rows[0].id

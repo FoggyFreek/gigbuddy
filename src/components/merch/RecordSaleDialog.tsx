@@ -14,7 +14,8 @@ import DateEntryField from '../DateEntryField.tsx'
 import MoneyInput from '../invoices/MoneyInput.tsx'
 import { listGigs } from '../../api/gigs.ts'
 import { formatEur } from '../../utils/purchaseTotals.ts'
-import { VAT_RATES } from './vatRates.ts'
+import { useProfile } from '../../contexts/profileContext.ts'
+import { vatRateMenuItems } from '../shared/vatRateMenuItems.tsx'
 import type { Product, Gig, Id } from '../../types/entities.ts'
 
 interface SaleBody {
@@ -37,11 +38,12 @@ interface RecordSaleDialogProps {
 // rate (both editable per sale). The gig link is optional context only.
 export default function RecordSaleDialog({ products, onSubmit, onClose }: Readonly<RecordSaleDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
+  const { vatCountry, defaultVatRate } = useProfile()
   const sellable = useMemo(() => products.filter((p) => !p.archived_at), [products])
   const [productId, setProductId] = useState<Id | ''>('')
   const [quantity, setQuantity] = useState<number | string>(1)
   const [priceInclCents, setPriceInclCents] = useState(0)
-  const [vatRate, setVatRate] = useState(21)
+  const [vatRate, setVatRate] = useState(defaultVatRate)
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [paymentMethod, setPaymentMethod] = useState('bank')
   const [gigId, setGigId] = useState<Id | ''>('')
@@ -135,9 +137,7 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Readon
             value={vatRate}
             onChange={(e) => setVatRate(Number(e.target.value))}
           >
-            {VAT_RATES.map((rate) => (
-              <MenuItem key={rate} value={rate}>{rate}%</MenuItem>
-            ))}
+            {vatRateMenuItems(vatCountry, vatRate, t($ => $.vat.otherCountries, { ns: 'common' }))}
           </TextField>
           <DateEntryField
             label={t($ => $.saleDialog.saleDate)}

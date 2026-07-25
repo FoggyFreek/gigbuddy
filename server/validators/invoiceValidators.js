@@ -2,6 +2,12 @@
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
 export { formatInvoiceNumber } from '../domain/invoice.js'
 
+// The art. 226 / art. 196 / VIES rules live in shared/invoiceReadiness.js (the
+// frontend previews the same answer via src/utils/invoiceReadiness.ts, while the
+// backend stays authoritative by running them on the persisted state inside the
+// finalizing transaction). Services import them from there directly — this file
+// keeps only the request-parsing duties.
+
 export const CONTENT_FIELDS = [
   'gig_id',
   'issue_date',
@@ -20,6 +26,8 @@ export const CONTENT_FIELDS = [
   'customer_tax_id',
   'memo',
   'tax_inclusive',
+  'reverse_charge',
+  'supply_date',
   'discount_type',
   'discount_pct',
   'discount_cents',
@@ -85,13 +93,22 @@ export function parseCreateInvoiceBody(body) {
   const issueDate = body.issue_date || new Date().toISOString().slice(0, 10)
   const dueDate = body.due_date || computeDueDate(issueDate, paymentTermDays)
   const taxInclusive = Boolean(body.tax_inclusive)
+  const reverseCharge = Boolean(body.reverse_charge)
+  const supplyDate = body.supply_date || null
   const discountType = body.discount_type === 'pct' ? 'pct' : 'eur'
   const discountPct = Math.max(0, Number(body.discount_pct) || 0)
   const discountCents = Math.max(0, Number.isInteger(Number(body.discount_cents)) ? Number(body.discount_cents) : 0)
   const lines = normalizeLines(body.lines)
   if (!lines.length) return { error: 'At least one line is required' }
 
-  return { customerName, paymentTermDays, issueDate, dueDate, taxInclusive, discountType, discountPct, discountCents, lines }
+  const viesChecked = Boolean(body.vies_checked)
+  const viesConsultationNumber = body.vies_consultation_number != null
+    ? (String(body.vies_consultation_number).trim() || null)
+    : null
+
+  // Reverse-charge eligibility depends on the supplier + customer countries
+  // (which the service knows), so it is validated there via validateReverseCharge.
+  return { customerName, paymentTermDays, issueDate, dueDate, taxInclusive, reverseCharge, supplyDate, discountType, discountPct, discountCents, lines, viesChecked, viesConsultationNumber }
 }
 
 function validateExpiresAt(value) {

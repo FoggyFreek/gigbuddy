@@ -134,6 +134,8 @@ function asUserB(req) {
 async function createInvoiceA(overrides = {}) {
   const res = await asUserA(request(app).post('/api/invoices')).send({
     customer_name: 'Alpha Hall',
+    customer_address_street: 'Hall Street 3',
+    customer_address_city: 'Utrecht',
     issue_date: '2026-05-01',
     payment_term_days: 14,
     lines: [{ description: 'Optreden', quantity: 1, unit_price_cents: 50000, tax_percentage: 0 }],
@@ -370,6 +372,8 @@ describe('Invoice finalization on payment-link creation (issue 1)', () => {
 
     const patchRes = await asUserA(request(app).patch(`/api/invoices/${inv.id}`)).send({
       customer_name: 'Different Name',
+      customer_address_street: 'Hall Street 3',
+      customer_address_city: 'Utrecht',
     })
     expect(patchRes.status).toBe(409)
   })
