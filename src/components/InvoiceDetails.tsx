@@ -81,6 +81,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
         <Tooltip title={t($ => $.pdf.rerender)}>
           <IconButton
             size="small"
+            color="primary"
             onClick={s.handlePdfRerender}
             disabled={s.pdfRerenderBusy}
             aria-label={t($ => $.pdf.rerenderAria)}
