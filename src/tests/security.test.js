@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest'
 import express from 'express'
 import supertest from 'supertest'
 import rateLimit from 'express-rate-limit'
@@ -342,19 +342,40 @@ describe('rate limiting', () => {
     expect(res.headers).toHaveProperty('ratelimit-policy')
   })
 
-  it('does not apply the tight auth limiter to /auth/me', async () => {
-    const oldEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'production'
-    vi.resetModules()
-    const { default: routes } = await import('../../server/routes/index.js')
-    process.env.NODE_ENV = oldEnv
+  describe('limiter mounting on the real router', () => {
+    let app
 
-    const a = express()
-    a.use('/api', routes)
+    // The limiters capture NODE_ENV at module load (`isTest` makes them skip every
+    // request), so the route tree has to be imported fresh in production mode. That
+    // import is the expensive part of these tests — do it once, in a hook.
+    beforeAll(async () => {
+      const oldEnv = process.env.NODE_ENV
+      process.env.NODE_ENV = 'production'
+      vi.resetModules()
+      const { default: routes } = await import('../../server/routes/index.js')
+      process.env.NODE_ENV = oldEnv
 
-    for (let i = 0; i < 35; i++) {
-      const res = await supertest(a).get('/api/auth/me')
+      app = express()
+      app.use('/api', routes)
+    })
+
+    // draft-8 appends one RateLimit-Policy entry per limiter that ran, so a single
+    // request names exactly which limiters a path sits behind — no need to actually
+    // exhaust a limit to find out.
+    const policyLimits = (res) =>
+      [...(res.headers['ratelimit-policy'] ?? '').matchAll(/q=(\d+)/g)].map((m) => Number(m[1]))
+
+    it('applies the tight auth limiter to the OIDC entry points', async () => {
+      const res = await supertest(app).get('/api/auth/login')
+      expect(policyLimits(res)).toEqual([1000, 30])
+    })
+
+    it('does not apply the tight auth limiter to /auth/me', async () => {
+      // /auth/me is polled on every SPA bootstrap; the 30/15min budget would break
+      // normal sessions. It stays covered by the broad API limiter alone.
+      const res = await supertest(app).get('/api/auth/me')
+      expect(policyLimits(res)).toEqual([1000])
       expect(res.status).toBe(401)
-    }
+    })
   })
 })

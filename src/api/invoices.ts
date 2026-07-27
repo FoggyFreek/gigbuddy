@@ -68,7 +68,9 @@ export const createInvoice = (body: Partial<Invoice>) =>
 export const updateInvoice = (id: Id, body: Partial<Invoice>) =>
   api<Invoice>(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteInvoice = (id: Id) => api<void>(`/${id}`, { method: 'DELETE' })
-export const renderInvoice = (id: Id) => api<Invoice>(`/${id}/render`, { method: 'POST' })
+/** Re-renders and stores the PDF. Responds with the new key only, not the invoice. */
+export const renderInvoice = (id: Id) =>
+  api<{ pdf_path: string | null }>(`/${id}/render`, { method: 'POST' })
 
 export function uploadInvoiceLogo(id: Id, file: File) {
   const fd = new FormData()

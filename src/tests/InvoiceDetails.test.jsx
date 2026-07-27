@@ -11,6 +11,7 @@ vi.mock('../api/invoices.ts', () => ({
   getInvoice: vi.fn(),
   getInvoiceEmlDefaults: vi.fn(),
   removeInvoiceLogo: vi.fn(),
+  renderInvoice: vi.fn(),
   syncInvoicePaymentLink: vi.fn(),
   updateInvoice: vi.fn(async () => ({})),
   uploadInvoiceLogo: vi.fn(),
@@ -83,6 +84,13 @@ const FINALIZED_INVOICE = {
   ...EDIT_INVOICE,
   status: 'sent',
   finalized_at: '2026-05-02T00:00:00.000Z',
+}
+
+// A finalized invoice that already has a rendered PDF — the only state in which
+// the download / re-generate pair is offered.
+const RENDERED_INVOICE = {
+  ...FINALIZED_INVOICE,
+  pdf_path: 'tenants/1/invoices/old-key.pdf',
 }
 
 afterEach(async () => {
@@ -179,6 +187,141 @@ describe('InvoiceDetails', () => {
     expect(screen.getByText(/This invoice is finalized/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
     expect(screen.getByDisplayValue('Venue BV')).toBeDisabled()
+  })
+
+  it('offers re-generating the PDF on a finalized invoice and points the download at the fresh key', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
+    // The endpoint answers with the new key only — not a whole invoice.
+    invoicesApi.renderInvoice.mockResolvedValueOnce({ pdf_path: 'tenants/1/invoices/new-key.pdf' })
+    invoicesApi.getInvoice.mockResolvedValueOnce({
+      ...RENDERED_INVOICE,
+      pdf_path: 'tenants/1/invoices/new-key.pdf',
+    })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Re-generate PDF' }))
+
+    await waitFor(() => expect(invoicesApi.renderInvoice).toHaveBeenCalledWith(7))
+    // The download link follows the newly stored key (the old one is deleted server-side).
+    await waitFor(() => expect(screen.getByRole('link', { name: /Download PDF/ }))
+      .toHaveAttribute('href', '/api/files/tenants/1/invoices/new-key.pdf'))
+    // Re-generating is not a status change: nothing is PATCHed.
+    expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
+  })
+
+  it('keeps the finalized invoice intact after re-generating (render returns only pdf_path)', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
+    invoicesApi.renderInvoice.mockResolvedValueOnce({ pdf_path: 'tenants/1/invoices/new-key.pdf' })
+    invoicesApi.getInvoice.mockResolvedValueOnce({
+      ...RENDERED_INVOICE,
+      pdf_path: 'tenants/1/invoices/new-key.pdf',
+    })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText(/This invoice is finalized/)).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Re-generate PDF' }))
+    await waitFor(() => expect(invoicesApi.renderInvoice).toHaveBeenCalledWith(7))
+
+    // Everything derived from the loaded invoice must survive: read-only mode,
+    // the status chip and the finalized banner. Overwriting the invoice with the
+    // partial render response would drop all three.
+    expect(await screen.findByText(/This invoice is finalized/)).toBeInTheDocument()
+    expect(screen.getByText('sent')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Venue BV')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
+  })
+
+  it('surfaces an error when re-generating the PDF fails', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
+    invoicesApi.renderInvoice.mockRejectedValueOnce(new Error('render boom'))
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Re-generate PDF' }))
+
+    expect(await screen.findByText('render boom')).toBeInTheDocument()
+    // The previously stored PDF is still downloadable.
+    expect(screen.getByRole('link', { name: /Download PDF/ }))
+      .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
+  })
+
+  it('offers no re-generate control before a PDF has been rendered', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
+    expect(screen.queryByRole('link', { name: /Download PDF/ })).toBeNull()
+  })
+
+  // Reader mode: finance.view without finance.manage. Every invoice mutation is
+  // finance.manage on the server, so nothing may be offered as editable.
+  describe('without finance.manage', () => {
+    it('hides the PDF re-generate control but keeps the download link', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
+      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
+      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+      expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
+      // Download is a read affordance — the route carries no finance.manage gate.
+      expect(screen.getByRole('link', { name: /Download PDF/ }))
+        .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
+      expect(screen.getByRole('button', { name: 'Download email' })).toBeInTheDocument()
+    })
+
+    it('renders an editable draft read-only and withholds save/delete/status actions', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
+      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+      expect(screen.getByDisplayValue('Venue BV')).toBeDisabled()
+      expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Mark as sent' })).toBeNull()
+      // The lines editor disables rather than hides its controls — the existing
+      // read-only treatment it already applies to a finalized invoice.
+      expect(screen.getByRole('button', { name: /Add item/ })).toBeDisabled()
+      expect(screen.getByLabelText('remove line')).toBeDisabled()
+    })
+
+    it('withholds the payment-link controls but keeps copy and open', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
+      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
+      await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
+
+      expect(screen.queryByRole('button', { name: 'Refresh payment status' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Remove payment link' })).toBeNull()
+      expect(screen.getByRole('button', { name: /Copy link/ })).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Open payment page' })).toBeInTheDocument()
+    })
+
+    it('offers no create control when there is no payment link yet', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
+      await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
+
+      expect(screen.queryByRole('button', { name: /Create payment link/ })).toBeNull()
+    })
+
+    it('refuses the re-generate mutation even if the handler is reached', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
+      const { rerender } = wrap(
+        <InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite />,
+      )
+      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+      // Re-render as a reader while the control is still mounted from the
+      // writer pass, then drive the click past the disabled-pointer check:
+      // the guard in the hook must still refuse the call.
+      rerender(
+        <ThemeProvider theme={theme}>
+          <InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />
+        </ThemeProvider>,
+      )
+      expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
+      expect(invoicesApi.renderInvoice).not.toHaveBeenCalled()
+    })
   })
 
   it('adds and removes invoice lines', async () => {

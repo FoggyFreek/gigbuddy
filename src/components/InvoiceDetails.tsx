@@ -8,9 +8,12 @@ import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import DownloadIcon from '@mui/icons-material/Download'
 import EmailIcon from '@mui/icons-material/Email'
 import DeleteIcon from '@mui/icons-material/Delete'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import { invoiceStatusColor } from '../utils/invoiceStatus.ts'
 import { useInvoiceDetailsState } from './invoices/useInvoiceDetailsState.ts'
 import InvoiceLogoHeader from './invoices/InvoiceLogoHeader.tsx'
@@ -30,11 +33,13 @@ interface InvoiceDetailsProps {
   onClose: (updated?: boolean) => void
   onInvoiceUpdate?: (id: Id, patch: Partial<Invoice>) => void
   onTitleReady?: (title: string) => void
+  /** false ⇒ read-only view for a viewer without finance.manage. */
+  canWrite?: boolean
 }
 
-export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, onTitleReady }: Readonly<InvoiceDetailsProps>) {
+export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, onTitleReady, canWrite = true }: Readonly<InvoiceDetailsProps>) {
   const { t } = useTranslation(['invoices', 'common'])
-  const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate })
+  const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate, canWrite })
   const isCompact = useCompactLayout()
 
   useEffect(() => {
@@ -56,6 +61,37 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
     || (s.form.invert_logo && s.tenant?.logo_dark_path ? s.tenant.logo_dark_path : s.tenant?.logo_path)
     || undefined
   const bandHeading = s.tenant?.formal_name || s.tenant?.band_name || ''
+
+  // Shown once a PDF exists. Download is a read affordance, so every finance
+  // viewer keeps it. Re-generating is a mutation behind finance.manage, but it
+  // never touches the invoice *data* — so it stays available on a finalized
+  // invoice: a rendering fix lands without voiding and re-issuing.
+  const pdfActions = s.invoice?.pdf_path ? (
+    <>
+      <Button
+        component="a"
+        href={`/api/files/${s.invoice.pdf_path}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        startIcon={<DownloadIcon />}
+      >
+        {t($ => $.pdf.download)}
+      </Button>
+      {canWrite && (
+        <Tooltip title={t($ => $.pdf.rerender)}>
+          <IconButton
+            size="small"
+            color="primary"
+            onClick={s.handlePdfRerender}
+            disabled={s.pdfRerenderBusy}
+            aria-label={t($ => $.pdf.rerenderAria)}
+          >
+            {s.pdfRerenderBusy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+      )}
+    </>
+  ) : null
 
   const dialogs = (
     <>
@@ -113,13 +149,15 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
                   label={t($ => $.rawStatus[s.invoice!.status as InvoiceStatus])}
                 />
               )}
-              <Box sx={{ ml: 'auto' }}>
-                <InvoiceStatusActions
-                  status={s.invoice.status ?? 'draft'}
-                  disabled={s.saving}
-                  onStatusChange={s.handleStatusChange}
-                />
-              </Box>
+              {canWrite && (
+                <Box sx={{ ml: 'auto' }}>
+                  <InvoiceStatusActions
+                    status={s.invoice.status ?? 'draft'}
+                    disabled={s.saving}
+                    onStatusChange={s.handleStatusChange}
+                  />
+                </Box>
+              )}
             </Box>
           )}
           {s.finalized && (
@@ -181,6 +219,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
               <Divider sx={{ my: 2 }} />
               <PaymentLinkPanel
                 invoice={s.invoice}
+                canWrite={canWrite}
                 onUpdated={(updated) => s.setInvoice({ ...s.invoice, ...updated } as Invoice)}
               />
             </>
@@ -190,17 +229,9 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
         <Divider sx={{ mt: 3, mb: 2 }} />
         {isCompact ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              {s.invoice?.pdf_path ? (
-                <Button
-                  component="a"
-                  href={`/api/files/${s.invoice.pdf_path}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  startIcon={<DownloadIcon />}
-                >
-                  {t($ => $.pdf.download)}
-                </Button>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+              {pdfActions ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>{pdfActions}</Box>
               ) : <Box />}
               {s.invoice && (
                 <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>
@@ -210,7 +241,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
             </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'center' }}>
               <Box>
-                {!s.finalized && (
+                {canWrite && !s.finalized && (
                   <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
                     {t($ => $.common.actions.delete)}
                   </Button>
@@ -231,24 +262,14 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
         ) : (
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>
-              {!s.finalized && (
+              {canWrite && !s.finalized && (
                 <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
                   {t($ => $.common.actions.delete)}
                 </Button>
               )}
             </Box>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {s.invoice?.pdf_path && (
-                <Button
-                  component="a"
-                  href={`/api/files/${s.invoice.pdf_path}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  startIcon={<DownloadIcon />}
-                >
-                  {t($ => $.pdf.download)}
-                </Button>
-              )}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {pdfActions}
               {s.invoice && (
                 <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>
                   {t($ => $.detail.downloadEmail)}

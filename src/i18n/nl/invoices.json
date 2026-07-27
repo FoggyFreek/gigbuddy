@@ -178,7 +178,9 @@
   },
   "pdf": {
     "download": "Pdf downloaden",
-    "retry": "Het maken van de pdf is mislukt - klik om opnieuw te proberen"
+    "retry": "Het maken van de pdf is mislukt - klik om opnieuw te proberen",
+    "rerender": "De pdf opnieuw maken op basis van de huidige factuurgegevens",
+    "rerenderAria": "Pdf opnieuw maken"
   },
   "validation": {
     "customerRequired": "Naam van de klant is verplicht",

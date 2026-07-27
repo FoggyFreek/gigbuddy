@@ -62,6 +62,9 @@ describe('TasksTable', () => {
   })
 
   it('shows assignee name and due date for a gig-linked task', () => {
+    // Pinned: within a week of the due date formatDueDate switches to a relative label.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-07-01T12:00:00.000Z'))
     wrap(<TasksTable tasks={TASKS} onToggleDone={noop} canToggleDone={yes} onOpenGig={noop} />)
     expect(screen.getByText('Alice')).toBeInTheDocument()
     expect(screen.getByText('01 aug 2026')).toBeInTheDocument()
