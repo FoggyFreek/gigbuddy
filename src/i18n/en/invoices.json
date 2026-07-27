@@ -178,7 +178,8 @@
   },
   "pdf": {
     "download": "Download PDF",
-    "retry": "PDF render failed - click to retry"
+    "retry": "PDF render failed - click to retry",
+    "rerenderTooltip": "Re-render PDF"
   },
   "validation": {
     "customerRequired": "Customer name is required",

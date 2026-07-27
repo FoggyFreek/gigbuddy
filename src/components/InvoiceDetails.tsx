@@ -8,9 +8,12 @@ import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import DownloadIcon from '@mui/icons-material/Download'
 import EmailIcon from '@mui/icons-material/Email'
 import DeleteIcon from '@mui/icons-material/Delete'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import { invoiceStatusColor } from '../utils/invoiceStatus.ts'
 import { useInvoiceDetailsState } from './invoices/useInvoiceDetailsState.ts'
 import InvoiceLogoHeader from './invoices/InvoiceLogoHeader.tsx'
@@ -190,17 +193,29 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
         <Divider sx={{ mt: 3, mb: 2 }} />
         {isCompact ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
               {s.invoice?.pdf_path ? (
-                <Button
-                  component="a"
-                  href={`/api/files/${s.invoice.pdf_path}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  startIcon={<DownloadIcon />}
-                >
-                  {t($ => $.pdf.download)}
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    component="a"
+                    href={`/api/files/${s.invoice.pdf_path}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    startIcon={<DownloadIcon />}
+                  >
+                    {t($ => $.pdf.download)}
+                  </Button>
+                  <Tooltip title={t($ => $.pdf.rerenderTooltip)}>
+                    <IconButton
+                      onClick={s.handlePdfRerender}
+                      disabled={s.pdfRerenderBusy}
+                      size="small"
+                      sx={{ alignSelf: 'center' }}
+                    >
+                      <RefreshIcon sx={{ transition: 'transform 0.6s linear', transform: s.pdfRerenderBusy ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               ) : <Box />}
               {s.invoice && (
                 <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>
@@ -239,15 +254,26 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
             </Box>
             <Box sx={{ display: 'flex', gap: 1 }}>
               {s.invoice?.pdf_path && (
-                <Button
-                  component="a"
-                  href={`/api/files/${s.invoice.pdf_path}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  startIcon={<DownloadIcon />}
-                >
-                  {t($ => $.pdf.download)}
-                </Button>
+                <>
+                  <Button
+                    component="a"
+                    href={`/api/files/${s.invoice.pdf_path}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    startIcon={<DownloadIcon />}
+                  >
+                    {t($ => $.pdf.download)}
+                  </Button>
+                  <Tooltip title={t($ => $.pdf.rerenderTooltip)}>
+                    <IconButton
+                      onClick={s.handlePdfRerender}
+                      disabled={s.pdfRerenderBusy}
+                      size="small"
+                    >
+                      <RefreshIcon sx={{ transition: 'transform 0.6s linear', transform: s.pdfRerenderBusy ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                    </IconButton>
+                  </Tooltip>
+                </>
               )}
               {s.invoice && (
                 <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>

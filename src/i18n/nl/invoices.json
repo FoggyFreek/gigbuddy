@@ -178,7 +178,8 @@
   },
   "pdf": {
     "download": "Pdf downloaden",
-    "retry": "Het maken van de pdf is mislukt - klik om opnieuw te proberen"
+    "retry": "Het maken van de pdf is mislukt - klik om opnieuw te proberen",
+    "rerenderTooltip": "Pdf opnieuw weergeven"
   },
   "validation": {
     "customerRequired": "Naam van de klant is verplicht",
