@@ -50,10 +50,13 @@ function asUserA(req) {
 async function seedLinkpageContent() {
   const a = seed.tenantA.id
   const b = seed.tenantB.id
-  await pool.query(`UPDATE tenants SET band_name = 'Alpha Band', bio = 'Alpha bio', logo_path = $2 WHERE id = $1`, [
-    a,
-    `tenants/${a}/logo/logo.webp`,
-  ])
+  await pool.query(
+    `UPDATE tenants
+        SET band_name = 'Alpha Band', bio = 'Alpha bio',
+            logo_path = $2, logo_dark_path = $3, avatar_path = $4
+      WHERE id = $1`,
+    [a, `tenants/${a}/logo/logo.webp`, `tenants/${a}/logo/logo-dark.webp`, `tenants/${a}/avatar/avatar.webp`],
+  )
   // Tenant A: one song with two links, one song without links, a product,
   // an announced future gig, an option future gig (must not export), an
   // announced past gig (must not export), and a profile link.
@@ -127,7 +130,12 @@ describe('public linkpage export', () => {
     expect(res.status).toBe(200)
 
     expect(res.body.band).toMatchObject({ slug: 'alpha', name: 'Alpha Band', bio: 'Alpha bio' })
-    expect(res.body.band.logoUrl).toContain('https://app.test.local/api/public/linkpage/image?t=')
+    // Light logo, dark logo and profile picture are all exposed as signed image URLs.
+    for (const key of ['logoUrl', 'logoDarkUrl', 'avatarUrl']) {
+      expect(res.body.band[key]).toContain('https://app.test.local/api/public/linkpage/image?t=')
+    }
+    const imageUrls = ['logoUrl', 'logoDarkUrl', 'avatarUrl'].map((k) => res.body.band[k])
+    expect(new Set(imageUrls).size).toBe(3)
 
     // Songs: only those with links; links ordered.
     expect(res.body.songs).toHaveLength(1)

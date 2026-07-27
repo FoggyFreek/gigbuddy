@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -83,6 +83,23 @@ function formatDate(val: string | Date | undefined): string {
 function formatTime(val: string | null | undefined): string {
   if (!val) return '—'
   return val.slice(0, 5)
+}
+
+function filterGigs(
+  gigs: GigWithExtras[],
+  selectedStatuses: ReadonlySet<string>,
+  selectedTags: ReadonlySet<string>,
+): GigWithExtras[] {
+  let filtered = gigs
+  if (selectedStatuses.size !== ALL_STATUSES.length) {
+    filtered = filtered.filter((g) => selectedStatuses.has(g.status ?? ''))
+  }
+  if (selectedTags.size > 0) {
+    filtered = filtered.filter((gig) =>
+      (gig.tags ?? []).some((tag) => tag.name && selectedTags.has(tag.name)),
+    )
+  }
+  return filtered
 }
 
 function GigCard({ gig, active, onClick }: Readonly<GigCardProps>) {
@@ -211,31 +228,20 @@ function DesktopHead() {
   )
 }
 
-export default function GigsTable({
-  gigs,
-  loading = false,
-  activeTab = 'upcoming',
-  onTabChange = () => {},
-  onRowClick,
-  selectedId = undefined,
-  onFilterSelectionChange,
-  search = '',
-  onSearchChange = () => {},
-  isSearching = false,
-  hasMore = false,
-  loadingMore = false,
-  onLoadMore,
-}: Readonly<GigsTableProps>) {
+interface GigsSearchFieldProps {
+  search: string
+  onSearchChange: (value: string) => void
+  isCompact: boolean
+}
+
+// Owns the search text and its debounce so keystrokes stay local (see the
+// SEARCH_DEBOUNCE_MS comment above).
+function GigsSearchField({ search, onSearchChange, isCompact }: Readonly<GigsSearchFieldProps>) {
   const { t } = useTranslation('gigs')
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set(ALL_STATUSES))
-  const [typeAnchor, setTypeAnchor] = useState<HTMLElement | null>(null)
-  const [tagAnchor, setTagAnchor] = useState<HTMLElement | null>(null)
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
   const [inputValue, setInputValue] = useState(search)
   const [syncedSearch, setSyncedSearch] = useState(search)
   const [lastSent, setLastSent] = useState(search)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isCompact = useCompactLayout()
 
   // Adjust local input state when `search` changes externally (e.g. the
   // parent clearing it) — per React's "adjusting state on a prop change"
@@ -248,10 +254,6 @@ export default function GigsTable({
       setInputValue(search)
     }
   }
-
-  useEffect(() => {
-    onFilterSelectionChange?.({ selectedStatuses, selectedTags })
-  }, [onFilterSelectionChange, selectedStatuses, selectedTags])
 
   useEffect(() => () => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -266,53 +268,7 @@ export default function GigsTable({
     }, SEARCH_DEBOUNCE_MS)
   }
 
-  const availableTags = [...new Map(
-    gigs.flatMap((gig) => gig.tags ?? [])
-      .filter((tag) => tag.name)
-      .map((tag) => [tag.name!.toLowerCase(), tag.name!] as const),
-  ).values()].sort((a, b) => a.localeCompare(b))
-
-  function toggleStatus(s: string) {
-    setSelectedStatuses((prev) => {
-      const next = new Set(prev)
-      if (next.has(s)) next.delete(s)
-      else next.add(s)
-      return next
-    })
-  }
-
-  function toggleAllStatuses() {
-    setSelectedStatuses((prev) =>
-      prev.size === ALL_STATUSES.length ? new Set() : new Set(ALL_STATUSES)
-    )
-  }
-
-  function toggleTag(tag: string) {
-    setSelectedTags((prev) => {
-      const next = new Set(prev)
-      if (next.has(tag)) next.delete(tag)
-      else next.add(tag)
-      return next
-    })
-  }
-
-  const allStatusesSelected = selectedStatuses.size === ALL_STATUSES.length
-  const someStatusesSelected = selectedStatuses.size > 0 && !allStatusesSelected
-  const statusFilterActive = !allStatusesSelected
-
-  let filtered = gigs
-  if (!allStatusesSelected) filtered = filtered.filter((g) => selectedStatuses.has(g.status ?? ''))
-  if (selectedTags.size > 0) {
-    filtered = filtered.filter((gig) =>
-      (gig.tags ?? []).some((tag) => tag.name && selectedTags.has(tag.name)),
-    )
-  }
-
-  const emptyMessage = isSearching
-    ? t($ => $.table.emptySearch)
-    : t(activeTab === 'upcoming' ? ($ => $.table.emptyUpcoming) : ($ => $.table.emptyPast))
-
-  const searchField = (
+  return (
     <TextField
       size="small"
       placeholder={t($ => $.table.searchPlaceholder)}
@@ -330,23 +286,52 @@ export default function GigsTable({
       }}
     />
   )
+}
 
-  const typeFilter = (
+interface StatusFilterMenuProps {
+  selectedStatuses: Set<string>
+  setSelectedStatuses: Dispatch<SetStateAction<Set<string>>>
+}
+
+function StatusFilterMenu({ selectedStatuses, setSelectedStatuses }: Readonly<StatusFilterMenuProps>) {
+  const { t } = useTranslation('gigs')
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+
+  const allStatusesSelected = selectedStatuses.size === ALL_STATUSES.length
+  const someStatusesSelected = selectedStatuses.size > 0 && !allStatusesSelected
+  const statusFilterActive = !allStatusesSelected
+
+  function toggleStatus(s: string) {
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev)
+      if (next.has(s)) next.delete(s)
+      else next.add(s)
+      return next
+    })
+  }
+
+  function toggleAllStatuses() {
+    setSelectedStatuses((prev) =>
+      prev.size === ALL_STATUSES.length ? new Set() : new Set(ALL_STATUSES)
+    )
+  }
+
+  return (
     <>
       <Button
         size="small"
         variant={statusFilterActive ? 'contained' : 'outlined'}
         startIcon={<FilterListIcon />}
-        onClick={(e) => setTypeAnchor(e.currentTarget)}
+        onClick={(e) => setAnchor(e.currentTarget)}
       >
         {statusFilterActive
           ? t($ => $.table.typesWithCount, { count: selectedStatuses.size })
           : t($ => $.table.types)}
       </Button>
       <Menu
-        anchorEl={typeAnchor}
-        open={Boolean(typeAnchor)}
-        onClose={() => setTypeAnchor(null)}
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => setAnchor(null)}
       >
         <MenuItem dense onClick={toggleAllStatuses}>
           <Checkbox
@@ -366,14 +351,34 @@ export default function GigsTable({
       </Menu>
     </>
   )
+}
 
-  const tagFilter = (
+interface TagFilterMenuProps {
+  availableTags: string[]
+  selectedTags: Set<string>
+  setSelectedTags: Dispatch<SetStateAction<Set<string>>>
+}
+
+function TagFilterMenu({ availableTags, selectedTags, setSelectedTags }: Readonly<TagFilterMenuProps>) {
+  const { t } = useTranslation('gigs')
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+
+  function toggleTag(tag: string) {
+    setSelectedTags((prev) => {
+      const next = new Set(prev)
+      if (next.has(tag)) next.delete(tag)
+      else next.add(tag)
+      return next
+    })
+  }
+
+  return (
     <>
       <Button
         size="small"
         variant={selectedTags.size > 0 ? 'contained' : 'outlined'}
         startIcon={<LocalOfferOutlinedIcon />}
-        onClick={(e) => setTagAnchor(e.currentTarget)}
+        onClick={(e) => setAnchor(e.currentTarget)}
         disabled={availableTags.length === 0}
       >
         {selectedTags.size > 0
@@ -381,9 +386,9 @@ export default function GigsTable({
           : t($ => $.table.tags)}
       </Button>
       <Menu
-        anchorEl={tagAnchor}
-        open={Boolean(tagAnchor)}
-        onClose={() => setTagAnchor(null)}
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => setAnchor(null)}
       >
         <MenuItem dense onClick={() => setSelectedTags(new Set())}>
           <Checkbox size="small" checked={selectedTags.size === 0} />
@@ -399,6 +404,111 @@ export default function GigsTable({
       </Menu>
     </>
   )
+}
+
+interface GigListBodyProps {
+  loading: boolean
+  gigs: GigWithExtras[]
+  emptyMessage: string
+  selectedId?: Id
+  onRowClick?: (gig: GigWithExtras) => void
+}
+
+function CompactGigList({ loading, gigs, emptyMessage, selectedId, onRowClick }: Readonly<GigListBodyProps>) {
+  let content: ReactNode
+  if (loading) {
+    content = (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress size={24} />
+      </Box>
+    )
+  } else if (gigs.length === 0) {
+    content = (
+      <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
+        {emptyMessage}
+      </Box>
+    )
+  } else {
+    content = gigs.map((gig) => (
+      <GigCard key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
+    ))
+  }
+
+  return (
+    <Paper variant="outlined">
+      {content}
+    </Paper>
+  )
+}
+
+function DesktopGigTable({ loading, gigs, emptyMessage, selectedId, onRowClick }: Readonly<GigListBodyProps>) {
+  return (
+    <TableContainer component={Paper} variant="outlined">
+      <Table size="small">
+        <DesktopHead />
+        <TableBody>
+          {loading && (
+            <TableRow>
+              <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 4 }}>
+                <CircularProgress size={24} />
+              </TableCell>
+            </TableRow>
+          )}
+          {!loading && gigs.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
+                {emptyMessage}
+              </TableCell>
+            </TableRow>
+          )}
+          {!loading && gigs.map((gig) => (
+            <DesktopRow key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  )
+}
+
+export default function GigsTable({
+  gigs,
+  loading = false,
+  activeTab = 'upcoming',
+  onTabChange = () => {},
+  onRowClick,
+  selectedId = undefined,
+  onFilterSelectionChange,
+  search = '',
+  onSearchChange = () => {},
+  isSearching = false,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+}: Readonly<GigsTableProps>) {
+  const { t } = useTranslation('gigs')
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set(ALL_STATUSES))
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
+  const isCompact = useCompactLayout()
+
+  useEffect(() => {
+    onFilterSelectionChange?.({ selectedStatuses, selectedTags })
+  }, [onFilterSelectionChange, selectedStatuses, selectedTags])
+
+  const availableTags = [...new Map(
+    gigs.flatMap((gig) => gig.tags ?? [])
+      .filter((tag) => tag.name)
+      .map((tag) => [tag.name!.toLowerCase(), tag.name!] as const),
+  ).values()].sort((a, b) => a.localeCompare(b))
+
+  const filtered = filterGigs(gigs, selectedStatuses, selectedTags)
+
+  const emptyMessage = isSearching
+    ? t($ => $.table.emptySearch)
+    : t(activeTab === 'upcoming' ? ($ => $.table.emptyUpcoming) : ($ => $.table.emptyPast))
+
+  const searchField = <GigsSearchField search={search} onSearchChange={onSearchChange} isCompact={isCompact} />
+  const typeFilter = <StatusFilterMenu selectedStatuses={selectedStatuses} setSelectedStatuses={setSelectedStatuses} />
+  const tagFilter = <TagFilterMenu availableTags={availableTags} selectedTags={selectedTags} setSelectedTags={setSelectedTags} />
 
   const tabs = (
     <Tabs
@@ -438,66 +548,15 @@ export default function GigsTable({
     </Box>
   )
 
-  if (isCompact) {
-    let content: ReactNode
-    if (loading) {
-      content = (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress size={24} />
-        </Box>
-      )
-    } else if (filtered.length === 0) {
-      content = (
-        <Box sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-          {emptyMessage}
-        </Box>
-      )
-    } else {
-      content = filtered.map((gig) => (
-        <GigCard key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
-      ))
-    }
-
-    return (
-      <Stack spacing={1.5}>
-        {!isSearching && tabs}
-        {controls}
-        <Paper variant="outlined">
-          {content}
-        </Paper>
-        {!isSearching && loadMoreFooter}
-      </Stack>
-    )
-  }
+  const list = isCompact
+    ? <CompactGigList loading={loading} gigs={filtered} emptyMessage={emptyMessage} selectedId={selectedId} onRowClick={onRowClick} />
+    : <DesktopGigTable loading={loading} gigs={filtered} emptyMessage={emptyMessage} selectedId={selectedId} onRowClick={onRowClick} />
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={isCompact ? 1.5 : 2}>
       {!isSearching && tabs}
       {controls}
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
-          <DesktopHead />
-          <TableBody>
-            {loading && (
-              <TableRow>
-                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 4 }}>
-                  <CircularProgress size={24} />
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && filtered.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
-                  {emptyMessage}
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && filtered.map((gig) => (
-              <DesktopRow key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {list}
       {!isSearching && loadMoreFooter}
     </Stack>
   )

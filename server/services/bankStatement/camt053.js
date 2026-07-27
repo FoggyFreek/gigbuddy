@@ -142,6 +142,51 @@ function buildLine({
   }
 }
 
+// One Ntry → its normalized line(s). Expands into per-TxDtls lines only when the
+// details reconcile to the booked entry amount (see detailsReconcile); otherwise
+// the entry stays a single aggregate line.
+function linesForEntry(ntry, stmtCcy) {
+  const entryDir = dirFromInd(ntry.CdtDbtInd)
+  const entryCcy = (ntry.Amt && typeof ntry.Amt === 'object' ? ntry.Amt['@_Ccy'] : null) ?? stmtCcy
+  const bookingDate = trimOrNull(ntry.BookgDt?.Dt) ?? trimOrNull(ntry.BookgDt?.DtTm)?.slice(0, 10)
+  const valueDate = trimOrNull(ntry.ValDt?.Dt) ?? trimOrNull(ntry.ValDt?.DtTm)?.slice(0, 10) ?? null
+  const entryRef = trimOrNull(ntry.AcctSvcrRef) ?? trimOrNull(ntry.NtryRef)
+  const entryReversal = isTrueFlag(ntry.RvslInd)
+  if (!bookingDate) throw new BankStatementParseError('entry missing booking date')
+
+  const entryReturn = Boolean(ntry.RtrInf)
+  const shared = { entryDir, entryCcy, bookingDate, valueDate, entryRef }
+  const txDetails = asArray(ntry.NtryDtls).flatMap((d) => asArray(d.TxDtls))
+
+  if (txDetails.length === 1) {
+    const txDtls = txDetails[0]
+    const txReversal = isTrueFlag(txDtls.RvslInd)
+    return [buildLine({
+      ...shared, txDtls, amountNode: ntry.Amt,
+      isReversal: entryReversal || txReversal || entryReturn || Boolean(txDtls.RtrInf),
+      partiesUseOriginalDirection: entryReversal || txReversal,
+    })]
+  }
+
+  if (!txDetails.length || !detailsReconcile(txDetails, ntry.Amt, entryCcy, entryDir)) {
+    return [buildLine({
+      ...shared, txDtls: null, amountNode: ntry.Amt,
+      isReversal: entryReversal || entryReturn
+        || txDetails.some((tx) => isTrueFlag(tx.RvslInd) || Boolean(tx.RtrInf)),
+      partiesUseOriginalDirection: entryReversal,
+    })]
+  }
+
+  return txDetails.map((txDtls) => {
+    const txReversal = isTrueFlag(txDtls.RvslInd)
+    return buildLine({
+      ...shared, txDtls, amountNode: detailAmountNode(txDtls),
+      isReversal: entryReversal || txReversal || entryReturn || Boolean(txDtls.RtrInf),
+      partiesUseOriginalDirection: entryReversal || txReversal,
+    })
+  })
+}
+
 export function parseCamt053(xml) {
   let doc
   try {
@@ -171,58 +216,7 @@ export function parseCamt053(xml) {
   for (const stmt of stmts) {
     const stmtCcy = trimOrNull(stmt.Acct?.Ccy) ?? statementCcy
     for (const ntry of asArray(stmt.Ntry)) {
-      const entryDir = dirFromInd(ntry.CdtDbtInd)
-      const entryCcy = (ntry.Amt && typeof ntry.Amt === 'object' ? ntry.Amt['@_Ccy'] : null) ?? stmtCcy
-      const bookingDate = trimOrNull(ntry.BookgDt?.Dt) ?? trimOrNull(ntry.BookgDt?.DtTm)?.slice(0, 10)
-      const valueDate = trimOrNull(ntry.ValDt?.Dt) ?? trimOrNull(ntry.ValDt?.DtTm)?.slice(0, 10) ?? null
-      const entryRef = trimOrNull(ntry.AcctSvcrRef) ?? trimOrNull(ntry.NtryRef)
-      const entryReversal = isTrueFlag(ntry.RvslInd)
-      if (!bookingDate) throw new BankStatementParseError('entry missing booking date')
-
-      const entryReturn = Boolean(ntry.RtrInf)
-      const txDetails = asArray(ntry.NtryDtls).flatMap((d) => asArray(d.TxDtls))
-      if (!txDetails.length) {
-        lines.push(buildLine({
-          txDtls: null, entryDir, amountNode: ntry.Amt, entryCcy,
-          bookingDate, valueDate, entryRef,
-          isReversal: entryReversal || entryReturn,
-          partiesUseOriginalDirection: entryReversal,
-        }))
-        continue
-      }
-
-      if (txDetails.length === 1) {
-        const txDtls = txDetails[0]
-        const txReversal = isTrueFlag(txDtls.RvslInd)
-        lines.push(buildLine({
-          txDtls, entryDir, amountNode: ntry.Amt, entryCcy,
-          bookingDate, valueDate, entryRef,
-          isReversal: entryReversal || txReversal || entryReturn || Boolean(txDtls.RtrInf),
-          partiesUseOriginalDirection: entryReversal || txReversal,
-        }))
-        continue
-      }
-
-      if (!detailsReconcile(txDetails, ntry.Amt, entryCcy, entryDir)) {
-        lines.push(buildLine({
-          txDtls: null, entryDir, amountNode: ntry.Amt, entryCcy,
-          bookingDate, valueDate, entryRef,
-          isReversal: entryReversal || entryReturn
-            || txDetails.some((tx) => isTrueFlag(tx.RvslInd) || Boolean(tx.RtrInf)),
-          partiesUseOriginalDirection: entryReversal,
-        }))
-        continue
-      }
-
-      for (const txDtls of txDetails) {
-        const txReversal = isTrueFlag(txDtls.RvslInd)
-        lines.push(buildLine({
-          txDtls, entryDir, amountNode: detailAmountNode(txDtls), entryCcy,
-          bookingDate, valueDate, entryRef,
-          isReversal: entryReversal || txReversal || entryReturn || Boolean(txDtls.RtrInf),
-          partiesUseOriginalDirection: entryReversal || txReversal,
-        }))
-      }
+      lines.push(...linesForEntry(ntry, stmtCcy))
     }
   }
 

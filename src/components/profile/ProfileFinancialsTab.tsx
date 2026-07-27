@@ -9,6 +9,7 @@ import Grid from '@mui/material/Grid'
 import InputAdornment from '@mui/material/InputAdornment'
 import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
+import IconButton from '@mui/material/IconButton'
 import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
@@ -234,7 +235,7 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
           ))}
         </TextField>
       </Grid>
-      <Grid size={{ xs: 8, md: 4 }}>
+      <Grid size={{ xs: 8, md: 6 }}>
         <TextField
           label={t($ => $.financials.taxId)}
           fullWidth
@@ -248,7 +249,7 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
             : t($ => $.financials.taxIdHelper, { example: getVatIdExample(form.vat_country) })}
         />
       </Grid>
-      <Grid size={{ xs: 4, md: 2 }}>
+      <Grid size={{ xs: 4, md: 3 }}>
         <TextField
           label={t($ => $.financials.taxPercent)}
           fullWidth
@@ -258,9 +259,35 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
           onBlur={handleTaxPercentageBlur}
           slotProps={{
             htmlInput: { min: 0, max: 100, step: 0.1 },
-            input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
+            input: {
+              endAdornment:
+                <InputAdornment position="end">
+                  %
+                  <Tooltip
+                    title={t($ => $.financials.taxPercentHelper)}
+                    describeChild
+                    arrow
+                    slotProps={{
+                      tooltip: {
+                        sx: {
+                          maxWidth: 200,
+                          whiteSpace: 'normal',
+                          overflowWrap: 'anywhere',
+                        },
+                      },
+                    }}
+                  >
+                    <IconButton
+                      size="small"
+                      edge="end"
+                      aria-label={t($ => $.financials.taxPercentHelper)}
+                    >
+                      <InfoOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </InputAdornment>
+            },
           }}
-          helperText={t($ => $.financials.taxPercentHelper)}
         />
       </Grid>
       {/* KOR is a Dutch-only VAT exemption, so only offer it to NL tenants. */}

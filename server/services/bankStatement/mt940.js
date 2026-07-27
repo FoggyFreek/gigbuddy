@@ -241,6 +241,53 @@ function statementMetadata(records) {
   }
 }
 
+// One :61: record → a normalized statement line (counterparty fields are filled
+// in later by the trailing :86: record, if any).
+function parseLine61(record, currency) {
+  const [firstLine, ...continuation] = record.value.split(/\r?\n/)
+  const match = RE_61.exec(firstLine.trim())
+  if (!match) throw new BankStatementParseError(`unparseable :61: line: ${firstLine}`)
+  const [, valueDate, entryDate, mark, , amount, , rest] = match
+  if (amount.length > 15) {
+    throw new BankStatementParseError(`invalid MT940 amount in :61: ${amount}`)
+  }
+
+  const separator = rest.indexOf('//')
+  const ownerRef = (separator === -1 ? rest : rest.slice(0, separator)).trim()
+  const bankRef = separator === -1 ? null : rest.slice(separator + 2).trim()
+  if (!ownerRef || ownerRef.length > 16) {
+    throw new BankStatementParseError('invalid MT940 :61: account owner reference')
+  }
+  if (bankRef && bankRef.length > 16) {
+    throw new BankStatementParseError('invalid MT940 :61: bank reference')
+  }
+
+  const { direction, isReversal } = markToDirection(mark)
+  const valueIso = isoDate(valueDate)
+  const detail = [ownerRef, ...continuation.map((line) => line.trim())].filter(Boolean).join(' ')
+  return {
+    bookingDate: isoEntryDate(entryDate, valueIso) ?? valueIso,
+    valueDate: valueIso,
+    amountCents: swiftAmountToCents(amount, '61'),
+    direction,
+    currency,
+    counterpartyName: null,
+    counterpartyIban: null,
+    remittance: detail || null,
+    bankRef: meaningfulRef(bankRef),
+    endToEndId: null,
+    isReversal,
+  }
+}
+
+// Merge a :86: information record into the :61: line it follows.
+function applyField86(pending, value) {
+  const info = parse86(value)
+  pending.counterpartyName = info.name ?? pending.counterpartyName
+  pending.counterpartyIban = normalizeIban(info.iban ?? findIban(value))
+  if (info.remittance) pending.remittance = info.remittance
+}
+
 function parseStatement(records) {
   const metadata = statementMetadata(records)
   const lines = []
@@ -255,55 +302,16 @@ function parseStatement(records) {
 
   for (const record of records) {
     switch (record.tag) {
-      case '61': {
+      case '61':
         if (entriesClosed) {
           throw new BankStatementParseError('MT940 :61: statement line occurs after closing balance')
         }
         flush()
-        const [firstLine, ...continuation] = record.value.split(/\r?\n/)
-        const match = RE_61.exec(firstLine.trim())
-        if (!match) throw new BankStatementParseError(`unparseable :61: line: ${firstLine}`)
-        const [, valueDate, entryDate, mark, , amount, , rest] = match
-        if (amount.length > 15) {
-          throw new BankStatementParseError(`invalid MT940 amount in :61: ${amount}`)
-        }
-
-        const separator = rest.indexOf('//')
-        const ownerRef = (separator === -1 ? rest : rest.slice(0, separator)).trim()
-        const bankRef = separator === -1 ? null : rest.slice(separator + 2).trim()
-        if (!ownerRef || ownerRef.length > 16) {
-          throw new BankStatementParseError('invalid MT940 :61: account owner reference')
-        }
-        if (bankRef && bankRef.length > 16) {
-          throw new BankStatementParseError('invalid MT940 :61: bank reference')
-        }
-
-        const { direction, isReversal } = markToDirection(mark)
-        const valueIso = isoDate(valueDate)
-        const detail = [ownerRef, ...continuation.map((line) => line.trim())].filter(Boolean).join(' ')
-        pending = {
-          bookingDate: isoEntryDate(entryDate, valueIso) ?? valueIso,
-          valueDate: valueIso,
-          amountCents: swiftAmountToCents(amount, '61'),
-          direction,
-          currency: metadata.currency,
-          counterpartyName: null,
-          counterpartyIban: null,
-          remittance: detail || null,
-          bankRef: meaningfulRef(bankRef),
-          endToEndId: null,
-          isReversal,
-        }
+        pending = parseLine61(record, metadata.currency)
         break
-      }
-      case '86': {
-        if (!pending || entriesClosed) break
-        const info = parse86(record.value)
-        pending.counterpartyName = info.name ?? pending.counterpartyName
-        pending.counterpartyIban = normalizeIban(info.iban ?? findIban(record.value))
-        if (info.remittance) pending.remittance = info.remittance
+      case '86':
+        if (pending && !entriesClosed) applyField86(pending, record.value)
         break
-      }
       case '62F':
       case '62M':
         flush()

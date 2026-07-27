@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { type Dispatch, type SetStateAction, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
@@ -54,16 +54,169 @@ function gigLabel(gig: Gig, locale: string): string {
   return [gig.event_description, date].filter(Boolean).join(' · ')
 }
 
-export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, onSaved }: Readonly<MemoryTileProps>) {
-  const { t, i18n } = useTranslation('dashboard')
-  const { t: tCommon } = useTranslation('common')
-  const locale = i18n.resolvedLanguage ?? 'en'
-  const navigate = useNavigate()
-  const showToast = useToast()
+// The persisted gigId is resolved against the freshest source that has the gig:
+// an explicit selection, the gigs the parent already loaded, then search results.
+function resolveLinkedGig(gigId: Id | null, selectedGig: Gig | null, gigs: Gig[], gigOptions: Gig[]): Gig | null {
+  if (gigId == null) return null
+  return (selectedGig?.id === gigId ? selectedGig : null)
+    ?? gigs.find((gig) => gig.id === gigId)
+    ?? gigOptions.find((gig) => gig.id === gigId)
+    ?? null
+}
 
-  const [editing, setEditing] = useState(false)
-  const [removing, setRemoving] = useState(false)
-  const [selectedGig, setSelectedGig] = useState<Gig | null>(null)
+interface GigChipProps {
+  gig: Gig
+  locale: string
+  /** Overlay style sits on the photo's bottom-right corner (read view). */
+  overlay?: boolean
+}
+
+function GigChip({ gig, locale, overlay = false }: Readonly<GigChipProps>) {
+  const navigate = useNavigate()
+  return (
+    <Chip
+      icon={<CollectionsIcon />}
+      label={gigLabel(gig, locale)}
+      onClick={() => navigate(`/gigs/${gig.id}`)}
+      size="small"
+      variant={overlay ? 'filled' : 'outlined'}
+      sx={overlay ? {
+        position: 'absolute', bottom: 8, right: 8, maxWidth: 'calc(100% - 16px)',
+        bgcolor: 'rgba(0,0,0,0.6)', color: '#fff', backdropFilter: 'blur(4px)',
+        '& .MuiChip-icon': { color: '#fff' },
+        '&:hover': { bgcolor: 'rgba(0,0,0,0.78)' },
+      } : { maxWidth: '100%' }}
+    />
+  )
+}
+
+interface MemoryEditActionsProps {
+  editing: boolean
+  hasPhoto: boolean
+  removing: boolean
+  uploading: boolean
+  onRemovePhoto: () => void
+  onToggleEditing: () => void
+}
+
+function MemoryEditActions({
+  editing, hasPhoto, removing, uploading, onRemovePhoto, onToggleEditing,
+}: Readonly<MemoryEditActionsProps>) {
+  const { t } = useTranslation('dashboard')
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+      {/* Remove sits next to Done while editing, but only when there's a photo. */}
+      {editing && hasPhoto && (
+        <Tooltip title={t($ => $.memory.removePhoto)}>
+          <span>
+            <IconButton
+              size="small"
+              onClick={onRemovePhoto}
+              disabled={removing || uploading}
+              color="error"
+              aria-label={t($ => $.memory.removePhoto)}
+            >
+              {removing ? <CircularProgress size={18} /> : <DeleteIcon fontSize="small" />}
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+      <Tooltip title={editing ? t($ => $.memory.done) : t($ => $.memory.edit)}>
+        <IconButton
+          size="small"
+          onClick={onToggleEditing}
+          color={editing ? 'primary' : 'default'}
+          aria-label={editing ? t($ => $.memory.done) : t($ => $.memory.edit)}
+        >
+          {editing ? <CheckIcon fontSize="small" /> : <EditIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
+    </Box>
+  )
+}
+
+interface MemoryPhotoProps {
+  imagePath: string | null
+  canEdit: boolean
+  editing: boolean
+  uploading: boolean
+  linkedGig: Gig | null
+  locale: string
+  onPickFile: () => void
+}
+
+function MemoryPhoto({
+  imagePath, canEdit, editing, uploading, linkedGig, locale, onPickFile,
+}: Readonly<MemoryPhotoProps>) {
+  const { t } = useTranslation('dashboard')
+  if (!imagePath) {
+    if (!canEdit) return null
+    return (
+      <Button
+        fullWidth
+        variant="outlined"
+        startIcon={uploading ? <CircularProgress size={18} /> : <AddPhotoAlternateIcon />}
+        onClick={onPickFile}
+        disabled={uploading}
+        sx={{ height: 120, mb: 1.5, borderStyle: 'dashed', textTransform: 'none' }}
+      >
+        {t($ => $.memory.addPhoto)}
+      </Button>
+    )
+  }
+
+  return (
+    <Box sx={{ position: 'relative', mb: 0.75 }}>
+      <Box
+        component="img"
+        src={`/api/files/${imagePath}`}
+        alt={t($ => $.memory.imageAlt)}
+        sx={{
+          display: 'block',
+          width: '100%',
+          maxHeight: IMAGE_MAX_HEIGHT,
+          objectFit: 'cover',
+          borderRadius: 1,
+        }}
+      />
+      {uploading && (
+        <Box sx={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 2,
+        }}>
+          <CircularProgress size={28} sx={{ color: '#fff' }} />
+        </Box>
+      )}
+      {editing && (
+        <Tooltip title={t($ => $.memory.changePhoto)}>
+          <IconButton
+            size="small"
+            onClick={onPickFile}
+            disabled={uploading}
+            aria-label={t($ => $.memory.changePhoto)}
+            sx={{
+              position: 'absolute', top: 8, right: 8,
+              bgcolor: 'rgba(0,0,0,0.5)', color: '#fff',
+              '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
+            }}
+          >
+            <PhotoCameraIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
+      {!editing && linkedGig && <GigChip gig={linkedGig} locale={locale} overlay />}
+    </Box>
+  )
+}
+
+interface MemoryCaptionFieldProps {
+  caption: string | null
+  schedule: (value: { memory_caption: string | null }) => void
+  flush: () => void
+}
+
+function MemoryCaptionField({ caption, schedule, flush }: Readonly<MemoryCaptionFieldProps>) {
+  const { t } = useTranslation('dashboard')
   // Local caption for the controlled TextField, re-seeded (render-phase sync, the
   // React-recommended alternative to a setState-in-effect) whenever the persisted
   // prop changes so it never drifts from the source.
@@ -74,23 +227,40 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
     setCaptionDraft(caption ?? '')
   }
 
-  const inputRef = useRef<HTMLInputElement>(null)
-  const crop = useImageCrop(
-    compressMemoryPhoto,
-    async (file) => {
-      const { memory_image_path } = await uploadMemoryImage(file)
-      onSaved({ memory_image_path: memory_image_path ?? null })
-    },
-    (msg) => showToast?.(msg || t($ => $.memory.uploadError), 'error'),
-    JPEG_PNG,
+  return (
+    <TextField
+      fullWidth
+      multiline
+      size="small"
+      minRows={1}
+      maxRows={4}
+      label={t($ => $.memory.captionLabel)}
+      placeholder={t($ => $.memory.captionPlaceholder)}
+      value={captionDraft}
+      onChange={(e) => { setCaptionDraft(e.target.value); schedule({ memory_caption: e.target.value || null }) }}
+      onBlur={() => flush()}
+      slotProps={{ htmlInput: { maxLength: 500 } }}
+      sx={{ mb: 1.5 }}
+    />
   )
+}
 
-  const { schedule, flush, cancel } = useDebouncedSave<{ memory_caption: string | null }>(
-    async ({ memory_caption }) => {
-      await updateProfile({ memory_caption })
-      onSaved({ memory_caption })
-    },
-  )
+interface MemoryGigPickerProps {
+  gigId: Id | null
+  gigs: Gig[]
+  selectedGig: Gig | null
+  setSelectedGig: Dispatch<SetStateAction<Gig | null>>
+  locale: string
+  onSaved: (patch: MemoryPatch) => void
+}
+
+// Only mounted while editing, so its search state resets when edit mode closes.
+function MemoryGigPicker({
+  gigId, gigs, selectedGig, setSelectedGig, locale, onSaved,
+}: Readonly<MemoryGigPickerProps>) {
+  const { t } = useTranslation('dashboard')
+  const { t: tCommon } = useTranslation('common')
+  const showToast = useToast()
 
   const {
     inputValue: gigInput,
@@ -99,17 +269,10 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
     tooShort: gigQueryTooShort,
     minChars: gigSearchMinChars,
     onInputChange: handleGigInputChange,
-    clear: clearGigSearch,
     clearQuery: clearGigQuery,
-  } = useRemoteSearch<Gig>({ search: searchGigs, enabled: editing })
+  } = useRemoteSearch<Gig>({ search: searchGigs })
 
-  const linkedGig = useMemo(() => {
-    if (gigId == null) return null
-    return (selectedGig?.id === gigId ? selectedGig : null)
-      ?? gigs.find((gig) => gig.id === gigId)
-      ?? gigOptions.find((gig) => gig.id === gigId)
-      ?? null
-  }, [gigId, gigs, gigOptions, selectedGig])
+  const linkedGig = resolveLinkedGig(gigId, selectedGig, gigs, gigOptions)
 
   async function saveGig(next: Gig | null) {
     const nextId = next?.id ?? null
@@ -136,6 +299,63 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
     }
   }
 
+  const noOptionsText = gigQueryTooShort
+    ? tCommon($ => $.picker.typeMinChars, { count: gigSearchMinChars })
+    : gigsLoading
+      ? tCommon($ => $.picker.searching)
+      : tCommon($ => $.picker.noMatches)
+
+  return (
+    <Autocomplete
+      options={gigOptions}
+      value={linkedGig}
+      onChange={(_, next) => saveGig(next)}
+      inputValue={gigInput}
+      onInputChange={handleGigInputChange}
+      filterOptions={(options) => options}
+      loading={gigsLoading}
+      getOptionLabel={(g) => gigLabel(g, locale)}
+      isOptionEqualToValue={(a, b) => a.id === b.id}
+      noOptionsText={noOptionsText}
+      size="small"
+      renderInput={(params) => (
+        <TextField {...params} label={t($ => $.memory.gigLabel)} placeholder={t($ => $.memory.gigNone)} />
+      )}
+    />
+  )
+}
+
+export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, onSaved }: Readonly<MemoryTileProps>) {
+  const { t, i18n } = useTranslation('dashboard')
+  const locale = i18n.resolvedLanguage ?? 'en'
+  const showToast = useToast()
+
+  const [editing, setEditing] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [selectedGig, setSelectedGig] = useState<Gig | null>(null)
+
+  const inputRef = useRef<HTMLInputElement>(null)
+  const crop = useImageCrop(
+    compressMemoryPhoto,
+    async (file) => {
+      const { memory_image_path } = await uploadMemoryImage(file)
+      onSaved({ memory_image_path: memory_image_path ?? null })
+    },
+    (msg) => showToast?.(msg || t($ => $.memory.uploadError), 'error'),
+    JPEG_PNG,
+  )
+
+  const { schedule, flush, cancel } = useDebouncedSave<{ memory_caption: string | null }>(
+    async ({ memory_caption }) => {
+      await updateProfile({ memory_caption })
+      onSaved({ memory_caption })
+    },
+  )
+
+  // Read-view resolution; while editing the picker resolves with its own
+  // search results as an extra fallback.
+  const linkedGig = resolveLinkedGig(gigId, selectedGig, gigs, [])
+
   async function removePhoto() {
     // Drop any in-flight caption edit so its debounced save can't resurrect the
     // caption after we clear the whole tile.
@@ -154,7 +374,6 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
   function toggleEditing() {
     if (editing) flush()
     setEditing((prev) => !prev)
-    if (editing) clearGigSearch()
   }
 
   const hasContent = Boolean(imagePath || caption || gigId)
@@ -162,123 +381,30 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
   if (!canEdit && !hasContent) return null
 
   const editAction = canEdit ? (
-    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-      {/* Remove sits next to Done while editing, but only when there's a photo. */}
-      {editing && imagePath && (
-        <Tooltip title={t($ => $.memory.removePhoto)}>
-          <span>
-            <IconButton
-              size="small"
-              onClick={removePhoto}
-              disabled={removing || crop.uploading}
-              color="error"
-              aria-label={t($ => $.memory.removePhoto)}
-            >
-              {removing ? <CircularProgress size={18} /> : <DeleteIcon fontSize="small" />}
-            </IconButton>
-          </span>
-        </Tooltip>
-      )}
-      <Tooltip title={editing ? t($ => $.memory.done) : t($ => $.memory.edit)}>
-        <IconButton
-          size="small"
-          onClick={toggleEditing}
-          color={editing ? 'primary' : 'default'}
-          aria-label={editing ? t($ => $.memory.done) : t($ => $.memory.edit)}
-        >
-          {editing ? <CheckIcon fontSize="small" /> : <EditIcon fontSize="small" />}
-        </IconButton>
-      </Tooltip>
-    </Box>
+    <MemoryEditActions
+      editing={editing}
+      hasPhoto={Boolean(imagePath)}
+      removing={removing}
+      uploading={crop.uploading}
+      onRemovePhoto={removePhoto}
+      onToggleEditing={toggleEditing}
+    />
   ) : undefined
 
   return (
     <DashboardCard title={t($ => $.memory.title)} icon={CollectionsIcon} action={editAction}>
-      {imagePath ? (
-        <Box sx={{ position: 'relative', mb: 0.75 }}>
-          <Box
-            component="img"
-            src={`/api/files/${imagePath}`}
-            alt={t($ => $.memory.imageAlt)}
-            sx={{
-              display: 'block',
-              width: '100%',
-              maxHeight: IMAGE_MAX_HEIGHT,
-              objectFit: 'cover',
-              borderRadius: 1,
-            }}
-          />
-          {crop.uploading && (
-            <Box sx={{
-              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 2,
-            }}>
-              <CircularProgress size={28} sx={{ color: '#fff' }} />
-            </Box>
-          )}
-          {editing && (
-            <Tooltip title={t($ => $.memory.changePhoto)}>
-              <IconButton
-                size="small"
-                onClick={() => inputRef.current?.click()}
-                disabled={crop.uploading}
-                aria-label={t($ => $.memory.changePhoto)}
-                sx={{
-                  position: 'absolute', top: 8, right: 8,
-                  bgcolor: 'rgba(0,0,0,0.5)', color: '#fff',
-                  '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
-                }}
-              >
-                <PhotoCameraIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-          {/* Linked gig sits over the photo's bottom-right corner (read view). */}
-          {!editing && linkedGig && (
-            <Chip
-              icon={<CollectionsIcon />}
-              label={gigLabel(linkedGig, locale)}
-              onClick={() => navigate(`/gigs/${linkedGig.id}`)}
-              size="small"
-              sx={{
-                position: 'absolute', bottom: 8, right: 8, maxWidth: 'calc(100% - 16px)',
-                bgcolor: 'rgba(0,0,0,0.6)', color: '#fff', backdropFilter: 'blur(4px)',
-                '& .MuiChip-icon': { color: '#fff' },
-                '&:hover': { bgcolor: 'rgba(0,0,0,0.78)' },
-              }}
-            />
-          )}
-        </Box>
-      ) : (
-        canEdit && (
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={crop.uploading ? <CircularProgress size={18} /> : <AddPhotoAlternateIcon />}
-            onClick={() => inputRef.current?.click()}
-            disabled={crop.uploading}
-            sx={{ height: 120, mb: 1.5, borderStyle: 'dashed', textTransform: 'none' }}
-          >
-            {t($ => $.memory.addPhoto)}
-          </Button>
-        )
-      )}
+      <MemoryPhoto
+        imagePath={imagePath}
+        canEdit={canEdit}
+        editing={editing}
+        uploading={crop.uploading}
+        linkedGig={linkedGig}
+        locale={locale}
+        onPickFile={() => inputRef.current?.click()}
+      />
 
       {editing ? (
-        <TextField
-          fullWidth
-          multiline
-          size="small"
-          minRows={1}
-          maxRows={4}
-          label={t($ => $.memory.captionLabel)}
-          placeholder={t($ => $.memory.captionPlaceholder)}
-          value={captionDraft}
-          onChange={(e) => { setCaptionDraft(e.target.value); schedule({ memory_caption: e.target.value || null }) }}
-          onBlur={() => flush()}
-          slotProps={{ htmlInput: { maxLength: 500 } }}
-          sx={{ mb: 1.5 }}
-        />
+        <MemoryCaptionField caption={caption} schedule={schedule} flush={flush} />
       ) : (
         caption && (
           <Typography variant="caption" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
@@ -288,39 +414,18 @@ export default function MemoryTile({ imagePath, caption, gigId, gigs, canEdit, o
       )}
 
       {editing ? (
-        <Autocomplete
-          options={gigOptions}
-          value={linkedGig}
-          onChange={(_, next) => saveGig(next)}
-          inputValue={gigInput}
-          onInputChange={handleGigInputChange}
-          filterOptions={(options) => options}
-          loading={gigsLoading}
-          getOptionLabel={(g) => gigLabel(g, locale)}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          noOptionsText={gigQueryTooShort
-            ? tCommon($ => $.picker.typeMinChars, { count: gigSearchMinChars })
-            : gigsLoading
-              ? tCommon($ => $.picker.searching)
-              : tCommon($ => $.picker.noMatches)}
-          size="small"
-          renderInput={(params) => (
-            <TextField {...params} label={t($ => $.memory.gigLabel)} placeholder={t($ => $.memory.gigNone)} />
-          )}
+        <MemoryGigPicker
+          gigId={gigId}
+          gigs={gigs}
+          selectedGig={selectedGig}
+          setSelectedGig={setSelectedGig}
+          locale={locale}
+          onSaved={onSaved}
         />
       ) : (
         // With an image the chip is overlaid on it; only the imageless read view
         // needs the chip here.
-        !imagePath && linkedGig && (
-          <Chip
-            icon={<CollectionsIcon />}
-            label={gigLabel(linkedGig, locale)}
-            onClick={() => navigate(`/gigs/${linkedGig.id}`)}
-            size="small"
-            variant="outlined"
-            sx={{ maxWidth: '100%' }}
-          />
-        )
+        !imagePath && linkedGig && <GigChip gig={linkedGig} locale={locale} />
       )}
 
       {/* Hidden file input drives both the "add" and "change" affordances. */}

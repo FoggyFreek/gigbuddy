@@ -75,7 +75,11 @@ export async function buildExport(db, slug) {
         slug: tenant.slug,
         name: nullable(tenant.band_name),
         bio: nullable(tenant.bio),
+        // Both logo variants plus the profile picture; each is null when unset
+        // so the link page can pick its own fallback.
         logoUrl: imageUrl(tenant.logo_path),
+        logoDarkUrl: imageUrl(tenant.logo_dark_path),
+        avatarUrl: imageUrl(tenant.avatar_path),
         socials: {
           instagram: nullable(tenant.instagram_handle),
           facebook: nullable(tenant.facebook_handle),
