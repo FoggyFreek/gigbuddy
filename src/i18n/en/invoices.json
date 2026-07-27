@@ -179,7 +179,8 @@
   "pdf": {
     "download": "Download PDF",
     "retry": "PDF render failed - click to retry",
-    "rerenderTooltip": "Re-render PDF"
+    "rerender": "Re-generate the PDF from the current invoice data",
+    "rerenderAria": "Re-generate PDF"
   },
   "validation": {
     "customerRequired": "Customer name is required",

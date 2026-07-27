@@ -60,6 +60,33 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
     || undefined
   const bandHeading = s.tenant?.formal_name || s.tenant?.band_name || ''
 
+  // Download + re-generate, shown together once a PDF exists. Re-generating never
+  // touches the invoice data, so it stays available on a finalized invoice — a
+  // rendering fix can be applied without voiding and re-issuing.
+  const pdfActions = s.invoice?.pdf_path ? (
+    <>
+      <Button
+        component="a"
+        href={`/api/files/${s.invoice.pdf_path}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        startIcon={<DownloadIcon />}
+      >
+        {t($ => $.pdf.download)}
+      </Button>
+      <Tooltip title={t($ => $.pdf.rerender)}>
+        <IconButton
+          size="small"
+          onClick={s.handlePdfRerender}
+          disabled={s.pdfRerenderBusy}
+          aria-label={t($ => $.pdf.rerenderAria)}
+        >
+          {s.pdfRerenderBusy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
+    </>
+  ) : null
+
   const dialogs = (
     <>
       <InvoiceDeleteDialog
@@ -194,28 +221,8 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
         {isCompact ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-              {s.invoice?.pdf_path ? (
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button
-                    component="a"
-                    href={`/api/files/${s.invoice.pdf_path}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    startIcon={<DownloadIcon />}
-                  >
-                    {t($ => $.pdf.download)}
-                  </Button>
-                  <Tooltip title={t($ => $.pdf.rerenderTooltip)}>
-                    <IconButton
-                      onClick={s.handlePdfRerender}
-                      disabled={s.pdfRerenderBusy}
-                      size="small"
-                      sx={{ alignSelf: 'center' }}
-                    >
-                      <RefreshIcon sx={{ transition: 'transform 0.6s linear', transform: s.pdfRerenderBusy ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
+              {pdfActions ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>{pdfActions}</Box>
               ) : <Box />}
               {s.invoice && (
                 <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>
@@ -252,29 +259,8 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
                 </Button>
               )}
             </Box>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {s.invoice?.pdf_path && (
-                <>
-                  <Button
-                    component="a"
-                    href={`/api/files/${s.invoice.pdf_path}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    startIcon={<DownloadIcon />}
-                  >
-                    {t($ => $.pdf.download)}
-                  </Button>
-                  <Tooltip title={t($ => $.pdf.rerenderTooltip)}>
-                    <IconButton
-                      onClick={s.handlePdfRerender}
-                      disabled={s.pdfRerenderBusy}
-                      size="small"
-                    >
-                      <RefreshIcon sx={{ transition: 'transform 0.6s linear', transform: s.pdfRerenderBusy ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-                    </IconButton>
-                  </Tooltip>
-                </>
-              )}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {pdfActions}
               {s.invoice && (
                 <Button startIcon={<EmailIcon />} onClick={s.openEmlDialog}>
                   {t($ => $.detail.downloadEmail)}
