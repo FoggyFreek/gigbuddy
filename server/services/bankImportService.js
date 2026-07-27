@@ -18,9 +18,14 @@ import { hasOpeningBalance } from '../repositories/ledgerRepository.js'
 import { accountExistsOfType } from '../repositories/accountRepository.js'
 import {
   findSuppliersForImport,
-  insertContact,
+  findSuppliersByIban,
+  findSuppliersByName,
+  insertSupplierIfAbsent,
+  setSupplierIbanIfMissing,
   contactExistsInTenant,
 } from '../repositories/contactRepository.js'
+import { fetchTenantKorState } from '../repositories/tenantRepository.js'
+import { korApplies } from '../../shared/vatRates.js'
 import { normalizeIban } from '../utils/normalizeIban.js'
 import { badRequest } from './serviceErrors.js'
 import { clearInvoicePaymentLink, markInvoicePaid } from '../repositories/invoiceRepository.js'
@@ -41,6 +46,7 @@ import {
   existingBankReferenceRows,
   listOpenInvoices,
   listOpenPurchases,
+  listPaidPurchasesForImport,
   lockInvoice,
   lockPurchase,
   reserveMollieReconciliation,
@@ -171,17 +177,25 @@ async function decorateImport(db, tenantId, imp) {
     ? (await listOpenInvoices(db, tenantId)).map(toInvoiceMatch)
     : []
   const openPurchases = debits.length ? await listOpenPurchases(db, tenantId) : []
+  const paidPurchases = await paidPurchasesNear(db, tenantId, debits)
   const suppliers = debits.length
     ? await findSuppliersForImport(db, tenantId, debits.map((l) => l.counterparty_iban), debits.map((l) => l.counterparty_name))
     : []
 
   const invByAmount = groupBy(openInvoices, (i) => i.total_cents)
   const purByAmount = groupBy(openPurchases, (p) => p.total_cents)
+  const paidByAmount = groupBy(paidPurchases, (p) => p.total_cents)
   const supByIban = groupBy(suppliers.filter((s) => s.iban), (s) => s.iban.toUpperCase())
   const supByName = groupBy(suppliers, (s) => (s.name ?? '').toLowerCase())
 
   const decorated = lines.map((line) => {
-    const suggestion = { possibleDuplicate: false, supplierMatches: [], invoiceMatches: [], purchaseMatches: [] }
+    const suggestion = {
+      possibleDuplicate: false,
+      supplierMatches: [],
+      invoiceMatches: [],
+      purchaseMatches: [],
+      paidPurchaseMatches: [],
+    }
     const identity = duplicateIdentity({
       accountIban: imp.account_iban,
       bankRef: line.bank_ref,
@@ -198,6 +212,9 @@ async function decorateImport(db, tenantId, imp) {
         suggestion.supplierMatches = (byIban && byIban.length)
           ? byIban
           : (line.counterparty_name ? (supByName.get(line.counterparty_name.toLowerCase()) ?? []) : [])
+        suggestion.paidPurchaseMatches = matchPaidPurchases(
+          line, paidByAmount.get(line.amount_cents) ?? [], suggestion.supplierMatches,
+        )
       } else {
         suggestion.invoiceMatches = invByAmount.get(line.amount_cents) ?? []
       }
@@ -216,6 +233,62 @@ async function decorateImport(db, tenantId, imp) {
     lines: decorated,
     openingBalanceSuggested,
   }
+}
+
+// How far a bill's recorded payment date may sit from the bank booking date and
+// still be the same payment. A few days covers a date typed by hand or taken
+// from the receipt; wider would start matching next month's identical payment
+// to a recurring supplier.
+const PAID_PURCHASE_WINDOW_DAYS = 7
+
+// Already-paid bills that could be the same payment as one of the debit lines.
+// Bounded by the statement's own amounts and date span (plus the window), so a
+// tenant with years of paid bills still costs one small query.
+async function paidPurchasesNear(db, tenantId, debits) {
+  if (!debits.length) return []
+  const dates = debits.map((l) => toDateOnly(l.booking_date)).filter(Boolean).sort()
+  if (!dates.length) return []
+  return listPaidPurchasesForImport(
+    db, tenantId,
+    debits.map((l) => l.amount_cents),
+    shiftDays(dates[0], -PAID_PURCHASE_WINDOW_DAYS),
+    shiftDays(dates[dates.length - 1], PAID_PURCHASE_WINDOW_DAYS),
+  )
+}
+
+function shiftDays(isoDate, days) {
+  const d = new Date(`${isoDate}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function daysApart(isoA, isoB) {
+  const ms = Math.abs(new Date(`${isoA}T00:00:00Z`) - new Date(`${isoB}T00:00:00Z`))
+  return ms / 86400000
+}
+
+// A paid bill warns about this line when it is the same supplier (the contact
+// the line already matched, else the bill's free-text supplier name) and was
+// paid close enough to the booking date. `candidates` is pre-filtered on the
+// exact amount — a partial payment is not this feature's business.
+function matchPaidPurchases(line, candidates, supplierMatches) {
+  if (!candidates.length) return []
+  const contactIds = new Set(supplierMatches.map((s) => s.id))
+  const name = line.counterparty_name?.trim().toLowerCase() ?? null
+  const bookingDate = toDateOnly(line.booking_date)
+  return candidates
+    .filter((p) => {
+      const sameSupplier = (p.supplier_contact_id != null && contactIds.has(p.supplier_contact_id))
+        || (name != null && (p.supplier_name ?? '').trim().toLowerCase() === name)
+      return sameSupplier && daysApart(p.paid_at, bookingDate) <= PAID_PURCHASE_WINDOW_DAYS
+    })
+    .map((p) => ({
+      id: p.id,
+      receipt_number: p.receipt_number,
+      supplier_name: p.supplier_name,
+      total_cents: p.total_cents,
+      paid_at: p.paid_at,
+    }))
 }
 
 // Shapes an open-invoice row into a reconciliation match, nesting the linked
@@ -550,6 +623,13 @@ async function journalLine(client, tenantId, line, decision, userId, expectedDir
     : await accountExistsOfType(client, tenantId, code, accountType)
   if (!okType) return 'skipped_invalid_account'
 
+  // A tenant on the small-business scheme neither charges output VAT nor
+  // deducts input VAT, so a rate on one of its lines is never bookable. The
+  // frontend hides the control entirely; this is the authoritative backstop,
+  // and it reports rather than silently dropping the VAT the caller asked for.
+  const vatRate = decision.vatRate ?? null
+  if (vatRate && await tenantAppliesKor(client, tenantId)) return 'skipped_vat_not_allowed'
+
   if (decision.action === 'journal_paid') {
     const supplierStatus = await resolveSupplier(client, tenantId, decision, line)
     if (supplierStatus) return supplierStatus
@@ -562,11 +642,17 @@ async function journalLine(client, tenantId, line, decision, userId, expectedDir
     direction: line.direction,
     contraAccountCode: code,
     memo: lineMemo(line),
+    vatRate,
   }, SYSTEM_OPTS(userId))
   await markLineResult(client, tenantId, line.id, {
-    status: 'imported', ledgerTransactionId: posted.transactionId ?? null,
+    status: 'imported', ledgerTransactionId: posted.transactionId ?? null, vatRate,
   })
   return 'imported'
+}
+
+async function tenantAppliesKor(client, tenantId) {
+  const tenant = await fetchTenantKorState(client, tenantId)
+  return Boolean(tenant?.applies_kor) && korApplies(tenant.vat_country)
 }
 
 // Links or creates the supplier for an outgoing line. Persisting the supplier
@@ -580,18 +666,36 @@ async function resolveSupplier(client, tenantId, decision, line) {
     return null
   }
   if (!decision.createSupplier) return null
-  try {
-    await insertContact(client, tenantId, {
-      name: decision.createSupplier.name,
-      email: null,
-      phone: null,
-      category: 'supplier',
-      iban: normalizeIban(decision.createSupplier.iban ?? line.counterparty_iban),
-    })
-  } catch (err) {
-    // A supplier of that name already exists (UNIQUE lower(name)+category): fine,
-    // the goal (a matchable supplier record) is already met.
-    if (err.code !== '23505') throw err
-  }
+  await reuseOrCreateSupplier(client, tenantId, {
+    name: decision.createSupplier.name,
+    iban: normalizeIban(decision.createSupplier.iban ?? line.counterparty_iban),
+  })
   return null
+}
+
+// Reuse before create, so one counterparty never yields several supplier
+// contacts. A statement reaches this path once per *line*, and banks vary the
+// counterparty name between lines of the same creditor ("ACME 0012" /
+// "ACME AMSTERDAM"), so name equality alone is not enough — the IBAN is the
+// stable identity and wins. Lines commit sequentially in their own
+// transactions, so a supplier created for an earlier line is already visible
+// here. Nothing existing is ever mutated except a missing IBAN backfill.
+async function reuseOrCreateSupplier(client, tenantId, { name, iban }) {
+  if (iban) {
+    // Suppliers sharing an IBAN are a legitimate (if rare) edge case, so an
+    // existing match is reused as-is rather than deduplicated further.
+    const byIban = await findSuppliersByIban(client, tenantId, iban)
+    if (byIban.length) return byIban[0]
+  }
+  const byName = await findSuppliersByName(client, tenantId, name)
+  if (byName.length) {
+    // Known supplier, first time we see its account number: record it so the
+    // next import matches on IBAN even when the bank renames the counterparty.
+    if (iban) await setSupplierIbanIfMissing(client, tenantId, byName[0].id, iban)
+    return byName[0]
+  }
+  const created = await insertSupplierIfAbsent(client, tenantId, { name, iban })
+  // Null means a concurrent commit took the name first — that row is the
+  // supplier record we wanted anyway.
+  return created ?? (await findSuppliersByName(client, tenantId, name))[0] ?? null
 }

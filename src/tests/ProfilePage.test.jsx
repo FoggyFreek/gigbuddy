@@ -27,6 +27,7 @@ vi.mock('../api/profile.ts', () => ({
     id: 1,
     band_name: 'The Testers',
     bio: 'We test things.',
+    short_bio: 'We test things, briefly.',
     instagram_handle: 'thetesters',
     facebook_handle: '',
     tiktok_handle: '',
@@ -124,6 +125,21 @@ describe('ProfilePage', () => {
     // Switch to Links tab to see the EPK link
     await user.click(screen.getByRole('tab', { name: /links/i }))
     expect(await screen.findByText('EPK')).toBeInTheDocument()
+  })
+
+  it('renders the short bio above the full bio and caps it at 150 characters', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />)
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+    const editButtons = await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }))
+    await user.click(editButtons[0])
+
+    const shortBio = await screen.findByLabelText(/^short bio$/i)
+    const fullBio = screen.getByLabelText(/^full bio$/i)
+    expect(shortBio).toHaveValue('We test things, briefly.')
+    expect(fullBio).toHaveValue('We test things.')
+    expect(shortBio.compareDocumentPosition(fullBio) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(shortBio).toHaveAttribute('maxlength', '150')
   })
 
   it('auto-saves band name edits', async () => {

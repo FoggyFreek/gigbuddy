@@ -48,6 +48,7 @@ export function normalizeShopifyDomain(domain) {
 export const PROFILE_FIELDS = [
   'band_name',
   'bio',
+  'short_bio',
   'instagram_handle',
   'facebook_handle',
   'tiktok_handle',
@@ -57,6 +58,22 @@ export const PROFILE_FIELDS = [
   'bandsintown_artist_id',
   'accent_color',
 ]
+
+// The short bio is the blurb the public link page shows, so it is capped where
+// that layout stops working. The long-form `bio` stays unbounded.
+const SHORT_BIO_MAX = 150
+
+function validateShortBio(raw) {
+  if (raw === null || raw === undefined || raw === '') return { value: null }
+  if (typeof raw !== 'string') return { error: 'invalid_short_bio' }
+  if (raw.length > SHORT_BIO_MAX) return { error: 'invalid_short_bio' }
+  return { value: raw }
+}
+
+// Per-key validators for PROFILE_FIELDS. Keys absent here are stored as sent.
+const PROFILE_VALIDATORS = {
+  short_bio: validateShortBio,
+}
 
 // Dashboard memory tile (customization data). The caption is free text; the gig
 // reference is a gig id (tenant ownership is verified in the service, not here).
@@ -229,10 +246,17 @@ export function buildProfileUpdate(body, { vatCountry = DEFAULT_VAT_COUNTRY } = 
   let idx = 1
 
   for (const key of PROFILE_FIELDS) {
-    if (key in body) {
+    if (!(key in body)) continue
+    const validator = PROFILE_VALIDATORS[key]
+    if (!validator) {
       fields.push(`${key} = $${idx++}`)
       values.push(body[key])
+      continue
     }
+    const result = validator(body[key])
+    if (result.error) return { error: result.error }
+    fields.push(`${key} = $${idx++}`)
+    values.push(result.value)
   }
 
   for (const key of FINANCIAL_FIELDS) {

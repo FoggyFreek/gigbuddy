@@ -1,0 +1,15 @@
+-- Per-line VAT on imported bank statement lines.
+--
+-- A statement line (CAMT.053 or MT940) carries only the gross amount — neither
+-- format reports a VAT breakdown — so whether a line contains VAT, and at which
+-- rate, is a decision the reviewer makes at commit time. The chosen rate is
+-- stored on the line so a re-opened import shows what was applied and the line
+-- stays auditable next to the ledger transaction it produced.
+--
+-- NULL means no VAT split: the behavior every line had before this column, and
+-- the only possible value for lines matched to an invoice or bill (those carry
+-- the document's own VAT).
+--
+-- NUMERIC(5,2) mirrors the other VAT rate columns (purchase lines, journal
+-- lines, merch), so non-integer reduced rates (5.5) round-trip.
+ALTER TABLE bank_statement_lines ADD COLUMN IF NOT EXISTS vat_rate NUMERIC(5,2);

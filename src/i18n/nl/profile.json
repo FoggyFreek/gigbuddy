@@ -25,7 +25,9 @@
     "lightLogo": "Logo voor lichte modus",
     "darkLogo": "Logo voor donkere modus",
     "bandName": "Bandnaam",
-    "bio": "Bio"
+    "shortBio": "Korte bio",
+    "shortBioHelp": "Wordt getoond op je linkpagina",
+    "fullBio": "Volledige bio"
   },
   "socials": {
     "copy": "URL kopiëren",

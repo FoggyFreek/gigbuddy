@@ -110,6 +110,22 @@ export async function insertContact(executor, tenantId, { name, email, phone, ca
   return rows[0]
 }
 
+// Inserts a supplier unless one with that name already exists (the importer's
+// create path). ON CONFLICT rather than catching 23505: a raised unique
+// violation would abort the caller's transaction, and the line's ledger post
+// runs in that same transaction. Returns the new row, or null when the name was
+// already taken (the caller then re-reads the winner).
+export async function insertSupplierIfAbsent(executor, tenantId, { name, iban = null }) {
+  const { rows } = await executor.query(
+    `INSERT INTO contacts (tenant_id, name, email, phone, category, iban)
+     VALUES ($1, $2, NULL, NULL, 'supplier', $3)
+     ON CONFLICT (tenant_id, lower(name), lower(category)) DO NOTHING
+     RETURNING *`,
+    [tenantId, name, iban],
+  )
+  return rows[0] || null
+}
+
 // Suppliers whose IBAN matches (canonical, case-insensitive). Returns all
 // matches so the caller can treat 2+ as ambiguous rather than auto-picking.
 export async function findSuppliersByIban(executor, tenantId, iban) {
@@ -154,6 +170,18 @@ export async function findSuppliersForImport(executor, tenantId, ibans, names) {
     [tenantId, wantIbans, wantNames],
   )
   return rows
+}
+
+// Backfills the IBAN of a supplier that has none yet (import reuse path). The
+// `iban IS NULL` predicate is in SQL so a concurrent write is never overwritten;
+// returns true when this call is the one that set it.
+export async function setSupplierIbanIfMissing(executor, tenantId, contactId, iban) {
+  const { rowCount } = await executor.query(
+    `UPDATE contacts SET iban = $3, updated_at = NOW()
+      WHERE id = $2 AND tenant_id = $1 AND category = 'supplier' AND iban IS NULL`,
+    [tenantId, contactId, iban],
+  )
+  return rowCount > 0
 }
 
 export async function updateContactFields(executor, tenantId, contactId, fields, values) {

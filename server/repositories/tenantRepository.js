@@ -39,6 +39,16 @@ export async function lockTenantRow(executor, tenantId) {
   return rows[0] || null
 }
 
+// The small-business-exemption pair: the flag alone is not enough, since the KOR
+// is a Dutch national scheme (see korApplies in shared/vatRates.js).
+export async function fetchTenantKorState(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT applies_kor, vat_country FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  return rows[0] ?? null
+}
+
 export async function fetchTenantVatCountry(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT vat_country FROM tenants WHERE id = $1',

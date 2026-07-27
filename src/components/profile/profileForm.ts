@@ -26,6 +26,7 @@ export const SOCIALS: SocialEntry[] = [
 /** The editable profile form shape. */
 export interface ProfileForm {
   band_name: string
+  short_bio: string
   bio: string
   instagram_handle: string
   facebook_handle: string
@@ -52,6 +53,7 @@ export interface ProfileForm {
 
 export const EMPTY_FORM: ProfileForm = {
   band_name: '',
+  short_bio: '',
   bio: '',
   instagram_handle: '',
   facebook_handle: '',
@@ -79,6 +81,7 @@ export const EMPTY_FORM: ProfileForm = {
 export function profileToForm(data: Record<string, unknown>): ProfileForm {
   return {
     band_name: String(data.band_name || ''),
+    short_bio: String(data.short_bio || ''),
     bio: String(data.bio || ''),
     instagram_handle: String(data.instagram_handle || ''),
     facebook_handle: String(data.facebook_handle || ''),

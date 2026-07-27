@@ -49,6 +49,7 @@
     "incomeAccountLabel": "Opbrengstrekening voor niet-gematchte inkomende regels",
     "reviewIntro": "Controleer elke regel. Gematchte facturen en inkoopfacturen zijn voorgeselecteerd; per uitgaande regel kan een nieuwe leverancier worden aangemaakt.",
     "duplicate": "Bankreferentie kwam voor in een eerdere import",
+    "alreadyPaid": "Inkoop #{{number}} is al betaald op {{date}} — overgeslagen om dubbel boeken te voorkomen",
     "skippedCurrency": "Vreemde valuta — overgeslagen",
     "empty": "Geen transacties om te importeren.",
     "table": {
@@ -72,6 +73,26 @@
       "createNew": "Nieuwe leverancier aanmaken",
       "name": "Naam leverancier",
       "none": "Geen leverancier"
+    },
+    "applyToRelation": {
+      "paid": {
+        "title": "Toepassen op alle betalingen aan {{name}}?",
+        "body_one": "{{count}} andere betaling aan {{name}} in dit afschrift staat op een andere rekening. Deze ook op {{account}} boeken?",
+        "body_other": "{{count}} andere betalingen aan {{name}} in dit afschrift staan op een andere rekening. Deze allemaal op {{account}} boeken?"
+      },
+      "received": {
+        "title": "Toepassen op alle ontvangsten van {{name}}?",
+        "body_one": "{{count}} andere ontvangst van {{name}} in dit afschrift staat op een andere rekening. Deze ook op {{account}} boeken?",
+        "body_other": "{{count}} andere ontvangsten van {{name}} in dit afschrift staan op een andere rekening. Deze allemaal op {{account}} boeken?"
+      },
+      "applyAll": "Op alle toepassen",
+      "keepSingle": "Alleen deze regel"
+    },
+    "vat": {
+      "label": "Btw",
+      "none": "Geen btw",
+      "rate": "{{rate}}%",
+      "split": "netto {{net}} · btw {{vat}}"
     },
     "expenseAccount": "Kostenrekening",
     "incomeAccount": "Opbrengstrekening",
@@ -115,6 +136,7 @@
       "skipped_mollie_reconciliation_conflict": "Factuur of betaling veranderde tijdens het koppelen",
       "skipped_bill_not_open": "Inkoop niet open",
       "skipped_not_found": "Niet gevonden",
+      "skipped_vat_not_allowed": "Btw niet toegestaan (KOR)",
       "skipped_invalid_supplier": "Ongeldige leverancier",
       "skipped_closed_period": "Gesloten periode",
       "skipped_accounting_not_configured": "Boekhouding niet ingesteld"

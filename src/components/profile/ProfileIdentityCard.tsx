@@ -27,6 +27,10 @@ import { useEntitlements } from '../../hooks/useEntitlements.ts'
 const BANNER_ASPECT_DESKTOP = (312 / 820) * 100  // 38.05%
 const BANNER_ASPECT_COMPACT = (360 / 640) * 100  // 56.25%
 
+// Mirrors SHORT_BIO_MAX in server/validators/profileValidators.js — the input
+// caps typing, the validator is the authority.
+const SHORT_BIO_MAX = 150
+
 const AVATAR_SIZE = 166
 const AVATAR_SIZE_COMPACT = 80
 const AVATAR_OVERLAP = Math.round(AVATAR_SIZE / 2)        // 83px
@@ -374,10 +378,29 @@ export default function ProfileIdentityCard({
 
         </Box>
 
-        {/* Bio — full width */}
+        {/* Short bio — full width. The only bio text the public link page shows. */}
         {editing ? (
           <TextField
-            label={t($ => $.identity.bio)}
+            label={t($ => $.identity.shortBio)}
+            fullWidth
+            multiline
+            minRows={2}
+            value={form.short_bio}
+            onChange={(e) => onChange('short_bio', e.target.value)}
+            slotProps={{ htmlInput: { maxLength: SHORT_BIO_MAX } }}
+            helperText={`${form.short_bio.length}/${SHORT_BIO_MAX} · ${t($ => $.identity.shortBioHelp)}`}
+          />
+        ) : (
+          <Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t($ => $.identity.shortBio)}</Typography>
+            <Typography sx={{ whiteSpace: 'pre-wrap' }}>{form.short_bio || '—'}</Typography>
+          </Box>
+        )}
+
+        {/* Full bio — full width */}
+        {editing ? (
+          <TextField
+            label={t($ => $.identity.fullBio)}
             fullWidth
             multiline
             minRows={4}
@@ -386,7 +409,7 @@ export default function ProfileIdentityCard({
           />
         ) : (
           <Box>
-            <Typography variant="caption" color="text.secondary">{t($ => $.identity.bio)}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t($ => $.identity.fullBio)}</Typography>
             <Typography sx={{ whiteSpace: 'pre-wrap' }}>{form.bio || '—'}</Typography>
           </Box>
         )}

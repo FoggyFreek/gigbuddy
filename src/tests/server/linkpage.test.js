@@ -52,10 +52,16 @@ async function seedLinkpageContent() {
   const b = seed.tenantB.id
   await pool.query(
     `UPDATE tenants
-        SET band_name = 'Alpha Band', bio = 'Alpha bio',
-            logo_path = $2, logo_dark_path = $3, avatar_path = $4
+        SET band_name = 'Alpha Band', bio = 'Alpha full bio', short_bio = 'Alpha short bio',
+            logo_path = $2, logo_dark_path = $3, avatar_path = $4, banner_path = $5
       WHERE id = $1`,
-    [a, `tenants/${a}/logo/logo.webp`, `tenants/${a}/logo/logo-dark.webp`, `tenants/${a}/avatar/avatar.webp`],
+    [
+      a,
+      `tenants/${a}/logo/logo.webp`,
+      `tenants/${a}/logo/logo-dark.webp`,
+      `tenants/${a}/avatar/avatar.webp`,
+      `tenants/${a}/profile-banner/banner.webp`,
+    ],
   )
   // Tenant A: one song with two links, one song without links, a product,
   // an announced future gig, an option future gig (must not export), an
@@ -129,13 +135,14 @@ describe('public linkpage export', () => {
       .set('Authorization', `Bearer ${SECRET}`)
     expect(res.status).toBe(200)
 
-    expect(res.body.band).toMatchObject({ slug: 'alpha', name: 'Alpha Band', bio: 'Alpha bio' })
-    // Light logo, dark logo and profile picture are all exposed as signed image URLs.
-    for (const key of ['logoUrl', 'logoDarkUrl', 'avatarUrl']) {
+    // The `bio` key on the wire carries the 150-char short bio, not the long-form one.
+    expect(res.body.band).toMatchObject({ slug: 'alpha', name: 'Alpha Band', bio: 'Alpha short bio' })
+    // Light logo, dark logo, profile picture and band banner are exposed as signed image URLs.
+    for (const key of ['logoUrl', 'logoDarkUrl', 'avatarUrl', 'bannerUrl']) {
       expect(res.body.band[key]).toContain('https://app.test.local/api/public/linkpage/image?t=')
     }
-    const imageUrls = ['logoUrl', 'logoDarkUrl', 'avatarUrl'].map((k) => res.body.band[k])
-    expect(new Set(imageUrls).size).toBe(3)
+    const imageUrls = ['logoUrl', 'logoDarkUrl', 'avatarUrl', 'bannerUrl'].map((k) => res.body.band[k])
+    expect(new Set(imageUrls).size).toBe(4)
 
     // Songs: only those with links; links ordered.
     expect(res.body.songs).toHaveLength(1)
@@ -154,6 +161,8 @@ describe('public linkpage export', () => {
     // Tenant isolation: nothing of tenant B may appear anywhere.
     const flat = JSON.stringify(res.body)
     expect(flat).not.toContain('Beta')
+    // The long-form bio stays in the app and is never shipped to the linkpage app.
+    expect(flat).not.toContain('Alpha full bio')
   })
 
   it('ships plan-derived entitlements: silver 3 pages/30d, gold 30 pages/90d, lapsed disabled', async () => {

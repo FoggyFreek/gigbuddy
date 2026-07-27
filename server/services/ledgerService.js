@@ -873,14 +873,40 @@ export async function postBillPaid(client, tenantId, purchase, opts = {}) {
 
 // A bank-statement line posted as a direct journal (no matching invoice/bill).
 // Received (credit): DR primary checking, CR the chosen contra account. Paid
-// (debit): DR the chosen contra account, CR primary checking. Posts gross — a
-// bank line carries no VAT breakdown. Two distinct source events ('received' /
-// 'paid') let the ledger browser sign the row without the direction.
+// (debit): DR the chosen contra account, CR primary checking. Two distinct
+// source events ('received' / 'paid') let the ledger browser sign the row
+// without the direction.
+//
+// The bank amount is always gross: it is what actually moved, so the checking
+// leg keeps it whole. A `vatRate` splits the *other* side into net + VAT —
+// output VAT on money received, input VAT on money paid — exactly as an invoice
+// or bill would, which is what makes these lines show up in the VAT return
+// (computed from the VAT account balances). No rate (or 0) posts two legs as
+// before.
 export async function postBankStatementLine(client, tenantId, line, opts = {}) {
-  const { id, entryDate, amountCents, direction, contraAccountCode, memo } = line
+  const { id, entryDate, amountCents, direction, contraAccountCode, memo, vatRate = null } = line
   const settings = await loadAccountingSettings(client, tenantId)
   const checking = requireCode(settings, 'primary_checking_account_code')
   const received = direction === 'credit'
+  const { netCents, vatCents } = computePurchaseLineTotals({
+    amount_incl_cents: amountCents, tax_rate: vatRate ?? 0,
+  })
+
+  const lines = received
+    ? [
+      { account_code: checking, debit_cents: amountCents, memo },
+      { account_code: contraAccountCode, credit_cents: netCents, memo },
+    ]
+    : [
+      { account_code: contraAccountCode, debit_cents: netCents, memo },
+      { account_code: checking, credit_cents: amountCents, memo },
+    ]
+  if (vatCents > 0) {
+    const vatCode = requireCode(settings, received ? 'output_vat_account_code' : 'input_vat_account_code')
+    lines.push(received
+      ? { account_code: vatCode, credit_cents: vatCents, memo }
+      : { account_code: vatCode, debit_cents: vatCents, memo })
+  }
 
   return postJournal(client, tenantId, {
     entryDate: toDateString(entryDate),
@@ -888,15 +914,7 @@ export async function postBankStatementLine(client, tenantId, line, opts = {}) {
     sourceType: 'bank_statement_line',
     sourceId: id,
     sourceEvent: received ? 'received' : 'paid',
-    lines: received
-      ? [
-        { account_code: checking, debit_cents: amountCents, memo },
-        { account_code: contraAccountCode, credit_cents: amountCents, memo },
-      ]
-      : [
-        { account_code: contraAccountCode, debit_cents: amountCents, memo },
-        { account_code: checking, credit_cents: amountCents, memo },
-      ],
+    lines,
     ...opts,
   })
 }

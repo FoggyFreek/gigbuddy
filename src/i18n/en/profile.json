@@ -25,7 +25,9 @@
     "lightLogo": "Light theme logo",
     "darkLogo": "Dark theme logo",
     "bandName": "Band name",
-    "bio": "Bio"
+    "shortBio": "Short bio",
+    "shortBioHelp": "Shown on your link page",
+    "fullBio": "Full bio"
   },
   "socials": {
     "copy": "Copy URL",

@@ -126,6 +126,10 @@ export interface Tenant {
   id?: Id
   slug?: string
   band_name?: string
+  /** Long-form band bio, shown inside the app. */
+  bio?: string | null
+  /** 150-char blurb; the only bio text shipped to the public link page. */
+  short_bio?: string | null
   archived_at?: string | null
   formal_name?: string
   logo_path?: string | null
@@ -452,6 +456,15 @@ export interface BankLineSuggestion {
     } | null
   }[]
   purchaseMatches: { id: Id; receipt_number: number; supplier_name: string; total_cents: number }[]
+  // Bills for this supplier and amount that are ALREADY paid — the line would
+  // double-book them. A warning only; a paid bill is never a reconcile target.
+  paidPurchaseMatches: {
+    id: Id
+    receipt_number: number
+    supplier_name: string
+    total_cents: number
+    paid_at: string
+  }[]
 }
 
 export interface BankStatementLine {
@@ -467,6 +480,8 @@ export interface BankStatementLine {
   remittance_info: string | null
   is_reversal: boolean
   status: string
+  /** VAT rate applied when the line was booked; null when it carried no VAT. */
+  vat_rate: number | null
   suggestion: BankLineSuggestion
 }
 
@@ -498,11 +513,12 @@ export type BankImportDecision =
   | { line_id: Id; action: 'skip' }
   | { line_id: Id; action: 'reconcile_invoice'; invoice_id: Id }
   | { line_id: Id; action: 'reconcile_purchase'; purchase_id: Id }
-  | { line_id: Id; action: 'journal_received'; contra_account_code: string }
+  | { line_id: Id; action: 'journal_received'; contra_account_code: string; vat_rate?: number | null }
   | {
       line_id: Id
       action: 'journal_paid'
       contra_account_code: string
+      vat_rate?: number | null
       supplier_contact_id?: Id | null
       create_supplier?: { name: string; iban?: string | null }
     }

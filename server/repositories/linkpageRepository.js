@@ -5,9 +5,9 @@
 
 export async function getTenantBySlug(executor, slug) {
   const { rows } = await executor.query(
-    `SELECT id, slug, band_name, bio,
+    `SELECT id, slug, band_name, short_bio,
             instagram_handle, facebook_handle, tiktok_handle, youtube_handle, spotify_handle,
-            logo_path, logo_dark_path, avatar_path
+            logo_path, logo_dark_path, avatar_path, banner_path
        FROM tenants
       WHERE slug = $1 AND archived_at IS NULL`,
     [slug],

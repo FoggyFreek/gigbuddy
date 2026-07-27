@@ -26,11 +26,18 @@ import Typography from '@mui/material/Typography'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { parseBankStatement, commitBankImport, cancelBankImport, setOpeningBalanceFromImport } from '../../api/bankImport.ts'
 import { listAccounts, getAccountingSettings } from '../../api/accounts.ts'
+import { getProfile } from '../../api/profile.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
+import {
+  DEFAULT_VAT_COUNTRY, getStandardVatRate, isAllowedVatRate, korApplies, vatRateOptions,
+} from '../../utils/vatRates.ts'
+// The same net/VAT split the server posts with — one rounding rule, no drift
+// between the preview and the ledger.
+import { computePurchaseLineTotals } from '../../utils/purchaseTotals.ts'
 import type {
   Account, AccountingSettings, BankImportParseResult, BankStatementLine,
-  BankImportDecision, BankImportResult, Id,
+  BankImportDecision, BankImportResult, Id, Tenant,
 } from '../../types/entities.ts'
 
 type Step = 'upload' | 'review' | 'importing' | 'done'
@@ -44,16 +51,55 @@ type Decision =
   | { kind: 'skip' }
   | { kind: 'reconcile_invoice'; invoiceId: Id }
   | { kind: 'reconcile_purchase'; purchaseId: Id }
-  | { kind: 'journal_paid'; contraAccountCode: string; supplier: SupplierChoice }
-  | { kind: 'journal_received'; contraAccountCode: string }
+  | { kind: 'journal_paid'; contraAccountCode: string; vatRate: number | null; supplier: SupplierChoice }
+  | { kind: 'journal_received'; contraAccountCode: string; vatRate: number | null }
+
+// The VAT a direct booking should carry, resolved once from the tenant profile.
+// `enabled` is false under the KOR: a small-business-scheme tenant neither
+// charges output VAT nor deducts input VAT, so no row may carry a rate.
+interface VatDefaults {
+  enabled: boolean
+  country: string
+  /** Money paid out — the country's standard rate. */
+  paid: number
+  /** Money received — the band's own configured rate (its invoice default). */
+  received: number
+}
+
+const NO_VAT_DEFAULTS: VatDefaults = {
+  enabled: false, country: DEFAULT_VAT_COUNTRY, paid: 0, received: 0,
+}
+
+function resolveVatDefaults(profile: Tenant): VatDefaults {
+  const country = profile.vat_country || DEFAULT_VAT_COUNTRY
+  // KOR is a Dutch-only exemption; it never applies to a non-NL band.
+  if (profile.applies_kor && korApplies(country)) return { ...NO_VAT_DEFAULTS, country }
+  const configured = Number(profile.tax_percentage)
+  return {
+    enabled: true,
+    country,
+    paid: getStandardVatRate(country),
+    // What the band charges on its own turnover — the same value invoices
+    // default to — falling back to the standard rate if it is not a real rate
+    // for this country (e.g. saved before the VAT country changed).
+    received: isAllowedVatRate(country, configured) ? configured : getStandardVatRate(country),
+  }
+}
 
 const EXPENSE_TYPES = new Set(['expense', 'cost_of_goods_sold'])
 const keyOf = (line: BankStatementLine) => String(line.id)
 
+// Fixed widths for the booking row: the how-it-books column and the VAT column
+// keep the same width on every line, so the VAT controls form one straight
+// column down the review list instead of stepping in and out with the content.
+const BOOKING_COLUMN = 300
+const VAT_COLUMN = 140
+
 // Pre-selects the most likely booking for a line: an exact single reconcile
 // match, else a direct journal (creating a supplier for a new outgoing
-// counterparty). Duplicate hints remain warning-only.
-function defaultDecision(line: BankStatementLine, settings: AccountingSettings | null): Decision {
+// counterparty). Duplicate hints remain warning-only. A reconciled invoice or
+// bill carries the document's own VAT, so only the direct journals get a rate.
+function defaultDecision(line: BankStatementLine, settings: AccountingSettings | null, vat: VatDefaults): Decision {
   if (line.direction === 'debit') {
     if (line.suggestion.purchaseMatches.length === 1) {
       return { kind: 'reconcile_purchase', purchaseId: line.suggestion.purchaseMatches[0].id }
@@ -61,13 +107,67 @@ function defaultDecision(line: BankStatementLine, settings: AccountingSettings |
     return {
       kind: 'journal_paid',
       contraAccountCode: settings?.default_expense_account_code ?? '',
+      vatRate: vat.enabled ? vat.paid : null,
       supplier: defaultSupplier(line),
     }
   }
   if (line.suggestion.invoiceMatches.length === 1) {
     return { kind: 'reconcile_invoice', invoiceId: line.suggestion.invoiceMatches[0].id }
   }
-  return { kind: 'journal_received', contraAccountCode: settings?.default_revenue_account_code ?? '' }
+  return {
+    kind: 'journal_received',
+    contraAccountCode: settings?.default_revenue_account_code ?? '',
+    vatRate: vat.enabled ? vat.received : null,
+  }
+}
+
+type PaidDecision = Extract<Decision, { kind: 'journal_paid' }>
+type JournalDecision = PaidDecision | Extract<Decision, { kind: 'journal_received' }>
+
+// A pending "book the rest of this relation's lines here too?" question.
+// `kind` picks the copy — money paid to a supplier vs. received from a payer —
+// and is also what keeps the two sides of one relation apart.
+interface ApplyPrompt {
+  kind: 'paid' | 'received'
+  relationName: string
+  accountCode: string
+  accountLabel: string
+  lineIds: Id[]
+  tokens: string[]
+}
+
+// Statement identity of the relation on a journal line: the supplier contact the
+// user linked (outgoing lines only — incoming lines carry no contact link) plus
+// the counterparty IBAN/name the bank reported. Two lines are the same relation
+// when they share *any* token — a bank varies the counterparty name between
+// lines of one party, and the parse-time matcher may have linked only some of
+// them.
+// "Only this line" is remembered per direction + relation + account, so editing
+// a third line of that relation doesn't ask again.
+const dismissKey = (kind: 'paid' | 'received', token: string, code: string) => `${kind}|${token}|${code}`
+
+function relationTokens(line: BankStatementLine, decision: JournalDecision): string[] {
+  const tokens: string[] = []
+  if (decision.kind === 'journal_paid' && decision.supplier.kind === 'link') {
+    tokens.push(`link:${decision.supplier.id}`)
+  }
+  if (line.counterparty_iban) tokens.push(`iban:${line.counterparty_iban.replace(/\s+/g, '').toUpperCase()}`)
+  if (line.counterparty_name?.trim()) tokens.push(`name:${line.counterparty_name.trim().toLowerCase()}`)
+  return tokens
+}
+
+// How to name the relation in the "apply to all" prompt: the linked supplier
+// when there is one, else what the bank called the counterparty.
+function relationLabel(line: BankStatementLine, decision: JournalDecision): string {
+  if (decision.kind === 'journal_paid') {
+    const { supplier } = decision
+    if (supplier.kind === 'link') {
+      const match = line.suggestion.supplierMatches.find((s) => s.id === supplier.id)
+      if (match?.name) return match.name
+    }
+    if (supplier.kind === 'create' && supplier.name.trim()) return supplier.name.trim()
+  }
+  return line.counterparty_name?.trim() || line.counterparty_iban || ''
 }
 
 function defaultSupplier(line: BankStatementLine): SupplierChoice {
@@ -99,14 +199,27 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
   // Local flag so the opening-balance nudge disappears once the user acts on it
   // (the server flag itself flips on the next parse).
   const [openingBalanceSet, setOpeningBalanceSet] = useState(false)
+  // Offer to book every other line of the same supplier to the account just
+  // picked. `dismissedApply` remembers "only this line" per supplier+account so
+  // editing a third line of that supplier doesn't ask again.
+  const [applyPrompt, setApplyPrompt] = useState<ApplyPrompt | null>(null)
+  const [dismissedApply, setDismissedApply] = useState<ReadonlySet<string>>(new Set())
+
+  const [vat, setVat] = useState<VatDefaults>(NO_VAT_DEFAULTS)
 
   useEffect(() => {
     let active = true
-    Promise.all([listAccounts(), getAccountingSettings()])
-      .then(([accs, setts]) => {
+    // The profile is read here rather than from ProfileContext because the KOR
+    // flag decides whether VAT may be booked at all — it must be the tenant's
+    // current value, not one cached since the session started.
+    // A failed profile read must not cost the reviewer the account lists, and it
+    // fails closed: without the KOR flag no VAT may be offered.
+    Promise.all([listAccounts(), getAccountingSettings(), getProfile().catch(() => null)])
+      .then(([accs, setts, profile]) => {
         if (!active) return
         setAccounts(accs)
         setSettings(setts)
+        if (profile) setVat(resolveVatDefaults(profile))
       })
       .catch(() => { /* accounts optional until review */ })
     return () => { active = false }
@@ -129,7 +242,14 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
       setParsed(data)
       const seeded: Record<string, Decision> = {}
       for (const line of data.lines) {
-        if (line.status === 'pending') seeded[keyOf(line)] = defaultDecision(line, settings)
+        if (line.status !== 'pending') continue
+        // A line whose bill is already paid starts on Skip: the payment leg is
+        // in the ledger already, so booking it again would double the expense
+        // (and the VAT deduction). The reviewer can still book it — the toggle
+        // hands back the ordinary decision — but not by accident.
+        seeded[keyOf(line)] = line.suggestion.paidPurchaseMatches.length
+          ? { kind: 'skip' }
+          : defaultDecision(line, settings, vat)
       }
       setDecisions(seeded)
       setStep('review')
@@ -143,6 +263,69 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
     setDecisions((prev) => ({ ...prev, [keyOf(line)]: decision }))
 
   const pendingLines = parsed?.lines.filter((l) => l.status === 'pending') ?? []
+
+  // Picking a contra account offers to book the relation's other lines the same
+  // way — statements repeat the same party, and booking each occurrence by hand
+  // is where mis-classifications creep in. Outgoing and incoming lines of one
+  // party are grouped separately: an expense account is no answer for a receipt.
+  function setContraAccount(line: BankStatementLine, decision: JournalDecision, code: string) {
+    const updated = { ...decision, contraAccountCode: code }
+    setDecision(line, updated)
+
+    const kind = updated.kind === 'journal_paid' ? 'paid' : 'received'
+    const tokens = relationTokens(line, updated)
+    const name = relationLabel(line, updated)
+    if (!tokens.length || !name) return
+    if (tokens.some((token) => dismissedApply.has(dismissKey(kind, token, code)))) return
+
+    const siblings = pendingLines.filter((other) => {
+      if (other.id === line.id) return false
+      const d = decisions[keyOf(other)]
+      if (d?.kind !== 'journal_paid' && d?.kind !== 'journal_received') return false
+      if (d.kind !== updated.kind || d.contraAccountCode === code) return false
+      return relationTokens(other, d).some((token) => tokens.includes(token))
+    })
+    if (!siblings.length) return
+
+    const account = accounts.find((a) => a.code === code)
+    setApplyPrompt({
+      kind,
+      relationName: name,
+      accountCode: code,
+      accountLabel: account ? `${account.code} — ${account.name}` : code,
+      lineIds: siblings.map((s) => s.id),
+      tokens,
+    })
+  }
+
+  function applyAccountToRelation() {
+    if (!applyPrompt) return
+    const targets = new Set(applyPrompt.lineIds.map(String))
+    setDecisions((prev) => {
+      const next: Record<string, Decision> = { ...prev }
+      for (const [key, decision] of Object.entries(prev)) {
+        if (!targets.has(key)) continue
+        if (decision.kind === 'journal_paid' || decision.kind === 'journal_received') {
+          next[key] = { ...decision, contraAccountCode: applyPrompt.accountCode }
+        }
+      }
+      return next
+    })
+    setApplyPrompt(null)
+  }
+
+  function dismissApplyPrompt() {
+    if (!applyPrompt) return
+    setDismissedApply((prev) => {
+      const next = new Set(prev)
+      for (const token of applyPrompt.tokens) {
+        next.add(dismissKey(applyPrompt.kind, token, applyPrompt.accountCode))
+      }
+      return next
+    })
+    setApplyPrompt(null)
+  }
+
   const toBook = pendingLines.filter((l) => decisions[keyOf(l)]?.kind && decisions[keyOf(l)].kind !== 'skip')
   const hasIncompleteSupplier = pendingLines.some((line) => {
     const decision = decisions[keyOf(line)]
@@ -165,9 +348,19 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
       if (!d || d.kind === 'skip') { out.push({ line_id: line.id, action: 'skip' }); continue }
       if (d.kind === 'reconcile_invoice') out.push({ line_id: line.id, action: 'reconcile_invoice', invoice_id: d.invoiceId })
       else if (d.kind === 'reconcile_purchase') out.push({ line_id: line.id, action: 'reconcile_purchase', purchase_id: d.purchaseId })
-      else if (d.kind === 'journal_received') out.push({ line_id: line.id, action: 'journal_received', contra_account_code: d.contraAccountCode || defaultIncomeCode })
-      else {
-        const base = { line_id: line.id, action: 'journal_paid' as const, contra_account_code: d.contraAccountCode || defaultExpenseCode }
+      else if (d.kind === 'journal_received') {
+        out.push({
+          line_id: line.id, action: 'journal_received',
+          contra_account_code: d.contraAccountCode || defaultIncomeCode,
+          vat_rate: d.vatRate,
+        })
+      } else {
+        const base = {
+          line_id: line.id,
+          action: 'journal_paid' as const,
+          contra_account_code: d.contraAccountCode || defaultExpenseCode,
+          vat_rate: d.vatRate,
+        }
         if (d.supplier.kind === 'link') out.push({ ...base, supplier_contact_id: d.supplier.id })
         else if (d.supplier.kind === 'create') out.push({ ...base, create_supplier: { name: d.supplier.name, iban: d.supplier.iban } })
         else out.push(base)
@@ -210,6 +403,11 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
       await cancelBankImport(parsed.import.id)
       onClose(false)
     } catch (err) {
+      // Re-uploading a file resolves to the import it was staged as the first
+      // time; once any of its lines are booked the server refuses to delete it.
+      // There is nothing to discard then, so close instead of trapping the user
+      // in a dialog whose only exit is this button.
+      if (errorCode(err) === 'bank_import_has_committed_lines') { onClose(false); return }
       setError(errorMessage(err))
       setCancelling(false)
     }
@@ -270,9 +468,11 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
             parsed={parsed}
             decisions={decisions}
             setDecision={setDecision}
+            setContraAccount={setContraAccount}
             expenseAccounts={expenseAccounts}
             incomeAccounts={incomeAccounts}
             settings={settings}
+            vat={vat}
             statementIban={statementIban}
           />
         )}
@@ -292,6 +492,48 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
           </Button>
         )}
       </DialogActions>
+
+      {/* Portals to the body, so nesting it here only nests the JSX. */}
+      {applyPrompt && (
+        <ApplyToRelationDialog
+          prompt={applyPrompt}
+          onApply={applyAccountToRelation}
+          onDismiss={dismissApplyPrompt}
+        />
+      )}
+    </Dialog>
+  )
+}
+
+interface ApplyToRelationDialogProps {
+  prompt: ApplyPrompt
+  onApply: () => void
+  onDismiss: () => void
+}
+
+function ApplyToRelationDialog({ prompt, onApply, onDismiss }: Readonly<ApplyToRelationDialogProps>) {
+  const { t } = useTranslation('ledger')
+  // Paid and received get their own sentences rather than one sentence with a
+  // direction hole — the words around the name inflect differently per language.
+  const copy = prompt.kind
+  return (
+    <Dialog open onClose={onDismiss} maxWidth="xs" fullWidth>
+      <DialogTitle>
+        {t($ => $.bankImport.applyToRelation[copy].title, { name: prompt.relationName })}
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body2">
+          {t($ => $.bankImport.applyToRelation[copy].body, {
+            count: prompt.lineIds.length,
+            name: prompt.relationName,
+            account: prompt.accountLabel,
+          })}
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onDismiss}>{t($ => $.bankImport.applyToRelation.keepSingle)}</Button>
+        <Button variant="contained" onClick={onApply}>{t($ => $.bankImport.applyToRelation.applyAll)}</Button>
+      </DialogActions>
     </Dialog>
   )
 }
@@ -300,14 +542,16 @@ interface ReviewStepProps {
   parsed: BankImportParseResult
   decisions: Record<string, Decision>
   setDecision: (line: BankStatementLine, decision: Decision) => void
+  setContraAccount: (line: BankStatementLine, decision: JournalDecision, code: string) => void
   expenseAccounts: Account[]
   incomeAccounts: Account[]
   settings: AccountingSettings | null
+  vat: VatDefaults
   statementIban: string | null | undefined
 }
 
 function ReviewStep({
-  parsed, decisions, setDecision, expenseAccounts, incomeAccounts, settings, statementIban,
+  parsed, decisions, setDecision, setContraAccount, expenseAccounts, incomeAccounts, settings, vat, statementIban,
 }: Readonly<ReviewStepProps>) {
   const { t } = useTranslation('ledger')
 
@@ -330,9 +574,11 @@ function ReviewStep({
           line={line}
           decision={decisions[String(line.id)]}
           setDecision={setDecision}
+          setContraAccount={setContraAccount}
           expenseAccounts={expenseAccounts}
           incomeAccounts={incomeAccounts}
           settings={settings}
+          vat={vat}
         />
       ))}
     </>
@@ -343,12 +589,16 @@ interface LineCardProps {
   line: BankStatementLine
   decision: Decision | undefined
   setDecision: (line: BankStatementLine, decision: Decision) => void
+  setContraAccount: (line: BankStatementLine, decision: JournalDecision, code: string) => void
   expenseAccounts: Account[]
   incomeAccounts: Account[]
   settings: AccountingSettings | null
+  vat: VatDefaults
 }
 
-function LineCard({ line, decision, setDecision, expenseAccounts, incomeAccounts, settings }: Readonly<LineCardProps>) {
+function LineCard({
+  line, decision, setDecision, setContraAccount, expenseAccounts, incomeAccounts, settings, vat,
+}: Readonly<LineCardProps>) {
   const { t } = useTranslation('ledger')
   const statusLabel = useStatusLabel()
   const isDebit = line.direction === 'debit'
@@ -359,7 +609,7 @@ function LineCard({ line, decision, setDecision, expenseAccounts, incomeAccounts
   function onDecisionMode(mode: 'book' | 'skip' | null) {
     if (mode === null) return
     if (mode === 'skip') return setDecision(line, { kind: 'skip' })
-    setDecision(line, defaultDecision(line, settings))
+    setDecision(line, defaultDecision(line, settings, vat))
   }
 
   return (
@@ -378,6 +628,18 @@ function LineCard({ line, decision, setDecision, expenseAccounts, incomeAccounts
             {line.suggestion?.possibleDuplicate && (
               <Chip size="small" color="warning" variant="outlined" label={t($ => $.bankImport.duplicate)} />
             )}
+            {line.suggestion?.paidPurchaseMatches?.map((bill) => (
+              <Chip
+                key={`paid-${bill.id}`}
+                size="small"
+                color="warning"
+                variant="outlined"
+                label={t($ => $.bankImport.alreadyPaid, {
+                  number: bill.receipt_number,
+                  date: formatShortDate(bill.paid_at),
+                })}
+              />
+            ))}
           </Box>
           {line.remittance_info && (
             <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: 'text.secondary' }}>
@@ -407,15 +669,18 @@ function LineCard({ line, decision, setDecision, expenseAccounts, incomeAccounts
         )}
       </Box>
 
-      {/* How the line is booked, on what account, which supplier */}
+      {/* How the line is booked, on what account, which supplier — supplier on
+          its own row above the booking/VAT columns */}
       {isPending && !skipped && decision && (
-        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1.5, alignItems: 'flex-start' }}>
           <BookingDetail
             line={line}
             decision={decision}
             setDecision={setDecision}
+            setContraAccount={setContraAccount}
             expenseAccounts={expenseAccounts}
             incomeAccounts={incomeAccounts}
+            vat={vat}
           />
         </Box>
       )}
@@ -434,22 +699,36 @@ interface BookingDetailProps {
   line: BankStatementLine
   decision: Exclude<Decision, { kind: 'skip' }>
   setDecision: (line: BankStatementLine, decision: Decision) => void
+  setContraAccount: (line: BankStatementLine, decision: JournalDecision, code: string) => void
   expenseAccounts: Account[]
   incomeAccounts: Account[]
+  vat: VatDefaults
 }
 
-function BookingDetail({ line, decision, setDecision, expenseAccounts, incomeAccounts }: Readonly<BookingDetailProps>) {
+function BookingDetail({
+  line, decision, setDecision, setContraAccount, expenseAccounts, incomeAccounts, vat,
+}: Readonly<BookingDetailProps>) {
   const { t } = useTranslation('ledger')
   const isDebit = line.direction === 'debit'
   const accounts = isDebit ? expenseAccounts : incomeAccounts
   const methodId = `bank-import-method-${line.id}`
+  const accountId = `bank-import-account-${line.id}`
   const hasMatches = line.suggestion.invoiceMatches.length > 0 || line.suggestion.purchaseMatches.length > 0
 
   function toJournal(): Decision {
     if (isDebit) {
-      return { kind: 'journal_paid', contraAccountCode: expenseAccounts[0]?.code ?? '', supplier: defaultSupplier(line) }
+      return {
+        kind: 'journal_paid',
+        contraAccountCode: expenseAccounts[0]?.code ?? '',
+        vatRate: vat.enabled ? vat.paid : null,
+        supplier: defaultSupplier(line),
+      }
     }
-    return { kind: 'journal_received', contraAccountCode: incomeAccounts[0]?.code ?? '' }
+    return {
+      kind: 'journal_received',
+      contraAccountCode: incomeAccounts[0]?.code ?? '',
+      vatRate: vat.enabled ? vat.received : null,
+    }
   }
 
   function onMethod(value: string) {
@@ -476,61 +755,126 @@ function BookingDetail({ line, decision, setDecision, expenseAccounts, incomeAcc
 
   return (
     <>
-      {/* How the line is booked: reconcile a matched doc, or a new journal entry */}
-      {hasMatches && (
-        <FormControl size="small" sx={{ minWidth: 220 }}>
-          <InputLabel id={methodId}>{t($ => $.bankImport.bookingMethod)}</InputLabel>
-          <Select labelId={methodId} label={t($ => $.bankImport.bookingMethod)} value={methodValue(decision)} onChange={(e) => onMethod(e.target.value)}>
-            {line.suggestion.invoiceMatches.map((inv) => (
-              <MenuItem key={`inv-${inv.id}`} value={`inv:${inv.id}`}>
-                {inv.mollie_payment_link_id
-                  ? t($ => $.bankImport.actions.matchInvoiceDeactivateMollie, { number: inv.invoice_number })
-                  : t($ => $.bankImport.actions.matchInvoice, { number: inv.invoice_number })}
-              </MenuItem>
-            ))}
-            {line.suggestion.purchaseMatches.map((pur) => (
-              <MenuItem key={`pur-${pur.id}`} value={`pur:${pur.id}`}>
-                {t($ => $.bankImport.actions.matchPurchase, { number: pur.receipt_number })}
-              </MenuItem>
-            ))}
-            <MenuItem value="journal">
-              {isDebit ? t($ => $.bankImport.actions.bookExpense) : t($ => $.bankImport.actions.bookIncome)}
-            </MenuItem>
-          </Select>
-        </FormControl>
-      )}
-
-      {/* What the reconciled invoice was for: its linked gig */}
-      {gigDetails && (
-        <Chip
-          size="small"
-          variant="outlined"
-          color="info"
-          label={t($ => $.bankImport.gigLabel, { details: gigDetails })}
-        />
-      )}
-
-      {/* On what account (journal only — a reconciled doc carries its own accounts) */}
-      {isJournal && (
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>{isDebit ? t($ => $.bankImport.expenseAccount) : t($ => $.bankImport.incomeAccount)}</InputLabel>
-          <Select
-            label={isDebit ? t($ => $.bankImport.expenseAccount) : t($ => $.bankImport.incomeAccount)}
-            value={decision.contraAccountCode}
-            onChange={(e) => setDecision(line, { ...decision, contraAccountCode: e.target.value })}
-          >
-            {accounts.map((a) => (
-              <MenuItem key={String(a.code)} value={a.code}>{a.code} — {a.name}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      )}
-
-      {/* Which supplier (outgoing journal only) */}
+      {/* Row 1 — the optional new supplier */}
       {decision.kind === 'journal_paid' && (
         <SupplierControl line={line} decision={decision} setDecision={setDecision} />
       )}
+
+      {/* Row 2 — how the line books (fixed column) then its VAT, so the VAT
+          controls line up down the statement instead of drifting with the
+          width of each row's other controls. */}
+      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Box sx={{ width: BOOKING_COLUMN, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {/* How the line is booked: reconcile a matched doc, or a new journal entry */}
+          {hasMatches && (
+            <FormControl size="small" fullWidth>
+              <InputLabel id={methodId}>{t($ => $.bankImport.bookingMethod)}</InputLabel>
+              <Select labelId={methodId} label={t($ => $.bankImport.bookingMethod)} value={methodValue(decision)} onChange={(e) => onMethod(e.target.value)}>
+                {line.suggestion.invoiceMatches.map((inv) => (
+                  <MenuItem key={`inv-${inv.id}`} value={`inv:${inv.id}`}>
+                    {inv.mollie_payment_link_id
+                      ? t($ => $.bankImport.actions.matchInvoiceDeactivateMollie, { number: inv.invoice_number })
+                      : t($ => $.bankImport.actions.matchInvoice, { number: inv.invoice_number })}
+                  </MenuItem>
+                ))}
+                {line.suggestion.purchaseMatches.map((pur) => (
+                  <MenuItem key={`pur-${pur.id}`} value={`pur:${pur.id}`}>
+                    {t($ => $.bankImport.actions.matchPurchase, { number: pur.receipt_number })}
+                  </MenuItem>
+                ))}
+                <MenuItem value="journal">
+                  {isDebit ? t($ => $.bankImport.actions.bookExpense) : t($ => $.bankImport.actions.bookIncome)}
+                </MenuItem>
+              </Select>
+            </FormControl>
+          )}
+
+          {/* On what account (journal only — a reconciled doc carries its own accounts) */}
+          {isJournal && (
+            <FormControl size="small" fullWidth>
+              <InputLabel id={accountId}>{isDebit ? t($ => $.bankImport.expenseAccount) : t($ => $.bankImport.incomeAccount)}</InputLabel>
+              <Select
+                labelId={accountId}
+                label={isDebit ? t($ => $.bankImport.expenseAccount) : t($ => $.bankImport.incomeAccount)}
+                value={decision.contraAccountCode}
+                onChange={(e) => setContraAccount(line, decision, e.target.value)}
+              >
+                {accounts.map((a) => (
+                  <MenuItem key={String(a.code)} value={a.code}>{a.code} — {a.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        </Box>
+
+        {/* Whether the gross amount contains VAT, and at what rate */}
+        {isJournal && vat.enabled && (
+          <VatControl line={line} decision={decision} setDecision={setDecision} vat={vat} />
+        )}
+
+        {/* What the reconciled invoice was for: its linked gig — sits in the
+            VAT slot, which a reconciled line never uses. */}
+        {gigDetails && (
+          <Chip
+            size="small"
+            variant="outlined"
+            color="info"
+            label={t($ => $.bankImport.gigLabel, { details: gigDetails })}
+          />
+        )}
+      </Box>
     </>
+  )
+}
+
+interface VatControlProps {
+  line: BankStatementLine
+  decision: JournalDecision
+  setDecision: (line: BankStatementLine, decision: Decision) => void
+  vat: VatDefaults
+}
+
+// VAT on a direct booking. A statement carries only the gross amount — neither
+// CAMT.053 nor MT940 reports a breakdown — so the rate is the reviewer's call
+// and the split is derived from it. "No VAT" is the yes/no half of the control;
+// the rates come from the tenant's VAT country, so this follows a band that
+// moved jurisdictions rather than hardcoding one country's pair.
+function VatControl({ line, decision, setDecision, vat }: Readonly<VatControlProps>) {
+  const { t } = useTranslation('ledger')
+  const labelId = `bank-import-vat-${line.id}`
+  const rate = decision.vatRate
+  const { netCents, vatCents } = computePurchaseLineTotals({
+    amount_incl_cents: line.amount_cents, tax_rate: rate ?? 0,
+  })
+  // 0% and "No VAT" post identically (no VAT leg), so offering both would be a
+  // distinction without a difference — only real rates are listed.
+  const rates = vatRateOptions(vat.country, rate).filter((r) => r > 0)
+
+  return (
+    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+      <FormControl size="small" sx={{ width: VAT_COLUMN, flexShrink: 0 }}>
+        <InputLabel id={labelId}>{t($ => $.bankImport.vat.label)}</InputLabel>
+        <Select
+          labelId={labelId}
+          label={t($ => $.bankImport.vat.label)}
+          value={rate == null ? 'none' : String(rate)}
+          onChange={(e) => setDecision(line, {
+            ...decision,
+            vatRate: e.target.value === 'none' ? null : Number(e.target.value),
+          })}
+        >
+          <MenuItem value="none">{t($ => $.bankImport.vat.none)}</MenuItem>
+          {rates.map((r) => (
+            <MenuItem key={r} value={String(r)}>{t($ => $.bankImport.vat.rate, { rate: r })}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      {rate != null && rate > 0 && (
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {t($ => $.bankImport.vat.split, { net: formatEur(netCents), vat: formatEur(vatCents) })}
+        </Typography>
+      )}
+    </Box>
   )
 }
 
@@ -601,7 +945,7 @@ const RESULT_STATUS_KEYS = [
   'imported', 'reconciled_invoice', 'reconciled_purchase', 'skipped', 'skipped_currency', 'pending',
   'skipped_already_committed', 'skipped_amount_mismatch', 'skipped_invalid_account',
   'skipped_direction_mismatch', 'skipped_invoice_not_open', 'skipped_invoice_has_link',
-  'skipped_bill_not_open', 'skipped_not_found', 'skipped_invalid_supplier',
+  'skipped_bill_not_open', 'skipped_not_found', 'skipped_invalid_supplier', 'skipped_vat_not_allowed',
   'skipped_closed_period', 'skipped_accounting_not_configured',
   'skipped_invoice_paid_via_mollie', 'skipped_mollie_error',
   'skipped_mollie_reconciliation_conflict',
@@ -651,6 +995,10 @@ function DoneStep({ result }: Readonly<{ result: BankImportResult }>) {
       )}
     </>
   )
+}
+
+function errorCode(err: unknown): string | undefined {
+  return (err as { body?: { code?: string } }).body?.code
 }
 
 function errorMessage(err: unknown): string {

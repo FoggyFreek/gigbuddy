@@ -130,13 +130,15 @@ export async function lockLine(executor, tenantId, importId, lineId) {
   return rows[0] || null
 }
 
-export async function markLineResult(executor, tenantId, lineId, { status, ledgerTransactionId = null, matchedSourceType = null, matchedSourceId = null }) {
+export async function markLineResult(executor, tenantId, lineId, {
+  status, ledgerTransactionId = null, matchedSourceType = null, matchedSourceId = null, vatRate = null,
+}) {
   await executor.query(
     `UPDATE bank_statement_lines
         SET status = $1, ledger_transaction_id = $2,
-            matched_source_type = $3, matched_source_id = $4
-      WHERE id = $5 AND tenant_id = $6`,
-    [status, ledgerTransactionId, matchedSourceType, matchedSourceId, lineId, tenantId],
+            matched_source_type = $3, matched_source_id = $4, vat_rate = $5
+      WHERE id = $6 AND tenant_id = $7`,
+    [status, ledgerTransactionId, matchedSourceType, matchedSourceId, vatRate, lineId, tenantId],
   )
 }
 
@@ -192,6 +194,31 @@ export async function listOpenPurchases(executor, tenantId) {
       WHERE tenant_id = $1 AND status = 'approved' AND paid_at IS NULL
       ORDER BY receipt_date DESC`,
     [tenantId],
+  )
+  return rows
+}
+
+// Bills that are ALREADY paid and could be the same payment as a debit line —
+// the double-booking guard. Bounded by the statement's own amounts and date
+// span so this is one small query per import, not a scan of every bill ever
+// paid. The caller narrows further by supplier and a date window.
+//
+// Bills already linked to another statement line are deliberately NOT excluded:
+// a second statement overlapping the first would double-book just as badly, and
+// the caller's date window is what keeps recurring same-amount payments apart.
+export async function listPaidPurchasesForImport(executor, tenantId, amounts, fromDate, toDate) {
+  const wanted = [...new Set(amounts)]
+  if (!wanted.length) return []
+  const { rows } = await executor.query(
+    `SELECT id, receipt_number, supplier_name, supplier_contact_id, total_cents,
+            to_char(paid_at, 'YYYY-MM-DD') AS paid_at
+       FROM purchases
+      WHERE tenant_id = $1
+        AND paid_at IS NOT NULL
+        AND total_cents = ANY($2)
+        AND paid_at >= $3::date AND paid_at < ($4::date + INTERVAL '1 day')
+      ORDER BY paid_at DESC`,
+    [tenantId, wanted, fromDate, toDate],
   )
   return rows
 }

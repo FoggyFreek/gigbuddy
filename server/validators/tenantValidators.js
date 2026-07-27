@@ -29,6 +29,7 @@ export const PATCHABLE = [
   'slug',
   'band_name',
   'bio',
+  'short_bio',
   'instagram_handle',
   'facebook_handle',
   'tiktok_handle',

@@ -103,6 +103,52 @@ describe('PATCH /api/profile — financial fields', () => {
     ).expect(403)
   })
 
+  it('accepts a short_bio of exactly 150 characters', async () => {
+    const short_bio = 'a'.repeat(150)
+    const res = await as(seed.userA.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ short_bio }),
+    ).expect(200)
+    expect(res.body.short_bio).toBe(short_bio)
+  })
+
+  it('rejects a short_bio over 150 characters with 400 invalid_short_bio and stores nothing', async () => {
+    await as(seed.userA.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ short_bio: 'Kept' }),
+    ).expect(200)
+
+    const res = await as(seed.userA.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ short_bio: 'b'.repeat(151), bio: 'Should not land' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_short_bio')
+
+    const reread = await as(seed.userA.id, seed.tenantA.id)(
+      request(app).get('/api/profile'),
+    ).expect(200)
+    expect(reread.body.short_bio).toBe('Kept')
+    expect(reread.body.bio).not.toBe('Should not land')
+  })
+
+  it('stores an empty short_bio as null', async () => {
+    const res = await as(seed.userA.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ short_bio: '' }),
+    ).expect(200)
+    expect(res.body.short_bio).toBeNull()
+  })
+
+  it('keeps short_bio isolated per tenant', async () => {
+    await as(seed.userA.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ short_bio: 'Alpha blurb' }),
+    ).expect(200)
+    await as(seed.userB.id, seed.tenantB.id)(
+      request(app).patch('/api/profile').send({ short_bio: 'Beta blurb' }),
+    ).expect(200)
+
+    const a = await as(seed.userA.id, seed.tenantA.id)(request(app).get('/api/profile')).expect(200)
+    expect(a.body.short_bio).toBe('Alpha blurb')
+    const b = await as(seed.userB.id, seed.tenantB.id)(request(app).get('/api/profile')).expect(200)
+    expect(b.body.short_bio).toBe('Beta blurb')
+  })
+
   it('rejects an invalid kvk_number with 400 invalid_kvk_number', async () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ kvk_number: '123' }),

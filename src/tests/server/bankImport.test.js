@@ -121,6 +121,17 @@ async function insertPurchase(tenantId, { receipt, total, status = 'approved' })
   return rows[0]
 }
 
+// A bill that is already settled — what the double-booking guard warns about.
+async function insertPaidPurchase(tenantId, { receipt, total, paidOn, supplier = 'Jansen PA Rental', contactId = null }) {
+  const { rows } = await pool.query(
+    `INSERT INTO purchases (tenant_id, receipt_number, supplier_name, supplier_contact_id, status,
+       receipt_date, subtotal_cents, tax_cents, total_cents, paid_at, payment_method)
+     VALUES ($1,$2,$3,$4,'paid','2026-02-01',$5,0,$5,$6::date,'bank') RETURNING *`,
+    [tenantId, receipt, supplier, contactId, total, paidOn],
+  )
+  return rows[0]
+}
+
 async function journalsFor(tenantId, sourceType, sourceId) {
   const { rows } = await pool.query(
     `SELECT lt.id, lt.source_event, lt.entry_date,
@@ -155,6 +166,72 @@ describe('bank-import parse + stage', () => {
     const first = await parse(asUserA, EUR)
     const second = await parse(asUserA, EUR)
     expect(second.body.import.id).toBe(first.body.import.id)
+  })
+
+  describe('already-paid bills (double-booking guard)', () => {
+    // The Jansen PA Rental debit line: 120.50 booked 2026-02-03.
+    const PAID = { receipt: 7001, total: 12050, paidOn: '2026-02-03' }
+
+    it('warns when a bill for the same supplier and amount was already paid', async () => {
+      const bill = await insertPaidPurchase(seed.tenantA.id, PAID)
+      const res = await parse(asUserA, EUR)
+      const line = lineBy(res.body.lines, 'Jansen PA Rental')
+      expect(line.suggestion.paidPurchaseMatches).toEqual([{
+        id: bill.id, receipt_number: 7001, supplier_name: 'Jansen PA Rental',
+        total_cents: 12050, paid_at: '2026-02-03',
+      }])
+      // It stays a warning: the bill is not offered as a reconcile target.
+      expect(line.suggestion.purchaseMatches).toEqual([])
+    })
+
+    it('matches the supplier through the contact the line resolved to', async () => {
+      // The bill names the supplier differently from the statement; both point
+      // at the same contact, which is what links them.
+      const { rows: [contact] } = await pool.query(
+        `INSERT INTO contacts (tenant_id, name, category, iban)
+         VALUES ($1, 'Jansen PA Rental', 'supplier', 'NL91ABNA0417164300') RETURNING id`,
+        [seed.tenantA.id],
+      )
+      const bill = await insertPaidPurchase(seed.tenantA.id, {
+        ...PAID, supplier: 'Jansen Podium & Audio BV', contactId: contact.id,
+      })
+      const res = await parse(asUserA, EUR)
+      const line = lineBy(res.body.lines, 'Jansen PA Rental')
+      expect(line.suggestion.paidPurchaseMatches.map((p) => p.id)).toEqual([bill.id])
+    })
+
+    it('does not warn when the amount differs', async () => {
+      await insertPaidPurchase(seed.tenantA.id, { ...PAID, total: 12051 })
+      const res = await parse(asUserA, EUR)
+      expect(lineBy(res.body.lines, 'Jansen PA Rental').suggestion.paidPurchaseMatches).toEqual([])
+    })
+
+    it('does not warn about a same-amount payment outside the date window', async () => {
+      // Same supplier, same amount, next month — a recurring bill, not this one.
+      await insertPaidPurchase(seed.tenantA.id, { ...PAID, paidOn: '2026-03-03' })
+      const res = await parse(asUserA, EUR)
+      expect(lineBy(res.body.lines, 'Jansen PA Rental').suggestion.paidPurchaseMatches).toEqual([])
+    })
+
+    it('does not warn when the supplier is a different party', async () => {
+      await insertPaidPurchase(seed.tenantA.id, { ...PAID, supplier: 'Someone Else BV' })
+      const res = await parse(asUserA, EUR)
+      expect(lineBy(res.body.lines, 'Jansen PA Rental').suggestion.paidPurchaseMatches).toEqual([])
+    })
+
+    it('never warns about another tenant\'s paid bill', async () => {
+      await insertPaidPurchase(seed.tenantB.id, PAID)
+      const res = await parse(asUserA, EUR)
+      expect(lineBy(res.body.lines, 'Jansen PA Rental').suggestion.paidPurchaseMatches).toEqual([])
+    })
+
+    it('leaves incoming lines alone', async () => {
+      await insertPaidPurchase(seed.tenantA.id, {
+        receipt: 7002, total: 60000, paidOn: '2026-02-04', supplier: 'Cafe De Kroon',
+      })
+      const res = await parse(asUserA, EUR)
+      expect(lineBy(res.body.lines, 'Cafe De Kroon').suggestion.paidPurchaseMatches).toEqual([])
+    })
   })
 
   it('suggests an open invoice for a matching credit line', async () => {
@@ -431,6 +508,199 @@ describe('bank-import commit', () => {
     expect(rows[0].iban).toBe('NL00TEST0000000001')
   })
 
+  it('reuses a supplier sharing the counterparty IBAN instead of creating a duplicate', async () => {
+    // Same creditor, two spellings of the name on the statement, one IBAN.
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category, iban)
+       VALUES ($1, 'Other Tenant Supplier', 'supplier', 'NL00TEST0000000001')`,
+      [seed.tenantB.id],
+    )
+    const staged = await parse(asUserA, EUR)
+    const first = lineBy(staged.body.lines, 'String Supply Co')
+    const second = lineBy(staged.body.lines, 'Drum Heads BV')
+    const res = await commit(asUserA, staged.body.import.id, [
+      {
+        line_id: first.id, action: 'journal_paid',
+        contra_account_code: settings.default_expense_account_code,
+        create_supplier: { name: 'String Supply Co', iban: 'NL00TEST0000000001' },
+      },
+      {
+        line_id: second.id, action: 'journal_paid',
+        contra_account_code: settings.default_expense_account_code,
+        create_supplier: { name: 'Drum Heads BV', iban: 'nl00 test 0000 000001' },
+      },
+    ])
+    expect(res.body.results.map((r) => r.status)).toEqual(['imported', 'imported'])
+
+    const { rows } = await pool.query(
+      `SELECT name FROM contacts WHERE tenant_id = $1 AND category = 'supplier' ORDER BY name`,
+      [seed.tenantA.id],
+    )
+    expect(rows).toEqual([{ name: 'String Supply Co' }])
+  })
+
+  it('does not reuse another tenant\'s supplier with the same IBAN', async () => {
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category, iban)
+       VALUES ($1, 'Tenant B Strings', 'supplier', 'NL00TEST0000000001')`,
+      [seed.tenantB.id],
+    )
+    const staged = await parse(asUserA, EUR)
+    const line = lineBy(staged.body.lines, 'String Supply Co')
+    await commit(asUserA, staged.body.import.id, [{
+      line_id: line.id, action: 'journal_paid',
+      contra_account_code: settings.default_expense_account_code,
+      create_supplier: { name: 'String Supply Co', iban: 'NL00TEST0000000001' },
+    }])
+
+    const { rows } = await pool.query(
+      `SELECT tenant_id, name FROM contacts WHERE category = 'supplier' ORDER BY name`,
+    )
+    expect(rows).toEqual([
+      { tenant_id: seed.tenantA.id, name: 'String Supply Co' },
+      { tenant_id: seed.tenantB.id, name: 'Tenant B Strings' },
+    ])
+  })
+
+  it('reuses a supplier matched by name and backfills its missing IBAN', async () => {
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category) VALUES ($1, 'Jansen PA Rental', 'supplier')`,
+      [seed.tenantA.id],
+    )
+    const staged = await parse(asUserA, EUR)
+    const line = lineBy(staged.body.lines, 'Jansen PA Rental')
+    const res = await commit(asUserA, staged.body.import.id, [{
+      line_id: line.id, action: 'journal_paid',
+      contra_account_code: settings.default_expense_account_code,
+      // Different casing, no IBAN on the decision — the line's IBAN is used.
+      create_supplier: { name: 'jansen pa rental', iban: null },
+    }])
+    expect(res.body.results[0].status).toBe('imported')
+
+    const { rows } = await pool.query(
+      `SELECT name, iban FROM contacts WHERE tenant_id = $1 AND category = 'supplier'`,
+      [seed.tenantA.id],
+    )
+    expect(rows).toEqual([{ name: 'Jansen PA Rental', iban: 'NL91ABNA0417164300' }])
+  })
+
+  it('keeps the stored IBAN when a name-matched supplier already has one', async () => {
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category, iban)
+       VALUES ($1, 'Jansen PA Rental', 'supplier', 'NL00OLDACCOUNT00001')`,
+      [seed.tenantA.id],
+    )
+    const staged = await parse(asUserA, EUR)
+    const line = lineBy(staged.body.lines, 'Jansen PA Rental')
+    await commit(asUserA, staged.body.import.id, [{
+      line_id: line.id, action: 'journal_paid',
+      contra_account_code: settings.default_expense_account_code,
+      create_supplier: { name: 'Jansen PA Rental', iban: null },
+    }])
+
+    const { rows } = await pool.query(
+      `SELECT name, iban FROM contacts WHERE tenant_id = $1 AND category = 'supplier'`,
+      [seed.tenantA.id],
+    )
+    expect(rows).toEqual([{ name: 'Jansen PA Rental', iban: 'NL00OLDACCOUNT00001' }])
+  })
+
+  it('splits VAT off a paid line into net expense + input VAT', async () => {
+    const staged = await parse(asUserA, EUR)
+    const line = lineBy(staged.body.lines, 'Jansen PA Rental')
+    const res = await commit(asUserA, staged.body.import.id, [{
+      line_id: line.id, action: 'journal_paid',
+      contra_account_code: settings.default_expense_account_code,
+      vat_rate: 21,
+    }])
+    expect(res.body.results[0].status).toBe('imported')
+
+    // The bank leg keeps the gross (that is what moved); 121% → 100% + 21%.
+    const [journal] = await journalsFor(seed.tenantA.id, 'bank_statement_line', line.id)
+    expect(journal.entries).toEqual(expect.arrayContaining([
+      { code: settings.default_expense_account_code, d: 9959, c: 0 },
+      { code: settings.input_vat_account_code, d: 2091, c: 0 },
+      { code: settings.primary_checking_account_code, d: 0, c: 12050 },
+    ]))
+    expect(journal.entries).toHaveLength(3)
+
+    const { rows: [stored] } = await pool.query(
+      'SELECT vat_rate FROM bank_statement_lines WHERE id = $1', [line.id],
+    )
+    expect(Number(stored.vat_rate)).toBe(21)
+  })
+
+  it('splits VAT off a received line into net revenue + output VAT', async () => {
+    const staged = await parse(asUserA, EUR)
+    const line = lineBy(staged.body.lines, 'Cafe De Kroon')
+    const res = await commit(asUserA, staged.body.import.id, [{
+      line_id: line.id, action: 'journal_received',
+      contra_account_code: settings.default_revenue_account_code,
+      vat_rate: 9,
+    }])
+    expect(res.body.results[0].status).toBe('imported')
+
+    const [journal] = await journalsFor(seed.tenantA.id, 'bank_statement_line', line.id)
+    expect(journal.entries).toEqual(expect.arrayContaining([
+      { code: settings.primary_checking_account_code, d: 60000, c: 0 },
+      { code: settings.default_revenue_account_code, d: 0, c: 55046 },
+      { code: settings.output_vat_account_code, d: 0, c: 4954 },
+    ]))
+    expect(journal.entries).toHaveLength(3)
+  })
+
+  it('posts two legs when no VAT rate is chosen', async () => {
+    const staged = await parse(asUserA, EUR)
+    const line = lineBy(staged.body.lines, 'Jansen PA Rental')
+    await commit(asUserA, staged.body.import.id, [{
+      line_id: line.id, action: 'journal_paid',
+      contra_account_code: settings.default_expense_account_code,
+    }])
+
+    const [journal] = await journalsFor(seed.tenantA.id, 'bank_statement_line', line.id)
+    expect(journal.entries).toEqual([
+      { code: settings.default_expense_account_code, d: 12050, c: 0 },
+      { code: settings.primary_checking_account_code, d: 0, c: 12050 },
+    ])
+    const { rows: [stored] } = await pool.query(
+      'SELECT vat_rate FROM bank_statement_lines WHERE id = $1', [line.id],
+    )
+    expect(stored.vat_rate).toBeNull()
+  })
+
+  it('rejects a vat_rate that is not a real VAT rate', async () => {
+    const staged = await parse(asUserA, EUR)
+    const line = lineBy(staged.body.lines, 'Jansen PA Rental')
+    const res = await commit(asUserA, staged.body.import.id, [{
+      line_id: line.id, action: 'journal_paid',
+      contra_account_code: settings.default_expense_account_code,
+      vat_rate: 17.5,
+    }])
+    expect(res.status).toBe(400)
+  })
+
+  it('refuses to book VAT for a tenant on the KOR', async () => {
+    await pool.query(
+      `UPDATE tenants SET applies_kor = true, vat_country = 'nl' WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+    const staged = await parse(asUserA, EUR)
+    const line = lineBy(staged.body.lines, 'Jansen PA Rental')
+    const res = await commit(asUserA, staged.body.import.id, [{
+      line_id: line.id, action: 'journal_paid',
+      contra_account_code: settings.default_expense_account_code,
+      vat_rate: 21,
+    }])
+    expect(res.body.results[0].status).toBe('skipped_vat_not_allowed')
+    expect(await journalsFor(seed.tenantA.id, 'bank_statement_line', line.id)).toHaveLength(0)
+
+    // Reported, not silently dropped: the line stays bookable without VAT.
+    const { rows: [after] } = await pool.query(
+      'SELECT status FROM bank_statement_lines WHERE id = $1', [line.id],
+    )
+    expect(after.status).toBe('pending')
+  })
+
   it('reclassifies an imported direct payment when a later purchase is paid', async () => {
     const staged = await parse(asUserA, EUR)
     const line = lineBy(staged.body.lines, 'String Supply Co')
@@ -590,6 +860,26 @@ describe('bank-import cancel', () => {
     expect(res.status).toBe(409)
     expect(res.body.code).toBe('bank_import_has_committed_lines')
     await asUserA(request(app).get(`/api/bank-import/${staged.body.import.id}`)).expect(200)
+  })
+
+  it('re-uploading a fully imported file returns it with no pending lines left', async () => {
+    const staged = await parse(asUserA, EUR)
+    const paid = lineBy(staged.body.lines, 'String Supply Co')
+    await commit(asUserA, staged.body.import.id, staged.body.lines
+      .filter((l) => l.status === 'pending')
+      .map((l) => (l.id === paid.id
+        ? { line_id: l.id, action: 'journal_paid', contra_account_code: settings.default_expense_account_code }
+        : { line_id: l.id, action: 'skip' })))
+
+    const again = await parse(asUserA, EUR)
+    expect(again.body.import.id).toBe(staged.body.import.id)
+    expect(again.body.lines.some((l) => l.status === 'pending')).toBe(false)
+    expect(lineBy(again.body.lines, 'String Supply Co').status).toBe('imported')
+
+    // Nothing left to discard — the review dialog's Cancel hits this.
+    const res = await cancel(asUserA, staged.body.import.id)
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('bank_import_has_committed_lines')
   })
 
   it('does not let another tenant delete a staged import', async () => {

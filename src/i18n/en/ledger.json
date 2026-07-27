@@ -49,6 +49,7 @@
     "incomeAccountLabel": "Income account for unmatched incoming lines",
     "reviewIntro": "Review each line. Matched invoices and bills are pre-selected; a new supplier can be created per outgoing line.",
     "duplicate": "Bank reference appeared in an earlier import",
+    "alreadyPaid": "Bill #{{number}} was already paid on {{date}} — skipped to avoid booking it twice",
     "skippedCurrency": "Foreign currency — skipped",
     "empty": "No transactions to import.",
     "table": {
@@ -72,6 +73,26 @@
       "createNew": "Create new supplier",
       "name": "Supplier name",
       "none": "No supplier"
+    },
+    "applyToRelation": {
+      "paid": {
+        "title": "Apply to all payments to {{name}}?",
+        "body_one": "{{count}} other payment to {{name}} in this statement is booked to a different account. Book it to {{account}} as well?",
+        "body_other": "{{count}} other payments to {{name}} in this statement are booked to a different account. Book them all to {{account}} as well?"
+      },
+      "received": {
+        "title": "Apply to all receipts from {{name}}?",
+        "body_one": "{{count}} other receipt from {{name}} in this statement is booked to a different account. Book it to {{account}} as well?",
+        "body_other": "{{count}} other receipts from {{name}} in this statement are booked to a different account. Book them all to {{account}} as well?"
+      },
+      "applyAll": "Apply to all",
+      "keepSingle": "Only this line"
+    },
+    "vat": {
+      "label": "VAT",
+      "none": "No VAT",
+      "rate": "{{rate}}%",
+      "split": "net {{net}} · VAT {{vat}}"
     },
     "expenseAccount": "Expense account",
     "incomeAccount": "Income account",
@@ -115,6 +136,7 @@
       "skipped_mollie_reconciliation_conflict": "Invoice or payment changed during reconciliation",
       "skipped_bill_not_open": "Bill not open",
       "skipped_not_found": "Not found",
+      "skipped_vat_not_allowed": "VAT not allowed (small-business scheme)",
       "skipped_invalid_supplier": "Invalid supplier",
       "skipped_closed_period": "Closed period",
       "skipped_accounting_not_configured": "Accounting not configured"

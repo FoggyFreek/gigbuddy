@@ -3,6 +3,7 @@
 // eligibility checks (line ownership, exact amount, target-doc status, account
 // type, tenant scope) happen in the service under row locks.
 import { parsePositiveId } from './common.js'
+import { isKnownVatRate } from '../../shared/vatRates.js'
 
 export const ACTIONS = new Set([
   'skip',
@@ -40,6 +41,18 @@ function normalizeDecision(raw) {
     const code = trimOrNull(raw.contra_account_code)
     if (!code) return { error: `${action} needs contra_account_code` }
     decision.contraAccountCode = code
+    // Optional VAT split of the (gross) statement amount. Absent/null keeps the
+    // pre-VAT behavior. Any rate real in *some* supported country is accepted —
+    // a band buys abroad — the tenant's own rate set is a frontend affordance,
+    // not a limit. Whether the tenant may deduct/charge at all (KOR) is decided
+    // in the service, which is the only layer that can read the tenant.
+    if (raw.vat_rate != null) {
+      const rate = Number(raw.vat_rate)
+      if (!isKnownVatRate(rate)) return { error: 'vat_rate must be a known VAT rate' }
+      decision.vatRate = rate
+    } else {
+      decision.vatRate = null
+    }
     // Outgoing lines may link or create a supplier. Exactly one, or neither.
     if (action === 'journal_paid') {
       const supplierContactId = raw.supplier_contact_id == null
