@@ -174,7 +174,8 @@ function drawAddresses(doc, invoice, tenant, startY, { t }) {
   const senderName = tenant.formal_name || tenant.band_name || ''
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#000')
   doc.text(senderName, PAGE_MARGIN, leftY, { width: colW })
-  leftY += 14
+  const senderNameHeight = doc.heightOfString(senderName, { width: colW })
+  leftY += Math.max(senderNameHeight, 12) + 2
 
   doc.fontSize(9).font('Helvetica').fillColor('#000')
   for (const line of [
@@ -221,7 +222,8 @@ function drawAddresses(doc, invoice, tenant, startY, { t }) {
   let rightY = startY
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#000')
   doc.text(invoice.customer_name || '', rightColX, rightY, { width: colW, align: 'right' })
-  rightY += 14
+  const customerNameHeight = doc.heightOfString(invoice.customer_name || '', { width: colW })
+  rightY += Math.max(customerNameHeight, 12) + 2
 
   doc.fontSize(9).font('Helvetica').fillColor('#000')
 
