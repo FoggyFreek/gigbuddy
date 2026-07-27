@@ -7,10 +7,15 @@ import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import InvoiceDetails from '../components/InvoiceDetails.tsx'
+import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Id, Invoice } from '../types/entities.ts'
 
 export default function InvoiceDetailPage() {
   const { t } = useTranslation(['invoices', 'common'])
+  // The route only requires finance.view; every invoice mutation (save, delete,
+  // status change, logo, payment link, PDF re-generate) is finance.manage on the
+  // server, so a viewer without it gets a read-only invoice.
+  const { canManageFinance } = usePermissions()
   const { id } = useParams()
   const invoiceId = Number(id)
   const navigate = useNavigate()
@@ -46,6 +51,7 @@ export default function InvoiceDetailPage() {
       <InvoiceDetails
         key={invoiceId}
         invoiceId={invoiceId}
+        canWrite={canManageFinance}
         onClose={(reload) => closeView(reload ?? false)}
         onInvoiceUpdate={outletCtx.onInvoiceUpdate as ((id: Id, patch: Partial<Invoice>) => void) | undefined}
         onTitleReady={setInvoiceTitle}

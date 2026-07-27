@@ -74,6 +74,10 @@ describe('finance.view gating', () => {
       await a(request(app).get('/api/journal')).expect(403)
       await a(request(app).get('/api/ledger')).expect(403)
       await a(request(app).get('/api/purchases')).expect(403)
+      // Re-generating an invoice PDF is a finance mutation. Permission is
+      // checked before the invoice is looked up, so a non-existent id still
+      // 403s — this fails loudly if the route ever escapes the gated router.
+      await a(request(app).post('/api/invoices/999999/render')).expect(403)
     })
   }
 
@@ -83,6 +87,9 @@ describe('finance.view gating', () => {
     await a(request(app).get('/api/invoices')).expect(200)
     await a(request(app).get('/api/journal')).expect(200)
     await a(request(app).get('/api/purchases')).expect(200)
+    // Past both gates: finance.manage is granted, so this reaches the lookup
+    // and 404s on the unknown id rather than 403ing on permission.
+    await a(request(app).post('/api/invoices/999999/render')).expect(404)
   })
 })
 

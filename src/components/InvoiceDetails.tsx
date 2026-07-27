@@ -33,11 +33,13 @@ interface InvoiceDetailsProps {
   onClose: (updated?: boolean) => void
   onInvoiceUpdate?: (id: Id, patch: Partial<Invoice>) => void
   onTitleReady?: (title: string) => void
+  /** false ⇒ read-only view for a viewer without finance.manage. */
+  canWrite?: boolean
 }
 
-export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, onTitleReady }: Readonly<InvoiceDetailsProps>) {
+export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, onTitleReady, canWrite = true }: Readonly<InvoiceDetailsProps>) {
   const { t } = useTranslation(['invoices', 'common'])
-  const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate })
+  const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate, canWrite })
   const isCompact = useCompactLayout()
 
   useEffect(() => {
@@ -60,9 +62,10 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
     || undefined
   const bandHeading = s.tenant?.formal_name || s.tenant?.band_name || ''
 
-  // Download + re-generate, shown together once a PDF exists. Re-generating never
-  // touches the invoice data, so it stays available on a finalized invoice — a
-  // rendering fix can be applied without voiding and re-issuing.
+  // Shown once a PDF exists. Download is a read affordance, so every finance
+  // viewer keeps it. Re-generating is a mutation behind finance.manage, but it
+  // never touches the invoice *data* — so it stays available on a finalized
+  // invoice: a rendering fix lands without voiding and re-issuing.
   const pdfActions = s.invoice?.pdf_path ? (
     <>
       <Button
@@ -74,16 +77,18 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
       >
         {t($ => $.pdf.download)}
       </Button>
-      <Tooltip title={t($ => $.pdf.rerender)}>
-        <IconButton
-          size="small"
-          onClick={s.handlePdfRerender}
-          disabled={s.pdfRerenderBusy}
-          aria-label={t($ => $.pdf.rerenderAria)}
-        >
-          {s.pdfRerenderBusy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
-        </IconButton>
-      </Tooltip>
+      {canWrite && (
+        <Tooltip title={t($ => $.pdf.rerender)}>
+          <IconButton
+            size="small"
+            onClick={s.handlePdfRerender}
+            disabled={s.pdfRerenderBusy}
+            aria-label={t($ => $.pdf.rerenderAria)}
+          >
+            {s.pdfRerenderBusy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+      )}
     </>
   ) : null
 
@@ -143,13 +148,15 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
                   label={t($ => $.rawStatus[s.invoice!.status as InvoiceStatus])}
                 />
               )}
-              <Box sx={{ ml: 'auto' }}>
-                <InvoiceStatusActions
-                  status={s.invoice.status ?? 'draft'}
-                  disabled={s.saving}
-                  onStatusChange={s.handleStatusChange}
-                />
-              </Box>
+              {canWrite && (
+                <Box sx={{ ml: 'auto' }}>
+                  <InvoiceStatusActions
+                    status={s.invoice.status ?? 'draft'}
+                    disabled={s.saving}
+                    onStatusChange={s.handleStatusChange}
+                  />
+                </Box>
+              )}
             </Box>
           )}
           {s.finalized && (
@@ -211,6 +218,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
               <Divider sx={{ my: 2 }} />
               <PaymentLinkPanel
                 invoice={s.invoice}
+                canWrite={canWrite}
                 onUpdated={(updated) => s.setInvoice({ ...s.invoice, ...updated } as Invoice)}
               />
             </>
@@ -232,7 +240,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
             </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'center' }}>
               <Box>
-                {!s.finalized && (
+                {canWrite && !s.finalized && (
                   <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
                     {t($ => $.common.actions.delete)}
                   </Button>
@@ -253,7 +261,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
         ) : (
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>
-              {!s.finalized && (
+              {canWrite && !s.finalized && (
                 <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
                   {t($ => $.common.actions.delete)}
                 </Button>

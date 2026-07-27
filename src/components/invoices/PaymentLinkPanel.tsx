@@ -45,6 +45,8 @@ function isPaymentStatus(status: string | undefined): status is PaymentStatus {
 interface PaymentLinkPanelProps {
   invoice: Invoice
   onUpdated: (patch: Partial<Invoice>) => void
+  /** false ⇒ the viewer lacks finance.manage; create/sync/remove are withheld. */
+  canWrite?: boolean
 }
 
 function PaymentStatusChip({ status }: Readonly<{ status: string | undefined }>) {
@@ -73,7 +75,7 @@ function CreateDisabledReason({ isVoid, isSaved, hasAmount }: Readonly<{ isVoid:
   return <Typography variant="caption" sx={{ color: 'text.secondary' }}>{reason}</Typography>
 }
 
-export default function PaymentLinkPanel({ invoice, onUpdated }: Readonly<PaymentLinkPanelProps>) {
+export default function PaymentLinkPanel({ invoice, onUpdated, canWrite = true }: Readonly<PaymentLinkPanelProps>) {
   const { t } = useTranslation('invoices')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,6 +90,7 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: Readonly<Paymen
   const hasAmount = (invoice.total_cents ?? 0) > 0
 
   async function handleCreate() {
+    if (!canWrite) return
     setBusy(true)
     setError(null)
     try {
@@ -103,6 +106,7 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: Readonly<Paymen
   }
 
   async function handleSync() {
+    if (!canWrite) return
     setBusy(true)
     setError(null)
     try {
@@ -120,6 +124,7 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: Readonly<Paymen
   }
 
   async function handleRemove() {
+    if (!canWrite) return
     setBusy(true)
     setError(null)
     try {
@@ -162,18 +167,22 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: Readonly<Paymen
       )}
 
       {!hasLink ? (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={handleCreate}
-            disabled={busy || isVoid || !isSaved || !hasAmount}
-            startIcon={busy ? <CircularProgress size={14} color="inherit" /> : null}
-          >
-            {t($ => $.paymentLink.create)}
-          </Button>
-          <CreateDisabledReason isVoid={isVoid} isSaved={isSaved} hasAmount={hasAmount} />
-        </Stack>
+        // Nothing to read without a link, so a viewer without finance.manage
+        // gets no stub — just the empty panel.
+        canWrite && (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleCreate}
+              disabled={busy || isVoid || !isSaved || !hasAmount}
+              startIcon={busy ? <CircularProgress size={14} color="inherit" /> : null}
+            >
+              {t($ => $.paymentLink.create)}
+            </Button>
+            <CreateDisabledReason isVoid={isVoid} isSaved={isSaved} hasAmount={hasAmount} />
+          </Stack>
+        )
       ) : (
         <Stack spacing={1}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -212,13 +221,15 @@ export default function PaymentLinkPanel({ invoice, onUpdated }: Readonly<Paymen
               </Button>
             </Tooltip>
 
-            <Tooltip title={t($ => $.paymentLink.refresh)}>
-              <IconButton size="small" onClick={handleSync} disabled={busy} aria-label={t($ => $.paymentLink.refreshAria)}>
-                {busy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
+            {canWrite && (
+              <Tooltip title={t($ => $.paymentLink.refresh)}>
+                <IconButton size="small" onClick={handleSync} disabled={busy} aria-label={t($ => $.paymentLink.refreshAria)}>
+                  {busy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+            )}
 
-            {paymentStatus !== 'paid' && (
+            {canWrite && paymentStatus !== 'paid' && (
               <Tooltip title={t($ => $.paymentLink.remove)}>
                 <IconButton size="small" color="error" onClick={handleRemove} disabled={busy} aria-label={t($ => $.paymentLink.remove)}>
                   <DeleteOutlineIcon fontSize="small" />

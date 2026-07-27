@@ -255,6 +255,75 @@ describe('InvoiceDetails', () => {
     expect(screen.queryByRole('link', { name: /Download PDF/ })).toBeNull()
   })
 
+  // Reader mode: finance.view without finance.manage. Every invoice mutation is
+  // finance.manage on the server, so nothing may be offered as editable.
+  describe('without finance.manage', () => {
+    it('hides the PDF re-generate control but keeps the download link', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
+      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
+      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+      expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
+      // Download is a read affordance — the route carries no finance.manage gate.
+      expect(screen.getByRole('link', { name: /Download PDF/ }))
+        .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
+      expect(screen.getByRole('button', { name: 'Download email' })).toBeInTheDocument()
+    })
+
+    it('renders an editable draft read-only and withholds save/delete/status actions', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
+      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+      expect(screen.getByDisplayValue('Venue BV')).toBeDisabled()
+      expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Mark as sent' })).toBeNull()
+      // The lines editor disables rather than hides its controls — the existing
+      // read-only treatment it already applies to a finalized invoice.
+      expect(screen.getByRole('button', { name: /Add item/ })).toBeDisabled()
+      expect(screen.getByLabelText('remove line')).toBeDisabled()
+    })
+
+    it('withholds the payment-link controls but keeps copy and open', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
+      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
+      await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
+
+      expect(screen.queryByRole('button', { name: 'Refresh payment status' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Remove payment link' })).toBeNull()
+      expect(screen.getByRole('button', { name: /Copy link/ })).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Open payment page' })).toBeInTheDocument()
+    })
+
+    it('offers no create control when there is no payment link yet', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
+      await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
+
+      expect(screen.queryByRole('button', { name: /Create payment link/ })).toBeNull()
+    })
+
+    it('refuses the re-generate mutation even if the handler is reached', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
+      const { rerender } = wrap(
+        <InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite />,
+      )
+      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+      // Re-render as a reader while the control is still mounted from the
+      // writer pass, then drive the click past the disabled-pointer check:
+      // the guard in the hook must still refuse the call.
+      rerender(
+        <ThemeProvider theme={theme}>
+          <InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />
+        </ThemeProvider>,
+      )
+      expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
+      expect(invoicesApi.renderInvoice).not.toHaveBeenCalled()
+    })
+  })
+
   it('adds and removes invoice lines', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)

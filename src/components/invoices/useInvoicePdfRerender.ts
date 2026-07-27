@@ -6,6 +6,8 @@ interface UseInvoicePdfRerenderArgs {
   invoiceId: Id
   setInvoice: (invoice: Invoice) => void
   setError: (msg: string | null) => void
+  /** false ⇒ the viewer lacks finance.manage, which the render route requires. */
+  canWrite?: boolean
 }
 
 interface UseInvoicePdfRerenderResult {
@@ -18,10 +20,11 @@ interface UseInvoicePdfRerenderResult {
 // can be applied without voiding and re-issuing. The render endpoint answers with
 // the new pdf_path only, so the full invoice is re-read afterwards (same as the
 // logo actions) rather than overwriting the loaded one with a partial.
-export function useInvoicePdfRerender({ invoiceId, setInvoice, setError }: UseInvoicePdfRerenderArgs): UseInvoicePdfRerenderResult {
+export function useInvoicePdfRerender({ invoiceId, setInvoice, setError, canWrite = true }: UseInvoicePdfRerenderArgs): UseInvoicePdfRerenderResult {
   const [pdfRerenderBusy, setPdfRerenderBusy] = useState(false)
 
   async function handlePdfRerender() {
+    if (!canWrite) return
     try {
       setPdfRerenderBusy(true)
       setError(null)

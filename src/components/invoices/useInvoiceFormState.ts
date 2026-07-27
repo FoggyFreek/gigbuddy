@@ -21,6 +21,8 @@ interface UseInvoiceFormStateArgs {
   invoiceId: Id
   onClose: (updated?: boolean) => void
   onInvoiceUpdate?: (id: Id, patch: Partial<Invoice>) => void
+  /** false ⇒ the viewer lacks finance.manage; the whole editor is read-only. */
+  canWrite?: boolean
 }
 
 export interface UseInvoiceFormStateResult {
@@ -66,7 +68,7 @@ export interface UseInvoiceFormStateResult {
 // Owns the editable invoice form: data loading, derived totals, line/field
 // mutations, and the save/delete/status lifecycle. Logo and EML side effects
 // live in their own hooks (see useInvoiceDetailsState).
-export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: UseInvoiceFormStateArgs): UseInvoiceFormStateResult {
+export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWrite = true }: UseInvoiceFormStateArgs): UseInvoiceFormStateResult {
   const { t } = useTranslation('invoices')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -100,7 +102,11 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
   }, [invoiceId])
 
   const finalized = Boolean(invoice?.finalized_at)
-  const readOnly = finalized
+  // Two independent reasons to lock the editor: the invoice is issued (nobody
+  // may edit it), or the viewer lacks finance.manage. `finalized` stays the
+  // narrow "already issued" fact — the finalized banner and the delete/status
+  // affordances key off it, so it must not absorb the permission check.
+  const readOnly = finalized || !canWrite
   // KOR is a Dutch-only exemption; it never zeroes VAT for a non-NL supplier.
   const appliesKor = Boolean(tenant?.applies_kor) && korApplies(tenant?.vat_country)
 
@@ -194,6 +200,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
   }
 
   async function handleSave() {
+    if (!canWrite) return
     if (!form.customer_name?.trim()) {
       setError(t($ => $.validation.customerRequired))
       return
@@ -215,6 +222,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
   }
 
   async function applyStatusChange(newStatus: InvoiceStatus) {
+    if (!canWrite) return
     try {
       setSaving(true)
       setError(null)
@@ -267,6 +275,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate }: Use
 
   async function confirmDelete() {
     setDeleteDialogOpen(false)
+    if (!canWrite) return
     try {
       await deleteInvoice(invoiceId)
       onClose(true)

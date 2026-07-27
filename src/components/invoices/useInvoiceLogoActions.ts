@@ -7,6 +7,8 @@ interface UseInvoiceLogoActionsArgs {
   invoiceId: Id
   setInvoice: (invoice: Invoice) => void
   setError: (msg: string | null) => void
+  /** false ⇒ the viewer lacks finance.manage; logo upload/remove is refused. */
+  canWrite?: boolean
 }
 
 interface UseInvoiceLogoActionsResult {
@@ -18,14 +20,14 @@ interface UseInvoiceLogoActionsResult {
 
 // Custom-logo upload/remove for an invoice. Reports the refreshed invoice and
 // any error back through the form-state setters it is given.
-export function useInvoiceLogoActions({ invoiceId, setInvoice, setError }: UseInvoiceLogoActionsArgs): UseInvoiceLogoActionsResult {
+export function useInvoiceLogoActions({ invoiceId, setInvoice, setError, canWrite = true }: UseInvoiceLogoActionsArgs): UseInvoiceLogoActionsResult {
   const [logoBusy, setLogoBusy] = useState(false)
   const logoInputRef = useRef<HTMLInputElement | null>(null)
 
   async function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
-    if (!file) return
+    if (!file || !canWrite) return
     try {
       setLogoBusy(true)
       setError(null)
@@ -40,6 +42,7 @@ export function useInvoiceLogoActions({ invoiceId, setInvoice, setError }: UseIn
   }
 
   async function handleLogoRemove() {
+    if (!canWrite) return
     try {
       setLogoBusy(true)
       await removeInvoiceLogo(invoiceId)
