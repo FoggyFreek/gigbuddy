@@ -59,8 +59,7 @@ export const PROFILE_FIELDS = [
   'accent_color',
 ]
 
-// The short bio is the blurb the public link page shows, so it is capped where
-// that layout stops working. The long-form `bio` stays unbounded.
+// Capped to what the public link page layout holds; long-form `bio` is unbounded.
 const SHORT_BIO_MAX = 150
 
 function validateShortBio(raw) {
@@ -166,10 +165,8 @@ function validateLegalForm(raw) {
   return { value: raw }
 }
 
-// The company registration number (KvK/Handelsregister/SIREN/…) is validated
-// against the tenant's VAT country: each register has its own format, and for
-// countries where the enterprise/tax number IS the registration identifier
-// (Belgium, Spain) only an empty value is accepted.
+// Registration number (KvK/Handelsregister/SIREN/…), format per VAT country.
+// Where the tax number IS the register id (BE, ES) only empty is accepted.
 function validateKvkNumber(raw, vatCountry) {
   if (raw === null || raw === undefined) return { value: null }
   if (typeof raw !== 'string') return { error: 'invalid_kvk_number' }
@@ -178,9 +175,8 @@ function validateKvkNumber(raw, vatCountry) {
   return { value: v }
 }
 
-// The VAT identification number is validated against the tenant's VAT country
-// (resolved by the service): a German tenant stores a DE… number, a Dutch tenant
-// an NL…B.. number, etc. Whitespace is stripped and letters uppercased first.
+// VAT id, validated against the tenant's VAT country (DE… vs NL…B..).
+// Whitespace stripped and uppercased first.
 function validateTaxId(raw, vatCountry) {
   if (raw === null || raw === undefined) return { value: null }
   if (typeof raw !== 'string') return { error: 'invalid_tax_id' }
@@ -228,68 +224,71 @@ const FINANCIAL_VALIDATORS = {
 }
 
 function normalizeFinancialValue(key, raw, vatCountry) {
-  // tax_id and kvk_number formats depend on the tenant's VAT country, so they are
-  // resolved against `vatCountry` rather than a fixed regex in the map above.
+  // tax_id/kvk_number formats are country-dependent, so no fixed regex above.
   if (key === 'tax_id') return validateTaxId(raw, vatCountry)
   if (key === 'kvk_number') return validateKvkNumber(raw, vatCountry)
   const validator = FINANCIAL_VALIDATORS[key]
   return validator ? validator(raw) : validateBoundedText(key, raw)
 }
 
-// Builds the tenant-profile UPDATE SET fragments from PROFILE + FINANCIAL fields.
-// `vatCountry` is the tenant's effective VAT country (the value being set, or the
-// stored one), used to validate tax_id. Returns { error } when a financial value
-// is invalid, otherwise { fields, values }.
-export function buildProfileUpdate(body, { vatCountry = DEFAULT_VAT_COUNTRY } = {}) {
+// Accumulates `col = $n` fragments + values, numbering in push order.
+function createSetBuilder() {
   const fields = []
   const values = []
-  let idx = 1
+  return {
+    fields,
+    values,
+    push(key, value) {
+      fields.push(`${key} = $${fields.length + 1}`)
+      values.push(value)
+    },
+  }
+}
 
-  for (const key of PROFILE_FIELDS) {
+// Runs one field group into `builder`. `resolveValidator` returns undefined for
+// keys stored exactly as sent. Returns an error string, or null when valid.
+function collectFieldGroup(body, keys, resolveValidator, builder) {
+  for (const key of keys) {
     if (!(key in body)) continue
-    const validator = PROFILE_VALIDATORS[key]
+    const validator = resolveValidator(key)
     if (!validator) {
-      fields.push(`${key} = $${idx++}`)
-      values.push(body[key])
+      builder.push(key, body[key])
       continue
     }
     const result = validator(body[key])
-    if (result.error) return { error: result.error }
-    fields.push(`${key} = $${idx++}`)
-    values.push(result.value)
-  }
-
-  for (const key of FINANCIAL_FIELDS) {
-    if (!(key in body)) continue
-    const result = normalizeFinancialValue(key, body[key], vatCountry)
-    if (result.error) return { error: result.error }
+    if (result.error) return result.error
     if (result.skip) continue
-    fields.push(`${key} = $${idx++}`)
-    values.push(result.value)
+    builder.push(key, result.value)
+  }
+  return null
+}
+
+// Builds the tenant-profile UPDATE SET fragments. `vatCountry` is the effective
+// VAT country (the value being set, else the stored one), used for tax_id.
+export function buildProfileUpdate(body, { vatCountry = DEFAULT_VAT_COUNTRY } = {}) {
+  const builder = createSetBuilder()
+  const groups = [
+    [PROFILE_FIELDS, (key) => PROFILE_VALIDATORS[key]],
+    [FINANCIAL_FIELDS, (key) => (raw) => normalizeFinancialValue(key, raw, vatCountry)],
+    [MEMORY_FIELDS, (key) => MEMORY_VALIDATORS[key]],
+  ]
+
+  for (const [keys, resolveValidator] of groups) {
+    const error = collectFieldGroup(body, keys, resolveValidator, builder)
+    if (error) return { error }
   }
 
-  for (const key of MEMORY_FIELDS) {
-    if (!(key in body)) continue
-    const result = MEMORY_VALIDATORS[key](body[key])
-    if (result.error) return { error: result.error }
-    fields.push(`${key} = $${idx++}`)
-    values.push(result.value)
-  }
-
-  return { fields, values }
+  return { fields: builder.fields, values: builder.values }
 }
 
 // Builds the profile-link UPDATE SET fragments. Throws (err.status 400) when a
 // provided url is invalid. Returns { fields, values }.
 export function buildLinkUpdate(body) {
-  const fields = []
-  const values = []
-  let idx = 1
+  const builder = createSetBuilder()
   for (const key of LINK_FIELDS) {
     if (key in body) {
-      fields.push(`${key} = $${idx++}`)
-      values.push(key === 'url' ? normalizeRequiredProfileUrl(body[key]) : body[key])
+      builder.push(key, key === 'url' ? normalizeRequiredProfileUrl(body[key]) : body[key])
     }
   }
-  return { fields, values }
+  return { fields: builder.fields, values: builder.values }
 }

@@ -165,11 +165,23 @@ function drawTitle(doc, invoice, tenant, logoBuffer, { t, locale }) {
 // ─── address columns ──────────────────────────────────────────────────────────
 // Sender (band) details left-aligned; customer right-aligned.
 
-function drawAddresses(doc, invoice, tenant, startY, { t }) {
-  const colW = Math.floor(USABLE_W / 2) - 10
-  const rightColX = PAGE_MARGIN + colW + 20
+// Registration numbers, labelled by the supplier's VAT country.
+function buildRegistrationLines(tenant, t) {
+  const regLabel = getRegistrationLabel(tenant.vat_country)
+  const officeLabel = getRegistrationOfficeLabel(tenant.vat_country)
+  return [
+    tenant.kvk_number && regLabel ? `${regLabel}: ${tenant.kvk_number}` : null,
+    tenant.kvk_number && tenant.registration_office && officeLabel
+      ? `${officeLabel}: ${tenant.registration_office}` : null,
+    tenant.tax_id     ? `${getVatIdLabel(tenant.vat_country)}: ${tenant.tax_id}` : null,
+    // Company-law disclosure (e.g. GmbHG §35a): incorporated bands only.
+    requiresCompanyDisclosure(tenant.legal_form) && tenant.directors
+      ? `${t('directors')}: ${tenant.directors}` : null,
+  ].filter(Boolean)
+}
 
-  // ── left: band / sender ──
+// Left column. Returns the y below it.
+function drawSenderColumn(doc, tenant, startY, colW, { t }) {
   let leftY = startY
   const senderName = tenant.formal_name || tenant.band_name || ''
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#000')
@@ -195,20 +207,7 @@ function drawAddresses(doc, invoice, tenant, startY, { t }) {
     leftY += 12
   }
 
-  // Registration numbers — labelled by the supplier's VAT country (KvK,
-  // Handelsregister, SIREN, …) with the court/city/province where applicable.
-  const regLabel = getRegistrationLabel(tenant.vat_country)
-  const officeLabel = getRegistrationOfficeLabel(tenant.vat_country)
-  const regLines = [
-    tenant.kvk_number && regLabel ? `${regLabel}: ${tenant.kvk_number}` : null,
-    tenant.kvk_number && tenant.registration_office && officeLabel
-      ? `${officeLabel}: ${tenant.registration_office}` : null,
-    tenant.tax_id     ? `${getVatIdLabel(tenant.vat_country)}: ${tenant.tax_id}` : null,
-    // Company-law disclosure (e.g. Germany's GmbHG §35a): only an incorporated
-    // band lists its managing directors on the invoice.
-    requiresCompanyDisclosure(tenant.legal_form) && tenant.directors
-      ? `${t('directors')}: ${tenant.directors}` : null,
-  ].filter(Boolean)
+  const regLines = buildRegistrationLines(tenant, t)
   if (regLines.length) {
     leftY += 4
     doc.fontSize(8).fillColor('#555')
@@ -218,7 +217,11 @@ function drawAddresses(doc, invoice, tenant, startY, { t }) {
     }
   }
 
-  // ── right: customer ──
+  return leftY
+}
+
+// Right column. Returns the y below it.
+function drawCustomerColumn(doc, invoice, startY, colW, rightColX, { t }) {
   let rightY = startY
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#000')
   doc.text(invoice.customer_name || '', rightColX, rightY, { width: colW, align: 'right' })
@@ -227,7 +230,7 @@ function drawAddresses(doc, invoice, tenant, startY, { t }) {
 
   doc.fontSize(9).font('Helvetica').fillColor('#000')
 
-  // Contact person line: "t.a.v. [title] [given_name] [family_name]"
+  // "t.a.v. [title] [given_name] [family_name]"
   const contactParts = [
     invoice.customer_contact_title,
     invoice.customer_contact_given_name,
@@ -253,6 +256,14 @@ function drawAddresses(doc, invoice, tenant, startY, { t }) {
     rightY += 12
   }
 
+  return rightY
+}
+
+function drawAddresses(doc, invoice, tenant, startY, { t }) {
+  const colW = Math.floor(USABLE_W / 2) - 10
+  const rightColX = PAGE_MARGIN + colW + 20
+  const leftY = drawSenderColumn(doc, tenant, startY, colW, { t })
+  const rightY = drawCustomerColumn(doc, invoice, startY, colW, rightColX, { t })
   return Math.max(leftY, rightY)
 }
 

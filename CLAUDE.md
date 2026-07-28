@@ -146,5 +146,6 @@ New migrations go in `server/db/migrations/` as `NNN_name.sql`. The runner sorts
 
 ## Misc conventions
 
+- Keep comments to the minimum, concise. only add where relevant for understanding code. otherwise, let the code speak for itself.
 - When giving the user a multi-line vs. line-by-line command, say which — don't leave a block ambiguous.
 - Don't restructure readable code solely to satisfy a linter or SonarQube cognitive-complexity threshold — prefer a clear `switch`/early-returns, or mark the issue `accept`.

@@ -242,7 +242,11 @@ describe('PATCH /api/profile — financial fields', () => {
 
   it('DB constraint accepts every supported vat_country', async () => {
     for (const code of VAT_COUNTRY_CODES) {
-      await pool.query('UPDATE tenants SET vat_country = $1 WHERE id = $2', [code, seed.tenantA.id])
+      const { rows } = await pool.query(
+        'UPDATE tenants SET vat_country = $1 WHERE id = $2 RETURNING vat_country',
+        [code, seed.tenantA.id],
+      )
+      expect(rows[0].vat_country).toBe(code)
     }
   })
 

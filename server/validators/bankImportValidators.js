@@ -5,19 +5,69 @@
 import { parsePositiveId } from './common.js'
 import { isKnownVatRate } from '../../shared/vatRates.js'
 
-export const ACTIONS = new Set([
-  'skip',
-  'reconcile_invoice',
-  'reconcile_purchase',
-  'journal_paid',
-  'journal_received',
-])
-
 function trimOrNull(v) {
   if (v == null) return null
   const s = String(v).trim()
   return s === '' ? null : s
 }
+
+// Contra account + optional VAT split of the gross amount. Any rate real in
+// *some* supported country is accepted (bands buy abroad); whether the tenant
+// may deduct/charge at all (KOR) is decided in the service.
+function normalizeJournalFields(raw, action) {
+  const code = trimOrNull(raw.contra_account_code)
+  if (!code) return { error: `${action} needs contra_account_code` }
+  if (raw.vat_rate == null) return { contraAccountCode: code, vatRate: null }
+  const rate = Number(raw.vat_rate)
+  if (!isKnownVatRate(rate)) return { error: 'vat_rate must be a known VAT rate' }
+  return { contraAccountCode: code, vatRate: rate }
+}
+
+// Outgoing lines may link or create a supplier. Exactly one, or neither.
+function normalizeSupplierFields(raw) {
+  const supplierContactId = raw.supplier_contact_id == null
+    ? null
+    : parsePositiveId(raw.supplier_contact_id)
+  if (raw.supplier_contact_id != null && supplierContactId === null) {
+    return { error: 'supplier_contact_id must be a positive id' }
+  }
+  if (raw.create_supplier == null) return { supplierContactId }
+  if (supplierContactId != null) {
+    return { error: 'provide supplier_contact_id or create_supplier, not both' }
+  }
+  const name = trimOrNull(raw.create_supplier.name)
+  if (!name) return { error: 'create_supplier needs a name' }
+  return {
+    supplierContactId,
+    createSupplier: { name, iban: trimOrNull(raw.create_supplier.iban) },
+  }
+}
+
+// Each returns { error } or the extra fields to merge onto the decision. The
+// key set IS the set of valid actions.
+const ACTION_NORMALIZERS = {
+  skip: () => ({}),
+  reconcile_invoice: (raw) => {
+    const invoiceId = parsePositiveId(raw.invoice_id)
+    if (invoiceId === null) return { error: 'reconcile_invoice needs invoice_id' }
+    return { invoiceId }
+  },
+  reconcile_purchase: (raw) => {
+    const purchaseId = parsePositiveId(raw.purchase_id)
+    if (purchaseId === null) return { error: 'reconcile_purchase needs purchase_id' }
+    return { purchaseId }
+  },
+  journal_received: (raw) => normalizeJournalFields(raw, 'journal_received'),
+  journal_paid: (raw) => {
+    const journal = normalizeJournalFields(raw, 'journal_paid')
+    if (journal.error) return journal
+    const supplier = normalizeSupplierFields(raw)
+    if (supplier.error) return supplier
+    return { ...journal, ...supplier }
+  },
+}
+
+export const ACTIONS = new Set(Object.keys(ACTION_NORMALIZERS))
 
 // Validates one decision. Returns { error } or { decision } (normalized).
 function normalizeDecision(raw) {
@@ -25,54 +75,12 @@ function normalizeDecision(raw) {
   const lineId = parsePositiveId(raw.line_id)
   if (lineId === null) return { error: 'decision.line_id must be a positive id' }
   const action = raw.action
+  // Set-guarded so an inherited key ('constructor') can't resolve to a function.
   if (!ACTIONS.has(action)) return { error: `invalid action: ${action}` }
 
-  const decision = { lineId, action }
-
-  if (action === 'reconcile_invoice') {
-    const invoiceId = parsePositiveId(raw.invoice_id)
-    if (invoiceId === null) return { error: 'reconcile_invoice needs invoice_id' }
-    decision.invoiceId = invoiceId
-  } else if (action === 'reconcile_purchase') {
-    const purchaseId = parsePositiveId(raw.purchase_id)
-    if (purchaseId === null) return { error: 'reconcile_purchase needs purchase_id' }
-    decision.purchaseId = purchaseId
-  } else if (action === 'journal_paid' || action === 'journal_received') {
-    const code = trimOrNull(raw.contra_account_code)
-    if (!code) return { error: `${action} needs contra_account_code` }
-    decision.contraAccountCode = code
-    // Optional VAT split of the (gross) statement amount. Absent/null keeps the
-    // pre-VAT behavior. Any rate real in *some* supported country is accepted —
-    // a band buys abroad — the tenant's own rate set is a frontend affordance,
-    // not a limit. Whether the tenant may deduct/charge at all (KOR) is decided
-    // in the service, which is the only layer that can read the tenant.
-    if (raw.vat_rate != null) {
-      const rate = Number(raw.vat_rate)
-      if (!isKnownVatRate(rate)) return { error: 'vat_rate must be a known VAT rate' }
-      decision.vatRate = rate
-    } else {
-      decision.vatRate = null
-    }
-    // Outgoing lines may link or create a supplier. Exactly one, or neither.
-    if (action === 'journal_paid') {
-      const supplierContactId = raw.supplier_contact_id == null
-        ? null
-        : parsePositiveId(raw.supplier_contact_id)
-      if (raw.supplier_contact_id != null && supplierContactId === null) {
-        return { error: 'supplier_contact_id must be a positive id' }
-      }
-      decision.supplierContactId = supplierContactId
-      if (raw.create_supplier != null) {
-        if (supplierContactId != null) {
-          return { error: 'provide supplier_contact_id or create_supplier, not both' }
-        }
-        const name = trimOrNull(raw.create_supplier.name)
-        if (!name) return { error: 'create_supplier needs a name' }
-        decision.createSupplier = { name, iban: trimOrNull(raw.create_supplier.iban) }
-      }
-    }
-  }
-  return { decision }
+  const extra = ACTION_NORMALIZERS[action](raw)
+  if (extra.error) return { error: extra.error }
+  return { decision: { lineId, action, ...extra } }
 }
 
 // Validates the whole commit body. Returns { error } or { decisions } with no

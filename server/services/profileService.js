@@ -148,33 +148,37 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
   return runProfileWrite(db, tenantId, body, false)
 }
 
+// Locks the tenant row and resolves the effective VAT country. A country-only
+// change must not orphan an incompatible tax_id/kvk_number — the UI sends the
+// dropdown change on its own, so this is the only place to catch it.
+// Returns { vatCountry } or an error result.
+async function lockAndResolveVatCountry(executor, tenantId, body) {
+  const tenant = await lockTenantRow(executor, tenantId)
+  if (!tenant) return notFound('Profile not found')
+
+  const newCountry = normalizeVatCountry(body.vat_country)
+  const vatCountry = newCountry ?? tenant.vat_country ?? DEFAULT_VAT_COUNTRY
+  if (!('vat_country' in body) || !newCountry) return { vatCountry }
+
+  if (!('tax_id' in body) && tenant.tax_id && !isValidVatId(newCountry, tenant.tax_id)) {
+    return badRequest('tax_id_incompatible_vat_country')
+  }
+  if (!('kvk_number' in body) && tenant.kvk_number
+    && !isValidRegistrationNumber(newCountry, tenant.kvk_number)) {
+    return badRequest('kvk_incompatible_vat_country')
+  }
+  return { vatCountry }
+}
+
 // The read-validate-write core of a profile PATCH, run on whatever executor the
 // caller provides (a locking transaction client for the financial/customization
-// paths, the pool for the plain path). When `lockForConsistency` is set it locks
-// the tenant row and enforces that VAT country, tax_id and registration number
-// stay compatible: tax_id/kvk_number are validated against the effective country
-// (the value set in this PATCH, else the stored one), and changing the country
-// alone must not leave an incompatible identifier behind (the UI sends the
-// dropdown change on its own, so this is the only place to catch it).
+// paths, the pool for the plain path).
 async function runProfileWrite(executor, tenantId, body, lockForConsistency) {
   let vatCountry = DEFAULT_VAT_COUNTRY
   if (lockForConsistency) {
-    const tenant = await lockTenantRow(executor, tenantId)
-    if (!tenant) return notFound('Profile not found')
-    const settingTaxId = 'tax_id' in body
-    const settingKvk = 'kvk_number' in body
-    const settingVatCountry = 'vat_country' in body
-    const newCountry = normalizeVatCountry(body.vat_country)
-    vatCountry = newCountry ?? tenant.vat_country ?? DEFAULT_VAT_COUNTRY
-
-    if (settingVatCountry && newCountry) {
-      if (!settingTaxId && tenant.tax_id && !isValidVatId(newCountry, tenant.tax_id)) {
-        return badRequest('tax_id_incompatible_vat_country')
-      }
-      if (!settingKvk && tenant.kvk_number && !isValidRegistrationNumber(newCountry, tenant.kvk_number)) {
-        return badRequest('kvk_incompatible_vat_country')
-      }
-    }
+    const resolved = await lockAndResolveVatCountry(executor, tenantId, body || {})
+    if (resolved.error) return resolved
+    vatCountry = resolved.vatCountry
   }
 
   const built = buildProfileUpdate(body || {}, { vatCountry })

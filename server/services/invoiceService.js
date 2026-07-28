@@ -278,6 +278,25 @@ function clampNonNegative(value) {
   return Math.max(0, Number(value) || 0)
 }
 
+// Only transitions that actually ISSUE the invoice (draft → sent/paid) recognise
+// revenue and print a legal document, so art. 226 mandatory content must be
+// present. Voiding a draft is NOT an issue — an abandoned draft must stay
+// voidable — though it still sets finalized_at (see applyStatusFields). Checks
+// the effective persisted state; aborting rolls back the caller's transaction.
+async function assertReadyForIssue(client, { tenantId, invoiceId, status, existing, tenant }) {
+  if (status !== 'sent' && status !== 'paid') return
+  if (existing.finalized_at !== null) return
+
+  const effective = await fetchInvoice(client, tenantId, invoiceId)
+  const effectiveLines = await fetchLines(client, invoiceId, tenantId)
+  const readyError = checkInvoiceReadyForIssue(
+    { ...effective, vies_confirmed_for: storedViesConfirmation(effective) },
+    effectiveLines,
+    tenant,
+  )
+  if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
+}
+
 // `client` is optional: when provided (the void flow's lock-holding session),
 // the transaction runs on it and the caller keeps ownership of the connection.
 async function runPatchTransaction({ pool, client: providedClient, tenantId, invoiceId, body, existing, tenant, requestedContentFields, actorUserId }) {
@@ -319,25 +338,7 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
     await updateInvoiceFields(client, tenantId, invoiceId, builder.changes())
 
     if (body.status !== undefined) {
-      // Issuance readiness applies only to transitions that actually ISSUE the
-      // invoice (draft → sent/paid): those recognise revenue and print a legal
-      // document, so the art. 226 mandatory content must be present. Voiding a
-      // draft (draft → void) is NOT an issue — an abandoned, incomplete draft
-      // must stay voidable — even though it, like any non-draft transition, still
-      // sets finalized_at for immutability (see applyStatusFields). The check
-      // runs on the effective persisted state; the writes above are inside this
-      // transaction, so a failure rolls them back.
-      const becomesIssued = body.status === 'sent' || body.status === 'paid'
-      if (becomesIssued && existing.finalized_at === null) {
-        const effective = await fetchInvoice(client, tenantId, invoiceId)
-        const effectiveLines = await fetchLines(client, invoiceId, tenantId)
-        const readyError = checkInvoiceReadyForIssue(
-          { ...effective, vies_confirmed_for: storedViesConfirmation(effective) },
-          effectiveLines,
-          tenant,
-        )
-        if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
-      }
+      await assertReadyForIssue(client, { tenantId, invoiceId, status: body.status, existing, tenant })
       await postInvoiceTransition(client, tenantId, invoiceId, existing.status, body.status, actorUserId)
     }
 
