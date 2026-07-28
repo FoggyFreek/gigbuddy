@@ -20,7 +20,9 @@
     "test:server": "vitest run --no-file-parallelism src/tests/server",
     "test:ui": "vitest --ui",
     "coverage": "vitest run --exclude src/tests/server --coverage",
-    "coverage:server": "vitest run --no-file-parallelism src/tests/server --coverage --config vitest.server.config.js"
+    "coverage:server": "vitest run --no-file-parallelism src/tests/server --coverage --config vitest.server.config.js",
+    "build:schematron": "node scripts/build-schematron.mjs",
+    "build:ubl-goldens": "node scripts/build-ubl-goldens.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -107,11 +109,13 @@
     "globals": "^17.4.0",
     "jsdom": "^29.0.2",
     "nodemon": "^3.1.14",
+    "saxon-js": "^2.7.0",
     "supertest": "^7.2.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.0",
     "vite": "^8.0.4",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "xslt3": "^2.7.0"
   },
   "allowScripts": {
     "core-js@3.49.0": true,

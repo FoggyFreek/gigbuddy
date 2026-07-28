@@ -44,6 +44,8 @@ export interface ProfileForm {
   registration_office: string
   legal_form: string
   directors: string
+  email: string
+  phone: string
   iban: string
   tax_id: string
   tax_percentage: number
@@ -71,6 +73,8 @@ export const EMPTY_FORM: ProfileForm = {
   registration_office: '',
   legal_form: '',
   directors: '',
+  email: '',
+  phone: '',
   iban: '',
   tax_id: '',
   tax_percentage: 9,
@@ -99,6 +103,8 @@ export function profileToForm(data: Record<string, unknown>): ProfileForm {
     registration_office: String(data.registration_office || ''),
     legal_form: String(data.legal_form || ''),
     directors: String(data.directors || ''),
+    email: String(data.email || ''),
+    phone: String(data.phone || ''),
     iban: String(data.iban || ''),
     tax_id: String(data.tax_id || ''),
     tax_percentage: data.tax_percentage != null ? Number(data.tax_percentage) : 9,

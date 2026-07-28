@@ -783,6 +783,112 @@ describe('invoices — .eml header sanitization', () => {
   })
 })
 
+describe('invoices — UBL/Peppol XML download', () => {
+  const createInvoice = (overrides) => asUserA(request(app).post('/api/invoices'))
+    .send(basePayload(overrides)).expect(201)
+
+  it('streams an XML attachment named after the invoice', async () => {
+    const created = await createInvoice()
+    const res = await asUserA(request(app).get(`/api/invoices/${created.body.id}/ubl`)).expect(200)
+
+    expect(res.headers['content-type']).toMatch(/^application\/xml; charset=utf-8/)
+    expect(res.headers['content-disposition'])
+      .toBe(`attachment; filename="factuur-${created.body.invoice_number}.xml"`)
+    expect(res.text.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true)
+    expect(res.text).toContain('urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0')
+    expect(res.text).toContain(`<cbc:ID>${created.body.invoice_number}</cbc:ID>`)
+  })
+
+  it('cross-tenant download returns 404, not 403', async () => {
+    const created = await createInvoice()
+    const foreign = await asUserB(request(app).get(`/api/invoices/${created.body.id}/ubl`))
+    expect(foreign.status).toBe(404)
+    // Visible to its owner — the 404 is isolation, not absence.
+    await asUserA(request(app).get(`/api/invoices/${created.body.id}/ubl`)).expect(200)
+  })
+
+  it('unknown id returns 404', async () => {
+    await asUserA(request(app).get('/api/invoices/999999/ubl')).expect(404)
+  })
+
+  it('is available to a finance role without tenant-admin rights', async () => {
+    const { rows: u } = await pool.query(
+      `INSERT INTO users (google_sub, email, name, status, is_super_admin)
+       VALUES ('sub-ubl-fa', 'ubl-fa@a.local', 'Finance Admin', 'approved', false) RETURNING id`,
+    )
+    await pool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
+       VALUES ($1, $2, 'financial_admin', 'approved', NOW())`,
+      [u[0].id, seed.tenantA.id],
+    )
+    const created = await createInvoice()
+    await request(app).get(`/api/invoices/${created.body.id}/ubl`)
+      .set('x-test-user-id', String(u[0].id))
+      .set('x-test-tenant-id', String(seed.tenantA.id))
+      .expect(200)
+  })
+
+  it('still produces the file when the customer cannot be addressed, and says so', async () => {
+    // The seeded customer has no VAT or Chamber of Commerce number, so there is
+    // no buyer EndpointID to derive. The download must not be blocked.
+    const created = await createInvoice()
+    const res = await asUserA(request(app).get(`/api/invoices/${created.body.id}/ubl`)).expect(200)
+
+    expect(res.headers['x-peppol-warnings'].split(',')).toContain('missing_buyer_endpoint')
+    expect(res.text).toContain('<cac:AccountingCustomerParty>')
+    const customerBlock = res.text.slice(
+      res.text.indexOf('<cac:AccountingCustomerParty>'),
+      res.text.indexOf('</cac:AccountingCustomerParty>'),
+    )
+    expect(customerBlock).not.toContain('cbc:EndpointID')
+  })
+
+  it('renders a reverse-charge invoice as VAT category AE', async () => {
+    const created = await createInvoice({
+      reverse_charge: true,
+      customer_address_country: 'BE',
+      customer_tax_id: 'BE0779341748',
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/${created.body.id}/ubl`)).expect(200)
+    expect(res.text).toContain('<cbc:ID>AE</cbc:ID>')
+    expect(res.text).toContain('<cbc:TaxExemptionReasonCode>VATEX-EU-AE</cbc:TaxExemptionReasonCode>')
+  })
+
+  it('uses the linked gig name as the Peppol buyer reference', async () => {
+    const created = await createInvoice()
+    const res = await asUserA(request(app).get(`/api/invoices/${created.body.id}/ubl`)).expect(200)
+    expect(res.text).toContain('<cbc:BuyerReference>Alpha Gig</cbc:BuyerReference>')
+  })
+})
+
+describe('invoices — the linked gig travels with every single-invoice read', () => {
+  // The frontend derives the Peppol buyer reference from event_description, so a
+  // response that dropped it would silently flip that warning to a wrong answer.
+  it('is present on create, get and a status-only patch alike', async () => {
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload()).expect(201)
+    expect(created.body.event_description).toBe('Alpha Gig')
+
+    const fetched = await asUserA(request(app).get(`/api/invoices/${created.body.id}`)).expect(200)
+    expect(fetched.body.event_description).toBe('Alpha Gig')
+    // The pre-existing payload is unchanged apart from the addition.
+    expect(fetched.body.customer_name).toBe('Alpha Hall')
+    expect(fetched.body.lines).toHaveLength(1)
+    expect(fetched.body.tenant).toBeTruthy()
+
+    const patched = await asUserA(request(app).patch(`/api/invoices/${created.body.id}`))
+      .send({ status: 'sent' }).expect(200)
+    expect(patched.body.status).toBe('sent')
+    expect(patched.body.event_description).toBe('Alpha Gig')
+  })
+
+  it('is null when the invoice is not linked to a gig', async () => {
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send(basePayload({ gig_id: null })).expect(201)
+    expect(created.body.event_description).toBeNull()
+  })
+})
+
 describe('invoices — render retry', () => {
   it('row persists with pdf_path NULL when render fails, retry populates it', async () => {
     // First create with broken render (mock putObject to reject once).

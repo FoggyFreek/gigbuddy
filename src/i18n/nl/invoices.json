@@ -43,6 +43,8 @@
   },
   "detail": {
     "heading": "Factuur {{number}}",
+    "download": "Downloaden",
+    "downloadMenuAria": "Downloadopties",
     "finalizedNotice": "Deze factuur is definitief. Om correcties aan te brengen, moet je de factuur laten vervallen en opnieuw uitgeven.",
     "downloadEmail": "E-mail downloaden",
     "saving": "Opslaan...",
@@ -181,6 +183,27 @@
     "retry": "Het maken van de pdf is mislukt - klik om opnieuw te proberen",
     "rerender": "De pdf opnieuw maken op basis van de huidige factuurgegevens",
     "rerenderAria": "Pdf opnieuw maken"
+  },
+  "ubl": {
+    "download": "UBL downloaden (XML)",
+    "downloadFailed": "Het UBL-bestand kon niet worden gemaakt.",
+    "notReadyTitle": "Niet geschikt voor e-facturatie",
+    "notReadyIntro": "Het bestand wordt gedownload, maar een e-facturatienetwerk zal het waarschijnlijk weigeren:",
+    "warnings": {
+      "missing_seller_endpoint": "Je btw-nummer ontbreekt, waardoor de factuur geen elektronisch adres voor je band bevat.",
+      "missing_buyer_endpoint": "De klant heeft geen btw- of KvK-nummer, waardoor de factuur niet elektronisch aan hem geadresseerd kan worden.",
+      "unknown_seller_country": "Je land werd niet herkend. Gebruik een landnaam of tweeletterige code.",
+      "unknown_buyer_country": "Het land van de klant werd niet herkend. Gebruik een landnaam of tweeletterige code.",
+      "missing_seller_postal_code": "Je postcode is verplicht op facturen vanuit dit land.",
+      "missing_buyer_postal_code": "De postcode van de klant is verplicht op facturen naar dit land.",
+      "missing_payment_account": "Een IBAN is verplicht op facturen vanuit dit land. Voeg er een toe aan je profiel.",
+      "de_domestic_contact_required": "Binnenlandse Duitse facturen moeten een telefoonnummer en e-mailadres van de verkoper bevatten. Voeg die toe bij Profiel → Financiële gegevens.",
+      "line_missing_name": "Elke factuurregel heeft een omschrijving nodig.",
+      "vat_rounding_drift": "De btw per tarief wijkt een euro of meer af van het tarief over de grondslag, wat validators weigeren.",
+      "endpoint_inferred": "Elektronische adressen worden afgeleid uit btw- en KvK-nummers en komen mogelijk niet overeen met de deelnemers-ID's die op het Peppol-netwerk geregistreerd zijn.",
+      "missing_buyer_vat_id": "De klant heeft geen btw-nummer, wat de meeste zakelijke ontvangers wel verwachten.",
+      "buyer_reference_defaulted": "Geen gekoppelde gig, dus het factuurnummer wordt als klantreferentie gebruikt. Sommige ontvangers matchen op hun eigen ordernummer."
+    }
   },
   "validation": {
     "customerRequired": "Naam van de klant is verplicht",

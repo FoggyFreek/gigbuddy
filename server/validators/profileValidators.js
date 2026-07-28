@@ -109,6 +109,8 @@ export const FINANCIAL_FIELDS = [
   'registration_office',
   'legal_form',
   'directors',
+  'email',
+  'phone',
   'iban',
   'tax_id',
   'tax_percentage',
@@ -130,9 +132,20 @@ const TEXT_MAX_LENGTHS = {
   registration_office: 120,
   // Managing directors / board, disclosed on invoices by incorporated bands.
   directors: 300,
+  email: 254,
+  phone: 40,
 }
 
 const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/
+
+// Business contact address (EN 16931 BT-43). Structural plausibility only — no
+// attempt to prove deliverability. Matches the shape the invoice mailer already
+// enforces on outgoing headers, so a value accepted here cannot be rejected there.
+const EMAIL_RE = /^[^\s@<>]+@[^.\s@<>]+(?:\.[^.\s@<>]+)+$/
+
+// Telephone (BT-42). Digits with the punctuation people actually type; kept
+// permissive because international formats vary far more than validators assume.
+const PHONE_RE = /^\+?[\d\s().-]{4,}$/
 
 export { parseId }
 
@@ -215,8 +228,24 @@ function validateBoundedText(key, raw) {
   return { value: raw }
 }
 
+// Trimmed, length-bounded, and pattern-checked only when non-empty — clearing
+// the field is always allowed.
+function makeOptionalPatternValidator(key, re) {
+  return (raw) => {
+    if (raw === null || raw === undefined) return { value: null }
+    if (typeof raw !== 'string') return { error: `invalid_${key}` }
+    const trimmed = raw.trim()
+    if (trimmed === '') return { value: '' }
+    if (trimmed.length > TEXT_MAX_LENGTHS[key]) return { error: `invalid_${key}` }
+    if (!re.test(trimmed)) return { error: `invalid_${key}` }
+    return { value: trimmed }
+  }
+}
+
 const FINANCIAL_VALIDATORS = {
   applies_kor: validateAppliesKor,
+  email: makeOptionalPatternValidator('email', EMAIL_RE),
+  phone: makeOptionalPatternValidator('phone', PHONE_RE),
   tax_percentage: validateTaxPercentage,
   vat_country: validateVatCountry,
   legal_form: validateLegalForm,

@@ -1,13 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/invoices.ts', () => ({
   createInvoicePaymentLink: vi.fn(),
   deleteInvoicePaymentLink: vi.fn(),
   deleteInvoice: vi.fn(async () => {}),
   downloadInvoiceEml: vi.fn(),
+  downloadInvoiceUbl: vi.fn(),
   getInvoice: vi.fn(),
   getInvoiceEmlDefaults: vi.fn(),
   removeInvoiceLogo: vi.fn(),
@@ -29,6 +30,13 @@ import theme from '../theme.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
+}
+
+// PDF, UBL and email all live behind one "Download" menu button, so every
+// assertion about them has to open it first. They render as menuitems, not
+// buttons or links, even though the PDF entry is still an anchor underneath.
+async function openDownloadMenu(name = 'Download') {
+  await userEvent.click(screen.getByRole('button', { name }))
 }
 
 const EDIT_INVOICE = {
@@ -91,6 +99,21 @@ const FINALIZED_INVOICE = {
 const RENDERED_INVOICE = {
   ...FINALIZED_INVOICE,
   pdf_path: 'tenants/1/invoices/old-key.pdf',
+}
+
+// Everything the Peppol readiness check wants: resolvable countries on both
+// sides, an addressable customer, post codes, and an IBAN to be paid into.
+const PEPPOL_READY_INVOICE = {
+  ...EDIT_INVOICE,
+  customer_address_country: 'NL',
+  customer_tax_id: 'NL819789471B01',
+  event_description: 'Summer Fest',
+  tenant: {
+    ...EDIT_INVOICE.tenant,
+    address_country: 'NL',
+    address_postal_code: '1011AB',
+    iban: 'NL91ABNA0417164300',
+  },
 }
 
 afterEach(async () => {
@@ -203,8 +226,9 @@ describe('InvoiceDetails', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Re-generate PDF' }))
 
     await waitFor(() => expect(invoicesApi.renderInvoice).toHaveBeenCalledWith(7))
-    // The download link follows the newly stored key (the old one is deleted server-side).
-    await waitFor(() => expect(screen.getByRole('link', { name: /Download PDF/ }))
+    // The download entry follows the newly stored key (the old one is deleted server-side).
+    await openDownloadMenu()
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: /Download PDF/ }))
       .toHaveAttribute('href', '/api/files/tenants/1/invoices/new-key.pdf'))
     // Re-generating is not a status change: nothing is PATCHed.
     expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
@@ -242,7 +266,8 @@ describe('InvoiceDetails', () => {
 
     expect(await screen.findByText('render boom')).toBeInTheDocument()
     // The previously stored PDF is still downloadable.
-    expect(screen.getByRole('link', { name: /Download PDF/ }))
+    await openDownloadMenu()
+    expect(screen.getByRole('menuitem', { name: /Download PDF/ }))
       .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
   })
 
@@ -252,7 +277,8 @@ describe('InvoiceDetails', () => {
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
     expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
-    expect(screen.queryByRole('link', { name: /Download PDF/ })).toBeNull()
+    await openDownloadMenu()
+    expect(screen.queryByRole('menuitem', { name: /Download PDF/ })).toBeNull()
   })
 
   // Reader mode: finance.view without finance.manage. Every invoice mutation is
@@ -264,10 +290,11 @@ describe('InvoiceDetails', () => {
       await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
       expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
-      // Download is a read affordance — the route carries no finance.manage gate.
-      expect(screen.getByRole('link', { name: /Download PDF/ }))
+      // Downloads are read affordances — those routes carry no finance.manage gate.
+      await openDownloadMenu()
+      expect(screen.getByRole('menuitem', { name: /Download PDF/ }))
         .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
-      expect(screen.getByRole('button', { name: 'Download email' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: 'Download email' })).toBeInTheDocument()
     })
 
     it('renders an editable draft read-only and withholds save/delete/status actions', async () => {
@@ -486,7 +513,8 @@ describe('InvoiceDetails', () => {
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('button', { name: 'Download email' }))
+    await openDownloadMenu()
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Download email' }))
     expect(await screen.findByDisplayValue('Hartelijk dank voor de samenwerking.')).toBeInTheDocument()
     expect(invoicesApi.getInvoiceEmlDefaults).toHaveBeenCalledWith(7)
   })
@@ -502,5 +530,130 @@ describe('InvoiceDetails', () => {
     expect(screen.getByText('Regels')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Wijzigingen opslaan' })).toBeInTheDocument()
     expect(screen.getByText('Betaallink')).toBeInTheDocument()
+  })
+})
+
+describe('InvoiceDetails — UBL/Peppol download', () => {
+  // jsdom implements neither of these; the download path calls both.
+  let downloadNames
+
+  beforeEach(() => {
+    downloadNames = []
+    vi.stubGlobal('URL', Object.assign(Object.create(URL), {
+      createObjectURL: vi.fn(() => 'blob:ubl'),
+      revokeObjectURL: vi.fn(),
+    }))
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function capture() {
+      downloadNames.push(this.download)
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('downloads the XML named after the invoice', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    invoicesApi.downloadInvoiceUbl.mockResolvedValueOnce(new Blob(['<Invoice/>']))
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await openDownloadMenu()
+    await userEvent.click(screen.getByRole('menuitem', { name: /Download UBL \(XML\)/ }))
+
+    await waitFor(() => expect(invoicesApi.downloadInvoiceUbl).toHaveBeenCalledWith(7))
+    expect(downloadNames).toEqual(['factuur-2026-0007.xml'])
+  })
+
+  it('offers the XML even when no PDF has been rendered', async () => {
+    // Unlike the PDF, the XML is generated on demand — it only needs a saved
+    // invoice, so it must not be gated on pdf_path.
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await openDownloadMenu()
+    expect(screen.queryByRole('menuitem', { name: /Download PDF/ })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: /Download UBL \(XML\)/ })).toBeInTheDocument()
+  })
+
+  it('warns when an e-invoicing network would reject the file', async () => {
+    // EDIT_INVOICE has no country on either party, so neither can be addressed.
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    // The warning sits on the UBL entry, where the action it concerns lives.
+    await openDownloadMenu()
+    const hint = screen.getByLabelText(/Not ready for e-invoicing/)
+    expect(hint).toBeInTheDocument()
+    expect(hint.getAttribute('aria-label')).toContain('country could not be recognised')
+    // …and is legible without hovering, as the entry's secondary line.
+    expect(screen.getByRole('menuitem', { name: /Not ready for e-invoicing/ })).toBeInTheDocument()
+  })
+
+  it('shows no warning once the invoice carries everything Peppol needs', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(PEPPOL_READY_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await openDownloadMenu()
+    expect(screen.queryByLabelText(/Not ready for e-invoicing/)).toBeNull()
+    expect(screen.getByRole('menuitem', { name: /Download UBL \(XML\)/ })).toBeInTheDocument()
+  })
+
+  it('surfaces a failed download instead of failing silently', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    invoicesApi.downloadInvoiceUbl.mockRejectedValueOnce(new Error('boom'))
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await openDownloadMenu()
+    await userEvent.click(screen.getByRole('menuitem', { name: /Download UBL \(XML\)/ }))
+    expect(await screen.findByText('Could not generate the UBL file.')).toBeInTheDocument()
+  })
+
+  it('renders the download in Dutch', async () => {
+    await i18n.changeLanguage('nl')
+    invoicesApi.getInvoice.mockResolvedValueOnce(PEPPOL_READY_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await openDownloadMenu('Downloaden')
+    expect(screen.getByRole('menuitem', { name: /UBL downloaden \(XML\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'E-mail downloaden' })).toBeInTheDocument()
+  })
+
+  it('groups all three downloads under one menu', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(PEPPOL_READY_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    // Nothing is offered until the menu is opened.
+    expect(screen.queryByRole('menuitem')).toBeNull()
+
+    await openDownloadMenu()
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Download UBL (XML)',
+      'Download email',
+    ])
+  })
+
+  it('includes the PDF entry once one has been rendered', async () => {
+    // Peppol-clean, so the UBL entry carries no secondary warning line and the
+    // assertion is about the menu's contents rather than the warning.
+    invoicesApi.getInvoice.mockResolvedValueOnce({
+      ...PEPPOL_READY_INVOICE,
+      pdf_path: 'tenants/1/invoices/old-key.pdf',
+    })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await openDownloadMenu()
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Download PDF',
+      'Download UBL (XML)',
+      'Download email',
+    ])
   })
 })

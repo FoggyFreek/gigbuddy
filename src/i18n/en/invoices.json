@@ -43,6 +43,8 @@
   },
   "detail": {
     "heading": "Invoice {{number}}",
+    "download": "Download",
+    "downloadMenuAria": "Download options",
     "finalizedNotice": "This invoice is finalized. Voiding and re-issuing is required to make corrections.",
     "downloadEmail": "Download email",
     "saving": "Saving...",
@@ -181,6 +183,27 @@
     "retry": "PDF render failed - click to retry",
     "rerender": "Re-generate the PDF from the current invoice data",
     "rerenderAria": "Re-generate PDF"
+  },
+  "ubl": {
+    "download": "Download UBL (XML)",
+    "downloadFailed": "Could not generate the UBL file.",
+    "notReadyTitle": "Not ready for e-invoicing",
+    "notReadyIntro": "The file will download, but an e-invoicing network is likely to reject it:",
+    "warnings": {
+      "missing_seller_endpoint": "Your VAT number is missing, so the invoice has no electronic address for your band.",
+      "missing_buyer_endpoint": "The customer has no VAT or Chamber of Commerce number, so the invoice cannot be addressed to them electronically.",
+      "unknown_seller_country": "Your country could not be recognised. Use a country name or two-letter code.",
+      "unknown_buyer_country": "The customer's country could not be recognised. Use a country name or two-letter code.",
+      "missing_seller_postal_code": "Your post code is required for invoices sent from this country.",
+      "missing_buyer_postal_code": "The customer's post code is required for invoices sent to this country.",
+      "missing_payment_account": "An IBAN is required on invoices from this country. Add one to your profile.",
+      "de_domestic_contact_required": "German domestic invoices must state a seller telephone number and email address. Add them under Profile → Financial details.",
+      "line_missing_name": "Every invoice line needs a description.",
+      "vat_rounding_drift": "The VAT per rate differs from the rate applied to its base by a euro or more, which validators reject.",
+      "endpoint_inferred": "Electronic addresses are derived from VAT and Chamber of Commerce numbers, and may not match the participant IDs registered on the Peppol network.",
+      "missing_buyer_vat_id": "The customer has no VAT number, which most business receivers expect.",
+      "buyer_reference_defaulted": "No linked gig, so the invoice number is used as the buyer reference. Some receivers match on their own order number."
+    }
   },
   "validation": {
     "customerRequired": "Customer name is required",

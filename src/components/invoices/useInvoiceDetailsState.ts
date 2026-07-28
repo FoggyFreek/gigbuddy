@@ -1,6 +1,7 @@
 import { useInvoiceFormState } from './useInvoiceFormState.ts'
 import { useInvoiceLogoActions } from './useInvoiceLogoActions.ts'
 import { useInvoiceEmlActions } from './useInvoiceEmlActions.ts'
+import { useInvoiceUblActions } from './useInvoiceUblActions.ts'
 import { useInvoicePdfRerender } from './useInvoicePdfRerender.ts'
 import type { Id, Invoice } from '../../types/entities.ts'
 
@@ -26,6 +27,8 @@ export function useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate, ca
   // Downloading the .eml is a read affordance — the route carries no
   // finance.manage gate, so it stays available to every finance viewer.
   const eml = useInvoiceEmlActions({ invoiceId, invoice: form.invoice })
+  // Same for the UBL/Peppol XML — a read, no finance.manage gate.
+  const ubl = useInvoiceUblActions({ invoiceId, invoice: form.invoice })
   const pdfRerender = useInvoicePdfRerender({
     invoiceId,
     setInvoice: form.setInvoice,
@@ -33,5 +36,5 @@ export function useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate, ca
     canWrite,
   })
 
-  return { ...form, ...logo, ...eml, ...pdfRerender }
+  return { ...form, ...logo, ...eml, ...ubl, ...pdfRerender }
 }

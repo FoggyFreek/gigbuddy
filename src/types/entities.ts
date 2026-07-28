@@ -154,6 +154,12 @@ export interface Tenant {
   legal_form?: string
   /** Managing directors / board — disclosed on invoices by incorporated bands. */
   directors?: string
+  /**
+   * Published business contact for the band, printed on issued documents.
+   * EN 16931 seller contact: BT-43 email, BT-42 telephone.
+   */
+  email?: string
+  phone?: string
   iban?: string
   tax_id?: string
   accent_color?: string | null
@@ -253,6 +259,11 @@ export interface Invoice {
   // Event name of the linked gig, attached only by the invoice search read
   // (invoices.gig_id → gigs). Null when the invoice isn't linked to a gig.
   gig_event_description?: string | null
+  // Linked gig's date and event name, attached by the single-invoice reads
+  // (GET /:id, POST /, PATCH /:id). The UBL export uses event_description as the
+  // Peppol buyer reference, so all three reads must supply it.
+  event_date?: string | null
+  event_description?: string | null
   total_cents?: number
   supply_date?: string | null
   reverse_charge?: boolean

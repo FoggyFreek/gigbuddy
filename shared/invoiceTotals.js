@@ -92,3 +92,73 @@ export function computeInvoiceTotals({ lines, taxInclusive, discountCents, disco
     perLine,
   }
 }
+
+// EN 16931 VAT category code for a rate. Reverse charge outranks the KOR, the
+// same precedence the PDF's VAT notes use.
+function vatCategoryCode(percent, { appliesKor, reverseCharge }) {
+  if (reverseCharge) return 'AE'
+  if (appliesKor) return 'E'
+  return percent > 0 ? 'S' : 'Z'
+}
+
+// Per-VAT-category view of an invoice, for the UBL/Peppol export.
+// computeInvoiceTotals cannot serve this directly: it drops zero-cent rate
+// groups from vatByRate (UBL needs a TaxSubtotal for every category), and its
+// per-rate discount allocation is internal.
+//
+// This DERIVES from computeInvoiceTotals rather than recomputing: those totals
+// are persisted on the invoice and posted to the ledger, so they are the
+// authority. Every returned figure sums back to them exactly, which is what
+// keeps the XML, the PDF and the journal in agreement.
+export function computeVatBreakdown(args) {
+  const totals = computeInvoiceTotals(args)
+  const zeroVat = args.appliesKor || args.reverseCharge
+
+  const netByRate = new Map()
+  args.lines.forEach((line, i) => {
+    const rate = zeroVat ? 0 : Number(line.tax_percentage) || 0
+    netByRate.set(rate, (netByRate.get(rate) || 0) + totals.perLine[i].netCents)
+  })
+
+  const groups = [...netByRate.entries()]
+    .map(([percent, lineNetCents]) => ({ percent, lineNetCents }))
+    .sort((a, b) => a.percent - b.percent)
+
+  const subtotal = totals.subtotalCents
+  const discounted = subtotal - totals.discountCents
+
+  // Same per-group proportional split computeInvoiceTotals uses internally, so
+  // the taxable bases match the VAT it already computed.
+  const exact = groups.map((g) => (subtotal === 0 ? 0 : (g.lineNetCents * discounted) / subtotal))
+  const taxable = exact.map((x) => Math.round(x))
+
+  // Independent rounding per group need not sum to the discounted subtotal.
+  // Repair by largest remainder so the UBL totals reconcile to the cent
+  // (BR-CO-11 and BR-CO-13 leave no tolerance).
+  const residual = discounted - taxable.reduce((a, b) => a + b, 0)
+  if (residual !== 0 && groups.length > 0) {
+    const step = Math.sign(residual)
+    const order = groups
+      .map((_, i) => i)
+      .sort((i, j) => {
+        const remainderDiff = (exact[i] - taxable[i]) - (exact[j] - taxable[j])
+        if (remainderDiff !== 0) return step > 0 ? -remainderDiff : remainderDiff
+        if (groups[i].lineNetCents !== groups[j].lineNetCents) return groups[j].lineNetCents - groups[i].lineNetCents
+        return groups[i].percent - groups[j].percent
+      })
+    for (let k = 0; k < Math.abs(residual); k++) taxable[order[k % order.length]] += step
+  }
+
+  const categories = groups.map((g, i) => ({
+    code: vatCategoryCode(g.percent, args),
+    percent: g.percent,
+    lineNetCents: g.lineNetCents,
+    allowanceCents: g.lineNetCents - taxable[i],
+    taxableCents: taxable[i],
+    // Looked up, never re-derived and never redistributed: a zero-rated group
+    // has no entry in vatByRate and so gets 0, which is what BR-Z-09 demands.
+    taxCents: totals.vatByRate.find((v) => v.rate === g.percent)?.cents ?? 0,
+  }))
+
+  return { totals, categories }
+}

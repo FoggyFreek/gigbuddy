@@ -1,4 +1,4 @@
-export { computeLineTotals, computeInvoiceTotals } from '../../shared/invoiceTotals.js'
+export { computeLineTotals, computeInvoiceTotals, computeVatBreakdown } from '../../shared/invoiceTotals.js'
 
 const eur = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' })
 

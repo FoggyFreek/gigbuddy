@@ -109,6 +109,7 @@ export async function buildExport(db, slug) {
         title: g.event_description,
         venue: nullable(g.venue),
         city: nullable(g.city),
+        eventUrl: nullable(g.event_link),
       })),
     },
   }

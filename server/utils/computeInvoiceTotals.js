@@ -1,1 +1,1 @@
-export { computeLineTotals, computeInvoiceTotals } from '../../shared/invoiceTotals.js'
+export { computeLineTotals, computeInvoiceTotals, computeVatBreakdown } from '../../shared/invoiceTotals.js'

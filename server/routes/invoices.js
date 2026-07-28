@@ -25,6 +25,7 @@ import {
   syncInvoicePaymentLink,
 } from '../services/invoiceService.js'
 import { getEmlDefaults, buildInvoiceEml } from '../services/invoiceEmailService.js'
+import { buildInvoiceUbl } from '../services/invoiceUblService.js'
 
 const router = Router()
 
@@ -176,6 +177,24 @@ router.post('/:id/eml', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (re
   const result = await buildInvoiceEml(pool, req.tenantId, id, req.body?.personalMessage)
   if (result.error) return sendError(res, result.error)
   res.setHeader('Content-Type', 'message/rfc822')
+  res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`)
+  res.send(result.content)
+})
+
+// Generates and streams the UBL/Peppol XML. A read, so finance.view is enough —
+// the same gate the stored PDF is served under.
+//
+// X-Peppol-Warnings is advisory, for anyone calling the endpoint directly; the
+// SPA computes the same answer locally from the invoice it already holds. The
+// download is never blocked by it.
+router.get('/:id/ubl', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await buildInvoiceUbl(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  if (result.warnings.length > 0) {
+    res.setHeader('X-Peppol-Warnings', result.warnings.map((w) => w.code).join(','))
+  }
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8')
   res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`)
   res.send(result.content)
 })

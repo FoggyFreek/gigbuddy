@@ -82,10 +82,10 @@ async function seedLinkpageContent() {
     [a],
   )
   await pool.query(
-    `INSERT INTO gigs (tenant_id, event_date, event_description, status)
-     VALUES ($1, CURRENT_DATE + 5, 'Alpha announced gig', 'announced'),
-            ($1, CURRENT_DATE + 6, 'Alpha option gig', 'option'),
-            ($1, CURRENT_DATE - 5, 'Alpha past gig', 'announced')`,
+    `INSERT INTO gigs (tenant_id, event_date, event_description, status, event_link)
+     VALUES ($1, CURRENT_DATE + 5, 'Alpha announced gig', 'announced', 'https://alpha.example/events/announced'),
+            ($1, CURRENT_DATE + 6, 'Alpha option gig', 'option', NULL),
+            ($1, CURRENT_DATE - 5, 'Alpha past gig', 'announced', NULL)`,
     [a],
   )
   await pool.query(
@@ -151,6 +151,7 @@ describe('public linkpage export', () => {
 
     // Gigs: announced + future only.
     expect(res.body.gigs.map((g) => g.title)).toEqual(['Alpha announced gig'])
+    expect(res.body.gigs[0].eventUrl).toBe('https://alpha.example/events/announced')
 
     expect(res.body.products).toEqual([expect.objectContaining({ name: 'Alpha CD', priceCents: 999 })])
     expect(res.body.links).toEqual([expect.objectContaining({ label: 'Website', url: 'https://alpha.example' })])

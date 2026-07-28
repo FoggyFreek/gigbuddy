@@ -41,3 +41,7 @@ INSTALL_LOG.md
 *.njsproj
 *.sln
 *.sw?
+
+# Generated from the vendored EN 16931 Schematron (npm run build:schematron)
+external/schematron/*.sef.json
+external/schematron/PEPPOL-EN16931-UBL.xslt

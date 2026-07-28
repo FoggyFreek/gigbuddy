@@ -65,7 +65,7 @@ export async function listActiveProducts(executor, tenantId) {
 // confirmations must never leak onto a public page.
 export async function listAnnouncedUpcomingGigs(executor, tenantId, limit) {
   const { rows } = await executor.query(
-    `SELECT g.id, g.event_date, g.start_time, g.event_description,
+    `SELECT g.id, g.event_date, g.start_time, g.event_description, g.event_link,
             v.name AS venue, v.city
        FROM gigs g
        LEFT JOIN venues v ON v.id = g.venue_id AND v.tenant_id = g.tenant_id

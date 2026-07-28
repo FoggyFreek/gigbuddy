@@ -163,6 +163,49 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body.error).toBe('invalid_iban')
   })
 
+  // Business contact details (EN 16931 seller contact BT-42/BT-43). Optional, so
+  // clearing them must stay possible; only a non-empty malformed value is an error.
+  it('stores trimmed business contact details and reads them back', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({
+        email: '  bookings@theband.example  ',
+        phone: ' +31 6 1234 5678 ',
+      }),
+    ).expect(200)
+    expect(res.body.email).toBe('bookings@theband.example')
+    expect(res.body.phone).toBe('+31 6 1234 5678')
+
+    const reread = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).get('/api/profile'),
+    ).expect(200)
+    expect(reread.body.email).toBe('bookings@theband.example')
+    expect(reread.body.phone).toBe('+31 6 1234 5678')
+  })
+
+  it('allows clearing the business contact details', async () => {
+    const as1 = as(seed.superUser.id, seed.tenantA.id)
+    await as1(request(app).patch('/api/profile').send({ email: 'x@y.example', phone: '+3112345' })).expect(200)
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ email: '', phone: '' }),
+    ).expect(200)
+    expect(res.body.email).toBe('')
+    expect(res.body.phone).toBe('')
+  })
+
+  it('rejects a malformed email with 400 invalid_email', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ email: 'not an address' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_email')
+  })
+
+  it('rejects a malformed phone with 400 invalid_phone', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({ phone: 'call me' }),
+    ).expect(400)
+    expect(res.body.error).toBe('invalid_phone')
+  })
+
   it('rejects an invalid tax_id with 400 invalid_tax_id', async () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ tax_id: 'NL123' }),

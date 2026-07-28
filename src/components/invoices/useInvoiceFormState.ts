@@ -8,6 +8,8 @@ import {
 import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
 import { korApplies } from '../../utils/vatRates.ts'
 import { checkInvoiceReadyForIssue, isInvoiceIssueErrorCode } from '../../utils/invoiceReadiness.ts'
+import { checkPeppolReadiness } from '../../utils/peppolReadiness.ts'
+import type { PeppolWarning } from '../../utils/peppolReadiness.ts'
 import type { Invoice, InvoiceStatus, Tenant, Id } from '../../types/entities.ts'
 import {
   addDays,
@@ -39,6 +41,7 @@ export interface UseInvoiceFormStateResult {
   appliesKor: boolean
   /** Why this invoice cannot be issued yet (advisory preview), or null. */
   issueBlocker: { code: string, message: string } | null
+  peppolWarnings: PeppolWarning[]
   totals: ReturnType<typeof computeInvoiceTotals>
   memoOpen: boolean
   setMemoOpen: (open: boolean) => void
@@ -151,6 +154,14 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     )
     return code ? { code, message: t($ => $.issueErrors[code]) } : null
   }, [finalized, form, totals.taxCents, tenant, t])
+
+  // What would stop the UBL/Peppol export being accepted by an e-invoicing
+  // network. Derived from the PERSISTED invoice, not `form`: the download route
+  // renders database state, so warning about unsaved edits would be a lie.
+  const peppolWarnings = useMemo(
+    () => checkPeppolReadiness(invoice, invoice?.lines ?? [], tenant),
+    [invoice, tenant],
+  )
 
   // due_date is derived from issue_date + payment_term_days. Recompute it in the
   // same transition that changes either input, rather than in a post-render
@@ -297,6 +308,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     readOnly,
     appliesKor,
     issueBlocker,
+    peppolWarnings,
     totals,
     memoOpen,
     setMemoOpen,

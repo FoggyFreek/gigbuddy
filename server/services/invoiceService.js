@@ -29,6 +29,7 @@ import {
   acquireSessionLock,
   releaseSessionLock,
   fetchInvoice,
+  fetchInvoiceWithGig,
   lockInvoice,
   lockInvoiceTotalsState,
   updateInvoiceFields,
@@ -676,8 +677,13 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
   }
 }
 
+// The three read paths that return an invoice to the client all use
+// fetchInvoiceWithGig, so the linked gig's event description is present no
+// matter which one produced the payload. The frontend derives the Peppol buyer
+// reference from it, and a status PATCH that dropped the field would silently
+// flip that warning to the wrong answer.
 export async function getInvoice(pool, tenantId, invoiceId) {
-  const invoice = await fetchInvoice(pool, tenantId, invoiceId)
+  const invoice = await fetchInvoiceWithGig(pool, tenantId, invoiceId)
   if (!invoice) return NOT_FOUND
   const lines = await fetchLines(pool, invoiceId, tenantId)
   const tenant = await fetchTenant(pool, tenantId)
@@ -764,7 +770,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
     logger.error('invoice.pdf_render_failed', { err, tenantId, invoiceId })
   }
 
-  const created = await fetchInvoice(pool, tenantId, invoiceId)
+  const created = await fetchInvoiceWithGig(pool, tenantId, invoiceId)
   const createdLines = await fetchLines(pool, invoiceId, tenantId)
   return { invoice: { ...created, lines: createdLines } }
 }
@@ -785,7 +791,7 @@ export async function patchInvoice(pool, tenantId, invoiceId, body, actorUserId 
     }
   }
 
-  const updated = await fetchInvoice(pool, tenantId, invoiceId)
+  const updated = await fetchInvoiceWithGig(pool, tenantId, invoiceId)
   const lines = await fetchLines(pool, invoiceId, tenantId)
   return { invoice: { ...updated, lines } }
 }

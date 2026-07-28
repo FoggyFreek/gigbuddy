@@ -213,6 +213,27 @@ export function FinancialsEditForm({ form, onChange, onFormChange, schedule }: R
       </Grid>
       <Grid size={{ xs: 12, md: 6 }}>
         <TextField
+          label={t($ => $.financials.email)}
+          type="email"
+          fullWidth
+          value={form.email}
+          onChange={(e) => onChange('email', e.target.value)}
+          slotProps={{ htmlInput: { maxLength: 254 } }}
+          helperText={t($ => $.financials.contactHelper)}
+        />
+      </Grid>
+      <Grid size={{ xs: 12, md: 6 }}>
+        <TextField
+          label={t($ => $.financials.phone)}
+          type="tel"
+          fullWidth
+          value={form.phone}
+          onChange={(e) => onChange('phone', e.target.value)}
+          slotProps={{ htmlInput: { maxLength: 40 } }}
+        />
+      </Grid>
+      <Grid size={{ xs: 12, md: 6 }}>
+        <TextField
           label={t($ => $.financials.iban)}
           fullWidth
           value={form.iban}
@@ -354,6 +375,14 @@ function FinancialsView({ form }: Readonly<FinancialsViewProps>) {
       <Grid size={12}>
         <Typography variant="caption" color="text.secondary">{t($ => $.financials.address)}</Typography>
         <Typography sx={{ whiteSpace: 'pre-wrap' }}>{addressDisplay}</Typography>
+      </Grid>
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="caption" color="text.secondary">{t($ => $.financials.email)}</Typography>
+        <Typography sx={{ wordBreak: 'break-all' }}>{form.email || '—'}</Typography>
+      </Grid>
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="caption" color="text.secondary">{t($ => $.financials.phone)}</Typography>
+        <Typography>{form.phone || '—'}</Typography>
       </Grid>
       <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="caption" color="text.secondary">{t($ => $.financials.iban)}</Typography>

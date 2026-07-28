@@ -91,6 +91,11 @@ export const deleteInvoicePaymentLink = (id: Id) =>
 
 export const getInvoiceEmlDefaults = (id: Id) => api<EmlDefaults>(`/${id}/eml-defaults`)
 
+// UBL 2.1 / Peppol BIS Billing 3.0 XML. A blob rather than a plain link so a
+// failure surfaces as an in-app error instead of raw JSON in a new tab.
+export const downloadInvoiceUbl = (id: Id) =>
+  requestBlob(`/api/invoices/${id}/ubl`, { method: 'GET' })
+
 export const downloadInvoiceEml = (id: Id, personalMessage?: string) =>
   requestBlob(`/api/invoices/${id}/eml`, {
     method: 'POST',

@@ -40,6 +40,8 @@ vi.mock('../api/profile.ts', () => ({
     address_city: '',
     address_country: 'Netherlands',
     kvk_number: '',
+    email: 'bookings@testers.example',
+    phone: '+31 6 1234 5678',
     iban: '',
     tax_id: '',
     tax_percentage: 9,
@@ -243,6 +245,41 @@ describe('ProfilePage', () => {
         expect.objectContaining({ kvk_number: '12345678' })
       ),
       { timeout: 2000 }
+    )
+  })
+
+  // The band's published business contact (EN 16931 seller contact). Every
+  // member can read it; only admins get the inputs.
+  it('shows the business contact details on the financial section without editing', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'contributor' } })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+
+    await user.click(screen.getByRole('tab', { name: /financials/i }))
+
+    expect(await screen.findByText('bookings@testers.example')).toBeInTheDocument()
+    expect(screen.getByText('+31 6 1234 5678')).toBeInTheDocument()
+    // Read-only typography, not inputs.
+    expect(screen.queryByLabelText(/business email/i)).toBeNull()
+  })
+
+  it('lets an admin edit the business contact details', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, { user: { isSuperAdmin: false, activeTenantRole: 'tenant_admin' } })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+
+    await user.click(screen.getByRole('tab', { name: /financials/i }))
+    await user.click(await screen.findByRole('button', { name: /edit financial details/i }))
+
+    const phone = await screen.findByLabelText(/business phone/i)
+    await user.clear(phone)
+    await user.type(phone, '+31201234567')
+
+    await waitFor(
+      () => expect(updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ phone: '+31201234567' }),
+      ),
+      { timeout: 2000 },
     )
   })
 
