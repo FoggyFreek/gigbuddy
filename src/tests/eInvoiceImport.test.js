@@ -8,7 +8,7 @@ import { parseCiiInvoice } from '../../server/utils/eInvoice/cii.js'
 import { parseEInvoice, EInvoiceParseError } from '../../server/utils/eInvoice/index.js'
 import { mapEInvoiceToPurchase } from '../../server/utils/eInvoiceToPurchase.js'
 import { computePurchaseTotals } from '../../shared/purchaseTotals.js'
-import { parseUblAmount, money } from '../../shared/peppol.js'
+import { parseUblAmount, money, toUblDate } from '../../shared/peppol.js'
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'ublImport')
 const siUbl = readFileSync(join(FIX, 'si-ubl-discount.xml'), 'utf8')
@@ -615,5 +615,43 @@ describe('parseEInvoice — picks the reader from the bytes', () => {
     await expect(parseEInvoice(Buffer.from('<html><body>nope</body></html>')))
       .rejects.toThrow(/Supported: UBL 2\.1 and UN\/CEFACT CII/)
     await expect(parseEInvoice(Buffer.alloc(0))).rejects.toThrow(EInvoiceParseError)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Dates that are the right SHAPE but not real days.
+// ---------------------------------------------------------------------------
+
+describe('calendar validation', () => {
+  const withCiiDate = (yyyymmdd) => cii.replace('>20260715<', `>${yyyymmdd}<`)
+
+  it('refuses a CII date that matches the pattern but is not a day', () => {
+    for (const impossible of ['20260231', '20261301', '20260000', '20260229']) {
+      expect(() => parseCiiInvoice(withCiiDate(impossible))).toThrow(/BT-2/)
+    }
+  })
+
+  it('accepts a real leap day', () => {
+    expect(parseCiiInvoice(withCiiDate('20240229')).issueDate).toBe('2024-02-29')
+  })
+
+  it('refuses the same impossible dates in UBL, via the shared helper', () => {
+    // toUblDate is also what the OUTGOING renderer uses, so the leniency was
+    // not confined to the importer.
+    for (const impossible of ['2026-02-31', '2026-13-01', '2026-02-29']) {
+      expect(toUblDate(impossible)).toBeNull()
+    }
+    expect(toUblDate('2024-02-29')).toBe('2024-02-29')
+  })
+
+  it('refuses trailing junk while still accepting a real ISO timestamp', () => {
+    expect(toUblDate('2026-07-29T10:00:00Z')).toBe('2026-07-29')
+    expect(toUblDate('2026-13-99garbage')).toBeNull()
+    expect(toUblDate('2026-07-29-and-then-some')).toBeNull()
+  })
+
+  it('still accepts what a DATE column hands back', () => {
+    // node-postgres returns a Date at local midnight; that path is unchanged.
+    expect(toUblDate(new Date(2026, 6, 29))).toBe('2026-07-29')
   })
 })

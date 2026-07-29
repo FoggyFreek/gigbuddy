@@ -49,7 +49,7 @@
     "title": "E-factuur importeren",
     "description": "Upload de e-factuur van een leverancier. Die wordt een concept-inkoopfactuur die je kunt controleren en goedkeuren.",
     "chooseFile": "Bestand kiezen",
-    "fileHint": "UBL- of CII-XML (EN 16931), of een Factur-X- / ZUGFeRD-pdf",
+    "fileHint": "UBL- of CII-XML, of een Factur-X- / ZUGFeRD-pdf",
     "created": "Concept-inkoopfactuur aangemaakt",
     "summary": "{{supplier}} — {{total}} over {{count}} regel(s).",
     "checkBeforeApproving": "Controleren voor goedkeuren",
@@ -69,9 +69,11 @@
       "prepaid_amount_ignored": "De factuur vermeldt {{amount}} als reeds vooruitbetaald. Het volledige bedrag is geboekt; registreer de betaling apart.",
       "totals_rounded": "Regelbedragen zijn met {{amount}} aangepast zodat het totaal gelijk is aan de factuur.",
       "supplier_not_matched": "Geen bijbehorend leverancierscontact gevonden. De naam is als tekst overgenomen — koppel een contact in het concept.",
-      "attachment_skipped": "De pdf die in de factuur was ingesloten kon niet worden opgeslagen."
+      "attachment_skipped": "De pdf die in de factuur was ingesloten kon niet worden opgeslagen.",
+      "source_document_not_stored": "Het originele factuurbestand kon niet worden opgeslagen. Dat is het administratieve bewijsstuk — importeer deze factuur opnieuw voor je goedkeurt."
     },
-    "alreadyImported": "Deze factuur is al vastgelegd als inkoopfactuur #{{receipts}}."
+    "alreadyImported": "Deze factuur is al vastgelegd als inkoopfactuur #{{receipts}}.",
+    "notValidated": "Bestanden worden gelezen, niet gecertificeerd: de import controleert niet op EN 16931, XRechnung of nationale e-factureringsregels. Controleer het concept voor je goedkeurt."
   },
   "detail": {
     "heading": "Inkoop {{number}}",
@@ -156,7 +158,8 @@
     "options": "bijlageopties",
     "pdfLoadError": "Deze pdf kon niet worden geladen",
     "add": "Bijlage toevoegen",
-    "download": "Downloaden"
+    "download": "Downloaden",
+    "noPreview": "Geen voorbeeld voor dit bestandstype"
   },
   "validation": {
     "description": "Voer een omschrijving in",

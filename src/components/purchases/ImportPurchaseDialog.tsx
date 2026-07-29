@@ -91,6 +91,9 @@ export default function ImportPurchaseDialog({ onClose, onImported }: Readonly<I
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
               {t($ => $.importDialog.fileHint)}
             </Typography>
+            <Alert severity="info" sx={{ mt: 3, textAlign: 'left' }}>
+              {t($ => $.importDialog.notValidated)}
+            </Alert>
           </Box>
         )}
 

@@ -22,6 +22,7 @@ import {
   getPurchaseStatus,
   deletePurchase as deletePurchaseRow,
   deleteAttachmentReturningKey,
+  fetchAttachmentKind,
   listImportedPaymentCandidates,
   lockImportedPaymentCandidate,
   lockPurchase,
@@ -55,17 +56,25 @@ import {
   correctLedgerTransaction,
 } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { purchaseAttachmentKey, uploadObjectWithQuota, removeObject, safeRemove } from './storageService.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 
 const ATTACHMENT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
 
+// Extensions for a stored source document. Only the importer reaches this path;
+// the manual upload route keeps its narrower allowlist.
+const SOURCE_EXTENSIONS = {
+  'application/pdf': '.pdf',
+  'application/xml': '.xml',
+  'text/xml': '.xml',
+}
+
 // Receipt/attachment upload. Allowed at any purchase status. Images take the
 // share-photo security path (magic bytes + sharp re-encode, which strips
 // EXIF/metadata); PDFs are magic-byte verified and stored as-is.
-export async function createPurchaseAttachment({ db, tenantId, purchaseId, file, requireCreatedByUserId = null }) {
+export async function createPurchaseAttachment({ db, tenantId, purchaseId, file, requireCreatedByUserId = null, kind = 'receipt' }) {
   const purchase = await fetchPurchaseOwner(db, tenantId, purchaseId)
   if (!purchase) return { error: { status: 404, body: { error: 'Not found' } } }
   // Self-scoped callers may only attach to their own purchase (hide as 404).
@@ -76,7 +85,12 @@ export async function createPurchaseAttachment({ db, tenantId, purchaseId, file,
   let buffer = file.buffer
   let size = file.size
   let ext
-  if (ATTACHMENT_IMAGE_TYPES.has(file.mimetype)) {
+  if (kind === 'source_e_invoice') {
+    // Stored byte-for-byte. Re-encoding, re-compressing or normalizing it would
+    // destroy the very thing it is kept for — this file IS the invoice, and for
+    // a hybrid document it is the authoritative half.
+    ext = SOURCE_EXTENSIONS[file.mimetype] ?? '.bin'
+  } else if (ATTACHMENT_IMAGE_TYPES.has(file.mimetype)) {
     let image
     try {
       image = await validateAndReencodeImage(file.buffer, file.mimetype, IMAGE_PROCESSING_PRESETS.purchaseReceipt)
@@ -103,6 +117,8 @@ export async function createPurchaseAttachment({ db, tenantId, purchaseId, file,
       originalFilename: file.originalname,
       contentType: file.mimetype,
       fileSize: size,
+      kind,
+      contentSha256: createHash('sha256').update(buffer).digest('hex'),
     })
     return { attachment }
   } catch (err) {
@@ -688,9 +704,26 @@ export async function deletePurchase(db, tenantId, id) {
 
 export async function deletePurchaseAttachment(db, tenantId, purchaseId, attachmentId) {
   const objectKey = await deleteAttachmentReturningKey(db, attachmentId, purchaseId, tenantId)
-  if (!objectKey) return { error: { status: 404, body: { error: 'Not found' } } }
-  safeRemove(objectKey, 'Failed to delete purchase attachment object:')
-  return {}
+  if (objectKey) {
+    safeRemove(objectKey, 'Failed to delete purchase attachment object:')
+    return {}
+  }
+  // The delete is scoped to exclude the imported source document, so nothing
+  // matching means either no such attachment or that one. Only the second is
+  // worth explaining.
+  const kind = await fetchAttachmentKind(db, attachmentId, purchaseId, tenantId)
+  if (kind === 'source_e_invoice') {
+    return {
+      error: {
+        status: 409,
+        body: {
+          error: 'The imported invoice file is the accounting record and cannot be deleted',
+          code: 'source_document_immutable',
+        },
+      },
+    }
+  }
+  return { error: { status: 404, body: { error: 'Not found' } } }
 }
 
 async function resolvePaymentMethod(pool, tenantId, body) {

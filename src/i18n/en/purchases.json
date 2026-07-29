@@ -49,7 +49,7 @@
     "title": "Import e-invoice",
     "description": "Upload a supplier's e-invoice. It becomes a draft purchase you can check and approve.",
     "chooseFile": "Choose file",
-    "fileHint": "UBL or CII XML (EN 16931), or a Factur-X / ZUGFeRD PDF",
+    "fileHint": "UBL or CII XML, or a Factur-X / ZUGFeRD PDF",
     "created": "Draft purchase created",
     "summary": "{{supplier}} — {{total}} across {{count}} line(s).",
     "checkBeforeApproving": "Check before approving",
@@ -69,9 +69,11 @@
       "prepaid_amount_ignored": "The invoice records {{amount}} already prepaid. The full amount was booked; register the payment separately.",
       "totals_rounded": "Line amounts were adjusted by {{amount}} so the total matches the invoice.",
       "supplier_not_matched": "No matching supplier contact was found. The name was kept as text — link a contact in the draft.",
-      "attachment_skipped": "The PDF embedded in the invoice could not be stored."
+      "attachment_skipped": "The PDF embedded in the invoice could not be stored.",
+      "source_document_not_stored": "The original invoice file could not be stored. It is the accounting record — re-import this invoice before approving."
     },
-    "alreadyImported": "This invoice has already been recorded as purchase #{{receipts}}."
+    "alreadyImported": "This invoice has already been recorded as purchase #{{receipts}}.",
+    "notValidated": "Files are read, not certified: the import does not check EN 16931, XRechnung or national e-invoicing rules. Check the draft before approving."
   },
   "detail": {
     "heading": "Purchase {{number}}",
@@ -156,7 +158,8 @@
     "options": "attachment options",
     "pdfLoadError": "Could not load this PDF",
     "add": "Add attachment",
-    "download": "Download"
+    "download": "Download",
+    "noPreview": "No preview for this file type"
   },
   "validation": {
     "description": "Enter a description",

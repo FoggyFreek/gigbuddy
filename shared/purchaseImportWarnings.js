@@ -26,6 +26,7 @@ export const PURCHASE_IMPORT_WARNING_CODES = Object.freeze([
   'totals_rounded',
   'supplier_not_matched',
   'attachment_skipped',
+  'source_document_not_stored',
 ])
 
 const BLOCKING = new Set([
@@ -35,6 +36,7 @@ const BLOCKING = new Set([
   'line_missing_description',
   'lines_synthesized_from_totals',
   'buyer_is_not_this_tenant',
+  'source_document_not_stored',
 ])
 
 export const isBlockingImportWarning = (code) => BLOCKING.has(code)

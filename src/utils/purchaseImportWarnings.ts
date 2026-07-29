@@ -22,6 +22,7 @@ export type PurchaseImportWarningCode =
   | 'totals_rounded'
   | 'supplier_not_matched'
   | 'attachment_skipped'
+  | 'source_document_not_stored'
 
 export const PURCHASE_IMPORT_WARNING_CODES = CODES_JS as readonly PurchaseImportWarningCode[]
 

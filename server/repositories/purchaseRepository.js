@@ -57,11 +57,13 @@ export async function fetchPurchaseOwner(executor, tenantId, purchaseId) {
 
 export async function insertPurchaseAttachment(executor, tenantId, purchaseId, attachment) {
   const { rows } = await executor.query(
-    `INSERT INTO purchase_attachments (purchase_id, tenant_id, object_key, original_filename, content_type, file_size)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at`,
+    `INSERT INTO purchase_attachments (purchase_id, tenant_id, object_key, original_filename,
+       content_type, file_size, kind, content_sha256)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at, kind, content_sha256`,
     [purchaseId, tenantId, attachment.objectKey, attachment.originalFilename,
-      attachment.contentType, attachment.fileSize],
+      attachment.contentType, attachment.fileSize,
+      attachment.kind ?? 'receipt', attachment.contentSha256 ?? null],
   )
   return rows[0]
 }
@@ -390,7 +392,8 @@ export async function listPurchasePeriods(executor, tenantId, supplierContactId 
 
 export async function fetchPurchaseAttachments(executor, purchaseId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id, object_key, original_filename, content_type, file_size, uploaded_at
+    `SELECT id, object_key, original_filename, content_type, file_size, uploaded_at,
+            kind, content_sha256
        FROM purchase_attachments
       WHERE purchase_id = $1 AND tenant_id = $2
       ORDER BY uploaded_at ASC, id ASC`,
@@ -411,10 +414,24 @@ export async function deletePurchase(executor, purchaseId, tenantId) {
   await executor.query('DELETE FROM purchases WHERE id = $1 AND tenant_id = $2', [purchaseId, tenantId])
 }
 
+// Never deletes the imported source document: those bytes are the invoice, and
+// the API surfaces the refusal as a 409 rather than silently keeping the row.
 export async function deleteAttachmentReturningKey(executor, attachmentId, purchaseId, tenantId) {
   const { rows } = await executor.query(
-    'DELETE FROM purchase_attachments WHERE id = $1 AND purchase_id = $2 AND tenant_id = $3 RETURNING object_key',
+    `DELETE FROM purchase_attachments
+      WHERE id = $1 AND purchase_id = $2 AND tenant_id = $3 AND kind <> 'source_e_invoice'
+      RETURNING object_key`,
     [attachmentId, purchaseId, tenantId],
   )
   return rows[0]?.object_key ?? null
+}
+
+// Distinguishes "no such attachment" (404) from "that one is the source
+// document" (409) after a delete matched nothing.
+export async function fetchAttachmentKind(executor, attachmentId, purchaseId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT kind FROM purchase_attachments WHERE id = $1 AND purchase_id = $2 AND tenant_id = $3',
+    [attachmentId, purchaseId, tenantId],
+  )
+  return rows[0]?.kind ?? null
 }

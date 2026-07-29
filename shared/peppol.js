@@ -171,8 +171,27 @@ export function toUblDate(value) {
   }
   const text = String(value ?? '').trim()
   if (!text) return null
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(text)
-  return match ? match[0] : null
+  // Anchored at both ends, so trailing junk is rejected rather than silently
+  // truncated away. A full ISO timestamp is still accepted — that is what a
+  // JSON payload carries — but only when the time part is really a time.
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/
+    .exec(text)
+  return match && isRealCalendarDate(match[1], match[2], match[3])
+    ? `${match[1]}-${match[2]}-${match[3]}`
+    : null
+}
+
+// True when the parts name a day that exists. A shape check alone accepts
+// 2026-02-31 and 2026-13-01, and an invoice booked on a date that never
+// happened lands in the wrong VAT period — or in no period at all.
+export function isRealCalendarDate(year, month, day) {
+  const y = Number(year)
+  const m = Number(month)
+  const d = Number(day)
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return false
+  if (m < 1 || m > 12 || d < 1) return false
+  // Day 0 of the NEXT month is the last day of this one, leap years included.
+  return d <= new Date(Date.UTC(y, m, 0)).getUTCDate()
 }
 
 // Integer cents → a 2-decimal amount. Never via division: (c / 100).toFixed(2)

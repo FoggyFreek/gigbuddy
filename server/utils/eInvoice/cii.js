@@ -26,8 +26,10 @@ import {
   CREDIT_NOTE_TYPE_CODES,
   VAT_CATEGORY,
   ZERO_RATED_VAT_CATEGORIES,
+  isRealCalendarDate,
   parseUblAmount,
   resolvePostalCountry,
+  toUblDate,
 } from '../../../shared/peppol.js'
 import {
   EInvoiceParseError,
@@ -61,10 +63,15 @@ function ciiDate(node) {
   if (!value) return null
   const format = attr(node?.DateTimeString, 'format')
   if (format && format !== '102') return null
+
   const match = /^(\d{4})(\d{2})(\d{2})$/.exec(value)
-  if (match) return `${match[1]}-${match[2]}-${match[3]}`
-  // Some senders write an ISO date despite the format code.
-  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null
+  // The shape is not enough: 20260231 matches it and is not a day.
+  if (match && isRealCalendarDate(match[1], match[2], match[3])) {
+    return `${match[1]}-${match[2]}-${match[3]}`
+  }
+  // Some senders write an ISO date despite the format code. toUblDate applies
+  // the same calendar check, so this path cannot be the lenient one.
+  return match ? null : toUblDate(value)
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import DescriptionIcon from '@mui/icons-material/Description'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
@@ -111,6 +112,10 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
   const safeIndex = clampIndex(index, attachments.length)
   const current = attachments[safeIndex] || null
   const isPdf = current?.content_type === 'application/pdf'
+  // An imported XRechnung/UBL/CII source document has no rendering of its own.
+  // It is still the accounting record, so it is listed and downloadable rather
+  // than pushed through the image branch, which would show a broken image.
+  const isRenderable = isPdf || (current?.content_type ?? '').startsWith('image/')
 
   // Reset view transforms and page when switching attachments
   // (adjust-state-during-render pattern, no extra committed render).
@@ -331,7 +336,23 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
               minHeight: '100%',
             }}
           >
-            {isPdf ? (
+            {!isRenderable ? (
+              <Box sx={{ textAlign: 'center', p: 4 }}>
+                <DescriptionIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 1 }} />
+                <Typography variant="body2" color="text.secondary">
+                  {t($ => $.attachments.noPreview)}
+                </Typography>
+                <Button
+                  component="a"
+                  href={`/api/files/${current.object_key}`}
+                  download={current.original_filename}
+                  size="small"
+                  sx={{ mt: 1 }}
+                >
+                  {t($ => $.attachments.download)}
+                </Button>
+              </Box>
+            ) : isPdf ? (
             <Document
               key={String(current.id)}
               file={src}

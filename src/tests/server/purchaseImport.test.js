@@ -3,6 +3,7 @@ import './_envSetup.js'
 import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
 import request from 'supertest'
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -96,10 +97,10 @@ describe('POST /purchases/import', () => {
     expect(purchase.lines.map((l) => l.amount_incl_cents)).toEqual([65340, 54450])
   })
 
-  it('stores the embedded PDF as an attachment on the draft', async () => {
+  it('stores the embedded PDF as a readable rendering beside the source XML', async () => {
     const res = await importFile(asUserA, SI_UBL)
-    expect(res.body.purchase.attachments).toHaveLength(1)
-    expect(res.body.purchase.attachments[0].content_type).toBe('application/pdf')
+    const rendering = res.body.purchase.attachments.find((a) => a.kind === 'receipt')
+    expect(rendering.content_type).toBe('application/pdf')
     expect(codes(res.body.warnings)).not.toContain('attachment_skipped')
   })
 
@@ -404,5 +405,83 @@ describe('POST /purchases/import — CII and Factur-X', () => {
     const res = await importFile(asUserA, CII)
     const id = res.body.purchase.id
     expect((await asUserB(request(app).get(`/api/purchases/${id}`))).status).toBe(404)
+  })
+})
+
+describe('POST /purchases/import — the original file is kept as evidence', () => {
+  const sourceOf = (purchase) => purchase.attachments.find((a) => a.kind === 'source_e_invoice')
+
+  it('stores the uploaded XML itself, not just a rendering of it', async () => {
+    const res = await importFile(asUserA, CII)
+    const source = sourceOf(res.body.purchase)
+
+    expect(source).toBeTruthy()
+    expect(source.content_type).toBe('application/xml')
+    expect(source.content_sha256).toBe(createHash('sha256').update(readFileSync(CII)).digest('hex'))
+    // Byte-for-byte: re-encoding would destroy the thing it is kept for.
+    expect(objectStore.get(source.object_key).buffer.equals(readFileSync(CII))).toBe(true)
+  })
+
+  it('keeps the source for a UBL upload too, alongside the embedded rendering', async () => {
+    const res = await importFile(asUserA, SI_UBL)
+    const kinds = res.body.purchase.attachments.map((a) => a.kind).sort()
+    expect(kinds).toEqual(['receipt', 'source_e_invoice'])
+    expect(sourceOf(res.body.purchase).content_type).toBe('application/xml')
+  })
+
+  it('keeps the Factur-X PDF itself as the source, with no duplicate rendering', async () => {
+    const { default: PDFDocument } = await import('pdfkit')
+    const pdf = new PDFDocument()
+    const chunks = []
+    pdf.on('data', (c) => chunks.push(c))
+    const done = new Promise((resolve) => pdf.on('end', resolve))
+    pdf.text('Rechnung')
+    pdf.file(Buffer.from(ciiText), { name: 'factur-x.xml' })
+    pdf.end()
+    await done
+    const bytes = Buffer.concat(chunks)
+
+    const res = await asUserA(request(app).post('/api/purchases/import'))
+      .attach('file', bytes, 'rechnung.pdf')
+
+    expect(res.body.purchase.attachments).toHaveLength(1)
+    const source = sourceOf(res.body.purchase)
+    expect(source.content_type).toBe('application/pdf')
+    expect(source.content_sha256).toBe(createHash('sha256').update(bytes).digest('hex'))
+  })
+
+  it('refuses to delete the source document', async () => {
+    const res = await importFile(asUserA, CII)
+    const source = sourceOf(res.body.purchase)
+
+    const del = await asUserA(
+      request(app).delete(`/api/purchases/${res.body.purchase.id}/attachments/${source.id}`),
+    )
+    expect(del.status).toBe(409)
+    expect(del.body.code).toBe('source_document_immutable')
+
+    const { rows } = await pool.query(
+      'SELECT count(*)::int AS n FROM purchase_attachments WHERE id = $1', [source.id],
+    )
+    expect(rows[0].n).toBe(1)
+  })
+
+  it('still allows deleting an ordinary receipt', async () => {
+    const res = await importFile(asUserA, SI_UBL)
+    const receipt = res.body.purchase.attachments.find((a) => a.kind === 'receipt')
+
+    const del = await asUserA(
+      request(app).delete(`/api/purchases/${res.body.purchase.id}/attachments/${receipt.id}`),
+    )
+    expect(del.status).toBe(204)
+  })
+
+  it('does not let another tenant delete the source document either', async () => {
+    const res = await importFile(asUserA, CII)
+    const source = sourceOf(res.body.purchase)
+    const del = await asUserB(
+      request(app).delete(`/api/purchases/${res.body.purchase.id}/attachments/${source.id}`),
+    )
+    expect(del.status).toBe(404)
   })
 })

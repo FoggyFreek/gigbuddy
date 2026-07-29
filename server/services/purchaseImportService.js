@@ -34,6 +34,7 @@ import { logger } from '../utils/logger.js'
 const LEDGER_CURRENCY = 'EUR'
 
 const PDF_MIME = 'application/pdf'
+const XML_MIME = 'application/xml'
 
 /**
  * Parses an uploaded e-invoice and creates the draft purchase it describes.
@@ -122,10 +123,14 @@ export async function importPurchaseFromDocument({ db, tenantId, file, actorUser
   const created = await createPurchase(db, tenantId, purchase, actorUserId, { canManageFinance: false })
   if (created.error) return created
 
-  const attached = await attachSourceDocument({
-    db, tenantId, purchaseId: created.purchaseId, doc, file,
-  })
-  if (attached) warnings.push(attached)
+  const target = { db, tenantId, purchaseId: created.purchaseId }
+  // The source first: it is the record. The rendering is the nicety.
+  for (const warning of [
+    await storeSourceDocument({ ...target, file }),
+    await attachEmbeddedRendering({ ...target, doc, file }),
+  ]) {
+    if (warning) warnings.push(warning)
+  }
 
   return { purchaseId: created.purchaseId, warnings: sortImportWarnings(warnings) }
 }
@@ -163,20 +168,41 @@ async function resolveSupplier(db, tenantId, doc) {
   return matches.length === 1 ? matches[0] : null
 }
 
-// Stores the human-readable PDF, so the purchase carries the document a person
-// can actually read.
+// Stores the file the purchase was parsed FROM, exactly as it arrived.
 //
-// Two sources, and the uploaded file wins: a Factur-X/ZUGFeRD upload IS the
-// readable invoice with the XML tucked inside it, whereas a UBL upload can only
-// offer whatever PDF the sender embedded (BT-125).
+// This is accounting evidence, not a convenience copy. The structured document
+// has to be retained intact — for a hybrid PDF the embedded XML is the
+// authoritative half when the two disagree, and an XRechnung has no PDF at all,
+// so keeping only a rendered copy would keep the wrong thing (or nothing).
+// Stored under kind 'source_e_invoice', which the delete route refuses.
+async function storeSourceDocument({ db, tenantId, purchaseId, file }) {
+  const result = await createPurchaseAttachment({
+    db,
+    tenantId,
+    purchaseId,
+    kind: 'source_e_invoice',
+    file: {
+      buffer: file.buffer,
+      size: file.buffer.length,
+      mimetype: isPdf(file.buffer) ? PDF_MIME : XML_MIME,
+      originalname: file.originalname || `invoice${isPdf(file.buffer) ? '.pdf' : '.xml'}`,
+    },
+  }).catch((err) => {
+    logger.error('purchase_import.source_document_failed', { err, tenantId, purchaseId })
+    return { error: true }
+  })
+  return result?.error ? importWarning('source_document_not_stored') : null
+}
+
+// The human-readable PDF a UBL/CII sender embedded in the XML (BT-125), stored
+// alongside the source so the purchase shows something a person can read.
+// Skipped for a PDF upload — that file is already stored as the source.
 //
 // Returns a warning to append, or null when there was nothing to do. A failure
-// here never fails the import: the purchase itself is already correct, and the
-// attachment is a convenience.
-async function attachSourceDocument({ db, tenantId, purchaseId, doc, file }) {
-  const embedded = isPdf(file?.buffer)
-    ? { bytes: file.buffer, filename: file.originalname || `${doc.invoiceNumber}.pdf`, mimeCode: PDF_MIME }
-    : doc.attachments.find((a) => a.mimeCode === PDF_MIME) ?? doc.attachments[0]
+// here never fails the import: the purchase itself is already correct.
+async function attachEmbeddedRendering({ db, tenantId, purchaseId, doc, file }) {
+  if (isPdf(file?.buffer)) return null
+  const embedded = doc.attachments.find((a) => a.mimeCode === PDF_MIME) ?? doc.attachments[0]
   if (!embedded) return null
 
   // The mime code is the sender's claim about their own bytes; check them.
