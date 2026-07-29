@@ -18,6 +18,7 @@
   "empty": "Geen inkopen gevonden",
   "labels": {
     "supplier": "Leverancier",
+    "supplierInvoiceNumber": "Factuurnummer leverancier",
     "receiptDate": "Datum inkoopfactuur",
     "dueDate": "Vervaldatum",
     "currency": "Valuta",
@@ -55,9 +56,11 @@
     "adjustments": "Wat is afgeleid",
     "openDraft": "Concept openen",
     "warnings": {
+      "vat_self_assessment_required": "Dit is een factuur met verlegde btw ({{category}}): de leverancier heeft geen btw berekend, maar jij bent die verschuldigd en trekt die in dezelfde aangifte af. De regels zijn op 0% geboekt — een inkoopfactuur kan beide kanten niet vastleggen, dus overleg dit met je boekhouder voor je goedkeurt.",
       "possible_duplicate": "Er bestaat al een inkoopfactuur met dezelfde leverancier, datum en totaal (#{{receipts}}). Controleer of je deze factuur niet dubbel invoert.",
       "totals_mismatch": "De regels tellen niet op tot het totaal van {{stated}} op de factuur — het verschil is {{amount}}. Corrigeer de regels voor je goedkeurt.",
       "line_missing_description": "Een regel heeft geen omschrijving. Vul die in voor je goedkeurt.",
+      "buyer_is_not_this_tenant": "De factuur is gericht aan een ander btw- of registratienummer dan dat van je band. Controleer of deze echt van jou is voor je goedkeurt.",
       "line_vat_rate_defaulted": "Een regel vermeldde geen btw-tarief; {{to}}% is toegepast.",
       "vat_rate_adjusted": "Het tarief van {{from}}% kun je niet boeken; in plaats daarvan is {{to}}% toegepast.",
       "document_discount_allocated": "De factuurkorting is over de regels verdeeld — een inkoopfactuur heeft geen apart kortingsveld.",
@@ -66,7 +69,8 @@
       "totals_rounded": "Regelbedragen zijn met {{amount}} aangepast zodat het totaal gelijk is aan de factuur.",
       "supplier_not_matched": "Geen bijbehorend leverancierscontact gevonden. De naam is als tekst overgenomen — koppel een contact in het concept.",
       "attachment_skipped": "De pdf die in de factuur was ingesloten kon niet worden opgeslagen."
-    }
+    },
+    "alreadyImported": "Deze factuur is al vastgelegd als inkoopfactuur #{{receipts}}."
   },
   "detail": {
     "heading": "Inkoop {{number}}",
@@ -78,7 +82,8 @@
   "supplierFields": {
     "addDueDate": "Vervaldatum",
     "openReceiptDatePicker": "datumkiezer openen",
-    "openDueDatePicker": "datumkiezer openen"
+    "openDueDatePicker": "datumkiezer openen",
+    "supplierInvoiceNumberHelp": "Het nummer dat de leverancier op de factuur heeft gezet. Voorkomt dat dezelfde factuur twee keer wordt ingevoerd."
   },
   "supplierPicker": {
     "placeholder": "Zoek of typ contactnaam…",

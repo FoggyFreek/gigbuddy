@@ -17,7 +17,8 @@ import { indexSuppliers, matchSuppliers } from '../utils/supplierMatch.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { findSuppliersForImport } from '../repositories/contactRepository.js'
 import { findPurchaseDuplicates } from '../repositories/purchaseRepository.js'
-import { fetchTenantVatCountry } from '../repositories/tenantRepository.js'
+import { fetchTenant } from '../repositories/tenantRepository.js'
+import { normalizeVatNumber } from '../../shared/vatRates.js'
 import { createPurchase, createPurchaseAttachment } from './purchaseService.js'
 import { computePurchaseTotals } from '../../shared/purchaseTotals.js'
 import { importWarning, sortImportWarnings } from '../../shared/purchaseImportWarnings.js'
@@ -63,12 +64,14 @@ export async function importPurchaseFromUbl({ db, tenantId, file, actorUserId })
     }
   }
 
-  const vatCountry = await fetchTenantVatCountry(db, tenantId)
-  const { purchase, warnings } = mapUblInvoiceToPurchase(doc, { vatCountry })
+  const tenant = await fetchTenant(db, tenantId)
+  const { purchase, warnings } = mapUblInvoiceToPurchase(doc, { vatCountry: tenant?.vat_country })
 
   if (!purchase.supplier_name) {
     return { error: { status: 400, body: { error: 'Invoice names no supplier', code: 'missing_supplier_name' } } }
   }
+
+  if (addressedElsewhere(doc.customer, tenant)) warnings.push(importWarning('buyer_is_not_this_tenant'))
 
   const supplier = await resolveSupplier(db, tenantId, doc)
   if (supplier) purchase.supplier_contact_id = supplier.id
@@ -77,13 +80,37 @@ export async function importPurchaseFromUbl({ db, tenantId, file, actorUserId })
   const duplicates = await findPurchaseDuplicates(db, tenantId, {
     supplierContactId: purchase.supplier_contact_id,
     supplierName: purchase.supplier_name,
+    supplierInvoiceNumber: purchase.supplier_invoice_number,
     receiptDate: purchase.receipt_date,
     totalCents: computePurchaseTotals({ lines: purchase.lines }).totalCents,
   })
-  if (duplicates.length) {
-    warnings.push(importWarning('possible_duplicate', {
-      receiptNumbers: duplicates.map((row) => row.receipt_number),
-    }))
+  const receiptsOf = (kind) => duplicates
+    .filter((row) => row.match_kind === kind)
+    .map((row) => row.receipt_number)
+
+  // Same supplier, same invoice number: an identity, not a resemblance. Refused
+  // outright — and the unique index refuses it too, which is what closes the gap
+  // between this lookup and the insert when two imports race.
+  const sameInvoice = receiptsOf('invoice_number')
+  if (sameInvoice.length) {
+    return {
+      error: {
+        status: 409,
+        body: {
+          error: 'This invoice has already been recorded',
+          code: 'supplier_invoice_number_taken',
+          receipt_numbers: sameInvoice,
+        },
+      },
+    }
+  }
+
+  // Same supplier, date and total as a bill entered by hand (which carries no
+  // invoice number to compare). Two genuine purchases can look like this, so
+  // this one only warns.
+  const looksAlike = receiptsOf('document_facts')
+  if (looksAlike.length) {
+    warnings.push(importWarning('possible_duplicate', { receiptNumbers: looksAlike }))
   }
 
   // Never `approved`: an imported document has had no human look at it yet, and
@@ -97,6 +124,26 @@ export async function importPurchaseFromUbl({ db, tenantId, file, actorUserId })
   if (attached) warnings.push(attached)
 
   return { purchaseId: created.purchaseId, warnings: sortImportWarnings(warnings) }
+}
+
+// True when the invoice names a buyer that is demonstrably not this tenant.
+//
+// Reported, never enforced, and only on a POSITIVE contradiction: most tenants
+// have no VAT or registration number on file, and a strict match would reject
+// the legitimate invoices of everyone who has not filled in their profile. So
+// silence means "nothing to compare", not "verified".
+function addressedElsewhere(customer, tenant) {
+  if (!customer || !tenant) return false
+  const disagrees = (a, b) => Boolean(a) && Boolean(b) && a !== b
+  const vatMatch = disagrees(
+    normalizeVatNumber(customer.vatId),
+    normalizeVatNumber(tenant.tax_id),
+  )
+  const registrationMatch = disagrees(
+    String(customer.registrationId ?? '').trim(),
+    String(tenant.kvk_number ?? '').trim(),
+  )
+  return vatMatch || registrationMatch
 }
 
 // The supplier contact this invoice's seller already is, or null. Matching only:

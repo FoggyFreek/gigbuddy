@@ -17,6 +17,8 @@ export interface PurchaseForm {
   receipt_number?: number | null
   supplier_name: string
   supplier_contact_id: Id | null
+  /** The supplier's OWN invoice number (EN 16931 BT-1), not our receipt_number. */
+  supplier_invoice_number: string | null
   receipt_date: string | null
   due_date: string | null
   currency: string
@@ -43,6 +45,7 @@ export function emptyDraft(): PurchaseForm {
   return {
     supplier_name: '',
     supplier_contact_id: null,
+    supplier_invoice_number: null,
     receipt_date: receiptDate,
     due_date: null,
     currency: 'EUR',
@@ -57,6 +60,7 @@ export function purchaseToForm(data: Record<string, unknown> & { lines?: Purchas
     receipt_number: (data.receipt_number as number | null) ?? null,
     supplier_name: String(data.supplier_name || ''),
     supplier_contact_id: (data.supplier_contact_id as Id | null) ?? null,
+    supplier_invoice_number: data.supplier_invoice_number ? String(data.supplier_invoice_number) : null,
     receipt_date: data.receipt_date ? String(data.receipt_date).slice(0, 10) : null,
     due_date: data.due_date ? String(data.due_date).slice(0, 10) : null,
     currency: String(data.currency || 'EUR'),
@@ -79,6 +83,7 @@ export function buildPurchasePayload(form: PurchaseForm, status?: Exclude<Purcha
   const payload: Record<string, unknown> = {
     supplier_name: form.supplier_name?.trim() || '',
     supplier_contact_id: form.supplier_contact_id ?? null,
+    supplier_invoice_number: form.supplier_invoice_number?.trim() || null,
     receipt_date: form.receipt_date,
     due_date: form.due_date || null,
     currency: form.currency || 'EUR',

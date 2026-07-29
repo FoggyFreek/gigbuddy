@@ -85,7 +85,9 @@ describe('POST /purchases/import', () => {
     expect(purchase.supplier_name).toBe('Recording Studio De Kerk')
     expect(purchase.receipt_date.slice(0, 10)).toBe('2026-07-29')
     expect(purchase.due_date.slice(0, 10)).toBe('2026-08-12')
-    expect(purchase.memo).toBe('20260038')
+    // The supplier's number now has its own column; memo is theirs to use.
+    expect(purchase.supplier_invoice_number).toBe('20260038')
+    expect(purchase.memo).toBeNull()
     expect(purchase.subtotal_cents).toBe(99000)
     expect(purchase.tax_cents).toBe(20790)
     expect(purchase.total_cents).toBe(119790)
@@ -135,19 +137,100 @@ describe('POST /purchases/import', () => {
     expect(codes(res.body.warnings)).toContain('supplier_not_matched')
   })
 
-  it('warns on a second import of the same bill', async () => {
+  it("stores the supplier's own invoice number in its own column", async () => {
+    const res = await importFile(asUserA, SI_UBL)
+    expect(res.body.purchase.supplier_invoice_number).toBe('20260038')
+    // receipt_number stays OUR sequential id for the same bill.
+    expect(res.body.purchase.receipt_number).not.toBe('20260038')
+  })
+
+  it('refuses a second import of the same bill, naming the purchase it clashes with', async () => {
     const first = await importFile(asUserA, SI_UBL)
     const second = await importFile(asUserA, SI_UBL)
 
-    expect(second.status).toBe(201)
-    const duplicate = second.body.warnings.find((w) => w.code === 'possible_duplicate')
+    expect(second.status).toBe(409)
+    expect(second.body).toMatchObject({ code: 'supplier_invoice_number_taken' })
+    expect(second.body.receipt_numbers).toContain(first.body.purchase.receipt_number)
+
+    const { rows } = await pool.query(
+      'SELECT count(*)::int AS n FROM purchases WHERE tenant_id = $1', [seed.tenantA.id],
+    )
+    expect(rows[0].n).toBe(1)
+  })
+
+  it('still refuses when the lookup is bypassed, because the index is the real guard', async () => {
+    await importFile(asUserA, SI_UBL)
+    // Simulates the race the pre-insert lookup cannot see: a concurrent import
+    // that passed its own check before the first one committed.
+    await expect(pool.query(
+      `INSERT INTO purchases (tenant_id, receipt_number, supplier_name, supplier_invoice_number, receipt_date)
+       VALUES ($1, 9999, 'Recording Studio De Kerk', '20260038', '2026-07-29')`,
+      [seed.tenantA.id],
+    )).rejects.toMatchObject({ code: '23505', constraint: 'purchases_tenant_supplier_invoice_number_key' })
+  })
+
+  it('warns rather than refuses when only the supplier, date and total match', async () => {
+    // A bill entered by hand carries no supplier invoice number to compare, so
+    // the resemblance is a heuristic and two genuine purchases can look alike.
+    const created = await asUserA(request(app).post('/api/purchases')).send({
+      supplier_name: 'Recording Studio De Kerk',
+      receipt_date: '2026-07-29',
+      lines: [{ description: 'Studio', tax_rate: 21, amount_incl_cents: 119790, position: 0 }],
+    })
+    expect(created.status).toBe(201)
+
+    const res = await importFile(asUserA, SI_UBL)
+    expect(res.status).toBe(201)
+    const duplicate = res.body.warnings.find((w) => w.code === 'possible_duplicate')
     expect(duplicate).toMatchObject({ severity: 'blocking' })
-    expect(duplicate.receiptNumbers).toContain(first.body.purchase.receipt_number)
+    expect(duplicate.receiptNumbers).toContain(created.body.receipt_number)
+  })
+
+  it('lets a different supplier reuse the same invoice number', async () => {
+    await importFile(asUserA, SI_UBL)
+    const other = await importBuf(asUserA, siUblText.replace(
+      /<cbc:RegistrationName>Recording Studio De Kerk<\/cbc:RegistrationName>/,
+      '<cbc:RegistrationName>Another Studio</cbc:RegistrationName>',
+    ))
+    expect(other.status).toBe(201)
   })
 
   it('reports the discount allocation so the user knows the lines were changed', async () => {
     const res = await importFile(asUserA, SI_UBL)
     expect(codes(res.body.warnings)).toContain('document_discount_allocated')
+  })
+})
+
+describe('POST /purchases/import — buyer identity', () => {
+  // The invoice's buyer VAT number, added to the fixture's customer party.
+  const withBuyerVat = (vat) => siUblText.replace(
+    '<cac:PartyLegalEntity>\n        <cbc:RegistrationName>The woods</cbc:RegistrationName>',
+    `<cac:PartyTaxScheme><cbc:CompanyID>${vat}</cbc:CompanyID>`
+    + '<cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>'
+    + '<cac:PartyLegalEntity>\n        <cbc:RegistrationName>The woods</cbc:RegistrationName>',
+  )
+
+  it('warns when the invoice is addressed to another VAT number', async () => {
+    await pool.query('UPDATE tenants SET tax_id = $2 WHERE id = $1', [seed.tenantA.id, 'NL123456789B01'])
+    const res = await importBuf(asUserA, withBuyerVat('NL999999999B99'))
+
+    expect(res.status).toBe(201)
+    expect(res.body.warnings.find((w) => w.code === 'buyer_is_not_this_tenant'))
+      .toMatchObject({ severity: 'blocking' })
+  })
+
+  it('stays quiet when the buyer VAT matches', async () => {
+    await pool.query('UPDATE tenants SET tax_id = $2 WHERE id = $1', [seed.tenantA.id, 'NL123456789B01'])
+    const res = await importBuf(asUserA, withBuyerVat('NL 123456789 B01'))
+    expect(codes(res.body.warnings)).not.toContain('buyer_is_not_this_tenant')
+  })
+
+  it('stays quiet when the tenant has no VAT number on file — the common case', async () => {
+    // Silence must mean "nothing to compare", never "verified": a tenant that
+    // has not filled in its profile must still be able to import.
+    await pool.query('UPDATE tenants SET tax_id = NULL, kvk_number = NULL WHERE id = $1', [seed.tenantA.id])
+    const res = await importBuf(asUserA, withBuyerVat('NL999999999B99'))
+    expect(codes(res.body.warnings)).not.toContain('buyer_is_not_this_tenant')
   })
 })
 
@@ -169,6 +252,26 @@ describe('POST /purchases/import — rejected documents', () => {
 
   it('rejects a file that is not a UBL invoice', async () => {
     const res = await importBuf(asUserA, '<html><body>not an invoice</body></html>')
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('ubl_parse_failed')
+  })
+
+  it('rejects an invoice missing a mandatory field rather than defaulting it', async () => {
+    const res = await importBuf(asUserA, siUblText.replace(
+      '<cbc:IssueDate>2026-07-29</cbc:IssueDate>', '',
+    ))
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('ubl_parse_failed')
+    // Nothing was created before the rejection.
+    const { rows } = await pool.query('SELECT count(*)::int AS n FROM purchases WHERE tenant_id = $1', [seed.tenantA.id])
+    expect(rows[0].n).toBe(0)
+  })
+
+  it('rejects a document whose root is not in the UBL Invoice namespace', async () => {
+    const res = await importBuf(asUserA, siUblText.replace(
+      'xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"',
+      'xmlns="urn:example:not-ubl"',
+    ))
     expect(res.status).toBe(400)
     expect(res.body.code).toBe('ubl_parse_failed')
   })
@@ -206,10 +309,12 @@ describe('POST /purchases/import — tenant isolation', () => {
     expect(codes(res.body.warnings)).toContain('supplier_not_matched')
   })
 
-  it('does not warn about a duplicate that belongs to another tenant', async () => {
-    await importFile(asUserB, SI_UBL)
-    const res = await importFile(asUserA, SI_UBL)
-    expect(codes(res.body.warnings)).not.toContain('possible_duplicate')
+  it('lets both tenants import the same bill — the number is unique per tenant', async () => {
+    const b = await importFile(asUserB, SI_UBL)
+    const a = await importFile(asUserA, SI_UBL)
+    expect(b.status).toBe(201)
+    expect(a.status).toBe(201)
+    expect(codes(a.body.warnings)).not.toContain('possible_duplicate')
   })
 
   it('keeps the imported attachment out of the other tenant', async () => {

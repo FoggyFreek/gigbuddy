@@ -181,6 +181,73 @@ describe('parseUblInvoice — what it refuses', () => {
   })
 })
 
+// EN 16931 marks these mandatory, and each one changes how the bill is booked.
+// Defaulting any of them puts a guess into the ledger.
+describe('parseUblInvoice — mandatory fields are not defaulted', () => {
+  const strip = (tag) => invoiceXml().replace(new RegExp(`<cbc:${tag}>[^<]*</cbc:${tag}>`), '')
+
+  it('rejects an invoice with no currency rather than assuming EUR', () => {
+    const xml = strip('DocumentCurrencyCode')
+      .replaceAll(' currencyID="EUR"', '')
+    expect(() => parseUblInvoice(xml)).toThrow(/BT-5/)
+  })
+
+  it('rejects a missing issue date rather than booking it today', () => {
+    expect(() => parseUblInvoice(strip('IssueDate'))).toThrow(/BT-2/)
+  })
+
+  it('rejects an unparseable issue date', () => {
+    const xml = invoiceXml().replace('<cbc:IssueDate>2026-03-04</cbc:IssueDate>', '<cbc:IssueDate>04-03-2026</cbc:IssueDate>')
+    expect(() => parseUblInvoice(xml)).toThrow(/BT-2/)
+  })
+
+  it('rejects a missing invoice number', () => {
+    expect(() => parseUblInvoice(strip('ID'))).toThrow(/BT-1/)
+  })
+
+  it('rejects a missing invoice type code, which could be an unlabelled credit note', () => {
+    expect(() => parseUblInvoice(strip('InvoiceTypeCode'))).toThrow(/BT-3/)
+  })
+
+  it('rejects an invoice stating no total, leaving the lines with nothing to reconcile against', () => {
+    const monetary = `<cac:LegalMonetaryTotal>
+      <cbc:LineExtensionAmount currencyID="EUR">100.00</cbc:LineExtensionAmount>
+    </cac:LegalMonetaryTotal>`
+    expect(() => parseUblInvoice(invoiceXml({ monetary }))).toThrow(/BT-112 \/ BT-115/)
+  })
+})
+
+describe('parseUblInvoice — namespace and currency integrity', () => {
+  it('rejects a root element that is not in the UBL Invoice namespace', () => {
+    const xml = invoiceXml().replace(
+      'xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"',
+      'xmlns="urn:example:not-ubl"',
+    )
+    expect(() => parseUblInvoice(xml)).toThrow(/UBL Invoice namespace/)
+  })
+
+  it('rejects a prefixed root bound to another namespace', () => {
+    // removeNSPrefix would otherwise make this parse as a plain <Invoice>.
+    const xml = `<?xml version="1.0"?><evil:Invoice xmlns:evil="urn:example:evil"><evil:ID>X</evil:ID></evil:Invoice>`
+    expect(() => parseUblInvoice(xml)).toThrow(/UBL Invoice namespace/)
+  })
+
+  it('accepts a prefixed root correctly bound to the UBL namespace', () => {
+    const xml = invoiceXml()
+      .replace('<Invoice xmlns=', '<ubl:Invoice xmlns:ubl=')
+      .replace('</Invoice>', '</ubl:Invoice>')
+    expect(parseUblInvoice(xml).invoiceNumber).toBe('INV-1')
+  })
+
+  it('rejects a document that mixes currencies across its amounts', () => {
+    const xml = invoiceXml().replace(
+      '<cbc:LineExtensionAmount currencyID="EUR">100.00</cbc:LineExtensionAmount>',
+      '<cbc:LineExtensionAmount currencyID="USD">100.00</cbc:LineExtensionAmount>',
+    )
+    expect(() => parseUblInvoice(xml)).toThrow(/mixes currencies/)
+  })
+})
+
 describe('mapUblInvoiceToPurchase', () => {
   it('reconciles the discounted invoice to the cent', () => {
     const { purchase, warnings } = mapNl(parseUblInvoice(siUbl))
@@ -203,9 +270,10 @@ describe('mapUblInvoiceToPurchase', () => {
       due_date: '2026-08-12',
       currency: 'EUR',
       status: 'draft',
+      // BT-1, in its own column rather than folded into free text.
+      supplier_invoice_number: '20260038',
     })
-    // The supplier's own invoice number has nowhere else to live on a purchase.
-    expect(purchase.memo).toBe('20260038')
+    expect(purchase.memo).toBeNull()
   })
 
   it('spreads a document-level charge onto the lines too', () => {
@@ -268,6 +336,34 @@ describe('mapUblInvoiceToPurchase', () => {
     })))
     expect(purchase.lines[0].tax_rate).toBe(21)
     expect(warnings.find((w) => w.code === 'line_vat_rate_defaulted')).toMatchObject({ to: 21 })
+  })
+
+  it('flags a reverse-charge line instead of letting it look like an ordinary 0% bill', () => {
+    const { purchase, warnings } = mapNl(parseUblInvoice(invoiceXml({
+      lines: [{ net: '100.00', percent: '0.00', category: 'AE', name: 'Gear from Germany' }],
+    })))
+    // 0% is a faithful record of what the supplier charged...
+    expect(purchase.lines[0].tax_rate).toBe(0)
+    // ...but the buyer still owes that VAT, and a purchase cannot hold both legs.
+    expect(warnings.find((w) => w.code === 'vat_self_assessment_required'))
+      .toMatchObject({ severity: 'blocking', category: 'AE' })
+  })
+
+  it('flags an intra-community acquisition the same way', () => {
+    const { warnings } = mapNl(parseUblInvoice(invoiceXml({
+      lines: [{ net: '100.00', percent: '0.00', category: 'K', name: 'EU acquisition' }],
+    })))
+    expect(warnings.find((w) => w.code === 'vat_self_assessment_required'))
+      .toMatchObject({ category: 'K' })
+  })
+
+  it('does not flag a genuinely zero-rated or exempt line', () => {
+    for (const category of ['Z', 'E', 'O']) {
+      const { warnings } = mapNl(parseUblInvoice(invoiceXml({
+        lines: [{ net: '100.00', percent: '0.00', category, name: 'Zero rated' }],
+      })))
+      expect(codes(warnings)).not.toContain('vat_self_assessment_required')
+    }
   })
 
   it('flags a line with no description, which cannot be approved', () => {

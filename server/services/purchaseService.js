@@ -163,8 +163,34 @@ async function applyPurchaseStockIn(client, tenantId, lines) {
   }
 }
 
+// Blank is "not stated", not an empty string: the unique index only constrains
+// rows that state a number, and '' would make every unnumbered bill collide.
+export function normalizeSupplierInvoiceNumber(value) {
+  const text = String(value ?? '').trim()
+  return text === '' ? null : text
+}
+
 const FINALIZED_ERROR ={ status: 409, body: { error: 'Purchase is finalized', code: 'purchase_finalized' } }
 const RECEIPT_TAKEN_ERROR = { status: 409, body: { error: 'Receipt number already in use', code: 'receipt_number_taken' } }
+const SUPPLIER_INVOICE_TAKEN_ERROR = {
+  status: 409,
+  body: {
+    error: 'This supplier invoice number is already recorded',
+    code: 'supplier_invoice_number_taken',
+  },
+}
+
+const SUPPLIER_INVOICE_INDEX = 'purchases_tenant_supplier_invoice_number_key'
+
+// Turns the unique index into the answer the API contract expects. This is what
+// makes double entry impossible rather than merely warned about: the check and
+// the insert are the same operation, so two concurrent imports of one bill
+// cannot both pass.
+export function supplierInvoiceConflict(err) {
+  return isUniqueViolation(err) && err.constraint === SUPPLIER_INVOICE_INDEX
+    ? { error: SUPPLIER_INVOICE_TAKEN_ERROR }
+    : null
+}
 const USE_PAYMENT_ENDPOINT_ERROR = { status: 409, body: { error: 'Use the payment endpoint to mark a purchase paid', code: 'use_payment_endpoint' } }
 
 function isUniqueViolation(err) {
@@ -252,6 +278,7 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
     const purchaseId = await insertPurchase(client, tenantId, buildCreatePurchaseData({
       status, tenantId, receiptNumber, supplierName, supplierContactId,
       receiptDate, dueDate, currency, memo: body.memo || null, totals, actorUserId,
+      supplierInvoiceNumber: normalizeSupplierInvoiceNumber(body.supplier_invoice_number),
     }))
     await insertPurchaseLines(client, purchaseId, tenantId, lines)
 
@@ -266,7 +293,7 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
     }
 
     return { purchaseId }
-  }, { db: pool, mapError: ledgerErrorResult })
+  }, { db: pool, mapError: (err) => supplierInvoiceConflict(err) ?? ledgerErrorResult(err) })
 }
 
 function resolveCreateStatus(body, { canManageFinance = false } = {}) {
@@ -290,7 +317,7 @@ function resolveCreateStatus(body, { canManageFinance = false } = {}) {
 
 function buildCreatePurchaseData({
   status, tenantId, receiptNumber, supplierName, supplierContactId,
-  receiptDate, dueDate, currency, memo, totals, actorUserId,
+  receiptDate, dueDate, currency, memo, totals, actorUserId, supplierInvoiceNumber,
 }) {
   return {
     tenantId,
@@ -301,6 +328,7 @@ function buildCreatePurchaseData({
     dueDate,
     currency,
     memo,
+    supplierInvoiceNumber,
     subtotalCents: totals.subtotalCents,
     taxCents: totals.taxCents,
     totalCents: totals.totalCents,
@@ -330,6 +358,7 @@ function buildSimpleSet(body, supplierContactIdOverride) {
     let value = body[key]
     if (key === 'supplier_contact_id') value = supplierContactIdOverride
     else if (key === 'supplier_name') value = String(value ?? '').trim()
+    else if (key === 'supplier_invoice_number') value = normalizeSupplierInvoiceNumber(value)
     fields[key] = value
   }
   // memo is editable even after finalization, so it is not in CONTENT_FIELDS;
@@ -465,6 +494,11 @@ async function computePatchedTotals(client, id, tenantId) {
 }
 
 function mapPatchError(err) {
+  // Checked before the generic unique violation: both constraints live on
+  // purchases, and reporting a clashing supplier number as a receipt-number
+  // clash would send the user to edit the wrong field.
+  const supplierConflict = supplierInvoiceConflict(err)
+  if (supplierConflict) return supplierConflict
   if (isUniqueViolation(err)) return { error: RECEIPT_TAKEN_ERROR }
   const mapped = ledgerErrorResult(err)
   if (mapped) return mapped

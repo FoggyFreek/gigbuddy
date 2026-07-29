@@ -18,6 +18,7 @@
   "empty": "No purchases found",
   "labels": {
     "supplier": "Supplier",
+    "supplierInvoiceNumber": "Supplier invoice number",
     "receiptDate": "Receipt date",
     "dueDate": "Due date",
     "currency": "Currency",
@@ -55,9 +56,11 @@
     "adjustments": "What was inferred",
     "openDraft": "Open draft",
     "warnings": {
+      "vat_self_assessment_required": "This is a reverse-charge invoice ({{category}}): the supplier charged no VAT, but you owe it and deduct it in the same return. The lines were booked at 0% — a purchase cannot record both sides, so settle this with your bookkeeper before approving.",
       "possible_duplicate": "A purchase with the same supplier, date and total already exists (#{{receipts}}). Check you are not entering this bill twice.",
       "totals_mismatch": "The lines do not add up to the {{stated}} the invoice states — they are off by {{amount}}. Correct the lines before approving.",
       "line_missing_description": "A line has no description. Fill it in before approving.",
+      "buyer_is_not_this_tenant": "The invoice is addressed to a different VAT or registration number than your band's. Check it is really yours before approving.",
       "line_vat_rate_defaulted": "A line stated no VAT rate; {{to}}% was applied.",
       "vat_rate_adjusted": "The {{from}}% rate is not a rate you can book; {{to}}% was applied instead.",
       "document_discount_allocated": "The invoice discount was spread across the lines — a purchase has no separate discount field.",
@@ -66,7 +69,8 @@
       "totals_rounded": "Line amounts were adjusted by {{amount}} so the total matches the invoice.",
       "supplier_not_matched": "No matching supplier contact was found. The name was kept as text — link a contact in the draft.",
       "attachment_skipped": "The PDF embedded in the invoice could not be stored."
-    }
+    },
+    "alreadyImported": "This invoice has already been recorded as purchase #{{receipts}}."
   },
   "detail": {
     "heading": "Purchase {{number}}",
@@ -78,7 +82,8 @@
   "supplierFields": {
     "addDueDate": "Due",
     "openReceiptDatePicker": "open receipt date picker",
-    "openDueDatePicker": "open due date picker"
+    "openDueDatePicker": "open due date picker",
+    "supplierInvoiceNumberHelp": "The number the supplier put on the bill. Used to stop the same bill being entered twice."
   },
   "supplierPicker": {
     "placeholder": "Search or type contact name…",

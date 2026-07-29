@@ -14,6 +14,7 @@
 // Nothing here silently invents money. A gap too large to be rounding is
 // reported as a warning and left in the lines for the user to resolve in the
 // draft, never forced onto an arbitrary line to make the total look right.
+import { SELF_ASSESSED_VAT_CATEGORIES } from '../../shared/peppol.js'
 import { snapVatRate } from '../../shared/vatRates.js'
 import { computePurchaseTotals } from '../../shared/purchaseTotals.js'
 import { importWarning, sortImportWarnings } from '../../shared/purchaseImportWarnings.js'
@@ -119,6 +120,13 @@ export function mapUblInvoiceToPurchase(doc, { vatCountry, today = new Date().to
 
   const lines = doc.lines.map((line, i) => {
     if (!line.description) report('line_missing_description')
+    // 0% is a faithful record of what the supplier charged, but under reverse
+    // charge the buyer still owes that VAT and deducts it in the same return.
+    // A purchase cannot express the two legs, so the draft says so out loud
+    // rather than looking like an ordinary zero-rated bill.
+    if (SELF_ASSESSED_VAT_CATEGORIES.has(line.category?.code)) {
+      report('vat_self_assessment_required', { category: line.category.code })
+    }
     const taxRate = resolveLineRate(line, doc, vatCountry, report)
     const netCents = line.netCents + adjustments[i]
     return {
@@ -138,12 +146,13 @@ export function mapUblInvoiceToPurchase(doc, { vatCountry, today = new Date().to
     purchase: {
       supplier_name: doc.supplier?.name ?? '',
       supplier_contact_id: null,
+      // BT-1. Its own column, and the key the unique index uses to make a
+      // second import of this bill impossible rather than merely warned about.
+      supplier_invoice_number: doc.invoiceNumber,
       receipt_date: doc.issueDate ?? today,
       due_date: doc.dueDate,
       currency: doc.currency ?? 'EUR',
-      // The supplier's own invoice number, which is what you quote when paying
-      // and the only place a purchase can hold it. Their note follows it.
-      memo: [doc.invoiceNumber, doc.note].filter(Boolean).join('\n') || null,
+      memo: doc.note,
       status: 'draft',
       lines,
     },

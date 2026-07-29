@@ -314,6 +314,8 @@ export interface Purchase {
   currency?: string
   supplier_name?: string
   supplier_contact_id?: Id | null
+  /** The supplier's OWN invoice number (EN 16931 BT-1), not our receipt_number. */
+  supplier_invoice_number?: string | null
   description?: string
   memo?: string | null
   subtotal_cents?: number
@@ -343,6 +345,8 @@ export interface PurchaseImportWarning {
   statedCents?: number
   /** Existing purchases that look like the same bill (possible_duplicate). */
   receiptNumbers?: number[]
+  /** UNCL5305 category the line carried (vat_self_assessment_required). */
+  category?: string
 }
 
 /** POST /purchases/import — the created draft plus what needs a human eye. */

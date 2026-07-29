@@ -9,22 +9,32 @@ export async function countPurchasesBySupplierContact(executor, tenantId, contac
   return rows[0].count
 }
 
-// Purchases that look like the same supplier bill already being in the books:
-// same supplier (by linked contact, else by name) on the same date for the same
-// total. Used by the e-invoice importer to warn before a bill is entered twice —
-// a supplier's own invoice number has nowhere to live on a purchase, so the
-// document's own facts are the duplicate signal.
-export async function findPurchaseDuplicates(executor, tenantId, { supplierContactId, supplierName, receiptDate, totalCents }) {
+// The same supplier bill already in the books.
+//
+// Two signals, in order of confidence. The supplier's own invoice number is an
+// identity — same supplier, same number, same bill — and is what the unique
+// index enforces. Without one (a hand-entered purchase, or a supplier whose
+// document omitted it) the fallback is the document's own facts: same supplier
+// on the same date for the same total.
+//
+// The supplier key mirrors the index: the linked contact when there is one,
+// the lower-cased name otherwise.
+export async function findPurchaseDuplicates(executor, tenantId, {
+  supplierContactId, supplierName, supplierInvoiceNumber, receiptDate, totalCents,
+}) {
   const { rows } = await executor.query(
-    `SELECT id, receipt_number, status, receipt_date, total_cents
+    `SELECT id, receipt_number, status, receipt_date, total_cents, supplier_invoice_number,
+            CASE WHEN $4::text IS NOT NULL AND supplier_invoice_number = $4
+                 THEN 'invoice_number' ELSE 'document_facts' END AS match_kind
        FROM purchases
       WHERE tenant_id = $1
-        AND receipt_date = $2
-        AND total_cents = $3
-        AND (($4::int IS NOT NULL AND supplier_contact_id = $4)
-             OR ($4::int IS NULL AND lower(supplier_name) = lower($5)))
+        AND COALESCE(supplier_contact_id::text, lower(supplier_name))
+            = COALESCE($2::int::text, lower($3))
+        AND (($4::text IS NOT NULL AND supplier_invoice_number = $4)
+             OR (supplier_invoice_number IS NULL AND receipt_date = $5 AND total_cents = $6))
       ORDER BY receipt_number ASC`,
-    [tenantId, receiptDate, totalCents, supplierContactId ?? null, supplierName ?? ''],
+    [tenantId, supplierContactId ?? null, supplierName ?? '',
+      supplierInvoiceNumber ?? null, receiptDate, totalCents],
   )
   return rows
 }
@@ -77,19 +87,20 @@ export async function insertPurchase(executor, tenantId, purchase) {
   const { rows } = await executor.query(
     `INSERT INTO purchases (
        tenant_id, receipt_number, supplier_name, supplier_contact_id,
-       receipt_date, due_date, currency, memo,
+       receipt_date, due_date, currency, memo, supplier_invoice_number,
        subtotal_cents, tax_cents, total_cents,
        status, finalized_at,
        created_by_user_id, approved_by_user_id
      ) VALUES (
        $1, $2, $3, $4,
-       $5, $6, $7, $8,
-       $9, $10, $11,
-       $12, ${approved ? 'NOW()' : 'NULL'},
-       $13, ${approved ? '$13' : 'NULL'}
+       $5, $6, $7, $8, $9,
+       $10, $11, $12,
+       $13, ${approved ? 'NOW()' : 'NULL'},
+       $14, ${approved ? '$14' : 'NULL'}
      ) RETURNING id`,
     [tenantId, purchase.receiptNumber, purchase.supplierName, purchase.supplierContactId,
       purchase.receiptDate, purchase.dueDate, purchase.currency, purchase.memo,
+      purchase.supplierInvoiceNumber ?? null,
       purchase.subtotalCents, purchase.taxCents, purchase.totalCents,
       purchase.status, purchase.actorUserId],
   )

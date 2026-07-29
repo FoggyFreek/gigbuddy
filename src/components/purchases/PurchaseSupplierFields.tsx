@@ -7,6 +7,7 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
+import TextField from '@mui/material/TextField'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutlined'
 import DateEntryField from '../DateEntryField.tsx'
 import SupplierAutocomplete from './SupplierAutocomplete.tsx'
@@ -35,6 +36,18 @@ export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Re
           disabled={readOnly}
           label={t($ => $.labels.supplier)}
           autoFocus
+        />
+      </Box>
+
+      <Box sx={{ mb: 2 }}>
+        <TextField
+          label={t($ => $.labels.supplierInvoiceNumber)}
+          helperText={t($ => $.supplierFields.supplierInvoiceNumberHelp)}
+          size="small"
+          fullWidth
+          value={form.supplier_invoice_number ?? ''}
+          onChange={(e) => patchForm({ supplier_invoice_number: e.target.value })}
+          disabled={readOnly}
         />
       </Box>
 

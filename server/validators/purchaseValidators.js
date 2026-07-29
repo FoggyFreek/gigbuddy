@@ -14,6 +14,7 @@ export const STATUS_VALUES = new Set(['draft', 'approved', 'paid'])
 export const CONTENT_FIELDS = [
   'supplier_name',
   'supplier_contact_id',
+  'supplier_invoice_number',
   'receipt_date',
   'due_date',
   'currency',

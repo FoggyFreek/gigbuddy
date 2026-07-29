@@ -8,9 +8,11 @@ import {
 } from '../../shared/purchaseImportWarnings.js'
 
 export type PurchaseImportWarningCode =
+  | 'vat_self_assessment_required'
   | 'possible_duplicate'
   | 'totals_mismatch'
   | 'line_missing_description'
+  | 'buyer_is_not_this_tenant'
   | 'line_vat_rate_defaulted'
   | 'vat_rate_adjusted'
   | 'document_discount_allocated'

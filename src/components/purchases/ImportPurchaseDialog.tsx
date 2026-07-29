@@ -13,7 +13,21 @@ import Typography from '@mui/material/Typography'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { importPurchaseDocument } from '../../api/purchases.ts'
 import { formatEur } from '../../utils/purchaseTotals.ts'
+import { isApiError, type ApiError } from '../../types/api.ts'
 import type { Id, PurchaseImportResult, PurchaseImportWarning } from '../../types/entities.ts'
+
+type Translate = ReturnType<typeof useTranslation<['purchases', 'common']>>['t']
+
+// The one rejection worth rephrasing: a bill already in the books is a normal
+// thing to hit, and naming the purchase it clashes with is more use than the
+// server's generic sentence.
+function describeFailure(e: unknown, t: Translate): string {
+  if (isApiError(e) && e.code === 'supplier_invoice_number_taken') {
+    const receipts = (e as ApiError & { receipt_numbers?: number[] }).receipt_numbers ?? []
+    return t($ => $.importDialog.alreadyImported, { receipts: receipts.join(', ') })
+  }
+  return (e as Error).message
+}
 
 // Uploads a supplier's UBL e-invoice and reports what came back before handing
 // the draft to the detail editor.
@@ -41,7 +55,7 @@ export default function ImportPurchaseDialog({ onClose, onImported }: Readonly<I
       setError(null)
       setResult(await importPurchaseDocument(file))
     } catch (e) {
-      setError((e as Error).message)
+      setError(describeFailure(e, t))
     } finally {
       setBusy(false)
     }

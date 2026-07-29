@@ -45,6 +45,15 @@ export const ZERO_RATED_VAT_CATEGORIES = Object.freeze(new Set([
   VAT_CATEGORY.EXPORT,
 ]))
 
+// Categories where the BUYER accounts for the VAT rather than the seller
+// charging it. The invoice correctly shows no VAT, but the buyer still owes it
+// and deducts it in the same return — so a bill under one of these is not
+// simply a 0% bill, and anything that books it as one understates both sides.
+export const SELF_ASSESSED_VAT_CATEGORIES = Object.freeze(new Set([
+  'AE', // reverse charge
+  'K', // intra-community acquisition
+]))
+
 /** UNCL4461 — SEPA credit transfer (BT-81). */
 export const PAYMENT_MEANS_CREDIT_TRANSFER = '30'
 

@@ -11,9 +11,11 @@
 
 export const PURCHASE_IMPORT_WARNING_CODES = Object.freeze([
   // Blocking — the draft is not safe to approve as it stands.
+  'vat_self_assessment_required',
   'possible_duplicate',
   'totals_mismatch',
   'line_missing_description',
+  'buyer_is_not_this_tenant',
   // Advisory — imported cleanly, but a value was inferred rather than read.
   'line_vat_rate_defaulted',
   'vat_rate_adjusted',
@@ -26,9 +28,11 @@ export const PURCHASE_IMPORT_WARNING_CODES = Object.freeze([
 ])
 
 const BLOCKING = new Set([
+  'vat_self_assessment_required',
   'possible_duplicate',
   'totals_mismatch',
   'line_missing_description',
+  'buyer_is_not_this_tenant',
 ])
 
 export const isBlockingImportWarning = (code) => BLOCKING.has(code)

@@ -271,6 +271,75 @@ function dueDateOf(doc) {
 }
 
 // ---------------------------------------------------------------------------
+// Document identity
+// ---------------------------------------------------------------------------
+
+const UBL_INVOICE_NS = 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2'
+
+const XML_COMMENTS = /<!--[\s\S]*?-->/g
+const XML_PROLOG = /<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>/g
+const FIRST_ELEMENT = /<([A-Za-z_][\w.-]*)(?::([A-Za-z_][\w.-]*))?((?:\s+[^>]*)?)>/
+
+// removeNSPrefix makes `<x:Invoice xmlns:x="urn:anything">` parse as `Invoice`,
+// so the parsed tree cannot tell a UBL invoice from any other document with a
+// root of that name — it drops the xmlns declarations entirely. The raw root tag
+// is therefore the only place the namespace can still be checked.
+function assertUblInvoiceNamespace(xml) {
+  const head = xml.replace(XML_COMMENTS, '').replace(XML_PROLOG, '')
+  const match = FIRST_ELEMENT.exec(head)
+  if (!match) throw new UblParseError('not a UBL Invoice document')
+
+  const [, first, second, attrs] = match
+  const prefix = second ? first : null
+  const localName = second ?? first
+  if (localName === 'CreditNote') {
+    throw new UblParseError('credit notes cannot be imported as a purchase')
+  }
+  if (localName !== 'Invoice') throw new UblParseError('not a UBL Invoice document')
+
+  const declaration = prefix
+    ? new RegExp(`\\sxmlns:${prefix}\\s*=\\s*["']([^"']*)["']`)
+    : /\sxmlns\s*=\s*["']([^"']*)["']/
+  if (declaration.exec(attrs)?.[1] !== UBL_INVOICE_NS) {
+    throw new UblParseError(`root element is not in the UBL Invoice namespace (${UBL_INVOICE_NS})`)
+  }
+}
+
+// Every amount this parser READS must be stated in the document currency.
+//
+// currencyID is per-amount in UBL, so a document can declare EUR and then state
+// a line in another currency; BR-CO-25 and friends forbid it, but a document we
+// did not write is not a document we can assume is conformant. The one
+// legitimate exception is a second TaxTotal in the seller's local tax currency
+// (BT-111), which is why the TaxTotal picked for reading is selected by
+// currency rather than checked here.
+function assertOneCurrency(invoice, currency) {
+  const monetary = invoice.LegalMonetaryTotal ?? {}
+  const amounts = [
+    ...Object.values(monetary),
+    ...asArray(invoice.InvoiceLine).map((line) => line?.LineExtensionAmount),
+    ...asArray(invoice.AllowanceCharge).map((node) => node?.Amount),
+  ]
+  for (const amount of amounts) {
+    const stated = attr(amount, 'currencyID')
+    if (stated && stated.toUpperCase() !== currency) {
+      throw new UblParseError(
+        `invoice mixes currencies: ${stated.toUpperCase()} stated on an amount in a ${currency} document`,
+      )
+    }
+  }
+}
+
+// A mandatory field is one EN 16931 marks as such AND that changes how the bill
+// is booked. Defaulting any of these would put a guess into the ledger: a
+// missing issue date silently becomes the wrong VAT period, an unreadable total
+// removes the only cross-check on the lines.
+function required(value, term, name) {
+  if (value === null || value === undefined || value === '') {
+    throw new UblParseError(`invoice is missing ${name} (${term})`)
+  }
+  return value
+}
 
 /**
  * @param {string} xml
@@ -279,6 +348,8 @@ function dueDateOf(doc) {
  * @throws {UblParseError}
  */
 export function parseUblInvoice(xml) {
+  assertUblInvoiceNamespace(String(xml ?? ''))
+
   let doc
   try {
     doc = parser.parse(xml)
@@ -290,27 +361,38 @@ export function parseUblInvoice(xml) {
   const invoice = doc?.Invoice
   if (!invoice) throw new UblParseError('not a UBL Invoice document')
 
-  const typeCode = trimOrNull(invoice.InvoiceTypeCode)
-  if (typeCode && CREDIT_NOTE_TYPE_CODES.has(typeCode)) {
+  // BT-3 decides what the document IS. Accepting one that states nothing means
+  // accepting a credit note that simply forgot to say so.
+  const typeCode = required(trimOrNull(invoice.InvoiceTypeCode), 'BT-3', 'an invoice type code')
+  if (CREDIT_NOTE_TYPE_CODES.has(typeCode)) {
     throw new UblParseError(`document type ${typeCode} is a credit note and cannot be imported as a purchase`)
   }
 
-  const invoiceNumber = trimOrNull(invoice.ID)
-  // BT-5 is mandatory, but fall back to the currency the totals are stated in
-  // rather than reporting none: the caller refuses a non-EUR document, and
+  const invoiceNumber = required(trimOrNull(invoice.ID), 'BT-1', 'an invoice number')
+  // BT-5, falling back to the currency the totals are stated in. Never defaulted:
   // "no currency stated" must not read as "safe to book as EUR".
-  const currency = (trimOrNull(invoice.DocumentCurrencyCode)
+  const currency = required((trimOrNull(invoice.DocumentCurrencyCode)
     ?? attr(invoice.LegalMonetaryTotal?.PayableAmount, 'currencyID')
     ?? attr(invoice.LegalMonetaryTotal?.TaxInclusiveAmount, 'currencyID')
-  )?.toUpperCase() ?? null
+  )?.toUpperCase(), 'BT-5', 'a document currency')
+  const issueDate = required(toUblDate(trimOrNull(invoice.IssueDate)), 'BT-2', 'a valid issue date')
+
   const lines = asArray(invoice.InvoiceLine).map(lineOf)
   if (!lines.length) throw new UblParseError('invoice has no invoice lines')
+
+  const totals = totalsOf(invoice, currency)
+  // BT-112/BT-115. Without one of these the lines have nothing to reconcile
+  // against, and a silent import is exactly the case where that matters most.
+  if (totals.taxInclusiveCents === null && totals.payableCents === null) {
+    throw new UblParseError('invoice states no total amount (BT-112 / BT-115)')
+  }
+  assertOneCurrency(invoice, currency)
 
   return {
     invoiceNumber,
     typeCode,
     customizationId: trimOrNull(invoice.CustomizationID),
-    issueDate: toUblDate(trimOrNull(invoice.IssueDate)),
+    issueDate,
     dueDate: dueDateOf(invoice),
     currency,
     // BT-22 may repeat; keep them all as one note, which is where the purchase
@@ -324,7 +406,7 @@ export function parseUblInvoice(xml) {
     lines,
     allowanceCharges: allowanceChargesOf(invoice),
     vatBreakdown: vatBreakdownOf(invoice, currency),
-    totals: totalsOf(invoice, currency),
+    totals,
     attachments: attachmentsOf(invoice, invoiceNumber),
   }
 }
