@@ -36,7 +36,12 @@ import { resolveInvoiceLng, getInvoiceT } from './invoiceI18n.js'
 import { normalizeIban } from './normalizeIban.js'
 import { korApplies, resolveVatCountry, vatIdPrefixCountry } from '../../shared/vatRates.js'
 import {
+  DISCOUNT_REASON_CODE,
   EAS_NL_KVK,
+  INVOICE_TYPE_COMMERCIAL,
+  PAYMENT_MEANS_CREDIT_TRANSFER,
+  UNIT_ONE,
+  VAT_CATEGORY,
   deriveEndpointId,
   money,
   numeric,
@@ -48,10 +53,6 @@ import {
 
 const CUSTOMIZATION_ID = 'urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0'
 const PROFILE_ID = 'urn:fdc:peppol.eu:2017:poacc:billing:01:1.0'
-const COMMERCIAL_INVOICE = '380'
-const CREDIT_TRANSFER = '30'
-const DISCOUNT_REASON_CODE = '95' // UNCL5189 "Discount"
-const UNIT_ONE = 'C62' // UN/ECE Rec 20 — the unit for a service with no measure
 const CURRENCY = 'EUR'
 
 // ---------------------------------------------------------------------------
@@ -118,13 +119,13 @@ function taxCategory(category, reasons = []) {
 // has no unambiguous VATEX equivalent and picking the wrong one would trip
 // PEPPOL-EN16931-P0104..P0111, so it carries free text alone (BR-E-10 allows it).
 function exemptionReasons(category, t) {
-  if (category.code === 'AE') {
+  if (category.code === VAT_CATEGORY.REVERSE_CHARGE) {
     return [
       leaf('cbc:TaxExemptionReasonCode', 'VATEX-EU-AE'),
       leaf('cbc:TaxExemptionReason', t('reverseChargeNote')),
     ]
   }
-  if (category.code === 'E') return [leaf('cbc:TaxExemptionReason', t('korNote'))]
+  if (category.code === VAT_CATEGORY.EXEMPT) return [leaf('cbc:TaxExemptionReason', t('korNote'))]
   return []
 }
 
@@ -231,7 +232,7 @@ function paymentMeans(invoice, tenant) {
   const iban = tenant.iban ? normalizeIban(tenant.iban) : null
   if (!iban) return null
   return el('cac:PaymentMeans', null, [
-    leaf('cbc:PaymentMeansCode', CREDIT_TRANSFER),
+    leaf('cbc:PaymentMeansCode', PAYMENT_MEANS_CREDIT_TRANSFER),
     leaf('cbc:PaymentID', invoice.invoice_number),
     el('cac:PayeeFinancialAccount', null, [
       leaf('cbc:ID', iban),
@@ -371,7 +372,7 @@ export function renderInvoiceUbl({ invoice, lines, tenant }) {
     leaf('cbc:ID', invoice.invoice_number),
     leaf('cbc:IssueDate', toUblDate(invoice.issue_date)),
     leaf('cbc:DueDate', toUblDate(invoice.due_date)),
-    leaf('cbc:InvoiceTypeCode', COMMERCIAL_INVOICE),
+    leaf('cbc:InvoiceTypeCode', INVOICE_TYPE_COMMERCIAL),
     // At most one document note (PEPPOL-EN16931-R002).
     leaf('cbc:Note', invoice.memo),
     leaf('cbc:DocumentCurrencyCode', CURRENCY),

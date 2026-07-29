@@ -8,7 +8,7 @@ const LOG_LEVELS = ['debug', 'info', 'warn', 'error']
 // instead, which is redacted to name/code/status and never serializes the
 // original message (see logger.error's `err` handling).
 const CONTEXT_KEYS = new Set([
-  'tenantId', 'invoiceId', 'userId', 'gigId', 'taskId', 'rehearsalId',
+  'tenantId', 'invoiceId', 'purchaseId', 'userId', 'gigId', 'taskId', 'rehearsalId',
   'operation', 'status', 'method', 'path', 'durationMs', 'endpointHost',
   'mode', 'migrated', 'reEncrypted', 'plaintextRemaining', 'port',
   'filename', 'aborted',

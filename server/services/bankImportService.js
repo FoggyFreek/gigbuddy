@@ -27,6 +27,7 @@ import {
 import { fetchTenantKorState } from '../repositories/tenantRepository.js'
 import { korApplies } from '../../shared/vatRates.js'
 import { normalizeIban } from '../utils/normalizeIban.js'
+import { indexSuppliers, matchSuppliers } from '../utils/supplierMatch.js'
 import { badRequest } from './serviceErrors.js'
 import { clearInvoicePaymentLink, markInvoicePaid } from '../repositories/invoiceRepository.js'
 import { deactivateMolliePaymentLink } from './molliePaymentLinkService.js'
@@ -185,8 +186,7 @@ async function decorateImport(db, tenantId, imp) {
   const invByAmount = groupBy(openInvoices, (i) => i.total_cents)
   const purByAmount = groupBy(openPurchases, (p) => p.total_cents)
   const paidByAmount = groupBy(paidPurchases, (p) => p.total_cents)
-  const supByIban = groupBy(suppliers.filter((s) => s.iban), (s) => s.iban.toUpperCase())
-  const supByName = groupBy(suppliers, (s) => (s.name ?? '').toLowerCase())
+  const supplierIndex = indexSuppliers(suppliers)
 
   const decorated = lines.map((line) => {
     const suggestion = {
@@ -208,10 +208,10 @@ async function decorateImport(db, tenantId, imp) {
     if (line.status === 'pending') {
       if (line.direction === 'debit') {
         suggestion.purchaseMatches = purByAmount.get(line.amount_cents) ?? []
-        const byIban = line.counterparty_iban ? supByIban.get(line.counterparty_iban.toUpperCase()) : null
-        suggestion.supplierMatches = (byIban && byIban.length)
-          ? byIban
-          : (line.counterparty_name ? (supByName.get(line.counterparty_name.toLowerCase()) ?? []) : [])
+        suggestion.supplierMatches = matchSuppliers(supplierIndex, {
+          iban: line.counterparty_iban,
+          name: line.counterparty_name,
+        })
         suggestion.paidPurchaseMatches = matchPaidPurchases(
           line, paidByAmount.get(line.amount_cents) ?? [], suggestion.supplierMatches,
         )

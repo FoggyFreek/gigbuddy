@@ -7,6 +7,7 @@
 // - Fields are optional (`?`) unless the original PropTypes marked `.isRequired`,
 //   so these types match the loose reality of server payloads we already render.
 // - `Id` is a number from Postgres, sometimes a string from the client.
+import type { PurchaseImportWarningCode } from '../utils/purchaseImportWarnings.ts'
 
 export type Id = number | string
 
@@ -323,6 +324,31 @@ export interface Purchase {
   paid_by_band_member_id?: Id
   lines?: PurchaseLine[]
   attachments?: PurchaseAttachment[]
+}
+
+/**
+ * What the e-invoice importer inferred or could not reconcile. Same
+ * `{ code, severity }` shape as PeppolWarning, so both render the same way;
+ * 'blocking' means "check this before approving", never "the import failed".
+ */
+export interface PurchaseImportWarning {
+  code: PurchaseImportWarningCode
+  severity: 'blocking' | 'advisory'
+  /** Rate that was replaced, and what it became (vat_rate_adjusted). */
+  from?: number
+  to?: number
+  /** Amount involved, in cents (totals_rounded, totals_mismatch, prepaid_amount_ignored). */
+  cents?: number
+  /** The total the document stated, in cents (totals_mismatch). */
+  statedCents?: number
+  /** Existing purchases that look like the same bill (possible_duplicate). */
+  receiptNumbers?: number[]
+}
+
+/** POST /purchases/import — the created draft plus what needs a human eye. */
+export interface PurchaseImportResult {
+  purchase: Purchase
+  warnings: PurchaseImportWarning[]
 }
 
 /** One band member's outstanding reimbursement balance (from /reimbursements/outstanding). */

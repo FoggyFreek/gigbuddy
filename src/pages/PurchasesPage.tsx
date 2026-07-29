@@ -11,8 +11,10 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import SearchIcon from '@mui/icons-material/Search'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { alpha } from '@mui/material/styles'
 import NewPurchaseDialog from '../components/NewPurchaseDialog.tsx'
+import ImportPurchaseDialog from '../components/purchases/ImportPurchaseDialog.tsx'
 import PeriodPicker from '../components/shared/periodPicker.tsx'
 import PurchasesList from '../components/purchases/PurchasesList.tsx'
 import SplitView from '../components/SplitView.tsx'
@@ -60,6 +62,7 @@ export default function PurchasesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newDialog, setNewDialog] = useState(false)
+  const [importDialog, setImportDialog] = useState(false)
   const [summaryFilter, setSummaryFilter] = useState<SummaryKey>('unpaid')
   const [searchQuery, setSearchQuery] = useState('')
   const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
@@ -176,6 +179,9 @@ export default function PurchasesPage() {
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
           {t($ => $.title)}
         </Typography>
+        <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setImportDialog(true)}>
+          {t($ => $.importDialog.title)}
+        </Button>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewDialog(true)}>
           {t($ => $.createPurchase)}
         </Button>
@@ -273,6 +279,13 @@ export default function PurchasesPage() {
 
       {newDialog && (
         <NewPurchaseDialog onClose={() => setNewDialog(false)} onCreated={handleCreated} />
+      )}
+
+      {importDialog && (
+        <ImportPurchaseDialog
+          onClose={() => { setImportDialog(false); refreshPeriods(); load() }}
+          onImported={(id) => { setImportDialog(false); handleCreated(id) }}
+        />
       )}
     </SplitView>
   )

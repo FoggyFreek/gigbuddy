@@ -9,6 +9,26 @@ export async function countPurchasesBySupplierContact(executor, tenantId, contac
   return rows[0].count
 }
 
+// Purchases that look like the same supplier bill already being in the books:
+// same supplier (by linked contact, else by name) on the same date for the same
+// total. Used by the e-invoice importer to warn before a bill is entered twice —
+// a supplier's own invoice number has nowhere to live on a purchase, so the
+// document's own facts are the duplicate signal.
+export async function findPurchaseDuplicates(executor, tenantId, { supplierContactId, supplierName, receiptDate, totalCents }) {
+  const { rows } = await executor.query(
+    `SELECT id, receipt_number, status, receipt_date, total_cents
+       FROM purchases
+      WHERE tenant_id = $1
+        AND receipt_date = $2
+        AND total_cents = $3
+        AND (($4::int IS NOT NULL AND supplier_contact_id = $4)
+             OR ($4::int IS NULL AND lower(supplier_name) = lower($5)))
+      ORDER BY receipt_number ASC`,
+    [tenantId, receiptDate, totalCents, supplierContactId ?? null, supplierName ?? ''],
+  )
+  return rows
+}
+
 export async function fetchPurchase(executor, tenantId, purchaseId) {
   const { rows } = await executor.query(
     'SELECT * FROM purchases WHERE id = $1 AND tenant_id = $2',

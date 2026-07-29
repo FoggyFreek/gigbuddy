@@ -44,6 +44,30 @@
     "description": "Pick a supplier and the receipt date to start. You can fill in the lines next.",
     "continue": "Continue"
   },
+  "importDialog": {
+    "title": "Import e-invoice",
+    "description": "Upload a supplier's UBL e-invoice (XML). It becomes a draft purchase you can check and approve.",
+    "chooseFile": "Choose XML file",
+    "fileHint": "UBL 2.1 invoice — Peppol BIS Billing 3.0 or SI-UBL",
+    "created": "Draft purchase created",
+    "summary": "{{supplier}} — {{total}} across {{count}} line(s).",
+    "checkBeforeApproving": "Check before approving",
+    "adjustments": "What was inferred",
+    "openDraft": "Open draft",
+    "warnings": {
+      "possible_duplicate": "A purchase with the same supplier, date and total already exists (#{{receipts}}). Check you are not entering this bill twice.",
+      "totals_mismatch": "The lines do not add up to the {{stated}} the invoice states — they are off by {{amount}}. Correct the lines before approving.",
+      "line_missing_description": "A line has no description. Fill it in before approving.",
+      "line_vat_rate_defaulted": "A line stated no VAT rate; {{to}}% was applied.",
+      "vat_rate_adjusted": "The {{from}}% rate is not a rate you can book; {{to}}% was applied instead.",
+      "document_discount_allocated": "The invoice discount was spread across the lines — a purchase has no separate discount field.",
+      "document_charge_allocated": "An invoice-level charge was spread across the lines — a purchase has no separate charge field.",
+      "prepaid_amount_ignored": "The invoice records {{amount}} already prepaid. The full amount was booked; register the payment separately.",
+      "totals_rounded": "Line amounts were adjusted by {{amount}} so the total matches the invoice.",
+      "supplier_not_matched": "No matching supplier contact was found. The name was kept as text — link a contact in the draft.",
+      "attachment_skipped": "The PDF embedded in the invoice could not be stored."
+    }
+  },
   "detail": {
     "heading": "Purchase {{number}}",
     "editReceiptNumber": "edit receipt number",
