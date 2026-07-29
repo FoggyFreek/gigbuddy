@@ -101,6 +101,6 @@ describe('ImportPurchaseDialog', () => {
     await user.upload(fileInput(), xmlFile())
 
     expect(await screen.findByText('Only EUR invoices can be imported')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Choose XML file' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Choose file' })).toBeInTheDocument()
   })
 })

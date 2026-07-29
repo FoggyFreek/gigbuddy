@@ -1,4 +1,8 @@
-// E-invoice import: turn a supplier's UBL invoice into a draft purchase.
+// E-invoice import: turn a supplier's e-invoice into a draft purchase.
+//
+// Syntax-agnostic: server/utils/eInvoice/ reads UBL, CII and Factur-X/ZUGFeRD
+// PDFs into one normalized document, and nothing below this line knows which
+// arrived.
 //
 // Deliberately NOT the bank importer's two-phase staging. A purchase draft is
 // already a review surface — editable, deletable, and posting nothing to the
@@ -10,9 +14,9 @@
 // Nothing here writes purchase rows itself: it builds the same body POST
 // /purchases accepts and hands it to createPurchase, so receipt numbering, line
 // validation, totals and tenant scoping have exactly one implementation.
-import { decodeUploadedText } from '../utils/decodeText.js'
-import { parseUblInvoice, UblParseError } from '../utils/parseUblInvoice.js'
-import { mapUblInvoiceToPurchase } from '../utils/ublInvoiceToPurchase.js'
+import { parseEInvoice, EInvoiceParseError } from '../utils/eInvoice/index.js'
+import { isPdf } from '../utils/eInvoice/facturx.js'
+import { mapEInvoiceToPurchase } from '../utils/eInvoiceToPurchase.js'
 import { indexSuppliers, matchSuppliers } from '../utils/supplierMatch.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { findSuppliersForImport } from '../repositories/contactRepository.js'
@@ -32,20 +36,20 @@ const LEDGER_CURRENCY = 'EUR'
 const PDF_MIME = 'application/pdf'
 
 /**
- * Parses an uploaded UBL invoice and creates the draft purchase it describes.
+ * Parses an uploaded e-invoice and creates the draft purchase it describes.
  *
  * @returns {{ purchaseId: number, warnings: object[] } | { error: object }}
  *   `warnings` are `{ code, severity, …context }`, the same shape the Peppol
  *   readiness check returns, so the frontend renders both the same way.
  */
-export async function importPurchaseFromUbl({ db, tenantId, file, actorUserId }) {
+export async function importPurchaseFromDocument({ db, tenantId, file, actorUserId }) {
   if (!file?.buffer?.length) return badRequest('No file uploaded')
 
   let doc
   try {
-    doc = parseUblInvoice(decodeUploadedText(file.buffer))
+    doc = await parseEInvoice(file.buffer)
   } catch (err) {
-    if (err instanceof UblParseError) {
+    if (err instanceof EInvoiceParseError) {
       return { error: { status: 400, body: { error: err.message, code: 'ubl_parse_failed' } } }
     }
     throw err
@@ -65,7 +69,7 @@ export async function importPurchaseFromUbl({ db, tenantId, file, actorUserId })
   }
 
   const tenant = await fetchTenant(db, tenantId)
-  const { purchase, warnings } = mapUblInvoiceToPurchase(doc, { vatCountry: tenant?.vat_country })
+  const { purchase, warnings } = mapEInvoiceToPurchase(doc, { vatCountry: tenant?.vat_country })
 
   if (!purchase.supplier_name) {
     return { error: { status: 400, body: { error: 'Invoice names no supplier', code: 'missing_supplier_name' } } }
@@ -119,7 +123,7 @@ export async function importPurchaseFromUbl({ db, tenantId, file, actorUserId })
   if (created.error) return created
 
   const attached = await attachSourceDocument({
-    db, tenantId, purchaseId: created.purchaseId, doc,
+    db, tenantId, purchaseId: created.purchaseId, doc, file,
   })
   if (attached) warnings.push(attached)
 
@@ -159,14 +163,20 @@ async function resolveSupplier(db, tenantId, doc) {
   return matches.length === 1 ? matches[0] : null
 }
 
-// Stores the human-readable PDF the supplier embedded in the XML (BT-125), so
-// the purchase carries the document a person can actually read.
+// Stores the human-readable PDF, so the purchase carries the document a person
+// can actually read.
+//
+// Two sources, and the uploaded file wins: a Factur-X/ZUGFeRD upload IS the
+// readable invoice with the XML tucked inside it, whereas a UBL upload can only
+// offer whatever PDF the sender embedded (BT-125).
 //
 // Returns a warning to append, or null when there was nothing to do. A failure
 // here never fails the import: the purchase itself is already correct, and the
 // attachment is a convenience.
-async function attachSourceDocument({ db, tenantId, purchaseId, doc }) {
-  const embedded = doc.attachments.find((a) => a.mimeCode === PDF_MIME) ?? doc.attachments[0]
+async function attachSourceDocument({ db, tenantId, purchaseId, doc, file }) {
+  const embedded = isPdf(file?.buffer)
+    ? { bytes: file.buffer, filename: file.originalname || `${doc.invoiceNumber}.pdf`, mimeCode: PDF_MIME }
+    : doc.attachments.find((a) => a.mimeCode === PDF_MIME) ?? doc.attachments[0]
   if (!embedded) return null
 
   // The mime code is the sender's claim about their own bytes; check them.

@@ -1,11 +1,13 @@
-// Turns a parsed UBL invoice (parseUblInvoice.js) into the body POST /purchases
-// already accepts. Pure: no DB, no IO.
+// Turns a parsed e-invoice (server/utils/eInvoice/) into the body POST
+// /purchases already accepts. Pure: no DB, no IO.
 //
 // One owner for "how a supplier's e-invoice becomes a bill", so the rules live
-// somewhere testable instead of inside the import service's IO.
+// somewhere testable instead of inside the import service's IO — and so they
+// are written once for every syntax, not once per syntax.
 //
-// THE SHAPE MISMATCH THIS EXISTS TO BRIDGE. A UBL line states a NET amount and a
-// VAT rate; document-level discounts sit beside the lines as their own elements.
+// THE SHAPE MISMATCH THIS EXISTS TO BRIDGE. An e-invoice line states a NET
+// amount and a VAT rate; document-level discounts sit beside the lines as their
+// own elements.
 // A purchase line stores a GROSS amount and derives net and VAT back out of it
 // (shared/purchaseTotals.js), and has nowhere to put a document-level discount.
 // So allowances and charges are allocated onto the lines they apply to, and the
@@ -90,6 +92,39 @@ function resolveLineRate(line, doc, vatCountry, report) {
   return snapped
 }
 
+// A stand-in line for a document that states totals and no line detail.
+//
+// Factur-X MINIMUM and BASIC WL are accounting-only profiles — MINIMUM is the
+// floor mandated by the French reform, so these arrive in normal use rather than
+// as defects. A purchase must have at least one line, so one is built from the
+// stated totals: the right money, none of the detail.
+//
+// It carries no description deliberately. That trips line_missing_description
+// as well, which is correct — both must be resolved before this can be approved.
+function summaryLine(doc, report) {
+  const { taxExclusiveCents, taxInclusiveCents, taxCents } = doc.totals
+  const net = taxExclusiveCents
+    ?? (taxInclusiveCents !== null && taxCents !== null ? taxInclusiveCents - taxCents : null)
+    ?? taxInclusiveCents
+    ?? doc.totals.payableCents
+
+  // The rate that covers most of the invoice; a summary profile rarely states
+  // more than one, and the reconciliation catches it when this guess is wrong.
+  const dominant = [...doc.vatBreakdown]
+    .filter((entry) => entry.category)
+    .sort((a, b) => (b.taxableCents ?? 0) - (a.taxableCents ?? 0))[0]
+
+  report('lines_synthesized_from_totals')
+  return {
+    id: '1',
+    description: null,
+    quantity: 1,
+    unitCode: null,
+    netCents: net ?? 0,
+    category: dominant?.category ?? null,
+  }
+}
+
 // The document value the imported lines must add up to: what the supplier is
 // charging in total, VAT included. PayableAmount is NOT it — that is net of any
 // prepayment (BT-113), which a purchase has no way to represent, so the prepaid
@@ -103,22 +138,29 @@ function targetTotalCents(doc) {
 }
 
 /**
- * @param {object} doc parsed UBL invoice (parseUblInvoice.js)
+ * @param {object} doc the normalized document (server/utils/eInvoice/)
  * @param {{ vatCountry: string, today?: string }} ctx
  * @returns {{ purchase: object, warnings: {code: string, severity: string}[] }}
  *   `purchase` is a POST /purchases body — always a draft, so nothing reaches
  *   the ledger until a human approves it.
  */
-export function mapUblInvoiceToPurchase(doc, { vatCountry, today = new Date().toISOString().slice(0, 10) }) {
+export function mapEInvoiceToPurchase(doc, { vatCountry, today = new Date().toISOString().slice(0, 10) }) {
   const found = new Map()
   const report = (code, context) => { if (!found.has(code)) found.set(code, context ?? null) }
 
-  const adjustments = allocateAllowanceCharges(doc)
-  if (doc.allowanceCharges.some((a) => a.kind === 'allowance')) report('document_discount_allocated')
-  if (doc.allowanceCharges.some((a) => a.kind === 'charge')) report('document_charge_allocated')
+  const summarized = doc.lines.length === 0
+  const sourceLines = summarized ? [summaryLine(doc, report)] : doc.lines
+
+  // A summary line is derived FROM the already-discounted document total, so
+  // the allowances are inside it: allocating them again would deduct twice.
+  const adjustments = summarized ? [0] : allocateAllowanceCharges(doc)
+  if (!summarized) {
+    if (doc.allowanceCharges.some((a) => a.kind === 'allowance')) report('document_discount_allocated')
+    if (doc.allowanceCharges.some((a) => a.kind === 'charge')) report('document_charge_allocated')
+  }
   if (doc.totals.prepaidCents) report('prepaid_amount_ignored', { cents: doc.totals.prepaidCents })
 
-  const lines = doc.lines.map((line, i) => {
+  const lines = sourceLines.map((line, i) => {
     if (!line.description) report('line_missing_description')
     // 0% is a faithful record of what the supplier charged, but under reverse
     // charge the buyer still owes that VAT and deducts it in the same return.

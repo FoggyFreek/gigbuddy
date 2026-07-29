@@ -3,8 +3,10 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseUblInvoice, UblParseError } from '../../server/utils/parseUblInvoice.js'
-import { mapUblInvoiceToPurchase } from '../../server/utils/ublInvoiceToPurchase.js'
+import { parseUblInvoice } from '../../server/utils/eInvoice/ubl.js'
+import { parseCiiInvoice } from '../../server/utils/eInvoice/cii.js'
+import { parseEInvoice, EInvoiceParseError } from '../../server/utils/eInvoice/index.js'
+import { mapEInvoiceToPurchase } from '../../server/utils/eInvoiceToPurchase.js'
 import { computePurchaseTotals } from '../../shared/purchaseTotals.js'
 import { parseUblAmount, money } from '../../shared/peppol.js'
 
@@ -12,7 +14,7 @@ const FIX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'ublImport
 const siUbl = readFileSync(join(FIX, 'si-ubl-discount.xml'), 'utf8')
 
 const codes = (warnings) => warnings.map((w) => w.code)
-const mapNl = (doc) => mapUblInvoiceToPurchase(doc, { vatCountry: 'nl', today: '2026-01-01' })
+const mapNl = (doc) => mapEInvoiceToPurchase(doc, { vatCountry: 'nl', today: '2026-01-01' })
 
 // Builds a minimal but structurally valid Peppol BIS 3.0 invoice, so each test
 // can state only the part it is about.
@@ -157,7 +159,7 @@ describe('parseUblInvoice — the SI-UBL 1.2 shape', () => {
 describe('parseUblInvoice — what it refuses', () => {
   it('rejects a CreditNote document', () => {
     const xml = invoiceXml().replace('<Invoice ', '<CreditNote ').replace('</Invoice>', '</CreditNote>')
-    expect(() => parseUblInvoice(xml)).toThrow(UblParseError)
+    expect(() => parseUblInvoice(xml)).toThrow(EInvoiceParseError)
   })
 
   it('rejects an Invoice carrying a credit-note type code', () => {
@@ -223,13 +225,13 @@ describe('parseUblInvoice — namespace and currency integrity', () => {
       'xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"',
       'xmlns="urn:example:not-ubl"',
     )
-    expect(() => parseUblInvoice(xml)).toThrow(/UBL Invoice namespace/)
+    expect(() => parseUblInvoice(xml)).toThrow(/not a UBL Invoice document/)
   })
 
   it('rejects a prefixed root bound to another namespace', () => {
     // removeNSPrefix would otherwise make this parse as a plain <Invoice>.
     const xml = `<?xml version="1.0"?><evil:Invoice xmlns:evil="urn:example:evil"><evil:ID>X</evil:ID></evil:Invoice>`
-    expect(() => parseUblInvoice(xml)).toThrow(/UBL Invoice namespace/)
+    expect(() => parseUblInvoice(xml)).toThrow(/not a UBL Invoice document/)
   })
 
   it('accepts a prefixed root correctly bound to the UBL namespace', () => {
@@ -248,7 +250,7 @@ describe('parseUblInvoice — namespace and currency integrity', () => {
   })
 })
 
-describe('mapUblInvoiceToPurchase', () => {
+describe('mapEInvoiceToPurchase', () => {
   it('reconciles the discounted invoice to the cent', () => {
     const { purchase, warnings } = mapNl(parseUblInvoice(siUbl))
     const totals = computePurchaseTotals({ lines: purchase.lines })
@@ -410,5 +412,208 @@ describe('mapUblInvoiceToPurchase', () => {
 
     expect(computePurchaseTotals({ lines: purchase.lines }).totalCents).toBe(12100)
     expect(warnings.find((w) => w.code === 'prepaid_amount_ignored')).toMatchObject({ cents: 2100 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CII — the other syntax EN 16931 permits, and the one Germany and France send.
+// ---------------------------------------------------------------------------
+
+const cii = readFileSync(join(FIX, 'cii-xrechnung.xml'), 'utf8')
+
+describe('parseCiiInvoice — a German XRechnung in CII syntax', () => {
+  const doc = parseCiiInvoice(cii)
+
+  it('reads the header, converting YYYYMMDD dates', () => {
+    expect(cii).toContain('format="102"')
+    expect(doc).toMatchObject({
+      syntax: 'cii',
+      invoiceNumber: 'RE-2026-0042',
+      issueDate: '2026-07-15',
+      dueDate: '2026-08-14',
+      currency: 'EUR',
+      typeCode: '380',
+    })
+  })
+
+  it('reads the seller from SellerTradeParty, VAT number qualified by schemeID', () => {
+    expect(doc.supplier).toMatchObject({
+      name: 'Tonstudio Hansa GmbH',
+      vatId: 'DE123456789',
+      registrationId: 'HRB 12345',
+      country: 'DE',
+      city: 'Berlin',
+    })
+    expect(doc.payeeIban).toBe('DE02120300000000202051')
+  })
+
+  it("reads the allowance despite ChargeIndicator's extra nesting", () => {
+    expect(doc.allowanceCharges).toEqual([
+      { kind: 'allowance', cents: 5000, reason: 'Rabatt', category: { code: 'S', percent: 19 } },
+    ])
+  })
+
+  it("maps CII's own total names onto the same normalized totals", () => {
+    expect(doc.totals).toMatchObject({
+      lineExtensionCents: 100000,   // LineTotalAmount        BT-106
+      taxExclusiveCents: 95000,     // TaxBasisTotalAmount    BT-109
+      taxInclusiveCents: 113050,    // GrandTotalAmount       BT-112
+      payableCents: 113050,         // DuePayableAmount       BT-115
+      taxCents: 18050,
+    })
+  })
+
+  it('produces a purchase reconciling to the German invoice exactly', () => {
+    const { purchase } = mapNl(doc)
+    const totals = computePurchaseTotals({ lines: purchase.lines })
+    expect([totals.subtotalCents, totals.taxCents, totals.totalCents]).toEqual([95000, 18050, 113050])
+    // 19% is a real rate in a supported country, so it survives the snap even
+    // though this tenant is Dutch.
+    expect(purchase.lines.map((l) => l.tax_rate)).toEqual([19, 19])
+  })
+
+  it('rejects a CII credit note, which shares the invoice root element', () => {
+    const creditNote = cii.replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>381</ram:TypeCode>')
+    // There is no separate CreditNote root in CII — BT-3 is the only guard.
+    expect(() => parseCiiInvoice(creditNote)).toThrow(/credit note/)
+  })
+
+  it('rejects a CII invoice with no type code at all', () => {
+    expect(() => parseCiiInvoice(cii.replace('<ram:TypeCode>380</ram:TypeCode>', '')))
+      .toThrow(/BT-3/)
+  })
+
+  it('refuses a date in a format that is not a calendar day', () => {
+    const monthOnly = cii.replace('<udt:DateTimeString format="102">20260715</udt:DateTimeString>',
+      '<udt:DateTimeString format="610">202607</udt:DateTimeString>')
+    expect(() => parseCiiInvoice(monthOnly)).toThrow(/BT-2/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Factur-X MINIMUM / BASIC WL — totals, no line detail.
+// ---------------------------------------------------------------------------
+
+// Strips every line item, leaving the summary a MINIMUM profile would send.
+const minimumProfile = () => cii.replace(
+  /<ram:IncludedSupplyChainTradeLineItem>[\s\S]*<\/ram:IncludedSupplyChainTradeLineItem>/,
+  '',
+).replace(
+  'urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_3.0',
+  'urn:factur-x.eu:1p0:minimum',
+)
+
+describe('Factur-X MINIMUM / BASIC WL — no line items', () => {
+  it('parses despite carrying no lines, because that profile is legitimate', () => {
+    const doc = parseCiiInvoice(minimumProfile())
+    expect(doc.lines).toEqual([])
+    expect(doc.customizationId).toBe('urn:factur-x.eu:1p0:minimum')
+    expect(doc.totals.taxInclusiveCents).toBe(113050)
+  })
+
+  it('synthesizes one line carrying the right money, and says it did', () => {
+    const { purchase, warnings } = mapNl(parseCiiInvoice(minimumProfile()))
+
+    expect(purchase.lines).toHaveLength(1)
+    const totals = computePurchaseTotals({ lines: purchase.lines })
+    expect([totals.subtotalCents, totals.taxCents, totals.totalCents]).toEqual([95000, 18050, 113050])
+    // Taken from the dominant VAT category in the document breakdown.
+    expect(purchase.lines[0].tax_rate).toBe(19)
+
+    expect(warnings.find((w) => w.code === 'lines_synthesized_from_totals'))
+      .toMatchObject({ severity: 'blocking' })
+    // No description to synthesize, so this must be resolved too.
+    expect(codes(warnings)).toContain('line_missing_description')
+  })
+
+  it('does not deduct the invoice discount twice', () => {
+    // The synthesized line comes from the ALREADY discounted TaxBasisTotalAmount,
+    // so allocating the allowance again would take the 50.00 off twice.
+    const { purchase, warnings } = mapNl(parseCiiInvoice(minimumProfile()))
+    expect(computePurchaseTotals({ lines: purchase.lines }).subtotalCents).toBe(95000)
+    expect(codes(warnings)).not.toContain('document_discount_allocated')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The dispatcher: syntax and container sniffing.
+// ---------------------------------------------------------------------------
+
+// Builds a hybrid PDF the way Factur-X does — a readable page plus the CII XML
+// as an embedded file. Real senders produce PDF/A-3; pdfkit's plain PDF is
+// enough to prove the extraction, which reads the attachment tree either way.
+async function facturXPdf(xml, name = 'factur-x.xml') {
+  const { default: PDFDocument } = await import('pdfkit')
+  const doc = new PDFDocument()
+  const chunks = []
+  doc.on('data', (c) => chunks.push(c))
+  const done = new Promise((resolve) => doc.on('end', resolve))
+  doc.text('Rechnung RE-2026-0042')
+  doc.file(Buffer.from(xml), { name })
+  doc.end()
+  await done
+  return Buffer.concat(chunks)
+}
+
+describe('parseEInvoice — picks the reader from the bytes', () => {
+  it('reads a UBL invoice from an .xml upload', async () => {
+    const doc = await parseEInvoice(Buffer.from(siUbl))
+    expect(doc.syntax).toBe('ubl')
+  })
+
+  it('reads a CII invoice from an .xml upload', async () => {
+    const doc = await parseEInvoice(Buffer.from(cii))
+    expect(doc.syntax).toBe('cii')
+  })
+
+  it('reads the CII out of a Factur-X PDF', async () => {
+    const doc = await parseEInvoice(await facturXPdf(cii))
+    expect(doc.syntax).toBe('cii')
+    expect(doc.invoiceNumber).toBe('RE-2026-0042')
+    expect(doc.totals.taxInclusiveCents).toBe(113050)
+  })
+
+  it('reads a ZUGFeRD 2.x PDF, which uses the other mandated filename', async () => {
+    const doc = await parseEInvoice(await facturXPdf(cii, 'zugferd-invoice.xml'))
+    expect(doc.invoiceNumber).toBe('RE-2026-0042')
+  })
+
+  it('tells the user what to do with an ordinary PDF invoice', async () => {
+    const { default: PDFDocument } = await import('pdfkit')
+    const pdf = new PDFDocument()
+    const chunks = []
+    pdf.on('data', (c) => chunks.push(c))
+    const done = new Promise((resolve) => pdf.on('end', resolve))
+    pdf.text('Just a scanned invoice')
+    pdf.end()
+    await done
+
+    await expect(parseEInvoice(Buffer.concat(chunks)))
+      .rejects.toThrow(/carries no e-invoice data/)
+  })
+
+  it('names ZUGFeRD 1.0 rather than complaining about its root element', async () => {
+    const v1 = '<rsm:CrossIndustryDocument xmlns:rsm="urn:ferd:CrossIndustryDocument:invoice:1p0"/>'
+    await expect(parseEInvoice(await facturXPdf(v1, 'zugferd-invoice.xml')))
+      .rejects.toThrow(/ZUGFeRD 1\.0 is not supported/)
+    await expect(parseEInvoice(Buffer.from(v1)))
+      .rejects.toThrow(/ZUGFeRD 1\.0 is not supported/)
+  })
+
+  it('names the national formats it will not import', async () => {
+    const cases = [
+      ['<p:FatturaElettronica xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2"/>', /FatturaPA/],
+      ['<fe:Facturae xmlns:fe="http://www.facturae.es/Facturae/2009/v3.2/Facturae"/>', /Facturae/],
+      ['<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"/>', /credit note/],
+    ]
+    for (const [xml, expected] of cases) {
+      await expect(parseEInvoice(Buffer.from(xml))).rejects.toThrow(expected)
+    }
+  })
+
+  it('rejects anything else with a message naming what is supported', async () => {
+    await expect(parseEInvoice(Buffer.from('<html><body>nope</body></html>')))
+      .rejects.toThrow(/Supported: UBL 2\.1 and UN\/CEFACT CII/)
+    await expect(parseEInvoice(Buffer.alloc(0))).rejects.toThrow(EInvoiceParseError)
   })
 })

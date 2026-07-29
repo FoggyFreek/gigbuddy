@@ -29,6 +29,8 @@ vi.mock('../../../server/utils/storage.js', () => ({
 const FIX = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'ublImport')
 const SI_UBL = join(FIX, 'si-ubl-discount.xml')
 const siUblText = readFileSync(SI_UBL, 'utf8')
+const CII = join(FIX, 'cii-xrechnung.xml')
+const ciiText = readFileSync(CII, 'utf8')
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let seed
@@ -323,5 +325,84 @@ describe('POST /purchases/import — tenant isolation', () => {
     const attachmentId = res.body.purchase.attachments[0].id
 
     expect((await asUserB(request(app).delete(`/api/purchases/${id}/attachments/${attachmentId}`))).status).toBe(404)
+  })
+})
+
+describe('POST /purchases/import — CII and Factur-X', () => {
+  // Same hybrid construction Factur-X uses: a readable PDF carrying the CII XML.
+  async function facturXPdf(xml, name = 'factur-x.xml') {
+    const { default: PDFDocument } = await import('pdfkit')
+    const doc = new PDFDocument()
+    const chunks = []
+    doc.on('data', (c) => chunks.push(c))
+    const done = new Promise((resolve) => doc.on('end', resolve))
+    doc.text('Rechnung')
+    doc.file(Buffer.from(xml), { name })
+    doc.end()
+    await done
+    return Buffer.concat(chunks)
+  }
+
+  it('imports a German XRechnung sent as CII XML', async () => {
+    const res = await importFile(asUserA, CII)
+    expect(res.status).toBe(201)
+    expect(res.body.purchase).toMatchObject({
+      supplier_name: 'Tonstudio Hansa GmbH',
+      supplier_invoice_number: 'RE-2026-0042',
+      subtotal_cents: 95000,
+      tax_cents: 18050,
+      total_cents: 113050,
+    })
+    // tax_rate is NUMERIC, which pg hands back as a string.
+    expect(res.body.purchase.lines.map((l) => Number(l.tax_rate))).toEqual([19, 19])
+  })
+
+  it('imports a Factur-X PDF and keeps the PDF itself as the attachment', async () => {
+    const res = await asUserA(request(app).post('/api/purchases/import'))
+      .attach('file', await facturXPdf(ciiText), 'rechnung.pdf')
+
+    expect(res.status).toBe(201)
+    expect(res.body.purchase.total_cents).toBe(113050)
+    // The upload IS the human-readable invoice, so it becomes the attachment.
+    expect(res.body.purchase.attachments).toHaveLength(1)
+    expect(res.body.purchase.attachments[0]).toMatchObject({
+      content_type: 'application/pdf',
+      original_filename: 'rechnung.pdf',
+    })
+  })
+
+  it('tells the user what to do with an ordinary PDF invoice', async () => {
+    const { default: PDFDocument } = await import('pdfkit')
+    const pdf = new PDFDocument()
+    const chunks = []
+    pdf.on('data', (c) => chunks.push(c))
+    const done = new Promise((resolve) => pdf.on('end', resolve))
+    pdf.text('Scanned invoice, no XML')
+    pdf.end()
+    await done
+
+    const res = await asUserA(request(app).post('/api/purchases/import'))
+      .attach('file', Buffer.concat(chunks), 'scan.pdf')
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/carries no e-invoice data/)
+  })
+
+  it('creates a usable draft from a line-less Factur-X MINIMUM document', async () => {
+    const minimum = ciiText.replace(
+      /<ram:IncludedSupplyChainTradeLineItem>[\s\S]*<\/ram:IncludedSupplyChainTradeLineItem>/, '',
+    )
+    const res = await importBuf(asUserA, minimum, 'minimum.xml')
+
+    expect(res.status).toBe(201)
+    expect(res.body.purchase.lines).toHaveLength(1)
+    expect(res.body.purchase.total_cents).toBe(113050)
+    expect(codes(res.body.warnings)).toContain('lines_synthesized_from_totals')
+  })
+
+  it('keeps a CII import inside the importing tenant', async () => {
+    const res = await importFile(asUserA, CII)
+    const id = res.body.purchase.id
+    expect((await asUserB(request(app).get(`/api/purchases/${id}`))).status).toBe(404)
   })
 })

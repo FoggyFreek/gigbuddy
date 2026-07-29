@@ -1,7 +1,7 @@
-// Reads a UBL 2.1 Invoice into a normalized document. The mirror image of
-// renderInvoiceUbl.js: both sides share the EN 16931 code lists and the
-// amount <-> cents primitives in shared/peppol.js, so a code only one direction
-// knows about cannot exist.
+// Reads a UBL 2.1 Invoice into the normalized document defined in index.js.
+// The mirror image of renderInvoiceUbl.js: both sides share the EN 16931 code
+// lists and the amount <-> cents primitives in shared/peppol.js, so a code only
+// one direction knows about cannot exist.
 //
 // Pure: no DB, no IO. Mapping the result onto a purchase is the service's job
 // (server/services/purchaseImportService.js).
@@ -19,8 +19,7 @@
 // notes. A credit note's amounts mean the opposite of an invoice's, and booking
 // one as a positive expense is a real accounting error rather than a rounding
 // one.
-import { XMLParser } from 'fast-xml-parser'
-import { normalizeIban } from './normalizeIban.js'
+import { normalizeIban } from '../normalizeIban.js'
 import {
   CREDIT_NOTE_TYPE_CODES,
   VAT_CATEGORY,
@@ -28,44 +27,29 @@ import {
   parseUblAmount,
   resolvePostalCountry,
   toUblDate,
-} from '../../shared/peppol.js'
+} from '../../../shared/peppol.js'
+import {
+  EInvoiceParseError,
+  asArray,
+  assertRootElement,
+  attr,
+  createParser,
+  numberOf,
+  readRootElement,
+  required,
+  text,
+  trimOrNull,
+} from './nodes.js'
 
-export class UblParseError extends Error {
-  constructor(message) {
-    super(message)
-    this.name = 'UblParseError'
-  }
-}
+export const UBL_INVOICE_NS = 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2'
+export const UBL_CREDIT_NOTE_NS = 'urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2'
 
-// removeNSPrefix strips cbc:/cac: so a document using default namespaces parses
-// identically. parseTagValue stays off: every value is read through an explicit
-// converter, and numeric coercion would reshape amounts and strip leading zeros
-// from identifiers.
-const REPEATABLE = new Set([
+const parser = createParser([
   'InvoiceLine', 'AllowanceCharge', 'TaxTotal', 'TaxSubtotal',
   'AdditionalDocumentReference', 'PaymentMeans', 'PartyTaxScheme', 'Note',
 ])
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: '@_',
-  removeNSPrefix: true,
-  parseTagValue: false,
-  isArray: (name) => REPEATABLE.has(name),
-})
 
-const asArray = (v) => (v == null ? [] : Array.isArray(v) ? v : [v])
-// A UBL element is either a bare string or { '#text': …, '@_attr': … }.
-const text = (v) => (v && typeof v === 'object' ? v['#text'] : v)
-const trimOrNull = (v) => {
-  const t = text(v)
-  return t == null || String(t).trim() === '' ? null : String(t).trim()
-}
-const attr = (v, name) => (v && typeof v === 'object' ? trimOrNull(v[`@_${name}`]) : null)
 const amountOf = (v) => parseUblAmount(text(v))
-const numberOf = (v) => {
-  const n = Number(trimOrNull(v))
-  return Number.isFinite(n) ? n : null
-}
 
 // ---------------------------------------------------------------------------
 // Parties
@@ -150,7 +134,7 @@ function descriptionOf(line) {
 function lineOf(line, index) {
   const netCents = amountOf(line.LineExtensionAmount)
   if (netCents === null) {
-    throw new UblParseError(`invoice line ${index + 1} has no readable LineExtensionAmount`)
+    throw new EInvoiceParseError(`invoice line ${index + 1} has no readable LineExtensionAmount`)
   }
   return {
     id: trimOrNull(line.ID) ?? String(index + 1),
@@ -270,41 +254,6 @@ function dueDateOf(doc) {
   return null
 }
 
-// ---------------------------------------------------------------------------
-// Document identity
-// ---------------------------------------------------------------------------
-
-const UBL_INVOICE_NS = 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2'
-
-const XML_COMMENTS = /<!--[\s\S]*?-->/g
-const XML_PROLOG = /<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>/g
-const FIRST_ELEMENT = /<([A-Za-z_][\w.-]*)(?::([A-Za-z_][\w.-]*))?((?:\s+[^>]*)?)>/
-
-// removeNSPrefix makes `<x:Invoice xmlns:x="urn:anything">` parse as `Invoice`,
-// so the parsed tree cannot tell a UBL invoice from any other document with a
-// root of that name — it drops the xmlns declarations entirely. The raw root tag
-// is therefore the only place the namespace can still be checked.
-function assertUblInvoiceNamespace(xml) {
-  const head = xml.replace(XML_COMMENTS, '').replace(XML_PROLOG, '')
-  const match = FIRST_ELEMENT.exec(head)
-  if (!match) throw new UblParseError('not a UBL Invoice document')
-
-  const [, first, second, attrs] = match
-  const prefix = second ? first : null
-  const localName = second ?? first
-  if (localName === 'CreditNote') {
-    throw new UblParseError('credit notes cannot be imported as a purchase')
-  }
-  if (localName !== 'Invoice') throw new UblParseError('not a UBL Invoice document')
-
-  const declaration = prefix
-    ? new RegExp(`\\sxmlns:${prefix}\\s*=\\s*["']([^"']*)["']`)
-    : /\sxmlns\s*=\s*["']([^"']*)["']/
-  if (declaration.exec(attrs)?.[1] !== UBL_INVOICE_NS) {
-    throw new UblParseError(`root element is not in the UBL Invoice namespace (${UBL_INVOICE_NS})`)
-  }
-}
-
 // Every amount this parser READS must be stated in the document currency.
 //
 // currencyID is per-amount in UBL, so a document can declare EUR and then state
@@ -323,49 +272,41 @@ function assertOneCurrency(invoice, currency) {
   for (const amount of amounts) {
     const stated = attr(amount, 'currencyID')
     if (stated && stated.toUpperCase() !== currency) {
-      throw new UblParseError(
+      throw new EInvoiceParseError(
         `invoice mixes currencies: ${stated.toUpperCase()} stated on an amount in a ${currency} document`,
       )
     }
   }
 }
 
-// A mandatory field is one EN 16931 marks as such AND that changes how the bill
-// is booked. Defaulting any of these would put a guess into the ledger: a
-// missing issue date silently becomes the wrong VAT period, an unreadable total
-// removes the only cross-check on the lines.
-function required(value, term, name) {
-  if (value === null || value === undefined || value === '') {
-    throw new UblParseError(`invoice is missing ${name} (${term})`)
-  }
-  return value
-}
-
 /**
  * @param {string} xml
  * @returns {object} the normalized document — see the mapping in
  *   purchaseImportService.js for how each part is consumed.
- * @throws {UblParseError}
+ * @throws {EInvoiceParseError}
  */
 export function parseUblInvoice(xml) {
-  assertUblInvoiceNamespace(String(xml ?? ''))
+  assertRootElement(readRootElement(xml), {
+    localName: 'Invoice', namespace: UBL_INVOICE_NS, syntax: 'UBL Invoice',
+  })
 
   let doc
   try {
     doc = parser.parse(xml)
   } catch (err) {
-    throw new UblParseError(`invalid XML: ${err.message}`)
+    throw new EInvoiceParseError(`invalid XML: ${err.message}`)
   }
 
-  if (doc?.CreditNote) throw new UblParseError('credit notes cannot be imported as a purchase')
+  // The root guard above already proved the namespace; this catches an element
+  // that is well-formed but empty.
   const invoice = doc?.Invoice
-  if (!invoice) throw new UblParseError('not a UBL Invoice document')
+  if (!invoice) throw new EInvoiceParseError('not a UBL Invoice document')
 
   // BT-3 decides what the document IS. Accepting one that states nothing means
   // accepting a credit note that simply forgot to say so.
   const typeCode = required(trimOrNull(invoice.InvoiceTypeCode), 'BT-3', 'an invoice type code')
   if (CREDIT_NOTE_TYPE_CODES.has(typeCode)) {
-    throw new UblParseError(`document type ${typeCode} is a credit note and cannot be imported as a purchase`)
+    throw new EInvoiceParseError(`document type ${typeCode} is a credit note and cannot be imported as a purchase`)
   }
 
   const invoiceNumber = required(trimOrNull(invoice.ID), 'BT-1', 'an invoice number')
@@ -378,17 +319,18 @@ export function parseUblInvoice(xml) {
   const issueDate = required(toUblDate(trimOrNull(invoice.IssueDate)), 'BT-2', 'a valid issue date')
 
   const lines = asArray(invoice.InvoiceLine).map(lineOf)
-  if (!lines.length) throw new UblParseError('invoice has no invoice lines')
+  if (!lines.length) throw new EInvoiceParseError('invoice has no invoice lines')
 
   const totals = totalsOf(invoice, currency)
   // BT-112/BT-115. Without one of these the lines have nothing to reconcile
   // against, and a silent import is exactly the case where that matters most.
   if (totals.taxInclusiveCents === null && totals.payableCents === null) {
-    throw new UblParseError('invoice states no total amount (BT-112 / BT-115)')
+    throw new EInvoiceParseError('invoice states no total amount (BT-112 / BT-115)')
   }
   assertOneCurrency(invoice, currency)
 
   return {
+    syntax: 'ubl',
     invoiceNumber,
     typeCode,
     customizationId: trimOrNull(invoice.CustomizationID),

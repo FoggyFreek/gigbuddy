@@ -75,7 +75,8 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/tests/sendPush.test.js', 'src/tests/server/**/*.js'],
+    // Tests that run under @vitest-environment node and use node globals.
+    files: ['src/tests/sendPush.test.js', 'src/tests/eInvoiceImport.test.js', 'src/tests/server/**/*.js'],
     languageOptions: {
       globals: globals.node,
     },

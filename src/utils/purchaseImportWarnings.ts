@@ -12,6 +12,7 @@ export type PurchaseImportWarningCode =
   | 'possible_duplicate'
   | 'totals_mismatch'
   | 'line_missing_description'
+  | 'lines_synthesized_from_totals'
   | 'buyer_is_not_this_tenant'
   | 'line_vat_rate_defaulted'
   | 'vat_rate_adjusted'

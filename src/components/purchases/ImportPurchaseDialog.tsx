@@ -83,7 +83,7 @@ export default function ImportPurchaseDialog({ onClose, onImported }: Readonly<I
               {t($ => $.importDialog.chooseFile)}
               <input
                 type="file"
-                accept=".xml,text/xml,application/xml"
+                accept=".xml,.pdf,text/xml,application/xml,application/pdf"
                 hidden
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
               />

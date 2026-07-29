@@ -15,6 +15,7 @@ export const PURCHASE_IMPORT_WARNING_CODES = Object.freeze([
   'possible_duplicate',
   'totals_mismatch',
   'line_missing_description',
+  'lines_synthesized_from_totals',
   'buyer_is_not_this_tenant',
   // Advisory — imported cleanly, but a value was inferred rather than read.
   'line_vat_rate_defaulted',
@@ -32,6 +33,7 @@ const BLOCKING = new Set([
   'possible_duplicate',
   'totals_mismatch',
   'line_missing_description',
+  'lines_synthesized_from_totals',
   'buyer_is_not_this_tenant',
 ])
 
