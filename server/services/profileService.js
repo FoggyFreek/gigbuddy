@@ -41,8 +41,7 @@ import {
 } from '../repositories/profileRepository.js'
 import { fetchTenant, lockTenantRow } from '../repositories/tenantRepository.js'
 import { withTransaction } from '../db/withTransaction.js'
-import { DEFAULT_VAT_COUNTRY, normalizeVatCountry, isValidVatId } from '../../shared/vatRates.js'
-import { isValidRegistrationNumber } from '../../shared/businessRegistry.js'
+import { DEFAULT_VAT_COUNTRY } from '../../shared/vatRates.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import {
   clearIntegrationCredential,
@@ -120,7 +119,7 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
   }
 
   const needsConsistencyCheck = body
-    ? ('tax_id' in body || 'kvk_number' in body || 'vat_country' in body)
+    ? ('tax_id' in body || 'kvk_number' in body)
     : false
 
   // accent_color and the memory tile are customization data: the guarded write
@@ -148,26 +147,17 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
   return runProfileWrite(db, tenantId, body, false)
 }
 
-// Locks the tenant row and resolves the effective VAT country. A country-only
-// change must not orphan an incompatible tax_id/kvk_number — the UI sends the
-// dropdown change on its own, so this is the only place to catch it.
+// Locks the tenant row and resolves the VAT country that tax_id/kvk_number are
+// validated against. The country itself is no longer patchable here — it lives on
+// the accounting profile and is immutable after band creation — so the effective
+// country is always the stored one. (Re-validating the stored identifiers against
+// a NEW country belongs to the profile's country-change operation, which must
+// reset and revalidate every dependent field together.)
 // Returns { vatCountry } or an error result.
-async function lockAndResolveVatCountry(executor, tenantId, body) {
+async function lockAndResolveVatCountry(executor, tenantId) {
   const tenant = await lockTenantRow(executor, tenantId)
   if (!tenant) return notFound('Profile not found')
-
-  const newCountry = normalizeVatCountry(body.vat_country)
-  const vatCountry = newCountry ?? tenant.vat_country ?? DEFAULT_VAT_COUNTRY
-  if (!('vat_country' in body) || !newCountry) return { vatCountry }
-
-  if (!('tax_id' in body) && tenant.tax_id && !isValidVatId(newCountry, tenant.tax_id)) {
-    return badRequest('tax_id_incompatible_vat_country')
-  }
-  if (!('kvk_number' in body) && tenant.kvk_number
-    && !isValidRegistrationNumber(newCountry, tenant.kvk_number)) {
-    return badRequest('kvk_incompatible_vat_country')
-  }
-  return { vatCountry }
+  return { vatCountry: tenant.vat_country ?? DEFAULT_VAT_COUNTRY }
 }
 
 // The read-validate-write core of a profile PATCH, run on whatever executor the
@@ -176,7 +166,7 @@ async function lockAndResolveVatCountry(executor, tenantId, body) {
 async function runProfileWrite(executor, tenantId, body, lockForConsistency) {
   let vatCountry = DEFAULT_VAT_COUNTRY
   if (lockForConsistency) {
-    const resolved = await lockAndResolveVatCountry(executor, tenantId, body || {})
+    const resolved = await lockAndResolveVatCountry(executor, tenantId)
     if (resolved.error) return resolved
     vatCountry = resolved.vatCountry
   }

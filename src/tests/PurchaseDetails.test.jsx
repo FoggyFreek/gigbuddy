@@ -48,6 +48,7 @@ vi.mock('../api/bandMembers.ts', () => ({
 import * as purchasesApi from '../api/purchases.ts'
 import * as accountsApi from '../api/accounts.ts'
 import * as bandMembersApi from '../api/bandMembers.ts'
+import * as contactsApi from '../api/contacts.ts'
 import PurchaseDetails from '../components/PurchaseDetails.tsx'
 import theme from '../theme.ts'
 
@@ -79,6 +80,40 @@ beforeEach(() => {
 })
 
 describe('PurchaseDetails', () => {
+  it('uses imported seller data when creating a supplier from a purchase draft', async () => {
+    purchasesApi.getPurchase.mockResolvedValue(purchase({
+      status: 'draft',
+      finalized_at: null,
+      supplier_name: 'Imported Studio',
+      supplier_import_data: {
+        name: 'Imported Studio',
+        email: 'billing@studio.example',
+        iban: 'NL55RABO0127957391',
+        kvk_number: '50048295',
+        tax_id: 'NL001794860B34',
+      },
+    }))
+    contactsApi.createContact.mockResolvedValue({ id: 22, name: 'Studio X', category: 'supplier' })
+    const user = userEvent.setup()
+
+    wrap(<PurchaseDetails mode="edit" purchaseId={5} onClose={() => {}} embedded />)
+
+    const supplierInput = await screen.findByRole('combobox', { name: 'Supplier' })
+    await user.clear(supplierInput)
+    await user.type(supplierInput, 'Studio X')
+    await screen.findByText("+ Add 'Studio X' as supplier")
+    await user.keyboard('{ArrowDown}{Enter}')
+
+    await waitFor(() => expect(contactsApi.createContact).toHaveBeenCalledWith({
+      name: 'Studio X',
+      category: 'supplier',
+      email: 'billing@studio.example',
+      iban: 'NL55RABO0127957391',
+      kvk_number: '50048295',
+      tax_id: 'NL001794860B34',
+    }))
+  })
+
   it('registers a bank payment on an approved unpaid purchase', async () => {
     purchasesApi.getPurchase.mockResolvedValue(purchase({ status: 'approved' }))
     const user = userEvent.setup()

@@ -95,6 +95,13 @@ describe('POST /purchases/import', () => {
     expect(purchase.tax_cents).toBe(20790)
     expect(purchase.total_cents).toBe(119790)
     expect(purchase.lines.map((l) => l.amount_incl_cents)).toEqual([65340, 54450])
+    expect(purchase.supplier_import_data).toEqual({
+      name: 'Recording Studio De Kerk',
+      email: 'studio@example.com',
+      iban: 'NL55RABO0127957391',
+      kvk_number: '50048295',
+      tax_id: 'NL001794860B34',
+    })
   })
 
   it('stores the embedded PDF as a readable rendering beside the source XML', async () => {
@@ -132,6 +139,51 @@ describe('POST /purchases/import', () => {
     const supplier = await insertSupplier(seed.tenantA.id, { name: 'recording studio de kerk' })
     const res = await importFile(asUserA, SI_UBL)
     expect(res.body.purchase.supplier_contact_id).toBe(supplier.id)
+  })
+
+  it('matches an existing supplier by VAT ID when its name and IBAN differ', async () => {
+    const { rows: [supplier] } = await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category, tax_id)
+       VALUES ($1, 'Former Studio Name', 'supplier', 'NL001794860B34')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+
+    const res = await importFile(asUserA, SI_UBL)
+
+    expect(res.body.purchase.supplier_contact_id).toBe(supplier.id)
+    expect(codes(res.body.warnings)).not.toContain('supplier_not_matched')
+  })
+
+  it('matches an existing supplier by registration number when its other details differ', async () => {
+    const { rows: [supplier] } = await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category, kvk_number)
+       VALUES ($1, 'Renamed Registered Studio', 'supplier', '50048295')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+    const withoutSupplierVat = siUblText.replace(
+      '<cbc:CompanyID schemeID="NL:VAT">NL001794860B34</cbc:CompanyID>',
+      '<cbc:CompanyID schemeID="NL:VAT">NL009999999B99</cbc:CompanyID>',
+    )
+
+    const res = await importBuf(asUserA, withoutSupplierVat)
+
+    expect(res.body.purchase.supplier_contact_id).toBe(supplier.id)
+    expect(codes(res.body.warnings)).not.toContain('supplier_not_matched')
+  })
+
+  it('never matches another tenant supplier by VAT or registration identifier', async () => {
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category, kvk_number, tax_id)
+       VALUES ($1, 'Private Registered Supplier', 'supplier', '50048295', 'NL001794860B34')`,
+      [seed.tenantB.id],
+    )
+
+    const res = await importFile(asUserA, SI_UBL)
+
+    expect(res.body.purchase.supplier_contact_id).toBeNull()
+    expect(codes(res.body.warnings)).toContain('supplier_not_matched')
   })
 
   it('keeps the supplier as free text and warns when nothing matches', async () => {

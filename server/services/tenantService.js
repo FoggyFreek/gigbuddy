@@ -4,10 +4,12 @@
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { WRITE_ROLES } from '../auth/permissions.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
+import { createAccountingProfileForTenant } from './accountingProfileService.js'
 import {
   validSlug,
   buildTenantUpdateFields,
   resolveAdminUserId,
+  parseTenantCountryCode,
 } from '../validators/tenantValidators.js'
 import {
   listTenantsWithMemberCount,
@@ -58,15 +60,22 @@ export async function createTenant(createdByUserId, body) {
   const resolved = resolveAdminUserId(body, createdByUserId)
   if (resolved.error) return badRequest(resolved.error)
   const { adminUserId } = resolved
+  const country = parseTenantCountryCode(body)
+  if (country.error) return badRequest(country.error)
 
   return withTransaction(async (client) => {
     if (adminUserId && !(await userExists(client, adminUserId))) {
       abortTransaction(badRequest('adminUserId references a non-existent user'))
     }
 
-    const tenant = await insertTenant(client, slug, band_name, createdByUserId)
+    const tenant = await insertTenant(client, {
+      slug, bandName: band_name, createdByUserId, vatCountry: country.countryCode,
+    })
     await ensureTenantStatistics(client, tenant.id)
     await seedTenantAccounting(client, tenant.id)
+    // Same transaction as the tenant insert: a band must never exist without the
+    // accounting profile that states its jurisdiction.
+    await createAccountingProfileForTenant(client, tenant.id, country.countryCode)
 
     if (adminUserId) {
       await insertTenantAdminMembership(client, adminUserId, tenant.id, createdByUserId)

@@ -10,6 +10,7 @@ import { ToastProvider } from './contexts/ToastContext.tsx'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
 import { ProfileProvider } from './contexts/ProfileContext.tsx'
+import { AccountingProfileProvider } from './contexts/AccountingProfileContext.tsx'
 import './i18n/index.ts'
 import '@fontsource/bebas-neue/400.css'
 import '@fontsource/lato/400.css'
@@ -31,11 +32,13 @@ createRoot(document.getElementById('root')!).render(
         <BrowserRouter>
           <AuthProvider>
             <ProfileProvider>
-              <TenantThemeProvider>
-                <ToastProvider>
-                  <App />
-                </ToastProvider>
-              </TenantThemeProvider>
+              <AccountingProfileProvider>
+                <TenantThemeProvider>
+                  <ToastProvider>
+                    <App />
+                  </ToastProvider>
+                </TenantThemeProvider>
+              </AccountingProfileProvider>
             </ProfileProvider>
           </AuthProvider>
         </BrowserRouter>

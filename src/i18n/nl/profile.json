@@ -2,8 +2,7 @@
   "title": "Profiel",
   "tabs": {
     "socials": "Socials",
-    "links": "Links",
-    "financials": "Financiëel"
+    "links": "Links"
   },
   "linkpage": {
     "edit": "Linkpagina bewerken",
@@ -49,8 +48,6 @@
     "add": "Link toevoegen"
   },
   "financials": {
-    "editAria": "Financiële gegevens bewerken",
-    "doneAria": "Klaar met bewerken van financiële gegevens",
     "formalName": "Formele naam (KvK)",
     "formalNamePlaceholder": "Zoals geregistreerd bij de Kamer van Koophandel",
     "registrationNumber": "Inschrijvingsnummer",
@@ -59,13 +56,6 @@
     "legalForm": "Rechtsvorm",
     "legalFormUnset": "Niet opgegeven",
     "legalFormHelper": "Een vennootschap vermeldt bestuurders op facturen",
-    "legalForms": {
-      "sole_trader": "Eenmanszaak / zzp",
-      "partnership": "Maatschap / vof",
-      "company": "Vennootschap (bv, GmbH, Ltd, …)",
-      "association": "Vereniging / stichting",
-      "other": "Anders"
-    },
     "directors": "Bestuurder(s)",
     "directorsHelper": "Op facturen getoond (bijv. vereist voor een Duitse GmbH)",
     "street": "Straat + nummer",
@@ -75,16 +65,10 @@
     "email": "Zakelijk e-mailadres",
     "phone": "Zakelijk telefoonnummer",
     "contactHelper": "Wordt als contactgegevens op facturen afgedrukt.",
-    "address": "Adres",
     "iban": "IBAN",
     "ibanHelper": "bijv. NL91 ABNA 0417 1643 00",
     "taxId": "Btw-nummer",
-    "taxIdHelper": "Formaat: {{example}}",
-    "vatCountry": "Btw-land",
-    "vatCountryHelper": "Bepaalt de beschikbare btw-tarieven",
-    "vatCountryIdentifierConflict": "Werk dit bij of wis het voordat je het btw-land wijzigt",
-    "taxPercent": "Standaard btw %",
-    "taxPercentHelper": "Vooringevuld op nieuwe factuur-, inkoop- en verkoopregels"
+    "taxIdHelper": "Formaat: {{example}}"
   },
   "members": {
     "title": "Bandleden",

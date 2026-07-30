@@ -18,7 +18,9 @@
     "name": "Naam",
     "email": "E-mail",
     "phone": "Telefoon",
-    "iban": "IBAN"
+    "iban": "IBAN",
+    "kvkNumber": "KvK-nummer",
+    "taxId": "Btw-nummer"
   },
   "table": {
     "searchPlaceholder": "Contacten zoeken…",

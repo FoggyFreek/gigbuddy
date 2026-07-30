@@ -16,6 +16,8 @@ export interface Venue {
   name?: string
   category?: string
   organization_name?: string
+  kvk_number?: string | null
+  tax_id?: string | null
   street_and_number?: string | null
   city?: string
   region?: string
@@ -228,6 +230,8 @@ export interface Contact {
   phone?: string | null
   category?: string
   iban?: string | null
+  kvk_number?: string | null
+  tax_id?: string | null
 }
 
 export interface DuplicateEntityMatch {
@@ -304,6 +308,14 @@ export interface PurchaseAttachment {
 export type PurchaseStatus = 'draft' | 'approved' | 'paid'
 export type PurchasePaymentMethod = 'bank' | 'member'
 
+export interface SupplierImportData {
+  name: string | null
+  email: string | null
+  iban: string | null
+  kvk_number: string | null
+  tax_id: string | null
+}
+
 export interface Purchase {
   id?: Id
   receipt_number?: number
@@ -314,6 +326,7 @@ export interface Purchase {
   currency?: string
   supplier_name?: string
   supplier_contact_id?: Id | null
+  supplier_import_data?: SupplierImportData | null
   /** The supplier's OWN invoice number (EN 16931 BT-1), not our receipt_number. */
   supplier_invoice_number?: string | null
   description?: string
@@ -584,6 +597,47 @@ export interface AccountingSettings {
   input_vat_account_code?: string
   merch_revenue_account_code?: string
   books_closed_through?: string
+}
+
+export type EntitySize = 'micro' | 'small' | 'other' | 'unknown'
+export type FinancialAccountingBasis = 'accrual' | 'cash' | 'simplified' | 'unknown'
+export type VatAccountingBasis = 'invoice' | 'cash' | 'not_applicable' | 'unknown'
+// 'exempt' is a registered band relieved of filing by a national small-business
+// scheme (the Dutch KOR and equivalents) — distinct from 'not_applicable', which
+// means not registered for VAT at all.
+export type VatFilingFrequency =
+  | 'monthly' | 'quarterly' | 'yearly' | 'authority_assigned'
+  | 'exempt' | 'not_applicable' | 'unconfigured'
+export type ProfileSource = 'tenant_creation' | 'legacy_backfill' | 'repair'
+// Derived by the server from profile_status + reviewed_at, so no consumer
+// re-implements the completeness/provenance combination.
+export type AccountingProfileState = 'incomplete' | 'needs_review' | 'complete'
+
+// The tenant's accounting regime. Distinct from the band profile (`Tenant`),
+// which carries the seller identity printed on invoices.
+export interface AccountingProfile {
+  tenant_id: Id
+  // Immutable after band creation; base_currency is derived from it.
+  country_code: string
+  base_currency: string
+  profile_status: 'incomplete' | 'complete'
+  profile_source: ProfileSource
+  presentation_state: AccountingProfileState
+  reviewed_at: string | null
+  reviewed_by_user_id: Id | null
+  legal_form: string | null
+  local_legal_form_code: string | null
+  local_legal_form_label: string | null
+  entity_size: EntitySize
+  financial_accounting_basis: FinancialAccountingBasis
+  vat_accounting_basis: VatAccountingBasis
+  reporting_framework_code: string | null
+  financial_year_start_month: number
+  financial_year_start_day: number
+  // Tri-state: null means "not yet confirmed", which differs from a confirmed false.
+  vat_registered: boolean | null
+  vat_filing_frequency: VatFilingFrequency
+  pack_version: string | null
 }
 
 export interface JournalLine {

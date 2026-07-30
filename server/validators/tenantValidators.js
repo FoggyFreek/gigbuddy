@@ -1,4 +1,5 @@
 // Input parsing and validation for tenant routes. No DB access here.
+import { normalizeVatCountry } from '../../shared/vatRates.js'
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
 
@@ -53,6 +54,21 @@ export function buildTenantUpdateFields(body) {
     values.push(body[key])
   }
   return { fields, values }
+}
+
+// The accounting country of a new tenant. Required, never defaulted: a silently
+// Dutch tenant is a wrong accounting jurisdiction, not a convenient default, and
+// the country is immutable afterwards. Shared by BOTH creation paths
+// (self-service and super-admin) so the two can't drift.
+// Returns { error: '<code>' } | { countryCode }.
+export function parseTenantCountryCode(body) {
+  const raw = body?.country_code
+  if (raw === null || raw === undefined || raw === '') {
+    return { error: 'country_code_required' }
+  }
+  const countryCode = normalizeVatCountry(raw)
+  if (!countryCode) return { error: 'invalid_country_code' }
+  return { countryCode }
 }
 
 // Resolves the seed-admin user id for a new tenant. Absent field → the creating

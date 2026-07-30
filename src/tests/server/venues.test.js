@@ -107,6 +107,49 @@ describe('POST /api/venues — create venue', () => {
 
     expect(res.body.name).toBe('Shared Stage')
   })
+
+  it('stores optional registration and VAT identifiers for venues and festivals', async () => {
+    const festival = await asUserA(
+      request(app).post('/api/venues').send({
+        category: 'festival',
+        name: 'Registered Festival',
+        kvk_number: ' 50048295 ',
+        tax_id: 'nl001794860b34',
+      })
+    ).expect(201)
+
+    expect(festival.body).toMatchObject({
+      category: 'festival',
+      kvk_number: '50048295',
+      tax_id: 'NL001794860B34',
+    })
+
+    const updated = await asUserA(
+      request(app).patch(`/api/venues/${festival.body.id}`).send({
+        kvk_number: ' HRB   12345 ',
+        tax_id: ' de 136695976 ',
+      })
+    ).expect(200)
+
+    expect(updated.body).toMatchObject({
+      kvk_number: 'HRB 12345',
+      tax_id: 'DE136695976',
+    })
+  })
+
+  it('does not allow one tenant to update another tenant venue identifiers', async () => {
+    const venueB = seed.venues.find((venue) => venue.tenant_id === seed.tenantB.id)
+    await asUserA(request(app).patch(`/api/venues/${venueB.id}`).send({
+      kvk_number: '50048295',
+      tax_id: 'NL001794860B34',
+    })).expect(404)
+
+    const { rows: [stored] } = await pool.query(
+      'SELECT kvk_number, tax_id FROM venues WHERE id = $1',
+      [venueB.id],
+    )
+    expect(stored).toEqual({ kvk_number: null, tax_id: null })
+  })
 })
 
 describe('POST /api/venues/duplicate-check', () => {

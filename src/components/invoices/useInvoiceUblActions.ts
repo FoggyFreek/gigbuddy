@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { downloadInvoiceUbl } from '../../api/invoices.ts'
+import { downloadInvoiceUbl, downloadInvoiceUblWithPdf } from '../../api/invoices.ts'
 import type { Invoice, Id } from '../../types/entities.ts'
 
 interface UseInvoiceUblActionsArgs {
@@ -11,6 +11,7 @@ interface UseInvoiceUblActionsResult {
   ublBusy: boolean
   ublError: string | null
   handleUblDownload: () => Promise<void>
+  handleUblWithPdfDownload: () => Promise<void>
 }
 
 // Owns the "download UBL (XML)" action. No dialog — unlike the .eml there is
@@ -20,11 +21,11 @@ export function useInvoiceUblActions({ invoiceId, invoice }: UseInvoiceUblAction
   const [ublBusy, setUblBusy] = useState(false)
   const [ublError, setUblError] = useState<string | null>(null)
 
-  async function handleUblDownload() {
+  async function downloadUbl(fetchBlob: (id: Id) => Promise<Blob>) {
     setUblBusy(true)
     setUblError(null)
     try {
-      const blob = await downloadInvoiceUbl(invoiceId)
+      const blob = await fetchBlob(invoiceId)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -41,5 +42,8 @@ export function useInvoiceUblActions({ invoiceId, invoice }: UseInvoiceUblAction
     }
   }
 
-  return { ublBusy, ublError, handleUblDownload }
+  const handleUblDownload = () => downloadUbl(downloadInvoiceUbl)
+  const handleUblWithPdfDownload = () => downloadUbl(downloadInvoiceUblWithPdf)
+
+  return { ublBusy, ublError, handleUblDownload, handleUblWithPdfDownload }
 }

@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { computeInvoiceTotals } from './computeInvoiceTotals.js'
 import { logger } from './logger.js'
 import { getRegistrationLabel, getRegistrationOfficeLabel, requiresCompanyDisclosure } from '../../shared/businessRegistry.js'
-import { resolveVatCountry, getVatLabel, getVatIdLabel, korApplies } from '../../shared/vatRates.js'
+import { getVatLabel, getVatIdLabel, korApplies } from '../../shared/vatRates.js'
 import { resolveInvoiceLng, getInvoiceT, invoiceIntlLocale } from './invoiceI18n.js'
 
 const PAGE_MARGIN = 48
@@ -241,16 +241,13 @@ function drawCustomerColumn(doc, invoice, startY, colW, rightColX, { t }) {
     rightY += 12
   }
 
-  const custCountry = resolveVatCountry(invoice.customer_address_country)
-  const customerRegLabel = (custCountry && getRegistrationLabel(custCountry)) || 'Reg.'
-  const customerVatIdLabel = custCountry ? getVatIdLabel(custCountry) : 'VAT no.'
   for (const line of [
     invoice.customer_address_street,
     [invoice.customer_address_postal_code, invoice.customer_address_city].filter(Boolean).join(' '),
     invoice.customer_address_country,
     invoice.customer_email,
-    invoice.customer_kvk ? `${customerRegLabel}: ${invoice.customer_kvk}` : null,
-    invoice.customer_tax_id ? `${customerVatIdLabel}: ${invoice.customer_tax_id}` : null,
+    invoice.customer_kvk ? `${t('customerChamberOfCommerceNumber')}: ${invoice.customer_kvk}` : null,
+    invoice.customer_tax_id ? `${t('customerVatId')}: ${invoice.customer_tax_id}` : null,
   ].filter(Boolean)) {
     doc.text(line, rightColX, rightY, { width: colW, align: 'right' })
     rightY += 12

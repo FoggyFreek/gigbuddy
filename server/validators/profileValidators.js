@@ -1,8 +1,8 @@
 // Input parsing and validation for profile routes. No DB access here.
 import { parsePositiveId as parseId } from './common.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
-import { DEFAULT_VAT_COUNTRY, normalizeVatCountry, isValidVatId, normalizeVatNumber } from '../../shared/vatRates.js'
-import { isValidRegistrationNumber, normalizeRegistrationNumber, isKnownLegalForm } from '../../shared/businessRegistry.js'
+import { DEFAULT_VAT_COUNTRY, isValidVatId, normalizeVatNumber } from '../../shared/vatRates.js'
+import { isValidRegistrationNumber, normalizeRegistrationNumber } from '../../shared/businessRegistry.js'
 
 // Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
 export const MOLLIE_KEY_RE = /^(live|test)_[A-Za-z0-9]{25,}$/
@@ -99,6 +99,15 @@ const MEMORY_VALIDATORS = {
   memory_gig_id: validateMemoryGigId,
 }
 
+// Seller-identity fields printed on invoices (EN 16931 BT-27..BT-43) plus the two
+// VAT values still read live by the renderers.
+//
+// `vat_country` and `legal_form` are deliberately NOT here: they moved to the
+// accounting profile, where the country is immutable after band creation. Leaving
+// them patchable would let this endpoint produce a tenant whose accounting
+// jurisdiction disagrees with its profile. `tax_percentage` and `applies_kor`
+// stay until their readers are repointed — moving the control without moving the
+// behavior would mislead.
 export const FINANCIAL_FIELDS = [
   'formal_name',
   'address_street',
@@ -107,7 +116,6 @@ export const FINANCIAL_FIELDS = [
   'address_country',
   'kvk_number',
   'registration_office',
-  'legal_form',
   'directors',
   'email',
   'phone',
@@ -115,7 +123,6 @@ export const FINANCIAL_FIELDS = [
   'tax_id',
   'tax_percentage',
   'applies_kor',
-  'vat_country',
 ]
 
 export const FINANCIAL_FIELDS_SET = new Set(FINANCIAL_FIELDS)
@@ -162,19 +169,6 @@ export function normalizeRequiredProfileUrl(value) {
 function validateAppliesKor(raw) {
   if (raw === null || raw === undefined) return { skip: true }
   if (typeof raw !== 'boolean') return { error: 'invalid_applies_kor' }
-  return { value: raw }
-}
-
-function validateVatCountry(raw) {
-  if (raw === null || raw === undefined || raw === '') return { skip: true }
-  const code = normalizeVatCountry(raw)
-  if (!code) return { error: 'invalid_vat_country' }
-  return { value: code }
-}
-
-function validateLegalForm(raw) {
-  if (raw === null || raw === undefined || raw === '') return { value: null }
-  if (!isKnownLegalForm(raw)) return { error: 'invalid_legal_form' }
   return { value: raw }
 }
 
@@ -247,8 +241,6 @@ const FINANCIAL_VALIDATORS = {
   email: makeOptionalPatternValidator('email', EMAIL_RE),
   phone: makeOptionalPatternValidator('phone', PHONE_RE),
   tax_percentage: validateTaxPercentage,
-  vat_country: validateVatCountry,
-  legal_form: validateLegalForm,
   iban: makeStrippedValidator('iban', IBAN_RE, true),
 }
 

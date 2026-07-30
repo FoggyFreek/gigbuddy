@@ -9,7 +9,15 @@ import CopyAdornment from './CopyAdornment.tsx'
 import { ALL_CONTACT_CATEGORIES, SUPPLIER_CATEGORY, useContactCategoryLabel } from '../utils/contactCategories.ts'
 
 interface ContactFieldsProps {
-  form: { name: string; email: string; phone: string; category: string; iban?: string }
+  form: {
+    name: string
+    email: string
+    phone: string
+    category: string
+    iban?: string
+    kvk_number?: string
+    tax_id?: string
+  }
   onChange: (field: string, value: string) => void
   errors?: Record<string, string | undefined>
   categories?: string[]
@@ -68,15 +76,35 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
         />
       </Grid>
       {form.category === SUPPLIER_CATEGORY && (
-        <Grid size={12}>
-          <TextField
-            label={t($ => $.fields.iban)}
-            fullWidth
-            value={form.iban ?? ''}
-            onChange={(e) => onChange('iban', e.target.value)}
-            slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.iban ?? ''} /> } }}
-          />
-        </Grid>
+        <>
+          <Grid size={12}>
+            <TextField
+              label={t($ => $.fields.iban)}
+              fullWidth
+              value={form.iban ?? ''}
+              onChange={(e) => onChange('iban', e.target.value)}
+              slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.iban ?? ''} /> } }}
+            />
+          </Grid>
+          <Grid size={6}>
+            <TextField
+              label={t($ => $.fields.kvkNumber)}
+              fullWidth
+              value={form.kvk_number ?? ''}
+              onChange={(e) => onChange('kvk_number', e.target.value)}
+              slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.kvk_number ?? ''} /> } }}
+            />
+          </Grid>
+          <Grid size={6}>
+            <TextField
+              label={t($ => $.fields.taxId)}
+              fullWidth
+              value={form.tax_id ?? ''}
+              onChange={(e) => onChange('tax_id', e.target.value)}
+              slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.tax_id ?? ''} /> } }}
+            />
+          </Grid>
+        </>
       )}
     </>
   )

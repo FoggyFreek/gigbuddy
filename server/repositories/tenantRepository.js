@@ -70,12 +70,19 @@ export async function userExists(executor, userId) {
   return rowCount > 0
 }
 
-export async function insertTenant(executor, slug, bandName, createdByUserId, ownerUserId = null) {
+// `vatCountry` is required, not defaulted: the accounting country is a chosen
+// fact (see parseTenantCountryCode) and it is immutable afterwards, so silently
+// inheriting the column default would pin a tenant to the wrong jurisdiction.
+// It stays on `tenants` as the compatibility projection of
+// tenant_accounting_profiles.country_code while the legacy readers are repointed.
+const TENANT_INSERT_COLUMNS = 'slug, band_name, created_by_user_id, owner_user_id, vat_country'
+
+export async function insertTenant(executor, { slug, bandName, createdByUserId, ownerUserId = null, vatCountry }) {
   const { rows } = await executor.query(
-    `INSERT INTO tenants (slug, band_name, created_by_user_id, owner_user_id)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO tenants (${TENANT_INSERT_COLUMNS})
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING ${tenantSafeProjection()}`,
-    [slug, bandName, createdByUserId, ownerUserId],
+    [slug, bandName, createdByUserId, ownerUserId, vatCountry],
   )
   return rows[0]
 }
@@ -83,13 +90,13 @@ export async function insertTenant(executor, slug, bandName, createdByUserId, ow
 // Insert variant for server-generated slugs: a slug collision returns null
 // instead of raising 23505 (which would abort the caller's transaction), so
 // the service can try the next dedupe suffix within the same transaction.
-export async function insertTenantIfSlugFree(executor, slug, bandName, createdByUserId, ownerUserId = null) {
+export async function insertTenantIfSlugFree(executor, { slug, bandName, createdByUserId, ownerUserId = null, vatCountry }) {
   const { rows } = await executor.query(
-    `INSERT INTO tenants (slug, band_name, created_by_user_id, owner_user_id)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO tenants (${TENANT_INSERT_COLUMNS})
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (slug) DO NOTHING
      RETURNING ${tenantSafeProjection()}`,
-    [slug, bandName, createdByUserId, ownerUserId],
+    [slug, bandName, createdByUserId, ownerUserId, vatCountry],
   )
   return rows[0] ?? null
 }

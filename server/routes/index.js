@@ -17,6 +17,7 @@ import invoicesRouter from './invoices.js'
 import purchasesRouter from './purchases.js'
 import merchRouter from './merch.js'
 import accountsRouter from './accounts.js'
+import accountingProfileRouter from './accountingProfile.js'
 import journalRouter from './journal.js'
 import ledgerRouter from './ledger.js'
 import bankImportRouter from './bankImport.js'
@@ -192,6 +193,7 @@ router.use('/invoices', financeView, invoicesRouter)
 router.use('/purchases', tenantMember, financeWrites, purchasesRouter)
 router.use('/merch', financeView, merchRouter)
 router.use('/accounts', financeView, accountsRouter)
+router.use('/accounting-profile', financeView, accountingProfileRouter)
 router.use('/journal', financeView, journalRouter)
 router.use('/ledger', financeView, ledgerRouter)
 router.use('/bank-import', financeView, bankImportRouter)

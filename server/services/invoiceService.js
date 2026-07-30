@@ -583,6 +583,8 @@ function buildBillingTarget(type, row) {
     address_city: row.city || null,
     address_country: row.country || null,
     email: row.email || null,
+    kvk_number: row.kvk_number || null,
+    tax_id: row.tax_id || null,
   }
 }
 
@@ -655,8 +657,8 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         customer_address_city: defaultTarget?.city || null,
         customer_address_country: defaultTarget?.country || 'NL',
         customer_email: defaultTarget?.email || null,
-        customer_kvk: null,
-        customer_tax_id: null,
+        customer_kvk: defaultTarget?.kvk_number || null,
+        customer_tax_id: defaultTarget?.tax_id || null,
         memo: null,
         tax_inclusive: false,
         reverse_charge: false,

@@ -53,6 +53,7 @@ import { listAllUsers } from '../../api/adminUsers.ts'
 import type { AdminUser } from '../../api/adminUsers.ts'
 import { getAllStorageStats, refreshAllStorageStats } from '../../api/statistics.ts'
 import { ROLES, WRITE_ROLES } from '../../auth/permissions.ts'
+import { VAT_COUNTRY_CODES } from '../../utils/vatRates.ts'
 import { formatBytes } from '../../utils/formatBytes.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import type { Tenant, Id } from '../../types/entities.ts'
@@ -83,6 +84,8 @@ export default function TenantsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [slug, setSlug] = useState('')
   const [bandName, setBandName] = useState('')
+  // Accounting country: required and never defaulted, same rule as self-service.
+  const [countryCode, setCountryCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -161,10 +164,13 @@ export default function TenantsPage() {
     setSubmitting(true)
     setError('')
     try {
-      await createTenant({ slug: slug.trim(), band_name: bandName.trim() } as Partial<Tenant>)
+      await createTenant({
+        slug: slug.trim(), band_name: bandName.trim(), country_code: countryCode,
+      })
       setCreateOpen(false)
       setSlug('')
       setBandName('')
+      setCountryCode('')
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Create failed')
@@ -599,6 +605,18 @@ export default function TenantsPage() {
               onChange={(e) => setBandName(e.target.value)}
               fullWidth
             />
+            <TextField
+              select
+              label="Accounting country"
+              value={countryCode}
+              onChange={(e) => setCountryCode(e.target.value)}
+              helperText="Decides the bookkeeping jurisdiction; immutable afterwards"
+              fullWidth
+            >
+              {VAT_COUNTRY_CODES.map((code) => (
+                <MenuItem key={code} value={code}>{code.toUpperCase()}</MenuItem>
+              ))}
+            </TextField>
             <Typography variant="caption" color="text.secondary">
               You will be added as the initial tenant_admin so the new tenant
               is immediately usable. Reassign or add members from the Tenants
@@ -616,7 +634,7 @@ export default function TenantsPage() {
           <Button
             variant="contained"
             onClick={handleCreate}
-            disabled={submitting || !slug.trim() || !bandName.trim()}
+            disabled={submitting || !slug.trim() || !bandName.trim() || !countryCode}
           >
             Create
           </Button>

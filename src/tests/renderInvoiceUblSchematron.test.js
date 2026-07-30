@@ -7,6 +7,7 @@
 // Skipped unless `npm run build:schematron` has produced the SEF bundle, so
 // neither local dev nor CI hard-depends on a third-party artefact.
 import { describe, it, expect } from 'vitest'
+import { Buffer } from 'node:buffer'
 import { renderInvoiceUbl } from '../../server/utils/renderInvoiceUbl.js'
 import { checkPeppolReadiness } from '../../shared/peppolReadiness.js'
 import { CASES, EXPECTED_PEPPOL_FAILURES } from './fixtures/ubl/cases.js'
@@ -126,6 +127,28 @@ describe.skipIf(!schematronAvailable())('e-invoicing conformance (official Schem
     for (const [name, input] of Object.entries(VARIANTS)) {
       it(name, () => expectValid(renderInvoiceUbl(input)))
     }
+
+    it('accepts an embedded invoice PDF', () => {
+      const xml = renderInvoiceUbl({
+        ...base,
+        embeddedPdf: {
+          filename: 'factuur-2026-0007.pdf',
+          base64: Buffer.from('%PDF-1.7 invoice').toString('base64'),
+        },
+      })
+      expectValid(xml)
+      expect(validatePeppol(xml)).toEqual([])
+    })
+
+    it('accepts the missing-PDF notice without creating a second document note', () => {
+      const xml = renderInvoiceUbl({
+        ...base,
+        invoice: { ...base.invoice, memo: 'Existing memo.' },
+        embeddedPdf: null,
+      })
+      expectValid(xml)
+      expect(validatePeppol(xml)).toEqual([])
+    })
   })
 
   describe('Peppol BIS Billing 3.0 — goldens', () => {

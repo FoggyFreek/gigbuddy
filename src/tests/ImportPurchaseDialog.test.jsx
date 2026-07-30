@@ -93,6 +93,19 @@ describe('ImportPurchaseDialog', () => {
     expect(screen.getByText(/€ 200,00/)).toBeInTheDocument()
   })
 
+  it('names the VAT category a reverse-charge warning carries', async () => {
+    importPurchaseDocument.mockResolvedValue({
+      ...RESULT,
+      warnings: [{ code: 'vat_self_assessment_required', severity: 'blocking', category: 'AE' }],
+    })
+    const user = userEvent.setup()
+    wrap(<ImportPurchaseDialog onClose={vi.fn()} onImported={vi.fn()} />)
+
+    await user.upload(fileInput(), xmlFile())
+
+    expect(await screen.findByText(/reverse-charge invoice \(AE\)/)).toBeInTheDocument()
+  })
+
   it('shows the upload step again when the file is rejected', async () => {
     importPurchaseDocument.mockRejectedValue(new Error('Only EUR invoices can be imported'))
     const user = userEvent.setup()

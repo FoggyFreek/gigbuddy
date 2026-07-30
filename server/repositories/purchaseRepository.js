@@ -88,19 +88,20 @@ export async function insertPurchase(executor, tenantId, purchase) {
   const approved = purchase.status === 'approved'
   const { rows } = await executor.query(
     `INSERT INTO purchases (
-       tenant_id, receipt_number, supplier_name, supplier_contact_id,
+       tenant_id, receipt_number, supplier_name, supplier_contact_id, supplier_import_data,
        receipt_date, due_date, currency, memo, supplier_invoice_number,
        subtotal_cents, tax_cents, total_cents,
        status, finalized_at,
        created_by_user_id, approved_by_user_id
      ) VALUES (
-       $1, $2, $3, $4,
-       $5, $6, $7, $8, $9,
-       $10, $11, $12,
-       $13, ${approved ? 'NOW()' : 'NULL'},
-       $14, ${approved ? '$14' : 'NULL'}
+       $1, $2, $3, $4, $5,
+       $6, $7, $8, $9, $10,
+       $11, $12, $13,
+       $14, ${approved ? 'NOW()' : 'NULL'},
+       $15, ${approved ? '$15' : 'NULL'}
      ) RETURNING id`,
     [tenantId, purchase.receiptNumber, purchase.supplierName, purchase.supplierContactId,
+      purchase.supplierImportData,
       purchase.receiptDate, purchase.dueDate, purchase.currency, purchase.memo,
       purchase.supplierInvoiceNumber ?? null,
       purchase.subtotalCents, purchase.taxCents, purchase.totalCents,

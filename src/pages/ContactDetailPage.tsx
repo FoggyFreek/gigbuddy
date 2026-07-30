@@ -52,6 +52,9 @@ interface ContactForm {
   email: string
   phone: string
   category: string
+  iban: string
+  kvk_number: string
+  tax_id: string
 }
 
 interface ContactNote {
@@ -83,7 +86,15 @@ export default function ContactDetailPage() {
     else navigate(-1)
   }, [navigate, onClose])
 
-  const [form, setForm] = useState<ContactForm>({ name: '', email: '', phone: '', category: 'press', iban: '' })
+  const [form, setForm] = useState<ContactForm>({
+    name: '',
+    email: '',
+    phone: '',
+    category: 'press',
+    iban: '',
+    kvk_number: '',
+    tax_id: '',
+  })
   const [notes, setNotes] = useState<ContactNote[]>([])
   const [newNote, setNewNote] = useState('')
   const [venues, setVenues] = useState<LinkedVenue[]>([])
@@ -128,6 +139,8 @@ export default function ContactDetailPage() {
           phone:    c.phone || '',
           category: c.category || 'press',
           iban:     c.iban || '',
+          kvk_number: c.kvk_number || '',
+          tax_id:     c.tax_id || '',
         })
         setNotes((c as { notes?: ContactNote[] }).notes || [])
       })

@@ -36,7 +36,9 @@
     "uploadLogo": "Upload logo",
     "removeLogo": "Remove",
     "slugPreview": "Your band's web address name: {{slug}}",
-    "slugCaveat": "If this name is taken, a number is added automatically (e.g. {{slug}}-2)."
+    "slugCaveat": "If this name is taken, a number is added automatically (e.g. {{slug}}-2).",
+    "countryLabel": "Accounting country",
+    "countryHelper": "Where this band keeps its books. This sets the VAT rules, chart of accounts and reporting rules, and cannot be changed later."
   },
   "summary": {
     "title": "Almost there",

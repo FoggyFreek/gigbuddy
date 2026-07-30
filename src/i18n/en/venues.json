@@ -17,6 +17,8 @@
     "givenName": "Given name",
     "familyName": "Family name",
     "organizationName": "Organization name",
+    "kvkNumber": "Chamber of Commerce number",
+    "taxId": "VAT ID",
     "streetAndNumber": "Street and number",
     "streetAdditional": "Street additional",
     "postalCode": "Postal code",

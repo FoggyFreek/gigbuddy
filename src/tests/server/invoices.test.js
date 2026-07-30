@@ -1,6 +1,7 @@
 import './_envSetup.js'
 // @vitest-environment node
 import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
+import { Readable } from 'node:stream'
 import request from 'supertest'
 
 // Stub the MinIO client so the PDF render path (putObject/getObject/removeObject)
@@ -535,9 +536,17 @@ describe('invoices — issuance-readiness invariant', () => {
 
 describe('invoices — draft-from-gig', () => {
   it('returns a pre-filled draft from a gig with its linked venue', async () => {
+    await pool.query(
+      `UPDATE venues
+          SET kvk_number = '50048295', tax_id = 'NL001794860B34'
+        WHERE id = $1 AND tenant_id = $2`,
+      [seed.venues[0].id, seed.tenantA.id],
+    )
     const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
     expect(res.body.draft.gig_id).toBe(seed.gigA.id)
     expect(res.body.draft.customer_name).toBe(seed.venues[0].name)
+    expect(res.body.draft.customer_kvk).toBe('50048295')
+    expect(res.body.draft.customer_tax_id).toBe('NL001794860B34')
     expect(res.body.draft.lines).toHaveLength(1)
     expect(res.body.draft.lines[0].unit_price_cents).toBe(50000)
   })
@@ -562,8 +571,9 @@ describe('invoices — draft-from-gig', () => {
 
   it('returns two billing_targets when gig has both festival and venue', async () => {
     const { rows: fv } = await pool.query(
-      `INSERT INTO venues (tenant_id, category, name, city)
-       VALUES ($1, 'festival', 'Texel Blues Festival', 'Den Hoorn') RETURNING id`,
+      `INSERT INTO venues (tenant_id, category, name, city, kvk_number, tax_id)
+       VALUES ($1, 'festival', 'Texel Blues Festival', 'Den Hoorn', '50048295', 'NL001794860B34')
+       RETURNING id`,
       [seed.tenantA.id],
     )
     const festivalId = fv[0].id
@@ -578,6 +588,10 @@ describe('invoices — draft-from-gig', () => {
     const types = res.body.billing_targets.map((t) => t.type)
     expect(types).toContain('festival')
     expect(types).toContain('venue')
+    expect(res.body.billing_targets.find((target) => target.type === 'festival')).toMatchObject({
+      kvk_number: '50048295',
+      tax_id: 'NL001794860B34',
+    })
     // Default customer should be from festival (first target)
     expect(res.body.draft.customer_name).toContain('Texel Blues')
   })
@@ -799,9 +813,44 @@ describe('invoices — UBL/Peppol XML download', () => {
     expect(res.text).toContain(`<cbc:ID>${created.body.invoice_number}</cbc:ID>`)
   })
 
+  it('embeds the stored PDF when requested', async () => {
+    const created = await createInvoice()
+    expect(created.body.pdf_path).toMatch(/^tenants\//)
+    const pdf = Buffer.from('%PDF-1.7 stored invoice')
+    const storage = await import('../../../server/utils/storage.js')
+    storage.storageClient.getObject.mockResolvedValueOnce(Readable.from([pdf]))
+
+    const res = await asUserA(
+      request(app).get(`/api/invoices/${created.body.id}/ubl`).query({ embedPdf: 'true' }),
+    ).expect(200)
+
+    expect(storage.storageClient.getObject).toHaveBeenCalledWith('test-bucket', created.body.pdf_path)
+    expect(res.text).toContain('mimeCode="application/pdf"')
+    expect(res.text).toContain(`filename="factuur-${created.body.invoice_number}.pdf"`)
+    const encoded = res.text.match(/<cbc:EmbeddedDocumentBinaryObject[^>]*>([^<]+)</)?.[1]
+    expect(Buffer.from(encoded, 'base64')).toEqual(pdf)
+  })
+
+  it('returns valid UBL with a notice when the requested PDF failed to render', async () => {
+    const storage = await import('../../../server/utils/storage.js')
+    storage.storageClient.putObject.mockRejectedValueOnce(new Error('render failed'))
+    const created = await createInvoice()
+    expect(created.body.pdf_path).toBeNull()
+
+    const res = await asUserA(
+      request(app).get(`/api/invoices/${created.body.id}/ubl`).query({ embedPdf: 'true' }),
+    ).expect(200)
+
+    expect(res.text).not.toContain('cac:AdditionalDocumentReference')
+    expect(res.text).not.toContain('cbc:EmbeddedDocumentBinaryObject')
+    expect(res.text).toMatch(/<cbc:Note>[^<]*pdf[^<]*<\/cbc:Note>/i)
+  })
+
   it('cross-tenant download returns 404, not 403', async () => {
     const created = await createInvoice()
-    const foreign = await asUserB(request(app).get(`/api/invoices/${created.body.id}/ubl`))
+    const foreign = await asUserB(
+      request(app).get(`/api/invoices/${created.body.id}/ubl`).query({ embedPdf: 'true' }),
+    )
     expect(foreign.status).toBe(404)
     // Visible to its owner — the 404 is isolation, not absence.
     await asUserA(request(app).get(`/api/invoices/${created.body.id}/ubl`)).expect(200)

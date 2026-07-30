@@ -42,6 +42,8 @@ export interface InvoiceBillingTarget {
   address_postal_code?: string | null
   address_country?: string | null
   email?: string | null
+  kvk_number?: string | null
+  tax_id?: string | null
 }
 
 /** Response of GET /invoices/draft-from-gig/:gigId — a prefill, not a persisted invoice. */
@@ -95,6 +97,9 @@ export const getInvoiceEmlDefaults = (id: Id) => api<EmlDefaults>(`/${id}/eml-de
 // failure surfaces as an in-app error instead of raw JSON in a new tab.
 export const downloadInvoiceUbl = (id: Id) =>
   requestBlob(`/api/invoices/${id}/ubl`, { method: 'GET' })
+
+export const downloadInvoiceUblWithPdf = (id: Id) =>
+  requestBlob(`/api/invoices/${id}/ubl?embedPdf=true`, { method: 'GET' })
 
 export const downloadInvoiceEml = (id: Id, personalMessage?: string) =>
   requestBlob(`/api/invoices/${id}/eml`, {

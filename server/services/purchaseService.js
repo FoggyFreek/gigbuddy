@@ -254,7 +254,13 @@ async function validateApprovalLines(executor, tenantId, lines) {
 
 // ---------- create ----------
 
-export async function createPurchase(pool, tenantId, body, actorUserId = null, { canManageFinance = false } = {}) {
+export async function createPurchase(
+  pool,
+  tenantId,
+  body,
+  actorUserId = null,
+  { canManageFinance = false, supplierImportData = null } = {},
+) {
   const supplierName = String(body.supplier_name ?? '').trim()
   if (!supplierName) return { error: { status: 400, body: { error: 'supplier_name is required' } } }
 
@@ -295,6 +301,7 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
       status, tenantId, receiptNumber, supplierName, supplierContactId,
       receiptDate, dueDate, currency, memo: body.memo || null, totals, actorUserId,
       supplierInvoiceNumber: normalizeSupplierInvoiceNumber(body.supplier_invoice_number),
+      supplierImportData,
     }))
     await insertPurchaseLines(client, purchaseId, tenantId, lines)
 
@@ -334,6 +341,7 @@ function resolveCreateStatus(body, { canManageFinance = false } = {}) {
 function buildCreatePurchaseData({
   status, tenantId, receiptNumber, supplierName, supplierContactId,
   receiptDate, dueDate, currency, memo, totals, actorUserId, supplierInvoiceNumber,
+  supplierImportData,
 }) {
   return {
     tenantId,
@@ -345,6 +353,7 @@ function buildCreatePurchaseData({
     currency,
     memo,
     supplierInvoiceNumber,
+    supplierImportData,
     subtotalCents: totals.subtotalCents,
     taxCents: totals.taxCents,
     totalCents: totals.totalCents,

@@ -243,6 +243,28 @@ function paymentMeans(invoice, tenant) {
   ])
 }
 
+function documentNote(invoiceMemo, embeddedPdf, t) {
+  const parts = [
+    invoiceMemo,
+    embeddedPdf === null ? t('ublPdfRenderFailedNote') : null,
+  ].filter((part) => String(part ?? '').trim())
+  return leaf('cbc:Note', parts.join('\n'))
+}
+
+function additionalDocumentReference(embeddedPdf, t) {
+  if (!embeddedPdf) return null
+  return el('cac:AdditionalDocumentReference', null, [
+    leaf('cbc:ID', embeddedPdf.filename),
+    leaf('cbc:DocumentDescription', t('ublPdfAttachmentDescription')),
+    el('cac:Attachment', null, [
+      leaf('cbc:EmbeddedDocumentBinaryObject', embeddedPdf.base64, {
+        mimeCode: 'application/pdf',
+        filename: embeddedPdf.filename,
+      }),
+    ]),
+  ])
+}
+
 // One allowance per VAT category. BR-32/BR-33 make the category mandatory on a
 // document-level allowance, so a single node can only ever describe one rate;
 // BR-S-08 then reconciles each category's taxable base separately.
@@ -319,7 +341,10 @@ function invoiceLines(lines, totals, categoryByRate, zeroVat) {
 
 // ---------------------------------------------------------------------------
 
-export function renderInvoiceUbl({ invoice, lines, tenant }) {
+// `embeddedPdf` is deliberately tri-state: undefined means a plain UBL was
+// requested, null means the embedded variant was requested but PDF rendering
+// failed, and an object carries the stored PDF.
+export function renderInvoiceUbl({ invoice, lines, tenant, embeddedPdf }) {
   const appliesKor = Boolean(tenant.applies_kor) && korApplies(tenant.vat_country)
   const reverseCharge = Boolean(invoice.reverse_charge)
   const zeroVat = appliesKor || reverseCharge
@@ -374,9 +399,10 @@ export function renderInvoiceUbl({ invoice, lines, tenant }) {
     leaf('cbc:DueDate', toUblDate(invoice.due_date)),
     leaf('cbc:InvoiceTypeCode', INVOICE_TYPE_COMMERCIAL),
     // At most one document note (PEPPOL-EN16931-R002).
-    leaf('cbc:Note', invoice.memo),
+    documentNote(invoice.memo, embeddedPdf, t),
     leaf('cbc:DocumentCurrencyCode', CURRENCY),
     leaf('cbc:BuyerReference', buyerReference),
+    additionalDocumentReference(embeddedPdf, t),
     supplierParty(tenant, ctx),
     customerParty(invoice, ctx),
     // Date of supply (BT-72). Not TaxPointDate: BR-CO-3 makes the two mutually

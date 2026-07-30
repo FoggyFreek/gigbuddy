@@ -13,20 +13,21 @@ import * as contactsApi from '../api/contacts.ts'
 import SupplierAutocomplete from '../components/purchases/SupplierAutocomplete.tsx'
 import theme from '../theme.ts'
 
-function Harness({ onPick }) {
+function Harness({ onPick, createDefaults }) {
   const [name, setName] = useState('')
   return (
     <SupplierAutocomplete
       value={name}
       onChange={(patch) => { setName(patch.supplier_name); onPick(patch) }}
+      createDefaults={createDefaults}
     />
   )
 }
 
-function wrap(onPick) {
+function wrap(onPick, createDefaults) {
   return render(
     <ThemeProvider theme={theme}>
-      <Harness onPick={onPick} />
+      <Harness onPick={onPick} createDefaults={createDefaults} />
     </ThemeProvider>,
   )
 }
@@ -50,6 +51,33 @@ describe('SupplierAutocomplete', () => {
 
     await waitFor(() => expect(contactsApi.createContact).toHaveBeenCalledWith({ name: 'Studio X', category: 'supplier' }))
     await waitFor(() => expect(onPick).toHaveBeenCalledWith({ supplier_name: 'Studio X', supplier_contact_id: 9 }))
+  })
+
+  it('feeds imported e-invoice seller data into a newly created supplier', async () => {
+    const created = { id: 10, name: 'Studio X', category: 'supplier' }
+    contactsApi.createContact.mockResolvedValue(created)
+    const onPick = vi.fn()
+    const user = userEvent.setup()
+    wrap(onPick, {
+      name: 'Original legal name',
+      email: 'billing@studio.example',
+      iban: 'NL55RABO0127957391',
+      kvk_number: '50048295',
+      tax_id: 'NL001794860B34',
+    })
+
+    await user.type(screen.getByRole('combobox', { name: 'Supplier' }), 'Studio X')
+    await screen.findByText("+ Add 'Studio X' as supplier")
+    await user.keyboard('{ArrowDown}{Enter}')
+
+    await waitFor(() => expect(contactsApi.createContact).toHaveBeenCalledWith({
+      name: 'Studio X',
+      category: 'supplier',
+      email: 'billing@studio.example',
+      iban: 'NL55RABO0127957391',
+      kvk_number: '50048295',
+      tax_id: 'NL001794860B34',
+    }))
   })
 
   it('falls back to an existing match when create fails', async () => {

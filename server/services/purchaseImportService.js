@@ -28,6 +28,10 @@ import { computePurchaseTotals } from '../../shared/purchaseTotals.js'
 import { importWarning, sortImportWarnings } from '../../shared/purchaseImportWarnings.js'
 import { badRequest } from './serviceErrors.js'
 import { logger } from '../utils/logger.js'
+import {
+  normalizeOptionalRegistrationNumber,
+  normalizeOptionalVatId,
+} from '../utils/businessIdentifiers.js'
 
 // The ledger books a purchase in EUR. Importing another currency would file the
 // supplier's figures under the wrong unit, which is worse than refusing.
@@ -120,7 +124,10 @@ export async function importPurchaseFromDocument({ db, tenantId, file, actorUser
 
   // Never `approved`: an imported document has had no human look at it yet, and
   // approving posts the accrual journal.
-  const created = await createPurchase(db, tenantId, purchase, actorUserId, { canManageFinance: false })
+  const created = await createPurchase(db, tenantId, purchase, actorUserId, {
+    canManageFinance: false,
+    supplierImportData: buildSupplierImportData(doc),
+  })
   if (created.error) return created
 
   const target = { db, tenantId, purchaseId: created.purchaseId }
@@ -133,6 +140,16 @@ export async function importPurchaseFromDocument({ db, tenantId, file, actorUser
   }
 
   return { purchaseId: created.purchaseId, warnings: sortImportWarnings(warnings) }
+}
+
+function buildSupplierImportData(doc) {
+  return {
+    name: doc.supplier?.name ?? null,
+    email: doc.supplier?.email ?? null,
+    iban: doc.payeeIban ?? null,
+    kvk_number: normalizeOptionalRegistrationNumber(doc.supplier?.registrationId),
+    tax_id: normalizeOptionalVatId(doc.supplier?.vatId),
+  }
 }
 
 // True when the invoice names a buyer that is demonstrably not this tenant.
@@ -162,8 +179,18 @@ function addressedElsewhere(customer, tenant) {
 async function resolveSupplier(db, tenantId, doc) {
   const name = doc.supplier?.name ?? null
   const iban = doc.payeeIban
-  const candidates = await findSuppliersForImport(db, tenantId, [iban], [name])
-  const matches = matchSuppliers(indexSuppliers(candidates), { iban, name })
+  const taxId = normalizeVatNumber(doc.supplier?.vatId)
+  const registrationId = String(doc.supplier?.registrationId ?? '').trim()
+  const candidates = await findSuppliersForImport(db, tenantId, [iban], [name], {
+    taxIds: [taxId],
+    registrationIds: [registrationId],
+  })
+  const matches = matchSuppliers(indexSuppliers(candidates), {
+    iban,
+    name,
+    taxId,
+    registrationId,
+  })
   // Several contacts share the identifier — let the user pick rather than guess.
   return matches.length === 1 ? matches[0] : null
 }

@@ -3,6 +3,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import pool from '../../../server/db/index.js'
 import { seedTenantAccounting } from '../../../server/db/defaultChartOfAccounts.js'
+import { createAccountingProfileForTenant } from '../../../server/services/accountingProfileService.js'
 import { TERMS_VERSION } from '../../../shared/termsVersion.js'
 import { assertTestDatabase } from './_databaseGuard.js'
 
@@ -215,6 +216,7 @@ export async function seedTwoTenants() {
   const tenants = d.tenants
   for (const t of tenants) {
     await seedTenantAccounting(pool, t.id)
+    await createAccountingProfileForTenant(pool, t.id, 'nl')
   }
 
   const tenantA   = d.tenants.find(t => t.slug === 'alpha')

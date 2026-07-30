@@ -77,6 +77,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
       <InvoiceDownloadMenu
         pdfPath={s.invoice.pdf_path}
         onDownloadUbl={s.handleUblDownload}
+        onDownloadUblWithPdf={s.handleUblWithPdfDownload}
         ublBusy={s.ublBusy}
         onOpenEmailDialog={s.openEmlDialog}
         peppolBlockers={s.peppolWarnings.filter((w) => w.severity === 'blocking')}

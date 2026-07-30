@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
+import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { XMLParser } from 'fast-xml-parser'
@@ -249,6 +250,17 @@ describe('renderInvoiceUbl — electronic addresses', () => {
     for (const id of ids) expect(id.attrs['@_schemeID']).toBe('0106')
   })
 
+  it('includes the customer Chamber of Commerce number and VAT ID', () => {
+    const all = parse(render('nl-standard'))
+    const customerParty = nodesNamed(all, 'cac:AccountingCustomerParty')[0]
+    const customerNodes = inside(all, customerParty)
+    const legalEntity = customerNodes.find((node) => node.name === 'cac:PartyLegalEntity')
+    const taxScheme = customerNodes.find((node) => node.name === 'cac:PartyTaxScheme')
+
+    expect(firstInside(all, legalEntity, 'cbc:CompanyID').text).toBe('87654321')
+    expect(firstInside(all, taxScheme, 'cbc:CompanyID').text).toBe('NL819789471B01')
+  })
+
   it('omits the legal-entity id rather than mislabelling a foreign register', () => {
     // Belgian supplier: the number is not a KVK registration, so no CompanyID.
     const all = parse(render('be-supplier'))
@@ -329,5 +341,41 @@ describe('renderInvoiceUbl — escaping and omissions', () => {
       invoice: { ...CASES['nl-standard'].invoice, event_description: null },
     })
     expect(nodesNamed(parse(xml), 'cbc:BuyerReference')[0].text).toBe('2026-0007')
+  })
+})
+
+describe('renderInvoiceUbl — embedded PDF', () => {
+  it('embeds the rendered invoice PDF as a Peppol supporting document', () => {
+    const pdf = Buffer.from('%PDF-1.7 invoice')
+    const all = parse(renderInvoiceUbl({
+      ...CASES['nl-standard'],
+      embeddedPdf: {
+        filename: 'factuur-2026-0007.pdf',
+        base64: pdf.toString('base64'),
+      },
+    }))
+
+    const reference = nodesNamed(all, 'cac:AdditionalDocumentReference')[0]
+    const binary = firstInside(all, reference, 'cbc:EmbeddedDocumentBinaryObject')
+    expect(firstInside(all, reference, 'cbc:ID').text).toBe('factuur-2026-0007.pdf')
+    expect(binary.attrs).toMatchObject({
+      '@_mimeCode': 'application/pdf',
+      '@_filename': 'factuur-2026-0007.pdf',
+    })
+    expect(Buffer.from(binary.text, 'base64')).toEqual(pdf)
+  })
+
+  it('adds one notice when PDF rendering failed and preserves the invoice memo', () => {
+    const all = parse(renderInvoiceUbl({
+      ...CASES['nl-standard'],
+      invoice: { ...CASES['nl-standard'].invoice, memo: 'Existing invoice memo.' },
+      embeddedPdf: null,
+    }))
+
+    expect(nodesNamed(all, 'cac:AdditionalDocumentReference')).toEqual([])
+    const notes = under(all, 'Invoice', 'cbc:Note')
+    expect(notes).toHaveLength(1)
+    expect(notes[0].text).toContain('Existing invoice memo.')
+    expect(notes[0].text).toContain('pdf kon niet worden gemaakt')
   })
 })

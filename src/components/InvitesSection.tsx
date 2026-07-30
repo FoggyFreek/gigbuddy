@@ -235,7 +235,14 @@ export default function InvitesSection({ canIssueAdmin = false }: Readonly<Invit
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+      <Stack
+        direction={isCompact ? 'column' : 'row'}
+        spacing={isCompact ? 1 : 2}
+        sx={{ alignItems: isCompact ? 'stretch' : 'center' }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1 }}>
+          {t($ => $.invites.title)}
+        </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}

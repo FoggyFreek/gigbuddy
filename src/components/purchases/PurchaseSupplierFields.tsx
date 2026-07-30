@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { PurchaseForm } from './purchaseFormHelpers.ts'
+import type { SupplierImportData } from '../../types/entities.ts'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -15,10 +16,16 @@ import SupplierAutocomplete from './SupplierAutocomplete.tsx'
 interface PurchaseSupplierFieldsProps {
   form: PurchaseForm
   patchForm: (patch: Partial<PurchaseForm>) => void
+  supplierCreateDefaults?: SupplierImportData | null
   readOnly?: boolean
 }
 
-export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Readonly<PurchaseSupplierFieldsProps>) {
+export default function PurchaseSupplierFields({
+  form,
+  patchForm,
+  supplierCreateDefaults,
+  readOnly,
+}: Readonly<PurchaseSupplierFieldsProps>) {
   const { t } = useTranslation('purchases')
   const [dueOpen, setDueOpen] = useState(Boolean(form.due_date))
 
@@ -33,6 +40,7 @@ export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Re
         <SupplierAutocomplete
           value={form.supplier_name}
           onChange={(patch) => patchForm(patch)}
+          createDefaults={supplierCreateDefaults}
           disabled={readOnly}
           label={t($ => $.labels.supplier)}
           autoFocus

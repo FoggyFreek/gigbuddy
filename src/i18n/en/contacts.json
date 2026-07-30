@@ -18,7 +18,9 @@
     "name": "Name",
     "email": "Email",
     "phone": "Phone",
-    "iban": "IBAN"
+    "iban": "IBAN",
+    "kvkNumber": "Chamber of Commerce number",
+    "taxId": "VAT ID"
   },
   "table": {
     "searchPlaceholder": "Search contacts…",

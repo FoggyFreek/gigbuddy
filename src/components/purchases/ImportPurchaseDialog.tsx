@@ -156,6 +156,7 @@ function WarningList({ severity, title, warnings }: Readonly<{
               amount: formatEur(Math.abs(w.cents ?? 0)),
               stated: formatEur(w.statedCents ?? 0),
               receipts: (w.receiptNumbers ?? []).join(', '),
+              category: w.category ?? '',
               defaultValue: w.code,
             })}
           </li>

@@ -14,6 +14,11 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
 
 export interface CreateOwnedTenantPayload {
   band_name: string
+  /**
+   * Accounting country (ISO alpha-2, lowercase). Required — the server never
+   * defaults it, and it is immutable once the band exists.
+   */
+  country_code: string
   /** Omitted → the server generates a slug from band_name (deduped). */
   slug?: string
   /** Marks the tenant as the caller's onboarding resume pointer. */
@@ -40,7 +45,12 @@ export const updateTenantOnboardingStatus = (tenantOnboardingEnabled: boolean) =
 
 export const listTenants = () => api<Tenant[]>('/')
 export const getTenant = (id: Id) => api<Tenant>(`/${id}`)
-export const createTenant = (payload: Partial<Tenant>) =>
+export interface CreateTenantPayload extends Partial<Tenant> {
+  /** Accounting country. Required on this path too — no silent default. */
+  country_code: string
+}
+
+export const createTenant = (payload: CreateTenantPayload) =>
   api<Tenant>('/', { method: 'POST', body: JSON.stringify(payload) })
 export const updateTenant = (id: Id, patch: Partial<Tenant>) =>
   api<Tenant>(`/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })

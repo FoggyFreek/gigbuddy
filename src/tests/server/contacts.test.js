@@ -32,6 +32,51 @@ function asUserA(req) {
     .set('x-test-tenant-id', String(seed.tenantA.id))
 }
 
+describe('supplier business identifiers', () => {
+  it('creates and updates optional registration and VAT identifiers', async () => {
+    const created = await asUserA(request(app).post('/api/contacts').send({
+      name: 'Registered Supplier',
+      category: 'supplier',
+      kvk_number: ' 50048295 ',
+      tax_id: 'nl001794860b34',
+    })).expect(201)
+
+    expect(created.body).toMatchObject({
+      kvk_number: '50048295',
+      tax_id: 'NL001794860B34',
+    })
+
+    const updated = await asUserA(request(app).patch(`/api/contacts/${created.body.id}`).send({
+      kvk_number: '  HRB   12345 ',
+      tax_id: ' de 136695976 ',
+    })).expect(200)
+
+    expect(updated.body).toMatchObject({
+      kvk_number: 'HRB 12345',
+      tax_id: 'DE136695976',
+    })
+  })
+
+  it('does not allow one tenant to update another tenant supplier identifiers', async () => {
+    const { rows: [supplier] } = await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category)
+       VALUES ($1, 'Private Supplier', 'supplier') RETURNING id`,
+      [seed.tenantB.id],
+    )
+
+    await asUserA(request(app).patch(`/api/contacts/${supplier.id}`).send({
+      kvk_number: '50048295',
+      tax_id: 'NL001794860B34',
+    })).expect(404)
+
+    const { rows: [stored] } = await pool.query(
+      'SELECT kvk_number, tax_id FROM contacts WHERE id = $1',
+      [supplier.id],
+    )
+    expect(stored).toEqual({ kvk_number: null, tax_id: null })
+  })
+})
+
 describe('GET /api/contacts - category filters', () => {
   it('returns only supplier contacts when category=supplier', async () => {
     await pool.query(

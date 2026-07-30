@@ -186,7 +186,7 @@ describe('requireCurrentTerms gate on tenant routes', () => {
 
     for (const req of [
       asUserA(request(app).get('/api/notifications')),
-      asUserA(request(app).post('/api/tenants').send({ band_name: 'Bypass Band' })),
+      asUserA(request(app).post('/api/tenants').send({ band_name: 'Bypass Band', country_code: 'nl' })),
       asUserA(request(app).post('/api/billing/cancel')),
       asUserA(request(app).post('/api/auth/active-tenant').send({ tenantId: seed.tenantA.id })),
     ]) {

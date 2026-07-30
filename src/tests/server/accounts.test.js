@@ -666,7 +666,7 @@ describe('tenant creation — seeds accounts', () => {
       .post('/api/admin/tenants')
       .set('x-test-user-id', String(seed.superUser.id))
       .set('x-test-tenant-id', String(seed.tenantA.id))
-      .send({ slug: 'gamma', band_name: 'Gamma Band', adminUserId: seed.superUser.id })
+      .send({ slug: 'gamma', band_name: 'Gamma Band', adminUserId: seed.superUser.id, country_code: 'nl' })
       .expect(201)
 
     const { rows: accs } = await pool.query(

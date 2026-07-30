@@ -3,25 +3,33 @@
   "nav": {
     "accountSettings": "Account settings",
     "bandSettings": "Band settings",
+    "financeSettings": "Finance and accounting settings",
     "backAria": "Back to settings",
     "items": {
       "preferences": "My preferences",
       "billing": "Billing",
       "connectedAccounts": "Connected accounts",
       "accent": "Accent color",
-      "members": "Members",
-      "invites": "Invites",
+      "membersAndInvites": "Members and invites",
       "storage": "Storage",
       "integrations": "Integrations",
       "chartOfAccounts": "Chart of accounts",
-      "defaultAccounts": "Accounting Settings"
+      "defaultAccounts": "Accounting Settings",
+      "financialProfile": "Financial profile",
+      "accountingProfile": "Accounting profile"
     }
   },
   "subscription": {
     "current": "Current plan",
     "manage": "Manage subscription"
   },
+  "financeWizard": {
+    "title": "Finance setup wizard",
+    "help": "Walk through your opening balance, financial profile and default accounts.",
+    "cta": "Start"
+  },
   "members": {
+    "title": "Members",
     "columns": {
       "name": "Name",
       "email": "Email",
@@ -55,6 +63,7 @@
     }
   },
   "invites": {
+    "title": "Invites",
     "newInvite": "New invite",
     "create": "Create",
     "role": "Role",
@@ -220,10 +229,6 @@
     },
     "booksClosedThrough": "Books closed through",
     "booksClosedThroughHelper": "Nothing can be posted on or before this date. Leave empty to keep the books open.",
-    "wizard": {
-      "cta": "Finance setup wizard",
-      "help": "Walk through your opening balance, financial profile and default accounts."
-    },
     "errors": {
       "account_has_open_balance": "This account still carries an open balance (unpaid bills, unsettled member debt or unpaid invoices). Settle them before changing the account.",
       "invalid_books_closed_through": "Enter a valid date (YYYY-MM-DD) or clear the field.",
@@ -279,5 +284,65 @@
     "saveFailed": "Saving the API key failed.",
     "replace": "Replace key",
     "remove": "Remove key"
+  },
+  "financialProfile": {
+    "title": "Financial profile",
+    "description": "Your band's legal and financial identity: the name, address and identifiers that appear on the invoices you send. Your accountant and your customers rely on these being the registered details.",
+    "legalFormNote": "Legal form note",
+    "legalFormNoteHelper": "Optional, for a form not in the list or an extra detail.",
+    "postalCountryHelper": "The country on your address. Set the country your books are kept in under Accounting profile.",
+    "errors": {
+      "unknown": "Could not save the financial profile.",
+      "invalid_email": "Enter a valid email address.",
+      "invalid_phone": "Enter a valid phone number.",
+      "invalid_iban": "Enter a valid IBAN.",
+      "invalid_tax_id": "That VAT number does not match the format for your band's accounting country.",
+      "invalid_kvk_number": "That registration number does not match the format for your band's accounting country."
+    }
+  },
+  "accountingProfile": {
+    "title": "Accounting profile",
+    "description": "The accounting rules this band's bookkeeping follows. Later reports, VAT workpapers and retention periods are derived from these answers, so they describe facts about the band rather than preferences.",
+    "unset": "Not set",
+    "notApplicable": "Not applicable — this band is not VAT registered.",
+    "needsReview": "These values were inherited when the accounting profile was introduced. Check them and confirm.",
+    "confirmCta": "Confirm",
+    "nonEuroPending": "This band's base currency is recorded but not yet applied: invoices, the UBL export and reports are still produced in euro. Multi-currency bookkeeping is not available yet.",
+    "country": "Accounting country",
+    "countryHelper": "Chosen when the band was created and fixed afterwards, because changing it would invalidate the VAT number, registration and existing documents.",
+    "baseCurrency": "Base currency",
+    "baseCurrencyHelper": "Derived from the accounting country. Recorded, not yet applied to invoices and reports.",
+    "financialYearStartMonth": "Financial year starts (month)",
+    "financialYearStartDay": "Day",
+    "vatRegistered": "Registered for VAT",
+    "vatRegisteredHelper": "A legal fact, not something we infer from turnover. Leave unconfirmed until you know.",
+    "vatRegisteredOptions": {
+      "yes": "Yes",
+      "no": "No",
+      "unconfirmed": "Not yet confirmed"
+    },
+    "vatFilingFrequency": "VAT filing frequency",
+    "vatFilingFrequencyHelper": "Copy the period the tax authority assigned you; do not guess.",
+    "vatFilingFrequencies": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "yearly": "Yearly",
+      "authority_assigned": "As assigned by the tax authority",
+      "exempt": "Exempt (small-business scheme)"
+    },
+    "errors": {
+      "unknown": "Could not save the accounting profile.",
+      "unavailable": "The accounting profile could not be loaded.",
+      "country_immutable": "The accounting country is fixed when the band is created and cannot be changed here.",
+      "profile_incomplete": "Answer every field before confirming the profile.",
+      "vat_fields_require_registration": "Set Registered for VAT to yes before choosing a VAT basis or filing frequency.",
+      "vat_fields_required_when_registered": "A VAT-registered band needs a VAT basis and a filing frequency.",
+      "invalid_financial_year_start": "That day does not exist in the chosen month.",
+      "invalid_financial_year_start_month": "Choose a valid month.",
+      "invalid_financial_year_start_day": "Choose a valid day."
+    },
+    "defaultVatRate": "Default VAT rate",
+    "defaultVatRateHelper": "Pre-filled on new invoice lines. You can still change the rate per line.",
+    "exemptNotImplemented": "Recorded, but not yet applied: suppressing VAT on invoices under a small-business scheme is currently only implemented for the Netherlands. Your invoices will keep charging VAT."
   }
 }

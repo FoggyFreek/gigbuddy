@@ -2,6 +2,10 @@
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
 import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../utils/urls.js'
 import {
+  normalizeOptionalRegistrationNumber,
+  normalizeOptionalVatId,
+} from '../utils/businessIdentifiers.js'
+import {
   VALID_VENUE_CATEGORIES,
   VENUE_EDITABLE_FIELDS,
   buildVenueInsertValues,
@@ -19,6 +23,8 @@ export const buildInsertValues = buildVenueInsertValues
 
 function normalizePatchField(key, value) {
   if (key === 'country') return value || null
+  if (key === 'kvk_number') return normalizeOptionalRegistrationNumber(value)
+  if (key === 'tax_id') return normalizeOptionalVatId(value)
   if (key === 'website') {
     return normalizeOptionalUrl(value, { allowedProtocols: WEB_URL_PROTOCOLS })
   }

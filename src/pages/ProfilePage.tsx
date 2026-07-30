@@ -23,7 +23,6 @@ import { EMPTY_FORM, profileToForm, ProfileForm } from '../components/profile/pr
 import ProfileIdentityCard from '../components/profile/ProfileIdentityCard.tsx'
 import ProfileSocialsTab from '../components/profile/ProfileSocialsTab.tsx'
 import ProfileLinksTab from '../components/profile/ProfileLinksTab.tsx'
-import ProfileFinancialsTab from '../components/profile/ProfileFinancialsTab.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import LinkpageEditButton from '../components/profile/LinkpageEditButton.tsx'
 import type { Id } from '../types/entities.ts'
@@ -51,10 +50,9 @@ export default function ProfilePage() {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [editingIdentity, setEditingIdentity] = useState(false)
   const [editingSocials, setEditingSocials] = useState(false)
-  const [editingFinancials, setEditingFinancials] = useState(false)
   const [activeTab, setActiveTab] = useState('socials')
   const [snackbar, setSnackbar] = useState<string | null>(null)
-  const { setBandName, setVatSettings } = useProfile()
+  const { setBandName } = useProfile()
 
   const logo = useImageUpload({
     compress: compressLogo,
@@ -115,8 +113,6 @@ export default function ProfilePage() {
     if (!canWritePlanning) return
     setForm((prev) => ({ ...prev, [field]: value }))
     if (field === 'band_name') setBandName(String(value))
-    if (field === 'vat_country') setVatSettings(String(value), Number(form.tax_percentage))
-    if (field === 'tax_percentage') setVatSettings(form.vat_country, Number(value))
     schedule({ [field]: value } as Partial<ProfileForm>)
   }
 
@@ -205,7 +201,6 @@ export default function ProfilePage() {
             >
               <Tab value="socials" label={t($ => $.tabs.socials)} />
               <Tab value="links" label={t($ => $.tabs.links)} />
-              <Tab value="financials" label={t($ => $.tabs.financials)} />
             </Tabs>
 
             {activeTab === 'socials' && (
@@ -233,17 +228,6 @@ export default function ProfilePage() {
               />
             )}
 
-            {activeTab === 'financials' && (
-              <ProfileFinancialsTab
-                form={form}
-                isAdmin={isAdmin}
-                editing={editingFinancials}
-                onToggleEditing={() => setEditingFinancials((v) => !v)}
-                onChange={handleChange}
-                onFormChange={setForm}
-                schedule={schedule}
-              />
-            )}
           </Paper>
         </Grid>
       </Grid>

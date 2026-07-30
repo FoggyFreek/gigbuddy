@@ -2,8 +2,7 @@
   "title": "Profile",
   "tabs": {
     "socials": "Socials",
-    "links": "Links",
-    "financials": "Financials"
+    "links": "Links"
   },
   "linkpage": {
     "edit": "Edit link page",
@@ -49,8 +48,6 @@
     "add": "Add link"
   },
   "financials": {
-    "editAria": "Edit financial details",
-    "doneAria": "Done editing financial details",
     "formalName": "Formal name (KvK)",
     "formalNamePlaceholder": "As registered at the Chamber of Commerce",
     "registrationNumber": "Company registration number",
@@ -59,13 +56,6 @@
     "legalForm": "Legal form",
     "legalFormUnset": "Not specified",
     "legalFormHelper": "A company must list its directors on invoices",
-    "legalForms": {
-      "sole_trader": "Sole trader / self-employed",
-      "partnership": "Partnership",
-      "company": "Company (BV, GmbH, Ltd, …)",
-      "association": "Association / foundation",
-      "other": "Other"
-    },
     "directors": "Managing director(s)",
     "directorsHelper": "Shown on invoices (e.g. required for a German GmbH)",
     "street": "Street + number",
@@ -75,16 +65,10 @@
     "email": "Business email",
     "phone": "Business phone",
     "contactHelper": "Printed on invoices as your public contact details.",
-    "address": "Address",
     "iban": "IBAN",
     "ibanHelper": "e.g. NL91 ABNA 0417 1643 00",
     "taxId": "Tax ID (BTW)",
-    "taxIdHelper": "Format: {{example}}",
-    "vatCountry": "VAT country",
-    "vatCountryHelper": "Determines the available VAT rates",
-    "vatCountryIdentifierConflict": "Update or clear this before changing the VAT country",
-    "taxPercent": "Default VAT %",
-    "taxPercentHelper": "Prefilled on new invoice, purchase and sale lines"
+    "taxIdHelper": "Format: {{example}}"
   },
   "members": {
     "title": "Band members",

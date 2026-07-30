@@ -2,8 +2,9 @@
   "title": "Financiële setup",
   "steps": {
     "welcome": "Welkom",
+    "accountingProfile": "Boekhoudprofiel",
     "openingBalance": "Beginsaldo",
-    "profile": "Financieel profiel",
+    "financialProfile": "Financieel profiel",
     "integrations": "Integraties",
     "accounts": "Standaardrekeningen",
     "done": "Klaar"
@@ -25,10 +26,6 @@
     "date": "Per datum",
     "negativeHint": "Gebruik een negatief bedrag als de rekening rood stond.",
     "alreadySet": "Er is al een beginsaldo ingesteld voor deze band."
-  },
-  "profile": {
-    "heading": "Financieel profiel",
-    "body": "Gebruikt op je facturen en belastingaangiften. Je kunt dit later op je profielpagina bewerken."
   },
   "integrations": {
     "heading": "Mollie en Shopify koppelen",
