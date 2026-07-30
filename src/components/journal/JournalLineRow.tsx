@@ -11,7 +11,6 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import AccountAutocomplete from './AccountAutocomplete.tsx'
 import AmountCell from './AmountCell.tsx'
 import JournalLinePopper from './JournalLinePopper.tsx'
-import { useProfile } from '../../contexts/profileContext.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
 
@@ -52,9 +51,7 @@ export default function JournalLineRow({
   patchLine, addLine, removeLine, duplicateLine,
 }: Readonly<JournalLineRowProps>) {
   const { t } = useTranslation(['journal', 'common'])
-  const { vatCountry } = useProfile()
-  const { profile: accountingProfile } = useAccountingProfile()
-  const accountingCountry = accountingProfile?.country_code ?? vatCountry
+  const { accountingCountry } = useAccountingProfile()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
 
   const commitDebit = (cents: number) => {

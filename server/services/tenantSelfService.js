@@ -9,7 +9,6 @@ import { randomBytes } from 'node:crypto'
 import { validSlug, slugFromBandName, parseTenantCountryCode } from '../validators/tenantValidators.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
 import { createAccountingProfileForTenant } from './accountingProfileService.js'
-import { defaultBaseCurrency } from '../../shared/accountingProfileCodes.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   insertTenant,
@@ -34,9 +33,9 @@ const SLUG_SUFFIX_ATTEMPTS = 25
 // Inserts with a server-generated slug: base, base-2, base-3, … each via
 // ON CONFLICT DO NOTHING so a taken slug never raises 23505 (which would
 // abort the surrounding transaction). Returns the inserted tenant row.
-async function insertWithGeneratedSlug(client, bandName, userId, vatCountry) {
+async function insertWithGeneratedSlug(client, bandName, userId) {
   const base = slugFromBandName(bandName)
-  const attrs = { bandName, createdByUserId: userId, ownerUserId: userId, vatCountry }
+  const attrs = { bandName, createdByUserId: userId, ownerUserId: userId }
   for (let n = 1; n <= SLUG_SUFFIX_ATTEMPTS; n++) {
     const candidate = n === 1 ? base : `${base}-${n}`
     const tenant = await insertTenantIfSlugFree(client, { ...attrs, slug: candidate })
@@ -80,15 +79,15 @@ export async function createOwnedTenant(db, userId, body) {
 
     const tenant = hasSlug
       ? await insertTenant(client, {
-        slug, bandName: band_name, createdByUserId: userId, ownerUserId: userId, vatCountry: country.countryCode,
+        slug, bandName: band_name, createdByUserId: userId, ownerUserId: userId,
       })
-      : await insertWithGeneratedSlug(client, band_name, userId, country.countryCode)
+      : await insertWithGeneratedSlug(client, band_name, userId)
     if (!tenant) {
       // Even the random-suffix fallback collided — effectively impossible.
       abortTransaction({ error: { status: 409, body: { error: 'Slug already in use' } } })
     }
     await ensureTenantStatistics(client, tenant.id)
-    await seedTenantAccounting(client, tenant.id, defaultBaseCurrency(country.countryCode))
+    await seedTenantAccounting(client, tenant.id)
     // Same transaction as the tenant insert: a band must never exist without the
     // accounting profile that states its jurisdiction.
     await createAccountingProfileForTenant(client, tenant.id, country.countryCode)

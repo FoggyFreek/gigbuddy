@@ -103,7 +103,7 @@ function SocialEditField({ social, handle, copied, onChange, onCopy }: Readonly<
         },
       }}
       helperText={(
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+        <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
           <span>{social.prefix + (handle || '…')}</span>
           {handle && <CopyButton copied={copied} label={social.label} onCopy={onCopy} small />}
         </Box>

@@ -75,8 +75,10 @@
     "emptyEditing": "Nog geen leden.",
     "emptyHint": "Nog geen leden. Klik op Bewerken om er een toe te voegen.",
     "name": "Naam",
-    "role": "Rol",
-    "rolePlaceholder": "Gitaar, Zang…",
+    "roles": "Rollen",
+    "rolesOrderHelp": "De geselecteerde rollen worden in deze volgorde getoond.",
+    "moveRoleUp": "{{role}} omhoog verplaatsen",
+    "moveRoleDown": "{{role}} omlaag verplaatsen",
     "position": "Positie",
     "positions": {
       "lead": "Vast",
@@ -84,9 +86,13 @@
       "sub": "Invaller"
     },
     "add": "Lid toevoegen",
+    "addAction": "Toevoegen",
+    "addDialogTitle": "Bandlid toevoegen",
+    "editDialogTitle": "Bandlid bewerken",
     "edit": "Lid bewerken",
     "delete": "Lid verwijderen",
-    "doneEditing": "Klaar met bewerken",
+    "saveError": "Bandlid opslaan is mislukt",
+    "color": "Kleur",
     "colorAria": "kleur {{color}}",
     "gigbuddyUser": "gigBuddy-gebruiker",
     "inviteCta": "Uitnodigen voor gigBuddy"

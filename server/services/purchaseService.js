@@ -4,7 +4,10 @@
 // to status codes without knowing the rules:
 //   { error: { status, body } }   — caller should respond with that status/body
 //   anything else                 — success payload (see each function)
-import { computePurchaseTotals, computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
+import {
+  computePurchaseLineAccountingAmounts,
+  computePurchaseTotals,
+} from '../../shared/purchaseTotals.js'
 import {
   fetchPurchase,
   fetchPurchaseLines,
@@ -35,7 +38,6 @@ import {
   updatePurchase,
 } from '../repositories/purchaseRepository.js'
 import { markLineResult } from '../repositories/bankImportRepository.js'
-import { fetchTenantVatCountry } from '../repositories/tenantRepository.js'
 import { getTransactionBySource } from '../repositories/ledgerRepository.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import { loadAccountingBehavior } from './accountingProfileService.js'
@@ -168,19 +170,20 @@ async function validateLineProducts(executor, tenantId, lines) {
 }
 
 // Adds each product line's quantity to stock and re-averages the product's
-// unit cost (moving average: existing stock value + this purchase's net,
+// unit cost (moving average: existing stock value + this purchase's book cost,
 // divided by the new quantity). Runs in the same transaction as the accrual
 // journal so stock, cost and ledger can never diverge; the row lock serializes
 // against concurrent sales of the same product.
-async function applyPurchaseStockIn(client, tenantId, lines) {
+async function applyPurchaseStockIn(client, tenantId, purchase, lines) {
+  const inputVatRecoverable = purchase.input_vat_recoverable_snapshot !== false
   for (const line of lines) {
     if (!line.product_id) continue
-    const { netCents } = computePurchaseLineTotals(line)
+    const { costCents } = computePurchaseLineAccountingAmounts(line, inputVatRecoverable)
     const product = await lockProductStock(client, tenantId, line.product_id)
     if (!product) continue // validated up front; the composite FK is the backstop
     const newQty = product.quantity_on_hand + line.quantity
     const newCost = Math.round(
-      (product.quantity_on_hand * product.unit_cost_cents + netCents) / newQty,
+      (product.quantity_on_hand * product.unit_cost_cents + costCents) / newQty,
     )
     await setProductStock(client, tenantId, line.product_id, newQty, newCost)
   }
@@ -333,12 +336,9 @@ export async function createPurchase(
 
     // Approving a bill accrues the expense + payable. Draft bills post nothing.
     if (status === 'approved') {
-      const purchaseRow = buildAccruedPurchaseRow({
-        purchaseId, receiptNumber, supplierName, supplierContactId,
-        receiptDate, totals,
-      })
+      const purchaseRow = await fetchPurchase(client, tenantId, purchaseId)
       await postBillAccrued(client, tenantId, purchaseRow, lines, { actorUserId })
-      await applyPurchaseStockIn(client, tenantId, lines)
+      await applyPurchaseStockIn(client, tenantId, purchaseRow, lines)
     }
 
     return { purchaseId }
@@ -388,18 +388,6 @@ function buildCreatePurchaseData({
   }
 }
 
-function buildAccruedPurchaseRow({ purchaseId, receiptNumber, supplierName, supplierContactId, receiptDate, totals }) {
-  return {
-    id: purchaseId,
-    receipt_number: receiptNumber,
-    supplier_name: supplierName,
-    supplier_contact_id: supplierContactId,
-    receipt_date: receiptDate,
-    tax_cents: totals.taxCents,
-    total_cents: totals.totalCents,
-  }
-}
-
 // ---------- patch ----------
 
 function buildSimpleSet(body, supplierContactIdOverride) {
@@ -422,7 +410,7 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
   const existing = await fetchPurchase(pool, tenantId, id)
   if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
 
-  const vatCountry = await fetchTenantVatCountry(pool, tenantId)
+  const { accountingCountry: vatCountry } = await loadAccountingBehavior(pool, tenantId)
   const preflightErr = await runPatchPreflightValidations(pool, tenantId, id, existing, body, vatCountry)
   if (preflightErr) return preflightErr
 
@@ -453,6 +441,9 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
     }
 
     const approving = body.status === 'approved' && existing.status !== 'approved'
+    const purchaseForTreatment = approving
+      ? { ...existing, receipt_date: fields.receipt_date ?? existing.receipt_date }
+      : null
     await updatePurchase(client, tenantId, id, {
       fields,
       totals,
@@ -462,7 +453,7 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
       approvedByUserId: actorUserId,
       // Frozen in the same statement as finalized_at, before postBillAccrued.
       snapshot: approving
-        ? purchaseSnapshotColumns(await resolvePurchaseVatTreatment(client, tenantId, existing))
+        ? purchaseSnapshotColumns(await resolvePurchaseVatTreatment(client, tenantId, purchaseForTreatment))
         : null,
     })
 
@@ -471,7 +462,7 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
       const purchaseRow = await fetchPurchase(client, tenantId, id)
       const currentLines = await fetchPurchaseLines(client, id, tenantId)
       await postBillAccrued(client, tenantId, purchaseRow, currentLines, { actorUserId })
-      await applyPurchaseStockIn(client, tenantId, currentLines)
+      await applyPurchaseStockIn(client, tenantId, purchaseRow, currentLines)
     }
 
     return {}

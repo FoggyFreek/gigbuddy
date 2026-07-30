@@ -355,14 +355,13 @@ function invoiceLines(lines, totals, categoryByRate, zeroVat, currency) {
 // Seller IDENTITY (name, address, VAT id, KvK) is still read live from the
 // tenant — not snapshotted yet, so this is regime-immutable, not
 // identity-immutable.
-export function renderInvoiceUbl({ invoice, lines, tenant, embeddedPdf, treatment = null }) {
-  const schemeExempt = Boolean(treatment?.schemeExempt)
+export function renderInvoiceUbl({ invoice, lines, tenant, embeddedPdf, treatment }) {
+  if (!treatment) throw new Error('renderInvoiceUbl requires a resolved VAT treatment')
+  const schemeExempt = Boolean(treatment.schemeExempt)
   const reverseCharge = Boolean(invoice.reverse_charge)
   const zeroVat = schemeExempt || reverseCharge
   const currency = invoice.currency || DEFAULT_CURRENCY
-  // Falls back to the live country only when no treatment could be resolved at
-  // all (a tenant without an accounting profile), so the document still renders.
-  const sellerVatCountry = treatment?.accounting_country ?? tenant.vat_country
+  const sellerVatCountry = treatment.accounting_country
 
   const { totals, categories } = computeVatBreakdown({
     lines,

@@ -16,7 +16,7 @@ import { computePurchaseTotals } from '../../utils/purchaseTotals.ts'
 import { compressReceipt } from '../../utils/compressImage.ts'
 import type { Purchase, PurchaseAttachment, PurchasePaymentCandidate, PurchasePaymentMethod, PurchaseStatus, Account, AccountingSettings, Member, Product, Id } from '../../types/entities.ts'
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.ts'
-import { useProfile } from '../../contexts/profileContext.ts'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import type { PurchaseForm, PurchaseFormLine } from './purchaseFormHelpers.ts'
 
 function todayIso(): string {
@@ -87,7 +87,7 @@ export interface UsePurchaseFormStateResult {
 // edited here, so this hook only deals with an existing purchase.
 export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: UsePurchaseFormStateArgs): UsePurchaseFormStateResult {
   const { t } = useTranslation('purchases')
-  const { defaultVatRate } = useProfile()
+  const { defaultVatRate } = useAccountingProfile()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)

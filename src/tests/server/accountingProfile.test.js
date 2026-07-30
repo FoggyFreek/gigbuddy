@@ -79,24 +79,17 @@ describe('accounting profile — read', () => {
   })
 
   it('records GBP as the base currency for a UK tenant', async () => {
-    await pool.query(
-      `UPDATE tenants SET vat_country = 'gb' WHERE id = $1`, [seed.tenantA.id],
-    )
-    await pool.query('DELETE FROM tenant_accounting_profiles WHERE tenant_id = $1', [seed.tenantA.id])
+    await asUserA(request(app).post('/api/accounting-profile/change-country'))
+      .send({ country_code: 'gb', tax_id: null, kvk_number: null }).expect(200)
 
     const res = await getProfile().expect(200)
     expect(res.body.country_code).toBe('gb')
     expect(res.body.base_currency).toBe('GBP')
   })
 
-  it('patches a known default VAT rate and dual-writes the legacy projection', async () => {
+  it('patches a known default VAT rate', async () => {
     const res = await patchProfile({ default_vat_rate: 21 }).expect(200)
     expect(Number(res.body.default_vat_rate)).toBe(21)
-    const { rows: [tenant] } = await pool.query(
-      'SELECT tax_percentage FROM tenants WHERE id = $1',
-      [seed.tenantA.id],
-    )
-    expect(Number(tenant.tax_percentage)).toBe(21)
     await patchProfile({ default_vat_rate: 18 }).expect(400)
   })
 })
@@ -132,24 +125,16 @@ describe('accounting profile — country change', () => {
     })
     expect(Number(res.body.default_vat_rate)).toBe(20)
 
-    const { rows: [projection] } = await pool.query(
-      `SELECT t.vat_country, t.tax_percentage, t.applies_kor, s.currency, p.vat_rate
-         FROM tenants t
-         JOIN tenant_accounting_settings s ON s.tenant_id = t.id
-         JOIN products p ON p.tenant_id = t.id
-        WHERE t.id = $1`,
-      [seed.tenantA.id],
-    )
     // base_currency is GBP (truthful, above) but the BOOKS stay euro: the ledger
     // has no currency column and no FX, so a jurisdiction multi-currency has not
     // reached yet must not start stamping documents in another unit.
-    expect(projection).toMatchObject({
-      vat_country: 'gb',
-      applies_kor: false,
-      currency: 'EUR',
-    })
-    expect(Number(projection.tax_percentage)).toBe(20)
-    expect(Number(projection.vat_rate)).toBe(20)
+    const settings = await asUserA(request(app).get('/api/accounts/settings')).expect(200)
+    expect(settings.body.currency).toBe('EUR')
+
+    const { rows: [product] } = await pool.query(
+      'SELECT vat_rate FROM products WHERE tenant_id = $1', [seed.tenantA.id],
+    )
+    expect(Number(product.vat_rate)).toBe(20)
   })
 
   it('blocks drafts and does not inspect another tenant', async () => {
@@ -169,29 +154,32 @@ describe('accounting profile — country change', () => {
   })
 })
 
-// The deployment window this closes: migrations run while the previous app
-// container is still serving, so that container can create a tenant after the
-// backfill and before the new code takes over.
-describe('accounting profile — temporary repair of a missing row', () => {
-  it('repairs a missing profile on read, deriving the country from the tenant', async () => {
+// Nothing derives a profile any more. A tenant without one is a fault an
+// operator repairs with backfillAccountingProfiles.js, not something the app
+// guesses its way past.
+describe('accounting profile — a missing row is a fault', () => {
+  it('reports 409 accounting_profile_missing instead of inventing a row', async () => {
     await pool.query('DELETE FROM tenant_accounting_profiles WHERE tenant_id = $1', [seed.tenantA.id])
 
-    const res = await getProfile().expect(200)
-    expect(res.body.profile_source).toBe('repair')
-    expect(res.body.country_code).toBe('nl')
-    expect(res.body.profile_status).toBe('incomplete')
-  })
-
-  it('two concurrent reads repair exactly one row', async () => {
-    await pool.query('DELETE FROM tenant_accounting_profiles WHERE tenant_id = $1', [seed.tenantA.id])
-
-    await Promise.all([getProfile().expect(200), getProfile().expect(200)])
+    const res = await getProfile().expect(409)
+    expect(res.body.code).toBe('accounting_profile_missing')
 
     const { rows: [{ count }] } = await pool.query(
       'SELECT COUNT(*)::int AS count FROM tenant_accounting_profiles WHERE tenant_id = $1',
       [seed.tenantA.id],
     )
-    expect(count).toBe(1)
+    expect(count).toBe(0)
+  })
+
+  // The regime drives money, so the fault must surface everywhere it is read,
+  // not just on the settings screen.
+  it('surfaces on the finance surfaces that read the regime', async () => {
+    await pool.query('DELETE FROM tenant_accounting_profiles WHERE tenant_id = $1', [seed.tenantA.id])
+
+    for (const path of ['/api/ledger/overview', '/api/accounts/settings']) {
+      const res = await asUserA(request(app).get(path)).expect(409)
+      expect(res.body.code).toBe('accounting_profile_missing')
+    }
   })
 })
 
@@ -254,12 +242,13 @@ describe('accounting profile — write', () => {
     expect(res.body.error).toBe('invalid_local_legal_form_code')
   })
 
-  it('mirrors the derived legal_form onto the legacy tenants column', async () => {
-    await patchProfile({ local_legal_form_code: 'nl_vereniging' }).expect(200)
+  it('does not write the regime back onto the tenants row', async () => {
+    await patchProfile({ local_legal_form_code: 'nl_vereniging', default_vat_rate: 9 }).expect(200)
     const { rows: [tenant] } = await pool.query(
-      'SELECT legal_form FROM tenants WHERE id = $1', [seed.tenantA.id],
+      'SELECT legal_form, tax_percentage FROM tenants WHERE id = $1', [seed.tenantA.id],
     )
-    expect(tenant.legal_form).toBe('association')
+    expect(tenant.legal_form).toBeNull()
+    expect(Number(tenant.tax_percentage)).toBe(9)
   })
 })
 
@@ -281,10 +270,6 @@ describe('accounting profile — immutable country', () => {
   it('PATCH /api/profile can no longer change the VAT country', async () => {
     await asUserA(request(app).patch('/api/profile')).send({ vat_country: 'de' }).expect(400)
 
-    const { rows: [tenant] } = await pool.query(
-      'SELECT vat_country FROM tenants WHERE id = $1', [seed.tenantA.id],
-    )
-    expect(tenant.vat_country).toBe('nl')
     const profile = await getProfile().expect(200)
     expect(profile.body.country_code).toBe('nl')
   })
@@ -300,11 +285,8 @@ describe('accounting profile — immutable country', () => {
   // Two country-dependent derivations, so a German band must land on the German
   // framework rather than the Dutch one.
   it('derives the framework from the profile country, not a default', async () => {
-    await pool.query(
-      `UPDATE tenants SET vat_country = 'de' WHERE id = $1`, [seed.tenantA.id],
-    )
-    await pool.query('DELETE FROM tenant_accounting_profiles WHERE tenant_id = $1', [seed.tenantA.id])
-    await getProfile().expect(200)
+    await asUserA(request(app).post('/api/accounting-profile/change-country'))
+      .send({ country_code: 'de', tax_id: null, kvk_number: null }).expect(200)
 
     const incorporated = await patchProfile({ local_legal_form_code: 'de_gmbh' }).expect(200)
     expect(incorporated.body.reporting_framework_code).toBe('de_hgb_micro')
@@ -352,11 +334,6 @@ describe('accounting profile — VAT dependency rules', () => {
     await patchProfile({ vat_registered: true }).expect(200)
     const res = await patchProfile({ vat_filing_frequency: 'exempt' }).expect(409)
     expect(res.body.code).toBe('filing_frequency_derived_from_scheme')
-
-    const { rows: [tenant] } = await pool.query(
-      'SELECT applies_kor FROM tenants WHERE id = $1', [seed.tenantA.id],
-    )
-    expect(tenant.applies_kor).toBe(false)
   })
 
   it('refuses an exempt filing period before registration is confirmed too', async () => {

@@ -57,24 +57,19 @@ const DEFAULT_CODES = {
 
 export async function getSettings(db, tenantId) {
   const profile = await loadAccountingProfile(db, tenantId)
-  if (!profile) return NOT_FOUND
-  // Behavioral column: follows the currency the books are kept in, not the
-  // factual base currency.
+  // Derived, not stored: the books' currency follows the profile.
   const currency = bookkeepingCurrency(profile.base_currency)
   const existing = await getSettingsRow(db, tenantId)
-  if (existing) {
-    if (existing.currency === currency) return { settings: existing }
-    const repaired = await updateSettings(db, tenantId, { currency })
-    return { settings: repaired }
-  }
+  if (existing) return { settings: { ...existing, currency } }
 
   // Backstop: settings row missing — insert with smart defaults.
   const existingCodes = new Set(await listChartCodes(db, tenantId))
-  const defaults = { currency }
+  const defaults = {}
   for (const [field, code] of Object.entries(DEFAULT_CODES)) {
     defaults[field] = existingCodes.has(code) ? code : null
   }
-  return { settings: await insertSettingsDefaults(db, tenantId, defaults) }
+  const inserted = await insertSettingsDefaults(db, tenantId, defaults)
+  return { settings: { ...inserted, currency } }
 }
 
 // Validates a single settings account-code field, returning { error } on a bad
@@ -146,7 +141,6 @@ export async function patchSettings(tenantId, body = {}) {
     // carries an open balance.
     await acquireAccountingSettingsLock(client, tenantId)
     const profile = await loadAccountingProfile(client, tenantId)
-    if (!profile) abortTransaction(NOT_FOUND)
     const current = (await getSettingsRow(client, tenantId)) || {}
 
     const conflict = await findOpenBalanceConflict(client, tenantId, updates, current)
@@ -163,11 +157,11 @@ export async function patchSettings(tenantId, body = {}) {
       })
     }
 
+    const currency = bookkeepingCurrency(profile.base_currency)
     const updated = await updateSettings(client, tenantId, updates)
     if (!updated) {
       // Row didn't exist — insert it with the updates applied as defaults
       const full = {
-        currency: bookkeepingCurrency(profile.base_currency),
         receivable_account_code: null,
         default_revenue_account_code: null,
         payable_account_code: null,
@@ -186,9 +180,9 @@ export async function patchSettings(tenantId, body = {}) {
         ...updates,
       }
       const inserted = await insertSettings(client, tenantId, full)
-      return { settings: inserted }
+      return { settings: { ...inserted, currency } }
     }
-    return { settings: updated }
+    return { settings: { ...updated, currency } }
   })
 }
 

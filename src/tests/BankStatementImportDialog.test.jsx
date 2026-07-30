@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import BankStatementImportDialog from '../components/ledger/BankStatementImportDialog.tsx'
 import { parseBankStatement, commitBankImport, cancelBankImport, setOpeningBalanceFromImport } from '../api/bankImport.ts'
 import { listAccounts, getAccountingSettings } from '../api/accounts.ts'
-import { getProfile } from '../api/profile.ts'
 import { getAccountingProfile } from '../api/accountingProfile.ts'
 import theme from '../theme.ts'
 
@@ -24,9 +23,6 @@ vi.mock('../api/accounts.ts', () => ({
 
 vi.mock('../api/accountingProfile.ts', () => ({
   getAccountingProfile: vi.fn(),
-}))
-vi.mock('../api/profile.ts', () => ({
-  getProfile: vi.fn(),
 }))
 
 function wrap(ui) {
@@ -51,9 +47,10 @@ const emptySuggestion = {
 // The dialog reads the scheme in force TODAY off the accounting profile — the
 // server resolves it date-aware from the enrolment, so the dialog never has to
 // look at a projection that a scheduled enrolment leaves stale.
-function accountingProfile(country, schemeExempt) {
+function accountingProfile(country, schemeExempt, defaultVatRate = 9) {
   return {
     country_code: country,
+    default_vat_rate: defaultVatRate,
     current_sales_treatment: {
       accounting_country: country,
       vat_scheme_code: schemeExempt ? 'nl_kor' : null,
@@ -98,7 +95,6 @@ beforeEach(() => {
     primary_checking_account_code: '11000',
   })
   // NL band, 9% on its own turnover, not on the small-business scheme.
-  getProfile.mockResolvedValue({ vat_country: 'nl', tax_percentage: 9 })
   getAccountingProfile.mockResolvedValue(accountingProfile('nl', false))
 })
 
@@ -441,7 +437,7 @@ describe('BankStatementImportDialog', () => {
         results: [{ line_id: 1, status: 'skipped' }, { line_id: 2, status: 'imported' }],
       })
       wrap(<BankStatementImportDialog onClose={() => {}} />)
-      await waitFor(() => expect(getProfile).toHaveBeenCalled())
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
       await uploadFile()
 
       expect(await screen.findByText(/Bill #7001 was already paid on/)).toBeInTheDocument()
@@ -463,7 +459,7 @@ describe('BankStatementImportDialog', () => {
         results: [{ line_id: 1, status: 'imported' }, { line_id: 2, status: 'imported' }],
       })
       wrap(<BankStatementImportDialog onClose={() => {}} />)
-      await waitFor(() => expect(getProfile).toHaveBeenCalled())
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
       await uploadFile()
 
       // The skip default must not disable the toggle: pressing Expense hands
@@ -484,7 +480,7 @@ describe('BankStatementImportDialog', () => {
     it('defaults outgoing lines to the standard rate and incoming to the band rate', async () => {
       parseBankStatement.mockResolvedValue(PARSE_RESULT)
       wrap(<BankStatementImportDialog onClose={() => {}} />)
-      await waitFor(() => expect(getProfile).toHaveBeenCalled())
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
       await uploadFile()
 
       const vatSelects = await screen.findAllByRole('combobox', { name: 'VAT' })
@@ -504,7 +500,7 @@ describe('BankStatementImportDialog', () => {
         results: [{ line_id: 1, status: 'imported' }, { line_id: 2, status: 'imported' }],
       })
       wrap(<BankStatementImportDialog onClose={() => {}} />)
-      await waitFor(() => expect(getProfile).toHaveBeenCalled())
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
       await uploadFile()
 
       const user = userEvent.setup()
@@ -521,11 +517,10 @@ describe('BankStatementImportDialog', () => {
 
     it('offers every rate of the tenant VAT country, not a fixed pair', async () => {
       // A Belgian band: 21 / 12 / 6, and 0 is folded into "No VAT".
-      getProfile.mockResolvedValue({ vat_country: 'be', tax_percentage: 6 })
-      getAccountingProfile.mockResolvedValue(accountingProfile('be', false))
+      getAccountingProfile.mockResolvedValue(accountingProfile('be', false, 6))
       parseBankStatement.mockResolvedValue(PARSE_RESULT)
       wrap(<BankStatementImportDialog onClose={() => {}} />)
-      await waitFor(() => expect(getProfile).toHaveBeenCalled())
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
       await uploadFile()
 
       const user = userEvent.setup()
@@ -535,7 +530,6 @@ describe('BankStatementImportDialog', () => {
     })
 
     it('offers no VAT control at all for a band on the KOR', async () => {
-      getProfile.mockResolvedValue({ vat_country: 'nl', tax_percentage: 9 })
       getAccountingProfile.mockResolvedValue(accountingProfile('nl', true))
       parseBankStatement.mockResolvedValue(PARSE_RESULT)
       commitBankImport.mockResolvedValue({
@@ -543,7 +537,7 @@ describe('BankStatementImportDialog', () => {
         results: [{ line_id: 1, status: 'imported' }, { line_id: 2, status: 'imported' }],
       })
       wrap(<BankStatementImportDialog onClose={() => {}} />)
-      await waitFor(() => expect(getProfile).toHaveBeenCalled())
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
       await uploadFile()
 
       expect(await screen.findByRole('combobox', { name: 'Expense account' })).toBeInTheDocument()
@@ -556,11 +550,10 @@ describe('BankStatementImportDialog', () => {
     })
 
     it('books no VAT when the profile cannot be read', async () => {
-      getProfile.mockRejectedValue(new Error('offline'))
       getAccountingProfile.mockRejectedValue(new Error('offline'))
       parseBankStatement.mockResolvedValue(PARSE_RESULT)
       wrap(<BankStatementImportDialog onClose={() => {}} />)
-      await waitFor(() => expect(getProfile).toHaveBeenCalled())
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
       await uploadFile()
 
       // Fails closed on VAT, but the account pickers still load.

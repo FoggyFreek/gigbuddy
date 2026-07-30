@@ -353,4 +353,19 @@ describe('purchase VAT snapshot', () => {
     expect(row.tax_cents).toBe(2100)
     expect(row.total_cents).toBe(12100)
   })
+
+  it('uses an edited receipt date when approval crosses into the KOR period', async () => {
+    await startScheme({ scheme_code: 'nl_kor', valid_from: '2025-06-01' }).expect(201)
+    const { body: draft } = await createPurchase({ receipt_date: '2025-05-31' }).expect(201)
+
+    await asUserA(request(app).patch(`/api/purchases/${draft.id}`))
+      .send({ receipt_date: '2025-06-01', status: 'approved' })
+      .expect(200)
+
+    expect(await purchaseSnapshot(draft.id)).toMatchObject({
+      vat_scheme_code_snapshot: 'nl_kor',
+      vat_treatment_snapshot: 'small_business_exempt',
+      input_vat_recoverable_snapshot: false,
+    })
+  })
 })

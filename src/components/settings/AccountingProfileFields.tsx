@@ -20,7 +20,6 @@ import {
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import type { AccountingProfile } from '../../types/entities.ts'
 import { VAT_COUNTRY_CODES } from '../../utils/vatRates.ts'
-import { useProfile } from '../../contexts/profileContext.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
 
@@ -97,7 +96,6 @@ function daysForMonth(month: number): number[] {
 export default function AccountingProfileFields() {
   const { t, i18n } = useTranslation('settings')
   const { profile, loading, applyProfile } = useAccountingProfile()
-  const { setVatSettings } = useProfile()
   const { refreshUser } = useAuth()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -143,7 +141,6 @@ export default function AccountingProfileFields() {
     try {
       const next = await changeAccountingCountry({ country_code: nextCountry })
       applyProfile(next)
-      setVatSettings(next.country_code, next.default_vat_rate)
       await refreshUser()
       setCountryDialogOpen(false)
     } catch (err) {

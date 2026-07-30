@@ -45,10 +45,9 @@ function clearStoredVatId() {
 }
 
 // The accounting country is chosen at band creation and is not patchable through
-// /api/profile, so tests that need another jurisdiction set the stored value
-// directly (both the tenants projection and the profile, so they stay in step).
+// /api/profile, so tests that need another jurisdiction set it on the profile,
+// which is where it lives.
 async function setStoredCountry(code) {
-  await pool.query('UPDATE tenants SET vat_country = $1 WHERE id = $2', [code, seed.tenantA.id])
   await pool.query(
     'UPDATE tenant_accounting_profiles SET country_code = $1 WHERE tenant_id = $2',
     [code, seed.tenantA.id],
@@ -71,7 +70,6 @@ describe('PATCH /api/profile — financial fields', () => {
         kvk_number: '12345678',
         iban: 'nl91 abna 0417 1643 00',
         tax_id: 'nl123456789b01',
-        tax_percentage: 21,
       }),
     ).expect(200)
 
@@ -79,13 +77,11 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body.kvk_number).toBe('12345678')
     expect(res.body.iban).toBe('NL91ABNA0417164300')
     expect(res.body.tax_id).toBe('NL123456789B01')
-    expect(Number(res.body.tax_percentage)).toBe(21)
 
     const reread = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).get('/api/profile'),
     ).expect(200)
     expect(reread.body.iban).toBe('NL91ABNA0417164300')
-    expect(Number(reread.body.tax_percentage)).toBe(21)
   })
 
   it('member cannot patch financial fields → 403', async () => {
@@ -238,15 +234,7 @@ describe('PATCH /api/profile — financial fields', () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).patch('/api/profile').send({ tax_id: 'de136695976' }),
     ).expect(200)
-    expect(res.body.vat_country).toBe('de')
     expect(res.body.tax_id).toBe('DE136695976')
-  })
-
-  it('rejects an out-of-range tax_percentage with 400 invalid_tax_percentage', async () => {
-    const res = await as(seed.superUser.id, seed.tenantA.id)(
-      request(app).patch('/api/profile').send({ tax_percentage: 150 }),
-    ).expect(400)
-    expect(res.body.error).toBe('invalid_tax_percentage')
   })
 
   it('no longer accepts vat_country — it belongs to the accounting profile', async () => {
@@ -255,17 +243,22 @@ describe('PATCH /api/profile — financial fields', () => {
       request(app).patch('/api/profile').send({ vat_country: 'de' }),
     ).expect(400)
 
-    const reread = await as(seed.superUser.id, seed.tenantA.id)(
-      request(app).get('/api/profile'),
+    const profile = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).get('/api/accounting-profile'),
     ).expect(200)
-    expect(reread.body.vat_country).toBe('nl')
+    expect(profile.body.country_code).toBe('nl')
   })
 
-  it('defaults vat_country to nl for a freshly seeded tenant', async () => {
+  // The regime is served by its own endpoint; the band profile no longer carries
+  // a copy that could go stale.
+  it('does not expose the accounting regime on the band profile', async () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
       request(app).get('/api/profile'),
     ).expect(200)
-    expect(res.body.vat_country).toBe('nl')
+    expect(res.body).not.toHaveProperty('vat_country')
+    expect(res.body).not.toHaveProperty('tax_percentage')
+    expect(res.body).not.toHaveProperty('applies_kor')
+    expect(res.body).not.toHaveProperty('legal_form')
   })
 
   it('DB constraint rejects an unsupported vat_country stored via raw SQL', async () => {
@@ -312,7 +305,6 @@ describe('PATCH /api/profile — financial fields', () => {
     const start = await admin(
       request(app).patch('/api/profile').send({ tax_id: 'nl123456789b01' }),
     ).expect(200)
-    expect(start.body.vat_country).toBe('nl')
     expect(start.body.tax_id).toBe('NL123456789B01')
 
     // 2. A German number is invalid while the tenant is Dutch.
@@ -321,7 +313,6 @@ describe('PATCH /api/profile — financial fields', () => {
     // 3. The country is not patchable here, so it cannot be talked into accepting it.
     await admin(request(app).patch('/api/profile').send({ vat_country: 'de' })).expect(400)
     const afterReject = await admin(request(app).get('/api/profile')).expect(200)
-    expect(afterReject.body.vat_country).toBe('nl')
     expect(afterReject.body.tax_id).toBe('NL123456789B01')
 
     // 4. Once the tenant really is German, German numbers validate and other
@@ -336,7 +327,6 @@ describe('PATCH /api/profile — financial fields', () => {
       request(app).patch('/api/profile').send({ formal_name: 'Die Tester GmbH' }),
     ).expect(200)
     expect(other.body.formal_name).toBe('Die Tester GmbH')
-    expect(other.body.vat_country).toBe('de')
     expect(other.body.tax_id).toBe('DE136695976')
   })
 
@@ -371,19 +361,19 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body.error).toBe('invalid_kvk_number')
   })
 
-  it('drops empty tax_percentage but updates other fields in the same patch', async () => {
-    // The column defaults to 9.00; an empty string should be a no-op for that
-    // column while a sibling non-financial field still updates.
+  it('drops the retired tax_percentage but updates other fields in the same patch', async () => {
+    // It moved to the accounting profile. A stale client still sending it has the
+    // field ignored rather than the whole patch rejected.
     const res = await as(seed.superUser.id, seed.tenantA.id)(
-      request(app).patch('/api/profile').send({ tax_percentage: '', bio: 'after' }),
+      request(app).patch('/api/profile').send({ tax_percentage: 21, bio: 'after' }),
     ).expect(200)
     expect(res.body.bio).toBe('after')
-    expect(Number(res.body.tax_percentage)).toBe(9)
+    expect(res.body).not.toHaveProperty('tax_percentage')
   })
 
-  it('PATCH containing only { tax_percentage: "" } drops the only field and 400s', async () => {
+  it('PATCH containing only { tax_percentage } drops the only field and 400s', async () => {
     const res = await as(seed.superUser.id, seed.tenantA.id)(
-      request(app).patch('/api/profile').send({ tax_percentage: '' }),
+      request(app).patch('/api/profile').send({ tax_percentage: 21 }),
     ).expect(400)
     expect(res.body.error).toBe('No valid fields to update')
   })

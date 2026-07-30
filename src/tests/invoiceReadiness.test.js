@@ -29,6 +29,13 @@ const INVOICE = {
 }
 const LINES = [{ description: 'Optreden', quantity: 1 }]
 
+// Country and legal form live on the accounting profile, so the caller passes
+// them in; these cases state them on the tenant fixture for readability.
+const ready = (invoice, lines, tenant) => checkInvoiceReadyForIssue(invoice, lines, tenant, {
+  accountingCountry: tenant.vat_country ?? 'nl',
+  legalForm: tenant.legal_form ?? null,
+})
+
 const reverseChargeInvoice = (extra = {}) => ({
   ...INVOICE,
   tax_cents: 0,
@@ -40,7 +47,7 @@ const reverseChargeInvoice = (extra = {}) => ({
 
 describe('invoiceReadiness — art. 226 mandatory content', () => {
   it('passes a complete invoice', () => {
-    expect(checkInvoiceReadyForIssue(INVOICE, LINES, TENANT)).toBeNull()
+    expect(ready(INVOICE, LINES, TENANT)).toBeNull()
   })
 
   it.each([
@@ -48,7 +55,7 @@ describe('invoiceReadiness — art. 226 mandatory content', () => {
     ['supplier city', { address_city: '' }, 'incomplete_supplier_details'],
     ['supplier VAT id (VAT charged)', { tax_id: null }, 'missing_supplier_vat_id'],
   ])('rejects a missing %s', (_label, tenantPatch, code) => {
-    expect(checkInvoiceReadyForIssue(INVOICE, LINES, { ...TENANT, ...tenantPatch })).toBe(code)
+    expect(ready(INVOICE, LINES, { ...TENANT, ...tenantPatch })).toBe(code)
   })
 
   it.each([
@@ -56,47 +63,47 @@ describe('invoiceReadiness — art. 226 mandatory content', () => {
     ['customer street', { customer_address_street: '' }, 'incomplete_customer_details'],
     ['issue date', { issue_date: null }, 'missing_issue_date'],
   ])('rejects a missing %s', (_label, invoicePatch, code) => {
-    expect(checkInvoiceReadyForIssue({ ...INVOICE, ...invoicePatch }, LINES, TENANT)).toBe(code)
+    expect(ready({ ...INVOICE, ...invoicePatch }, LINES, TENANT)).toBe(code)
   })
 
   it('requires at least one usable line', () => {
-    expect(checkInvoiceReadyForIssue(INVOICE, [], TENANT)).toBe('invalid_lines')
-    expect(checkInvoiceReadyForIssue(INVOICE, [{ description: 'x', quantity: 0 }], TENANT)).toBe('invalid_lines')
-    expect(checkInvoiceReadyForIssue(INVOICE, [{ description: '', quantity: 1 }], TENANT)).toBe('invalid_lines')
+    expect(ready(INVOICE, [], TENANT)).toBe('invalid_lines')
+    expect(ready(INVOICE, [{ description: 'x', quantity: 0 }], TENANT)).toBe('invalid_lines')
+    expect(ready(INVOICE, [{ description: '', quantity: 1 }], TENANT)).toBe('invalid_lines')
   })
 
   it('requires registration disclosure only from an incorporated band', () => {
     const company = { ...TENANT, legal_form: 'company' }
-    expect(checkInvoiceReadyForIssue(INVOICE, LINES, company)).toBe('missing_registration_info')
-    expect(checkInvoiceReadyForIssue(INVOICE, LINES, { ...company, kvk_number: '12345678' })).toBeNull()
+    expect(ready(INVOICE, LINES, company)).toBe('missing_registration_info')
+    expect(ready(INVOICE, LINES, { ...company, kvk_number: '12345678' })).toBeNull()
     // A German company must also name its register court.
     const deCompany = { ...company, vat_country: 'de', tax_id: 'DE136695976', kvk_number: 'HRB 12345' }
-    expect(checkInvoiceReadyForIssue(INVOICE, LINES, deCompany)).toBe('missing_registration_info')
-    expect(checkInvoiceReadyForIssue(INVOICE, LINES, { ...deCompany, registration_office: 'Amtsgericht München' })).toBeNull()
+    expect(ready(INVOICE, LINES, deCompany)).toBe('missing_registration_info')
+    expect(ready(INVOICE, LINES, { ...deCompany, registration_office: 'Amtsgericht München' })).toBeNull()
     // A sole trader owes none of it.
-    expect(checkInvoiceReadyForIssue(INVOICE, LINES, TENANT)).toBeNull()
+    expect(ready(INVOICE, LINES, TENANT)).toBeNull()
   })
 
   it('does not require a supplier VAT id when no VAT is charged', () => {
     const noVat = { ...INVOICE, tax_cents: 0 }
-    expect(checkInvoiceReadyForIssue(noVat, LINES, { ...TENANT, tax_id: null })).toBeNull()
+    expect(ready(noVat, LINES, { ...TENANT, tax_id: null })).toBeNull()
   })
 })
 
 describe('invoiceReadiness — reverse charge & VIES attestation', () => {
   it('accepts a valid intra-EU supply with a current attestation', () => {
     const invoice = reverseChargeInvoice({ vies_confirmed_for: 'DE136695976' })
-    expect(checkInvoiceReadyForIssue(invoice, LINES, TENANT)).toBeNull()
+    expect(ready(invoice, LINES, TENANT)).toBeNull()
   })
 
   it('blocks issuing without a VIES confirmation', () => {
-    expect(checkInvoiceReadyForIssue(reverseChargeInvoice(), LINES, TENANT))
+    expect(ready(reverseChargeInvoice(), LINES, TENANT))
       .toBe('reverse_charge_vies_check_required')
   })
 
   it('treats an attestation for a different number as stale', () => {
     const invoice = reverseChargeInvoice({ vies_confirmed_for: 'DE100000008' })
-    expect(checkInvoiceReadyForIssue(invoice, LINES, TENANT)).toBe('reverse_charge_vies_check_stale')
+    expect(ready(invoice, LINES, TENANT)).toBe('reverse_charge_vies_check_stale')
   })
 
   it('ignores formatting differences when matching the attested number', () => {

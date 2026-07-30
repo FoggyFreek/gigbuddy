@@ -14,7 +14,6 @@ import DateEntryField from '../DateEntryField.tsx'
 import MoneyInput from '../invoices/MoneyInput.tsx'
 import { listGigs } from '../../api/gigs.ts'
 import { formatEur } from '../../utils/purchaseTotals.ts'
-import { useProfile } from '../../contexts/profileContext.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
 import type { Product, Gig, Id } from '../../types/entities.ts'
@@ -39,9 +38,7 @@ interface RecordSaleDialogProps {
 // rate (both editable per sale). The gig link is optional context only.
 export default function RecordSaleDialog({ products, onSubmit, onClose }: Readonly<RecordSaleDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
-  const { vatCountry, defaultVatRate } = useProfile()
-  const { profile: accountingProfile } = useAccountingProfile()
-  const accountingCountry = accountingProfile?.country_code ?? vatCountry
+  const { accountingCountry, defaultVatRate } = useAccountingProfile()
   const sellable = useMemo(() => products.filter((p) => !p.archived_at), [products])
   const [productId, setProductId] = useState<Id | ''>('')
   const [quantity, setQuantity] = useState<number | string>(1)

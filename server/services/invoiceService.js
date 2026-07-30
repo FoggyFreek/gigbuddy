@@ -22,7 +22,7 @@ import {
 } from '../../shared/invoiceReadiness.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
-import { loadAccountingBehavior } from './accountingProfileService.js'
+import { loadAccountingBehavior, loadAccountingProfile } from './accountingProfileService.js'
 import {
   createMolliePaymentLink,
   getMollieClientForTenant,
@@ -276,7 +276,7 @@ async function recomputeTotals(client, tenantId, invoiceId, body, tenant, reques
   // values set in this PATCH, else the stored ones), mirroring create.
   if (reverseCharge) {
     const rcError = checkReverseCharge({
-      supplierCountry: tenant.vat_country,
+      supplierCountry: treatment.accounting_country,
       customerCountry: 'customer_address_country' in body ? body.customer_address_country : current.customer_address_country,
       customerTaxId: 'customer_tax_id' in body ? body.customer_tax_id : current.customer_tax_id,
     })
@@ -309,6 +309,13 @@ function clampNonNegative(value) {
 // present. Voiding a draft is NOT an issue — an abandoned draft must stay
 // voidable — though it still sets finalized_at (see applyStatusFields). Checks
 // the effective persisted state; aborting rolls back the caller's transaction.
+// The regime half of the issuance check: country and legal form live on the
+// accounting profile, not the tenant row.
+async function issueRegime(executor, tenantId) {
+  const profile = await loadAccountingProfile(executor, tenantId)
+  return { accountingCountry: profile.country_code, legalForm: profile.legal_form }
+}
+
 async function assertReadyForIssue(client, { tenantId, invoiceId, status, existing, tenant }) {
   if (status !== 'sent' && status !== 'paid') return
   if (existing.finalized_at !== null) return
@@ -319,6 +326,7 @@ async function assertReadyForIssue(client, { tenantId, invoiceId, status, existi
     { ...effective, vies_confirmed_for: storedViesConfirmation(effective) },
     effectiveLines,
     tenant,
+    await issueRegime(client, tenantId),
   )
   if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
 }
@@ -598,6 +606,7 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
         { ...current, vies_confirmed_for: storedViesConfirmation(current) },
         lines,
         tenant,
+        await issueRegime(client, tenantId),
       )
       if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
     }

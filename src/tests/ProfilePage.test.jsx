@@ -226,6 +226,24 @@ describe('ProfilePage', () => {
     expect(label.parentElement).toHaveTextContent('The Testers')
   })
 
+  it('renders social edit helpers without invalid nested block elements', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />)
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+
+    const instagramLabel = await screen.findByText('Instagram')
+    const editButtons = await screen.findAllByRole('button', { name: /^edit$/i })
+    const socialEditButton = editButtons.find(
+      (button) => instagramLabel.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+    await user.click(socialEditButton)
+
+    const instagramInput = await screen.findByLabelText('Instagram')
+    const helperId = instagramInput.getAttribute('aria-describedby')
+    expect(helperId).toBeTruthy()
+    expect(document.getElementById(helperId).querySelector('div')).toBeNull()
+  })
+
 
   it('locks banner/avatar uploads behind diamonds but keeps the logo cameras when the plan lacks customization', async () => {
     const user = userEvent.setup()

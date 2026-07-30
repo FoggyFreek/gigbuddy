@@ -10,7 +10,6 @@ import DialogTitle from '@mui/material/DialogTitle'
 import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import MoneyInput from '../invoices/MoneyInput.tsx'
-import { useProfile } from '../../contexts/profileContext.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
 import type { Product, Account } from '../../types/entities.ts'
@@ -35,9 +34,7 @@ interface ProductDialogProps {
 // cost for stock added before any purchase) and read-only afterwards.
 export default function ProductDialog({ product, revenueAccounts = [], onSubmit, onClose }: Readonly<ProductDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
-  const { vatCountry, defaultVatRate } = useProfile()
-  const { profile: accountingProfile } = useAccountingProfile()
-  const accountingCountry = accountingProfile?.country_code ?? vatCountry
+  const { accountingCountry, defaultVatRate } = useAccountingProfile()
   const [name, setName] = useState(product?.name ?? '')
   const [unitCostCents, setUnitCostCents] = useState(product?.unit_cost_cents ?? 0)
   const [priceInclCents, setPriceInclCents] = useState(product?.default_price_incl_cents ?? 0)

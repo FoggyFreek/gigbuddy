@@ -67,8 +67,8 @@ export const DEFAULT_ACCOUNTS = [
   { code: '64200', name: 'Hired Musicians & Contractors',                 type: 'expense',            parent_code: '64000' },
 ]
 
+// No `currency`: the books follow the profile's base_currency now.
 const DEFAULT_SETTINGS = {
-  currency: 'EUR',
   receivable_account_code: '11200',
   default_revenue_account_code: '41000',
   payable_account_code: '21100',
@@ -88,7 +88,7 @@ const DEFAULT_SETTINGS = {
 // Seeds the chart of accounts + settings row for a single tenant.
 // client can be a pool or a transaction client (both expose .query).
 // Safe to call multiple times: uses ON CONFLICT DO NOTHING.
-export async function seedTenantAccounting(client, tenantId, currency = DEFAULT_SETTINGS.currency) {
+export async function seedTenantAccounting(client, tenantId) {
   for (const acc of DEFAULT_ACCOUNTS) {
     const reportingGroup = acc.reporting_group ?? defaultReportingGroupForType(acc.type)
     await client.query(
@@ -104,18 +104,17 @@ export async function seedTenantAccounting(client, tenantId, currency = DEFAULT_
   }
   await client.query(
     `INSERT INTO tenant_accounting_settings (
-       tenant_id, currency,
+       tenant_id,
        receivable_account_code, default_revenue_account_code,
        payable_account_code, default_reimbursement_account_code, default_expense_account_code,
        primary_checking_account_code, cash_account_code,
        output_vat_account_code, input_vat_account_code,
        vat_receivable_settlement_account_code, vat_payable_settlement_account_code,
        merch_inventory_account_code, merch_revenue_account_code, merch_cogs_account_code
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      ON CONFLICT (tenant_id) DO NOTHING`,
     [
       tenantId,
-      currency,
       DEFAULT_SETTINGS.receivable_account_code,
       DEFAULT_SETTINGS.default_revenue_account_code,
       DEFAULT_SETTINGS.payable_account_code,

@@ -1,12 +1,47 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { imageCompression } = vi.hoisted(() => ({
   imageCompression: vi.fn(async (file) => file),
 }))
 
 vi.mock('browser-image-compression', () => ({ default: imageCompression }))
+vi.mock('browser-image-compression/dist/browser-image-compression.js?url', () => ({
+  default: '/assets/browser-image-compression.js',
+}))
 
-import { compressAvatar, compressBanner, compressReceipt } from '../utils/compressImage.ts'
+import {
+  compressAvatar,
+  compressBanner,
+  compressLogo,
+  compressMemoryPhoto,
+  compressPhoto,
+  compressReceipt,
+} from '../utils/compressImage.ts'
+
+beforeEach(() => {
+  imageCompression.mockClear()
+})
+
+it('self-hosts the worker dependency for every compression profile', async () => {
+  const file = new File(['image'], 'image.png', { type: 'image/png' })
+
+  await Promise.all([
+    compressPhoto(file),
+    compressMemoryPhoto(file),
+    compressLogo(file),
+    compressBanner(file),
+    compressAvatar(file),
+    compressReceipt(file),
+  ])
+
+  expect(imageCompression).toHaveBeenCalledTimes(6)
+  for (const [, options] of imageCompression.mock.calls) {
+    expect(options).toEqual(expect.objectContaining({
+      useWebWorker: true,
+      libURL: '/assets/browser-image-compression.js',
+    }))
+  }
+})
 
 describe('banner compression', () => {
   it('converts banners to a compact high-quality WebP', async () => {
@@ -20,6 +55,7 @@ describe('banner compression', () => {
       initialQuality: 0.9,
       fileType: 'image/webp',
       useWebWorker: true,
+      libURL: '/assets/browser-image-compression.js',
     })
   })
 })
@@ -36,6 +72,7 @@ describe('avatar compression', () => {
       initialQuality: 0.9,
       fileType: 'image/webp',
       useWebWorker: true,
+      libURL: '/assets/browser-image-compression.js',
     })
   })
 })
@@ -51,6 +88,7 @@ describe('compressReceipt', () => {
       maxWidthOrHeight: 2000,
       initialQuality: 0.85,
       useWebWorker: true,
+      libURL: '/assets/browser-image-compression.js',
     }))
   })
 

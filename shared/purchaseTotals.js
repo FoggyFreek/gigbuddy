@@ -12,6 +12,15 @@ export function computePurchaseLineTotals(line) {
   return { netCents, vatCents, grossCents }
 }
 
+export function computePurchaseLineAccountingAmounts(line, inputVatRecoverable = true) {
+  const totals = computePurchaseLineTotals(line)
+  return {
+    ...totals,
+    costCents: inputVatRecoverable ? totals.netCents : totals.grossCents,
+    inputVatCents: inputVatRecoverable ? totals.vatCents : 0,
+  }
+}
+
 export function computePurchaseTotals({ lines }) {
   let subtotalCents = 0
   let taxCents = 0

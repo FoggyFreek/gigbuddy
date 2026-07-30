@@ -66,7 +66,8 @@ export function checkInvoiceReadyForIssue(
   invoice: InvoiceReadinessInput,
   lines: Pick<InvoiceLine, 'description' | 'quantity'>[],
   tenant: Partial<Tenant> | null,
+  regime: { accountingCountry: string; legalForm: string | null },
 ): InvoiceIssueErrorCode | null {
   if (!tenant) return null // tenant not loaded yet — don't claim a problem
-  return checkJs(invoice, lines, tenant) as InvoiceIssueErrorCode | null
+  return checkJs(invoice, lines, tenant, regime) as InvoiceIssueErrorCode | null
 }

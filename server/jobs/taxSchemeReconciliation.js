@@ -1,34 +1,25 @@
-// Catches the LEGACY VAT-scheme projections up with the enrolment history.
+// Catches the profile's derived `vat_filing_frequency` up with the enrolment
+// history. It is written when an enrolment is created or edited, which is not
+// enough on its own: an enrolment can be scheduled to start or end on a future
+// date, and on that boundary nothing writes anything — the fact changes without
+// a request. The date-aware resolver (vatTreatmentService) is the AUTHORITY and
+// needs no job; this only keeps the displayed field from lagging.
 //
-// `tenants.applies_kor` and the profile's derived `vat_filing_frequency` are
-// written when an enrolment is created or edited. That is not enough on its own:
-// an enrolment can be scheduled to start or end on a future date, and on that
-// boundary nothing writes anything — the fact changes without a request. The
-// date-aware resolver (vatTreatmentService) is the AUTHORITY and needs no job;
-// this exists purely so the two compatibility columns, which the old app
-// container and the not-yet-repointed frontend still read, do not lag behind.
-//
-// Idempotent by construction: it recomputes both projections from the enrolment
-// in force today and writes only where they disagree, so a second run in the
-// same day is a no-op. Called from runReconciliationTick, which already holds a
-// single-instance advisory lock.
-//
-// TEMPORARY. It disappears with the columns it maintains, once every reader has
-// moved to the resolver and tenants.applies_kor is dropped.
+// Idempotent by construction: it recomputes from the enrolment in force today
+// and writes only where they disagree, so a second run in the same day is a
+// no-op. Called from runReconciliationTick, which already holds a single-instance
+// advisory lock.
 import { withTransaction } from '../db/withTransaction.js'
 import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
 import { fetchAccountingProfile } from '../repositories/accountingProfileRepository.js'
 import { listProjectionDrift } from '../repositories/taxSchemeEnrolmentRepository.js'
-import {
-  syncSchemeProjections,
-  ZERO_RATING_SCHEME_CODES,
-} from '../services/taxSchemeEnrolmentService.js'
+import { syncSchemeProjections } from '../services/taxSchemeEnrolmentService.js'
 import { logger } from '../utils/logger.js'
 
 // Returns how many tenants were repaired, so the caller (and the tests) can see
 // a boundary crossing actually happened.
 export async function reconcileSchemeProjections(db) {
-  const drifted = await listProjectionDrift(db, [...ZERO_RATING_SCHEME_CODES])
+  const drifted = await listProjectionDrift(db)
   let repaired = 0
 
   for (const row of drifted) {

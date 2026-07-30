@@ -1,17 +1,23 @@
 import imageCompression, { type Options } from 'browser-image-compression'
+import imageCompressionLibUrl from 'browser-image-compression/dist/browser-image-compression.js?url'
+
+const WEB_WORKER_OPTIONS: Pick<Options, 'useWebWorker' | 'libURL'> = {
+  useWebWorker: true,
+  libURL: imageCompressionLibUrl,
+}
 
 const PHOTO_OPTIONS: Options = {
   maxSizeMB: 0.9,
   maxWidthOrHeight: 1200,
   initialQuality: 0.85,
-  useWebWorker: true,
+  ...WEB_WORKER_OPTIONS,
 }
 
 const LOGO_OPTIONS: Options = {
   maxSizeMB: 0.8,
   maxWidthOrHeight: 800,
   initialQuality: 0.9,
-  useWebWorker: true,
+  ...WEB_WORKER_OPTIONS,
 }
 
 export function compressPhoto(file: File): Promise<File> {
@@ -25,7 +31,7 @@ const MEMORY_PHOTO_OPTIONS: Options = {
   maxWidthOrHeight: 1600,
   initialQuality: 0.85,
   fileType: 'image/webp',
-  useWebWorker: true,
+  ...WEB_WORKER_OPTIONS,
 }
 
 export function compressMemoryPhoto(file: File): Promise<File> {
@@ -44,7 +50,7 @@ const BANNER_OPTIONS: Options = {
   maxWidthOrHeight: 820,
   initialQuality: 0.9,
   fileType: 'image/webp',
-  useWebWorker: true,
+  ...WEB_WORKER_OPTIONS,
 }
 
 export function compressBanner(file: File): Promise<File> {
@@ -56,7 +62,7 @@ const AVATAR_OPTIONS: Options = {
   maxWidthOrHeight: 720,
   initialQuality: 0.9,
   fileType: 'image/webp',
-  useWebWorker: true,
+  ...WEB_WORKER_OPTIONS,
 }
 
 export function compressAvatar(file: File): Promise<File> {
@@ -67,7 +73,7 @@ const RECEIPT_OPTIONS: Options = {
   maxSizeMB: 1.5,
   maxWidthOrHeight: 2000,
   initialQuality: 0.85,
-  useWebWorker: true,
+  ...WEB_WORKER_OPTIONS,
 }
 
 const RECEIPT_EXTENSIONS: Record<string, string> = {

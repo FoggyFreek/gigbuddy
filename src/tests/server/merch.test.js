@@ -54,9 +54,16 @@ async function createProduct(asUser, overrides = {}) {
   return res.body
 }
 
-// Stock products via an approved purchase (the only stock-in path).
-// unitCostCents is the intended NET cost per unit; the line is entered gross
-// (incl. 21% VAT) so the booked net — and thus the moving average — lands on it.
+function startKor() {
+  return asUserA(request(app).post('/api/accounting-profile/schemes')).send({
+    scheme_code: 'nl_kor',
+    valid_from: '2020-01-01',
+  })
+}
+
+// Stock products via an approved purchase (the only stock-in path). For the
+// standard VAT-registered tenant, unitCostCents is the intended recoverable net
+// cost; the KOR test below expects the gross amount instead.
 async function stockProduct(asUser, productId, quantity, unitCostCents = 1200) {
   await asUser(request(app).post('/api/purchases')).send({
     supplier_name: 'Merch Printer',
@@ -249,6 +256,17 @@ describe('merch — purchase stock-in', () => {
     const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'recorded')
     const cogs = lines.find((l) => l.account_code === '51000')
     expect(cogs.debit_cents).toBe(2400)
+  })
+
+  it('includes non-recoverable KOR VAT in purchased stock cost', async () => {
+    await startKor().expect(201)
+    const product = await createProduct(asUserA, { unit_cost_cents: 0 })
+
+    await stockProduct(asUserA, product.id, 10, 1000)
+
+    const list = await asUserA(request(app).get('/api/merch/products')).expect(200)
+    expect(list.body[0].quantity_on_hand).toBe(10)
+    expect(list.body[0].unit_cost_cents).toBe(1210)
   })
 
   it('voiding a sale re-absorbs the units at their snapshot cost', async () => {

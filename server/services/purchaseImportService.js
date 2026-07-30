@@ -22,6 +22,7 @@ import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { findSuppliersForImport } from '../repositories/contactRepository.js'
 import { findPurchaseDuplicates } from '../repositories/purchaseRepository.js'
 import { fetchTenant } from '../repositories/tenantRepository.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
 import { normalizeVatNumber } from '../../shared/vatRates.js'
 import { createPurchase, createPurchaseAttachment } from './purchaseService.js'
 import { computePurchaseTotals } from '../../shared/purchaseTotals.js'
@@ -74,7 +75,8 @@ export async function importPurchaseFromDocument({ db, tenantId, file, actorUser
   }
 
   const tenant = await fetchTenant(db, tenantId)
-  const { purchase, warnings } = mapEInvoiceToPurchase(doc, { vatCountry: tenant?.vat_country })
+  const { accountingCountry } = await loadAccountingBehavior(db, tenantId)
+  const { purchase, warnings } = mapEInvoiceToPurchase(doc, { vatCountry: accountingCountry })
 
   if (!purchase.supplier_name) {
     return { error: { status: 400, body: { error: 'Invoice names no supplier', code: 'missing_supplier_name' } } }

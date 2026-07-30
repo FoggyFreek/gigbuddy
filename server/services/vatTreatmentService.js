@@ -1,8 +1,7 @@
 // THE single owner of "what VAT treatment does this document have".
 //
-// Totals, snapshot capture, the PDF and the UBL all resolve through here, and
-// nothing else on the server reads tenants.applies_kor. There are exactly two
-// answers, and which one applies is the whole design:
+// Totals, snapshot capture, the PDF and the UBL all resolve through here. There
+// are exactly two answers, and which one applies is the whole design:
 //
 //   ISSUED document  -> read the snapshot off the row. No profile read, no
 //                       enrolment read, no registry call. This is what makes a
@@ -21,10 +20,8 @@
 // two only diverge across a scheme boundary — which is exactly the case worth
 // getting right.
 import { loadAccountingProfile } from './accountingProfileService.js'
-import { fetchHomeSchemeEnrolmentOn, insertHomeSchemeEnrolmentIfAbsent } from '../repositories/taxSchemeEnrolmentRepository.js'
-import { fetchTenantKorState } from '../repositories/tenantRepository.js'
+import { fetchHomeSchemeEnrolmentOn } from '../repositories/taxSchemeEnrolmentRepository.js'
 import { resolveVatTreatment, TAX_TREATMENT_VERSION } from '../../shared/taxSchemes.js'
-import { korApplies } from '../../shared/vatRates.js'
 import { toUblDate as toDateOnly } from '../../shared/peppol.js'
 import { logger } from '../utils/logger.js'
 
@@ -76,56 +73,18 @@ function fromResolved(countryCode, resolved) {
 
 // Live, date-aware resolution. `reverseCharge` belongs to the document, not the
 // regime, so the caller supplies it.
+// No enrolment covering the tax point means no scheme applied on that date, and
+// the resolver treats that as the ordinary VAT-charging case. That is the whole
+// answer now: `tenants.applies_kor` is no longer consulted, so an enrolment is
+// the only thing that can make a document exempt.
 export async function resolveLiveTreatment(executor, tenantId, isoDate, { reverseCharge = false } = {}) {
   const profile = await loadAccountingProfile(executor, tenantId)
-  if (!profile) return null
-
-  let enrolment = await fetchHomeSchemeEnrolmentOn(executor, tenantId, profile.country_code, isoDate)
-  if (!enrolment) {
-    enrolment = await repairMissingEnrolment(executor, tenantId, profile, isoDate)
-  }
+  const enrolment = await fetchHomeSchemeEnrolmentOn(executor, tenantId, profile.country_code, isoDate)
 
   return fromResolved(
     profile.country_code,
     resolveVatTreatment({ version: TAX_TREATMENT_VERSION, homeEnrolment: enrolment, reverseCharge }),
   )
-}
-
-// TEMPORARY, remove when tenants.applies_kor is dropped.
-//
-// Deployment runs migrations while the previous app container is still serving,
-// so that container can set applies_kor AFTER migration 140's backfill and before
-// the new code takes over — leaving a tenant whose legacy flag says "on the
-// scheme" with no enrolment to back it. A pre-cutover script cannot win that
-// race (Step 1 hit the same one with profiles), so the gap is closed on read.
-//
-// Only ever creates what the legacy flag already asserts, and only for the
-// jurisdiction that flag was ever valid for. valid_from reaches back far enough
-// to cover the document being resolved, since the flag applied to it too.
-// Idempotent: a concurrent insert loses the open-home-scheme index and the caller
-// re-reads.
-async function repairMissingEnrolment(executor, tenantId, profile, isoDate) {
-  // Reproduce the OLD predicate exactly — `applies_kor && korApplies(vat_country)`
-  // on the tenants row — not just the flag. A tenant the previous code never
-  // treated as exempt must not acquire an enrolment here, and the profile country
-  // has to agree too or the enrolment would be invisible to the resolver that
-  // filters on it.
-  if (profile.country_code !== 'nl') return null
-  const kor = await fetchTenantKorState(executor, tenantId)
-  if (!kor?.applies_kor || !korApplies(kor.vat_country)) return null
-
-  const validFrom = isoDate < todayIso() ? isoDate : todayIso()
-  const inserted = await insertHomeSchemeEnrolmentIfAbsent(executor, tenantId, {
-    country_code: 'nl',
-    scheme_code: 'nl_kor',
-    valid_from: validFrom,
-    status: 'legacy_inferred',
-  })
-  if (inserted) {
-    logger.warn('tax_scheme.enrolment_repaired', { tenantId, operation: 'lazy_repair' })
-    return inserted
-  }
-  return fetchHomeSchemeEnrolmentOn(executor, tenantId, profile.country_code, isoDate)
 }
 
 function todayIso() {
@@ -197,7 +156,6 @@ export function purchaseSnapshotColumns(treatment) {
 // that goes stale on a scheduled enrolment's boundary date.
 export async function resolveCurrentSalesTreatment(executor, tenantId, isoDate = todayIso()) {
   const treatment = await resolveLiveTreatment(executor, tenantId, isoDate)
-  if (!treatment) return null
   return {
     accounting_country: treatment.accounting_country,
     vat_scheme_code: treatment.vat_scheme_code,

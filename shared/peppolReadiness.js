@@ -53,7 +53,7 @@ const DRIFT_FATAL_CENTS = 100
 // `treatment` is the resolved VAT treatment (see server/services/vatTreatmentService).
 // This module stays pure — the caller passes it in — so readiness and the
 // renderers can never disagree about whether VAT was suppressed.
-export function checkPeppolReadiness({ invoice, lines, tenant, treatment = null }) {
+export function checkPeppolReadiness({ invoice, lines, tenant, treatment }) {
   const found = new Set()
   const add = (code) => found.add(code)
 
@@ -66,7 +66,7 @@ export function checkPeppolReadiness({ invoice, lines, tenant, treatment = null 
 
   // Electronic addresses come from the TAX jurisdiction instead: the scheme
   // states which register the identifier belongs to.
-  const sellerVatCountry = treatment?.accounting_country ?? tenant.vat_country
+  const sellerVatCountry = treatment?.accounting_country
   const sellerEndpoint = deriveEndpointId({
     country: sellerVatCountry,
     vatId: tenant.tax_id,

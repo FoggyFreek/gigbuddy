@@ -225,7 +225,7 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
   it('adopts only the pointer tenant and never re-creates', async () => {
     mockAuth({ onboardingTenantId: 42, termsVersion: TERMS_VERSION })
     listOwnedTenants.mockResolvedValue([
-      { id: 42, slug: 'the-band', band_name: 'The Band', vat_country: 'nl', archived_at: null },
+      { id: 42, slug: 'the-band', band_name: 'The Band', accounting_country: 'nl', archived_at: null },
     ])
     subscribe.mockResolvedValue({ checkoutUrl: 'https://pay.test/tr_2', trial: true })
     const user = userEvent.setup()

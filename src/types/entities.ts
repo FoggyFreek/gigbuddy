@@ -8,6 +8,7 @@
 //   so these types match the loose reality of server payloads we already render.
 // - `Id` is a number from Postgres, sometimes a string from the client.
 import type { PurchaseImportWarningCode } from '../utils/purchaseImportWarnings.ts'
+import type { BandMemberRole } from '../utils/bandMemberRoles.ts'
 
 export type Id = number | string
 
@@ -58,11 +59,19 @@ export interface GigTag {
 export interface Member {
   id?: Id
   name?: string
-  color?: string
+  roles?: BandMemberRole[]
+  color?: string | null
   position?: string
   sort_order?: number
   // Set when this band member is linked to an app (gigBuddy) user account.
   user_id?: Id | null
+}
+
+export interface BandMemberInput {
+  name: string
+  roles: BandMemberRole[]
+  color: string | null
+  position: string
 }
 
 // A task. May be linked to a gig (gig_id set, with event_description/event_date
@@ -134,6 +143,8 @@ export interface Tenant {
   /** 150-char blurb; the only bio text shipped to the public link page. */
   short_bio?: string | null
   archived_at?: string | null
+  /** Accounting country, joined in by the owned-tenants list for the onboarding resume. */
+  accounting_country?: string | null
   formal_name?: string
   logo_path?: string | null
   banner_path?: string | null
@@ -142,10 +153,6 @@ export interface Tenant {
   memory_image_path?: string | null
   memory_caption?: string | null
   memory_gig_id?: Id | null
-  applies_kor?: boolean
-  tax_percentage?: number | string
-  /** VAT jurisdiction (ISO 3166-1 alpha-2, lowercase); selects allowed VAT rates. */
-  vat_country?: string
   address_street?: string
   address_postal_code?: string
   address_city?: string
@@ -153,8 +160,6 @@ export interface Tenant {
   kvk_number?: string
   /** Court/city/province the registration number is scoped to (DE/FR/AT/IT). */
   registration_office?: string
-  /** Legal form of the band; 'company' triggers extra invoice disclosures. */
-  legal_form?: string
   /** Managing directors / board — disclosed on invoices by incorporated bands. */
   directors?: string
   /**

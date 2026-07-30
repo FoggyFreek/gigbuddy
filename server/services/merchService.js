@@ -33,7 +33,6 @@ import {
   setProductStock,
 } from '../repositories/merchRepository.js'
 import { getSettings } from './accountService.js'
-import { fetchTenantVatCountry } from '../repositories/tenantRepository.js'
 import {
   ledgerErrorResult,
   postMerchSaleRecorded,
@@ -127,8 +126,8 @@ function validateProductBody(body, vatCountry, { partial = false } = {}) {
 }
 
 export async function createProduct(executor, tenantId, body) {
-  const vatCountry = await fetchTenantVatCountry(executor, tenantId)
-  const validated = validateProductBody(body, vatCountry)
+  const { accountingCountry } = await loadAccountingBehavior(executor, tenantId)
+  const validated = validateProductBody(body, accountingCountry)
   if (validated.error) return validated
   const v = validated.values
   const revenue = await resolveProductRevenueAccount(executor, tenantId, body.revenue_account_code)
@@ -138,8 +137,8 @@ export async function createProduct(executor, tenantId, body) {
 }
 
 export async function updateProduct(executor, tenantId, id, body) {
-  const vatCountry = await fetchTenantVatCountry(executor, tenantId)
-  const validated = validateProductBody(body, vatCountry, { partial: true })
+  const { accountingCountry } = await loadAccountingBehavior(executor, tenantId)
+  const validated = validateProductBody(body, accountingCountry, { partial: true })
   if (validated.error) return validated
   const values = { ...validated.values }
   if ('revenue_account_code' in body) {

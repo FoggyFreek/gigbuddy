@@ -81,7 +81,7 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 | Rules shared by frontend & backend | `shared/` (`permissions.js`, `entitlements.js`, …) |
 | Shared frontend entity types | `src/types/entities.ts`, `src/types/api.ts` |
 
-**Domain navigation convention**: for any resource `foo`, look for `server/routes/foo.js` → `server/services/fooService.js` → `server/repositories/fooRepository.js` → `server/validators/fooValidators.js` → `src/api/foo.ts` → its page/components. Domains: planning (gigs, rehearsals, band events, availability, tasks), people/CRM (contacts, venues, band members, invites, tenants), music (songs, setlists, chordpro), finance (accounts, invoices, purchases, journal, ledger, reimbursements, VAT returns, reports), merch (+ Shopify import), promotion (Bandsintown, public calendars, share), admin, achievements, tutorials.
+**Domain navigation convention**: for any resource `foo`, look for `server/routes/foo.js` → `server/services/fooService.js` → `server/repositories/fooRepository.js` → `server/validators/fooValidators.js` → `src/api/foo.ts` → its page/components. Domains: planning (gigs, rehearsals, band events, availability, tasks), people/CRM (contacts, venues, band members, invites, tenants), music (songs, setlists, chordpro), finance (accounting profile + tax scheme enrolments, accounts, invoices, purchases, journal, ledger, reimbursements, VAT returns, reports), merch (+ Shopify import), promotion (Bandsintown, public calendars, share), admin, achievements, tutorials.
 
 **Decoupled link-page app**: band link pages are served by a separate app living in its own repo (own package.json, own Postgres DB, own deploy). It talks to gigbuddy only over HTTP: `server/routes/publicLinkpage.js` (unauthenticated, shared-secret bearer) exposes a per-band content export and a signed image proxy; `server/routes/linkpage.js` mints short-lived editor handoff tokens for the "Edit link page" profile affordance. The shared HMAC secret is `LINKPAGE_SECRET`; `LINKPAGE_URL` is the link-page app's public origin. Entitlement gating (silver/gold, tenant-admin only) lives in `shared/entitlements.js` / `server/db/defaultPlans.js` as usual.
 
@@ -128,6 +128,18 @@ The financial core is an **immutable double-entry ledger** (`ledger_transactions
 - Business services post **inside the same DB transaction** as the state change — keep it that way for new events.
 - Display classification of `(source_type, source_event)`: `server/services/ledgerEntryTypes.js` with frontend mirror `src/utils/ledgerEntryType.ts` — **keep both in sync** when adding events.
 - Tenant accounting settings are guarded by a per-tenant advisory lock (shared with `server/routes/accounts.js`).
+
+**Accounting profile** — `tenant_accounting_profiles` is the single source of the tenant's accounting regime: country, legal form, entity size, accounting bases, financial-year start, base currency, default VAT rate, VAT registration and filing frequency.
+
+- **`loadAccountingProfile(executor, tenantId)` / `loadAccountingBehavior(...)` (`accountingProfileService.js`) are the read primitives.** They **throw `AccountingProfileMissingError`** (409 `accounting_profile_missing`, translated by the `server/index.js` error handler) rather than returning null or defaulting — never guess a jurisdiction. A missing row is repaired by an operator: `node server/scripts/backfillAccountingProfiles.js --check|--apply`.
+- Every tenant gets its profile in the **same transaction as the tenant insert** (`createAccountingProfileForTenant`).
+- `country_code` is immutable through PATCH (409 `country_immutable`); only `changeAccountingCountry` moves it, and it refuses once financial documents exist.
+- Fiscal-year maths has one owner: `shared/fiscalYear.js`, consumed by `server/utils/periodQuery.js` and `src/utils/invoicePeriod.ts`. VAT quarters and invoice number sequences stay calendar-based.
+- Frontend: **`useAccountingProfile()` owns `accountingCountry` and `defaultVatRate`** (`src/contexts/accountingProfileContext.ts`). `ProfileContext` is band identity only — it carries no regime.
+
+**VAT treatment** — `server/services/vatTreatmentService.js` is the single owner of "what VAT treatment does this document have". An **issued** invoice/purchase renders from its own persisted snapshot (`*_snapshot` columns), so re-rendering an old document reproduces what was sent; a **draft** resolves live and date-aware from `tax_scheme_enrolments` at the document's tax point. Scheme registry: `shared/taxSchemes.js`. Renderers (`renderInvoicePdf`/`renderInvoiceUbl`) and `shared/{invoiceReadiness,peppolReadiness}.js` stay pure — the caller passes the resolved treatment/regime in.
+
+**`tenants.vat_country`, `tenants.legal_form`, `tenants.tax_percentage`, `tenants.applies_kor` and `tenant_accounting_settings.currency` are dead columns awaiting a drop migration.** Nothing reads or writes them, they are absent from `tenantSafeProjection.js`, and no new code may reference them.
 
 **Bank statement import** (CAMT.053/MT940): parsers `server/services/bankStatement/`, service/repo/validators `bankImport*`, dialog `src/components/ledger/BankStatementImportDialog.tsx`. Two-phase (parse-stage, then commit by line id) — **client money is never trusted**; amounts are re-read server-side. Reference tests: `bankStatementParsers.test.js`, `bankImport.test.js`.
 

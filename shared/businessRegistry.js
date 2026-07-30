@@ -4,8 +4,8 @@
 // validation) so a tenant's registration number is stored in the right format
 // for its VAT country and printed on invoices with the correct register label.
 //
-// Selected by the tenant's `vat_country` (same jurisdiction drives VAT and the
-// register). Registers and identifier structures per the official national
+// Selected by the tenant's accounting country (the same jurisdiction drives VAT
+// and the register). Registers and identifier structures per the official national
 // registers linked from the EU e-Justice Portal / BRIS (kvk.nl, handelsregister.de,
 // INPI/RCS, Firmenbuch, CRO, Companies House, …).
 //
