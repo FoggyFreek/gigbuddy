@@ -27,16 +27,17 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { parseBankStatement, commitBankImport, cancelBankImport, setOpeningBalanceFromImport } from '../../api/bankImport.ts'
 import { listAccounts, getAccountingSettings } from '../../api/accounts.ts'
 import { getProfile } from '../../api/profile.ts'
+import { getAccountingProfile } from '../../api/accountingProfile.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
 import {
-  DEFAULT_VAT_COUNTRY, getStandardVatRate, isAllowedVatRate, korApplies, vatRateOptions,
+  DEFAULT_VAT_COUNTRY, getStandardVatRate, isAllowedVatRate, vatRateOptions,
 } from '../../utils/vatRates.ts'
 // The same net/VAT split the server posts with — one rounding rule, no drift
 // between the preview and the ledger.
 import { computePurchaseLineTotals } from '../../utils/purchaseTotals.ts'
 import type {
-  Account, AccountingSettings, BankImportParseResult, BankStatementLine,
+  Account, AccountingProfile, AccountingSettings, BankImportParseResult, BankStatementLine,
   BankImportDecision, BankImportResult, Id, Tenant,
 } from '../../types/entities.ts'
 
@@ -54,9 +55,9 @@ type Decision =
   | { kind: 'journal_paid'; contraAccountCode: string; vatRate: number | null; supplier: SupplierChoice }
   | { kind: 'journal_received'; contraAccountCode: string; vatRate: number | null }
 
-// The VAT a direct booking should carry, resolved once from the tenant profile.
-// `enabled` is false under the KOR: a small-business-scheme tenant neither
-// charges output VAT nor deducts input VAT, so no row may carry a rate.
+// The VAT a direct booking should carry. `enabled` is false under a
+// small-business scheme: such a tenant neither charges output VAT nor deducts
+// input VAT, so no row may carry a rate.
 interface VatDefaults {
   enabled: boolean
   country: string
@@ -70,10 +71,15 @@ const NO_VAT_DEFAULTS: VatDefaults = {
   enabled: false, country: DEFAULT_VAT_COUNTRY, paid: 0, received: 0,
 }
 
-function resolveVatDefaults(profile: Tenant): VatDefaults {
-  const country = profile.vat_country || DEFAULT_VAT_COUNTRY
-  // KOR is a Dutch-only exemption; it never applies to a non-NL band.
-  if (profile.applies_kor && korApplies(country)) return { ...NO_VAT_DEFAULTS, country }
+// `accounting` supplies the scheme in force today; the band profile still
+// supplies the band's own configured rate. These are only the reviewer's
+// DEFAULTS — the server re-checks each line against the scheme in force at that
+// line's booking date, which is the authoritative answer for a statement
+// spanning a scheme change.
+function resolveVatDefaults(profile: Tenant, accounting: AccountingProfile | null): VatDefaults {
+  const treatment = accounting?.current_sales_treatment ?? null
+  const country = treatment?.accounting_country || profile.vat_country || DEFAULT_VAT_COUNTRY
+  if (treatment?.scheme_exempt) return { ...NO_VAT_DEFAULTS, country }
   const configured = Number(profile.tax_percentage)
   return {
     enabled: true,
@@ -209,17 +215,22 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
 
   useEffect(() => {
     let active = true
-    // The profile is read here rather than from ProfileContext because the KOR
-    // flag decides whether VAT may be booked at all — it must be the tenant's
-    // current value, not one cached since the session started.
-    // A failed profile read must not cost the reviewer the account lists, and it
-    // fails closed: without the KOR flag no VAT may be offered.
-    Promise.all([listAccounts(), getAccountingSettings(), getProfile().catch(() => null)])
-      .then(([accs, setts, profile]) => {
+    // Both profiles are read fresh rather than from context: the VAT scheme
+    // decides whether VAT may be booked at all, so it must be the current value
+    // and not one cached since the session started.
+    // A failed read must not cost the reviewer the account lists, and it fails
+    // closed: without a resolved scheme no VAT is offered.
+    Promise.all([
+      listAccounts(),
+      getAccountingSettings(),
+      getProfile().catch(() => null),
+      getAccountingProfile().catch(() => null),
+    ])
+      .then(([accs, setts, profile, accounting]) => {
         if (!active) return
         setAccounts(accs)
         setSettings(setts)
-        if (profile) setVat(resolveVatDefaults(profile))
+        if (profile && accounting) setVat(resolveVatDefaults(profile, accounting))
       })
       .catch(() => { /* accounts optional until review */ })
     return () => { active = false }

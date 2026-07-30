@@ -8,6 +8,7 @@ import { fetchInvoiceWithGig, fetchLines } from '../repositories/invoiceReposito
 import { fetchTenant } from '../repositories/tenantRepository.js'
 import { getObject } from './storageService.js'
 import { renderInvoiceUbl } from '../utils/renderInvoiceUbl.js'
+import { resolveInvoiceVatTreatment } from './vatTreatmentService.js'
 import { checkPeppolReadiness } from '../../shared/peppolReadiness.js'
 import { notFound } from './serviceErrors.js'
 
@@ -46,8 +47,13 @@ export async function buildInvoiceUbl(pool, tenantId, invoiceId, { embedPdf = fa
       : null
   }
 
-  const content = renderInvoiceUbl({ invoice, lines, tenant, embeddedPdf })
-  const warnings = checkPeppolReadiness({ invoice, lines, tenant })
+  // An issued invoice renders from its own snapshot, so downloading the XML of an
+  // old invoice is unaffected by a later scheme change. Readiness is a pre-send
+  // check on the CURRENT document and takes the same resolved treatment rather
+  // than reading the tenant flag.
+  const treatment = await resolveInvoiceVatTreatment(pool, tenantId, invoice)
+  const content = renderInvoiceUbl({ invoice, lines, tenant, embeddedPdf, treatment })
+  const warnings = checkPeppolReadiness({ invoice, lines, tenant, treatment })
 
   return { filename: `factuur-${safeNumber}.xml`, content, warnings }
 }

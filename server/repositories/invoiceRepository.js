@@ -156,13 +156,24 @@ export async function lockInvoiceTotalsState(executor, tenantId, invoiceId) {
   return rows[0] || null
 }
 
-export async function updateInvoiceFields(executor, tenantId, invoiceId, { columns, finalize }) {
+// `snapshot` is the VAT treatment to freeze onto the row when this update is the
+// one that ISSUES the invoice. Every column is written as COALESCE(col, $n):
+// first writer wins, in SQL. An already-snapshotted invoice can therefore never
+// have its treatment rewritten by any path that re-enters — a read-then-check
+// guard could be raced through, this cannot.
+export async function updateInvoiceFields(executor, tenantId, invoiceId, { columns, finalize, snapshot = null }) {
   const assignments = []
   const values = []
   let index = 1
   for (const { column, value } of columns) {
     assignments.push(`${column} = $${index++}`)
     values.push(value)
+  }
+  if (snapshot) {
+    for (const [column, value] of Object.entries(snapshot)) {
+      assignments.push(`${column} = COALESCE(${column}, $${index++})`)
+      values.push(value)
+    }
   }
   if (finalize) assignments.push('finalized_at = NOW()')
   assignments.push('updated_at = NOW()')
@@ -173,6 +184,119 @@ export async function updateInvoiceFields(executor, tenantId, invoiceId, { colum
   )
 }
 
+// ---------- VAT snapshot audit ----------
+//
+// ISSUED, not merely finalized: applyStatusFields stamps finalized_at on
+// draft -> void too, and an abandoned draft was never issued. The EXISTS clause
+// catches an invoice that was issued and later voided.
+const ISSUED_INVOICE = `(
+  i.status IN ('sent', 'paid')
+  OR EXISTS (SELECT 1 FROM ledger_transactions lt
+              WHERE lt.tenant_id = i.tenant_id AND lt.source_type = 'invoice'
+                AND lt.source_id = i.id AND lt.source_event = 'sent')
+)`
+
+// Issued invoices carrying no VAT snapshot — rows the previous app container
+// issued during a deployment, before the new code took over. Repairable.
+export async function listIssuedInvoicesMissingSnapshot(executor) {
+  const { rows } = await executor.query(
+    `SELECT i.id, i.tenant_id, i.invoice_number, i.status, i.tax_cents,
+            i.reverse_charge, i.supply_date, i.issue_date
+       FROM invoices i
+      WHERE i.accounting_country_snapshot IS NULL
+        AND ${ISSUED_INVOICE}
+      ORDER BY i.tenant_id, i.id`,
+  )
+  return rows
+}
+
+// Invoices whose stored VAT contradicts their snapshotted treatment. NEVER
+// auto-repaired: the ledger already posted whatever tax_cents says, so which of
+// the two is wrong is a human judgement and the fix is a correction document,
+// not an UPDATE.
+export async function listInvoiceSnapshotConflicts(executor) {
+  const { rows } = await executor.query(
+    `SELECT i.id, i.tenant_id, i.invoice_number, i.tax_cents,
+            i.vat_treatment_snapshot, i.charges_output_vat_snapshot, i.vat_snapshot_source
+       FROM invoices i
+      WHERE i.vat_treatment_snapshot IS NOT NULL
+        AND ((i.tax_cents > 0) <> COALESCE(i.charges_output_vat_snapshot, FALSE))
+      ORDER BY i.tenant_id, i.id`,
+  )
+  return rows
+}
+
+// Snapshots this migration INFERRED and no human has confirmed. Not a fault —
+// a finding, and the population a bulk confirmation would clear.
+export async function countInferredInvoiceSnapshots(executor) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*)::int AS count FROM invoices
+      WHERE vat_snapshot_source = 'legacy_inferred'`,
+  )
+  return rows[0].count
+}
+
+// Documents whose recorded scheme did not actually produce its treatment — a
+// scheme that is recorded but not implemented. Expected, and worth surfacing so
+// the size of the "recorded but inert" population is visible.
+export async function countUnimplementedSchemeInvoices(executor, implementedCodes) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*)::int AS count FROM invoices
+      WHERE vat_scheme_code_snapshot IS NOT NULL
+        AND NOT (vat_scheme_code_snapshot = ANY($1::text[]))
+        AND vat_treatment_snapshot = 'standard'`,
+    [implementedCodes],
+  )
+  return rows[0].count
+}
+
+// Corrects a snapshot the MIGRATION inferred. Scoped to 'legacy_inferred' in the
+// WHERE clause, so an 'issued' or already-'confirmed' row is untouchable however
+// the caller is written — the same first-writer-wins discipline the capture path
+// uses, expressed as a guard the database enforces.
+export async function confirmInvoiceVatSnapshot(executor, tenantId, invoiceId, snapshot) {
+  const { rows } = await executor.query(
+    `UPDATE invoices
+        SET vat_treatment_snapshot = $3,
+            charges_output_vat_snapshot = $4,
+            vat_scheme_code_snapshot = $5,
+            vat_snapshot_source = 'confirmed',
+            updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2 AND vat_snapshot_source = 'legacy_inferred'
+    RETURNING ${invoiceProjection()}`,
+    [
+      invoiceId, tenantId,
+      snapshot.vat_treatment_snapshot,
+      snapshot.charges_output_vat_snapshot,
+      snapshot.vat_scheme_code_snapshot ?? null,
+    ],
+  )
+  return rows[0] || null
+}
+
+export async function setInvoiceVatSnapshot(executor, invoiceId, snapshot) {
+  await executor.query(
+    `UPDATE invoices
+        SET accounting_country_snapshot = COALESCE(accounting_country_snapshot, $2),
+            vat_scheme_code_snapshot = COALESCE(vat_scheme_code_snapshot, $3),
+            vat_treatment_snapshot = COALESCE(vat_treatment_snapshot, $4),
+            charges_output_vat_snapshot = COALESCE(charges_output_vat_snapshot, $5),
+            vat_treatment_version = COALESCE(vat_treatment_version, $6),
+            vat_snapshot_source = COALESCE(vat_snapshot_source, $7),
+            updated_at = NOW()
+      WHERE id = $1`,
+    [
+      invoiceId,
+      snapshot.accounting_country_snapshot,
+      snapshot.vat_scheme_code_snapshot,
+      snapshot.vat_treatment_snapshot,
+      snapshot.charges_output_vat_snapshot,
+      snapshot.vat_treatment_version,
+      snapshot.vat_snapshot_source,
+    ],
+  )
+}
+
 export async function setInvoicePdfPath(executor, tenantId, invoiceId, pdfPath) {
   await executor.query(
     'UPDATE invoices SET pdf_path = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3',
@@ -180,15 +304,32 @@ export async function setInvoicePdfPath(executor, tenantId, invoiceId, pdfPath) 
   )
 }
 
-export async function finalizeInvoiceForPaymentLink(executor, tenantId, invoiceId) {
+// The second issuing path (draft -> sent for a payment link). Freezes the VAT
+// treatment in the same statement as finalized_at, and with the same
+// first-writer-wins COALESCE the PATCH path uses.
+export async function finalizeInvoiceForPaymentLink(executor, tenantId, invoiceId, snapshot) {
   const { rows } = await executor.query(
     `UPDATE invoices
         SET status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END,
             finalized_at = COALESCE(finalized_at, NOW()),
+            accounting_country_snapshot = COALESCE(accounting_country_snapshot, $3),
+            vat_scheme_code_snapshot = COALESCE(vat_scheme_code_snapshot, $4),
+            vat_treatment_snapshot = COALESCE(vat_treatment_snapshot, $5),
+            charges_output_vat_snapshot = COALESCE(charges_output_vat_snapshot, $6),
+            vat_treatment_version = COALESCE(vat_treatment_version, $7),
+            vat_snapshot_source = COALESCE(vat_snapshot_source, $8),
             updated_at = NOW()
       WHERE id = $1 AND tenant_id = $2
     RETURNING ${invoiceProjection()}`,
-    [invoiceId, tenantId],
+    [
+      invoiceId, tenantId,
+      snapshot.accounting_country_snapshot,
+      snapshot.vat_scheme_code_snapshot,
+      snapshot.vat_treatment_snapshot,
+      snapshot.charges_output_vat_snapshot,
+      snapshot.vat_treatment_version,
+      snapshot.vat_snapshot_source,
+    ],
   )
   return rows[0] || null
 }

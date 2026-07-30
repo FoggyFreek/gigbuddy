@@ -39,7 +39,7 @@ const BASE_INVOICE = {
   discount_pct: 0,
 }
 
-const CASES = {
+const RAW_CASES = {
   'nl-standard': {
     tenant: NL_TENANT,
     invoice: {
@@ -125,6 +125,32 @@ const CASES = {
     },
     lines: [{ description: 'Live performance', quantity: 1, unit_price_cents: 150000, tax_percentage: 21 }],
   },
+  // A band that is on the KOR TODAY, but whose historical invoice charged VAT.
+  // Migration 141 snapshots it as `standard`, because the document's own totals
+  // (and the output VAT the ledger posted from them) prove what it was issued
+  // as — the current scheme flag does not. Before this step the renderer read
+  // that live flag and zeroed the VAT, i.e. printed something the invoice never
+  // was; this golden pins the corrected behavior so it cannot regress back.
+  'kor-tenant-historical-vat': {
+    tenant: { ...NL_TENANT, applies_kor: true },
+    treatment: {
+      accounting_country: 'nl',
+      vat_scheme_code: 'nl_kor',
+      vat_treatment: 'standard',
+      schemeExempt: false,
+      chargesOutputVat: true,
+      inputVatRecoverable: false,
+      vat_treatment_version: 1,
+    },
+    invoice: {
+      ...BASE_INVOICE,
+      customer_address_country: 'NL',
+      customer_address_postal_code: '1011AB',
+      customer_address_city: 'Amsterdam',
+      customer_tax_id: 'NL819789471B01',
+    },
+    lines: [{ description: 'Live performance', quantity: 1, unit_price_cents: 150000, tax_percentage: 21 }],
+  },
   // Domestic German
   'de-domestic': {
     tenant: {
@@ -154,6 +180,37 @@ const CASES = {
     lines: [{ description: 'Live performance', quantity: 1, unit_price_cents: 150000, tax_percentage: 19 }],
   },
 }
+
+// The VAT treatment the renderer now takes as an input instead of deriving from
+// live tenant state. Derived here ONE-TO-ONE from what the fixtures' tenant flags
+// used to mean — `applies_kor` gated to NL, exactly what korApplies() did — so
+// every golden stays byte-identical and the regeneration diff proves it.
+//
+// Note reverse charge is NOT folded in: it is the invoice's own column and the
+// renderer still reads it there, which is why a case can override it in a spread
+// and still get the right document.
+function treatmentFor(tenant) {
+  const schemeExempt = Boolean(tenant.applies_kor) && tenant.vat_country === 'nl'
+  return {
+    accounting_country: tenant.vat_country,
+    vat_scheme_code: schemeExempt ? 'nl_kor' : null,
+    vat_treatment: schemeExempt ? 'small_business_exempt' : 'standard',
+    schemeExempt,
+    chargesOutputVat: !schemeExempt,
+    inputVatRecoverable: !schemeExempt,
+    vat_treatment_version: 1,
+  }
+}
+
+// A case may state its own treatment where the tenant flags cannot express it —
+// which is precisely the situation migration 141's evidence-first backfill
+// produces.
+const CASES = Object.fromEntries(
+  Object.entries(RAW_CASES).map(([name, input]) => [
+    name,
+    { ...input, treatment: input.treatment ?? treatmentFor(input.tenant) },
+  ]),
+)
 
 // Peppol adds network-addressing rules on top of EN 16931, and we deliberately
 // still emit documents that break some of them rather than refusing the

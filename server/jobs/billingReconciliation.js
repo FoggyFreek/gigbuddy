@@ -15,6 +15,7 @@ import {
   bumpCleanupAttempts,
 } from '../repositories/storageCleanupRepository.js'
 import { BILLING_TASKS } from './billingTasks.js'
+import { reconcileSchemeProjections } from './taxSchemeReconciliation.js'
 import { logger } from '../utils/logger.js'
 
 const TICK_INTERVAL_MS = 15 * 60 * 1000
@@ -68,6 +69,16 @@ export async function runReconciliationTick() {
       await drainStorageCleanupQueue(client)
     } catch (err) {
       logger.error('billing.reconcile_task_failed', { err, jobName: 'storage_cleanup' })
+    }
+    // Not a BILLING task, and deliberately not in BILLING_TASKS. It lives here
+    // because this is the only scheduler in the process and it already carries
+    // non-billing work: an enrolment scheduled to start or end on a future date
+    // changes the answer with no request to hang a write off, so the two legacy
+    // compatibility columns need a tick to catch up. Disappears with them.
+    try {
+      await reconcileSchemeProjections(pool)
+    } catch (err) {
+      logger.error('billing.reconcile_task_failed', { err, jobName: 'tax_scheme_projections' })
     }
     return true
   } finally {

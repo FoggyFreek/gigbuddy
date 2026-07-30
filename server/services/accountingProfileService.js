@@ -23,6 +23,7 @@ import {
   isProfileComplete,
   profilePresentationState,
 } from '../validators/accountingProfileValidators.js'
+import { resolveCurrentSalesTreatment } from './vatTreatmentService.js'
 import { defaultBaseCurrency } from '../../shared/accountingProfileCodes.js'
 import { normalizeVatCountry } from '../../shared/vatRates.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
@@ -89,7 +90,13 @@ async function repairMissingProfile(executor, tenantId) {
 export async function getAccountingProfile(db, tenantId) {
   const profile = await loadAccountingProfile(db, tenantId)
   if (!profile) return notFound('Accounting profile not found')
-  return { profile: present(profile) }
+
+  // The sales treatment in force TODAY, resolved from the scheme enrolment
+  // rather than read off tenants.applies_kor. The invoice form previews VAT with
+  // it, so a scheme scheduled to start or end shows up on its boundary date
+  // instead of whenever something last wrote the projection.
+  const currentSalesTreatment = await resolveCurrentSalesTreatment(db, tenantId)
+  return { profile: { ...present(profile), current_sales_treatment: currentSalesTreatment } }
 }
 
 // The read primitive for every downstream consumer of the accounting regime.
@@ -135,8 +142,14 @@ export async function patchAccountingProfile(db, tenantId, body = {}) {
 
     applyDerivedFields(updates, current, current.country_code)
 
+    // Before the VAT cascade: "you cannot set this field at all" outranks
+    // "this value needs registration", which the cascade would answer first.
+    assertFilingFrequencyNotRequested(body, current)
+
     const vatError = applyVatDependencyRules(updates, current)
     if (vatError) abortTransaction(badRequest(vatError))
+
+    assertSchemeExemptNotCleared(current, updates)
 
     // Completeness is derived, never client-supplied.
     updates.profile_status = isProfileComplete({ ...current, ...updates }) ? 'complete' : 'incomplete'
@@ -144,38 +157,64 @@ export async function patchAccountingProfile(db, tenantId, body = {}) {
     const updated = await updateAccountingProfile(client, tenantId, updates)
     if (!updated) abortTransaction(notFound('Accounting profile not found'))
 
-    await projectToLegacyColumns(client, tenantId, updates, current)
+    await projectToLegacyColumns(client, tenantId, updates)
 
     return { profile: present(updated) }
   }, { db })
 }
 
+// 'exempt' is DERIVED from the tenant's VAT scheme enrolment, not answered here.
+// The scheme carries dates, a jurisdiction and a confirmation, and issued
+// documents snapshot its outcome — a plain field write has none of that, and two
+// controls for one fact could disagree. So the enrolment editor owns it:
+// taxSchemeEnrolmentService.syncSchemeProjections is the only writer.
+//
+// Both directions are refused, including the value the vat_registered cascade
+// would derive, so the field can never drift away from the enrolment behind the
+// user's back.
+// The two directions a client could ask for, both refused before the VAT
+// cascade gets a chance to answer the less specific "that value needs
+// registration" — "you cannot set this field at all" is the more actionable
+// message and points at the control that does own it.
+function assertFilingFrequencyNotRequested(body, current) {
+  if (body.vat_filing_frequency === 'exempt') {
+    abortTransaction(conflict('Start a VAT scheme enrolment instead', {
+      code: 'filing_frequency_derived_from_scheme',
+    }))
+  }
+  if (current.vat_filing_frequency === 'exempt' && 'vat_filing_frequency' in body) {
+    abortTransaction(conflict('End the VAT scheme enrolment instead', {
+      code: 'filing_frequency_derived_from_scheme',
+    }))
+  }
+}
+
+// Catches the value the vat_registered cascade DERIVES, which no body check can
+// see: a KOR participant IS registered, so `vat_registered = false` forcing
+// 'not_applicable' would silently contradict the open enrolment.
+function assertSchemeExemptNotCleared(current, updates) {
+  const next = updates.vat_filing_frequency
+  if (current.vat_filing_frequency === 'exempt' && next !== undefined && next !== 'exempt') {
+    abortTransaction(conflict('End the VAT scheme enrolment instead', {
+      code: 'filing_frequency_derived_from_scheme',
+    }))
+  }
+}
+
 // Keeps the legacy tenants columns in step during the expand phase.
 //
-// `applies_kor` is projected from the filing frequency rather than being asked
-// separately: a small-business-scheme participant is exactly a registered band that
-// does not file, so two controls for one fact would be a duplicate that can
-// disagree. The flag is the one that actually suppresses VAT on invoices
-// (shared/invoiceTotals.js), so the visible answer has to drive it.
-//
-// It is only set for the Netherlands. The KOR is a Dutch national scheme —
-// korApplies() in shared/vatRates.js gates on that — and the equivalent schemes in
-// the other packs are not implemented, so recording the flag for them would claim
-// VAT suppression the invoice code does not perform. The UI says so.
-async function projectToLegacyColumns(client, tenantId, updates, current) {
+// `applies_kor` is deliberately NOT projected here any more. It is now a
+// projection of the scheme enrolment in force TODAY, which is a date-dependent
+// fact a field write cannot express: an enrolment can be scheduled to start or
+// end in the future. taxSchemeEnrolmentService.syncSchemeProjections owns it, and
+// server/jobs/taxSchemeReconciliation.js catches it up on boundary dates.
+async function projectToLegacyColumns(client, tenantId, updates) {
   const fields = []
   const values = []
   for (const key of LEGACY_PROJECTED_FIELDS) {
     if (!(key in updates)) continue
     fields.push(`${key} = $${fields.length + 1}`)
     values.push(updates[key])
-  }
-
-  if ('vat_filing_frequency' in updates) {
-    const exempt = updates.vat_filing_frequency === 'exempt'
-      && normalizeVatCountry(current.country_code) === 'nl'
-    fields.push(`applies_kor = $${fields.length + 1}`)
-    values.push(exempt)
   }
 
   if (fields.length) await updateTenantFields(client, tenantId, fields, values)

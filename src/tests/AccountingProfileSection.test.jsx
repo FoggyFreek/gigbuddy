@@ -15,9 +15,19 @@ vi.mock('../api/profile.ts', () => ({
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
 }))
+// The scheme editor renders inside this section; its own behaviour is covered by
+// VatSchemeEnrolments.test.jsx, so here it only needs to not hit the network.
+vi.mock('../api/taxSchemes.ts', () => ({
+  listTaxSchemeEnrolments: vi.fn(),
+  startTaxSchemeEnrolment: vi.fn(),
+  updateTaxSchemeEnrolment: vi.fn(),
+  voidTaxSchemeEnrolment: vi.fn(),
+  deleteTaxSchemeEnrolment: vi.fn(),
+}))
 
 import * as profileApi from '../api/accountingProfile.ts'
 import * as bandProfileApi from '../api/profile.ts'
+import * as schemeApi from '../api/taxSchemes.ts'
 import AccountingProfileSection from '../components/settings/AccountingProfileSection.tsx'
 import { AccountingProfileContext } from '../contexts/accountingProfileContext.ts'
 import theme from '../theme.ts'
@@ -43,6 +53,7 @@ const BASE_PROFILE = {
   vat_registered: null,
   vat_filing_frequency: 'unconfigured',
   pack_version: null,
+  current_sales_treatment: null,
 }
 
 // The section reads from the context and writes through the api, so the test
@@ -67,7 +78,8 @@ function wrap(overrides = {}, applyProfile = vi.fn()) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  bandProfileApi.getProfile.mockResolvedValue({ tax_percentage: 21, applies_kor: false })
+  bandProfileApi.getProfile.mockResolvedValue({ tax_percentage: 21 })
+  schemeApi.listTaxSchemeEnrolments.mockResolvedValue([])
   bandProfileApi.updateProfile.mockResolvedValue({})
   profileApi.updateAccountingProfile.mockImplementation(async (patch) => ({ ...BASE_PROFILE, ...patch }))
   profileApi.confirmAccountingProfile.mockResolvedValue({
@@ -196,28 +208,23 @@ describe('AccountingProfileSection', () => {
     expect(screen.queryByLabelText(/small-business scheme/i)).not.toBeInTheDocument()
   })
 
-  it('warns that an exempt scheme is not applied outside the Netherlands', async () => {
-    wrap({ country_code: 'de', vat_registered: true, vat_filing_frequency: 'exempt' })
-    expect(await screen.findByText(/only implemented for the Netherlands/i)).toBeInTheDocument()
-  })
-
-  it('does not warn for a Dutch exempt band', async () => {
-    wrap({ vat_registered: true, vat_filing_frequency: 'exempt' })
-    await screen.findByLabelText('Accounting country')
-    expect(screen.queryByText(/only implemented for the Netherlands/i)).not.toBeInTheDocument()
-  })
-
-  // A scheme participant stays VAT registered and simply stops filing, so 'exempt'
-  // has to be reachable — it is not the same statement as "not registered".
-  it('offers an exempt filing period for a registered band', async () => {
+  // 'exempt' is no longer a period a band picks: it is derived from a scheme
+  // enrolment, which carries dates and a jurisdiction this select cannot express.
+  it('does not offer exempt as a filing period', async () => {
     const user = userEvent.setup()
     wrap({ vat_registered: true })
 
     await user.click(await screen.findByLabelText('VAT filing frequency'))
-    await user.click(await screen.findByRole('option', { name: /exempt/i }))
+    expect(screen.queryByRole('option', { name: /exempt/i })).not.toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: 'Quarterly' })).toBeInTheDocument()
+  })
 
-    await waitFor(() => expect(profileApi.updateAccountingProfile)
-      .toHaveBeenCalledWith({ vat_filing_frequency: 'exempt' }))
+  it('locks the filing period and points at the scheme while one is in force', async () => {
+    wrap({ vat_registered: true, vat_filing_frequency: 'exempt' })
+    const field = await screen.findByLabelText('VAT filing frequency')
+    expect(field).toHaveAttribute('aria-disabled', 'true')
+    expect(await screen.findByText(/End the scheme below to choose a filing period/i))
+      .toBeInTheDocument()
   })
 
   it('surfaces a known backend error code as its translated message', async () => {

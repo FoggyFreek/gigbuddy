@@ -282,6 +282,15 @@ export interface Invoice {
   mollie_payment_link_id?: string
   mollie_payment_link_url?: string
   mollie_payment_status?: string
+  // The VAT treatment frozen when the invoice was ISSUED. Null on a draft, which
+  // resolves live instead. Read these rather than the tenant's current scheme
+  // whenever they are present — that is what keeps an issued invoice's figures
+  // stable after the band changes scheme.
+  accounting_country_snapshot?: string | null
+  vat_scheme_code_snapshot?: string | null
+  vat_treatment_snapshot?: string | null
+  charges_output_vat_snapshot?: boolean | null
+  currency?: string
   lines?: InvoiceLine[]
   tenant?: Tenant
 }
@@ -638,6 +647,52 @@ export interface AccountingProfile {
   vat_registered: boolean | null
   vat_filing_frequency: VatFilingFrequency
   pack_version: string | null
+  // The sales treatment in force TODAY, resolved server-side from the scheme
+  // enrolment. The invoice form previews VAT with it instead of `applies_kor`,
+  // which a scheduled enrolment leaves stale until its boundary date passes.
+  current_sales_treatment: CurrentSalesTreatment | null
+}
+
+export interface CurrentSalesTreatment {
+  accounting_country: string
+  vat_scheme_code: string | null
+  vat_treatment: string
+  // Whether the SCHEME suppresses output VAT. Reverse charge is the invoice's
+  // own field and is applied separately.
+  scheme_exempt: boolean
+  input_vat_recoverable: boolean
+}
+
+// What GOVERNS: only a national_home enrolment drives domestic VAT treatment and
+// the filing obligation. A per-destination EU SME exemption is recorded and
+// reported but never stops the home returns.
+export type SchemeScope = 'national_home' | 'eu_sme_destination'
+// 'legacy_inferred' rows were derived from the old applies_kor boolean by
+// migration 140: the scheme is provable, the start date is not.
+export type EnrolmentStatus = 'confirmed' | 'legacy_inferred'
+
+// One period of enrolment in a VAT scheme. Editing one never changes an already
+// issued invoice — those carry their own treatment snapshot.
+export interface TaxSchemeEnrolment {
+  id: Id
+  tenant_id: Id
+  // The tenant's own country for a national scheme; the DESTINATION member state
+  // for an EU SME enrolment.
+  country_code: string
+  scheme_code: string
+  scheme_scope: SchemeScope
+  valid_from: string
+  // INCLUSIVE last day; null means still open.
+  valid_to: string | null
+  status: EnrolmentStatus
+  source_confirmation_date: string | null
+  voided_at: string | null
+  void_reason: string | null
+  // Decorated by the server from shared/taxSchemes.js so the UI never re-derives
+  // them. `scheme_implemented` false means recorded, no VAT behavior.
+  scheme_label: string
+  scheme_implemented: boolean
+  scheme_sales_treatment: string | null
 }
 
 export interface JournalLine {

@@ -55,6 +55,11 @@ import {
   postBillPaid,
   correctLedgerTransaction,
 } from './ledgerService.js'
+import {
+  resolveLiveTreatment,
+  resolvePurchaseVatTreatment,
+  purchaseSnapshotColumns,
+} from './vatTreatmentService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { purchaseAttachmentKey, uploadObjectWithQuota, removeObject, safeRemove } from './storageService.js'
@@ -297,12 +302,17 @@ export async function createPurchase(
 
   return withTransaction(async (client) => {
     const receiptNumber = await nextPurchaseNumber(client, tenantId)
+    // Approval is the posting event and the moment the VAT treatment stops being
+    // re-derivable, so a create-as-approved freezes it here. A draft gets none.
+    const snapshot = status === 'approved'
+      ? purchaseSnapshotColumns(await resolveLiveTreatment(client, tenantId, receiptDate))
+      : null
     const purchaseId = await insertPurchase(client, tenantId, buildCreatePurchaseData({
       status, tenantId, receiptNumber, supplierName, supplierContactId,
       receiptDate, dueDate, currency, memo: body.memo || null, totals, actorUserId,
       supplierInvoiceNumber: normalizeSupplierInvoiceNumber(body.supplier_invoice_number),
       supplierImportData,
-    }))
+    }), snapshot)
     await insertPurchaseLines(client, purchaseId, tenantId, lines)
 
     // Approving a bill accrues the expense + payable. Draft bills post nothing.
@@ -426,13 +436,18 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
       abortTransaction({ error: { status: 400, body: { error: 'No valid fields to update' } } })
     }
 
+    const approving = body.status === 'approved' && existing.status !== 'approved'
     await updatePurchase(client, tenantId, id, {
       fields,
       totals,
       status: body.status,
       finalize: body.status !== undefined && body.status !== 'draft' && existing.finalized_at === null,
-      setApprovedBy: body.status === 'approved' && existing.status !== 'approved',
+      setApprovedBy: approving,
       approvedByUserId: actorUserId,
+      // Frozen in the same statement as finalized_at, before postBillAccrued.
+      snapshot: approving
+        ? purchaseSnapshotColumns(await resolvePurchaseVatTreatment(client, tenantId, existing))
+        : null,
     })
 
     // Transitioning a draft to approved accrues the expense + payable.

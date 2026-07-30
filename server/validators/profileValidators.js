@@ -99,15 +99,23 @@ const MEMORY_VALIDATORS = {
   memory_gig_id: validateMemoryGigId,
 }
 
-// Seller-identity fields printed on invoices (EN 16931 BT-27..BT-43) plus the two
-// VAT values still read live by the renderers.
+// Seller-identity fields printed on invoices (EN 16931 BT-27..BT-43) plus the
+// default VAT rate, still read live by the renderers.
 //
 // `vat_country` and `legal_form` are deliberately NOT here: they moved to the
 // accounting profile, where the country is immutable after band creation. Leaving
 // them patchable would let this endpoint produce a tenant whose accounting
-// jurisdiction disagrees with its profile. `tax_percentage` and `applies_kor`
-// stay until their readers are repointed — moving the control without moving the
-// behavior would mislead.
+// jurisdiction disagrees with its profile.
+//
+// `applies_kor` is gone for the same reason, one step further along: it is now a
+// PROJECTION of the tenant's VAT scheme enrolment in force today, owned by
+// taxSchemeEnrolmentService. A field write here could not express the dates, the
+// jurisdiction or the confirmation an enrolment carries, and would silently
+// disagree with it. A stale client still sending the field has it ignored rather
+// than rejected, so no browser left open across the deployment starts failing.
+//
+// `tax_percentage` stays until its readers are repointed — moving the control
+// without moving the behavior would mislead.
 export const FINANCIAL_FIELDS = [
   'formal_name',
   'address_street',
@@ -122,7 +130,6 @@ export const FINANCIAL_FIELDS = [
   'iban',
   'tax_id',
   'tax_percentage',
-  'applies_kor',
 ]
 
 export const FINANCIAL_FIELDS_SET = new Set(FINANCIAL_FIELDS)
@@ -164,12 +171,6 @@ export function normalizeRequiredProfileUrl(value) {
     throw err
   }
   return url
-}
-
-function validateAppliesKor(raw) {
-  if (raw === null || raw === undefined) return { skip: true }
-  if (typeof raw !== 'boolean') return { error: 'invalid_applies_kor' }
-  return { value: raw }
 }
 
 // Registration number (KvK/Handelsregister/SIREN/…), format per VAT country.
@@ -237,7 +238,6 @@ function makeOptionalPatternValidator(key, re) {
 }
 
 const FINANCIAL_VALIDATORS = {
-  applies_kor: validateAppliesKor,
   email: makeOptionalPatternValidator('email', EMAIL_RE),
   phone: makeOptionalPatternValidator('phone', PHONE_RE),
   tax_percentage: validateTaxPercentage,

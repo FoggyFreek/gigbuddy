@@ -264,23 +264,14 @@ describe('accounting profile — VAT dependency rules', () => {
     expect(res.body.vat_filing_frequency).toBe('unconfigured')
   })
 
-  // The small-business scheme is one fact with one control: choosing "exempt" is
-  // what enrols the band, and the server projects it onto the legacy applies_kor
-  // flag — the flag that actually suppresses VAT on invoices.
-  it('projects an exempt filing period onto the KOR flag for a Dutch band', async () => {
+  // 'exempt' is no longer a filing period a band picks: it is DERIVED from a VAT
+  // scheme enrolment, which carries dates, a jurisdiction and a confirmation this
+  // field cannot express. See taxSchemeEnrolments.test.js for the projection
+  // itself; here we only assert the field refuses to be the second control.
+  it('refuses an exempt filing period, pointing at the scheme instead', async () => {
     await patchProfile({ vat_registered: true }).expect(200)
-    await patchProfile({ vat_filing_frequency: 'exempt' }).expect(200)
-
-    const { rows: [tenant] } = await pool.query(
-      'SELECT applies_kor FROM tenants WHERE id = $1', [seed.tenantA.id],
-    )
-    expect(tenant.applies_kor).toBe(true)
-  })
-
-  it('clears the KOR flag when the band starts filing again', async () => {
-    await patchProfile({ vat_registered: true }).expect(200)
-    await patchProfile({ vat_filing_frequency: 'exempt' }).expect(200)
-    await patchProfile({ vat_filing_frequency: 'quarterly' }).expect(200)
+    const res = await patchProfile({ vat_filing_frequency: 'exempt' }).expect(409)
+    expect(res.body.code).toBe('filing_frequency_derived_from_scheme')
 
     const { rows: [tenant] } = await pool.query(
       'SELECT applies_kor FROM tenants WHERE id = $1', [seed.tenantA.id],
@@ -288,32 +279,22 @@ describe('accounting profile — VAT dependency rules', () => {
     expect(tenant.applies_kor).toBe(false)
   })
 
-  // The KOR is a Dutch scheme and korApplies() gates on that, so recording the flag
-  // for another country would claim VAT suppression the invoice code never performs.
-  it('does not set the KOR flag for a non-Dutch band', async () => {
-    await pool.query(`UPDATE tenants SET vat_country = 'de' WHERE id = $1`, [seed.tenantA.id])
-    await pool.query('DELETE FROM tenant_accounting_profiles WHERE tenant_id = $1', [seed.tenantA.id])
-    await getProfile().expect(200)
-
-    await patchProfile({ vat_registered: true }).expect(200)
-    const res = await patchProfile({ vat_filing_frequency: 'exempt' }).expect(200)
-    expect(res.body.vat_filing_frequency).toBe('exempt')
-
-    const { rows: [tenant] } = await pool.query(
-      'SELECT applies_kor FROM tenants WHERE id = $1', [seed.tenantA.id],
-    )
-    expect(tenant.applies_kor).toBe(false)
+  it('refuses an exempt filing period before registration is confirmed too', async () => {
+    // The scheme conflict outranks the less specific "that value needs
+    // registration": it names the control that actually owns the fact.
+    const res = await patchProfile({ vat_filing_frequency: 'exempt' }).expect(409)
+    expect(res.body.code).toBe('filing_frequency_derived_from_scheme')
   })
 
   it('an exempt band still counts as complete', async () => {
     await patchProfile({ local_legal_form_code: 'nl_eenmanszaak', vat_registered: true }).expect(200)
-    const res = await patchProfile({ vat_filing_frequency: 'exempt' }).expect(200)
-    expect(res.body.profile_status).toBe('complete')
-  })
+    // Enrolling is what makes it exempt, and the enrolment sets the field.
+    await asUserA(request(app).post('/api/accounting-profile/schemes'))
+      .send({ scheme_code: 'nl_kor', valid_from: '2020-01-01' }).expect(201)
 
-  it('rejects an exempt filing period while registration is not confirmed', async () => {
-    const res = await patchProfile({ vat_filing_frequency: 'exempt' }).expect(400)
-    expect(res.body.error).toBe('vat_fields_require_registration')
+    const res = await getProfile().expect(200)
+    expect(res.body.vat_filing_frequency).toBe('exempt')
+    expect(res.body.profile_status).toBe('complete')
   })
 
   it('rejects a filing period while registration is not confirmed', async () => {

@@ -339,9 +339,15 @@ describe('invoices — reverse charge & supply date', () => {
   })
 
   it('does not apply the Dutch KOR exemption for a non-NL tenant', async () => {
-    // applies_kor is a Dutch-only scheme, so a German tenant still charges VAT.
+    // The KOR is a Dutch national scheme, so a German tenant still charges VAT —
+    // even carrying the legacy flag, which the lazy enrolment repair only honours
+    // for the jurisdiction the flag was ever valid for.
     await pool.query(
       "UPDATE tenants SET vat_country = 'de', applies_kor = true WHERE id = $1",
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      "UPDATE tenant_accounting_profiles SET country_code = 'de' WHERE tenant_id = $1",
       [seed.tenantA.id],
     )
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload({

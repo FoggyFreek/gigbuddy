@@ -2,6 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
+import { auditLog } from '../utils/auditLog.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireEntitlement } from '../middleware/entitlements.js'
 import { FEATURES } from '../auth/entitlements.js'
@@ -18,6 +19,7 @@ import {
   patchInvoice,
   deleteInvoice,
   retryRenderPdf,
+  correctInvoiceVatSnapshot,
   uploadInvoiceLogo,
   removeInvoiceLogo,
   createInvoicePaymentLink,
@@ -113,6 +115,17 @@ router.post('/:id/render', requirePermission(PERMISSIONS.FINANCE_MANAGE), async 
   const result = await retryRenderPdf(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
   res.json({ pdf_path: result.pdf_path })
+})
+
+// Correct a VAT treatment snapshot that migration 141 INFERRED, and confirm it.
+// The service 409s anything already final — an inference may be corrected, an
+// issued or confirmed treatment may not.
+router.patch('/:id/vat-snapshot', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await correctInvoiceVatSnapshot(pool, req.tenantId, id, req.body || {})
+  if (result.error) return sendError(res, result.error)
+  auditLog(req, result.audit.action, result.audit.details)
+  res.json(result.invoice)
 })
 
 // Upload custom logo

@@ -2,7 +2,9 @@ import { useTranslation } from 'react-i18next'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import Divider from '@mui/material/Divider'
 import AccountingProfileFields from './AccountingProfileFields.tsx'
+import VatSchemeEnrolments from './VatSchemeEnrolments.tsx'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 
 // The Settings surface for the accounting profile: section chrome (title,
@@ -25,6 +27,12 @@ export default function AccountingProfileSection() {
       </Typography>
 
       <AccountingProfileFields />
+
+      {/* The scheme history sits inside this section rather than beside it:
+          "which scheme, since when" qualifies the same regime the fields above
+          describe, and the filing period they show is derived from it. */}
+      <Divider sx={{ my: 3 }} />
+      <VatSchemeEnrolments />
     </Paper>
   )
 }

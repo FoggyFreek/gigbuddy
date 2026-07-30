@@ -24,8 +24,7 @@ import {
   setSupplierIbanIfMissing,
   contactExistsInTenant,
 } from '../repositories/contactRepository.js'
-import { fetchTenantKorState } from '../repositories/tenantRepository.js'
-import { korApplies } from '../../shared/vatRates.js'
+import { resolveLiveTreatment } from './vatTreatmentService.js'
 import { normalizeIban } from '../utils/normalizeIban.js'
 import { indexSuppliers, matchSuppliers } from '../utils/supplierMatch.js'
 import { badRequest } from './serviceErrors.js'
@@ -628,7 +627,9 @@ async function journalLine(client, tenantId, line, decision, userId, expectedDir
   // frontend hides the control entirely; this is the authoritative backstop,
   // and it reports rather than silently dropping the VAT the caller asked for.
   const vatRate = decision.vatRate ?? null
-  if (vatRate && await tenantAppliesKor(client, tenantId)) return 'skipped_vat_not_allowed'
+  if (vatRate && await schemeSuppressesVatOn(client, tenantId, line.booking_date)) {
+    return 'skipped_vat_not_allowed'
+  }
 
   if (decision.action === 'journal_paid') {
     const supplierStatus = await resolveSupplier(client, tenantId, decision, line)
@@ -650,9 +651,13 @@ async function journalLine(client, tenantId, line, decision, userId, expectedDir
   return 'imported'
 }
 
-async function tenantAppliesKor(client, tenantId) {
-  const tenant = await fetchTenantKorState(client, tenantId)
-  return Boolean(tenant?.applies_kor) && korApplies(tenant.vat_country)
+// Resolved DATE-AWARE at the line's booking date, not from the legacy
+// tenants.applies_kor flag: an enrolment can start or end on a future date, and
+// importing a statement line dated either side of that boundary must follow the
+// scheme that actually applied then.
+async function schemeSuppressesVatOn(client, tenantId, bookingDate) {
+  const treatment = await resolveLiveTreatment(client, tenantId, toDateOnly(bookingDate))
+  return Boolean(treatment?.schemeExempt)
 }
 
 // Links or creates the supplier for an outgoing line. Persisting the supplier

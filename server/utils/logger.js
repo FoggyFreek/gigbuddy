@@ -17,6 +17,12 @@ const CONTEXT_KEYS = new Set([
   'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
   'achievementKey',
+  // VAT scheme / issued-document snapshot audit counters. All server-computed
+  // integers, never anything off a request.
+  'missingInvoiceSnapshots', 'missingPurchaseSnapshots', 'overlappingEnrolments',
+  'projectionDrift', 'repairedInvoices', 'repairedPurchases', 'repairedProjections',
+  'invoiceEvidenceConflicts', 'inputVatPostingDivergence',
+  'inferredInvoiceSnapshots', 'inferredPurchaseSnapshots', 'unimplementedSchemeInvoices',
 ])
 
 function safeCode(value) {

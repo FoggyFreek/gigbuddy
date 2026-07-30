@@ -16,10 +16,13 @@ import {
 import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import { getProfile, updateProfile } from '../../api/profile.ts'
-import { korApplies } from '../../utils/vatRates.ts'
 import type { AccountingProfile } from '../../types/entities.ts'
 
-const VAT_FREQUENCIES = ['monthly', 'quarterly', 'yearly', 'authority_assigned', 'exempt'] as const
+// 'exempt' is deliberately absent: it is DERIVED from a VAT scheme enrolment,
+// which carries dates, a jurisdiction and a confirmation this select cannot
+// express. The scheme editor below owns it, and the server rejects a direct
+// write in either direction so the two can never disagree.
+const VAT_FREQUENCIES = ['monthly', 'quarterly', 'yearly', 'authority_assigned'] as const
 const VAT_REGISTERED_OPTIONS = ['yes', 'no', 'unconfirmed'] as const
 
 // The error codes the backend can return for a profile write. Anything else falls
@@ -156,6 +159,16 @@ export default function AccountingProfileFields() {
 
   const registered = profile.vat_registered === true
   const vatFieldsDisabled = saving || !registered
+  // A scheme is in force: the filing period is 'exempt' and owned by the scheme
+  // editor, not by this select.
+  const schemeExempt = profile.vat_filing_frequency === 'exempt'
+
+  function schemeExemptHelper(): string {
+    if (schemeExempt) return t($ => $.accountingProfile.vatScheme.frequencyFromScheme)
+    return registered
+      ? t($ => $.accountingProfile.vatFilingFrequencyHelper)
+      : t($ => $.accountingProfile.notApplicable)
+  }
 
   return (
     <>
@@ -260,23 +273,27 @@ export default function AccountingProfileFields() {
 
         {/* The filing period only exists for a registered band. A band that is
             not registered has it stored as "not applicable" by the server, so
-            this renders disabled rather than demanding a meaningless choice. */}
+            this renders disabled rather than demanding a meaningless choice.
+            While a VAT scheme is in force the period is exempt and DERIVED, so
+            the select is replaced by a read-only statement pointing at the
+            control that owns it — offering a choice the server would reject
+            would be worse than not offering one. */}
         <TextField
           select
           id="accounting-profile-vat-frequency"
           label={t($ => $.accountingProfile.vatFilingFrequency)}
           fullWidth
           size="small"
-          disabled={vatFieldsDisabled}
-          value={registered && VAT_FREQUENCIES.includes(profile.vat_filing_frequency as typeof VAT_FREQUENCIES[number])
+          disabled={vatFieldsDisabled || schemeExempt}
+          value={!schemeExempt
+            && registered
+            && VAT_FREQUENCIES.includes(profile.vat_filing_frequency as typeof VAT_FREQUENCIES[number])
             ? profile.vat_filing_frequency
             : ''}
           onChange={(e) => void save({
             vat_filing_frequency: e.target.value as AccountingProfile['vat_filing_frequency'],
           })}
-          helperText={registered
-            ? t($ => $.accountingProfile.vatFilingFrequencyHelper)
-            : t($ => $.accountingProfile.notApplicable)}
+          helperText={schemeExemptHelper()}
         >
           <MenuItem value=""><em>{t($ => $.accountingProfile.unset)}</em></MenuItem>
           {VAT_FREQUENCIES.map((freq) => (
@@ -306,13 +323,6 @@ export default function AccountingProfileFields() {
           helperText={t($ => $.accountingProfile.defaultVatRateHelper)}
         />
 
-        {/* Choosing "exempt" is what enrols the band in its national small-business
-            scheme, and the server projects that onto the flag that suppresses VAT on
-            invoices. That projection only exists for the Netherlands so far, so say
-            plainly when it will not take effect rather than implying coverage. */}
-        {profile.vat_filing_frequency === 'exempt' && !korApplies(profile.country_code) && (
-          <Alert severity="warning">{t($ => $.accountingProfile.exemptNotImplemented)}</Alert>
-        )}
       </Stack>
     </>
   )

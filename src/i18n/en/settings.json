@@ -327,8 +327,7 @@
       "monthly": "Monthly",
       "quarterly": "Quarterly",
       "yearly": "Yearly",
-      "authority_assigned": "As assigned by the tax authority",
-      "exempt": "Exempt (small-business scheme)"
+      "authority_assigned": "As assigned by the tax authority"
     },
     "errors": {
       "unknown": "Could not save the accounting profile.",
@@ -339,10 +338,53 @@
       "vat_fields_required_when_registered": "A VAT-registered band needs a VAT basis and a filing frequency.",
       "invalid_financial_year_start": "That day does not exist in the chosen month.",
       "invalid_financial_year_start_month": "Choose a valid month.",
-      "invalid_financial_year_start_day": "Choose a valid day."
+      "invalid_financial_year_start_day": "Choose a valid day.",
+      "filing_frequency_derived_from_scheme": "The filing period follows the VAT scheme. Start or end a scheme below instead of setting this.",
+      "invalid_scheme_code": "Choose a scheme from the list.",
+      "scheme_country_mismatch": "That scheme does not belong to this band's accounting country.",
+      "invalid_country_code": "Choose a destination country.",
+      "invalid_valid_from": "Enter a valid first day.",
+      "invalid_valid_to": "Enter a valid last day.",
+      "valid_to_before_valid_from": "The last day cannot be before the first day.",
+      "invalid_source_confirmation_date": "Enter a valid confirmation date.",
+      "overlapping_enrolment": "Another enrolment already covers those dates.",
+      "scheme_requires_vat_registration": "A band on a VAT scheme is still registered for VAT. Set Registered for VAT to yes first.",
+      "enrolment_confirmed": "A confirmed enrolment is retracted, not deleted, so the history stays intact.",
+      "enrolment_referenced": "Invoices or bills were issued during this period, so it cannot be removed.",
+      "enrolment_voided": "This enrolment has been retracted and can no longer be edited.",
+      "nothing_to_update": "Change at least one date."
     },
     "defaultVatRate": "Default VAT rate",
     "defaultVatRateHelper": "Pre-filled on new invoice lines. You can still change the rate per line.",
-    "exemptNotImplemented": "Recorded, but not yet applied: suppressing VAT on invoices under a small-business scheme is currently only implemented for the Netherlands. Your invoices will keep charging VAT."
+    "vatScheme": {
+      "title": "VAT scheme",
+      "description": "Which small-business or cross-border scheme this band is enrolled in, and between which dates. Changing this never changes an invoice you have already sent — those keep the VAT treatment they were issued with.",
+      "start": "Start a scheme",
+      "startTitle": "Start a VAT scheme",
+      "editTitle": "Edit this enrolment",
+      "empty": "No scheme recorded. This band charges and files VAT normally.",
+      "scheme": "Scheme",
+      "validFrom": "First day",
+      "validFromHelper": "The date the scheme started applying, as stated by the tax authority.",
+      "validTo": "Last day",
+      "validToHelper": "The last day the scheme applied — that day is still covered. Leave empty while the scheme is ongoing.",
+      "confirmationDate": "Confirmation date",
+      "confirmationDateHelper": "Optional: the date on the letter or notice confirming the enrolment.",
+      "destinationCountry": "Destination country",
+      "destinationCountryHelper": "The member state that granted the exemption. The cross-border scheme is recorded per destination.",
+      "open": "Ongoing",
+      "destination": "Destination",
+      "edit": "Edit",
+      "retract": "Retract",
+      "cancel": "Cancel",
+      "save": "Save",
+      "inferred": "Start date not confirmed",
+      "recordedOnly": "Recorded only",
+      "voided": "Retracted",
+      "frequencyFromScheme": "Exempt: this band is on a VAT scheme, so it does not file periodic returns. End the scheme below to choose a filing period.",
+      "notImplemented": "This scheme will be recorded, but suppressing VAT on invoices is currently only implemented for the Dutch KOR. Your invoices will keep charging VAT.",
+      "destinationOnlyNote": "The cross-border scheme applies to sales into the destination country only. It does not change the VAT returns you file at home.",
+      "issuedUnaffected": "Invoices you have already sent keep the VAT treatment they were issued with, so correcting these dates is safe."
+    }
   }
 }
