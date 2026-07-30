@@ -105,8 +105,8 @@ export function isEuVatCountry(code) {
 }
 
 // The Dutch KOR is a NATIONAL small-business VAT exemption; it only applies when
-// the tenant's VAT country is the Netherlands. (The EU-wide SME scheme is a
-// separate, per-country enrolment and is not modelled by the applies_kor flag.)
+// the tenant's VAT country is the Netherlands. The EU-wide SME scheme is a
+// separate, per-country enrolment.
 export function korApplies(country) {
   return normalizeVatCountry(country) === 'nl'
 }

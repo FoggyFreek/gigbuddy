@@ -36,7 +36,8 @@ import {
 import { clearIntegrationCredential } from './integrationCredentialService.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import { setMollieKeyRetained } from '../repositories/integrationCredentialRepository.js'
-import { clearBandsintownArtist, clearTenantCustomization } from '../repositories/profileRepository.js'
+import { clearTenantCustomization } from '../repositories/profileRepository.js'
+import { clearBandsintownArtist } from '../repositories/tenantIntegrationRepository.js'
 import { deleteAllTokensForTenant } from '../repositories/calendarFeedRepository.js'
 import {
   listSongFileKeysForTenant,

@@ -6,7 +6,7 @@
 import {
   getShopifyClientId,
   getShopifyDomain,
-} from '../repositories/profileRepository.js'
+} from '../repositories/tenantIntegrationRepository.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import { loadIntegrationCredential } from './integrationCredentialService.js'
 

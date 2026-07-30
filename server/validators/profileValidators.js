@@ -235,12 +235,15 @@ function normalizeFinancialValue(key, raw, vatCountry) {
 function createSetBuilder() {
   const fields = []
   const values = []
+  const updates = []
   return {
     fields,
     values,
+    updates,
     push(key, value) {
       fields.push(`${key} = $${fields.length + 1}`)
       values.push(value)
+      updates.push({ field: key, value })
     },
   }
 }
@@ -278,7 +281,7 @@ export function buildProfileUpdate(body, { vatCountry = DEFAULT_VAT_COUNTRY } = 
     if (error) return { error }
   }
 
-  return { fields: builder.fields, values: builder.values }
+  return { fields: builder.fields, values: builder.values, updates: builder.updates }
 }
 
 // Builds the profile-link UPDATE SET fragments. Throws (err.status 400) when a

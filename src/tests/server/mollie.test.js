@@ -82,8 +82,12 @@ beforeEach(async () => {
 
   // Give tenant A a Mollie key and financial data.
   await pool.query(
-    `UPDATE tenants SET mollie_api_key = 'test_mollie_key_alpha', band_name = 'Alpha Band'
-      WHERE id = $1`,
+    `UPDATE tenants SET band_name = 'Alpha Band' WHERE id = $1`,
+    [seed.tenantA.id],
+  )
+  await pool.query(
+    `INSERT INTO tenant_integrations (tenant_id, mollie_api_key)
+     VALUES ($1, 'test_mollie_key_alpha')`,
     [seed.tenantA.id],
   )
 
@@ -301,7 +305,10 @@ describe('POST /api/invoices/:id/payment-link', () => {
   })
 
   it('returns 400 when tenant has no Mollie key', async () => {
-    await pool.query('UPDATE tenants SET mollie_api_key = NULL WHERE id = $1', [seed.tenantA.id])
+    await pool.query(
+      'UPDATE tenant_integrations SET mollie_api_key = NULL WHERE tenant_id = $1',
+      [seed.tenantA.id],
+    )
     const inv = await createInvoiceA()
     const res = await asUserA(request(app).post(`/api/invoices/${inv.id}/payment-link`)).send({})
     expect(res.status).toBe(400)
@@ -710,7 +717,10 @@ describe('GET /api/profile/mollie-key', () => {
   })
 
   it('reports isSet:false when no key is stored', async () => {
-    await pool.query('UPDATE tenants SET mollie_api_key = NULL WHERE id = $1', [seed.tenantA.id])
+    await pool.query(
+      'UPDATE tenant_integrations SET mollie_api_key = NULL WHERE tenant_id = $1',
+      [seed.tenantA.id],
+    )
     const res = await asUserA(request(app).get('/api/profile/mollie-key'))
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ isSet: false, changedAt: null })
@@ -721,7 +731,8 @@ describe('GET /api/profile/mollie-key', () => {
     const res = await asUserA(request(app).put('/api/profile/mollie-key').send({ key: value })).expect(200)
     expect(res.body).toEqual({ isSet: true, changedAt: expect.any(String) })
     const { rows: [stored] } = await pool.query(
-      'SELECT mollie_api_key, mollie_api_key_encrypted FROM tenants WHERE id = $1',
+      `SELECT mollie_api_key, mollie_api_key_encrypted
+         FROM tenant_integrations WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
     expect(stored.mollie_api_key).toBeNull()

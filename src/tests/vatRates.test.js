@@ -41,16 +41,16 @@ describe('vatRates country config', () => {
     expect(VAT_COUNTRY_CODES.length).toBeGreaterThan(1)
   })
 
-  it('keeps the tenants.vat_country DB constraint in sync with VAT_COUNTRIES', () => {
+  it('keeps the accounting-profile country CHECK in sync with VAT_COUNTRIES', () => {
     // The CHECK enumerates the supported codes so an unsupported country cannot
     // be stored (and then silently compute at Dutch rates). If a country is
     // added to VAT_COUNTRIES without extending the migration constraint, the DB
     // would reject saving it — this guards against that drift.
     const migration = readFileSync(
-      resolve(globalThis.process.cwd(), 'server/db/migrations/125_tenant_vat_country.sql'),
+      resolve(globalThis.process.cwd(), 'server/db/migrations/137_accounting_profile.sql'),
       'utf8',
     )
-    const inClause = migration.match(/vat_country IN \(([^)]*)\)/)
+    const inClause = migration.match(/country_code IN \(([^)]*)\)/)
     expect(inClause).not.toBeNull()
     const constraintCodes = [...inClause[1].matchAll(/'([a-z]{2})'/g)].map((m) => m[1])
     expect(new Set(constraintCodes)).toEqual(new Set(VAT_COUNTRY_CODES))

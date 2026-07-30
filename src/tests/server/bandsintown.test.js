@@ -139,7 +139,11 @@ function fakeBandsintown({ artist = ARTIST_JSON, events = [EVENT_JSON, EVENT_JSO
 
 async function setTenantArtist(tenantId, { id = '15556138', name = null } = {}) {
   await pool.query(
-    'UPDATE tenants SET bandsintown_artist_id = $2, bandsintown_artist_name = $3 WHERE id = $1',
+    `INSERT INTO tenant_integrations (tenant_id, bandsintown_artist_id, bandsintown_artist_name)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (tenant_id)
+     DO UPDATE SET bandsintown_artist_id = EXCLUDED.bandsintown_artist_id,
+                   bandsintown_artist_name = EXCLUDED.bandsintown_artist_name`,
     [tenantId, id, name],
   )
 }
@@ -243,7 +247,8 @@ describe('/api/profile/bandsintown-key', () => {
 
     // Stored encrypted, plaintext column stays empty.
     const { rows: [row] } = await pool.query(
-      'SELECT bandsintown_app_id, bandsintown_app_id_encrypted FROM tenants WHERE id = $1',
+      `SELECT bandsintown_app_id, bandsintown_app_id_encrypted
+         FROM tenant_integrations WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
     expect(row.bandsintown_app_id).toBeNull()

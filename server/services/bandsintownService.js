@@ -26,6 +26,7 @@ import {
 } from '../repositories/gigRepository.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import { loadIntegrationCredential } from './integrationCredentialService.js'
+import { fetchBandsintownArtist } from '../repositories/tenantIntegrationRepository.js'
 
 const API_BASE = 'https://rest.bandsintown.com'
 
@@ -104,11 +105,7 @@ export async function fetchArtistById(db, tenantId, artistIdRaw, fetchImpl = glo
 }
 
 async function loadTenantArtistConfig(db, tenantId) {
-  const { rows } = await db.query(
-    'SELECT bandsintown_artist_id, bandsintown_artist_name FROM tenants WHERE id = $1',
-    [tenantId],
-  )
-  return rows[0] ?? null
+  return fetchBandsintownArtist(db, tenantId)
 }
 
 // Lean projection of tenant venues for matching (no contacts/years).

@@ -1,26 +1,17 @@
 // Consistency audit + repair for tenant_accounting_profiles.
 //
-// This is now the ONLY repair path: the app no longer creates a profile lazily
-// on read, it reports 409 accounting_profile_missing instead.
+// The ONLY repair path: a missing profile is a 409 accounting_profile_missing,
+// never created lazily.
 //
-// --check reports and exits 2 when anything is inconsistent (no writes).
-// --apply repairs missing rows and missing default VAT rates.
+//   --check                              report only, exits 2 when inconsistent
+//   --apply                              fill missing default VAT rates
+//   --apply --tenant=<id> --country=<cc> insert the profile for one tenant
 //
-// Two faults are checked:
-//   missing profile        a tenant with no profile row. Only possible for a
-//                          tenant created before the profile became mandatory,
-//                          so tenants.vat_country is the country it was really
-//                          created with and --apply may derive from it. Once
-//                          that column is dropped this repair needs the country
-//                          supplied by hand.
-//   missing default rate   migration 142 added default_vat_rate; a profile
-//                          inserted during that migration's window has none, and
-//                          every rate-dependent read would produce NaN.
-//
-// The former country-mismatch check is gone: tenants.vat_country is no longer
-// written, so every band created after that change disagrees with it by
-// construction. Reconciling the two was the gate for THIS step and had to pass
-// before it shipped.
+// Two faults:
+//   missing profile        nothing records a jurisdiction for it and one is never
+//                          guessed, so the repair takes an explicit --country.
+//   missing default rate   rate-dependent reads would produce NaN. The profile's
+//                          own country_code fills it, so --apply repairs in bulk.
 import 'dotenv/config'
 import { pathToFileURL } from 'node:url'
 import pool from '../db/index.js'
@@ -33,9 +24,9 @@ import {
   updateAccountingProfile,
 } from '../repositories/accountingProfileRepository.js'
 import { defaultBaseCurrency } from '../../shared/accountingProfileCodes.js'
-import { getStandardVatRate } from '../../shared/vatRates.js'
+import { getStandardVatRate, isKnownVatCountry, normalizeVatCountry } from '../../shared/vatRates.js'
 
-export async function auditAccountingProfiles(executor, { apply = false } = {}) {
+export async function auditAccountingProfiles(executor, { apply = false, repairTenant = null } = {}) {
   const missing = await findTenantsWithoutProfile(executor)
   const missingRate = await findProfilesMissingDefaultVatRate(executor)
 
@@ -51,11 +42,15 @@ export async function auditAccountingProfiles(executor, { apply = false } = {}) 
   counts.tenants = bySource.reduce((total, row) => total + row.count, 0)
 
   if (apply) {
-    for (const row of missing) {
-      const inserted = await insertAccountingProfile(executor, row.tenant_id, {
-        country_code: row.vat_country,
-        base_currency: defaultBaseCurrency(row.vat_country),
-        default_vat_rate: getStandardVatRate(row.vat_country),
+    // Only when named: the country is the operator's assertion about that band.
+    if (repairTenant) {
+      if (!missing.some((row) => row.tenant_id === repairTenant.tenantId)) {
+        throw new Error(`Tenant ${repairTenant.tenantId} has no missing profile to repair`)
+      }
+      const inserted = await insertAccountingProfile(executor, repairTenant.tenantId, {
+        country_code: repairTenant.countryCode,
+        base_currency: defaultBaseCurrency(repairTenant.countryCode),
+        default_vat_rate: getStandardVatRate(repairTenant.countryCode),
         legal_form: null,
         profile_source: 'repair',
         profile_status: 'incomplete',
@@ -70,7 +65,10 @@ export async function auditAccountingProfiles(executor, { apply = false } = {}) 
     }
   }
 
-  const ok = apply || (counts.migrationNeeded === 0 && counts.rateMissing === 0)
+  // A still-missing profile keeps the run non-ok, so a repair run cannot read as
+  // "all clean" while work remains.
+  const ok = counts.migrationNeeded - counts.migrated === 0
+    && (apply || counts.rateMissing === 0)
   return { counts, ok, missing, missingRate, bySource }
 }
 
@@ -86,8 +84,7 @@ function reportDetails(result) {
     })
   }
   for (const row of result.bySource) {
-    // 'repair' rows had their country derived rather than chosen — worth a human
-    // look before the legacy column they were derived from is dropped.
+    // 'repair' rows had their country supplied by hand — worth a human look.
     const level = row.profile_source === 'repair' ? 'warn' : 'info'
     logger[level]('accounting_profile_audit.source', {
       operation: row.profile_source, tenants: row.count,
@@ -95,14 +92,41 @@ function reportDetails(result) {
   }
 }
 
-async function main() {
-  const args = process.argv.slice(2)
-  if (args.length !== 1 || !['--check', '--apply'].includes(args[0])) {
-    throw new Error('Usage: node server/scripts/backfillAccountingProfiles.js --check|--apply')
+const USAGE = 'Usage: node server/scripts/backfillAccountingProfiles.js --check'
+  + ' | --apply [--tenant=<id> --country=<cc>]'
+
+export function parseArgs(argv) {
+  const mode = argv[0]
+  if (mode !== '--check' && mode !== '--apply') throw new Error(USAGE)
+
+  const rest = argv.slice(1)
+  if (mode === '--check' && rest.length) throw new Error(USAGE)
+
+  const flags = new Map()
+  for (const arg of rest) {
+    const match = /^--(tenant|country)=(.+)$/.exec(arg)
+    if (!match) throw new Error(USAGE)
+    flags.set(match[1], match[2])
   }
-  const result = await auditAccountingProfiles(pool, { apply: args[0] === '--apply' })
+  if (!flags.size) return { apply: mode === '--apply', repairTenant: null }
+  if (flags.size !== 2) throw new Error('--tenant and --country must be given together')
+
+  const tenantId = Number(flags.get('tenant'))
+  if (!Number.isInteger(tenantId) || tenantId <= 0) throw new Error('--tenant must be a positive integer')
+
+  const countryCode = normalizeVatCountry(flags.get('country'))
+  if (!isKnownVatCountry(countryCode)) throw new Error(`Unsupported --country: ${flags.get('country')}`)
+
+  return { apply: true, repairTenant: { tenantId, countryCode } }
+}
+
+async function main() {
+  const options = parseArgs(process.argv.slice(2))
+  const result = await auditAccountingProfiles(pool, options)
   reportDetails(result)
-  logger.info('accounting_profile_audit.completed', { mode: args[0].slice(2), ...result.counts })
+  logger.info('accounting_profile_audit.completed', {
+    mode: options.apply ? 'apply' : 'check', ...result.counts,
+  })
   if (!result.ok) process.exitCode = 2
 }
 

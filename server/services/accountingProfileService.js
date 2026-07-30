@@ -43,11 +43,10 @@ import {
 import { lockTenantRow } from '../repositories/tenantRepository.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
 
-// Nothing derives a profile any more: with `tenants.vat_country` no longer
-// written there is nothing truthful to fall back on, so a missing row is an
-// explicit fault. server/index.js turns a 4xx `status` into { error, code }, so
-// this reaches the client as 409 from every route. Repair with
-// `backfillAccountingProfiles.js --apply`.
+// A profile is never derived — there is nothing truthful to fall back on — so a
+// missing row is an explicit fault. server/index.js turns a 4xx `status` into
+// { error, code }, so this reaches the client as 409 from every route. Repair
+// with `backfillAccountingProfiles.js --apply --tenant=<id> --country=<cc>`.
 export class AccountingProfileMissingError extends Error {
   constructor(tenantId) {
     super('This band has no accounting profile yet')

@@ -4,13 +4,12 @@ const SAFE_TENANT_COLUMNS = Object.freeze([
   'id', 'slug', 'band_name', 'bio', 'short_bio',
   'instagram_handle', 'facebook_handle', 'tiktok_handle', 'youtube_handle', 'spotify_handle',
   'logo_path', 'created_by_user_id', 'created_at', 'updated_at', 'archived_at',
-  'accent_color', 'bandsintown_artist_name', 'bandsintown_artist_id',
+  'accent_color',
   'formal_name', 'address_street', 'address_postal_code', 'address_city', 'address_country',
   'kvk_number', 'registration_office', 'directors',
   'email', 'phone',
   'iban', 'tax_id',
   'banner_path', 'avatar_path', 'logo_dark_path',
-  'memory_image_path', 'memory_caption', 'memory_gig_id',
   'owner_user_id',
 ])
 

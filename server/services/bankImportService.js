@@ -649,10 +649,9 @@ async function journalLine(client, tenantId, line, decision, userId, expectedDir
   return 'imported'
 }
 
-// Resolved DATE-AWARE at the line's booking date, not from the legacy
-// tenants.applies_kor flag: an enrolment can start or end on a future date, and
-// importing a statement line dated either side of that boundary must follow the
-// scheme that actually applied then.
+// Resolved DATE-AWARE at the line's booking date: an enrolment can start or end
+// on a future date, and a statement line dated either side of that boundary must
+// follow the scheme that actually applied then.
 async function schemeSuppressesVatOn(client, tenantId, bookingDate) {
   const treatment = await resolveLiveTreatment(client, tenantId, toDateOnly(bookingDate))
   return Boolean(treatment?.schemeExempt)

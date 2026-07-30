@@ -116,7 +116,9 @@ function order(overrides = {}) {
 
 async function configureShopify(tenantId) {
   await pool.query(
-    'UPDATE tenants SET shopify_client_id = $1, shopify_client_secret = $2, shopify_shop_domain = $3 WHERE id = $4',
+    `INSERT INTO tenant_integrations (
+       shopify_client_id, shopify_client_secret, shopify_shop_domain, tenant_id
+     ) VALUES ($1, $2, $3, $4)`,
     ['a'.repeat(32), 'b'.repeat(32), 'test-band.myshopify.com', tenantId],
   )
 }

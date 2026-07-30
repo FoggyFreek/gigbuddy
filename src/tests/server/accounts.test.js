@@ -1,27 +1,20 @@
 import './_envSetup.js'
 // @vitest-environment node
-import { readFileSync } from 'fs'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import request from 'supertest'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-
-let app, pool, runMigrations, truncateAll, seedTwoTenants, DEFAULT_ACCOUNTS, defaultReportingGroupForType
+let app, pool, runMigrations, truncateAll, seedTwoTenants, DEFAULT_ACCOUNTS
 let seed
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
   const seedMod = await import('../../../server/db/defaultChartOfAccounts.js')
-  const reportingMod = await import('../../../server/domain/accountReportingGroups.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   DEFAULT_ACCOUNTS = seedMod.DEFAULT_ACCOUNTS
-  defaultReportingGroupForType = reportingMod.defaultReportingGroupForType
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -93,7 +86,6 @@ describe('accounts — seeding (JS path)', () => {
     )
     expect(rows).toHaveLength(1)
     const s = rows[0]
-    expect(s.currency).toBe('EUR')
     expect(s.receivable_account_code).toBe('11200')
     expect(s.default_revenue_account_code).toBe('41000')
     expect(s.payable_account_code).toBe('21100')
@@ -115,86 +107,6 @@ describe('accounts — seeding (JS path)', () => {
     )
     expect(aRows[0].n).toBe(DEFAULT_ACCOUNTS.length)
     expect(bRows[0].n).toBe(DEFAULT_ACCOUNTS.length)
-  })
-})
-
-describe('accounts — migration backfill parity', () => {
-  it('backfill SQL produces the same accounts as the JS seed', async () => {
-    // Insert a bare tenant (no JS seeding), run the idempotent migration, verify
-    const { rows: [bare] } = await pool.query(
-      `INSERT INTO tenants (slug, band_name) VALUES ('bare', 'Bare Band') RETURNING id`,
-    )
-    // The current test schema already has migration 123's constraint. Remove
-    // it while replaying the older backfills, then 123 restores it after it has
-    // populated reporting_group for those legacy-style rows.
-    await pool.query('ALTER TABLE chart_of_accounts DROP CONSTRAINT IF EXISTS chart_of_accounts_reporting_group_check')
-    const migrationSql = readFileSync(
-      join(__dirname, '../../../server/db/migrations/064_chart_of_accounts.sql'),
-      'utf8',
-    )
-    await pool.query(migrationSql)
-    // 075 adds the VAT settlement accounts (15010/24010) for existing tenants;
-    // replay it too so the SQL-backfilled tenant matches the JS seed.
-    const vatMigrationSql = readFileSync(
-      join(__dirname, '../../../server/db/migrations/075_vat_returns.sql'),
-      'utf8',
-    )
-    await pool.query(vatMigrationSql)
-    // 081 adds the is_capitalizable flag + the depreciation accounts (13100/62900)
-    // for existing tenants; replay it too so the SQL-backfilled tenant matches.
-    const capitalizableMigrationSql = readFileSync(
-      join(__dirname, '../../../server/db/migrations/081_account_capitalizable.sql'),
-      'utf8',
-    )
-    await pool.query(capitalizableMigrationSql)
-    // 082 adds the cash-on-hand account (11100) for existing tenants; replay it
-    // too so the SQL-backfilled tenant matches the JS seed.
-    const cashAccountMigrationSql = readFileSync(
-      join(__dirname, '../../../server/db/migrations/082_merch_cash_account.sql'),
-      'utf8',
-    )
-    await pool.query(cashAccountMigrationSql)
-    // 121 adds Other Operating Income and its Grants & Subsidies subaccount.
-    const otherOperatingIncomeMigrationSql = readFileSync(
-      join(__dirname, '../../../server/db/migrations/121_other_operating_income.sql'),
-      'utf8',
-    )
-    await pool.query(otherOperatingIncomeMigrationSql)
-    // 123 separates P&L reporting placement from debit/credit account type.
-    const reportingGroupsMigrationSql = readFileSync(
-      join(__dirname, '../../../server/db/migrations/123_account_reporting_groups.sql'),
-      'utf8',
-    )
-    await pool.query(reportingGroupsMigrationSql)
-
-    const { rows: accs } = await pool.query(
-      `SELECT code, name, type, parent_code, is_capitalizable, reporting_group
-         FROM chart_of_accounts WHERE tenant_id = $1 ORDER BY code`,
-      [bare.id],
-    )
-    const jsCodes = DEFAULT_ACCOUNTS.map((a) => a.code).sort()
-    const sqlCodes = accs.map((a) => a.code).sort()
-    expect(sqlCodes).toEqual(jsCodes)
-
-    for (const acc of DEFAULT_ACCOUNTS) {
-      const row = accs.find((r) => r.code === acc.code)
-      expect(row).toBeDefined()
-      expect(row.name).toBe(acc.name)
-      expect(row.type).toBe(acc.type)
-      expect(row.parent_code).toBe(acc.parent_code ?? null)
-      expect(row.is_capitalizable).toBe(Boolean(acc.capitalizable))
-      expect(row.reporting_group).toBe(acc.reporting_group ?? defaultReportingGroupForType(acc.type))
-    }
-
-    const { rows: [s] } = await pool.query(
-      'SELECT * FROM tenant_accounting_settings WHERE tenant_id = $1',
-      [bare.id],
-    )
-    expect(s).toBeDefined()
-    expect(s.currency).toBe('EUR')
-    expect(s.primary_checking_account_code).toBe('11000')
-    expect(s.cash_account_code).toBe('11100')
-    expect(s.default_reimbursement_account_code).toBe('22000')
   })
 })
 
@@ -681,6 +593,5 @@ describe('tenant creation — seeds accounts', () => {
       [res.body.id],
     )
     expect(settings).toHaveLength(1)
-    expect(settings[0].currency).toBe('EUR')
   })
 })

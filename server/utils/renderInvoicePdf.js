@@ -72,7 +72,7 @@ function bufferDocument(doc) {
 // The tenant is still the source of seller IDENTITY (name, address, VAT id,
 // registration number) — that is not snapshotted yet, so a re-render is
 // regime-immutable but not identity-immutable.
-export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer, treatment }) {
+export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer, treatment, legalForm = null }) {
   if (!treatment) throw new Error('renderInvoicePdf requires a resolved VAT treatment')
   const doc = new PDFDocument({ size: 'A4', margin: PAGE_MARGIN })
   const done = bufferDocument(doc)
@@ -119,7 +119,7 @@ export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer, tre
     }
   }
 
-  const ctx = { t, locale, currency, country }
+  const ctx = { t, locale, currency, country, legalForm }
   const titleBottom = drawTitle(doc, invoice, tenant, logoBuffer, ctx)
   const addrBottom  = drawAddresses(doc, invoice, tenant, titleBottom + 20, ctx)
   hline(doc, PAGE_MARGIN, RIGHT_EDGE, addrBottom + 8)
@@ -179,7 +179,7 @@ function drawTitle(doc, invoice, tenant, logoBuffer, { t, locale }) {
 // Sender (band) details left-aligned; customer right-aligned.
 
 // Registration numbers, labelled by the supplier's VAT country.
-function buildRegistrationLines(tenant, t, country) {
+function buildRegistrationLines(tenant, t, country, legalForm) {
   const regLabel = getRegistrationLabel(country)
   const officeLabel = getRegistrationOfficeLabel(country)
   return [
@@ -188,13 +188,13 @@ function buildRegistrationLines(tenant, t, country) {
       ? `${officeLabel}: ${tenant.registration_office}` : null,
     tenant.tax_id     ? `${getVatIdLabel(country)}: ${tenant.tax_id}` : null,
     // Company-law disclosure (e.g. GmbHG §35a): incorporated bands only.
-    requiresCompanyDisclosure(tenant.legal_form) && tenant.directors
+    requiresCompanyDisclosure(legalForm) && tenant.directors
       ? `${t('directors')}: ${tenant.directors}` : null,
   ].filter(Boolean)
 }
 
 // Left column. Returns the y below it.
-function drawSenderColumn(doc, tenant, startY, colW, { t, country }) {
+function drawSenderColumn(doc, tenant, startY, colW, { t, country, legalForm }) {
   let leftY = startY
   const senderName = tenant.formal_name || tenant.band_name || ''
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#000')
@@ -220,7 +220,7 @@ function drawSenderColumn(doc, tenant, startY, colW, { t, country }) {
     leftY += 12
   }
 
-  const regLines = buildRegistrationLines(tenant, t, country)
+  const regLines = buildRegistrationLines(tenant, t, country, legalForm)
   if (regLines.length) {
     leftY += 4
     doc.fontSize(8).fillColor('#555')
@@ -269,10 +269,10 @@ function drawCustomerColumn(doc, invoice, startY, colW, rightColX, { t }) {
   return rightY
 }
 
-function drawAddresses(doc, invoice, tenant, startY, { t, country }) {
+function drawAddresses(doc, invoice, tenant, startY, { t, country, legalForm }) {
   const colW = Math.floor(USABLE_W / 2) - 10
   const rightColX = PAGE_MARGIN + colW + 20
-  const leftY = drawSenderColumn(doc, tenant, startY, colW, { t, country })
+  const leftY = drawSenderColumn(doc, tenant, startY, colW, { t, country, legalForm })
   const rightY = drawCustomerColumn(doc, invoice, startY, colW, rightColX, { t })
   return Math.max(leftY, rightY)
 }

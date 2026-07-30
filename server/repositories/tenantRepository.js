@@ -211,7 +211,8 @@ export async function fetchTenantAssetKeys(executor, tenantId) {
        UNION ALL SELECT banner_path FROM tenants WHERE id = $1
        UNION ALL SELECT avatar_path FROM tenants WHERE id = $1
        UNION ALL SELECT logo_dark_path FROM tenants WHERE id = $1
-       UNION ALL SELECT memory_image_path FROM tenants WHERE id = $1
+       UNION ALL SELECT image_path FROM dashboard_tiles
+        WHERE tenant_id = $1 AND type = 'memory_tile'
        UNION ALL SELECT banner_path FROM gigs WHERE tenant_id = $1
        UNION ALL SELECT object_key FROM share_photos WHERE tenant_id = $1
        UNION ALL SELECT object_key FROM gig_attachments WHERE tenant_id = $1

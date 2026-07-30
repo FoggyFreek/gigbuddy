@@ -66,12 +66,11 @@ export async function markProfileReviewed(executor, tenantId, userId) {
   return rows[0] || null
 }
 
-// Tenants with no profile row. Only a tenant created before the profile became
-// mandatory can be one, so its legacy `vat_country` is still the country that
-// tenant was actually created with — which is what --apply repairs from.
+// Tenants with no profile row. Nothing on the tenant row records a country, so
+// repairing one takes an operator supplying it explicitly.
 export async function findTenantsWithoutProfile(executor) {
   const { rows } = await executor.query(
-    `SELECT t.id AS tenant_id, t.slug, t.vat_country
+    `SELECT t.id AS tenant_id, t.slug
        FROM tenants t
        LEFT JOIN tenant_accounting_profiles p ON p.tenant_id = t.id
       WHERE p.tenant_id IS NULL

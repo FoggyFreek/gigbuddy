@@ -69,12 +69,12 @@ async function applyOperation(executor, operation, config) {
   const envelope = encryptIntegrationSecret(value, row.id, credential.type, config)
   decryptIntegrationSecret(envelope, row.id, credential.type, config)
   await executor.query(
-    `UPDATE tenants
+    `UPDATE tenant_integrations
         SET ${credential.encrypted} = $1::jsonb,
             ${credential.legacy} = NULL,
             ${credential.changedAt} = ${kind === 'migrate' ? 'COALESCE(' + credential.changedAt + ', NOW())' : credential.changedAt},
             updated_at = NOW()
-      WHERE id = $2`,
+      WHERE tenant_id = $2`,
     [JSON.stringify(envelope), row.id],
   )
 }
@@ -88,7 +88,7 @@ async function applyOperations(executor, operations, config, counts) {
   const { rows: [remaining] } = await executor.query(
     `SELECT ((COUNT(*) FILTER (WHERE mollie_api_key IS NOT NULL))
             + (COUNT(*) FILTER (WHERE shopify_client_secret IS NOT NULL)))::int AS count
-       FROM tenants`,
+       FROM tenant_integrations`,
   )
   counts.plaintextRemaining = remaining.count
   if (counts.plaintextRemaining !== 0) throw new Error('integration_secret_plaintext_remaining')
@@ -99,10 +99,10 @@ export async function migrateIntegrationSecrets(executor, { apply = false } = {}
   await executor.query('BEGIN')
   try {
     const { rows } = await executor.query(
-      `SELECT id,
+      `SELECT tenant_id AS id,
               mollie_api_key, mollie_api_key_encrypted, mollie_api_key_changed_at,
               shopify_client_secret, shopify_client_secret_encrypted, shopify_client_secret_changed_at
-         FROM tenants ORDER BY id FOR UPDATE`,
+         FROM tenant_integrations ORDER BY tenant_id FOR UPDATE`,
     )
     const counts = emptyCounts(rows.length)
     const operations = []
