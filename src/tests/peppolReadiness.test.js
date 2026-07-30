@@ -37,11 +37,18 @@ const INVOICE = {
 
 const LINES = [{ description: 'Live performance', quantity: 1, unit_price_cents: 15000, tax_percentage: 21 }]
 
-const check = (over = {}) => checkPeppolReadiness({
-  invoice: { ...INVOICE, ...over.invoice },
-  lines: over.lines ?? LINES,
-  tenant: { ...TENANT, ...over.tenant },
-})
+// The accounting country reaches the rules through the resolved VAT treatment,
+// which the caller owns — the fixture's vat_country is just how these cases
+// state it.
+const check = (over = {}) => {
+  const tenant = { ...TENANT, ...over.tenant }
+  return checkPeppolReadiness({
+    invoice: { ...INVOICE, ...over.invoice },
+    lines: over.lines ?? LINES,
+    tenant,
+    treatment: over.treatment ?? { accounting_country: tenant.vat_country },
+  })
+}
 
 const codes = (warnings) => warnings.map((w) => w.code)
 const blocking = (warnings) => warnings.filter((w) => w.severity === 'blocking').map((w) => w.code)

@@ -3,7 +3,6 @@ import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
 import { computeInvoiceTotals, formatCurrency } from '../../utils/invoiceTotals.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
-import { useProfile } from '../../contexts/profileContext.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -164,10 +163,8 @@ interface InvoiceLinesEditorProps {
 
 export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly, patchForm, patchLine, addLine, removeLine }: Readonly<InvoiceLinesEditorProps>) {
   const { t } = useTranslation('invoices')
-  const { profile } = useAccountingProfile()
-  const { vatCountry } = useProfile()
+  const { profile, accountingCountry } = useAccountingProfile()
   const currency = profile?.base_currency ?? 'EUR'
-  const accountingCountry = profile?.country_code ?? vatCountry
   const compact = useCompactLayout()
   // KOR and reverse charge both remove VAT from the invoice, so the VAT controls
   // and column are hidden in either case.

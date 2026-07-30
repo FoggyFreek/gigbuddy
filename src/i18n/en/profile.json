@@ -75,8 +75,10 @@
     "emptyEditing": "No members yet.",
     "emptyHint": "No members yet. Click Edit to add one.",
     "name": "Name",
-    "role": "Role",
-    "rolePlaceholder": "Guitar, Vocals…",
+    "roles": "Roles",
+    "rolesOrderHelp": "Selected roles are displayed in this order.",
+    "moveRoleUp": "Move {{role}} up",
+    "moveRoleDown": "Move {{role}} down",
     "position": "Position",
     "positions": {
       "lead": "Lead",
@@ -84,9 +86,13 @@
       "sub": "Sub"
     },
     "add": "Add member",
+    "addAction": "Add",
+    "addDialogTitle": "Add band member",
+    "editDialogTitle": "Edit band member",
     "edit": "Edit member",
     "delete": "Delete member",
-    "doneEditing": "Done editing",
+    "saveError": "Could not save the band member",
+    "color": "Color",
     "colorAria": "color {{color}}",
     "gigbuddyUser": "gigBuddy user",
     "inviteCta": "Invite to gigBuddy"

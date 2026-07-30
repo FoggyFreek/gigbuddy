@@ -1,40 +1,50 @@
 // Consistency audit + repair for tenant_accounting_profiles.
 //
-// Migration 137 backfills a profile for every tenant that existed when it ran.
-// Deployment migrates while the PREVIOUS app container is still serving
-// (`docker compose run --rm migrate` before `docker compose up -d app`), so that
-// container can still create a tenant afterwards without a profile row. The app
-// repairs such a row lazily on read; this script is the operator-side view of the
-// same problem and the gate for dropping the legacy tenants columns.
+// This is now the ONLY repair path: the app no longer creates a profile lazily
+// on read, it reports 409 accounting_profile_missing instead.
 //
 // --check reports and exits 2 when anything is inconsistent (no writes).
-// --apply repairs missing rows, deriving the country from tenants.vat_country.
+// --apply repairs missing rows and missing default VAT rates.
 //
-// Country MISMATCHES are never auto-repaired: whether the profile or the legacy
-// column is right is a judgement call about the tenant's real jurisdiction, and
-// guessing would silently change a tax jurisdiction. They are reported for a human.
+// Two faults are checked:
+//   missing profile        a tenant with no profile row. Only possible for a
+//                          tenant created before the profile became mandatory,
+//                          so tenants.vat_country is the country it was really
+//                          created with and --apply may derive from it. Once
+//                          that column is dropped this repair needs the country
+//                          supplied by hand.
+//   missing default rate   migration 142 added default_vat_rate; a profile
+//                          inserted during that migration's window has none, and
+//                          every rate-dependent read would produce NaN.
+//
+// The former country-mismatch check is gone: tenants.vat_country is no longer
+// written, so every band created after that change disagrees with it by
+// construction. Reconciling the two was the gate for THIS step and had to pass
+// before it shipped.
 import 'dotenv/config'
 import { pathToFileURL } from 'node:url'
 import pool from '../db/index.js'
 import { logger } from '../utils/logger.js'
 import {
-  findProfileInconsistencies,
+  findTenantsWithoutProfile,
+  findProfilesMissingDefaultVatRate,
   countProfilesBySource,
   insertAccountingProfile,
+  updateAccountingProfile,
 } from '../repositories/accountingProfileRepository.js'
 import { defaultBaseCurrency } from '../../shared/accountingProfileCodes.js'
 import { getStandardVatRate } from '../../shared/vatRates.js'
 
 export async function auditAccountingProfiles(executor, { apply = false } = {}) {
-  const inconsistencies = await findProfileInconsistencies(executor)
-  const missing = inconsistencies.filter((row) => row.missing)
-  const mismatched = inconsistencies.filter((row) => !row.missing)
+  const missing = await findTenantsWithoutProfile(executor)
+  const missingRate = await findProfilesMissingDefaultVatRate(executor)
 
   const counts = {
     tenants: 0,
-    conflicts: mismatched.length,
     migrationNeeded: missing.length,
+    rateMissing: missingRate.length,
     migrated: 0,
+    ratesFilled: 0,
   }
 
   const bySource = await countProfilesBySource(executor)
@@ -52,12 +62,16 @@ export async function auditAccountingProfiles(executor, { apply = false } = {}) 
       })
       if (inserted) counts.migrated += 1
     }
+    for (const row of missingRate) {
+      await updateAccountingProfile(executor, row.tenant_id, {
+        default_vat_rate: getStandardVatRate(row.country_code),
+      })
+      counts.ratesFilled += 1
+    }
   }
 
-  // A mismatch always fails: it must be resolved by a human, not by this script.
-  // Missing rows only fail in --check mode, since --apply just fixed them.
-  const ok = counts.conflicts === 0 && (apply || counts.migrationNeeded === 0)
-  return { counts, ok, missing, mismatched, bySource }
+  const ok = apply || (counts.migrationNeeded === 0 && counts.rateMissing === 0)
+  return { counts, ok, missing, missingRate, bySource }
 }
 
 function reportDetails(result) {
@@ -66,13 +80,16 @@ function reportDetails(result) {
       tenantId: row.tenant_id, operation: 'missing_profile',
     })
   }
-  for (const row of result.mismatched) {
-    logger.error('accounting_profile_audit.country_mismatch', {
-      tenantId: row.tenant_id, operation: 'country_mismatch',
+  for (const row of result.missingRate) {
+    logger.warn('accounting_profile_audit.missing_default_rate', {
+      tenantId: row.tenant_id, operation: 'missing_default_vat_rate',
     })
   }
   for (const row of result.bySource) {
-    logger.info('accounting_profile_audit.source', {
+    // 'repair' rows had their country derived rather than chosen — worth a human
+    // look before the legacy column they were derived from is dropped.
+    const level = row.profile_source === 'repair' ? 'warn' : 'info'
+    logger[level]('accounting_profile_audit.source', {
       operation: row.profile_source, tenants: row.count,
     })
   }

@@ -99,23 +99,12 @@ const MEMORY_VALIDATORS = {
   memory_gig_id: validateMemoryGigId,
 }
 
-// Seller-identity fields printed on invoices (EN 16931 BT-27..BT-43) plus the
-// default VAT rate, still read live by the renderers.
+// Seller-identity fields printed on invoices (EN 16931 BT-27..BT-43).
 //
-// `vat_country` and `legal_form` are deliberately NOT here: they moved to the
-// accounting profile, where the country is immutable after band creation. Leaving
-// them patchable would let this endpoint produce a tenant whose accounting
-// jurisdiction disagrees with its profile.
-//
-// `applies_kor` is gone for the same reason, one step further along: it is now a
-// PROJECTION of the tenant's VAT scheme enrolment in force today, owned by
-// taxSchemeEnrolmentService. A field write here could not express the dates, the
-// jurisdiction or the confirmation an enrolment carries, and would silently
-// disagree with it. A stale client still sending the field has it ignored rather
-// than rejected, so no browser left open across the deployment starts failing.
-//
-// `tax_percentage` stays until its readers are repointed — moving the control
-// without moving the behavior would mislead.
+// The REGIME is deliberately absent — country, legal form, default VAT rate and
+// the scheme exemption belong to the accounting profile and its enrolments, which
+// carry immutability, dates and confirmations this endpoint cannot express. A
+// stale client still sending one has the field ignored rather than rejected.
 export const FINANCIAL_FIELDS = [
   'formal_name',
   'address_street',

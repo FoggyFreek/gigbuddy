@@ -5,7 +5,6 @@ import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { WRITE_ROLES } from '../auth/permissions.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
 import { createAccountingProfileForTenant } from './accountingProfileService.js'
-import { defaultBaseCurrency } from '../../shared/accountingProfileCodes.js'
 import {
   validSlug,
   buildTenantUpdateFields,
@@ -70,10 +69,10 @@ export async function createTenant(createdByUserId, body) {
     }
 
     const tenant = await insertTenant(client, {
-      slug, bandName: band_name, createdByUserId, vatCountry: country.countryCode,
+      slug, bandName: band_name, createdByUserId,
     })
     await ensureTenantStatistics(client, tenant.id)
-    await seedTenantAccounting(client, tenant.id, defaultBaseCurrency(country.countryCode))
+    await seedTenantAccounting(client, tenant.id)
     // Same transaction as the tenant insert: a band must never exist without the
     // accounting profile that states its jurisdiction.
     await createAccountingProfileForTenant(client, tenant.id, country.countryCode)

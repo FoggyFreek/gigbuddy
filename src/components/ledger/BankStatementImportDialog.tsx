@@ -26,7 +26,6 @@ import Typography from '@mui/material/Typography'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { parseBankStatement, commitBankImport, cancelBankImport, setOpeningBalanceFromImport } from '../../api/bankImport.ts'
 import { listAccounts, getAccountingSettings } from '../../api/accounts.ts'
-import { getProfile } from '../../api/profile.ts'
 import { getAccountingProfile } from '../../api/accountingProfile.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
@@ -39,7 +38,7 @@ import VatRateSelect from '../shared/VatRateSelect.tsx'
 import { computePurchaseLineTotals } from '../../utils/purchaseTotals.ts'
 import type {
   Account, AccountingProfile, AccountingSettings, BankImportParseResult, BankStatementLine,
-  BankImportDecision, BankImportResult, Id, Tenant,
+  BankImportDecision, BankImportResult, Id,
 } from '../../types/entities.ts'
 
 type Step = 'upload' | 'review' | 'importing' | 'done'
@@ -72,16 +71,14 @@ const NO_VAT_DEFAULTS: VatDefaults = {
   enabled: false, country: DEFAULT_VAT_COUNTRY, paid: 0, received: 0,
 }
 
-// `accounting` supplies the scheme in force today; the band profile still
-// supplies the band's own configured rate. These are only the reviewer's
-// DEFAULTS — the server re-checks each line against the scheme in force at that
-// line's booking date, which is the authoritative answer for a statement
-// spanning a scheme change.
-function resolveVatDefaults(profile: Tenant, accounting: AccountingProfile | null): VatDefaults {
+// Only the reviewer's DEFAULTS — the server re-checks each line against the
+// scheme in force at that line's booking date, which is the authoritative answer
+// for a statement spanning a scheme change.
+function resolveVatDefaults(accounting: AccountingProfile | null): VatDefaults {
   const treatment = accounting?.current_sales_treatment ?? null
-  const country = treatment?.accounting_country || profile.vat_country || DEFAULT_VAT_COUNTRY
+  const country = treatment?.accounting_country || accounting?.country_code || DEFAULT_VAT_COUNTRY
   if (treatment?.scheme_exempt) return { ...NO_VAT_DEFAULTS, country }
-  const configured = Number(profile.tax_percentage)
+  const configured = Number(accounting?.default_vat_rate)
   return {
     enabled: true,
     country,
@@ -224,14 +221,13 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
     Promise.all([
       listAccounts(),
       getAccountingSettings(),
-      getProfile().catch(() => null),
       getAccountingProfile().catch(() => null),
     ])
-      .then(([accs, setts, profile, accounting]) => {
+      .then(([accs, setts, accounting]) => {
         if (!active) return
         setAccounts(accs)
         setSettings(setts)
-        if (profile && accounting) setVat(resolveVatDefaults(profile, accounting))
+        if (accounting) setVat(resolveVatDefaults(accounting))
       })
       .catch(() => { /* accounts optional until review */ })
     return () => { active = false }

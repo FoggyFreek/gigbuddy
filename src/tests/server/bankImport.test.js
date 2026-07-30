@@ -680,8 +680,12 @@ describe('bank-import commit', () => {
   })
 
   it('refuses to book VAT for a tenant on the KOR', async () => {
+    // Enrolment, not a flag: the scheme in force at the line's date is what
+    // decides whether VAT may be booked.
     await pool.query(
-      `UPDATE tenants SET applies_kor = true, vat_country = 'nl' WHERE id = $1`,
+      `INSERT INTO tax_scheme_enrolments
+         (tenant_id, country_code, scheme_code, scheme_scope, valid_from, status)
+       VALUES ($1, 'nl', 'nl_kor', 'national_home', '2020-01-01', 'confirmed')`,
       [seed.tenantA.id],
     )
     const staged = await parse(asUserA, EUR)

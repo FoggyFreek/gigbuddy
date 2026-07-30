@@ -12,7 +12,6 @@ import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import MoneyInput from '../invoices/MoneyInput.tsx'
 import { centsToEditableEuro } from '../invoices/invoiceFormHelpers.ts'
-import { useProfile } from '../../contexts/profileContext.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
 
@@ -45,9 +44,7 @@ interface PurchaseLineRowProps {
 
 function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, errors = {}, readOnly, canRemove, patchLine, removeLine }: Readonly<PurchaseLineRowProps>) {
   const { t } = useTranslation('purchases')
-  const { vatCountry } = useProfile()
-  const { profile: accountingProfile } = useAccountingProfile()
-  const accountingCountry = accountingProfile?.country_code ?? vatCountry
+  const { accountingCountry } = useAccountingProfile()
   const accountGroup = (account: AccountOption) => {
     const type = isAccountGroupKey(account.type) ? account.type : 'expense'
     return t($ => $.lines.accountGroups[type])

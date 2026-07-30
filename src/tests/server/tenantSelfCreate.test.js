@@ -116,8 +116,8 @@ describe('POST /api/tenants (self-service creation)', () => {
       profile_source: 'tenant_creation',
       profile_status: 'incomplete',
     })
-    // tenants.vat_country stays populated as the compatibility projection.
-    expect(res.body.vat_country).toBe('de')
+    // The regime is not echoed onto the tenant payload any more.
+    expect(res.body).not.toHaveProperty('vat_country')
   })
 
   it('a generated slug keeps the requested country through every retry', async () => {
@@ -128,7 +128,6 @@ describe('POST /api/tenants (self-service creation)', () => {
       .send({ band_name: 'Retry Band', country_code: 'gb' })).expect(201)
 
     expect(res.body.slug).toBe('retry-band-2')
-    expect(res.body.vat_country).toBe('gb')
     const { rows: [profile] } = await pool.query(
       'SELECT country_code, base_currency FROM tenant_accounting_profiles WHERE tenant_id = $1',
       [res.body.id],

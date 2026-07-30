@@ -296,7 +296,7 @@ export default function OnboardingPage() {
           if (resumed) {
             setOnboardingTenant(resumed)
             setBandName(resumed.band_name ?? '')
-            setCountryCode(resumed.vat_country ?? '')
+            setCountryCode(resumed.accounting_country ?? '')
           }
           setResumeChecked(true)
         })

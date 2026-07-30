@@ -8,7 +8,10 @@
 //
 // Core invariant: Assets & Expenses increase with Debits; Liabilities, Equity &
 // Revenue increase with Credits. Every journal balances (Σ debits == Σ credits).
-import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
+import {
+  computePurchaseLineAccountingAmounts,
+  computePurchaseLineTotals,
+} from '../../shared/purchaseTotals.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { classify, describe, receiptFor } from './ledgerEntryTypes.js'
 import { parseSearchLimit } from '../validators/ledgerValidators.js'
@@ -45,7 +48,7 @@ import { hasReclassifiedLines } from '../repositories/journalRepository.js'
 import { badRequest, notFound } from './serviceErrors.js'
 import { openInvoiceBuckets } from '../repositories/invoiceRepository.js'
 import { upcomingBandFeesByStatus } from '../repositories/gigRepository.js'
-import { fetchAccountingProfile } from '../repositories/accountingProfileRepository.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
 import { currentFiscalYear, fiscalYearRange } from '../../shared/fiscalYear.js'
 
 // Thrown when a journal needs a tenant default account that isn't configured.
@@ -612,11 +615,8 @@ export async function resolveEffectiveRange(executor, tenantId, range, fiscalYea
 // the VAT position of the *current* quarter, and the open invoice buckets
 // (which reflect current status, not the period).
 export async function getFinancialOverview(executor, tenantId, range) {
-  const profile = await fetchAccountingProfile(executor, tenantId)
-  const fiscalYearStart = {
-    month: Number(profile?.financial_year_start_month ?? 1),
-    day: Number(profile?.financial_year_start_day ?? 1),
-  }
+  const behavior = await loadAccountingBehavior(executor, tenantId)
+  const fiscalYearStart = behavior.fiscalYearStart
   const effectiveRange = await resolveEffectiveRange(executor, tenantId, range, fiscalYearStart)
 
   // Trailing-three-calendar-years result trend, pinned to "today" (independent
@@ -630,13 +630,12 @@ export async function getFinancialOverview(executor, tenantId, range) {
   }))
 
   const vatQuarter = currentVatQuarter()
-  const [monthRows, annualRows, vat, buckets, settings, bankBalanceCents, merch, merchInventoryCents, feeRows] =
+  const [monthRows, annualRows, vat, buckets, bankBalanceCents, merch, merchInventoryCents, feeRows] =
     await Promise.all([
       monthlyResultTotals(executor, tenantId, effectiveRange),
       annualResultTotals(executor, tenantId, annualRanges),
       vatTotals(executor, tenantId, vatQuarter.range),
       openInvoiceBuckets(executor, tenantId),
-      loadAccountingSettings(executor, tenantId),
       checkingAccountBalance(executor, tenantId),
       merchTotals(executor, tenantId, effectiveRange),
       merchInventoryValue(executor, tenantId),
@@ -687,7 +686,7 @@ export async function getFinancialOverview(executor, tenantId, range) {
   }
 
   return {
-    currency: settings?.currency || 'EUR',
+    currency: behavior.currency,
     months,
     totals,
     annual_results: annualResults,
@@ -820,31 +819,35 @@ export async function postInvoiceVoid(client, tenantId, invoice, opts = {}) {
 
 // ---------- purchase journals (expenses) ----------
 
-// Bill accrued (on approve): DR expense account(s) per line (grouped on net),
-// DR input VAT (claimable asset), CR payable (liability up).
+// Bill accrued (on approve): recoverable VAT posts net cost + input VAT;
+// non-recoverable VAT is part of the expense/asset cost. Both credit the gross
+// payable amount.
 export async function postBillAccrued(client, tenantId, purchase, purchaseLines, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const payable = requireCode(settings, 'payable_account_code')
   const memo = `Bill ${purchase.receipt_number} — ${purchase.supplier_name}`
+  const inputVatRecoverable = purchase.input_vat_recoverable_snapshot !== false
 
-  // Group net amounts by account. Lines that stock a product book to the merch
+  // Group book costs by account. Lines that stock a product book to the merch
   // inventory asset (the goods aren't an expense until sold); other lines use
   // their explicit code or fall back to the tenant default expense account.
-  const netByAccount = new Map()
+  const costByAccount = new Map()
+  let inputVatCents = 0
   for (const line of purchaseLines) {
-    const { netCents } = computePurchaseLineTotals(line)
+    const amounts = computePurchaseLineAccountingAmounts(line, inputVatRecoverable)
     const code = line.product_id
       ? requireCode(settings, 'merch_inventory_account_code')
       : (line.account_code || requireCode(settings, 'default_expense_account_code'))
-    netByAccount.set(code, (netByAccount.get(code) || 0) + netCents)
+    costByAccount.set(code, (costByAccount.get(code) || 0) + amounts.costCents)
+    inputVatCents += amounts.inputVatCents
   }
 
   const lines = []
-  for (const [code, net] of netByAccount) {
-    lines.push({ account_code: code, debit_cents: net, memo })
+  for (const [code, cost] of costByAccount) {
+    lines.push({ account_code: code, debit_cents: cost, memo })
   }
-  if (purchase.tax_cents > 0) {
-    lines.push({ account_code: requireCode(settings, 'input_vat_account_code'), debit_cents: purchase.tax_cents, memo })
+  if (inputVatCents > 0) {
+    lines.push({ account_code: requireCode(settings, 'input_vat_account_code'), debit_cents: inputVatCents, memo })
   }
   lines.push({ account_code: payable, credit_cents: purchase.total_cents, memo })
 

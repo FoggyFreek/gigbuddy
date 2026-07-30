@@ -120,6 +120,13 @@ function fileReturn(body) {
   return asUserA(request(app).post('/api/vat-returns')).send({ year: 2026, quarter: 1, ...body })
 }
 
+function startKor() {
+  return asUserA(request(app).post('/api/accounting-profile/schemes')).send({
+    scheme_code: 'nl_kor',
+    valid_from: '2020-01-01',
+  })
+}
+
 // The quarter containing "now" — its period_to is always >= today, so filing it
 // is rejected as not-yet-ended regardless of when the suite runs.
 function currentYearQuarter() {
@@ -152,6 +159,25 @@ describe('VAT returns — preview', () => {
 
   it('rejects an invalid quarter', async () => {
     await asUserA(request(app).get('/api/vat-returns/preview?year=2026&quarter=5')).expect(400)
+  })
+
+  it('does not accumulate or settle supplier VAT from a KOR purchase', async () => {
+    await startKor().expect(201)
+    await createBill()
+
+    const preview = await asUserA(
+      request(app).get('/api/vat-returns/preview?year=2026&quarter=1'),
+    ).expect(200)
+    expect(preview.body).toMatchObject({
+      output_vat_cents: 0,
+      input_vat_cents: 0,
+      net_cents: 0,
+      direction: 'nil',
+    })
+
+    const filed = await fileReturn()
+    expect(filed.status).toBe(400)
+    expect(filed.body.code).toBe('nothing_to_settle')
   })
 })
 

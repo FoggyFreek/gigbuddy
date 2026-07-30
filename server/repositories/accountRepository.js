@@ -3,7 +3,6 @@
 // first so callers control transactions, and every query is tenant-scoped.
 
 const SETTINGS_INSERT_COLUMNS = [
-  'currency',
   'receivable_account_code', 'default_revenue_account_code',
   'payable_account_code', 'default_reimbursement_account_code', 'default_expense_account_code',
   'primary_checking_account_code', 'cash_account_code',

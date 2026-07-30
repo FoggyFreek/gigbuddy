@@ -72,16 +72,15 @@ function bufferDocument(doc) {
 // The tenant is still the source of seller IDENTITY (name, address, VAT id,
 // registration number) — that is not snapshotted yet, so a re-render is
 // regime-immutable but not identity-immutable.
-export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer, treatment = null }) {
+export async function renderInvoicePdf({ invoice, lines, tenant, logoBuffer, treatment }) {
+  if (!treatment) throw new Error('renderInvoicePdf requires a resolved VAT treatment')
   const doc = new PDFDocument({ size: 'A4', margin: PAGE_MARGIN })
   const done = bufferDocument(doc)
 
   // The scheme's own contribution; reverse charge is the invoice's own column and
   // stays a separate input to the totals, which apply their own precedence.
   const schemeExempt = Boolean(treatment?.schemeExempt)
-  // Falls back to the live country only when no treatment could be resolved at
-  // all (a tenant without an accounting profile), so the document still renders.
-  const country = treatment?.accounting_country ?? tenant.vat_country
+  const country = treatment.accounting_country
   const currency = invoice.currency || 'EUR'
 
   const totals = computeInvoiceTotals({

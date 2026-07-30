@@ -121,7 +121,9 @@ export default function ImageCropDialog({ open, imageSrc, aspect, onConfirm, onC
     <Dialog open={open} onClose={onCancel} maxWidth="md" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       {/* key resets all crop state when a new image is loaded */}
-      <CropContent key={imageSrc || ''} imageSrc={imageSrc ?? ''} aspect={aspect} onConfirm={onConfirm} onCancel={onCancel} />
+      {imageSrc && (
+        <CropContent key={imageSrc} imageSrc={imageSrc} aspect={aspect} onConfirm={onConfirm} onCancel={onCancel} />
+      )}
     </Dialog>
   )
 }

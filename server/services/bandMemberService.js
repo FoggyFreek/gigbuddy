@@ -1,7 +1,11 @@
 // Band-member domain logic. Route handlers stay thin and delegate here.
 // Functions that can fail with a specific HTTP outcome return
 // { error: { status, body } }; success returns a domain payload.
-import { VALID_POSITIONS, buildMemberUpdateFields } from '../validators/bandMemberValidators.js'
+import {
+  VALID_POSITIONS,
+  buildMemberUpdateFields,
+  validateMemberRoles,
+} from '../validators/bandMemberValidators.js'
 import {
   listBandMembers,
   nextSortOrder,
@@ -20,8 +24,10 @@ export async function listMembers(db, tenantId) {
 }
 
 export async function createMember(db, tenantId, body) {
-  const { name, role, color, position } = body
+  const { name, roles = [], color, position } = body
   if (!name) return badRequest('name is required')
+  const rolesError = validateMemberRoles(roles)
+  if (rolesError) return badRequest(rolesError)
   const pos = position ?? 'lead'
   if (!VALID_POSITIONS.includes(pos)) {
     return badRequest('position must be lead, optional, or sub')
@@ -35,7 +41,7 @@ export async function createMember(db, tenantId, body) {
     const sortOrder = await nextSortOrder(client, tenantId)
     const member = await insertBandMember(client, tenantId, {
       name,
-      role: role ?? null,
+      roles,
       color: color ?? null,
       sortOrder,
       position: pos,
@@ -45,6 +51,10 @@ export async function createMember(db, tenantId, body) {
 }
 
 export async function patchMember(db, tenantId, memberId, body) {
+  if ('roles' in body) {
+    const rolesError = validateMemberRoles(body.roles)
+    if (rolesError) return badRequest(rolesError)
+  }
   const built = buildMemberUpdateFields(body)
   if (!built.fields.length) return badRequest('No valid fields to update')
 

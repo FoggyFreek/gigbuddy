@@ -24,9 +24,6 @@ export async function fetchTenant(executor, tenantId) {
   return rows[0] || null
 }
 
-// Lightweight read of just the tenant's VAT country, used by finance services
-// to resolve the allowed VAT rates for a tenant without loading the full row.
-// Returns the stored code (defaulted to 'nl' at the column level).
 // Locks the tenant row FOR UPDATE and returns the safe projection. Lets a
 // read-validate-write sequence (the profile VAT/registration consistency check)
 // run atomically so a concurrent PATCH can't slip an incompatible tax_id or
@@ -37,24 +34,6 @@ export async function lockTenantRow(executor, tenantId) {
     [tenantId],
   )
   return rows[0] || null
-}
-
-// The small-business-exemption pair: the flag alone is not enough, since the KOR
-// is a Dutch national scheme (see korApplies in shared/vatRates.js).
-export async function fetchTenantKorState(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT applies_kor, vat_country FROM tenants WHERE id = $1',
-    [tenantId],
-  )
-  return rows[0] ?? null
-}
-
-export async function fetchTenantVatCountry(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT vat_country FROM tenants WHERE id = $1',
-    [tenantId],
-  )
-  return rows[0]?.vat_country ?? null
 }
 
 export async function fetchTenantArchiveState(executor, tenantId) {
@@ -70,19 +49,16 @@ export async function userExists(executor, userId) {
   return rowCount > 0
 }
 
-// `vatCountry` is required, not defaulted: the accounting country is a chosen
-// fact (see parseTenantCountryCode) and it is immutable afterwards, so silently
-// inheriting the column default would pin a tenant to the wrong jurisdiction.
-// It stays on `tenants` as the compatibility projection of
-// tenant_accounting_profiles.country_code while the legacy readers are repointed.
-const TENANT_INSERT_COLUMNS = 'slug, band_name, created_by_user_id, owner_user_id, vat_country'
+// The accounting country belongs to tenant_accounting_profiles.country_code,
+// which the caller inserts in the same transaction.
+const TENANT_INSERT_COLUMNS = 'slug, band_name, created_by_user_id, owner_user_id'
 
-export async function insertTenant(executor, { slug, bandName, createdByUserId, ownerUserId = null, vatCountry }) {
+export async function insertTenant(executor, { slug, bandName, createdByUserId, ownerUserId = null }) {
   const { rows } = await executor.query(
     `INSERT INTO tenants (${TENANT_INSERT_COLUMNS})
-     VALUES ($1, $2, $3, $4, $5)
+     VALUES ($1, $2, $3, $4)
      RETURNING ${tenantSafeProjection()}`,
-    [slug, bandName, createdByUserId, ownerUserId, vatCountry],
+    [slug, bandName, createdByUserId, ownerUserId],
   )
   return rows[0]
 }
@@ -90,13 +66,13 @@ export async function insertTenant(executor, { slug, bandName, createdByUserId, 
 // Insert variant for server-generated slugs: a slug collision returns null
 // instead of raising 23505 (which would abort the caller's transaction), so
 // the service can try the next dedupe suffix within the same transaction.
-export async function insertTenantIfSlugFree(executor, { slug, bandName, createdByUserId, ownerUserId = null, vatCountry }) {
+export async function insertTenantIfSlugFree(executor, { slug, bandName, createdByUserId, ownerUserId = null }) {
   const { rows } = await executor.query(
     `INSERT INTO tenants (${TENANT_INSERT_COLUMNS})
-     VALUES ($1, $2, $3, $4, $5)
+     VALUES ($1, $2, $3, $4)
      ON CONFLICT (slug) DO NOTHING
      RETURNING ${tenantSafeProjection()}`,
-    [slug, bandName, createdByUserId, ownerUserId, vatCountry],
+    [slug, bandName, createdByUserId, ownerUserId],
   )
   return rows[0] ?? null
 }
@@ -105,9 +81,11 @@ export async function insertTenantIfSlugFree(executor, { slug, bandName, created
 export async function listOwnedTenants(executor, userId) {
   const { rows } = await executor.query(
     `SELECT ${tenantSafeProjection('t')},
+            p.country_code AS accounting_country,
             (SELECT COUNT(*)::int FROM memberships m
                WHERE m.tenant_id = t.id AND m.status = 'approved') AS member_count
        FROM tenants t
+       LEFT JOIN tenant_accounting_profiles p ON p.tenant_id = t.id
       WHERE t.owner_user_id = $1
       ORDER BY t.created_at DESC, t.id DESC`,
     [userId],

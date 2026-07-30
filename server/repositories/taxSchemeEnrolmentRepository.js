@@ -203,22 +203,16 @@ export async function hasIssuedDocumentInRange(executor, tenantId, from, to) {
   return rows[0].referenced
 }
 
-// Tenants whose legacy projections disagree with the home enrolment in force
-// TODAY. Drives both the reconciler (scheduled enrolments make a write-time
-// projection stale on its boundary date) and the audit script.
-//
-// `zeroRatingSchemeCodes` is passed in rather than hardcoded: which schemes
-// actually suppress VAT is registry knowledge, and the repository holds no
-// business rules.
-export async function listProjectionDrift(executor, zeroRatingSchemeCodes) {
+// Tenants whose derived `vat_filing_frequency` disagrees with the home enrolment
+// in force TODAY. Drives both the reconciler (a scheduled enrolment makes a
+// write-time derivation stale on its boundary date) and the audit script.
+export async function listProjectionDrift(executor) {
   const { rows } = await executor.query(
     `SELECT t.id AS tenant_id,
             t.slug,
-            t.applies_kor,
             p.country_code,
             p.vat_filing_frequency,
             e.scheme_code AS active_scheme_code,
-            (e.id IS NOT NULL AND e.scheme_code = ANY($1::text[])) AS expected_applies_kor,
             (e.id IS NOT NULL) AS expected_exempt
        FROM tenants t
        JOIN tenant_accounting_profiles p ON p.tenant_id = t.id
@@ -233,11 +227,8 @@ export async function listProjectionDrift(executor, zeroRatingSchemeCodes) {
           ORDER BY s.valid_from DESC, s.id DESC
           LIMIT 1
        ) e ON TRUE
-      WHERE COALESCE(t.applies_kor, FALSE)
-              <> (e.id IS NOT NULL AND e.scheme_code = ANY($1::text[]))
-         OR (p.vat_filing_frequency = 'exempt') <> (e.id IS NOT NULL)
+      WHERE (p.vat_filing_frequency = 'exempt') <> (e.id IS NOT NULL)
       ORDER BY t.id`,
-    [zeroRatingSchemeCodes],
   )
   return rows
 }

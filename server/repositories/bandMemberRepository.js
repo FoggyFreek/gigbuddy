@@ -4,7 +4,11 @@
 
 export async function listBandMembers(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT * FROM band_members WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
+    `SELECT id, tenant_id, name, roles, color, sort_order, position,
+            created_at, user_id
+       FROM band_members
+      WHERE tenant_id = $1
+      ORDER BY sort_order ASC, id ASC`,
     [tenantId],
   )
   return rows
@@ -26,11 +30,13 @@ export async function nextSortOrder(executor, tenantId) {
   return rows[0].next
 }
 
-export async function insertBandMember(executor, tenantId, { name, role, color, sortOrder, position }) {
+export async function insertBandMember(executor, tenantId, { name, roles, color, sortOrder, position }) {
   const { rows } = await executor.query(
-    `INSERT INTO band_members (tenant_id, name, role, color, sort_order, position)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [tenantId, name, role, color, sortOrder, position],
+    `INSERT INTO band_members (tenant_id, name, roles, color, sort_order, position)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, tenant_id, name, roles, color, sort_order, position,
+               created_at, user_id`,
+    [tenantId, name, roles, color, sortOrder, position],
   )
   return rows[0]
 }

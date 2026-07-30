@@ -43,9 +43,13 @@ export function checkPeppolReadiness(
   invoice: Invoice | null,
   lines: Pick<InvoiceLine, 'description' | 'quantity' | 'unit_price_cents' | 'tax_percentage'>[],
   tenant: Partial<Tenant> | null,
+  accountingCountry: string,
 ): PeppolWarning[] {
   if (!invoice || !tenant) return [] // not loaded yet — don't claim a problem
-  return checkJs({ invoice, lines, tenant }) as PeppolWarning[]
+  // An issued invoice keeps the country it was issued under; a draft uses the
+  // regime in force now. Mirrors the server's resolver.
+  const treatment = { accounting_country: invoice.accounting_country_snapshot ?? accountingCountry }
+  return checkJs({ invoice, lines, tenant, treatment }) as PeppolWarning[]
 }
 
 /** True when nothing would make a Peppol access point reject the document. */

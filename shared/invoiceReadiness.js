@@ -84,7 +84,12 @@ export function checkViesAttestation({ customerTaxId, viesConfirmedFor }) {
 
 // An invoice may only be issued (draft → sent/paid, payment-link finalization)
 // when it holds the mandatory content. Returns an error code, or null when ready.
-export function checkInvoiceReadyForIssue(invoice, lines, tenant) {
+//
+// `regime` carries the accounting country and legal form, which live on the
+// accounting profile rather than the tenant row; passing them in keeps this
+// module free of storage knowledge.
+export function checkInvoiceReadyForIssue(invoice, lines, tenant, regime = {}) {
+  const { accountingCountry, legalForm } = regime
   // Supplier identity + postal address.
   const supplierName = tenant.formal_name || tenant.band_name
   if (!nonEmpty(supplierName) || !nonEmpty(tenant.address_street) || !nonEmpty(tenant.address_city)) {
@@ -105,9 +110,9 @@ export function checkInvoiceReadyForIssue(invoice, lines, tenant) {
     if (!Number.isFinite(qty) || qty <= 0 || !nonEmpty(line.description)) return 'invalid_lines'
   }
   // Registration disclosure required of an incorporated band (GmbHG §35a etc.).
-  if (requiresCompanyDisclosure(tenant.legal_form)) {
+  if (requiresCompanyDisclosure(legalForm)) {
     if (!nonEmpty(tenant.kvk_number)) return 'missing_registration_info'
-    if (registrationUsesOffice(tenant.vat_country) && !nonEmpty(tenant.registration_office)) {
+    if (registrationUsesOffice(accountingCountry) && !nonEmpty(tenant.registration_office)) {
       return 'missing_registration_info'
     }
   }
@@ -120,7 +125,7 @@ export function checkInvoiceReadyForIssue(invoice, lines, tenant) {
   // check attestation for that exact number.
   if (invoice.reverse_charge) {
     const rcError = checkReverseCharge({
-      supplierCountry: tenant.vat_country,
+      supplierCountry: accountingCountry,
       customerCountry: invoice.customer_address_country,
       customerTaxId: invoice.customer_tax_id,
     })

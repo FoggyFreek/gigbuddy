@@ -498,10 +498,12 @@ describe('invoices — issuance-readiness invariant', () => {
   })
 
   it('rejects finalization when an incorporated band has no registration number', async () => {
+    // The legal form is a profile fact; the registration number is seller identity.
     await pool.query(
-      "UPDATE tenants SET legal_form = 'company', kvk_number = NULL WHERE id = $1",
+      "UPDATE tenant_accounting_profiles SET legal_form = 'company' WHERE tenant_id = $1",
       [seed.tenantA.id],
     )
+    await pool.query('UPDATE tenants SET kvk_number = NULL WHERE id = $1', [seed.tenantA.id])
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
     const res = await asUserA(request(app).patch(`/api/invoices/${r.body.id}`)).send({ status: 'sent' })
     expect(res.status).toBe(422)

@@ -4,6 +4,7 @@ import type { Invoice, Tenant } from '../../types/entities.ts'
 import type { InvoiceForm } from './invoiceFormHelpers.ts'
 import { getRegistrationLabel } from '../../utils/businessRegistry.ts'
 import { getVatIdLabel } from '../../utils/vatRates.ts'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import FormControlLabel from '@mui/material/FormControlLabel'
@@ -31,6 +32,7 @@ export default function InvoiceLogoHeader({
   logoBusy, logoInputRef, onLogoFile, onLogoRemove, form, patchForm,
 }: Readonly<InvoiceLogoHeaderProps>) {
   const { t } = useTranslation('invoices')
+  const { accountingCountry } = useAccountingProfile()
   const hasCustomLogo = Boolean(invoice?.custom_logo_path)
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 3 }}>
@@ -104,12 +106,12 @@ export default function InvoiceLogoHeader({
         )}
         {tenant?.kvk_number && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            {getRegistrationLabel(tenant.vat_country) ?? 'Reg.'} {tenant.kvk_number}
+            {getRegistrationLabel(accountingCountry) ?? 'Reg.'} {tenant.kvk_number}
             {tenant.registration_office ? ` · ${tenant.registration_office}` : ''}
           </Typography>
         )}
         {tenant?.tax_id && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{getVatIdLabel(tenant.vat_country)} {tenant.tax_id}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{getVatIdLabel(accountingCountry)} {tenant.tax_id}</Typography>
         )}
       </Box>
     </Box>

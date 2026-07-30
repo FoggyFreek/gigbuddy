@@ -66,22 +66,29 @@ export async function markProfileReviewed(executor, tenantId, userId) {
   return rows[0] || null
 }
 
-// Tenants with no profile row, and tenants whose profile country disagrees with
-// the legacy tenants.vat_country projection. Drives the audit script that gates
-// dropping the legacy columns.
-export async function findProfileInconsistencies(executor) {
+// Tenants with no profile row. Only a tenant created before the profile became
+// mandatory can be one, so its legacy `vat_country` is still the country that
+// tenant was actually created with — which is what --apply repairs from.
+export async function findTenantsWithoutProfile(executor) {
   const { rows } = await executor.query(
-    `SELECT t.id AS tenant_id,
-            t.slug,
-            t.vat_country,
-            p.country_code,
-            p.profile_source,
-            (p.tenant_id IS NULL) AS missing
+    `SELECT t.id AS tenant_id, t.slug, t.vat_country
        FROM tenants t
        LEFT JOIN tenant_accounting_profiles p ON p.tenant_id = t.id
       WHERE p.tenant_id IS NULL
-         OR p.country_code <> t.vat_country
       ORDER BY t.id`,
+  )
+  return rows
+}
+
+// Profiles with no default VAT rate: migration 142 added the column and
+// backfilled it, but a profile inserted during that migration's window has none,
+// and every rate-dependent read would produce NaN.
+export async function findProfilesMissingDefaultVatRate(executor) {
+  const { rows } = await executor.query(
+    `SELECT tenant_id, country_code
+       FROM tenant_accounting_profiles
+      WHERE default_vat_rate IS NULL
+      ORDER BY tenant_id`,
   )
   return rows
 }

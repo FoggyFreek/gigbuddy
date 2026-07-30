@@ -52,9 +52,13 @@ function isoDaysFromNow(days) {
   return d.toISOString().slice(0, 10)
 }
 
-async function appliesKor(tenantId = seed.tenantA.id) {
-  const { rows } = await pool.query('SELECT applies_kor FROM tenants WHERE id = $1', [tenantId])
-  return rows[0].applies_kor
+// The scheme's only projection now: 'exempt' is derived from the home enrolment
+// in force today rather than answered separately.
+async function filingFrequency(tenantId = seed.tenantA.id) {
+  const { rows } = await pool.query(
+    'SELECT vat_filing_frequency FROM tenant_accounting_profiles WHERE tenant_id = $1', [tenantId],
+  )
+  return rows[0].vat_filing_frequency
 }
 
 // Resolves the domestic scheme through the repository, i.e. the same predicate
@@ -183,20 +187,17 @@ describe('tax scheme enrolments — scope', () => {
     await startScheme({ scheme_code: 'eu_sme', valid_from: '2020-01-01', country_code: 'be' }).expect(201)
 
     // Spec §9.4: a destination-country exemption does not stop the home returns.
-    expect(await appliesKor()).toBe(false)
     expect((await getProfile().expect(200)).body.vat_filing_frequency).not.toBe('exempt')
     expect(await homeSchemeOn('2025-06-01')).toBeNull()
   })
 })
 
 describe('tax scheme enrolments — projections', () => {
-  it('drives applies_kor and the derived filing frequency from the home enrolment', async () => {
+  it('drives the derived filing frequency from the home enrolment', async () => {
     const { body: e } = await startScheme({ scheme_code: 'nl_kor', valid_from: '2020-01-01' }).expect(201)
-    expect(await appliesKor()).toBe(true)
     expect((await getProfile().expect(200)).body.vat_filing_frequency).toBe('exempt')
 
     await patchScheme(e.id, { valid_to: isoDaysFromNow(-1) }).expect(200)
-    expect(await appliesKor()).toBe(false)
     // Leaving the scheme returns the field to unanswered rather than guessing a
     // period the tax authority has not assigned.
     expect((await getProfile().expect(200)).body.vat_filing_frequency).toBe('unconfigured')
@@ -205,7 +206,7 @@ describe('tax scheme enrolments — projections', () => {
   it('records an unimplemented scheme without claiming VAT suppression', async () => {
     await asUserA(request(app).patch('/api/accounting-profile')).send({ local_legal_form_code: 'nl_vof' }).expect(200)
     await startScheme({ scheme_code: 'eu_sme', valid_from: '2020-01-01', country_code: 'de' }).expect(201)
-    expect(await appliesKor()).toBe(false)
+    expect(await filingFrequency()).not.toBe('exempt')
   })
 
   it('refuses to set or clear the exempt filing frequency directly', async () => {
@@ -248,9 +249,9 @@ describe('tax scheme enrolments — projections', () => {
     expect(res.body.code).toBe('filing_frequency_derived_from_scheme')
   })
 
-  it('no longer lets PATCH /api/profile write applies_kor', async () => {
+  it('no longer lets PATCH /api/profile claim the exemption', async () => {
     await asUserA(request(app).patch('/api/profile')).send({ applies_kor: true })
-    expect(await appliesKor()).toBe(false)
+    expect(await filingFrequency()).not.toBe('exempt')
   })
 })
 
@@ -263,7 +264,7 @@ describe('tax scheme enrolments — scheduled boundaries', () => {
     expect((await homeSchemeOn(start))?.scheme_code).toBe('nl_kor')
     // The projection is stale by construction until the boundary passes — which
     // is exactly why date-aware resolution, not the projection, is the authority.
-    expect(await appliesKor()).toBe(false)
+    expect(await filingFrequency()).not.toBe('exempt')
   })
 
   it('resolves a future end on its inclusive last day', async () => {
@@ -272,7 +273,7 @@ describe('tax scheme enrolments — scheduled boundaries', () => {
 
     expect((await homeSchemeOn(end))?.scheme_code).toBe('nl_kor')
     expect(await homeSchemeOn(isoDaysFromNow(8))).toBeNull()
-    expect(await appliesKor()).toBe(true)
+    expect(await filingFrequency()).toBe('exempt')
   })
 
   it('the reconciler catches the projection up, and a second run is a no-op', async () => {
@@ -286,10 +287,13 @@ describe('tax scheme enrolments — scheduled boundaries', () => {
        VALUES ($1, 'nl', 'nl_kor', 'national_home', '2020-01-01', $2, 'confirmed')`,
       [seed.tenantA.id, isoDaysFromNow(-1)],
     )
-    await pool.query('UPDATE tenants SET applies_kor = TRUE WHERE id = $1', [seed.tenantA.id])
+    await pool.query(
+      `UPDATE tenant_accounting_profiles SET vat_filing_frequency = 'exempt' WHERE tenant_id = $1`,
+      [seed.tenantA.id],
+    )
 
     expect(await reconcileSchemeProjections(pool)).toBe(1)
-    expect(await appliesKor()).toBe(false)
+    expect(await filingFrequency()).not.toBe('exempt')
     expect(await reconcileSchemeProjections(pool)).toBe(0)
   })
 
@@ -302,7 +306,7 @@ describe('tax scheme enrolments — scheduled boundaries', () => {
       [seed.tenantA.id, isoDaysFromNow(-1)],
     )
     expect(await reconcileSchemeProjections(pool)).toBe(1)
-    expect(await appliesKor()).toBe(true)
+    expect(await filingFrequency()).toBe('exempt')
   })
 })
 
@@ -315,7 +319,7 @@ describe('tax scheme enrolments — corrections are forward-only', () => {
     expect(res.body.void_reason).toBe('never enrolled')
 
     expect(await homeSchemeOn('2025-06-01')).toBeNull()
-    expect(await appliesKor()).toBe(false)
+    expect(await filingFrequency()).not.toBe('exempt')
     // The row survives: it is the evidence explaining any snapshot taken under it.
     expect((await listSchemes().expect(200)).body).toHaveLength(1)
   })
@@ -417,7 +421,7 @@ describe('tax scheme enrolments — tenant isolation', () => {
 
   it('keeps the projections of the two bands independent', async () => {
     await startScheme({ scheme_code: 'nl_kor', valid_from: '2020-01-01' }).expect(201)
-    expect(await appliesKor(seed.tenantA.id)).toBe(true)
-    expect(await appliesKor(seed.tenantB.id)).toBe(false)
+    expect(await filingFrequency(seed.tenantA.id)).toBe('exempt')
+    expect(await filingFrequency(seed.tenantB.id)).not.toBe('exempt')
   })
 })

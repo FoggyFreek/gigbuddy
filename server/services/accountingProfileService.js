@@ -9,7 +9,7 @@
 // facts from — loadAccountingProfile() is that read primitive.
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
-import { fetchTenantVatCountry, updateTenantFields } from '../repositories/tenantRepository.js'
+import { updateTenantFields } from '../repositories/tenantRepository.js'
 import {
   fetchAccountingProfile,
   insertAccountingProfile,
@@ -41,15 +41,22 @@ import {
   registrationUsesOffice,
 } from '../../shared/businessRegistry.js'
 import { lockTenantRow } from '../repositories/tenantRepository.js'
-import { updateSettings } from '../repositories/accountRepository.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
-import { logger } from '../utils/logger.js'
 
-// Fields the profile still shares with the legacy tenants columns while the
-// legacy readers are repointed. A profile write keeps the projection in step so
-// the previous app container (deployment migrates before replacing it) and any
-// un-repointed reader stay correct. Removed when the columns are dropped.
-const LEGACY_PROJECTED_FIELDS = ['legal_form', 'default_vat_rate']
+// Nothing derives a profile any more: with `tenants.vat_country` no longer
+// written there is nothing truthful to fall back on, so a missing row is an
+// explicit fault. server/index.js turns a 4xx `status` into { error, code }, so
+// this reaches the client as 409 from every route. Repair with
+// `backfillAccountingProfiles.js --apply`.
+export class AccountingProfileMissingError extends Error {
+  constructor(tenantId) {
+    super('This band has no accounting profile yet')
+    this.name = 'AccountingProfileMissingError'
+    this.code = 'accounting_profile_missing'
+    this.status = 409
+    this.tenantId = tenantId
+  }
+}
 
 // Adds the derived presentation state so no consumer re-implements the
 // completeness/provenance combination.
@@ -75,68 +82,28 @@ export async function createAccountingProfileForTenant(client, tenantId, country
   return inserted ?? fetchAccountingProfile(client, tenantId)
 }
 
-// TEMPORARY, remove when the legacy tenants columns are dropped.
-//
-// Deployment runs migrations while the previous app container is still serving
-// (`docker compose run --rm migrate` before `docker compose up -d app`), so that
-// container can create a tenant AFTER migration 137's backfill and before the new
-// code takes over — leaving a tenant with no profile row that no repair script
-// can win a race against. Repairing on read closes that window.
-//
-// This is only honest while `tenants.vat_country` still exists to derive the
-// country from. Once it is dropped there is nothing truthful to fall back on, and
-// this must be replaced by a 409 `accounting_profile_missing` plus the
-// backfillAccountingProfiles repair script.
-// Takes an executor rather than starting its own transaction, so it works both on
-// the pool and inside a caller's transaction. It needs no advisory lock: there is
-// no read-modify-write to protect, only an idempotent insert of a row derived
-// entirely from tenants.vat_country. A concurrent insert lands in ON CONFLICT DO
-// NOTHING and the re-read (fresh snapshot under READ COMMITTED) returns the
-// winner's row.
-async function repairMissingProfile(executor, tenantId) {
-  const vatCountry = normalizeVatCountry(await fetchTenantVatCountry(executor, tenantId))
-  if (!vatCountry) return null
-
-  const inserted = await insertAccountingProfile(executor, tenantId, {
-    country_code: vatCountry,
-    base_currency: defaultBaseCurrency(vatCountry),
-    default_vat_rate: getStandardVatRate(vatCountry),
-    legal_form: null,
-    profile_source: 'repair',
-    profile_status: 'incomplete',
-  })
-  if (inserted) logger.warn('accounting_profile.repaired', { tenantId, operation: 'lazy_repair' })
-  return inserted ?? fetchAccountingProfile(executor, tenantId)
-}
-
 export async function getAccountingProfile(db, tenantId) {
   const profile = await loadAccountingProfile(db, tenantId)
-  if (!profile) return notFound('Accounting profile not found')
 
-  // The sales treatment in force TODAY, resolved from the scheme enrolment
-  // rather than read off tenants.applies_kor. The invoice form previews VAT with
-  // it, so a scheme scheduled to start or end shows up on its boundary date
-  // instead of whenever something last wrote the projection.
+  // The sales treatment in force TODAY, resolved from the scheme enrolment. The
+  // invoice form previews VAT with it, so a scheme scheduled to start or end
+  // shows up on its boundary date instead of whenever something last wrote a
+  // projection.
   const currentSalesTreatment = await resolveCurrentSalesTreatment(db, tenantId)
   return { profile: { ...present(profile), current_sales_treatment: currentSalesTreatment } }
 }
 
 // The read primitive for every downstream consumer of the accounting regime.
-// Returns the row (repairing a missing one) or null when the tenant is gone.
+// Throws rather than returning null: it is called deep inside money-moving
+// transactions, where a null would silently post against a guessed jurisdiction.
 export async function loadAccountingProfile(executor, tenantId) {
   const existing = await fetchAccountingProfile(executor, tenantId)
-  if (existing) {
-    if (existing.default_vat_rate !== null) return existing
-    return updateAccountingProfile(executor, tenantId, {
-      default_vat_rate: getStandardVatRate(existing.country_code),
-    })
-  }
-  return repairMissingProfile(executor, tenantId)
+  if (!existing) throw new AccountingProfileMissingError(tenantId)
+  return existing
 }
 
 export async function loadAccountingBehavior(executor, tenantId) {
   const profile = await loadAccountingProfile(executor, tenantId)
-  if (!profile) return null
   return {
     accountingCountry: profile.country_code,
     // Behavioral vs factual: the books are kept in `currency`, the profile
@@ -201,8 +168,6 @@ export async function patchAccountingProfile(db, tenantId, body = {}) {
     const updated = await updateAccountingProfile(client, tenantId, updates)
     if (!updated) abortTransaction(notFound('Accounting profile not found'))
 
-    await projectToLegacyColumns(client, tenantId, updates)
-
     return { profile: present(updated) }
   }, { db })
 }
@@ -243,25 +208,6 @@ function assertSchemeExemptNotCleared(current, updates) {
       code: 'filing_frequency_derived_from_scheme',
     }))
   }
-}
-
-// Keeps the legacy tenants columns in step during the expand phase.
-//
-// `applies_kor` is deliberately NOT projected here any more. It is now a
-// projection of the scheme enrolment in force TODAY, which is a date-dependent
-// fact a field write cannot express: an enrolment can be scheduled to start or
-// end in the future. taxSchemeEnrolmentService.syncSchemeProjections owns it, and
-// server/jobs/taxSchemeReconciliation.js catches it up on boundary dates.
-async function projectToLegacyColumns(client, tenantId, updates) {
-  const fields = []
-  const values = []
-  for (const key of LEGACY_PROJECTED_FIELDS) {
-    if (!(key in updates)) continue
-    fields.push(`${key === 'default_vat_rate' ? 'tax_percentage' : key} = $${fields.length + 1}`)
-    values.push(updates[key])
-  }
-
-  if (fields.length) await updateTenantFields(client, tenantId, fields, values)
 }
 
 // Records that a human confirmed the profile. Only meaningful once every field is
@@ -344,16 +290,13 @@ export async function changeAccountingCountry(db, tenantId, body = {}, userId = 
       baseCurrency,
       defaultVatRate,
     })
+    // Only the seller IDENTITY still lives on `tenants`; the regime itself moved
+    // to the profile row, which resetProfileCountry has just rewritten.
     await updateTenantFields(client, tenantId, [
-      'vat_country = $1',
-      'tax_percentage = $2',
-      'tax_id = $3',
-      'kvk_number = $4',
-      'registration_office = $5',
-      'legal_form = NULL',
-      'applies_kor = FALSE',
-    ], [countryCode, defaultVatRate, taxId.value, kvk.value, registrationOffice])
-    await updateSettings(client, tenantId, { currency: bookkeepingCurrency(baseCurrency) })
+      'tax_id = $1',
+      'kvk_number = $2',
+      'registration_office = $3',
+    ], [taxId.value, kvk.value, registrationOffice])
     const enrolmentsVoided = await voidCountryDependentEnrolments(client, tenantId, userId)
     const productsReset = await resetProductVatRates(client, tenantId, defaultVatRate)
 

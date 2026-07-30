@@ -73,7 +73,7 @@ export interface UseInvoiceFormStateResult {
 // live in their own hooks (see useInvoiceDetailsState).
 export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWrite = true }: UseInvoiceFormStateArgs): UseInvoiceFormStateResult {
   const { t } = useTranslation('invoices')
-  const { profile: accountingProfile } = useAccountingProfile()
+  const { profile: accountingProfile, accountingCountry } = useAccountingProfile()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -158,16 +158,17 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
       },
       form.lines,
       tenant,
+      { accountingCountry, legalForm: accountingProfile?.legal_form ?? null },
     )
     return code ? { code, message: t($ => $.issueErrors[code]) } : null
-  }, [finalized, form, totals.taxCents, tenant, t])
+  }, [finalized, form, totals.taxCents, tenant, accountingCountry, accountingProfile?.legal_form, t])
 
   // What would stop the UBL/Peppol export being accepted by an e-invoicing
   // network. Derived from the PERSISTED invoice, not `form`: the download route
   // renders database state, so warning about unsaved edits would be a lie.
   const peppolWarnings = useMemo(
-    () => checkPeppolReadiness(invoice, invoice?.lines ?? [], tenant),
-    [invoice, tenant],
+    () => checkPeppolReadiness(invoice, invoice?.lines ?? [], tenant, accountingCountry),
+    [invoice, tenant, accountingCountry],
   )
 
   // due_date is derived from issue_date + payment_term_days. Recompute it in the

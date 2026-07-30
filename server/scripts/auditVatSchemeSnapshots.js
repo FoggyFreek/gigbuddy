@@ -50,7 +50,6 @@ import {
   invoiceSnapshotColumns,
   purchaseSnapshotColumns,
 } from '../services/vatTreatmentService.js'
-import { ZERO_RATING_SCHEME_CODES } from '../services/taxSchemeEnrolmentService.js'
 import { reconcileSchemeProjections } from '../jobs/taxSchemeReconciliation.js'
 import { TAX_SCHEMES } from '../../shared/taxSchemes.js'
 
@@ -90,7 +89,7 @@ export async function auditVatSchemeSnapshots(executor, { apply = false, strict 
   const missingInvoices = await listIssuedInvoicesMissingSnapshot(executor)
   const missingPurchases = await listPostedPurchasesMissingSnapshot(executor)
   const overlaps = await listOverlappingEnrolments(executor)
-  const drift = await listProjectionDrift(executor, [...ZERO_RATING_SCHEME_CODES])
+  const drift = await listProjectionDrift(executor)
 
   const conflicts = await listInvoiceSnapshotConflicts(executor)
   const inputVatDivergence = await listPurchaseInputVatDivergence(executor)

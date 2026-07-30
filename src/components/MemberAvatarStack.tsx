@@ -19,7 +19,7 @@ interface AvatarMember {
   status?: string
   position?: string
   reason?: string
-  color?: string
+  color?: string | null
 }
 
 interface MemberAvatarStackProps {

@@ -110,6 +110,13 @@ function setInvoiceStatus(id, status) {
   return asUserA(request(app).patch(`/api/invoices/${id}`)).send({ status })
 }
 
+function startKor(validFrom = '2020-01-01') {
+  return asUserA(request(app).post('/api/accounting-profile/schemes')).send({
+    scheme_code: 'nl_kor',
+    valid_from: validFrom,
+  })
+}
+
 async function runInvoiceLedgerBackfill() {
   const sql = await readFile(
     new URL('../../../server/db/migrations/074_backfill_invoice_ledger.sql', import.meta.url),
@@ -241,7 +248,12 @@ describe('ledger — invoicing (revenue)', () => {
   })
 
   it('zero-VAT (KOR) invoice omits the output VAT line', async () => {
-    await pool.query('UPDATE tenants SET applies_kor = true WHERE id = $1', [seed.tenantA.id])
+    await pool.query(
+      `INSERT INTO tax_scheme_enrolments
+         (tenant_id, country_code, scheme_code, scheme_scope, valid_from, status)
+       VALUES ($1, 'nl', 'nl_kor', 'national_home', '2020-01-01', 'confirmed')`,
+      [seed.tenantA.id],
+    )
     const inv = await createInvoice()
     expect(inv.tax_cents).toBe(0)
     await setInvoiceStatus(inv.id, 'sent').expect(200)
@@ -449,6 +461,17 @@ describe('ledger — purchasing (expenses)', () => {
     expectBalanced(accrued)
     expect(line(accrued, '62100').debit_cents).toBe(103306)
     expect(line(accrued, '15000').debit_cents).toBe(21694)
+    expect(line(accrued, '21100').credit_cents).toBe(125000)
+  })
+
+  it('KOR bill approved posts the full supplier amount as cost and no input VAT', async () => {
+    await startKor().expect(201)
+    const bill = await createApprovedBill({ supplier_contact_id: contactA.id })
+    const accrued = byEvent(await journalsFor(seed.tenantA.id, 'purchase', bill.id), 'accrued')
+
+    expectBalanced(accrued)
+    expect(line(accrued, '62100').debit_cents).toBe(125000)
+    expect(line(accrued, '15000')).toBeUndefined()
     expect(line(accrued, '21100').credit_cents).toBe(125000)
   })
 

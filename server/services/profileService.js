@@ -40,6 +40,7 @@ import {
   gigBelongsToTenant,
 } from '../repositories/profileRepository.js'
 import { fetchTenant, lockTenantRow } from '../repositories/tenantRepository.js'
+import { loadAccountingProfile } from './accountingProfileService.js'
 import { withTransaction } from '../db/withTransaction.js'
 import { DEFAULT_VAT_COUNTRY } from '../../shared/vatRates.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
@@ -147,17 +148,16 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
   return runProfileWrite(db, tenantId, body, false)
 }
 
-// Locks the tenant row and resolves the VAT country that tax_id/kvk_number are
-// validated against. The country itself is no longer patchable here — it lives on
-// the accounting profile and is immutable after band creation — so the effective
-// country is always the stored one. (Re-validating the stored identifiers against
-// a NEW country belongs to the profile's country-change operation, which must
-// reset and revalidate every dependent field together.)
+// Locks the tenant row and resolves the accounting country that tax_id/kvk_number
+// are validated against. The country is not patchable here — it belongs to the
+// accounting profile and changes only through changeAccountingCountry, which
+// revalidates every dependent field together.
 // Returns { vatCountry } or an error result.
 async function lockAndResolveVatCountry(executor, tenantId) {
   const tenant = await lockTenantRow(executor, tenantId)
   if (!tenant) return notFound('Profile not found')
-  return { vatCountry: tenant.vat_country ?? DEFAULT_VAT_COUNTRY }
+  const profile = await loadAccountingProfile(executor, tenantId)
+  return { vatCountry: profile.country_code }
 }
 
 // The read-validate-write core of a profile PATCH, run on whatever executor the

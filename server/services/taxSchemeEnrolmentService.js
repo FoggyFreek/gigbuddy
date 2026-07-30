@@ -18,7 +18,6 @@
 // which is where the session and client ip live.
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
-import { fetchTenantKorState, updateTenantFields } from '../repositories/tenantRepository.js'
 import { fetchAccountingProfile, updateAccountingProfile } from '../repositories/accountingProfileRepository.js'
 import {
   fetchEnrolment,
@@ -43,16 +42,6 @@ import { toUblDate as toDateOnly } from '../../shared/peppol.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
 
 const NOT_FOUND = notFound('Enrolment not found')
-
-// The schemes that actually suppress output VAT in this application today. Only
-// these may set the legacy `tenants.applies_kor` projection: recording the flag
-// for a scheme the invoice code does not implement would claim a VAT treatment
-// that never happens.
-export const ZERO_RATING_SCHEME_CODES = Object.freeze(
-  Object.entries(TAX_SCHEMES)
-    .filter(([, s]) => s.implemented && s.salesTreatment === 'small_business_exempt')
-    .map(([code]) => code),
-)
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -242,34 +231,19 @@ export async function deleteEnrolment(db, tenantId, id) {
   }, { db })
 }
 
-// Recomputes the two legacy projections from the HOME enrolment in force on
-// `asOf`, in the caller's transaction.
+// Recomputes `profiles.vat_filing_frequency` from the HOME enrolment in force on
+// `asOf`, in the caller's transaction. 'exempt' is derived from the scheme, not
+// asked separately: two controls for one fact could disagree.
 //
-//   tenants.applies_kor              no longer read by any server path — kept for
-//                                    the OLD app container during a deployment and
-//                                    for tenantSafeProjection, which the frontend
-//                                    still receives.
-//   profiles.vat_filing_frequency    'exempt' is derived from the scheme, not
-//                                    asked separately: two controls for one fact
-//                                    could disagree.
-//
-// Both are STALE BY CONSTRUCTION for an enrolment scheduled to start or end in
-// the future — nothing writes them on the boundary date. The date-aware resolver
-// is the authority; server/jobs/taxSchemeReconciliation.js catches the
-// projections up on a tick. Both disappear when the columns are dropped.
+// STALE BY CONSTRUCTION for an enrolment scheduled to start or end in the future
+// — nothing writes it on the boundary date. The date-aware resolver is the
+// authority; server/jobs/taxSchemeReconciliation.js catches the field up on a
+// tick.
 export async function syncSchemeProjections(client, tenantId, profile, { asOf = today() } = {}) {
   if (!profile) return { changed: false }
 
   const active = await fetchHomeSchemeEnrolmentOn(client, tenantId, profile.country_code, asOf)
-  const appliesKor = Boolean(active) && ZERO_RATING_SCHEME_CODES.includes(active.scheme_code)
   const frequency = deriveFilingFrequency(Boolean(active), profile.vat_filing_frequency)
-
-  // applies_kor lives on `tenants`, not on the profile row.
-  const korState = await fetchTenantKorState(client, tenantId)
-  const korChanged = Boolean(korState?.applies_kor) !== appliesKor
-  if (korChanged) {
-    await updateTenantFields(client, tenantId, ['applies_kor = $1'], [appliesKor])
-  }
 
   // Completeness is derived from the filing frequency, so it is recomputed here
   // too — with the same owner patchAccountingProfile uses. Enrolling is a second
@@ -288,8 +262,7 @@ export async function syncSchemeProjections(client, tenantId, profile, { asOf = 
   }
 
   return {
-    changed: korChanged || frequencyChanged,
-    appliesKor,
+    changed: frequencyChanged,
     vatFilingFrequency: frequency,
     activeSchemeCode: active?.scheme_code ?? null,
   }

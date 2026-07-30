@@ -2,8 +2,8 @@
 // (rate validation + defaults for purchases, journals, merch, invoices) and the
 // frontend (rate dropdowns, via the typed wrapper in src/utils/vatRates.ts).
 //
-// VAT tariffs are country-dependent, so a tenant's `vat_country` (see the
-// migration adding tenants.vat_country) selects which rate set applies. Rates
+// VAT tariffs are country-dependent, so the tenant's accounting country
+// (tenant_accounting_profiles.country_code) selects which rate set applies. Rates
 // are percentages stored in NUMERIC(5,2) columns, so non-integer reduced rates
 // (e.g. 5.5) are fine.
 //

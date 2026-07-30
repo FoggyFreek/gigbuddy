@@ -9,9 +9,9 @@ import theme from '../theme.ts'
 
 vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([
-    { id: 1, name: 'Alice', role: 'Guitar', color: '#e53935', sort_order: 0, position: 'lead' },
+    { id: 1, name: 'Alice', roles: ['Lead Guitar', 'Lead Vocals'], color: '#e53935', sort_order: 0, position: 'lead' },
   ]),
-  createMember: vi.fn().mockResolvedValue({ id: 2, name: 'Bob', role: 'Drums', color: null, sort_order: 1, position: 'lead' }),
+  createMember: vi.fn().mockResolvedValue({ id: 2, name: 'Bob', roles: ['Drums'], color: null, sort_order: 1, position: 'lead' }),
   updateMember: vi.fn().mockResolvedValue({}),
   deleteMember: vi.fn().mockResolvedValue(null),
 }))
@@ -57,7 +57,7 @@ describe('BandMembersSection', () => {
   it('renders existing members', async () => {
     wrap(<BandMembersSection />)
     await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
-    expect(screen.getByText('(Guitar)')).toBeInTheDocument()
+    expect(screen.getByText('(Lead Guitar, Lead Vocals)')).toBeInTheDocument()
   })
 
   it('keeps the member list view-only for a reader', async () => {
@@ -73,33 +73,48 @@ describe('BandMembersSection', () => {
     wrap(<BandMembersSection />)
     await waitFor(() => screen.getByText('Alice'))
 
-    // The add form is only shown in section editing mode
     await user.click(screen.getByRole('button', { name: /^edit$/i }))
-    await user.type(screen.getByLabelText(/^name$/i), 'Bob')
-    await user.type(screen.getByLabelText(/^role$/i), 'Drums')
     await user.click(screen.getByRole('button', { name: /add member/i }))
+    expect(screen.getByRole('dialog', { name: /add band member/i })).toBeInTheDocument()
+    await user.type(screen.getByLabelText(/^name$/i), 'Bob')
+    await user.click(screen.getByLabelText(/^roles$/i))
+    await user.click(screen.getByRole('option', { name: 'Drums' }))
+    await user.click(screen.getByRole('option', { name: 'Background Vocals' }))
+    await user.keyboard('{Escape}')
+    await user.click(screen.getByRole('button', { name: /^add$/i }))
 
     await waitFor(() =>
-      expect(createMember).toHaveBeenCalledWith({ name: 'Bob', role: 'Drums', position: 'lead' })
+      expect(createMember).toHaveBeenCalledWith({
+        name: 'Bob',
+        roles: ['Drums', 'Background Vocals'],
+        color: null,
+        position: 'lead',
+      })
     )
   })
 
-  it('switches to edit mode and debounce-saves name change', async () => {
+  it('edits a member in a modal and saves the ordered roles', async () => {
     const user = userEvent.setup()
     wrap(<BandMembersSection />)
     await waitFor(() => screen.getByText('Alice'))
 
-    // Enable section editing to reveal per-member edit buttons, then click Alice's edit button
-    // (section button switches to CheckIcon/Done, so EditIcon belongs uniquely to Alice's row)
     await user.click(screen.getByRole('button', { name: /^edit$/i }))
     await user.click(screen.getByTestId('EditIcon').closest('button'))
-    const nameInput = screen.getAllByLabelText(/^name$/i)[0]
+    expect(screen.getByRole('dialog', { name: /edit band member/i })).toBeInTheDocument()
+
+    const nameInput = screen.getByLabelText(/^name$/i)
     await user.clear(nameInput)
     await user.type(nameInput, 'Alicia')
+    await user.click(screen.getByRole('button', { name: /move lead vocals up/i }))
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(
-      () => expect(updateMember).toHaveBeenCalledWith(1, expect.objectContaining({ name: 'Alicia' })),
-      { timeout: 2000 }
+      () => expect(updateMember).toHaveBeenCalledWith(1, {
+        name: 'Alicia',
+        roles: ['Lead Vocals', 'Lead Guitar'],
+        color: '#e53935',
+        position: 'lead',
+      })
     )
   })
 
@@ -116,8 +131,8 @@ describe('BandMembersSection', () => {
 
   it('shows a gigBuddy badge only for members linked to a user', async () => {
     listMembers.mockResolvedValueOnce([
-      { id: 1, name: 'Alice', role: 'Guitar', color: '#e53935', sort_order: 0, position: 'lead', user_id: 42 },
-      { id: 2, name: 'Bob', role: 'Drums', color: '#1e88e5', sort_order: 1, position: 'lead', user_id: null },
+      { id: 1, name: 'Alice', roles: ['Lead Guitar'], color: '#e53935', sort_order: 0, position: 'lead', user_id: 42 },
+      { id: 2, name: 'Bob', roles: ['Drums'], color: '#1e88e5', sort_order: 1, position: 'lead', user_id: null },
     ])
     wrap(<BandMembersSection />)
     await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
@@ -129,8 +144,8 @@ describe('BandMembersSection', () => {
   it('shows an invite button to tenant admins when a lead member is not a gigBuddy user', async () => {
     const user = userEvent.setup()
     listMembers.mockResolvedValueOnce([
-      { id: 1, name: 'Alice', role: 'Guitar', color: '#e53935', sort_order: 0, position: 'lead', user_id: 42 },
-      { id: 2, name: 'Bob', role: 'Drums', color: '#1e88e5', sort_order: 1, position: 'lead', user_id: null },
+      { id: 1, name: 'Alice', roles: ['Lead Guitar'], color: '#e53935', sort_order: 0, position: 'lead', user_id: 42 },
+      { id: 2, name: 'Bob', roles: ['Drums'], color: '#1e88e5', sort_order: 1, position: 'lead', user_id: null },
     ])
     wrap(<BandMembersSection />, { auth: adminAuth })
     await waitFor(() => screen.getByText('Alice'))
@@ -141,8 +156,8 @@ describe('BandMembersSection', () => {
 
   it('hides the invite button when all lead members are gigBuddy users', async () => {
     listMembers.mockResolvedValueOnce([
-      { id: 1, name: 'Alice', role: 'Guitar', color: '#e53935', sort_order: 0, position: 'lead', user_id: 42 },
-      { id: 2, name: 'Bob', role: 'Drums', color: '#1e88e5', sort_order: 1, position: 'sub', user_id: null },
+      { id: 1, name: 'Alice', roles: ['Lead Guitar'], color: '#e53935', sort_order: 0, position: 'lead', user_id: 42 },
+      { id: 2, name: 'Bob', roles: ['Drums'], color: '#1e88e5', sort_order: 1, position: 'sub', user_id: null },
     ])
     wrap(<BandMembersSection />, { auth: adminAuth })
     await waitFor(() => screen.getByText('Alice'))
@@ -152,7 +167,7 @@ describe('BandMembersSection', () => {
 
   it('hides the invite button from non-admin members', async () => {
     listMembers.mockResolvedValueOnce([
-      { id: 2, name: 'Bob', role: 'Drums', color: '#1e88e5', sort_order: 1, position: 'lead', user_id: null },
+      { id: 2, name: 'Bob', roles: ['Drums'], color: '#1e88e5', sort_order: 1, position: 'lead', user_id: null },
     ])
     wrap(<BandMembersSection />)
     await waitFor(() => screen.getByText('Bob'))
@@ -165,14 +180,19 @@ describe('BandMembersSection', () => {
     wrap(<BandMembersSection />)
     await waitFor(() => screen.getByText('Alice'))
 
-    // Enable section editing, then enter per-member edit mode to reveal color swatches
     await user.click(screen.getByRole('button', { name: /^edit$/i }))
     await user.click(screen.getByTestId('EditIcon').closest('button'))
     const swatch = screen.getByLabelText('color #e91e63')
     await user.click(swatch)
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() =>
-      expect(updateMember).toHaveBeenCalledWith(1, { color: '#e91e63' })
+      expect(updateMember).toHaveBeenCalledWith(1, {
+        name: 'Alice',
+        roles: ['Lead Guitar', 'Lead Vocals'],
+        color: '#e91e63',
+        position: 'lead',
+      })
     )
   })
 })

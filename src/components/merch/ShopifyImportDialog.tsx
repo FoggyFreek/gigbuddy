@@ -28,7 +28,6 @@ import { fetchShopifyOrders, importShopifyOrders } from '../../api/merch.ts'
 import { listAccounts } from '../../api/accounts.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import { formatEur } from '../../utils/purchaseTotals.ts'
-import { useProfile } from '../../contexts/profileContext.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
 import type {
@@ -131,7 +130,7 @@ interface ShopifyImportDialogProps {
 
 export default function ShopifyImportDialog({ products, onClose }: Readonly<ShopifyImportDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
-  const { defaultVatRate } = useProfile()
+  const { defaultVatRate } = useAccountingProfile()
   const shopifyErrorMessage = useShopifyErrorMessage()
   const [step, setStep] = useState<Step>('select')
   const [orders, setOrders] = useState<ShopifyOrder[]>([])
@@ -459,9 +458,7 @@ function LineMapControl({
   line, mapping, activeProducts, revenueAccounts, mappingValue, onMappingSelect, onVatChange, compact = false,
 }: Readonly<LineMapControlProps>) {
   const { t } = useTranslation(['merch', 'common'])
-  const { vatCountry } = useProfile()
-  const { profile: accountingProfile } = useAccountingProfile()
-  const accountingCountry = accountingProfile?.country_code ?? vatCountry
+  const { accountingCountry } = useAccountingProfile()
   if (!lineMappable(line)) {
     return (
       <Chip

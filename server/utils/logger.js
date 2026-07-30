@@ -13,7 +13,7 @@ const CONTEXT_KEYS = new Set([
   'mode', 'migrated', 'reEncrypted', 'plaintextRemaining', 'port',
   'filename', 'aborted',
   'tenants', 'plaintext', 'encrypted', 'conflicts', 'corrupt',
-  'migrationNeeded', 'reEncryptionNeeded',
+  'migrationNeeded', 'reEncryptionNeeded', 'rateMissing', 'ratesFilled',
   'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
   'achievementKey',
