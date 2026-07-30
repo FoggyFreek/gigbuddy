@@ -58,6 +58,7 @@ describe('accounting profile — read', () => {
       tenant_id: seed.tenantA.id,
       country_code: 'nl',
       base_currency: 'EUR',
+      default_vat_rate: 21,
       profile_status: 'incomplete',
       profile_source: 'tenant_creation',
       presentation_state: 'incomplete',
@@ -86,6 +87,85 @@ describe('accounting profile — read', () => {
     const res = await getProfile().expect(200)
     expect(res.body.country_code).toBe('gb')
     expect(res.body.base_currency).toBe('GBP')
+  })
+
+  it('patches a known default VAT rate and dual-writes the legacy projection', async () => {
+    const res = await patchProfile({ default_vat_rate: 21 }).expect(200)
+    expect(Number(res.body.default_vat_rate)).toBe(21)
+    const { rows: [tenant] } = await pool.query(
+      'SELECT tax_percentage FROM tenants WHERE id = $1',
+      [seed.tenantA.id],
+    )
+    expect(Number(tenant.tax_percentage)).toBe(21)
+    await patchProfile({ default_vat_rate: 18 }).expect(400)
+  })
+})
+
+describe('accounting profile — country change', () => {
+  const changeCountry = (body) => asUserA(
+    request(app).post('/api/accounting-profile/change-country'),
+  ).send(body)
+
+  it('atomically resets country-dependent configuration before documents exist', async () => {
+    await completeProfile()
+    await pool.query(
+      `INSERT INTO products (
+         tenant_id, name, unit_cost_cents, default_price_incl_cents, vat_rate, quantity_on_hand
+       ) VALUES ($1, 'Shirt', 500, 1500, 9, 1)`,
+      [seed.tenantA.id],
+    )
+
+    const res = await changeCountry({
+      country_code: 'gb',
+      tax_id: null,
+      kvk_number: null,
+    }).expect(200)
+    expect(res.body).toMatchObject({
+      country_code: 'gb',
+      base_currency: 'GBP',
+      profile_status: 'incomplete',
+      vat_registered: null,
+      vat_accounting_basis: 'unknown',
+      vat_filing_frequency: 'unconfigured',
+      local_legal_form_code: null,
+      reviewed_at: null,
+    })
+    expect(Number(res.body.default_vat_rate)).toBe(20)
+
+    const { rows: [projection] } = await pool.query(
+      `SELECT t.vat_country, t.tax_percentage, t.applies_kor, s.currency, p.vat_rate
+         FROM tenants t
+         JOIN tenant_accounting_settings s ON s.tenant_id = t.id
+         JOIN products p ON p.tenant_id = t.id
+        WHERE t.id = $1`,
+      [seed.tenantA.id],
+    )
+    // base_currency is GBP (truthful, above) but the BOOKS stay euro: the ledger
+    // has no currency column and no FX, so a jurisdiction multi-currency has not
+    // reached yet must not start stamping documents in another unit.
+    expect(projection).toMatchObject({
+      vat_country: 'gb',
+      applies_kor: false,
+      currency: 'EUR',
+    })
+    expect(Number(projection.tax_percentage)).toBe(20)
+    expect(Number(projection.vat_rate)).toBe(20)
+  })
+
+  it('blocks drafts and does not inspect another tenant', async () => {
+    await pool.query(
+      `INSERT INTO invoices (
+         tenant_id, invoice_number, issue_date, customer_name, currency
+       ) VALUES ($1, '2026-0001', '2026-01-01', 'Customer', 'EUR')`,
+      [seed.tenantA.id],
+    )
+    const blocked = await changeCountry({ country_code: 'gb' }).expect(409)
+    expect(blocked.body.code).toBe('accounting_country_has_financial_documents')
+
+    const other = await asUserB(
+      request(app).post('/api/accounting-profile/change-country'),
+    ).send({ country_code: 'gb', tax_id: null, kvk_number: null }).expect(200)
+    expect(other.body.country_code).toBe('gb')
   })
 })
 

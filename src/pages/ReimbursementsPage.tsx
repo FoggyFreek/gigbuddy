@@ -18,11 +18,13 @@ import MemberReimbursementRow from '../components/reimbursements/MemberReimburse
 import MemberReimbursementCard from '../components/reimbursements/MemberReimbursementCard.tsx'
 import RegisterReimbursementDialog from '../components/reimbursements/RegisterReimbursementDialog.tsx'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
-import { formatEur } from '../utils/purchaseTotals.ts'
+import { formatCurrency } from '../utils/invoiceTotals.ts'
+import { useAccountingProfile } from '../contexts/accountingProfileContext.ts'
 import { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
 import type { MemberOutstanding } from '../types/entities.ts'
 
 export default function ReimbursementsPage() {
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const { t } = useTranslation('reimbursements')
   const navigate = useNavigate()
   const isCompact = useCompactLayout()
@@ -63,7 +65,7 @@ export default function ReimbursementsPage() {
           {Boolean(outstanding.length) && (
             <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'inline-block', minWidth: 160 }}>
               <Typography variant="body2" color="text.secondary">{t($ => $.totalOwed)}</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(totalOwed)}</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatCurrency(totalOwed, currency)}</Typography>
             </Paper>
           )}
 

@@ -8,6 +8,7 @@ import {
   getAccountingProfile,
   patchAccountingProfile,
   markProfileReviewed,
+  changeAccountingCountry,
 } from '../services/accountingProfileService.js'
 import {
   listEnrolments,
@@ -41,6 +42,22 @@ router.patch('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res
   try {
     const result = await patchAccountingProfile(pool, req.tenantId, req.body || {})
     if (result.error) return sendError(res, result.error)
+    res.json(result.profile)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/change-country', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
+  try {
+    const result = await changeAccountingCountry(
+      pool,
+      req.tenantId,
+      req.body || {},
+      req.session.userId,
+    )
+    if (result.error) return sendError(res, result.error)
+    logAudit(req, result.audit)
     res.json(result.profile)
   } catch (err) {
     next(err)

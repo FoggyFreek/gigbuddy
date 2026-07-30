@@ -310,6 +310,22 @@ describe('PurchaseDetails', () => {
     expect(payload.lines[0].amount_incl_cents).toBe(125000)
   })
 
+  it('only offers VAT rates from the tenant accounting country', async () => {
+    purchasesApi.getPurchase.mockResolvedValue(purchase({ status: 'draft', finalized_at: null }))
+    const user = userEvent.setup()
+
+    wrap(<PurchaseDetails mode="create" purchaseId={5} onClose={() => {}} embedded />)
+
+    await screen.findByText('Purchase 5')
+    await user.click(screen.getByRole('combobox', { name: /tax rate/i }))
+
+    expect(screen.getByRole('option', { name: '21%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '9%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '0%' })).toBeInTheDocument()
+    expect(screen.queryByText('Other countries')).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '19%' })).not.toBeInTheDocument()
+  })
+
   it('blocks save and surfaces a message when a line keeps an inactive account', async () => {
     purchasesApi.getPurchase.mockResolvedValue(purchase({
       status: 'draft',

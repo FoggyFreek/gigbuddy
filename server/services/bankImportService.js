@@ -15,7 +15,8 @@ import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { settleInvoice } from './invoiceService.js'
 import { settlePurchase } from './purchaseService.js'
 import { hasOpeningBalance } from '../repositories/ledgerRepository.js'
-import { accountExistsOfType } from '../repositories/accountRepository.js'
+import { accountExistsOfType, acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
 import {
   findSuppliersForImport,
   findSuppliersByIban,
@@ -73,11 +74,7 @@ const MAX_BYTES = 10 * 1024 * 1024
 const MAX_LINES = 1000
 
 async function tenantCurrency(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT currency FROM tenant_accounting_settings WHERE tenant_id = $1',
-    [tenantId],
-  )
-  return rows[0]?.currency || 'EUR'
+  return (await loadAccountingBehavior(executor, tenantId)).currency
 }
 
 function lineMemo(line) {
@@ -116,6 +113,7 @@ export async function parseAndStage(db, tenantId, file, userId) {
   const currency = await tenantCurrency(db, tenantId)
 
   const imp = await withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
     let staged = await insertImport(client, tenantId, {
       filename: file.originalname || 'statement',
       format: parsed.format,

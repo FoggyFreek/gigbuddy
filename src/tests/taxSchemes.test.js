@@ -9,6 +9,8 @@ import {
   enrolmentCoversDate,
   resolveVatTreatment,
 } from '../../shared/taxSchemes.js'
+import { BOOKKEEPING_CURRENCIES, bookkeepingCurrency } from '../../shared/accountingProfileCodes.js'
+import { fiscalYearRange, fiscalYearForDate } from '../../shared/fiscalYear.js'
 
 // A national_home enrolment row shaped like the repository returns one.
 function enrolment(overrides = {}) {
@@ -176,5 +178,52 @@ describe('resolveVatTreatment', () => {
   it('refuses a version it does not implement, rather than guessing', () => {
     expect(() => resolveVatTreatment({ version: 2, homeEnrolment: null }))
       .toThrow(/unknown_vat_treatment_version/)
+  })
+})
+
+describe('bookkeepingCurrency', () => {
+  it('keeps a supported currency', () => {
+    expect(bookkeepingCurrency('EUR')).toBe('EUR')
+  })
+
+  // The profile records GBP truthfully, but the ledger has no currency column
+  // and no FX: stamping new documents GBP while the existing ones are EUR would
+  // mix two units. A UK band therefore keeps euro books until multi-currency
+  // support lands.
+  it('clamps a currency the books cannot be kept in', () => {
+    expect(bookkeepingCurrency('GBP')).toBe('EUR')
+    expect(bookkeepingCurrency('USD')).toBe('EUR')
+    expect(bookkeepingCurrency(null)).toBe('EUR')
+  })
+
+  it('only lists currencies the whole finance stack can carry', () => {
+    expect(BOOKKEEPING_CURRENCIES).toEqual(['EUR'])
+  })
+})
+
+describe('fiscalYearRange', () => {
+  it('resolves 1 January identically to the calendar year it replaced', () => {
+    expect(fiscalYearRange(2025, { month: 1, day: 1 }))
+      .toEqual({ from: '2025-01-01', toExclusive: '2026-01-01' })
+  })
+
+  it('carries an arbitrary start across the year boundary', () => {
+    expect(fiscalYearRange(2025, { month: 7, day: 1 }))
+      .toEqual({ from: '2025-07-01', toExclusive: '2026-07-01' })
+  })
+
+  // Mirrors the tap_financial_year_start_valid CHECK: a fiscal year must start
+  // on a date that exists in every year, so 29-31 February is not a range.
+  it('refuses a start date that does not exist every year', () => {
+    expect(() => fiscalYearRange(2025, { month: 2, day: 29 })).toThrow(RangeError)
+    expect(() => fiscalYearRange(2025, { month: 2, day: 30 })).toThrow(RangeError)
+    expect(() => fiscalYearRange(2025, { month: 4, day: 31 })).toThrow(RangeError)
+    expect(() => fiscalYearRange(2025, { month: 13, day: 1 })).toThrow(RangeError)
+  })
+
+  it('assigns a date to the fiscal year it falls in', () => {
+    const start = { month: 7, day: 1 }
+    expect(fiscalYearForDate('2025-06-30', start)).toBe(2024)
+    expect(fiscalYearForDate('2025-07-01', start)).toBe(2025)
   })
 })

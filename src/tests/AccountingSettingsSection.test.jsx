@@ -155,23 +155,22 @@ describe('AccountingSettingsSection — VAT accounts', () => {
 })
 
 describe('AccountingSettingsSection — PATCH on change', () => {
-  it('calls updateAccountingSettings with new currency when changed', async () => {
-    accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, currency: 'USD' })
+  // Currency is derived from the accounting profile's base currency, so it is
+  // shown here but not editable — the server 400s `currency_read_only`.
+  it('shows the currency read-only and never patches it', async () => {
     const user = userEvent.setup()
     wrap(<AccountingSettingsSection />)
     await waitFor(() => screen.getByLabelText(/currency/i))
 
-    // Open currency select and choose USD
     const currencySelect = screen.getByRole('combobox', { name: /currency/i })
-    await user.click(currencySelect)
-    await waitFor(() => screen.getByRole('option', { name: 'USD' }))
-    await user.click(screen.getByRole('option', { name: 'USD' }))
+    expect(currencySelect).toHaveAttribute('aria-disabled', 'true')
 
-    await waitFor(() => {
-      expect(accountsApi.updateAccountingSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: 'USD' }),
-      )
-    })
+    await user.click(currencySelect)
+    expect(screen.queryByRole('option', { name: 'USD' })).not.toBeInTheDocument()
+    // Other settings still save; `currency` is simply never among them.
+    for (const [patch] of accountsApi.updateAccountingSettings.mock.calls) {
+      expect(patch).not.toHaveProperty('currency')
+    }
   })
 
   it('renders the books-closed-through field and saves a chosen date', async () => {

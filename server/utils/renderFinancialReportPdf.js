@@ -8,12 +8,9 @@ const PAGE_W = 595.28 // A4 width in points
 const USABLE_W = PAGE_W - 2 * PAGE_MARGIN
 const RIGHT_EDGE = PAGE_W - PAGE_MARGIN
 
-function fmt(cents) {
-  const sign = cents < 0 ? '- ' : ''
-  const abs = Math.abs(cents || 0)
-  const euros = Math.floor(abs / 100)
-  const rem = String(abs % 100).padStart(2, '0')
-  return `${sign}€ ${euros.toLocaleString('nl-NL')},${rem}`
+function fmt(cents, currency) {
+  return new Intl.NumberFormat('nl-NL', { style: 'currency', currency })
+    .format((Number(cents) || 0) / 100)
 }
 
 function hline(doc, y, color = '#cccccc') {
@@ -61,19 +58,20 @@ function subHeader(doc, y, label) {
   return y + 16
 }
 
-function accountSection(doc, y, label, rows, totalLabel, totalCents) {
+function accountSection(doc, y, label, rows, totalLabel, totalCents, format) {
   y = subHeader(doc, y, label)
   for (const r of rows) {
-    y = accountRow(doc, y, { code: r.code, name: r.name, amount: fmt(r.amount_cents) })
+    y = accountRow(doc, y, { code: r.code, name: r.name, amount: format(r.amount_cents) })
   }
   if (!rows.length) {
-    y = accountRow(doc, y, { name: '—', amount: fmt(0) })
+    y = accountRow(doc, y, { name: '—', amount: format(0) })
   }
-  y = accountRow(doc, y, { name: totalLabel, amount: fmt(totalCents) }, { bold: true })
+  y = accountRow(doc, y, { name: totalLabel, amount: format(totalCents) }, { bold: true })
   return y + 8
 }
 
 export async function renderFinancialReportPdf({ report, tenantName, periodLabel }) {
+  const format = (cents) => fmt(cents, report.currency)
   const doc = new PDFDocument({ size: 'A4', margin: PAGE_MARGIN })
   const done = bufferDocument(doc)
 
@@ -92,42 +90,43 @@ export async function renderFinancialReportPdf({ report, tenantName, periodLabel
   // ---- profit & loss ----
   const pl = report.profit_loss
   y = sectionTitle(doc, y, 'Profit & Loss')
-  y = accountSection(doc, y, 'Revenue', pl.revenue, 'Total revenue', pl.totals.revenue_cents)
+  y = accountSection(doc, y, 'Revenue', pl.revenue, 'Total revenue', pl.totals.revenue_cents, format)
   if (pl.cost_of_goods_sold.length || pl.totals.cogs_cents !== 0) {
-    y = accountSection(doc, y, 'Cost of goods sold', pl.cost_of_goods_sold, 'Total cost of goods sold', pl.totals.cogs_cents)
-    y = accountRow(doc, y, { name: 'Gross profit', amount: fmt(pl.totals.gross_profit_cents) }, { bold: true }) + 8
+    y = accountSection(doc, y, 'Cost of goods sold', pl.cost_of_goods_sold, 'Total cost of goods sold', pl.totals.cogs_cents, format)
+    y = accountRow(doc, y, { name: 'Gross profit', amount: format(pl.totals.gross_profit_cents) }, { bold: true }) + 8
   } else if (pl.other_operating_income.length || pl.totals.other_operating_income_cents !== 0) {
-    y = accountRow(doc, y, { name: 'Gross profit', amount: fmt(pl.totals.gross_profit_cents) }, { bold: true }) + 8
+    y = accountRow(doc, y, { name: 'Gross profit', amount: format(pl.totals.gross_profit_cents) }, { bold: true }) + 8
   }
   if (pl.other_operating_income.length || pl.totals.other_operating_income_cents !== 0) {
     y = accountSection(
       doc, y, 'Other operating income', pl.other_operating_income,
       'Total other operating income', pl.totals.other_operating_income_cents,
+      format,
     )
   }
-  y = accountSection(doc, y, 'Expenses', pl.expenses, 'Total expenses', pl.totals.expense_cents)
+  y = accountSection(doc, y, 'Expenses', pl.expenses, 'Total expenses', pl.totals.expense_cents, format)
   y = ensureSpace(doc, y, 24)
   hline(doc, y, '#999999')
-  y = accountRow(doc, y + 6, { name: 'Result', amount: fmt(pl.totals.result_cents) }, { bold: true }) + 16
+  y = accountRow(doc, y + 6, { name: 'Result', amount: format(pl.totals.result_cents) }, { bold: true }) + 16
 
   // ---- balance sheet ----
   const bs = report.balance_sheet
   y = sectionTitle(doc, y, `Balance Sheet (as of ${bs.as_of})`)
-  y = accountSection(doc, y, 'Assets', bs.assets, 'Total assets', bs.totals.assets_cents)
-  y = accountSection(doc, y, 'Liabilities', bs.liabilities, 'Total liabilities', bs.totals.liabilities_cents)
+  y = accountSection(doc, y, 'Assets', bs.assets, 'Total assets', bs.totals.assets_cents, format)
+  y = accountSection(doc, y, 'Liabilities', bs.liabilities, 'Total liabilities', bs.totals.liabilities_cents, format)
   y = subHeader(doc, y, 'Equity')
   for (const r of bs.equity) {
-    y = accountRow(doc, y, { code: r.code, name: r.name, amount: fmt(r.amount_cents) })
+    y = accountRow(doc, y, { code: r.code, name: r.name, amount: format(r.amount_cents) })
   }
-  y = accountRow(doc, y, { name: 'Unallocated result', amount: fmt(bs.unallocated_result_cents) })
-  y = accountRow(doc, y, { name: 'Total equity', amount: fmt(bs.totals.equity_cents) }, { bold: true }) + 8
-  y = accountRow(doc, y, { name: 'Total liabilities + equity', amount: fmt(bs.totals.liabilities_and_equity_cents) }, { bold: true }) + 16
+  y = accountRow(doc, y, { name: 'Unallocated result', amount: format(bs.unallocated_result_cents) })
+  y = accountRow(doc, y, { name: 'Total equity', amount: format(bs.totals.equity_cents) }, { bold: true }) + 8
+  y = accountRow(doc, y, { name: 'Total liabilities + equity', amount: format(bs.totals.liabilities_and_equity_cents) }, { bold: true }) + 16
 
   // ---- VAT ----
   y = sectionTitle(doc, y, 'VAT position')
-  y = accountRow(doc, y, { name: 'VAT on sales (output)', amount: fmt(report.vat.output_cents) })
-  y = accountRow(doc, y, { name: 'VAT on purchases (input)', amount: fmt(report.vat.input_cents) })
-  y = accountRow(doc, y, { name: 'Net VAT position', amount: fmt(report.vat.net_cents) }, { bold: true }) + 16
+  y = accountRow(doc, y, { name: 'VAT on sales (output)', amount: format(report.vat.output_cents) })
+  y = accountRow(doc, y, { name: 'VAT on purchases (input)', amount: format(report.vat.input_cents) })
+  y = accountRow(doc, y, { name: 'Net VAT position', amount: format(report.vat.net_cents) }, { bold: true }) + 16
 
   // ---- trial balance ----
   y = sectionTitle(doc, y, 'Trial Balance')
@@ -142,11 +141,11 @@ export async function renderFinancialReportPdf({ report, tenantName, periodLabel
   }
   y = drawTbRow(y, 'Code', 'Account', 'Debit', 'Credit', { bold: true })
   for (const r of report.trial_balance.rows) {
-    y = drawTbRow(y, r.code, r.name, fmt(r.debit_cents), fmt(r.credit_cents))
+    y = drawTbRow(y, r.code, r.name, format(r.debit_cents), format(r.credit_cents))
   }
   y = ensureSpace(doc, y, 24)
   hline(doc, y, '#999999')
-  drawTbRow(y + 6, '', 'Total', fmt(report.trial_balance.totals.debit_cents), fmt(report.trial_balance.totals.credit_cents), { bold: true })
+  drawTbRow(y + 6, '', 'Total', format(report.trial_balance.totals.debit_cents), format(report.trial_balance.totals.credit_cents), { bold: true })
 
   doc.end()
   return done

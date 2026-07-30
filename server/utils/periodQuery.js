@@ -1,3 +1,5 @@
+import { fiscalYearRange } from '../../shared/fiscalYear.js'
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 function readSingle(query, key) {
@@ -27,14 +29,14 @@ function padMonth(month) {
   return String(month).padStart(2, '0')
 }
 
-function rangeForQuery(query) {
+function rangeForQuery(query, fiscalYearStart = { month: 1, day: 1 }) {
   const mode = readSingle(query, 'mode')
   if (!mode || mode === 'all_time') return { range: null }
 
   if (mode === 'fiscal_year') {
     const year = parseIntParam(query, 'year')
     if (!year || year < 1) return { error: 'Invalid period year' }
-    return { range: { from: `${year}-01-01`, toExclusive: `${year + 1}-01-01` } }
+    return { range: fiscalYearRange(year, fiscalYearStart) }
   }
 
   if (mode === 'month') {
@@ -87,12 +89,12 @@ function nextDay(isoDate) {
 
 // Resolves the period query params to a concrete { from, toExclusive } date
 // range: { range } (null range = all time) or { error }.
-export function resolvePeriodRange(query) {
-  return rangeForQuery(query)
+export function resolvePeriodRange(query, fiscalYearStart) {
+  return rangeForQuery(query, fiscalYearStart)
 }
 
-export function buildPeriodWhere(query, columnSql, startIndex = 2) {
-  const result = rangeForQuery(query)
+export function buildPeriodWhere(query, columnSql, startIndex = 2, fiscalYearStart) {
+  const result = rangeForQuery(query, fiscalYearStart)
   if (result.error) return { error: result.error }
   if (!result.range) return { sql: '', values: [] }
 

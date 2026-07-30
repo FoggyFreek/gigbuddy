@@ -9,6 +9,7 @@ import { randomBytes } from 'node:crypto'
 import { validSlug, slugFromBandName, parseTenantCountryCode } from '../validators/tenantValidators.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
 import { createAccountingProfileForTenant } from './accountingProfileService.js'
+import { defaultBaseCurrency } from '../../shared/accountingProfileCodes.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   insertTenant,
@@ -87,7 +88,7 @@ export async function createOwnedTenant(db, userId, body) {
       abortTransaction({ error: { status: 409, body: { error: 'Slug already in use' } } })
     }
     await ensureTenantStatistics(client, tenant.id)
-    await seedTenantAccounting(client, tenant.id)
+    await seedTenantAccounting(client, tenant.id, defaultBaseCurrency(country.countryCode))
     // Same transaction as the tenant insert: a band must never exist without the
     // accounting profile that states its jurisdiction.
     await createAccountingProfileForTenant(client, tenant.id, country.countryCode)

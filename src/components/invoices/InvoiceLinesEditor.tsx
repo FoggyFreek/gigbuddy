@@ -1,13 +1,14 @@
 import { useTranslation } from 'react-i18next'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
-import { computeInvoiceTotals, formatEur } from '../../utils/invoiceTotals.ts'
+import { computeInvoiceTotals, formatCurrency } from '../../utils/invoiceTotals.ts'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
+import { useProfile } from '../../contexts/profileContext.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import IconButton from '@mui/material/IconButton'
-import InputAdornment from '@mui/material/InputAdornment'
 import Link from '@mui/material/Link'
 import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
@@ -17,6 +18,7 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import MoneyInput from './MoneyInput.tsx'
+import VatRateSelect from '../shared/VatRateSelect.tsx'
 
 const GRID_COLUMNS = '2fr 0.6fr 1fr 0.7fr 1fr 32px'
 
@@ -37,9 +39,11 @@ interface InvoiceLineRowProps {
   compact?: boolean
   patchLine: (idx: number, patch: Partial<InvoiceFormLine>) => void
   removeLine: (idx: number) => void
+  currency: string
+  accountingCountry: string
 }
 
-function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readOnly, canRemove, compact, patchLine, removeLine }: Readonly<InvoiceLineRowProps>) {
+function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readOnly, canRemove, compact, patchLine, removeLine, currency, accountingCountry }: Readonly<InvoiceLineRowProps>) {
   const { t } = useTranslation('invoices')
   const displayCents = taxInclusive ? lineTotals.grossCents : lineTotals.netCents
 
@@ -80,22 +84,19 @@ function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readO
             cents={line.unit_price_cents}
             onChange={(c) => patchLine(idx, { unit_price_cents: c })}
             disabled={readOnly}
+            currency={currency}
           />
           {!appliesKor && (
-            <TextField
-              size="small"
-              type="number"
+            <VatRateSelect
+              id={`invoice-line-${idx}-vat-rate`}
               label={t($ => $.lines.vatPercentage)}
+              country={accountingCountry}
               value={line.tax_percentage}
-              onChange={(e) => patchLine(idx, { tax_percentage: Number(e.target.value) || 0 })}
-              slotProps={{
-                htmlInput: { min: 0, step: 1 },
-                input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-              }}
+              onChange={(rate) => patchLine(idx, { tax_percentage: rate ?? 0 })}
               disabled={readOnly}
             />
           )}
-          <Typography variant="body2" align="right">{formatEur(displayCents)}</Typography>
+          <Typography variant="body2" align="right">{formatCurrency(displayCents, currency)}</Typography>
         </Box>
       </Box>
     )
@@ -122,23 +123,22 @@ function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readO
         cents={line.unit_price_cents}
         onChange={(c) => patchLine(idx, { unit_price_cents: c })}
         disabled={readOnly}
+        currency={currency}
       />
       {!appliesKor ? (
-        <TextField
-          size="small"
-          type="number"
+        <VatRateSelect
+          id={`invoice-line-${idx}-vat-rate`}
+          label={t($ => $.lines.vatPercentage)}
+          country={accountingCountry}
           value={line.tax_percentage}
-          onChange={(e) => patchLine(idx, { tax_percentage: Number(e.target.value) || 0 })}
-          slotProps={{
-            htmlInput: { min: 0, step: 1 },
-            input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-          }}
+          onChange={(rate) => patchLine(idx, { tax_percentage: rate ?? 0 })}
           disabled={readOnly}
+          hideLabel
         />
       ) : (
         <span />
       )}
-      <Typography variant="body2" align="right">{formatEur(displayCents)}</Typography>
+      <Typography variant="body2" align="right">{formatCurrency(displayCents, currency)}</Typography>
       <IconButton
         size="small"
         onClick={() => removeLine(idx)}
@@ -164,6 +164,10 @@ interface InvoiceLinesEditorProps {
 
 export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly, patchForm, patchLine, addLine, removeLine }: Readonly<InvoiceLinesEditorProps>) {
   const { t } = useTranslation('invoices')
+  const { profile } = useAccountingProfile()
+  const { vatCountry } = useProfile()
+  const currency = profile?.base_currency ?? 'EUR'
+  const accountingCountry = profile?.country_code ?? vatCountry
   const compact = useCompactLayout()
   // KOR and reverse charge both remove VAT from the invoice, so the VAT controls
   // and column are hidden in either case.
@@ -264,6 +268,8 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
           compact={compact}
           patchLine={patchLine}
           removeLine={removeLine}
+          currency={currency}
+          accountingCountry={accountingCountry}
         />
       ))}
 

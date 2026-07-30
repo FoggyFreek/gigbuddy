@@ -12,12 +12,15 @@ interface MoneyInputProps {
   error?: boolean
   helperText?: string
   sx?: SxProps<Theme>
+  currency?: string
 }
 
 // Lets the user type freely (e.g. "200") and only commits the parsed cent value
 // on blur, preventing the controlled-input loop where every keystroke reformats
 // the display value.
-export default function MoneyInput({ cents, onChange, disabled = false, label, error = false, helperText, sx }: Readonly<MoneyInputProps>) {
+export default function MoneyInput({
+  cents, onChange, disabled = false, label, error = false, helperText, sx, currency = 'EUR',
+}: Readonly<MoneyInputProps>) {
   const [raw, setRaw] = useState('')
   const [focused, setFocused] = useState(false)
 
@@ -40,7 +43,19 @@ export default function MoneyInput({ cents, onChange, disabled = false, label, e
       error={error}
       helperText={helperText}
       sx={sx}
-      slotProps={{ input: { startAdornment: <InputAdornment position="start">€</InputAdornment> } }}
+      slotProps={{
+        input: {
+          startAdornment: (
+            <InputAdornment position="start">
+              {new Intl.NumberFormat('nl-NL', {
+                style: 'currency',
+                currency,
+                currencyDisplay: 'narrowSymbol',
+              }).formatToParts(0).find((part) => part.type === 'currency')?.value}
+            </InputAdornment>
+          ),
+        },
+      }}
     />
   )
 }

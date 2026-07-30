@@ -15,7 +15,8 @@ import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import { getVatReturn, recordVatPayment } from '../api/vatReturns.ts'
-import { formatEur } from '../utils/invoiceTotals.ts'
+import { formatCurrency } from '../utils/invoiceTotals.ts'
+import { useAccountingProfile } from '../contexts/accountingProfileContext.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
 import { quarterKey, statusMeta, outstandingCents } from '../utils/vatReturns.ts'
 import RecordVatPaymentDialog from '../components/vatReturns/RecordVatPaymentDialog.tsx'
@@ -40,6 +41,7 @@ function Row({ label, value }: Readonly<{ label: string; value?: ReactNode }>) {
 // the stored breakdown, the settlement ledger entry link, payments so far and
 // the outstanding balance with a record-payment/refund action.
 export default function VatReturnDetailPage() {
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const { t, i18n } = useTranslation(['vatReturns', 'common'])
   const { id } = useParams()
   const vatReturnId = Number(id)
@@ -118,14 +120,14 @@ export default function VatReturnDetailPage() {
           <Row label={t($ => $.fields.dueDate)} value={formatShortDate(ret.due_date, locale)} />
           <Row label={t($ => $.fields.filed)} value={formatShortDate(ret.filed_at, locale)} />
           <Divider sx={{ my: 1 }} />
-          <Row label={t($ => $.fields.outputVat)} value={formatEur(ret.output_vat_cents)} />
-          <Row label={t($ => $.fields.inputVat)} value={`− ${formatEur(ret.input_vat_cents)}`} />
+          <Row label={t($ => $.fields.outputVat)} value={formatCurrency(ret.output_vat_cents, currency)} />
+          <Row label={t($ => $.fields.inputVat)} value={`− ${formatCurrency(ret.input_vat_cents, currency)}`} />
           <Divider sx={{ my: 1 }} />
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
             <Typography variant="subtitle2">
               {dueLabel}
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(Math.abs(ret.net_cents ?? 0))}</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatCurrency(Math.abs(ret.net_cents ?? 0), currency)}</Typography>
           </Box>
 
           {ret.payments && ret.payments.length > 0 && (
@@ -137,11 +139,11 @@ export default function VatReturnDetailPage() {
                 <Row
                   key={String(p.id)}
                   label={`${formatShortDate(p.paid_on, locale)} · ${p.bank_account_code}`}
-                  value={formatEur(p.amount_cents)}
+                  value={formatCurrency(p.amount_cents, currency)}
                 />
               ))}
               {ret.direction !== 'nil' && (
-                <Row label={t($ => $.fields.outstanding)} value={formatEur(outstanding)} />
+                <Row label={t($ => $.fields.outstanding)} value={formatCurrency(outstanding, currency)} />
               )}
               <Divider sx={{ my: 1 }} />
             </>

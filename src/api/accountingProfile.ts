@@ -13,7 +13,8 @@ export const getAccountingProfile = () => api<AccountingProfile>('/')
 // (status, source, review columns).
 export type AccountingProfilePatch = Partial<Pick<AccountingProfile,
   'local_legal_form_code' | 'local_legal_form_label' | 'vat_registered'
-  | 'vat_filing_frequency' | 'financial_year_start_month' | 'financial_year_start_day'>>
+  | 'vat_filing_frequency' | 'financial_year_start_month' | 'financial_year_start_day'
+  | 'default_vat_rate'>>
 
 export const updateAccountingProfile = (body: AccountingProfilePatch) =>
   api<AccountingProfile>('/', { method: 'PATCH', body: JSON.stringify(body) })
@@ -22,3 +23,13 @@ export const updateAccountingProfile = (body: AccountingProfilePatch) =>
 // field is answered.
 export const confirmAccountingProfile = () =>
   api<AccountingProfile>('/review', { method: 'POST' })
+
+export interface AccountingCountryChangeRequest {
+  country_code: string
+  tax_id?: string | null
+  kvk_number?: string | null
+  registration_office?: string | null
+}
+
+export const changeAccountingCountry = (body: AccountingCountryChangeRequest) =>
+  api<AccountingProfile>('/change-country', { method: 'POST', body: JSON.stringify(body) })

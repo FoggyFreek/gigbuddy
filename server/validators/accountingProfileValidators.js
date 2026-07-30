@@ -7,6 +7,7 @@ import {
   legalFormForLocalCode,
   defaultReportingFramework,
 } from '../../shared/accountingProfileCodes.js'
+import { isKnownVatRate } from '../../shared/vatRates.js'
 
 // entity_size and financial_accounting_basis are deliberately NOT patchable — see
 // migration 137. Both record what this application is and does (micro-entity
@@ -50,6 +51,7 @@ export const PATCHABLE_PROFILE_FIELDS = Object.freeze([
   'vat_filing_frequency',
   'financial_year_start_month',
   'financial_year_start_day',
+  'default_vat_rate',
 ])
 
 const LOCAL_LEGAL_FORM_LABEL_MAX = 120
@@ -99,6 +101,9 @@ const SIMPLE_VALIDATORS = {
   local_legal_form_label: validateLocalLegalFormLabel,
   vat_filing_frequency: makeEnumValidator('vat_filing_frequency', VAT_FILING_FREQUENCIES),
   vat_registered: validateVatRegistered,
+  default_vat_rate: (raw) => isKnownVatRate(raw)
+    ? { value: Number(raw) }
+    : { error: 'invalid_default_vat_rate' },
 }
 
 function parseFiscalPart(raw) {

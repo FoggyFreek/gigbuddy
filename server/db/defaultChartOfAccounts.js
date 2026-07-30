@@ -88,7 +88,7 @@ const DEFAULT_SETTINGS = {
 // Seeds the chart of accounts + settings row for a single tenant.
 // client can be a pool or a transaction client (both expose .query).
 // Safe to call multiple times: uses ON CONFLICT DO NOTHING.
-export async function seedTenantAccounting(client, tenantId) {
+export async function seedTenantAccounting(client, tenantId, currency = DEFAULT_SETTINGS.currency) {
   for (const acc of DEFAULT_ACCOUNTS) {
     const reportingGroup = acc.reporting_group ?? defaultReportingGroupForType(acc.type)
     await client.query(
@@ -115,7 +115,7 @@ export async function seedTenantAccounting(client, tenantId) {
      ON CONFLICT (tenant_id) DO NOTHING`,
     [
       tenantId,
-      DEFAULT_SETTINGS.currency,
+      currency,
       DEFAULT_SETTINGS.receivable_account_code,
       DEFAULT_SETTINGS.default_revenue_account_code,
       DEFAULT_SETTINGS.payable_account_code,

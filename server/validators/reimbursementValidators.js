@@ -4,6 +4,6 @@ import { buildPeriodWhere } from '../utils/periodQuery.js'
 
 export { isValidIsoDate, parseId }
 
-export function buildReimbursementPeriodWhere(query) {
-  return buildPeriodWhere(query, 'r.paid_on')
+export function buildReimbursementPeriodWhere(query, fiscalYearStart) {
+  return buildPeriodWhere(query, 'r.paid_on', 2, fiscalYearStart)
 }

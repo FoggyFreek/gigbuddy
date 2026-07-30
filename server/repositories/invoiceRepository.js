@@ -14,7 +14,7 @@ export async function releaseSessionLock(executor, namespace, resourceId) {
 // `period` is the { sql, values } pair from buildPeriodWhere(query, 'issue_date').
 export async function listInvoices(executor, tenantId, period) {
   const { rows } = await executor.query(
-    `SELECT id, invoice_number, gig_id, issue_date, due_date,
+    `SELECT id, invoice_number, gig_id, issue_date, due_date, currency,
             customer_name, total_cents, status, pdf_path, finalized_at,
             mollie_payment_link_id, mollie_payment_link_url,
             mollie_payment_status, mollie_paid_at,
@@ -54,7 +54,7 @@ export async function countInvoicesWithPaymentLink(executor, tenantId) {
 // Exact invoice-number matches sort first, then most recent. Tenant-scoped.
 export async function searchInvoices(executor, tenantId, like, limit) {
   const { rows } = await executor.query(
-    `SELECT i.id, i.invoice_number, i.customer_name, i.total_cents, i.status,
+    `SELECT i.id, i.invoice_number, i.customer_name, i.total_cents, i.currency, i.status,
             i.issue_date, g.event_description AS gig_event_description
        FROM invoices i
        LEFT JOIN gigs g ON g.id = i.gig_id AND g.tenant_id = i.tenant_id
@@ -396,7 +396,7 @@ export async function insertInvoice(executor, invoice) {
        discount_type, discount_pct, discount_cents,
        invert_logo,
        subtotal_cents, tax_cents, total_cents,
-       created_by_user_id,
+       currency, created_by_user_id,
        vies_checked_at, vies_checked_vat_number, vies_consultation_number
      ) VALUES (
        $1, $2, $3, $4, $5, $6,
@@ -408,8 +408,8 @@ export async function insertInvoice(executor, invoice) {
        $22, $23, $24,
        $25,
        $26, $27, $28,
-       $29,
-       $30, $31, $32
+       $29, $30,
+       $31, $32, $33
      ) RETURNING id`,
     [
       invoice.tenant_id, invoice.gig_id, invoice.invoice_number, invoice.issue_date, invoice.due_date, invoice.payment_term_days,
@@ -421,7 +421,7 @@ export async function insertInvoice(executor, invoice) {
       invoice.discount_type, invoice.discount_pct, invoice.discount_cents,
       invoice.invert_logo,
       invoice.subtotal_cents, invoice.tax_cents, invoice.total_cents,
-      invoice.created_by_user_id,
+      invoice.currency, invoice.created_by_user_id,
       invoice.vies_checked_at ?? null, invoice.vies_checked_vat_number ?? null, invoice.vies_consultation_number ?? null,
     ],
   )

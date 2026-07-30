@@ -23,6 +23,7 @@ import {
   insertAccountingProfile,
 } from '../repositories/accountingProfileRepository.js'
 import { defaultBaseCurrency } from '../../shared/accountingProfileCodes.js'
+import { getStandardVatRate } from '../../shared/vatRates.js'
 
 export async function auditAccountingProfiles(executor, { apply = false } = {}) {
   const inconsistencies = await findProfileInconsistencies(executor)
@@ -44,6 +45,7 @@ export async function auditAccountingProfiles(executor, { apply = false } = {}) 
       const inserted = await insertAccountingProfile(executor, row.tenant_id, {
         country_code: row.vat_country,
         base_currency: defaultBaseCurrency(row.vat_country),
+        default_vat_rate: getStandardVatRate(row.vat_country),
         legal_form: null,
         profile_source: 'repair',
         profile_status: 'incomplete',

@@ -41,6 +41,9 @@ const SAFE_EXTRA_KEYS = new Set([
   'enrolmentId',
   'schemeCode',
   'invoiceId',
+  'oldCountry',
+  'newCountry',
+  'affectedCount',
 ])
 
 export function sanitizeAuditExtra(extra = {}) {

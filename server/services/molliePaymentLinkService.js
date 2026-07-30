@@ -63,7 +63,7 @@ function buildPaymentLinkPayload({ tenant, invoice, invoiceId, opts }) {
   if (tenantLabel) redirectQuery.set('band', tenantLabel)
 
   const payload = {
-    amount: { currency: 'EUR', value: formatMollieAmountFromCents(invoice.total_cents) },
+    amount: { currency: invoice.currency, value: formatMollieAmountFromCents(invoice.total_cents) },
     description,
     redirectUrl: `${appUrl}/payment/thanks?${redirectQuery.toString()}`,
     reusable: false,

@@ -30,6 +30,7 @@ import { listLedgerEntries, listLedgerPeriods } from '../api/ledger.ts'
 import { listAccounts } from '../api/accounts.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
+import useFiscalYearStart from '../hooks/useFiscalYearStart.ts'
 import { loadLedgerEntrySearchFilters, saveLedgerEntrySearchFilters } from '../utils/ledgerEntrySearchFilterStorage.ts'
 import type { Account, LedgerEntryLineRow, Period } from '../types/entities.ts'
 
@@ -41,6 +42,7 @@ const SORT_FIELDS: ReadonlySet<SortField> = new Set(['id', 'entry_date', 'amount
 const signedAmount = (row: LedgerEntryLineRow) => (row.debit_cents ?? 0) - (row.credit_cents ?? 0)
 
 export default function LedgerEntrySearchPage() {
+  const fiscalYearStart = useFiscalYearStart()
   const { t } = useTranslation('ledger')
   // Restore the previous session's filters so navigating away and back keeps
   // the user's account selection, period, search, sort and pagination.
@@ -56,7 +58,7 @@ export default function LedgerEntrySearchPage() {
   const [sortDesc, setSortDesc] = useState<boolean>(typeof saved?.sortDesc === 'boolean' ? saved.sortDesc : true)
   const [page, setPage] = useState<number>(typeof saved?.page === 'number' ? saved.page : 0)
   const [rowsPerPage, setRowsPerPage] = useState<number>(typeof saved?.rowsPerPage === 'number' ? saved.rowsPerPage : 50)
-  const [period, setPeriod] = useState<Period>(() => (saved?.period && typeof saved.period === 'object' ? saved.period as Period : { mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [period, setPeriod] = useState<Period>(() => (saved?.period && typeof saved.period === 'object' ? saved.period as Period : defaultPeriodForDates([], fiscalYearStart)))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
 
@@ -76,15 +78,15 @@ export default function LedgerEntrySearchPage() {
         const dateStrings = dates.filter(Boolean)
         setAvailableDates(dateStrings)
         setPeriod((prev) => {
-          const currentYear = new Date().getFullYear()
+          const currentYear = defaultPeriodForDates([], fiscalYearStart).year
           if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
-          return defaultPeriodForDates(dateStrings)
+          return defaultPeriodForDates(dateStrings, fiscalYearStart)
         })
       })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setPeriodsLoaded(true) })
     return () => { cancelled = true }
-  }, [])
+  }, [fiscalYearStart])
 
   // A stable, order-independent key for the selected codes, so the fetch effect
   // re-runs on a real selection change (not on every Set identity change).

@@ -15,6 +15,10 @@ import {
   insertAccountingProfile,
   updateAccountingProfile,
   markProfileReviewed as markProfileReviewedRow,
+  countFinancialDocuments,
+  resetProfileCountry,
+  voidCountryDependentEnrolments,
+  resetProductVatRates,
 } from '../repositories/accountingProfileRepository.js'
 import {
   buildAccountingProfileUpdate,
@@ -24,8 +28,20 @@ import {
   profilePresentationState,
 } from '../validators/accountingProfileValidators.js'
 import { resolveCurrentSalesTreatment } from './vatTreatmentService.js'
-import { defaultBaseCurrency } from '../../shared/accountingProfileCodes.js'
-import { normalizeVatCountry } from '../../shared/vatRates.js'
+import { defaultBaseCurrency, bookkeepingCurrency } from '../../shared/accountingProfileCodes.js'
+import {
+  getStandardVatRate,
+  isValidVatId,
+  normalizeVatCountry,
+  normalizeVatNumber,
+} from '../../shared/vatRates.js'
+import {
+  isValidRegistrationNumber,
+  normalizeRegistrationNumber,
+  registrationUsesOffice,
+} from '../../shared/businessRegistry.js'
+import { lockTenantRow } from '../repositories/tenantRepository.js'
+import { updateSettings } from '../repositories/accountRepository.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
 import { logger } from '../utils/logger.js'
 
@@ -33,12 +49,16 @@ import { logger } from '../utils/logger.js'
 // legacy readers are repointed. A profile write keeps the projection in step so
 // the previous app container (deployment migrates before replacing it) and any
 // un-repointed reader stay correct. Removed when the columns are dropped.
-const LEGACY_PROJECTED_FIELDS = ['legal_form']
+const LEGACY_PROJECTED_FIELDS = ['legal_form', 'default_vat_rate']
 
 // Adds the derived presentation state so no consumer re-implements the
 // completeness/provenance combination.
 function present(profile) {
-  return { ...profile, presentation_state: profilePresentationState(profile) }
+  return {
+    ...profile,
+    default_vat_rate: Number(profile.default_vat_rate),
+    presentation_state: profilePresentationState(profile),
+  }
 }
 
 // Creates the profile for a brand-new tenant. Runs inside the caller's tenant
@@ -47,6 +67,7 @@ export async function createAccountingProfileForTenant(client, tenantId, country
   const inserted = await insertAccountingProfile(client, tenantId, {
     country_code: countryCode,
     base_currency: defaultBaseCurrency(countryCode),
+    default_vat_rate: getStandardVatRate(countryCode),
     legal_form: null,
     profile_source: 'tenant_creation',
     profile_status: 'incomplete',
@@ -79,6 +100,7 @@ async function repairMissingProfile(executor, tenantId) {
   const inserted = await insertAccountingProfile(executor, tenantId, {
     country_code: vatCountry,
     base_currency: defaultBaseCurrency(vatCountry),
+    default_vat_rate: getStandardVatRate(vatCountry),
     legal_form: null,
     profile_source: 'repair',
     profile_status: 'incomplete',
@@ -103,8 +125,30 @@ export async function getAccountingProfile(db, tenantId) {
 // Returns the row (repairing a missing one) or null when the tenant is gone.
 export async function loadAccountingProfile(executor, tenantId) {
   const existing = await fetchAccountingProfile(executor, tenantId)
-  if (existing) return existing
+  if (existing) {
+    if (existing.default_vat_rate !== null) return existing
+    return updateAccountingProfile(executor, tenantId, {
+      default_vat_rate: getStandardVatRate(existing.country_code),
+    })
+  }
   return repairMissingProfile(executor, tenantId)
+}
+
+export async function loadAccountingBehavior(executor, tenantId) {
+  const profile = await loadAccountingProfile(executor, tenantId)
+  if (!profile) return null
+  return {
+    accountingCountry: profile.country_code,
+    // Behavioral vs factual: the books are kept in `currency`, the profile
+    // records `baseCurrency`. They differ only where multi-currency is not live.
+    currency: bookkeepingCurrency(profile.base_currency),
+    baseCurrency: profile.base_currency,
+    defaultVatRate: Number(profile.default_vat_rate),
+    fiscalYearStart: {
+      month: Number(profile.financial_year_start_month),
+      day: Number(profile.financial_year_start_day),
+    },
+  }
 }
 
 export async function patchAccountingProfile(db, tenantId, body = {}) {
@@ -213,7 +257,7 @@ async function projectToLegacyColumns(client, tenantId, updates) {
   const values = []
   for (const key of LEGACY_PROJECTED_FIELDS) {
     if (!(key in updates)) continue
-    fields.push(`${key} = $${fields.length + 1}`)
+    fields.push(`${key === 'default_vat_rate' ? 'tax_percentage' : key} = $${fields.length + 1}`)
     values.push(updates[key])
   }
 
@@ -235,5 +279,97 @@ export async function markProfileReviewed(db, tenantId, userId) {
 
     const updated = await markProfileReviewedRow(client, tenantId, userId)
     return { profile: present(updated) }
+  }, { db })
+}
+
+function retainedIdentifier(value, supplied, normalize, valid, conflictCode) {
+  if (supplied) {
+    if (value === null) return { value: null }
+    const normalized = normalize(value)
+    if (!valid(normalized)) return { error: badRequest(`Invalid identifier`, { code: conflictCode }) }
+    return { value: normalized }
+  }
+  if (value === null || value === '') return { value }
+  if (!valid(value)) return { error: conflict('Stored identifier is incompatible with target country', { code: conflictCode }) }
+  return { value }
+}
+
+export async function changeAccountingCountry(db, tenantId, body = {}, userId = null) {
+  const countryCode = normalizeVatCountry(body.country_code)
+  if (!countryCode) return badRequest('invalid_country_code')
+
+  return withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
+    const [current, tenant] = await Promise.all([
+      fetchAccountingProfile(client, tenantId),
+      lockTenantRow(client, tenantId),
+    ])
+    if (!current || !tenant) abortTransaction(notFound('Accounting profile not found'))
+
+    const counts = await countFinancialDocuments(client, tenantId)
+    const totalDocuments = Object.values(counts).reduce((sum, value) => sum + Number(value), 0)
+    if (totalDocuments > 0) {
+      abortTransaction(conflict('Accounting country cannot change after financial documents exist', {
+        code: 'accounting_country_has_financial_documents',
+      }))
+    }
+
+    const taxId = retainedIdentifier(
+      Object.hasOwn(body, 'tax_id') ? body.tax_id : tenant.tax_id,
+      Object.hasOwn(body, 'tax_id'),
+      normalizeVatNumber,
+      (value) => value === '' || isValidVatId(countryCode, value),
+      'tax_id_incompatible_vat_country',
+    )
+    if (taxId.error) abortTransaction(taxId.error)
+
+    const kvk = retainedIdentifier(
+      Object.hasOwn(body, 'kvk_number') ? body.kvk_number : tenant.kvk_number,
+      Object.hasOwn(body, 'kvk_number'),
+      normalizeRegistrationNumber,
+      (value) => isValidRegistrationNumber(countryCode, value),
+      'kvk_incompatible_vat_country',
+    )
+    if (kvk.error) abortTransaction(kvk.error)
+
+    const officeSupplied = Object.hasOwn(body, 'registration_office')
+    const registrationOffice = officeSupplied && registrationUsesOffice(countryCode)
+      ? (body.registration_office === null ? null : String(body.registration_office).trim() || null)
+      : null
+    const baseCurrency = defaultBaseCurrency(countryCode)
+    const defaultVatRate = getStandardVatRate(countryCode)
+
+    const updated = await resetProfileCountry(client, tenantId, {
+      countryCode,
+      baseCurrency,
+      defaultVatRate,
+    })
+    await updateTenantFields(client, tenantId, [
+      'vat_country = $1',
+      'tax_percentage = $2',
+      'tax_id = $3',
+      'kvk_number = $4',
+      'registration_office = $5',
+      'legal_form = NULL',
+      'applies_kor = FALSE',
+    ], [countryCode, defaultVatRate, taxId.value, kvk.value, registrationOffice])
+    await updateSettings(client, tenantId, { currency: bookkeepingCurrency(baseCurrency) })
+    const enrolmentsVoided = await voidCountryDependentEnrolments(client, tenantId, userId)
+    const productsReset = await resetProductVatRates(client, tenantId, defaultVatRate)
+
+    return {
+      profile: {
+        ...present(updated),
+        current_sales_treatment: null,
+      },
+      audit: {
+        action: 'accounting_profile.country_changed',
+        details: {
+          oldCountry: current.country_code,
+          newCountry: countryCode,
+          affectedCount: enrolmentsVoided + productsReset,
+        },
+      },
+    }
   }, { db })
 }

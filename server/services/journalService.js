@@ -42,6 +42,7 @@ import { ledgerErrorResult, postUserJournal, firstOpenDate } from './ledgerServi
 import { classify } from './ledgerEntryTypes.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
+import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
 
 const NOT_FOUND = notFound('Not found')
 const APPROVED_LOCKED = { status: 409, body: { error: 'Approved journals cannot be edited', code: 'journal_approved' } }
@@ -99,6 +100,7 @@ export async function createJournal(pool, tenantId, body, actorUserId = null) {
   if (codeErr) return codeErr
 
   return withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
     const id = await createJournalRepo(client, tenantId, {
       entryDate, description: body.description?.trim() || null,
       createdByUserId: actorUserId, note: normalizeNote(body.note),

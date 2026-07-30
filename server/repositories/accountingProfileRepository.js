@@ -22,15 +22,16 @@ export async function fetchAccountingProfile(executor, tenantId) {
 export async function insertAccountingProfile(executor, tenantId, profile) {
   const { rows } = await executor.query(
     `INSERT INTO tenant_accounting_profiles (
-       tenant_id, country_code, base_currency, legal_form, profile_source, profile_status
+       tenant_id, country_code, base_currency, default_vat_rate, legal_form, profile_source, profile_status
      )
-     VALUES ($1, $2, $3, $4, $5, $6)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (tenant_id) DO NOTHING
      RETURNING *`,
     [
       tenantId,
       profile.country_code,
       profile.base_currency,
+      profile.default_vat_rate,
       profile.legal_form ?? null,
       profile.profile_source,
       profile.profile_status,
@@ -93,4 +94,73 @@ export async function countProfilesBySource(executor) {
       ORDER BY profile_source`,
   )
   return rows
+}
+
+export async function countFinancialDocuments(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT
+       (SELECT COUNT(*)::int FROM invoices WHERE tenant_id = $1) AS invoices,
+       (SELECT COUNT(*)::int FROM purchases WHERE tenant_id = $1) AS purchases,
+       (SELECT COUNT(*)::int FROM ledger_transactions WHERE tenant_id = $1) AS journals,
+       (SELECT COUNT(*)::int FROM reimbursements WHERE tenant_id = $1) AS reimbursements,
+       (SELECT COUNT(*)::int FROM vat_returns WHERE tenant_id = $1) AS vat_returns,
+       (SELECT COUNT(*)::int FROM merch_sales WHERE tenant_id = $1) AS merch_sales,
+       (SELECT COUNT(*)::int FROM bank_statement_imports WHERE tenant_id = $1) AS bank_imports`,
+    [tenantId],
+  )
+  return rows[0]
+}
+
+export async function resetProfileCountry(executor, tenantId, {
+  countryCode,
+  baseCurrency,
+  defaultVatRate,
+}) {
+  const { rows } = await executor.query(
+    `UPDATE tenant_accounting_profiles
+        SET country_code = $2,
+            base_currency = $3,
+            default_vat_rate = $4,
+            legal_form = NULL,
+            local_legal_form_code = NULL,
+            local_legal_form_label = NULL,
+            reporting_framework_code = NULL,
+            vat_registered = NULL,
+            vat_accounting_basis = 'unknown',
+            vat_filing_frequency = 'unconfigured',
+            profile_status = 'incomplete',
+            reviewed_at = NULL,
+            reviewed_by_user_id = NULL,
+            pack_version = NULL,
+            updated_at = NOW()
+      WHERE tenant_id = $1
+      RETURNING *`,
+    [tenantId, countryCode, baseCurrency, defaultVatRate],
+  )
+  return rows[0] || null
+}
+
+export async function voidCountryDependentEnrolments(executor, tenantId, userId) {
+  const { rowCount } = await executor.query(
+    `UPDATE tax_scheme_enrolments
+        SET voided_at = NOW(),
+            voided_by_user_id = $2,
+            void_reason = 'accounting_country_changed',
+            updated_at = NOW()
+      WHERE tenant_id = $1
+        AND voided_at IS NULL
+        AND (valid_to IS NULL OR valid_to >= CURRENT_DATE)`,
+    [tenantId, userId],
+  )
+  return rowCount
+}
+
+export async function resetProductVatRates(executor, tenantId, defaultVatRate) {
+  const { rowCount } = await executor.query(
+    `UPDATE products
+        SET vat_rate = $2, updated_at = NOW()
+      WHERE tenant_id = $1 AND vat_rate IS DISTINCT FROM $2`,
+    [tenantId, defaultVatRate],
+  )
+  return rowCount
 }

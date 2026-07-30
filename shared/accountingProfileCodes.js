@@ -201,6 +201,18 @@ export function defaultBaseCurrency(country) {
   return normalizeVatCountry(country) === 'gb' ? 'GBP' : 'EUR'
 }
 
+// Currencies the books can actually be kept in. ledger_entries carry no
+// currency and there is no FX conversion, so only the euro is safe to make
+// behavioral; widening this is the one switch that changes that.
+export const BOOKKEEPING_CURRENCIES = Object.freeze(['EUR'])
+
+// What to stamp on documents and label reports with. `base_currency` stays
+// truthful (GBP for a UK band); this clamps it, so a tenant whose historical
+// documents are euro never gets new ones in another unit.
+export function bookkeepingCurrency(baseCurrency) {
+  return BOOKKEEPING_CURRENCIES.includes(baseCurrency) ? baseCurrency : 'EUR'
+}
+
 // The reporting framework a micro entity in this country falls under, keyed on
 // whether it is incorporated. It is DERIVED rather than asked: for a band-sized
 // entity the framework follows from the jurisdiction and the legal form, and it is

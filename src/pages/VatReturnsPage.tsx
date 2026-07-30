@@ -14,7 +14,8 @@ import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
 import { alpha } from '@mui/material/styles'
 import SplitView from '../components/SplitView.tsx'
 import { listVatReturns } from '../api/vatReturns.ts'
-import { formatEur } from '../utils/invoiceTotals.ts'
+import { formatCurrency } from '../utils/invoiceTotals.ts'
+import { useAccountingProfile } from '../contexts/accountingProfileContext.ts'
 import { quarterKey, statusMeta, outstandingCents } from '../utils/vatReturns.ts'
 import NewVatReturnDialog from '../components/vatReturns/NewVatReturnDialog.tsx'
 import type { VatReturn, Id } from '../types/entities.ts'
@@ -56,6 +57,7 @@ interface MenuState {
 // Selecting a declaration opens its breakdown in the SplitView detail pane
 // (/vat-returns/:id); filing a new one stays a dialog.
 export default function VatReturnsPage() {
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const { t } = useTranslation('vatReturns')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
@@ -179,7 +181,7 @@ export default function VatReturnsPage() {
                     </Typography>
                   </Box>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    {formatEur(stats.total)}
+                    {formatCurrency(stats.total, currency)}
                   </Typography>
                 </Paper>
               )
@@ -240,6 +242,7 @@ interface VatReturnRowProps {
 
 function VatReturnRow({ vatReturn, selected, onClick, onMenu }: Readonly<VatReturnRowProps>) {
   const { t } = useTranslation('vatReturns')
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const meta = statusMeta(vatReturn)
   const period = t($ => $.quarters[quarterKey(vatReturn.quarter ?? 1)], { year: vatReturn.year ?? 0 })
   return (
@@ -269,7 +272,7 @@ function VatReturnRow({ vatReturn, selected, onClick, onMenu }: Readonly<VatRetu
       </Box>
       {vatReturn.direction !== 'nil' && (
         <Typography variant="body1" sx={{ fontWeight: 500,  flexShrink: 0  }}>
-          {formatEur(Math.abs(vatReturn.net_cents ?? 0))}
+          {formatCurrency(Math.abs(vatReturn.net_cents ?? 0), currency)}
         </Typography>
       )}
       <IconButton

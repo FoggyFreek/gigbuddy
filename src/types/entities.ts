@@ -629,6 +629,7 @@ export interface AccountingProfile {
   // Immutable after band creation; base_currency is derived from it.
   country_code: string
   base_currency: string
+  default_vat_rate: number
   profile_status: 'incomplete' | 'complete'
   profile_source: ProfileSource
   presentation_state: AccountingProfileState

@@ -1,22 +1,28 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import MenuItem from '@mui/material/MenuItem'
-import InputAdornment from '@mui/material/InputAdornment'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
 import {
   updateAccountingProfile,
   confirmAccountingProfile,
+  changeAccountingCountry,
   type AccountingProfilePatch,
 } from '../../api/accountingProfile.ts'
-import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
-import { getProfile, updateProfile } from '../../api/profile.ts'
 import type { AccountingProfile } from '../../types/entities.ts'
+import { VAT_COUNTRY_CODES } from '../../utils/vatRates.ts'
+import { useProfile } from '../../contexts/profileContext.ts'
+import { useAuth } from '../../contexts/authContext.ts'
+import VatRateSelect from '../shared/VatRateSelect.tsx'
 
 // 'exempt' is deliberately absent: it is DERIVED from a VAT scheme enrolment,
 // which carries dates, a jurisdiction and a confirmation this select cannot
@@ -35,6 +41,9 @@ const KNOWN_ERROR_CODES = [
   'invalid_financial_year_start',
   'invalid_financial_year_start_month',
   'invalid_financial_year_start_day',
+  'accounting_country_has_financial_documents',
+  'tax_id_incompatible_vat_country',
+  'kvk_incompatible_vat_country',
 ] as const
 
 type KnownErrorCode = typeof KNOWN_ERROR_CODES[number]
@@ -88,31 +97,12 @@ function daysForMonth(month: number): number[] {
 export default function AccountingProfileFields() {
   const { t, i18n } = useTranslation('settings')
   const { profile, loading, applyProfile } = useAccountingProfile()
+  const { setVatSettings } = useProfile()
+  const { refreshUser } = useAuth()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // The default invoice VAT rate still lives on the tenant row (it moves with the
-  // scheme-enrolment work), so it is loaded and saved through the band-profile
-  // endpoint while being shown here — this is where a user looks for VAT, and the
-  // section groups by meaning, not by table.
-  const [taxPercentage, setTaxPercentage] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    getProfile()
-      .then((p) => {
-        if (cancelled) return
-        setTaxPercentage(p?.tax_percentage != null ? String(p.tax_percentage) : '')
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const persistRate = useCallback(async (patch: { tax_percentage: number }) => {
-    await updateProfile(patch)
-  }, [])
-  const { schedule: scheduleRate } = useDebouncedSave(persistRate)
+  const [countryDialogOpen, setCountryDialogOpen] = useState(false)
+  const [nextCountry, setNextCountry] = useState('')
 
   async function save(patch: AccountingProfilePatch) {
     setSaving(true)
@@ -141,6 +131,28 @@ export default function AccountingProfileFields() {
       setError(isKnownErrorCode(code)
         ? t($ => $.accountingProfile.errors[code])
         : e.message ?? t($ => $.accountingProfile.errors.unknown))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function changeCountry() {
+    if (!nextCountry) return
+    setSaving(true)
+    setError(null)
+    try {
+      const next = await changeAccountingCountry({ country_code: nextCountry })
+      applyProfile(next)
+      setVatSettings(next.country_code, next.default_vat_rate)
+      await refreshUser()
+      setCountryDialogOpen(false)
+    } catch (err) {
+      const e = err as { code?: string; message?: string }
+      const code = e.code ?? e.message ?? ''
+      setError(isKnownErrorCode(code)
+        ? t($ => $.accountingProfile.errors[code])
+        : e.message ?? t($ => $.accountingProfile.errors.unknown))
+      setCountryDialogOpen(false)
     } finally {
       setSaving(false)
     }
@@ -202,6 +214,16 @@ export default function AccountingProfileFields() {
           value={countryLabel(profile.country_code, i18n.language)}
           helperText={t($ => $.accountingProfile.countryHelper)}
         />
+        <Button
+          variant="outlined"
+          disabled={saving}
+          onClick={() => {
+            setNextCountry(profile.country_code)
+            setCountryDialogOpen(true)
+          }}
+        >
+          {t($ => $.accountingProfile.changeCountry.action)}
+        </Button>
 
         <TextField
           id="accounting-profile-base-currency"
@@ -212,13 +234,6 @@ export default function AccountingProfileFields() {
           value={profile.base_currency}
           helperText={t($ => $.accountingProfile.baseCurrencyHelper)}
         />
-
-        {/* Recorded truthfully but not yet applied: the invoice PDF, the UBL
-            export and the money formatter are still euro-only. Say so rather
-            than let a non-euro tenant assume its documents follow. */}
-        {profile.base_currency !== 'EUR' && (
-          <Alert severity="warning">{t($ => $.accountingProfile.nonEuroPending)}</Alert>
-        )}
 
         <Stack direction="row" spacing={2}>
           <TextField
@@ -303,27 +318,50 @@ export default function AccountingProfileFields() {
           ))}
         </TextField>
 
-        <TextField
+        <VatRateSelect
           id="accounting-profile-default-vat-rate"
           label={t($ => $.accountingProfile.defaultVatRate)}
-          fullWidth
-          size="small"
-          type="number"
-          value={taxPercentage}
-          onChange={(e) => {
-            const raw = e.target.value
-            setTaxPercentage(raw)
-            const n = Number(raw)
-            if (raw !== '' && Number.isFinite(n) && n >= 0 && n <= 100) scheduleRate({ tax_percentage: n })
-          }}
-          slotProps={{
-            htmlInput: { min: 0, max: 100, step: 0.1 },
-            input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-          }}
+          country={profile.country_code}
+          value={profile.default_vat_rate}
+          onChange={(rate) => rate != null && void save({ default_vat_rate: rate })}
+          disabled={saving}
           helperText={t($ => $.accountingProfile.defaultVatRateHelper)}
         />
 
       </Stack>
+      <Dialog open={countryDialogOpen} onClose={() => setCountryDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{t($ => $.accountingProfile.changeCountry.title)}</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {t($ => $.accountingProfile.changeCountry.warning)}
+          </Alert>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label={t($ => $.accountingProfile.country)}
+            value={nextCountry}
+            onChange={(event) => setNextCountry(event.target.value)}
+          >
+            {VAT_COUNTRY_CODES.map((code) => (
+              <MenuItem key={code} value={code}>{countryLabel(code, i18n.language)}</MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCountryDialogOpen(false)}>
+            {t($ => $.accountingProfile.changeCountry.cancel)}
+          </Button>
+          <Button
+            color="warning"
+            variant="contained"
+            disabled={saving || !nextCountry || nextCountry === profile.country_code}
+            onClick={() => void changeCountry()}
+          >
+            {t($ => $.accountingProfile.changeCountry.confirm)}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   )
 }

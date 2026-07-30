@@ -206,7 +206,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
           description: '',
           quantity: 1,
           unit_price_cents: 0,
-          tax_percentage: appliesKor ? 0 : Number(tenant?.tax_percentage ?? 9),
+          tax_percentage: appliesKor ? 0 : Number(accountingProfile?.default_vat_rate ?? 9),
           position: prev.lines.length,
         },
       ],

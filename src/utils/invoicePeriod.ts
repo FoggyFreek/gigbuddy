@@ -1,15 +1,32 @@
 import type { Invoice, Period } from '../types/entities.ts'
+import {
+  currentFiscalYear,
+  fiscalYearForDate,
+  fiscalYearLabel,
+  fiscalYearRange,
+} from '../../shared/fiscalYear.js'
+
+export interface FiscalYearStart {
+  month: number
+  day: number
+}
+
+export const CALENDAR_FISCAL_YEAR_START: FiscalYearStart = { month: 1, day: 1 }
 
 // Returns true when the invoice's issue_date falls inside the given period.
 // Invoices without an issue_date are always excluded.
-export function invoiceInPeriod(inv: Invoice, period: Period): boolean {
+export function invoiceInPeriod(
+  inv: Invoice,
+  period: Period,
+  fiscalYearStart: FiscalYearStart = CALENDAR_FISCAL_YEAR_START,
+): boolean {
   if (!inv.issue_date) return false
   const d = new Date(inv.issue_date)
   const y = d.getFullYear()
   const m = d.getMonth()
   switch (period.mode) {
     case 'fiscal_year':
-      return y === period.year
+      return fiscalYearForDate(inv.issue_date, fiscalYearStart) === period.year
     case 'month':
       return y === period.year && m === period.month
     case 'quarter':
@@ -55,7 +72,7 @@ export function periodDatesFromRecords<T>(records: T[], dateField = 'issue_date'
 export function periodLabel(period: Period): string {
   switch (period.mode) {
     case 'fiscal_year':
-      return `FY ${period.year}`
+      return fiscalYearLabel(period.year)
     case 'month': {
       const d = new Date(period.year ?? 0, period.month ?? 0, 1)
       return d.toLocaleDateString('nl-NL', { month: 'short', year: 'numeric' })
@@ -78,11 +95,15 @@ export function periodLabel(period: Period): string {
   }
 }
 
-export function defaultPeriodForDates(dates: string[]): Period {
-  const currentYear = new Date().getFullYear()
+export function defaultPeriodForDates(
+  dates: string[],
+  fiscalYearStart: FiscalYearStart = CALENDAR_FISCAL_YEAR_START,
+  today?: string,
+): Period {
+  const currentYear = currentFiscalYear(fiscalYearStart, today)
   const years = dates
     .filter(Boolean)
-    .map((date) => new Date(`${String(date).slice(0, 10)}T12:00:00`).getFullYear())
+    .map((date) => fiscalYearForDate(String(date).slice(0, 10), fiscalYearStart))
     .filter((year) => !Number.isNaN(year))
   if (!years.length || years.includes(currentYear)) {
     return { mode: 'fiscal_year', year: currentYear }
@@ -93,6 +114,11 @@ export function defaultPeriodForDates(dates: string[]): Period {
 // Returns the appropriate default period given a list of invoices:
 // defaults to the current fiscal year; if it has no invoices, falls back to
 // the most recent year that does.
-export function defaultPeriod(invoices: Invoice[]): Period {
-  return defaultPeriodForDates(periodDatesFromRecords(invoices))
+export function defaultPeriod(
+  invoices: Invoice[],
+  fiscalYearStart: FiscalYearStart = CALENDAR_FISCAL_YEAR_START,
+): Period {
+  return defaultPeriodForDates(periodDatesFromRecords(invoices), fiscalYearStart)
 }
+
+export { fiscalYearForDate, fiscalYearRange }

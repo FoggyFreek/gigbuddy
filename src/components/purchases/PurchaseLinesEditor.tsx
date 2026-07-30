@@ -5,11 +5,7 @@ import { computePurchaseTotals } from '../../utils/purchaseTotals.ts'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import FormControl from '@mui/material/FormControl'
 import IconButton from '@mui/material/IconButton'
-import InputLabel from '@mui/material/InputLabel'
-import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
@@ -17,7 +13,8 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import MoneyInput from '../invoices/MoneyInput.tsx'
 import { centsToEditableEuro } from '../invoices/invoiceFormHelpers.ts'
 import { useProfile } from '../../contexts/profileContext.ts'
-import { vatRateMenuItems } from '../shared/vatRateMenuItems.tsx'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
+import VatRateSelect from '../shared/VatRateSelect.tsx'
 
 type AccountGroupKey = 'asset' | 'cost_of_goods_sold' | 'expense'
 
@@ -47,8 +44,10 @@ interface PurchaseLineRowProps {
 }
 
 function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, errors = {}, readOnly, canRemove, patchLine, removeLine }: Readonly<PurchaseLineRowProps>) {
-  const { t } = useTranslation(['purchases', 'common'])
+  const { t } = useTranslation('purchases')
   const { vatCountry } = useProfile()
+  const { profile: accountingProfile } = useAccountingProfile()
+  const accountingCountry = accountingProfile?.country_code ?? vatCountry
   const accountGroup = (account: AccountOption) => {
     const type = isAccountGroupKey(account.type) ? account.type : 'expense'
     return t($ => $.lines.accountGroups[type])
@@ -172,17 +171,14 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
 
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 2, alignItems: 'end' }}>
         <Box>
-          <FormControl size="small" fullWidth disabled={readOnly}>
-            <InputLabel>{t($ => $.lines.taxRate)}</InputLabel>
-            <Select
-              label={t($ => $.lines.taxRate)}
-              value={Number.isFinite(Number(line.tax_rate)) ? Number(line.tax_rate) : -1}
-              onChange={(e) => patchLine(idx, { tax_rate: Number(e.target.value) })}
-              renderValue={(v) => (v === -1 ? t($ => $.lines.select) : `${v}%`)}
-            >
-              {vatRateMenuItems(vatCountry, Number(line.tax_rate), t($ => $.vat.otherCountries, { ns: 'common' }))}
-            </Select>
-          </FormControl>
+          <VatRateSelect
+            id={`purchase-line-${idx}-tax-rate`}
+            label={t($ => $.lines.taxRate)}
+            country={accountingCountry}
+            value={Number.isFinite(Number(line.tax_rate)) ? Number(line.tax_rate) : null}
+            onChange={(rate) => patchLine(idx, { tax_rate: rate ?? 0 })}
+            disabled={readOnly}
+          />
         </Box>
         <Box>
           <TextField

@@ -5,17 +5,15 @@ import type { Account } from '../../types/entities.ts'
 import type { JournalFormLine } from './journalFormHelpers.ts'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
-import FormControl from '@mui/material/FormControl'
-import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import AccountAutocomplete from './AccountAutocomplete.tsx'
 import AmountCell from './AmountCell.tsx'
 import JournalLinePopper from './JournalLinePopper.tsx'
 import { useProfile } from '../../contexts/profileContext.ts'
-import { vatRateMenuItems } from '../shared/vatRateMenuItems.tsx'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
+import VatRateSelect from '../shared/VatRateSelect.tsx'
 
 // Description · Account · VAT · Debit · Credit read as one connected segmented
 // control; a connector line then bridges to the standalone balancing account.
@@ -55,6 +53,8 @@ export default function JournalLineRow({
 }: Readonly<JournalLineRowProps>) {
   const { t } = useTranslation(['journal', 'common'])
   const { vatCountry } = useProfile()
+  const { profile: accountingProfile } = useAccountingProfile()
+  const accountingCountry = accountingProfile?.country_code ?? vatCountry
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
 
   const commitDebit = (cents: number) => {
@@ -85,17 +85,15 @@ export default function JournalLineRow({
         sx={connect('mid')}
         onChange={(code) => patchLine(idx, { account_code: code })}
       />
-      <FormControl size="small" fullWidth disabled={readOnly} sx={connect('mid')}>
-        <InputLabel>{t($ => $.line.vatRate)}</InputLabel>
-        <Select
-          label={t($ => $.line.vatRate)}
-          value={Number.isFinite(Number(line.vat_rate)) ? Number(line.vat_rate) : 0}
-          onChange={(e) => patchLine(idx, { vat_rate: Number(e.target.value) })}
-          renderValue={(v) => `${v}%`}
-        >
-          {vatRateMenuItems(vatCountry, Number(line.vat_rate), t($ => $.vat.otherCountries, { ns: 'common' }))}
-        </Select>
-      </FormControl>
+      <VatRateSelect
+        id={`journal-line-${idx}-vat-rate`}
+        label={t($ => $.line.vatRate)}
+        country={accountingCountry}
+        value={Number.isFinite(Number(line.vat_rate)) ? Number(line.vat_rate) : 0}
+        onChange={(rate) => patchLine(idx, { vat_rate: rate ?? 0 })}
+        disabled={readOnly}
+        sx={connect('mid')}
+      />
       <AmountCell
         cents={line.amount_cents}
         active={line.side === 'debit'}

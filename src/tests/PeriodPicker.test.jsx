@@ -10,6 +10,7 @@ import {
   invoiceInPeriod,
   periodLabel,
   periodQueryString,
+  fiscalYearRange,
 } from '../utils/invoicePeriod.ts'
 import theme from '../theme.ts'
 
@@ -60,6 +61,35 @@ describe('period utilities', () => {
     expect(defaultPeriod([])).toEqual({ mode: 'fiscal_year', year: 2026 })
     expect(defaultPeriodForDates(['2025-03-01', '2024-06-01'])).toEqual({ mode: 'fiscal_year', year: 2025 })
   })
+
+  it('uses the starting calendar year as the fiscal-year label', () => {
+    const start = { month: 7, day: 15 }
+    expect(fiscalYearRange(2025, start)).toEqual({
+      from: '2025-07-15',
+      toExclusive: '2026-07-15',
+    })
+    expect(invoiceInPeriod(
+      { issue_date: '2026-07-14' },
+      { mode: 'fiscal_year', year: 2025 },
+      start,
+    )).toBe(true)
+    expect(invoiceInPeriod(
+      { issue_date: '2026-07-15' },
+      { mode: 'fiscal_year', year: 2025 },
+      start,
+    )).toBe(false)
+    expect(defaultPeriodForDates([], start, '2026-06-08')).toEqual({
+      mode: 'fiscal_year',
+      year: 2025,
+    })
+  })
+
+  it('keeps the January compatibility range exact', () => {
+    expect(fiscalYearRange(2026, { month: 1, day: 1 })).toEqual({
+      from: '2026-01-01',
+      toExclusive: '2027-01-01',
+    })
+  })
 })
 
 describe('PeriodPicker button label', () => {
@@ -109,6 +139,25 @@ describe('PeriodPicker fiscal year grid', () => {
     await user.click(screen.getByRole('option', { name: '2025' }))
     expect(onChange).toHaveBeenCalledWith({ mode: 'fiscal_year', year: 2025 })
     await waitFor(() => expect(screen.queryByText('2020 - 2029')).not.toBeInTheDocument())
+  })
+
+  it('groups dates by fiscal year while month mode remains calendar-based', async () => {
+    const user = userEvent.setup()
+    wrap(
+      <PeriodPicker
+        availableDates={['2026-06-15']}
+        value={{ mode: 'fiscal_year', year: 2025 }}
+        fiscalYearStart={{ month: 7, day: 1 }}
+        onChange={vi.fn()}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: /FY 2025/ }))
+    expect(screen.getByRole('option', { name: '2025' })).toHaveAttribute('aria-disabled', 'false')
+    expect(screen.getByRole('option', { name: '2026' })).toHaveAttribute('aria-disabled', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Month' }))
+    await user.click(screen.getByRole('button', { name: 'next' }))
+    expect(screen.getByRole('option', { name: 'Jun' })).toHaveAttribute('aria-disabled', 'false')
   })
 })
 

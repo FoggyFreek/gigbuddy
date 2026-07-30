@@ -4,8 +4,6 @@
 // formatted as currency, so the sheet is directly usable in tax submissions.
 import ExcelJS from 'exceljs'
 
-const EUR_FMT = '€ #,##0.00;[Red]-€ #,##0.00'
-
 const toEuros = (cents) => (cents || 0) / 100
 
 function addHeaderRow(sheet, values) {
@@ -20,8 +18,9 @@ function addSectionTitle(sheet, title) {
   return row
 }
 
-function moneyColumns(sheet, columns) {
-  for (const col of columns) sheet.getColumn(col).numFmt = EUR_FMT
+function moneyColumns(sheet, columns, currency) {
+  const format = `"${currency}" #,##0.00;[Red]-"${currency}" #,##0.00`
+  for (const col of columns) sheet.getColumn(col).numFmt = format
 }
 
 function addAccountRows(sheet, rows) {
@@ -61,7 +60,7 @@ export async function renderFinancialReportXlsx({ report, lines, tenantName, per
   addTotalRow(pl, 'Total expenses', report.profit_loss.totals.expense_cents)
   pl.addRow([])
   addTotalRow(pl, 'Result', report.profit_loss.totals.result_cents)
-  moneyColumns(pl, [3])
+  moneyColumns(pl, [3], report.currency)
 
   // ---- Balance Sheet ----
   const bs = wb.addWorksheet('Balance Sheet')
@@ -82,7 +81,7 @@ export async function renderFinancialReportXlsx({ report, lines, tenantName, per
   addTotalRow(bs, 'Total equity', report.balance_sheet.totals.equity_cents)
   bs.addRow([])
   addTotalRow(bs, 'Total liabilities + equity', report.balance_sheet.totals.liabilities_and_equity_cents)
-  moneyColumns(bs, [3])
+  moneyColumns(bs, [3], report.currency)
 
   // ---- VAT ----
   const vat = wb.addWorksheet('VAT')
@@ -93,7 +92,7 @@ export async function renderFinancialReportXlsx({ report, lines, tenantName, per
   vat.addRow(['VAT on purchases (input)', toEuros(report.vat.input_cents)])
   const vatNet = vat.addRow(['Net VAT position', toEuros(report.vat.net_cents)])
   vatNet.font = { bold: true }
-  moneyColumns(vat, [2])
+  moneyColumns(vat, [2], report.currency)
 
   // ---- Trial Balance ----
   const tb = wb.addWorksheet('Trial Balance')
@@ -110,7 +109,7 @@ export async function renderFinancialReportXlsx({ report, lines, tenantName, per
     toEuros(report.trial_balance.totals.credit_cents),
   ])
   tbTotal.font = { bold: true }
-  moneyColumns(tb, [4, 5])
+  moneyColumns(tb, [4, 5], report.currency)
 
   // ---- Entries (line-level detail) ----
   const en = wb.addWorksheet('Entries')
@@ -127,7 +126,7 @@ export async function renderFinancialReportXlsx({ report, lines, tenantName, per
       l.account_name || '', toEuros(l.debit_cents), toEuros(l.credit_cents), l.memo || '',
     ])
   }
-  moneyColumns(en, [6, 7])
+  moneyColumns(en, [6, 7], report.currency)
 
   return wb.xlsx.writeBuffer()
 }

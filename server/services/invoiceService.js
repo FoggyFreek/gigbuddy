@@ -22,6 +22,7 @@ import {
 } from '../../shared/invoiceReadiness.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
 import {
   createMolliePaymentLink,
   getMollieClientForTenant,
@@ -83,6 +84,7 @@ import {
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { notFound } from './serviceErrors.js'
 import { invoiceIssueError } from '../domain/invoiceIssueErrors.js'
+import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
 
 // Holds a session-level per-tenant accounting-settings advisory lock for the
 // duration of `fn`, which receives the lock-holding client. Session and
@@ -616,7 +618,8 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
 const NOT_FOUND = notFound('Not found')
 
 export async function listInvoices(pool, tenantId, query) {
-  const period = buildPeriodWhere(query, 'issue_date')
+  const behavior = await loadAccountingBehavior(pool, tenantId)
+  const period = buildPeriodWhere(query, 'issue_date', 2, behavior?.fiscalYearStart)
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
   return { invoices: await listInvoiceRows(pool, tenantId, period) }
 }
@@ -687,13 +690,14 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
 
   const tenant = await fetchTenant(pool, tenantId)
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
+  const behavior = await loadAccountingBehavior(pool, tenantId)
 
   const issueDate = new Date().toISOString().slice(0, 10)
   const paymentTermDays = 14
   // Date-aware: prefilling a draft dated after a scheduled scheme change must
   // offer that scheme's rate, which the legacy flag cannot express.
   const treatment = await resolveLiveTreatment(pool, tenantId, issueDate)
-  const taxPercentage = treatment?.schemeExempt ? 0 : Number(tenant.tax_percentage ?? 9)
+  const taxPercentage = treatment?.schemeExempt ? 0 : behavior.defaultVatRate
 
   const eventDateStr = gig.event_date
     ? new Date(gig.event_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -730,13 +734,15 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         kvk_number: tenant.kvk_number,
         iban: tenant.iban,
         tax_id: tenant.tax_id,
-        tax_percentage: tenant.tax_percentage,
+        tax_percentage: behavior.defaultVatRate,
+        vat_country: behavior.accountingCountry,
         // Resolved for this draft's date rather than echoing the legacy flag.
         applies_kor: Boolean(treatment?.schemeExempt),
         logo_path: tenant.logo_path,
       },
       billing_targets: billingTargets.length > 1 ? billingTargets : [],
       draft: {
+        currency: behavior.currency,
         gig_id: gig.id,
         issue_date: issueDate,
         payment_term_days: paymentTermDays,
@@ -794,15 +800,6 @@ export async function createInvoice(pool, tenantId, userId, body) {
   const tenant = await fetchTenant(pool, tenantId)
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
 
-  if (parsed.reverseCharge) {
-    const rcError = checkReverseCharge({
-      supplierCountry: tenant.vat_country,
-      customerCountry: body.customer_address_country,
-      customerTaxId: body.customer_tax_id,
-    })
-    if (rcError) return { error: invoiceIssueError(rcError, 400) }
-  }
-
   // A create always produces a DRAFT, so no snapshot is taken — but the totals
   // still go through the one resolver, date-aware at the new invoice's tax point,
   // so a draft dated after a scheduled scheme change is priced under that scheme.
@@ -825,6 +822,16 @@ export async function createInvoice(pool, tenantId, userId, body) {
   const vies = viesAttestationColumns(parsed.viesChecked, body.customer_tax_id, parsed.viesConsultationNumber)
 
   const invoiceId = await withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
+    const behavior = await loadAccountingBehavior(client, tenantId)
+    if (parsed.reverseCharge) {
+      const rcError = checkReverseCharge({
+        supplierCountry: behavior.accountingCountry,
+        customerCountry: body.customer_address_country,
+        customerTaxId: body.customer_tax_id,
+      })
+      if (rcError) abortTransaction({ error: invoiceIssueError(rcError, 400) })
+    }
     const invoiceNumber = await nextInvoiceNumber(client, tenantId, year)
     const id = await insertInvoice(client, {
       tenant_id: tenantId,
@@ -855,6 +862,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
       subtotal_cents: totals.subtotalCents,
       tax_cents: totals.taxCents,
       total_cents: totals.totalCents,
+      currency: behavior.currency,
       created_by_user_id: userId,
       vies_checked_at: vies.vies_checked_at,
       vies_checked_vat_number: vies.vies_checked_vat_number,
@@ -863,6 +871,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
     await insertInvoiceLines(client, id, tenantId, parsed.lines)
     return id
   }, { db: pool })
+  if (invoiceId?.error) return invoiceId
 
   // Post-commit: render the PDF (best-effort) and return the created invoice.
   try {

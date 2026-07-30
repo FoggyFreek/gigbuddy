@@ -31,8 +31,9 @@ import { getAccountingProfile } from '../../api/accountingProfile.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
 import {
-  DEFAULT_VAT_COUNTRY, getStandardVatRate, isAllowedVatRate, vatRateOptions,
+  DEFAULT_VAT_COUNTRY, getStandardVatRate, isAllowedVatRate,
 } from '../../utils/vatRates.ts'
+import VatRateSelect from '../shared/VatRateSelect.tsx'
 // The same net/VAT split the server posts with — one rounding rule, no drift
 // between the preview and the ledger.
 import { computePurchaseLineTotals } from '../../utils/purchaseTotals.ts'
@@ -852,34 +853,27 @@ interface VatControlProps {
 // moved jurisdictions rather than hardcoding one country's pair.
 function VatControl({ line, decision, setDecision, vat }: Readonly<VatControlProps>) {
   const { t } = useTranslation('ledger')
-  const labelId = `bank-import-vat-${line.id}`
   const rate = decision.vatRate
   const { netCents, vatCents } = computePurchaseLineTotals({
     amount_incl_cents: line.amount_cents, tax_rate: rate ?? 0,
   })
   // 0% and "No VAT" post identically (no VAT leg), so offering both would be a
   // distinction without a difference — only real rates are listed.
-  const rates = vatRateOptions(vat.country, rate).filter((r) => r > 0)
-
   return (
     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-      <FormControl size="small" sx={{ width: VAT_COLUMN, flexShrink: 0 }}>
-        <InputLabel id={labelId}>{t($ => $.bankImport.vat.label)}</InputLabel>
-        <Select
-          labelId={labelId}
-          label={t($ => $.bankImport.vat.label)}
-          value={rate == null ? 'none' : String(rate)}
-          onChange={(e) => setDecision(line, {
+      <VatRateSelect
+        id={`bank-import-vat-${line.id}`}
+        label={t($ => $.bankImport.vat.label)}
+        country={vat.country}
+        value={rate}
+        noVatLabel={t($ => $.bankImport.vat.none)}
+        onChange={(nextRate) => setDecision(line, {
             ...decision,
-            vatRate: e.target.value === 'none' ? null : Number(e.target.value),
+            vatRate: nextRate,
           })}
-        >
-          <MenuItem value="none">{t($ => $.bankImport.vat.none)}</MenuItem>
-          {rates.map((r) => (
-            <MenuItem key={r} value={String(r)}>{t($ => $.bankImport.vat.rate, { rate: r })}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+        fullWidth={false}
+        sx={{ width: VAT_COLUMN, flexShrink: 0 }}
+      />
       {rate != null && rate > 0 && (
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {t($ => $.bankImport.vat.split, { net: formatEur(netCents), vat: formatEur(vatCents) })}

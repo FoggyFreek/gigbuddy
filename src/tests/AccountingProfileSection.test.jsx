@@ -8,12 +8,7 @@ vi.mock('../api/accountingProfile.ts', () => ({
   getAccountingProfile: vi.fn(),
   updateAccountingProfile: vi.fn(),
   confirmAccountingProfile: vi.fn(),
-}))
-// The default VAT rate and the small-business flag still live on the tenant row, so
-// the section reads and writes them through the band-profile endpoint.
-vi.mock('../api/profile.ts', () => ({
-  getProfile: vi.fn(),
-  updateProfile: vi.fn(),
+  changeAccountingCountry: vi.fn(),
 }))
 // The scheme editor renders inside this section; its own behaviour is covered by
 // VatSchemeEnrolments.test.jsx, so here it only needs to not hit the network.
@@ -26,7 +21,6 @@ vi.mock('../api/taxSchemes.ts', () => ({
 }))
 
 import * as profileApi from '../api/accountingProfile.ts'
-import * as bandProfileApi from '../api/profile.ts'
 import * as schemeApi from '../api/taxSchemes.ts'
 import AccountingProfileSection from '../components/settings/AccountingProfileSection.tsx'
 import { AccountingProfileContext } from '../contexts/accountingProfileContext.ts'
@@ -36,6 +30,7 @@ const BASE_PROFILE = {
   tenant_id: 1,
   country_code: 'nl',
   base_currency: 'EUR',
+  default_vat_rate: 21,
   profile_status: 'incomplete',
   profile_source: 'tenant_creation',
   presentation_state: 'incomplete',
@@ -78,12 +73,16 @@ function wrap(overrides = {}, applyProfile = vi.fn()) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  bandProfileApi.getProfile.mockResolvedValue({ tax_percentage: 21 })
   schemeApi.listTaxSchemeEnrolments.mockResolvedValue([])
-  bandProfileApi.updateProfile.mockResolvedValue({})
   profileApi.updateAccountingProfile.mockImplementation(async (patch) => ({ ...BASE_PROFILE, ...patch }))
   profileApi.confirmAccountingProfile.mockResolvedValue({
     ...BASE_PROFILE, profile_status: 'complete', presentation_state: 'complete', reviewed_at: '2026-07-30T00:00:00Z',
+  })
+  profileApi.changeAccountingCountry.mockResolvedValue({
+    ...BASE_PROFILE,
+    country_code: 'gb',
+    base_currency: 'GBP',
+    default_vat_rate: 20,
   })
 })
 
@@ -99,9 +98,29 @@ describe('AccountingProfileSection', () => {
     expect(currency).toBeDisabled()
   })
 
-  it('warns that a non-euro base currency is recorded but not yet applied', async () => {
+  it('shows a non-euro base currency without a pending-support warning', async () => {
     wrap({ country_code: 'gb', base_currency: 'GBP' })
-    expect(await screen.findByText(/Multi-currency bookkeeping is not available yet/i)).toBeInTheDocument()
+    expect(await screen.findByLabelText('Base currency')).toHaveValue('GBP')
+    expect(screen.queryByText(/Multi-currency bookkeeping is not available yet/i)).not.toBeInTheDocument()
+  })
+
+  it('confirms the full reset warning before changing country', async () => {
+    const applyProfile = vi.fn()
+    const user = userEvent.setup()
+    wrap({}, applyProfile)
+
+    await user.click(await screen.findByRole('button', { name: 'Change accounting country' }))
+    expect(screen.getByText(/resets VAT registration/i)).toBeInTheDocument()
+    await user.click(screen.getAllByLabelText('Accounting country').at(-1))
+    await user.click(screen.getByRole('option', { name: /United Kingdom/ }))
+    await user.click(screen.getByRole('button', { name: 'Change and reset' }))
+
+    await waitFor(() => expect(profileApi.changeAccountingCountry)
+      .toHaveBeenCalledWith({ country_code: 'gb' }))
+    expect(applyProfile).toHaveBeenCalledWith(expect.objectContaining({
+      country_code: 'gb',
+      base_currency: 'GBP',
+    }))
   })
 
   it('does not warn for a euro tenant', async () => {
@@ -180,23 +199,34 @@ describe('AccountingProfileSection', () => {
     expect(screen.queryByLabelText(/legal form note/i)).not.toBeInTheDocument()
   })
 
-  it('shows the invoice VAT defaults from the band profile', async () => {
+  it('shows the invoice VAT default from the accounting profile', async () => {
     wrap()
-    expect(await screen.findByLabelText(/default vat rate/i)).toHaveValue(21)
+    expect(await screen.findByRole('combobox', { name: /default vat rate/i })).toHaveTextContent('21%')
   })
 
   it('saves a changed default VAT rate', async () => {
     const user = userEvent.setup()
     wrap()
 
-    const rate = await screen.findByLabelText(/default vat rate/i)
-    await user.clear(rate)
-    await user.type(rate, '9')
+    const rate = await screen.findByRole('combobox', { name: /default vat rate/i })
+    await user.click(rate)
+    await user.click(await screen.findByRole('option', { name: '9%' }))
 
     await waitFor(
-      () => expect(bandProfileApi.updateProfile).toHaveBeenCalledWith({ tax_percentage: 9 }),
+      () => expect(profileApi.updateAccountingProfile).toHaveBeenCalledWith({ default_vat_rate: 9 }),
       { timeout: 2000 },
     )
+  })
+
+  it('only offers default VAT rates from the accounting country', async () => {
+    const user = userEvent.setup()
+    wrap()
+
+    await user.click(await screen.findByRole('combobox', { name: /default vat rate/i }))
+    expect(screen.getByRole('option', { name: '21%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '9%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '0%' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '19%' })).not.toBeInTheDocument()
   })
 
   // One control for one fact: the small-business scheme is the filing period's

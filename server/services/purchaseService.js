@@ -38,6 +38,8 @@ import { markLineResult } from '../repositories/bankImportRepository.js'
 import { fetchTenantVatCountry } from '../repositories/tenantRepository.js'
 import { getTransactionBySource } from '../repositories/ledgerRepository.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
+import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
 import {
   CONTENT_FIELDS_SET,
   FINALIZED_LOCKED_FIELDS_SET,
@@ -275,8 +277,8 @@ export async function createPurchase(
     if (supplierContactId === null) return { error: { status: 400, body: { error: 'Invalid supplier_contact_id' } } }
   }
 
-  const vatCountry = await fetchTenantVatCountry(pool, tenantId)
-  const lines = normalizeLines(body.lines, vatCountry)
+  const initialBehavior = await loadAccountingBehavior(pool, tenantId)
+  let lines = normalizeLines(body.lines, initialBehavior.accountingCountry)
   if (!lines.length) return { error: { status: 400, body: { error: 'At least one line is required' } } }
 
   const accountErr = await validateLineAccounts(pool, tenantId, lines)
@@ -287,13 +289,18 @@ export async function createPurchase(
 
   const receiptDate =body.receipt_date || new Date().toISOString().slice(0, 10)
   const dueDate = body.due_date || null
-  const currency = String(body.currency || 'EUR').trim() || 'EUR'
+  const requestedCurrency = body.currency == null
+    ? initialBehavior.currency
+    : String(body.currency).trim().toUpperCase()
+  if (requestedCurrency !== initialBehavior.currency) {
+    return { error: { status: 400, body: { error: 'currency_must_match_base_currency' } } }
+  }
 
   const statusResult = resolveCreateStatus(body, { canManageFinance })
   if (statusResult.error) return statusResult
   const { status } = statusResult
 
-  const totals = computePurchaseTotals({ lines })
+  let totals = computePurchaseTotals({ lines })
 
   if (status === 'approved') {
     const approvalErr = await validateApprovalLines(pool, tenantId, lines)
@@ -301,6 +308,15 @@ export async function createPurchase(
   }
 
   return withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
+    const behavior = await loadAccountingBehavior(client, tenantId)
+    if (body.currency != null && requestedCurrency !== behavior.currency) {
+      abortTransaction({ error: { status: 400, body: { error: 'currency_must_match_base_currency' } } })
+    }
+    if (behavior.accountingCountry !== initialBehavior.accountingCountry) {
+      lines = normalizeLines(body.lines, behavior.accountingCountry)
+      totals = computePurchaseTotals({ lines })
+    }
     const receiptNumber = await nextPurchaseNumber(client, tenantId)
     // Approval is the posting event and the moment the VAT treatment stops being
     // re-derivable, so a create-as-approved freezes it here. A draft gets none.
@@ -309,7 +325,7 @@ export async function createPurchase(
       : null
     const purchaseId = await insertPurchase(client, tenantId, buildCreatePurchaseData({
       status, tenantId, receiptNumber, supplierName, supplierContactId,
-      receiptDate, dueDate, currency, memo: body.memo || null, totals, actorUserId,
+      receiptDate, dueDate, currency: behavior.currency, memo: body.memo || null, totals, actorUserId,
       supplierInvoiceNumber: normalizeSupplierInvoiceNumber(body.supplier_invoice_number),
       supplierImportData,
     }), snapshot)
@@ -669,7 +685,8 @@ function resolveSupplierContactId(query) {
 }
 
 export async function listPurchases(db, tenantId, query, { createdByUserId = null } = {}) {
-  const period = buildPeriodWhere(query, 'p.receipt_date')
+  const behavior = await loadAccountingBehavior(db, tenantId)
+  const period = buildPeriodWhere(query, 'p.receipt_date', 2, behavior?.fiscalYearStart)
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
   const supplier = resolveSupplierContactId(query)
   if (supplier.error) return { error: supplier.error }

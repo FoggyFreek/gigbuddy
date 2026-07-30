@@ -24,10 +24,12 @@ import PeriodPicker from '../components/shared/periodPicker.tsx'
 import SplitView from '../components/SplitView.tsx'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { listInvoicePeriods, listInvoices } from '../api/invoices.ts'
-import { formatEur } from '../utils/invoiceTotals.ts'
+import { formatCurrency } from '../utils/invoiceTotals.ts'
+import { useAccountingProfile } from '../contexts/accountingProfileContext.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
 import { invoiceStatusColor } from '../utils/invoiceStatus.ts'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
+import useFiscalYearStart from '../hooks/useFiscalYearStart.ts'
 import StatusDot from '../components/StatusDot.tsx'
 import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
 import type { Invoice, InvoiceStatus, Id, Period } from '../types/entities.ts'
@@ -64,6 +66,8 @@ function matchesSummaryFilter(inv: Invoice, filter: SummaryKey): boolean {
 }
 
 export default function InvoicesPage() {
+  const fiscalYearStart = useFiscalYearStart()
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const { t } = useTranslation('invoices')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
@@ -74,7 +78,7 @@ export default function InvoicesPage() {
   const [newDialog, setNewDialog] = useState(false)
   const [summaryFilter, setSummaryFilter] = useState<SummaryKey>('unpaid')
   const [searchQuery, setSearchQuery] = useState('')
-  const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [period, setPeriod] = useState<Period>(() => defaultPeriodForDates([], fiscalYearStart))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
 
@@ -83,8 +87,8 @@ export default function InvoicesPage() {
       const dates = await listInvoicePeriods()
       setAvailableDates(dates as string[])
       setPeriod((prev) => {
-        const fallback = defaultPeriodForDates(dates as string[])
-        const currentYear = new Date().getFullYear()
+        const fallback = defaultPeriodForDates(dates as string[], fiscalYearStart)
+        const currentYear = defaultPeriodForDates([], fiscalYearStart).year
         if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
         return fallback
       })
@@ -93,7 +97,7 @@ export default function InvoicesPage() {
     } finally {
       if (signalLoaded) setPeriodsLoaded(true)
     }
-  }, [])
+  }, [fiscalYearStart])
 
   useEffect(() => {
     refreshPeriods({ signalLoaded: true })
@@ -242,7 +246,7 @@ export default function InvoicesPage() {
                     </Typography>
                   </Box>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    {formatEur(stats.total)}
+                    {formatCurrency(stats.total, currency)}
                   </Typography>
                 </Paper>
               )
@@ -305,6 +309,7 @@ interface InvoicesListProps {
 
 function InvoicesList({ invoices, selectedId, onRowClick }: Readonly<InvoicesListProps>) {
   const { t, i18n } = useTranslation('invoices')
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const isCompact = useCompactLayout()
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)
@@ -371,7 +376,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }: Readonly<InvoicesLis
               </Typography>
             </Box>
             <Typography variant="body1" sx={{ fontWeight: 500, flexShrink: 0 }}>
-              {formatEur(inv.total_cents)}
+              {formatCurrency(inv.total_cents, inv.currency ?? currency)}
             </Typography>
           </Box>
         ))}
@@ -417,7 +422,7 @@ function InvoicesList({ invoices, selectedId, onRowClick }: Readonly<InvoicesLis
                 <TableCell>#{inv.invoice_number}</TableCell>
                 <TableCell>{formatShortDate(inv.issue_date, i18n.resolvedLanguage)}</TableCell>
                 <TableCell>{inv.customer_name}</TableCell>
-                <MoneyCells cents={inv.total_cents} />
+                <MoneyCells cents={inv.total_cents} currency={inv.currency ?? currency} />
               </TableRow>
             ))}
           </TableBody>

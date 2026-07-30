@@ -1,7 +1,6 @@
 import { parsePositiveId as parseId } from './common.js'
 
 const CODE_RE = /^\d{4,6}$/
-const CURRENCY_RE = /^[A-Z]{3}$/
 
 export const ACCOUNT_TYPES = new Set([
   'asset', 'liability', 'equity', 'revenue', 'cost_of_goods_sold', 'expense',
@@ -60,7 +59,3 @@ export function isValidCalendarDate(val) {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === val
 }
 
-export function validateCurrency(val) {
-  const c = String(val ?? '').trim().toUpperCase()
-  return CURRENCY_RE.test(c) ? c : null
-}

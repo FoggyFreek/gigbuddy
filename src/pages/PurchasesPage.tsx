@@ -19,8 +19,10 @@ import PeriodPicker from '../components/shared/periodPicker.tsx'
 import PurchasesList from '../components/purchases/PurchasesList.tsx'
 import SplitView from '../components/SplitView.tsx'
 import { listPurchasePeriods, listPurchases } from '../api/purchases.ts'
-import { formatEur } from '../utils/purchaseTotals.ts'
+import { formatCurrency } from '../utils/invoiceTotals.ts'
+import { useAccountingProfile } from '../contexts/accountingProfileContext.ts'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
+import useFiscalYearStart from '../hooks/useFiscalYearStart.ts'
 import type { Purchase, Id, Period } from '../types/entities.ts'
 
 const SUMMARY_CARDS = [
@@ -53,6 +55,8 @@ function matchesSummaryFilter(p: Purchase, filter: SummaryKey): boolean {
 }
 
 export default function PurchasesPage() {
+  const fiscalYearStart = useFiscalYearStart()
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const { t } = useTranslation('purchases')
   const navigate = useNavigate()
   const location = useLocation()
@@ -65,7 +69,7 @@ export default function PurchasesPage() {
   const [importDialog, setImportDialog] = useState(false)
   const [summaryFilter, setSummaryFilter] = useState<SummaryKey>('unpaid')
   const [searchQuery, setSearchQuery] = useState('')
-  const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [period, setPeriod] = useState<Period>(() => defaultPeriodForDates([], fiscalYearStart))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
 
@@ -74,8 +78,8 @@ export default function PurchasesPage() {
       const dates = await listPurchasePeriods()
       setAvailableDates(dates.filter(Boolean))
       setPeriod((prev) => {
-        const fallback = defaultPeriodForDates(dates)
-        const currentYear = new Date().getFullYear()
+        const fallback = defaultPeriodForDates(dates, fiscalYearStart)
+        const currentYear = defaultPeriodForDates([], fiscalYearStart).year
         if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
         return fallback
       })
@@ -84,7 +88,7 @@ export default function PurchasesPage() {
     } finally {
       if (signalLoaded) setPeriodsLoaded(true)
     }
-  }, [])
+  }, [fiscalYearStart])
 
   useEffect(() => {
     refreshPeriods({ signalLoaded: true })
@@ -241,7 +245,7 @@ export default function PurchasesPage() {
                       {t($ => $.state[card.key])}
                     </Typography>
                   </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatEur(stats.total)}</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatCurrency(stats.total, currency)}</Typography>
                 </Paper>
               )
             })}

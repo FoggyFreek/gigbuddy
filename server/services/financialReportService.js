@@ -8,9 +8,11 @@ import {
   reportEntryLines,
   vatTotals,
 } from '../repositories/ledgerRepository.js'
+import { bookkeepingCurrency } from '../../shared/accountingProfileCodes.js'
 import { listVatReturnsInRange } from '../repositories/vatReturnRepository.js'
-import { fetchBooksClosedThrough, loadAccountingSettings, resolveEffectiveRange } from './ledgerService.js'
+import { fetchBooksClosedThrough, resolveEffectiveRange } from './ledgerService.js'
 import { ACCOUNT_REPORTING_GROUPS } from '../domain/accountReportingGroups.js'
+import { fetchAccountingProfile } from '../repositories/accountingProfileRepository.js'
 
 const PL_TYPES = new Set(['revenue', 'cost_of_goods_sold', 'expense'])
 
@@ -43,15 +45,19 @@ function dayBefore(toExclusive) {
 
 // The full report. `range` is { from, toExclusive } or null (all time).
 export async function getFinancialReport(executor, tenantId, range) {
-  const effectiveRange = await resolveEffectiveRange(executor, tenantId, range)
+  const profile = await fetchAccountingProfile(executor, tenantId)
+  const fiscalYearStart = {
+    month: Number(profile?.financial_year_start_month ?? 1),
+    day: Number(profile?.financial_year_start_day ?? 1),
+  }
+  const effectiveRange = await resolveEffectiveRange(executor, tenantId, range, fiscalYearStart)
 
   const periodEnd = dayBefore(effectiveRange.toExclusive)
 
-  const [activity, balances, vat, settings, closedThrough, vatReturns] = await Promise.all([
+  const [activity, balances, vat, closedThrough, vatReturns] = await Promise.all([
     accountActivity(executor, tenantId, effectiveRange),
     accountBalancesBefore(executor, tenantId, effectiveRange.toExclusive),
     vatTotals(executor, tenantId, effectiveRange),
-    loadAccountingSettings(executor, tenantId),
     fetchBooksClosedThrough(executor, tenantId),
     listVatReturnsInRange(executor, tenantId, { from: effectiveRange.from, to: periodEnd }),
   ])
@@ -104,7 +110,7 @@ export async function getFinancialReport(executor, tenantId, range) {
   }))
 
   return {
-    currency: settings?.currency || 'EUR',
+    currency: bookkeepingCurrency(profile?.base_currency),
     period: { from: effectiveRange.from, to: dayBefore(effectiveRange.toExclusive) },
     profit_loss: {
       revenue,
@@ -157,6 +163,10 @@ export async function getFinancialReport(executor, tenantId, range) {
 
 // Line-level detail for the exports: every journal line in the period.
 export async function getReportEntryLines(executor, tenantId, range) {
-  const effectiveRange = await resolveEffectiveRange(executor, tenantId, range)
+  const profile = await fetchAccountingProfile(executor, tenantId)
+  const effectiveRange = await resolveEffectiveRange(executor, tenantId, range, {
+    month: Number(profile?.financial_year_start_month ?? 1),
+    day: Number(profile?.financial_year_start_day ?? 1),
+  })
   return reportEntryLines(executor, tenantId, effectiveRange)
 }

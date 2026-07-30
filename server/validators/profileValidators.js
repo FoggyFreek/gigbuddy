@@ -129,7 +129,6 @@ export const FINANCIAL_FIELDS = [
   'phone',
   'iban',
   'tax_id',
-  'tax_percentage',
 ]
 
 export const FINANCIAL_FIELDS_SET = new Set(FINANCIAL_FIELDS)
@@ -194,14 +193,6 @@ function validateTaxId(raw, vatCountry) {
   return { value: stripped }
 }
 
-function validateTaxPercentage(raw) {
-  if (raw === null || raw === undefined) return { value: null }
-  if (raw === '') return { skip: true }
-  const n = Number(raw)
-  if (!Number.isFinite(n) || n < 0 || n > 100) return { error: 'invalid_tax_percentage' }
-  return { value: n }
-}
-
 // Builds a validator for whitespace-stripped, regex-checked fields (kvk/iban/tax_id).
 function makeStrippedValidator(key, re, upper) {
   return (raw) => {
@@ -240,7 +231,6 @@ function makeOptionalPatternValidator(key, re) {
 const FINANCIAL_VALIDATORS = {
   email: makeOptionalPatternValidator('email', EMAIL_RE),
   phone: makeOptionalPatternValidator('phone', PHONE_RE),
-  tax_percentage: validateTaxPercentage,
   iban: makeStrippedValidator('iban', IBAN_RE, true),
 }
 

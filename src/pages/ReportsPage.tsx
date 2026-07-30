@@ -21,6 +21,7 @@ import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { exportFinancialReport, getFinancialReport, listLedgerPeriods } from '../api/ledger.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { defaultPeriodForDates, periodLabel } from '../utils/invoicePeriod.ts'
+import useFiscalYearStart from '../hooks/useFiscalYearStart.ts'
 import { downloadBlob } from '../utils/shareCard.ts'
 import type { Period } from '../types/entities.ts'
 
@@ -454,8 +455,9 @@ interface FinancialReportData {
 }
 
 export default function ReportsPage() {
+  const fiscalYearStart = useFiscalYearStart()
   const { t } = useTranslation('reports')
-  const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [period, setPeriod] = useState<Period>(() => defaultPeriodForDates([], fiscalYearStart))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
   const [report, setReport] = useState<FinancialReportData | null>(null)
@@ -471,15 +473,15 @@ export default function ReportsPage() {
         if (cancelled) return
         setAvailableDates(dates.filter(Boolean))
         setPeriod((prev) => {
-          const currentYear = new Date().getFullYear()
+          const currentYear = defaultPeriodForDates([], fiscalYearStart).year
           if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
-          return defaultPeriodForDates(dates)
+          return defaultPeriodForDates(dates, fiscalYearStart)
         })
       })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setPeriodsLoaded(true) })
     return () => { cancelled = true }
-  }, [])
+  }, [fiscalYearStart])
 
   const load = useCallback(async () => {
     try {

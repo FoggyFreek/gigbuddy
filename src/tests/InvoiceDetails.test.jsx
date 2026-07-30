@@ -26,11 +26,23 @@ vi.mock('../utils/compressImage.ts', () => ({
 import * as invoicesApi from '../api/invoices.ts'
 import { compressLogo } from '../utils/compressImage.ts'
 import InvoiceDetails from '../components/InvoiceDetails.tsx'
+import { AccountingProfileContext } from '../contexts/accountingProfileContext.ts'
 import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
 
-function wrap(ui) {
-  return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
+function wrap(ui, accountingProfile = null) {
+  const content = accountingProfile
+    ? (
+      <AccountingProfileContext.Provider value={{ profile: accountingProfile, loading: false, applyProfile: vi.fn() }}>
+        {ui}
+      </AccountingProfileContext.Provider>
+    )
+    : ui
+  return render(
+    <ThemeProvider theme={theme}>
+      {content}
+    </ThemeProvider>,
+  )
 }
 
 // PDF, UBL and email all live behind one "Download" menu button, so every
@@ -146,6 +158,27 @@ describe('InvoiceDetails', () => {
     // Payment-link panel is only rendered in edit mode once the invoice loads.
     expect(screen.getByText('Payment link')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create payment link/ })).toBeInTheDocument()
+  })
+
+  it('only offers VAT rates from the tenant accounting country on invoice lines', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce({
+      ...EDIT_INVOICE,
+      currency: 'GBP',
+      lines: [{ ...EDIT_INVOICE.lines[0], tax_percentage: 20 }],
+    })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />, {
+      country_code: 'gb',
+      base_currency: 'GBP',
+    })
+
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+    expect(screen.getAllByText('VAT %')).toHaveLength(1)
+    await userEvent.click(screen.getByRole('combobox', { name: 'VAT %' }))
+
+    expect(screen.getByRole('option', { name: '20%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '5%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '0%' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '21%' })).not.toBeInTheDocument()
   })
 
   it('edits the customer Chamber of Commerce number and VAT ID', async () => {

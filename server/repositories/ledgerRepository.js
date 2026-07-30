@@ -216,24 +216,33 @@ export async function monthlyResultTotals(executor, tenantId, { from, toExclusiv
 // Revenue/expense totals per calendar year inside [from, toExclusive), using
 // the same chart-of-accounts classification as monthlyResultTotals. Years
 // without activity are absent — the service fills them with zeros.
-export async function annualResultTotals(executor, tenantId, { from, toExclusive }) {
+export async function annualResultTotals(executor, tenantId, ranges) {
   const { rows } = await executor.query(
-    `SELECT EXTRACT(YEAR FROM lt.entry_date)::int AS year,
+    `WITH requested AS (
+       SELECT (item->>'year')::int AS year,
+              (item->>'from')::date AS from_date,
+              (item->>'toExclusive')::date AS to_date
+         FROM jsonb_array_elements($2::jsonb) item
+     )
+     SELECT r.year,
             COALESCE(SUM(le.credit_cents - le.debit_cents)
               FILTER (WHERE coa.type = 'revenue'), 0)::int AS revenue_cents,
             COALESCE(SUM(le.debit_cents - le.credit_cents)
               FILTER (WHERE coa.type IN ('expense', 'cost_of_goods_sold')), 0)::int AS expense_cents
-       FROM ledger_entries le
+       FROM requested r
        JOIN ledger_transactions lt
-         ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+         ON lt.tenant_id = $1
+        AND lt.entry_date >= r.from_date
+        AND lt.entry_date < r.to_date
+       JOIN ledger_entries le
+         ON le.transaction_id = lt.id AND le.tenant_id = lt.tenant_id
        JOIN chart_of_accounts coa
          ON coa.tenant_id = le.tenant_id AND coa.code = le.account_code
-      WHERE le.tenant_id = $1
-        AND lt.entry_date >= $2::date
-        AND lt.entry_date < $3::date
+      WHERE TRUE
         ${EXCLUDE_VOIDED_SQL}
-      GROUP BY 1`,
-    [tenantId, from, toExclusive],
+      GROUP BY r.year
+      ORDER BY r.year`,
+    [tenantId, JSON.stringify(ranges)],
   )
   return rows
 }
