@@ -11,6 +11,7 @@ import PurchasesList from './purchases/PurchasesList.tsx'
 import { listPurchasePeriods, listPurchases } from '../api/purchases.ts'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
 import type { Purchase, Id, Period } from '../types/entities.ts'
+import useFiscalYearStart from '../hooks/useFiscalYearStart.ts'
 
 interface SupplierPurchasesSectionProps {
   contactId: Id
@@ -20,10 +21,11 @@ interface SupplierPurchasesSectionProps {
 // Purchases page data flow (server-side period filter + the shared
 // PurchasesList renderer) but scoped to one supplier via supplier_contact_id.
 export default function SupplierPurchasesSection({ contactId }: Readonly<SupplierPurchasesSectionProps>) {
+  const fiscalYearStart = useFiscalYearStart()
   const { t } = useTranslation('contacts')
   const navigate = useNavigate()
   const [purchases, setPurchases] = useState<Purchase[]>([])
-  const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [period, setPeriod] = useState<Period>(() => defaultPeriodForDates([], fiscalYearStart))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -37,12 +39,12 @@ export default function SupplierPurchasesSection({ contactId }: Readonly<Supplie
       .then((dates) => {
         if (!active) return
         setAvailableDates(dates.filter(Boolean))
-        setPeriod(defaultPeriodForDates(dates))
+        setPeriod(defaultPeriodForDates(dates, fiscalYearStart))
       })
       .catch(() => { if (active) setAvailableDates([]) })
       .finally(() => { if (active) setPeriodsLoaded(true) })
     return () => { active = false }
-  }, [contactId])
+  }, [contactId, fiscalYearStart])
 
   const load = useCallback(async () => {
     setLoading(true)

@@ -9,6 +9,36 @@ export async function countPurchasesBySupplierContact(executor, tenantId, contac
   return rows[0].count
 }
 
+// The same supplier bill already in the books.
+//
+// Two signals, in order of confidence. The supplier's own invoice number is an
+// identity — same supplier, same number, same bill — and is what the unique
+// index enforces. Without one (a hand-entered purchase, or a supplier whose
+// document omitted it) the fallback is the document's own facts: same supplier
+// on the same date for the same total.
+//
+// The supplier key mirrors the index: the linked contact when there is one,
+// the lower-cased name otherwise.
+export async function findPurchaseDuplicates(executor, tenantId, {
+  supplierContactId, supplierName, supplierInvoiceNumber, receiptDate, totalCents,
+}) {
+  const { rows } = await executor.query(
+    `SELECT id, receipt_number, status, receipt_date, total_cents, supplier_invoice_number,
+            CASE WHEN $4::text IS NOT NULL AND supplier_invoice_number = $4
+                 THEN 'invoice_number' ELSE 'document_facts' END AS match_kind
+       FROM purchases
+      WHERE tenant_id = $1
+        AND COALESCE(supplier_contact_id::text, lower(supplier_name))
+            = COALESCE($2::int::text, lower($3))
+        AND (($4::text IS NOT NULL AND supplier_invoice_number = $4)
+             OR (supplier_invoice_number IS NULL AND receipt_date = $5 AND total_cents = $6))
+      ORDER BY receipt_number ASC`,
+    [tenantId, supplierContactId ?? null, supplierName ?? '',
+      supplierInvoiceNumber ?? null, receiptDate, totalCents],
+  )
+  return rows
+}
+
 export async function fetchPurchase(executor, tenantId, purchaseId) {
   const { rows } = await executor.query(
     'SELECT * FROM purchases WHERE id = $1 AND tenant_id = $2',
@@ -27,11 +57,13 @@ export async function fetchPurchaseOwner(executor, tenantId, purchaseId) {
 
 export async function insertPurchaseAttachment(executor, tenantId, purchaseId, attachment) {
   const { rows } = await executor.query(
-    `INSERT INTO purchase_attachments (purchase_id, tenant_id, object_key, original_filename, content_type, file_size)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at`,
+    `INSERT INTO purchase_attachments (purchase_id, tenant_id, object_key, original_filename,
+       content_type, file_size, kind, content_sha256)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id, object_key, original_filename, content_type, file_size, uploaded_at, kind, content_sha256`,
     [purchaseId, tenantId, attachment.objectKey, attachment.originalFilename,
-      attachment.contentType, attachment.fileSize],
+      attachment.contentType, attachment.fileSize,
+      attachment.kind ?? 'receipt', attachment.contentSha256 ?? null],
   )
   return rows[0]
 }
@@ -52,26 +84,42 @@ export async function setProductStock(executor, tenantId, productId, quantity, u
   )
 }
 
-export async function insertPurchase(executor, tenantId, purchase) {
+// `snapshot` is the VAT treatment frozen onto a purchase created as APPROVED —
+// approval is the posting event, and the same moment the treatment stops being
+// re-derivable. It records recoverability, never an amount: the supplier charged
+// what the supplier charged.
+export async function insertPurchase(executor, tenantId, purchase, snapshot = null) {
   const approved = purchase.status === 'approved'
+  const snap = approved && snapshot ? snapshot : {}
   const { rows } = await executor.query(
     `INSERT INTO purchases (
-       tenant_id, receipt_number, supplier_name, supplier_contact_id,
-       receipt_date, due_date, currency, memo,
+       tenant_id, receipt_number, supplier_name, supplier_contact_id, supplier_import_data,
+       receipt_date, due_date, currency, memo, supplier_invoice_number,
        subtotal_cents, tax_cents, total_cents,
        status, finalized_at,
-       created_by_user_id, approved_by_user_id
+       created_by_user_id, approved_by_user_id,
+       accounting_country_snapshot, vat_scheme_code_snapshot, vat_treatment_snapshot,
+       input_vat_recoverable_snapshot, vat_treatment_version, vat_snapshot_source
      ) VALUES (
-       $1, $2, $3, $4,
-       $5, $6, $7, $8,
-       $9, $10, $11,
-       $12, ${approved ? 'NOW()' : 'NULL'},
-       $13, ${approved ? '$13' : 'NULL'}
+       $1, $2, $3, $4, $5,
+       $6, $7, $8, $9, $10,
+       $11, $12, $13,
+       $14, ${approved ? 'NOW()' : 'NULL'},
+       $15, ${approved ? '$15' : 'NULL'},
+       $16, $17, $18, $19, $20, $21
      ) RETURNING id`,
     [tenantId, purchase.receiptNumber, purchase.supplierName, purchase.supplierContactId,
+      purchase.supplierImportData,
       purchase.receiptDate, purchase.dueDate, purchase.currency, purchase.memo,
+      purchase.supplierInvoiceNumber ?? null,
       purchase.subtotalCents, purchase.taxCents, purchase.totalCents,
-      purchase.status, purchase.actorUserId],
+      purchase.status, purchase.actorUserId,
+      snap.accounting_country_snapshot ?? null,
+      snap.vat_scheme_code_snapshot ?? null,
+      snap.vat_treatment_snapshot ?? null,
+      snap.input_vat_recoverable_snapshot ?? null,
+      snap.vat_treatment_version ?? null,
+      snap.vat_snapshot_source ?? null],
   )
   return rows[0].id
 }
@@ -101,6 +149,14 @@ export async function updatePurchase(executor, tenantId, purchaseId, patch) {
     if (patch.setApprovedBy) {
       assignments.push(`approved_by_user_id = $${index++}`)
       values.push(patch.approvedByUserId)
+    }
+    // First writer wins, in SQL: once a purchase has been approved its treatment
+    // can never be rewritten by a path that re-enters.
+    if (patch.snapshot) {
+      for (const [column, value] of Object.entries(patch.snapshot)) {
+        assignments.push(`${column} = COALESCE(${column}, $${index++})`)
+        values.push(value)
+      }
     }
   }
   assignments.push('updated_at = NOW()')
@@ -359,7 +415,8 @@ export async function listPurchasePeriods(executor, tenantId, supplierContactId 
 
 export async function fetchPurchaseAttachments(executor, purchaseId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id, object_key, original_filename, content_type, file_size, uploaded_at
+    `SELECT id, object_key, original_filename, content_type, file_size, uploaded_at,
+            kind, content_sha256
        FROM purchase_attachments
       WHERE purchase_id = $1 AND tenant_id = $2
       ORDER BY uploaded_at ASC, id ASC`,
@@ -380,10 +437,101 @@ export async function deletePurchase(executor, purchaseId, tenantId) {
   await executor.query('DELETE FROM purchases WHERE id = $1 AND tenant_id = $2', [purchaseId, tenantId])
 }
 
+// Never deletes the imported source document: those bytes are the invoice, and
+// the API surfaces the refusal as a 409 rather than silently keeping the row.
 export async function deleteAttachmentReturningKey(executor, attachmentId, purchaseId, tenantId) {
   const { rows } = await executor.query(
-    'DELETE FROM purchase_attachments WHERE id = $1 AND purchase_id = $2 AND tenant_id = $3 RETURNING object_key',
+    `DELETE FROM purchase_attachments
+      WHERE id = $1 AND purchase_id = $2 AND tenant_id = $3 AND kind <> 'source_e_invoice'
+      RETURNING object_key`,
     [attachmentId, purchaseId, tenantId],
   )
   return rows[0]?.object_key ?? null
+}
+
+// Distinguishes "no such attachment" (404) from "that one is the source
+// document" (409) after a delete matched nothing.
+export async function fetchAttachmentKind(executor, attachmentId, purchaseId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT kind FROM purchase_attachments WHERE id = $1 AND purchase_id = $2 AND tenant_id = $3',
+    [attachmentId, purchaseId, tenantId],
+  )
+  return rows[0]?.kind ?? null
+}
+
+// ---------- VAT snapshot audit ----------
+
+// Approved/paid purchases carrying no VAT snapshot — rows the previous app
+// container posted during a deployment. Repairable.
+export async function listPostedPurchasesMissingSnapshot(executor) {
+  const { rows } = await executor.query(
+    `SELECT id, tenant_id, receipt_number, status, receipt_date, tax_cents
+       FROM purchases
+      WHERE accounting_country_snapshot IS NULL
+        AND status IN ('approved', 'paid')
+      ORDER BY tenant_id, id`,
+  )
+  return rows
+}
+
+// Purchases whose input VAT was recorded as NON-recoverable while the journal
+// still debited the input-VAT account. This is the known divergence migration
+// 141 exists to make fixable, not a defect in the snapshot: spec §9.4 says an
+// enrolled tenant does not deduct input VAT, but changing how postBillAccrued
+// books it is a ledger change needing a correction path. Reported so the size of
+// the population is visible before that work starts.
+//
+// Deliberately NOT reported: a positive tax_cents under an exempt scheme. That is
+// the NORMAL case — the supplier still charges VAT, the buyer just cannot deduct
+// it — and flagging it would be a false alarm on every such bill.
+export async function listPurchaseInputVatDivergence(executor) {
+  const { rows } = await executor.query(
+    `SELECT p.id, p.tenant_id, p.receipt_number, p.tax_cents, p.vat_scheme_code_snapshot
+       FROM purchases p
+      WHERE p.input_vat_recoverable_snapshot IS FALSE
+        AND p.tax_cents > 0
+        AND EXISTS (
+          SELECT 1 FROM ledger_transactions lt
+            JOIN ledger_entries le ON le.transaction_id = lt.id
+            JOIN tenant_accounting_settings tas ON tas.tenant_id = p.tenant_id
+           WHERE lt.tenant_id = p.tenant_id
+             AND lt.source_type = 'purchase'
+             AND lt.source_id = p.id
+             AND le.account_code = tas.input_vat_account_code
+             AND le.debit_cents > 0
+        )
+      ORDER BY p.tenant_id, p.id`,
+  )
+  return rows
+}
+
+export async function countInferredPurchaseSnapshots(executor) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*)::int AS count FROM purchases
+      WHERE vat_snapshot_source = 'legacy_inferred'`,
+  )
+  return rows[0].count
+}
+
+export async function setPurchaseVatSnapshot(executor, purchaseId, snapshot) {
+  await executor.query(
+    `UPDATE purchases
+        SET accounting_country_snapshot = COALESCE(accounting_country_snapshot, $2),
+            vat_scheme_code_snapshot = COALESCE(vat_scheme_code_snapshot, $3),
+            vat_treatment_snapshot = COALESCE(vat_treatment_snapshot, $4),
+            input_vat_recoverable_snapshot = COALESCE(input_vat_recoverable_snapshot, $5),
+            vat_treatment_version = COALESCE(vat_treatment_version, $6),
+            vat_snapshot_source = COALESCE(vat_snapshot_source, $7),
+            updated_at = NOW()
+      WHERE id = $1`,
+    [
+      purchaseId,
+      snapshot.accounting_country_snapshot,
+      snapshot.vat_scheme_code_snapshot,
+      snapshot.vat_treatment_snapshot,
+      snapshot.input_vat_recoverable_snapshot,
+      snapshot.vat_treatment_version,
+      snapshot.vat_snapshot_source,
+    ],
+  )
 }

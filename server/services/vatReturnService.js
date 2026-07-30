@@ -52,6 +52,8 @@ function dayBefore(isoDate) {
 // Quarter date range + NL filing due date (last day of the month after the
 // quarter ends). Same math as currentVatQuarter in ledgerService.js.
 export function quarterRange(year, quarter) {
+  // VAT filing quarters remain calendar-based and do not follow the reporting
+  // fiscal-year start stored in the accounting profile.
   const startMonth = (quarter - 1) * 3 + 1
   return {
     period_from: monthStart(year, startMonth),

@@ -15,7 +15,8 @@ import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { settleInvoice } from './invoiceService.js'
 import { settlePurchase } from './purchaseService.js'
 import { hasOpeningBalance } from '../repositories/ledgerRepository.js'
-import { accountExistsOfType } from '../repositories/accountRepository.js'
+import { accountExistsOfType, acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
 import {
   findSuppliersForImport,
   findSuppliersByIban,
@@ -24,9 +25,9 @@ import {
   setSupplierIbanIfMissing,
   contactExistsInTenant,
 } from '../repositories/contactRepository.js'
-import { fetchTenantKorState } from '../repositories/tenantRepository.js'
-import { korApplies } from '../../shared/vatRates.js'
+import { resolveLiveTreatment } from './vatTreatmentService.js'
 import { normalizeIban } from '../utils/normalizeIban.js'
+import { indexSuppliers, matchSuppliers } from '../utils/supplierMatch.js'
 import { badRequest } from './serviceErrors.js'
 import { clearInvoicePaymentLink, markInvoicePaid } from '../repositories/invoiceRepository.js'
 import { deactivateMolliePaymentLink } from './molliePaymentLinkService.js'
@@ -73,11 +74,7 @@ const MAX_BYTES = 10 * 1024 * 1024
 const MAX_LINES = 1000
 
 async function tenantCurrency(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT currency FROM tenant_accounting_settings WHERE tenant_id = $1',
-    [tenantId],
-  )
-  return rows[0]?.currency || 'EUR'
+  return (await loadAccountingBehavior(executor, tenantId)).currency
 }
 
 function lineMemo(line) {
@@ -116,6 +113,7 @@ export async function parseAndStage(db, tenantId, file, userId) {
   const currency = await tenantCurrency(db, tenantId)
 
   const imp = await withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
     let staged = await insertImport(client, tenantId, {
       filename: file.originalname || 'statement',
       format: parsed.format,
@@ -185,8 +183,7 @@ async function decorateImport(db, tenantId, imp) {
   const invByAmount = groupBy(openInvoices, (i) => i.total_cents)
   const purByAmount = groupBy(openPurchases, (p) => p.total_cents)
   const paidByAmount = groupBy(paidPurchases, (p) => p.total_cents)
-  const supByIban = groupBy(suppliers.filter((s) => s.iban), (s) => s.iban.toUpperCase())
-  const supByName = groupBy(suppliers, (s) => (s.name ?? '').toLowerCase())
+  const supplierIndex = indexSuppliers(suppliers)
 
   const decorated = lines.map((line) => {
     const suggestion = {
@@ -208,10 +205,10 @@ async function decorateImport(db, tenantId, imp) {
     if (line.status === 'pending') {
       if (line.direction === 'debit') {
         suggestion.purchaseMatches = purByAmount.get(line.amount_cents) ?? []
-        const byIban = line.counterparty_iban ? supByIban.get(line.counterparty_iban.toUpperCase()) : null
-        suggestion.supplierMatches = (byIban && byIban.length)
-          ? byIban
-          : (line.counterparty_name ? (supByName.get(line.counterparty_name.toLowerCase()) ?? []) : [])
+        suggestion.supplierMatches = matchSuppliers(supplierIndex, {
+          iban: line.counterparty_iban,
+          name: line.counterparty_name,
+        })
         suggestion.paidPurchaseMatches = matchPaidPurchases(
           line, paidByAmount.get(line.amount_cents) ?? [], suggestion.supplierMatches,
         )
@@ -628,7 +625,9 @@ async function journalLine(client, tenantId, line, decision, userId, expectedDir
   // frontend hides the control entirely; this is the authoritative backstop,
   // and it reports rather than silently dropping the VAT the caller asked for.
   const vatRate = decision.vatRate ?? null
-  if (vatRate && await tenantAppliesKor(client, tenantId)) return 'skipped_vat_not_allowed'
+  if (vatRate && await schemeSuppressesVatOn(client, tenantId, line.booking_date)) {
+    return 'skipped_vat_not_allowed'
+  }
 
   if (decision.action === 'journal_paid') {
     const supplierStatus = await resolveSupplier(client, tenantId, decision, line)
@@ -650,9 +649,13 @@ async function journalLine(client, tenantId, line, decision, userId, expectedDir
   return 'imported'
 }
 
-async function tenantAppliesKor(client, tenantId) {
-  const tenant = await fetchTenantKorState(client, tenantId)
-  return Boolean(tenant?.applies_kor) && korApplies(tenant.vat_country)
+// Resolved DATE-AWARE at the line's booking date, not from the legacy
+// tenants.applies_kor flag: an enrolment can start or end on a future date, and
+// importing a statement line dated either side of that boundary must follow the
+// scheme that actually applied then.
+async function schemeSuppressesVatOn(client, tenantId, bookingDate) {
+  const treatment = await resolveLiveTreatment(client, tenantId, toDateOnly(bookingDate))
+  return Boolean(treatment?.schemeExempt)
 }
 
 // Links or creates the supplier for an outgoing line. Persisting the supplier

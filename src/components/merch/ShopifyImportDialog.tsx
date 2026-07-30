@@ -29,7 +29,8 @@ import { listAccounts } from '../../api/accounts.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import { formatEur } from '../../utils/purchaseTotals.ts'
 import { useProfile } from '../../contexts/profileContext.ts'
-import { vatRateMenuItems } from '../shared/vatRateMenuItems.tsx'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
+import VatRateSelect from '../shared/VatRateSelect.tsx'
 import type {
   Account, Product, ShopifyOrder, ShopifyLineItem, ShopifyLineMapping, ShopifyImportResult,
 } from '../../types/entities.ts'
@@ -459,6 +460,8 @@ function LineMapControl({
 }: Readonly<LineMapControlProps>) {
   const { t } = useTranslation(['merch', 'common'])
   const { vatCountry } = useProfile()
+  const { profile: accountingProfile } = useAccountingProfile()
+  const accountingCountry = accountingProfile?.country_code ?? vatCountry
   if (!lineMappable(line)) {
     return (
       <Chip
@@ -489,16 +492,15 @@ function LineMapControl({
         </Select>
       </FormControl>
       {mapping?.type === 'revenue' && (
-        <FormControl size="small" sx={compact ? { alignSelf: 'flex-start', minWidth: 120 } : { minWidth: 90 }}>
-          <InputLabel>{t($ => $.shopify.vat)}</InputLabel>
-          <Select
-            label={t($ => $.shopify.vat)}
-            value={mapping.vat_rate}
-            onChange={(e) => onVatChange(line.id, mapping.account_code, Number(e.target.value))}
-          >
-            {vatRateMenuItems(vatCountry, Number(mapping.vat_rate), t($ => $.vat.otherCountries, { ns: 'common' }))}
-          </Select>
-        </FormControl>
+        <VatRateSelect
+          id={`shopify-line-${line.id}-vat-rate`}
+          label={t($ => $.shopify.vat)}
+          country={accountingCountry}
+          value={Number(mapping.vat_rate)}
+          onChange={(rate) => onVatChange(line.id, mapping.account_code, rate ?? 0)}
+          fullWidth={false}
+          sx={compact ? { alignSelf: 'flex-start', minWidth: 120 } : { minWidth: 90 }}
+        />
       )}
     </Box>
   )

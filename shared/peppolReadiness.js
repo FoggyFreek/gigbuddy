@@ -12,7 +12,7 @@
 // Pure — no DB, no IO.
 import { resolvePostalCountry, deriveEndpointId } from './peppol.js'
 import { computeVatBreakdown } from './invoiceTotals.js'
-import { resolveVatCountry, vatIdPrefixCountry, korApplies } from './vatRates.js'
+import { resolveVatCountry, vatIdPrefixCountry } from './vatRates.js'
 
 // Every code these checks can return, in report order. Kept as one list so the
 // i18n bundles can be proven complete against it.
@@ -50,7 +50,10 @@ const nonEmpty = (v) => String(v ?? '').trim().length > 0
 // under one whole currency unit, so only a gap that reaches EUR 1 is fatal.
 const DRIFT_FATAL_CENTS = 100
 
-export function checkPeppolReadiness({ invoice, lines, tenant }) {
+// `treatment` is the resolved VAT treatment (see server/services/vatTreatmentService).
+// This module stays pure — the caller passes it in — so readiness and the
+// renderers can never disagree about whether VAT was suppressed.
+export function checkPeppolReadiness({ invoice, lines, tenant, treatment = null }) {
   const found = new Set()
   const add = (code) => found.add(code)
 
@@ -63,8 +66,9 @@ export function checkPeppolReadiness({ invoice, lines, tenant }) {
 
   // Electronic addresses come from the TAX jurisdiction instead: the scheme
   // states which register the identifier belongs to.
+  const sellerVatCountry = treatment?.accounting_country ?? tenant.vat_country
   const sellerEndpoint = deriveEndpointId({
-    country: tenant.vat_country,
+    country: sellerVatCountry,
     vatId: tenant.tax_id,
     kvk: tenant.kvk_number,
   })
@@ -116,7 +120,7 @@ export function checkPeppolReadiness({ invoice, lines, tenant }) {
   // reference, and fall back to the invoice number when there is no gig.
   if (!nonEmpty(invoice.event_description)) add('buyer_reference_defaulted')
 
-  if (hasFatalVatDrift({ invoice, lines, tenant })) add('vat_rounding_drift')
+  if (hasFatalVatDrift({ invoice, lines, treatment })) add('vat_rounding_drift')
 
   return PEPPOL_WARNING_CODES
     .filter((code) => found.has(code))
@@ -124,7 +128,7 @@ export function checkPeppolReadiness({ invoice, lines, tenant }) {
     .sort((a, b) => Number(b.severity === 'blocking') - Number(a.severity === 'blocking'))
 }
 
-function hasFatalVatDrift({ invoice, lines, tenant }) {
+function hasFatalVatDrift({ invoice, lines, treatment }) {
   if (!Array.isArray(lines) || lines.length === 0) return false
   const { categories } = computeVatBreakdown({
     lines,
@@ -132,7 +136,7 @@ function hasFatalVatDrift({ invoice, lines, tenant }) {
     discountCents: invoice.discount_cents,
     discountType: invoice.discount_type,
     discountPct: invoice.discount_pct,
-    appliesKor: tenant.applies_kor && korApplies(tenant.vat_country),
+    appliesKor: Boolean(treatment?.schemeExempt),
     reverseCharge: invoice.reverse_charge,
   })
   return categories.some((c) => {

@@ -348,7 +348,7 @@ describe('/api/admin/tenants — super admin only', () => {
     expect(list.body).toHaveLength(2)
 
     const created = await asSuper(
-      request(app).post('/api/admin/tenants').send({ slug: 'gamma', band_name: 'Gamma Band' }),
+      request(app).post('/api/admin/tenants').send({ slug: 'gamma', band_name: 'Gamma Band', country_code: 'nl' }),
     ).expect(201)
     expect(created.body.slug).toBe('gamma')
     expect(created.body.archived_at).toBeNull()
@@ -372,19 +372,19 @@ describe('/api/admin/tenants — super admin only', () => {
 
   it('rejects invalid slug', async () => {
     await asSuper(
-      request(app).post('/api/admin/tenants').send({ slug: 'Bad Slug!', band_name: 'X' }),
+      request(app).post('/api/admin/tenants').send({ slug: 'Bad Slug!', band_name: 'X', country_code: 'nl' }),
     ).expect(400)
   })
 
   it('duplicate slug → 409', async () => {
     await asSuper(
-      request(app).post('/api/admin/tenants').send({ slug: 'alpha', band_name: 'Dup' }),
+      request(app).post('/api/admin/tenants').send({ slug: 'alpha', band_name: 'Dup', country_code: 'nl' }),
     ).expect(409)
   })
 
   it('POST /:id/admins assigns tenant_admin to a user (creates approved membership)', async () => {
     const created = await asSuper(
-      request(app).post('/api/admin/tenants').send({ slug: 'gamma', band_name: 'Gamma' }),
+      request(app).post('/api/admin/tenants').send({ slug: 'gamma', band_name: 'Gamma', country_code: 'nl' }),
     ).expect(201)
     // userA is currently NOT a member of gamma
     const res = await asSuper(
@@ -399,7 +399,7 @@ describe('/api/admin/tenants — super admin only', () => {
     const created = await asSuper(
       request(app)
         .post('/api/admin/tenants')
-        .send({ slug: 'delta', band_name: 'Delta', adminUserId: seed.userA.id }),
+        .send({ slug: 'delta', band_name: 'Delta', adminUserId: seed.userA.id, country_code: 'nl' }),
     ).expect(201)
     const { rows } = await pool.query(
       `SELECT role, status FROM memberships WHERE tenant_id = $1 AND user_id = $2`,
@@ -418,7 +418,7 @@ describe('/api/admin/tenants — super admin only', () => {
     const created = await asSuper(
       request(app)
         .post('/api/admin/tenants')
-        .send({ slug: 'epsilon', band_name: 'Epsilon', adminUserId: null }),
+        .send({ slug: 'epsilon', band_name: 'Epsilon', adminUserId: null, country_code: 'nl' }),
     ).expect(201)
     const { rows } = await pool.query(
       `SELECT 1 FROM memberships WHERE tenant_id = $1`,
@@ -429,7 +429,7 @@ describe('/api/admin/tenants — super admin only', () => {
 
   it('POST /:id/memberships grants a contributor-role membership directly', async () => {
     const created = await asSuper(
-      request(app).post('/api/admin/tenants').send({ slug: 'zeta', band_name: 'Zeta' }),
+      request(app).post('/api/admin/tenants').send({ slug: 'zeta', band_name: 'Zeta', country_code: 'nl' }),
     ).expect(201)
     const res = await asSuper(
       request(app)

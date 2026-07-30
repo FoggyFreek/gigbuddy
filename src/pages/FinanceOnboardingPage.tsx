@@ -19,36 +19,23 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined'
 import DateEntryField from '../components/DateEntryField.tsx'
-import { FinancialsEditForm } from '../components/profile/ProfileFinancialsTab.tsx'
 import DefaultAccountsFields from '../components/settings/DefaultAccountsFields.tsx'
+import AccountingProfileSection from '../components/settings/AccountingProfileSection.tsx'
+import FinancialProfileSection from '../components/settings/FinancialProfileSection.tsx'
 import { MollieKeySection, ShopifyKeySection } from '../components/settings/IntegrationsSection.tsx'
-import { EMPTY_FORM, profileToForm, type ProfileForm } from '../components/profile/profileForm.ts'
-import { getProfile, updateProfile } from '../api/profile.ts'
 import { getFinanceOnboardingStatus, setOpeningBalance } from '../api/financeOnboarding.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 
-const STEP_KEYS = ['welcome', 'openingBalance', 'profile', 'integrations', 'accounts', 'done'] as const
+// The accounting profile comes first: it fixes the jurisdiction, financial year and
+// VAT status that everything after it is interpreted against — including the format
+// the financial profile validates the VAT and registration numbers in.
+//
+// The two profile steps are disjoint by construction: `accountingProfile` owns the
+// regime (country, currency, financial year, VAT registration and filing) and
+// `financialProfile` owns the identity printed on invoices (name, legal form,
+// address, registration number, contact, IBAN, VAT number). No field appears twice.
+const STEP_KEYS = ['welcome', 'accountingProfile', 'financialProfile', 'openingBalance', 'integrations', 'accounts', 'done'] as const
 type StepKey = typeof STEP_KEYS[number]
-
-// Financial subset of the profile form persisted by the wizard's profile step.
-function financialFields(form: ProfileForm) {
-  return {
-    formal_name: form.formal_name,
-    address_street: form.address_street,
-    address_postal_code: form.address_postal_code,
-    address_city: form.address_city,
-    address_country: form.address_country,
-    kvk_number: form.kvk_number,
-    registration_office: form.registration_office,
-    legal_form: form.legal_form,
-    directors: form.directors,
-    iban: form.iban,
-    tax_id: form.tax_id,
-    tax_percentage: form.tax_percentage,
-    applies_kor: form.applies_kor,
-    vat_country: form.vat_country,
-  }
-}
 
 // A euro string ("1234.56", "1.234,56", "-50") → signed integer cents, or null
 // when malformed.
@@ -72,9 +59,6 @@ export default function FinanceOnboardingPage() {
   const [amount, setAmount] = useState('')
   const [balanceDate, setBalanceDate] = useState(() => new Date().toISOString().slice(0, 10))
 
-  // Profile step state.
-  const [form, setForm] = useState<ProfileForm>(EMPTY_FORM)
-
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -82,9 +66,6 @@ export default function FinanceOnboardingPage() {
     let active = true
     getFinanceOnboardingStatus()
       .then((s) => { if (active) setOpeningBalanceSetState(s.openingBalanceSet) })
-      .catch(() => {})
-    getProfile()
-      .then((p) => { if (active) setForm(profileToForm(p as unknown as Record<string, unknown>)) })
       .catch(() => {})
     return () => { active = false }
   }, [])
@@ -118,17 +99,6 @@ export default function FinanceOnboardingPage() {
         setBusy(false)
       }
     }
-    if (current === 'profile') {
-      setBusy(true)
-      try {
-        await updateProfile(financialFields(form))
-      } catch {
-        setError(t($ => $.errors.generic))
-        return false
-      } finally {
-        setBusy(false)
-      }
-    }
     return true
   }
 
@@ -149,6 +119,11 @@ export default function FinanceOnboardingPage() {
   const stepBody = (
     <>
       {step === 'welcome' && <WelcomeStep />}
+      {/* Both profile steps reuse their Settings sections wholesale: each carries
+          its own heading, description and per-field save, so neither has anything
+          for the wizard to commit on Next. */}
+      {step === 'accountingProfile' && <AccountingProfileSection />}
+      {step === 'financialProfile' && <FinancialProfileSection />}
       {step === 'openingBalance' && (
         <OpeningBalanceStep
           alreadySet={openingBalanceSet}
@@ -159,18 +134,6 @@ export default function FinanceOnboardingPage() {
           date={balanceDate}
           setDate={setBalanceDate}
         />
-      )}
-      {step === 'profile' && (
-        <>
-          <Typography variant="h6" sx={{ mb: 0.5 }}>{t($ => $.profile.heading)}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{t($ => $.profile.body)}</Typography>
-          <FinancialsEditForm
-            form={form}
-            onChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
-            onFormChange={setForm}
-            schedule={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
-          />
-        </>
       )}
       {step === 'integrations' && (
         <>

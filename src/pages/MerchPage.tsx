@@ -35,7 +35,8 @@ import {
   createProduct, updateProduct, archiveProduct,
   recordMerchSale, listMerchSalePeriods, listMerchSalesSummary,
 } from '../api/merch.ts'
-import { formatEur } from '../utils/purchaseTotals.ts'
+import { formatCurrency } from '../utils/invoiceTotals.ts'
+import { useAccountingProfile } from '../contexts/accountingProfileContext.ts'
 import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
 import type { Product, MerchSale, MerchSalesSummaryRow, Period, Id } from '../types/entities.ts'
 
@@ -297,6 +298,7 @@ interface ProductsListProps {
 
 function ProductsList({ products, onEdit, onArchive }: Readonly<ProductsListProps>) {
   const { t } = useTranslation('merch')
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const isCompact = useCompactLayout()
 
   if (isCompact) {
@@ -311,9 +313,9 @@ function ProductsList({ products, onEdit, onArchive }: Readonly<ProductsListProp
               </Box>
               <Typography variant="caption" color="text.secondary">
                 {t($ => $.products.priceLine, {
-                  price: formatEur(p.default_price_incl_cents),
+                  price: formatCurrency(p.default_price_incl_cents, currency),
                   rate: Number(p.vat_rate),
-                  cost: formatEur(p.unit_cost_cents),
+                  cost: formatCurrency(p.unit_cost_cents, currency),
                 })}
               </Typography>
               <Typography variant="body2" color="text.secondary">
@@ -350,8 +352,8 @@ function ProductsList({ products, onEdit, onArchive }: Readonly<ProductsListProp
                   {p.name}
                   {p.archived_at && <Chip label={t($ => $.products.archived)} size="small" sx={{ ml: 1 }} />}
                 </TableCell>
-                <MoneyCells cents={p.unit_cost_cents} />
-                <MoneyCells cents={p.default_price_incl_cents} />
+                <MoneyCells cents={p.unit_cost_cents} currency={currency} />
+                <MoneyCells cents={p.default_price_incl_cents} currency={currency} />
                 <TableCell align="right">{Number(p.vat_rate)}%</TableCell>
                 <TableCell align="right">{p.quantity_on_hand}</TableCell>
                 <TableCell align="right">
@@ -381,6 +383,7 @@ interface ProductSalesSummaryListProps {
 
 function ProductSalesSummaryList({ rows, selectedId, onRowClick }: Readonly<ProductSalesSummaryListProps>) {
   const { t } = useTranslation('merch')
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const isCompact = useCompactLayout()
 
   if (!rows.length) {
@@ -418,7 +421,7 @@ function ProductSalesSummaryList({ rows, selectedId, onRowClick }: Readonly<Prod
               </Typography>
             </Box>
             <Typography variant="body1" sx={{ fontWeight: 500, flexShrink: 0 }}>
-              {formatEur(row.total_amount_cents)}
+              {formatCurrency(row.total_amount_cents, currency)}
             </Typography>
           </Box>
         ))}
@@ -450,7 +453,7 @@ function ProductSalesSummaryList({ rows, selectedId, onRowClick }: Readonly<Prod
                 <TableCell>{row.product_name}</TableCell>
                 <TableCell>{accountLabel(row)}</TableCell>
                 <TableCell align="right">{row.total_qty}</TableCell>
-                <MoneyCells cents={row.total_amount_cents} />
+                <MoneyCells cents={row.total_amount_cents} currency={currency} />
               </TableRow>
             ))}
           </TableBody>

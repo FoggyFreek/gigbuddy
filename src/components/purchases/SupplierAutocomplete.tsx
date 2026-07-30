@@ -28,6 +28,12 @@ function isAction(o: unknown): o is ActionOption {
 interface SupplierAutocompleteProps {
   value?: string
   onChange: (patch: { supplier_name: string; supplier_contact_id: Id | null }) => void
+  createDefaults?: {
+    email?: string | null
+    iban?: string | null
+    kvk_number?: string | null
+    tax_id?: string | null
+  } | null
   disabled?: boolean
   autoFocus?: boolean
   label?: string
@@ -39,7 +45,7 @@ interface SupplierAutocompleteProps {
 // falls back to re-searching and selecting an exact match rather than reading
 // the error shape.
 export default function SupplierAutocomplete({
-  value, onChange, disabled, autoFocus, label,
+  value, onChange, createDefaults, disabled, autoFocus, label,
 }: Readonly<SupplierAutocompleteProps>) {
   const { t } = useTranslation(['purchases', 'common'])
   const [error, setError] = useState<string | null>(null)
@@ -63,7 +69,14 @@ export default function SupplierAutocomplete({
   async function createSupplier(name: string) {
     setError(null)
     try {
-      const created = await createContact({ name, category: 'supplier' })
+      const created = await createContact({
+        name,
+        category: 'supplier',
+        ...(createDefaults?.email ? { email: createDefaults.email } : {}),
+        ...(createDefaults?.iban ? { iban: createDefaults.iban } : {}),
+        ...(createDefaults?.kvk_number ? { kvk_number: createDefaults.kvk_number } : {}),
+        ...(createDefaults?.tax_id ? { tax_id: createDefaults.tax_id } : {}),
+      })
       onChange({ supplier_name: created.name ?? '', supplier_contact_id: created.id ?? null })
     } catch {
       try {

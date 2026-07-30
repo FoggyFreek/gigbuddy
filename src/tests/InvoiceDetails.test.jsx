@@ -9,6 +9,7 @@ vi.mock('../api/invoices.ts', () => ({
   deleteInvoice: vi.fn(async () => {}),
   downloadInvoiceEml: vi.fn(),
   downloadInvoiceUbl: vi.fn(),
+  downloadInvoiceUblWithPdf: vi.fn(),
   getInvoice: vi.fn(),
   getInvoiceEmlDefaults: vi.fn(),
   removeInvoiceLogo: vi.fn(),
@@ -25,11 +26,23 @@ vi.mock('../utils/compressImage.ts', () => ({
 import * as invoicesApi from '../api/invoices.ts'
 import { compressLogo } from '../utils/compressImage.ts'
 import InvoiceDetails from '../components/InvoiceDetails.tsx'
+import { AccountingProfileContext } from '../contexts/accountingProfileContext.ts'
 import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
 
-function wrap(ui) {
-  return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
+function wrap(ui, accountingProfile = null) {
+  const content = accountingProfile
+    ? (
+      <AccountingProfileContext.Provider value={{ profile: accountingProfile, loading: false, applyProfile: vi.fn() }}>
+        {ui}
+      </AccountingProfileContext.Provider>
+    )
+    : ui
+  return render(
+    <ThemeProvider theme={theme}>
+      {content}
+    </ThemeProvider>,
+  )
 }
 
 // PDF, UBL and email all live behind one "Download" menu button, so every
@@ -145,6 +158,62 @@ describe('InvoiceDetails', () => {
     // Payment-link panel is only rendered in edit mode once the invoice loads.
     expect(screen.getByText('Payment link')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create payment link/ })).toBeInTheDocument()
+  })
+
+  it('only offers VAT rates from the tenant accounting country on invoice lines', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce({
+      ...EDIT_INVOICE,
+      currency: 'GBP',
+      lines: [{ ...EDIT_INVOICE.lines[0], tax_percentage: 20 }],
+    })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />, {
+      country_code: 'gb',
+      base_currency: 'GBP',
+    })
+
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+    expect(screen.getAllByText('VAT %')).toHaveLength(1)
+    await userEvent.click(screen.getByRole('combobox', { name: 'VAT %' }))
+
+    expect(screen.getByRole('option', { name: '20%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '5%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '0%' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '21%' })).not.toBeInTheDocument()
+  })
+
+  it('edits the customer Chamber of Commerce number and VAT ID', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce({
+      ...EDIT_INVOICE,
+      customer_kvk: '50048295',
+      customer_tax_id: 'NL001794860B34',
+    })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+
+    const chamberNumber = await screen.findByRole('textbox', { name: 'Chamber of Commerce number' })
+    const vatId = screen.getByRole('textbox', { name: 'VAT ID' })
+    expect(chamberNumber).toHaveValue('50048295')
+    expect(vatId).toHaveValue('NL001794860B34')
+
+    await userEvent.clear(vatId)
+    await userEvent.type(vatId, 'NL819789471B01')
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        customer_kvk: '50048295',
+        customer_tax_id: 'NL819789471B01',
+      }),
+    ))
+  })
+
+  it('uses the Dutch customer business-identifier labels', async () => {
+    await i18n.changeLanguage('nl')
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+
+    expect(await screen.findByRole('textbox', { name: 'KVK nr.' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'BTW nr.' })).toBeInTheDocument()
   })
 
   it('shows a friendly error when payment-link creation fails', async () => {
@@ -565,6 +634,19 @@ describe('InvoiceDetails — UBL/Peppol download', () => {
     expect(downloadNames).toEqual(['factuur-2026-0007.xml'])
   })
 
+  it('downloads a UBL containing the embedded PDF invoice', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    invoicesApi.downloadInvoiceUblWithPdf.mockResolvedValueOnce(new Blob(['<Invoice/>']))
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await openDownloadMenu()
+    await userEvent.click(screen.getByRole('menuitem', { name: 'UBL with embedded PDF invoice' }))
+
+    await waitFor(() => expect(invoicesApi.downloadInvoiceUblWithPdf).toHaveBeenCalledWith(7))
+    expect(downloadNames).toEqual(['factuur-2026-0007.xml'])
+  })
+
   it('offers the XML even when no PDF has been rendered', async () => {
     // Unlike the PDF, the XML is generated on demand — it only needs a saved
     // invoice, so it must not be gated on pdf_path.
@@ -621,10 +703,11 @@ describe('InvoiceDetails — UBL/Peppol download', () => {
 
     await openDownloadMenu('Downloaden')
     expect(screen.getByRole('menuitem', { name: /UBL downloaden \(XML\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'UBL met ingesloten pdf-factuur' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'E-mail downloaden' })).toBeInTheDocument()
   })
 
-  it('groups all three downloads under one menu', async () => {
+  it('groups all download variants under one menu', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(PEPPOL_READY_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
@@ -635,6 +718,7 @@ describe('InvoiceDetails — UBL/Peppol download', () => {
     await openDownloadMenu()
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Download UBL (XML)',
+      'UBL with embedded PDF invoice',
       'Download email',
     ])
   })
@@ -653,6 +737,7 @@ describe('InvoiceDetails — UBL/Peppol download', () => {
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Download PDF',
       'Download UBL (XML)',
+      'UBL with embedded PDF invoice',
       'Download email',
     ])
   })

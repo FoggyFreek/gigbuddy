@@ -6,6 +6,63 @@
 // VAT countries it supports. No credit notes, no charges, no foreign currency.
 import { normalizeVatNumber, normalizeVatCountry, isValidVatId } from './vatRates.js'
 
+// ---------------------------------------------------------------------------
+// EN 16931 / UBL code lists
+//
+// One owner for the codes, because they are read in both directions: the
+// renderer writes them (server/utils/renderInvoiceUbl.js) and the importer
+// matches on them (server/utils/parseUblInvoice.js). A code that only one side
+// knows is how the two drift apart.
+// ---------------------------------------------------------------------------
+
+/** UNCL1001 — a commercial invoice, the only document type GigBuddy issues. */
+export const INVOICE_TYPE_COMMERCIAL = '380'
+
+// UNCL1001 codes that reverse a charge rather than raise one. A UBL Invoice
+// carrying one of these is a credit note in an Invoice envelope: its amounts
+// mean the opposite of what a purchase expects, so the importer refuses it
+// rather than booking a negative expense as a positive one.
+export const CREDIT_NOTE_TYPE_CODES = Object.freeze(new Set(['381', '396', '81', '83', '261', '262']))
+
+/** UNCL5305 VAT category codes (BT-95/BT-102/BT-118). */
+export const VAT_CATEGORY = Object.freeze({
+  STANDARD: 'S',
+  ZERO: 'Z',
+  EXEMPT: 'E',
+  REVERSE_CHARGE: 'AE',
+  OUTSIDE_SCOPE: 'O',
+  INTRA_COMMUNITY: 'K',
+  EXPORT: 'G',
+})
+
+/** Categories that carry no VAT, whatever Percent the document states. */
+export const ZERO_RATED_VAT_CATEGORIES = Object.freeze(new Set([
+  VAT_CATEGORY.ZERO,
+  VAT_CATEGORY.EXEMPT,
+  VAT_CATEGORY.REVERSE_CHARGE,
+  VAT_CATEGORY.OUTSIDE_SCOPE,
+  VAT_CATEGORY.INTRA_COMMUNITY,
+  VAT_CATEGORY.EXPORT,
+]))
+
+// Categories where the BUYER accounts for the VAT rather than the seller
+// charging it. The invoice correctly shows no VAT, but the buyer still owes it
+// and deducts it in the same return — so a bill under one of these is not
+// simply a 0% bill, and anything that books it as one understates both sides.
+export const SELF_ASSESSED_VAT_CATEGORIES = Object.freeze(new Set([
+  'AE', // reverse charge
+  'K', // intra-community acquisition
+]))
+
+/** UNCL4461 — SEPA credit transfer (BT-81). */
+export const PAYMENT_MEANS_CREDIT_TRANSFER = '30'
+
+/** UNCL5189 "Discount" — the reason code on a document-level allowance (BT-98). */
+export const DISCOUNT_REASON_CODE = '95'
+
+/** UN/ECE Rec 20 — the unit for a service with no measure (BT-130). */
+export const UNIT_ONE = 'C62'
+
 // Electronic Address Scheme per supported country (Peppol EAS code list).
 // All VAT-number based except Belgium — Belgian participants are registered
 // under their enterprise (CBE) number, and a VAT registration is only an extra
@@ -114,8 +171,27 @@ export function toUblDate(value) {
   }
   const text = String(value ?? '').trim()
   if (!text) return null
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(text)
-  return match ? match[0] : null
+  // Anchored at both ends, so trailing junk is rejected rather than silently
+  // truncated away. A full ISO timestamp is still accepted — that is what a
+  // JSON payload carries — but only when the time part is really a time.
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/
+    .exec(text)
+  return match && isRealCalendarDate(match[1], match[2], match[3])
+    ? `${match[1]}-${match[2]}-${match[3]}`
+    : null
+}
+
+// True when the parts name a day that exists. A shape check alone accepts
+// 2026-02-31 and 2026-13-01, and an invoice booked on a date that never
+// happened lands in the wrong VAT period — or in no period at all.
+export function isRealCalendarDate(year, month, day) {
+  const y = Number(year)
+  const m = Number(month)
+  const d = Number(day)
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return false
+  if (m < 1 || m > 12 || d < 1) return false
+  // Day 0 of the NEXT month is the last day of this one, leap years included.
+  return d <= new Date(Date.UTC(y, m, 0)).getUTCDate()
 }
 
 // Integer cents → a 2-decimal amount. Never via division: (c / 100).toFixed(2)
@@ -125,6 +201,31 @@ export function money(cents) {
   const sign = n < 0 ? '-' : ''
   const abs = Math.abs(n)
   return `${sign}${Math.trunc(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
+}
+
+// The inverse of money(): an XSD decimal from a UBL document → integer cents.
+// Returns null for anything that is not one, so callers decide whether a
+// missing amount is fatal.
+//
+// Deliberately strict, and deliberately NOT the bank statement's amountToCents:
+// that one accepts either decimal separator with grouping and returns an
+// absolute value, because MT940/CAMT are written by hundreds of banks. A UBL
+// amount is schema-constrained to a '.' decimal and its sign is meaningful.
+export function parseUblAmount(value) {
+  if (value === null || value === undefined) return null
+  const text = String(value).trim()
+  if (!/^[+-]?\d+(\.\d+)?$/.test(text)) return null
+  const negative = text.startsWith('-')
+  const [whole, fraction = ''] = text.replace(/^[+-]/, '').split('.')
+  // Scale by string surgery, not by multiplying: 8.29 * 100 is 828.9999…, and
+  // rounding that back is exactly the error integer cents exist to avoid.
+  const cents = Number(whole) * 100 + Number(`${fraction}00`.slice(0, 2))
+  if (!Number.isSafeInteger(cents)) return null
+  // Beyond 2 decimals UBL amounts are out of contract; round the remainder in
+  // rather than truncating, so 0.005 does not silently become 0.00.
+  const rest = fraction.length > 2 ? Number(`0.${fraction.slice(2)}`) : 0
+  const scaled = cents + Math.round(rest)
+  return negative ? -scaled : scaled
 }
 
 // A NUMERIC column value without the trailing zeros pg pads on (2.00 → 2).

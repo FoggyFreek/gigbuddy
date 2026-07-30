@@ -100,12 +100,20 @@ export async function contactExistsInTenant(executor, contactId, tenantId) {
   return rowCount > 0
 }
 
-export async function insertContact(executor, tenantId, { name, email, phone, category, iban = null }) {
+export async function insertContact(executor, tenantId, {
+  name,
+  email,
+  phone,
+  category,
+  iban = null,
+  kvkNumber = null,
+  taxId = null,
+}) {
   const { rows } = await executor.query(
-    `INSERT INTO contacts (tenant_id, name, email, phone, category, iban)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO contacts (tenant_id, name, email, phone, category, iban, kvk_number, tax_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [tenantId, name, email, phone, category, iban],
+    [tenantId, name, email, phone, category, iban, kvkNumber, taxId],
   )
   return rows[0]
 }
@@ -154,20 +162,32 @@ export async function findSuppliersByName(executor, tenantId, name) {
   return rows
 }
 
-// Batched supplier lookup: all suppliers matching any of the given (canonical)
-// IBANs or names. Returns rows the caller groups by iban/name in memory — one
-// query per import instead of per line.
-export async function findSuppliersForImport(executor, tenantId, ibans, names) {
+// Batched supplier lookup: all suppliers matching any canonical identifier or
+// name. Returns rows the caller groups in memory — one query per import.
+export async function findSuppliersForImport(
+  executor,
+  tenantId,
+  ibans,
+  names,
+  { taxIds = [], registrationIds = [] } = {},
+) {
   const wantIbans = [...new Set(ibans.filter(Boolean).map((i) => i.toUpperCase()))]
   const wantNames = [...new Set(names.filter(Boolean).map((n) => n.toLowerCase()))]
-  if (!wantIbans.length && !wantNames.length) return []
+  const wantTaxIds = [...new Set(taxIds.filter(Boolean).map((id) => id.toUpperCase()))]
+  const wantRegistrationIds = [...new Set(registrationIds.filter(Boolean).map((id) => id.toLowerCase()))]
+  if (!wantIbans.length && !wantNames.length && !wantTaxIds.length && !wantRegistrationIds.length) return []
   const { rows } = await executor.query(
-    `SELECT id, name, category, email, phone, iban
+    `SELECT id, name, category, email, phone, iban, kvk_number, tax_id
        FROM contacts
       WHERE tenant_id = $1 AND category = 'supplier'
-        AND (upper(iban) = ANY($2) OR lower(name) = ANY($3))
+        AND (
+          upper(iban) = ANY($2)
+          OR lower(name) = ANY($3)
+          OR tax_id = ANY($4)
+          OR lower(kvk_number) = ANY($5)
+        )
       ORDER BY name ASC`,
-    [tenantId, wantIbans, wantNames],
+    [tenantId, wantIbans, wantNames, wantTaxIds, wantRegistrationIds],
   )
   return rows
 }

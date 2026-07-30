@@ -6,7 +6,7 @@ import {
   updateInvoice,
 } from '../../api/invoices.ts'
 import { computeInvoiceTotals } from '../../utils/invoiceTotals.ts'
-import { korApplies } from '../../utils/vatRates.ts'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import { checkInvoiceReadyForIssue, isInvoiceIssueErrorCode } from '../../utils/invoiceReadiness.ts'
 import { checkPeppolReadiness } from '../../utils/peppolReadiness.ts'
 import type { PeppolWarning } from '../../utils/peppolReadiness.ts'
@@ -73,6 +73,7 @@ export interface UseInvoiceFormStateResult {
 // live in their own hooks (see useInvoiceDetailsState).
 export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWrite = true }: UseInvoiceFormStateArgs): UseInvoiceFormStateResult {
   const { t } = useTranslation('invoices')
+  const { profile: accountingProfile } = useAccountingProfile()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -110,8 +111,14 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
   // narrow "already issued" fact — the finalized banner and the delete/status
   // affordances key off it, so it must not absorb the permission check.
   const readOnly = finalized || !canWrite
-  // KOR is a Dutch-only exemption; it never zeroes VAT for a non-NL supplier.
-  const appliesKor = Boolean(tenant?.applies_kor) && korApplies(tenant?.vat_country)
+  // Mirrors the server's resolver: an ISSUED invoice reads the treatment frozen
+  // onto it, so its preview stays put after the band changes scheme. A draft uses
+  // the treatment in force today, which the server resolves date-aware from the
+  // scheme enrolment — `tenant.applies_kor` would be stale for an enrolment
+  // scheduled to start or end.
+  const appliesKor = invoice?.vat_treatment_snapshot
+    ? invoice.vat_treatment_snapshot === 'small_business_exempt'
+    : Boolean(accountingProfile?.current_sales_treatment?.scheme_exempt)
 
   // Server error codes ({ error, code }) are turned into a friendly, localized
   // sentence; anything else falls back to the message the API gave us.
@@ -199,7 +206,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
           description: '',
           quantity: 1,
           unit_price_cents: 0,
-          tax_percentage: appliesKor ? 0 : Number(tenant?.tax_percentage ?? 9),
+          tax_percentage: appliesKor ? 0 : Number(accountingProfile?.default_vat_rate ?? 9),
           position: prev.lines.length,
         },
       ],

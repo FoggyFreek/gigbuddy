@@ -23,6 +23,8 @@ const venueForm = {
   given_name: '',
   family_name: '',
   organization_name: '',
+  kvk_number: '',
+  tax_id: '',
   street_and_number: '',
   street_additional: '',
   postal_code: '',
@@ -55,5 +57,16 @@ describe('VenueFields — label changes by category', () => {
   it('does not render a "Venue name" field when category=festival', () => {
     wrap(festivalForm)
     expect(screen.queryByLabelText(/^Venue name$/i)).not.toBeInTheDocument()
+  })
+
+  it('shows optional registration and VAT identifier fields for both categories', () => {
+    const { unmount } = wrap(venueForm)
+    expect(screen.getByLabelText('Chamber of Commerce number')).toBeInTheDocument()
+    expect(screen.getByLabelText('VAT ID')).toBeInTheDocument()
+    unmount()
+
+    wrap(festivalForm)
+    expect(screen.getByLabelText('Chamber of Commerce number')).toBeInTheDocument()
+    expect(screen.getByLabelText('VAT ID')).toBeInTheDocument()
   })
 })

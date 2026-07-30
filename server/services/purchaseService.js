@@ -22,6 +22,7 @@ import {
   getPurchaseStatus,
   deletePurchase as deletePurchaseRow,
   deleteAttachmentReturningKey,
+  fetchAttachmentKind,
   listImportedPaymentCandidates,
   lockImportedPaymentCandidate,
   lockPurchase,
@@ -37,6 +38,8 @@ import { markLineResult } from '../repositories/bankImportRepository.js'
 import { fetchTenantVatCountry } from '../repositories/tenantRepository.js'
 import { getTransactionBySource } from '../repositories/ledgerRepository.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
+import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
 import {
   CONTENT_FIELDS_SET,
   FINALIZED_LOCKED_FIELDS_SET,
@@ -54,18 +57,31 @@ import {
   postBillPaid,
   correctLedgerTransaction,
 } from './ledgerService.js'
+import {
+  resolveLiveTreatment,
+  resolvePurchaseVatTreatment,
+  purchaseSnapshotColumns,
+} from './vatTreatmentService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { purchaseAttachmentKey, uploadObjectWithQuota, removeObject, safeRemove } from './storageService.js'
 import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 
 const ATTACHMENT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
 
+// Extensions for a stored source document. Only the importer reaches this path;
+// the manual upload route keeps its narrower allowlist.
+const SOURCE_EXTENSIONS = {
+  'application/pdf': '.pdf',
+  'application/xml': '.xml',
+  'text/xml': '.xml',
+}
+
 // Receipt/attachment upload. Allowed at any purchase status. Images take the
 // share-photo security path (magic bytes + sharp re-encode, which strips
 // EXIF/metadata); PDFs are magic-byte verified and stored as-is.
-export async function createPurchaseAttachment({ db, tenantId, purchaseId, file, requireCreatedByUserId = null }) {
+export async function createPurchaseAttachment({ db, tenantId, purchaseId, file, requireCreatedByUserId = null, kind = 'receipt' }) {
   const purchase = await fetchPurchaseOwner(db, tenantId, purchaseId)
   if (!purchase) return { error: { status: 404, body: { error: 'Not found' } } }
   // Self-scoped callers may only attach to their own purchase (hide as 404).
@@ -76,7 +92,12 @@ export async function createPurchaseAttachment({ db, tenantId, purchaseId, file,
   let buffer = file.buffer
   let size = file.size
   let ext
-  if (ATTACHMENT_IMAGE_TYPES.has(file.mimetype)) {
+  if (kind === 'source_e_invoice') {
+    // Stored byte-for-byte. Re-encoding, re-compressing or normalizing it would
+    // destroy the very thing it is kept for — this file IS the invoice, and for
+    // a hybrid document it is the authoritative half.
+    ext = SOURCE_EXTENSIONS[file.mimetype] ?? '.bin'
+  } else if (ATTACHMENT_IMAGE_TYPES.has(file.mimetype)) {
     let image
     try {
       image = await validateAndReencodeImage(file.buffer, file.mimetype, IMAGE_PROCESSING_PRESETS.purchaseReceipt)
@@ -103,6 +124,8 @@ export async function createPurchaseAttachment({ db, tenantId, purchaseId, file,
       originalFilename: file.originalname,
       contentType: file.mimetype,
       fileSize: size,
+      kind,
+      contentSha256: createHash('sha256').update(buffer).digest('hex'),
     })
     return { attachment }
   } catch (err) {
@@ -163,8 +186,34 @@ async function applyPurchaseStockIn(client, tenantId, lines) {
   }
 }
 
+// Blank is "not stated", not an empty string: the unique index only constrains
+// rows that state a number, and '' would make every unnumbered bill collide.
+export function normalizeSupplierInvoiceNumber(value) {
+  const text = String(value ?? '').trim()
+  return text === '' ? null : text
+}
+
 const FINALIZED_ERROR ={ status: 409, body: { error: 'Purchase is finalized', code: 'purchase_finalized' } }
 const RECEIPT_TAKEN_ERROR = { status: 409, body: { error: 'Receipt number already in use', code: 'receipt_number_taken' } }
+const SUPPLIER_INVOICE_TAKEN_ERROR = {
+  status: 409,
+  body: {
+    error: 'This supplier invoice number is already recorded',
+    code: 'supplier_invoice_number_taken',
+  },
+}
+
+const SUPPLIER_INVOICE_INDEX = 'purchases_tenant_supplier_invoice_number_key'
+
+// Turns the unique index into the answer the API contract expects. This is what
+// makes double entry impossible rather than merely warned about: the check and
+// the insert are the same operation, so two concurrent imports of one bill
+// cannot both pass.
+export function supplierInvoiceConflict(err) {
+  return isUniqueViolation(err) && err.constraint === SUPPLIER_INVOICE_INDEX
+    ? { error: SUPPLIER_INVOICE_TAKEN_ERROR }
+    : null
+}
 const USE_PAYMENT_ENDPOINT_ERROR = { status: 409, body: { error: 'Use the payment endpoint to mark a purchase paid', code: 'use_payment_endpoint' } }
 
 function isUniqueViolation(err) {
@@ -212,7 +261,13 @@ async function validateApprovalLines(executor, tenantId, lines) {
 
 // ---------- create ----------
 
-export async function createPurchase(pool, tenantId, body, actorUserId = null, { canManageFinance = false } = {}) {
+export async function createPurchase(
+  pool,
+  tenantId,
+  body,
+  actorUserId = null,
+  { canManageFinance = false, supplierImportData = null } = {},
+) {
   const supplierName = String(body.supplier_name ?? '').trim()
   if (!supplierName) return { error: { status: 400, body: { error: 'supplier_name is required' } } }
 
@@ -222,8 +277,8 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
     if (supplierContactId === null) return { error: { status: 400, body: { error: 'Invalid supplier_contact_id' } } }
   }
 
-  const vatCountry = await fetchTenantVatCountry(pool, tenantId)
-  const lines = normalizeLines(body.lines, vatCountry)
+  const initialBehavior = await loadAccountingBehavior(pool, tenantId)
+  let lines = normalizeLines(body.lines, initialBehavior.accountingCountry)
   if (!lines.length) return { error: { status: 400, body: { error: 'At least one line is required' } } }
 
   const accountErr = await validateLineAccounts(pool, tenantId, lines)
@@ -234,13 +289,18 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
 
   const receiptDate =body.receipt_date || new Date().toISOString().slice(0, 10)
   const dueDate = body.due_date || null
-  const currency = String(body.currency || 'EUR').trim() || 'EUR'
+  const requestedCurrency = body.currency == null
+    ? initialBehavior.currency
+    : String(body.currency).trim().toUpperCase()
+  if (requestedCurrency !== initialBehavior.currency) {
+    return { error: { status: 400, body: { error: 'currency_must_match_base_currency' } } }
+  }
 
   const statusResult = resolveCreateStatus(body, { canManageFinance })
   if (statusResult.error) return statusResult
   const { status } = statusResult
 
-  const totals = computePurchaseTotals({ lines })
+  let totals = computePurchaseTotals({ lines })
 
   if (status === 'approved') {
     const approvalErr = await validateApprovalLines(pool, tenantId, lines)
@@ -248,11 +308,27 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
   }
 
   return withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
+    const behavior = await loadAccountingBehavior(client, tenantId)
+    if (body.currency != null && requestedCurrency !== behavior.currency) {
+      abortTransaction({ error: { status: 400, body: { error: 'currency_must_match_base_currency' } } })
+    }
+    if (behavior.accountingCountry !== initialBehavior.accountingCountry) {
+      lines = normalizeLines(body.lines, behavior.accountingCountry)
+      totals = computePurchaseTotals({ lines })
+    }
     const receiptNumber = await nextPurchaseNumber(client, tenantId)
+    // Approval is the posting event and the moment the VAT treatment stops being
+    // re-derivable, so a create-as-approved freezes it here. A draft gets none.
+    const snapshot = status === 'approved'
+      ? purchaseSnapshotColumns(await resolveLiveTreatment(client, tenantId, receiptDate))
+      : null
     const purchaseId = await insertPurchase(client, tenantId, buildCreatePurchaseData({
       status, tenantId, receiptNumber, supplierName, supplierContactId,
-      receiptDate, dueDate, currency, memo: body.memo || null, totals, actorUserId,
-    }))
+      receiptDate, dueDate, currency: behavior.currency, memo: body.memo || null, totals, actorUserId,
+      supplierInvoiceNumber: normalizeSupplierInvoiceNumber(body.supplier_invoice_number),
+      supplierImportData,
+    }), snapshot)
     await insertPurchaseLines(client, purchaseId, tenantId, lines)
 
     // Approving a bill accrues the expense + payable. Draft bills post nothing.
@@ -266,7 +342,7 @@ export async function createPurchase(pool, tenantId, body, actorUserId = null, {
     }
 
     return { purchaseId }
-  }, { db: pool, mapError: ledgerErrorResult })
+  }, { db: pool, mapError: (err) => supplierInvoiceConflict(err) ?? ledgerErrorResult(err) })
 }
 
 function resolveCreateStatus(body, { canManageFinance = false } = {}) {
@@ -290,7 +366,8 @@ function resolveCreateStatus(body, { canManageFinance = false } = {}) {
 
 function buildCreatePurchaseData({
   status, tenantId, receiptNumber, supplierName, supplierContactId,
-  receiptDate, dueDate, currency, memo, totals, actorUserId,
+  receiptDate, dueDate, currency, memo, totals, actorUserId, supplierInvoiceNumber,
+  supplierImportData,
 }) {
   return {
     tenantId,
@@ -301,6 +378,8 @@ function buildCreatePurchaseData({
     dueDate,
     currency,
     memo,
+    supplierInvoiceNumber,
+    supplierImportData,
     subtotalCents: totals.subtotalCents,
     taxCents: totals.taxCents,
     totalCents: totals.totalCents,
@@ -330,6 +409,7 @@ function buildSimpleSet(body, supplierContactIdOverride) {
     let value = body[key]
     if (key === 'supplier_contact_id') value = supplierContactIdOverride
     else if (key === 'supplier_name') value = String(value ?? '').trim()
+    else if (key === 'supplier_invoice_number') value = normalizeSupplierInvoiceNumber(value)
     fields[key] = value
   }
   // memo is editable even after finalization, so it is not in CONTENT_FIELDS;
@@ -372,13 +452,18 @@ export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId =
       abortTransaction({ error: { status: 400, body: { error: 'No valid fields to update' } } })
     }
 
+    const approving = body.status === 'approved' && existing.status !== 'approved'
     await updatePurchase(client, tenantId, id, {
       fields,
       totals,
       status: body.status,
       finalize: body.status !== undefined && body.status !== 'draft' && existing.finalized_at === null,
-      setApprovedBy: body.status === 'approved' && existing.status !== 'approved',
+      setApprovedBy: approving,
       approvedByUserId: actorUserId,
+      // Frozen in the same statement as finalized_at, before postBillAccrued.
+      snapshot: approving
+        ? purchaseSnapshotColumns(await resolvePurchaseVatTreatment(client, tenantId, existing))
+        : null,
     })
 
     // Transitioning a draft to approved accrues the expense + payable.
@@ -465,6 +550,11 @@ async function computePatchedTotals(client, id, tenantId) {
 }
 
 function mapPatchError(err) {
+  // Checked before the generic unique violation: both constraints live on
+  // purchases, and reporting a clashing supplier number as a receipt-number
+  // clash would send the user to edit the wrong field.
+  const supplierConflict = supplierInvoiceConflict(err)
+  if (supplierConflict) return supplierConflict
   if (isUniqueViolation(err)) return { error: RECEIPT_TAKEN_ERROR }
   const mapped = ledgerErrorResult(err)
   if (mapped) return mapped
@@ -595,7 +685,8 @@ function resolveSupplierContactId(query) {
 }
 
 export async function listPurchases(db, tenantId, query, { createdByUserId = null } = {}) {
-  const period = buildPeriodWhere(query, 'p.receipt_date')
+  const behavior = await loadAccountingBehavior(db, tenantId)
+  const period = buildPeriodWhere(query, 'p.receipt_date', 2, behavior?.fiscalYearStart)
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
   const supplier = resolveSupplierContactId(query)
   if (supplier.error) return { error: supplier.error }
@@ -654,9 +745,26 @@ export async function deletePurchase(db, tenantId, id) {
 
 export async function deletePurchaseAttachment(db, tenantId, purchaseId, attachmentId) {
   const objectKey = await deleteAttachmentReturningKey(db, attachmentId, purchaseId, tenantId)
-  if (!objectKey) return { error: { status: 404, body: { error: 'Not found' } } }
-  safeRemove(objectKey, 'Failed to delete purchase attachment object:')
-  return {}
+  if (objectKey) {
+    safeRemove(objectKey, 'Failed to delete purchase attachment object:')
+    return {}
+  }
+  // The delete is scoped to exclude the imported source document, so nothing
+  // matching means either no such attachment or that one. Only the second is
+  // worth explaining.
+  const kind = await fetchAttachmentKind(db, attachmentId, purchaseId, tenantId)
+  if (kind === 'source_e_invoice') {
+    return {
+      error: {
+        status: 409,
+        body: {
+          error: 'The imported invoice file is the accounting record and cannot be deleted',
+          code: 'source_document_immutable',
+        },
+      },
+    }
+  }
+  return { error: { status: 404, body: { error: 'Not found' } } }
 }
 
 async function resolvePaymentMethod(pool, tenantId, body) {

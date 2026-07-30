@@ -24,6 +24,7 @@ import { createReclassification } from '../services/journalService.js'
 import { getFinancialReport, getReportEntryLines } from '../services/financialReportService.js'
 import { renderFinancialReportXlsx } from '../utils/renderFinancialReportXlsx.js'
 import { renderFinancialReportPdf } from '../utils/renderFinancialReportPdf.js'
+import { loadAccountingBehavior } from '../services/accountingProfileService.js'
 
 const router = Router()
 
@@ -40,8 +41,10 @@ function periodLabelFor(query) {
 }
 
 // ---------- list ----------
-router.get('/', async (req, res) => {
-  const period = buildPeriodWhere(req.query, 'lt.entry_date')
+router.get('/', async (req, res, next) => {
+  const behavior = await loadAccountingBehavior(pool, req.tenantId).catch(next)
+  if (!behavior) return
+  const period = buildPeriodWhere(req.query, 'lt.entry_date', 2, behavior.fiscalYearStart)
   if (period.error) return res.status(400).json({ error: period.error })
   res.json(await getLedgerList(pool, req.tenantId, period))
 })
@@ -59,29 +62,37 @@ router.get('/search', async (req, res) => {
 })
 
 // ---------- entry-line search by account (must precede /:id) ----------
-router.get('/entries', async (req, res) => {
-  const period = buildPeriodWhere(req.query, 'lt.entry_date', 3) // $1 tenant, $2 codes, period from $3
+router.get('/entries', async (req, res, next) => {
+  const behavior = await loadAccountingBehavior(pool, req.tenantId).catch(next)
+  if (!behavior) return
+  const period = buildPeriodWhere(req.query, 'lt.entry_date', 3, behavior.fiscalYearStart)
   if (period.error) return res.status(400).json({ error: period.error })
   const codes = parseAccountCodes(req.query.accounts)
   res.json(await getLedgerEntriesByAccount(pool, req.tenantId, codes, period))
 })
 
 // ---------- financial dashboard overview (must precede /:id) ----------
-router.get('/overview', async (req, res) => {
-  const period = resolvePeriodRange(req.query)
+router.get('/overview', async (req, res, next) => {
+  const behavior = await loadAccountingBehavior(pool, req.tenantId).catch(next)
+  if (!behavior) return
+  const period = resolvePeriodRange(req.query, behavior.fiscalYearStart)
   if (period.error) return res.status(400).json({ error: period.error })
   res.json(await getFinancialOverview(pool, req.tenantId, period.range))
 })
 
 // ---------- financial report (must precede /:id) ----------
-router.get('/report', async (req, res) => {
-  const period = resolvePeriodRange(req.query)
+router.get('/report', async (req, res, next) => {
+  const behavior = await loadAccountingBehavior(pool, req.tenantId).catch(next)
+  if (!behavior) return
+  const period = resolvePeriodRange(req.query, behavior.fiscalYearStart)
   if (period.error) return res.status(400).json({ error: period.error })
   res.json(await getFinancialReport(pool, req.tenantId, period.range))
 })
 
-router.get('/report/export', async (req, res) => {
-  const period = resolvePeriodRange(req.query)
+router.get('/report/export', async (req, res, next) => {
+  const behavior = await loadAccountingBehavior(pool, req.tenantId).catch(next)
+  if (!behavior) return
+  const period = resolvePeriodRange(req.query, behavior.fiscalYearStart)
   if (period.error) return res.status(400).json({ error: period.error })
   const format = req.query.format
   if (format !== 'xlsx' && format !== 'pdf') {

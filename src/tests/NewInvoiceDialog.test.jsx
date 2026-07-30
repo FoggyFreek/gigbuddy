@@ -78,7 +78,14 @@ describe('NewInvoiceDialog', () => {
       ...DRAFT_PAYLOAD,
       billing_targets: [
         { type: 'festival', name: 'Festival Org', address_city: 'Utrecht', email: 'festival@example.test' },
-        { type: 'venue', name: 'Venue Org', address_city: 'Amsterdam', email: 'venue@example.test' },
+        {
+          type: 'venue',
+          name: 'Venue Org',
+          address_city: 'Amsterdam',
+          email: 'venue@example.test',
+          kvk_number: '50048295',
+          tax_id: 'NL001794860B34',
+        },
       ],
     })
 
@@ -97,6 +104,8 @@ describe('NewInvoiceDialog', () => {
     expect(createInvoice).toHaveBeenCalledWith(expect.objectContaining({
       customer_name: 'Venue Org',
       customer_email: 'venue@example.test',
+      customer_kvk: '50048295',
+      customer_tax_id: 'NL001794860B34',
     }))
     expect(onCreated).toHaveBeenCalledWith(123)
   })

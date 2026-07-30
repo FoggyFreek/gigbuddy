@@ -2,6 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
+import { auditLog } from '../utils/auditLog.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireEntitlement } from '../middleware/entitlements.js'
 import { FEATURES } from '../auth/entitlements.js'
@@ -18,6 +19,7 @@ import {
   patchInvoice,
   deleteInvoice,
   retryRenderPdf,
+  correctInvoiceVatSnapshot,
   uploadInvoiceLogo,
   removeInvoiceLogo,
   createInvoicePaymentLink,
@@ -115,6 +117,17 @@ router.post('/:id/render', requirePermission(PERMISSIONS.FINANCE_MANAGE), async 
   res.json({ pdf_path: result.pdf_path })
 })
 
+// Correct a VAT treatment snapshot that migration 141 INFERRED, and confirm it.
+// The service 409s anything already final — an inference may be corrected, an
+// issued or confirmed treatment may not.
+router.patch('/:id/vat-snapshot', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await correctInvoiceVatSnapshot(pool, req.tenantId, id, req.body || {})
+  if (result.error) return sendError(res, result.error)
+  auditLog(req, result.audit.action, result.audit.details)
+  res.json(result.invoice)
+})
+
 // Upload custom logo
 router.post('/:id/logo', requirePermission(PERMISSIONS.FINANCE_MANAGE), logoUpload.single('logo'), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
@@ -181,15 +194,18 @@ router.post('/:id/eml', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (re
   res.send(result.content)
 })
 
-// Generates and streams the UBL/Peppol XML. A read, so finance.view is enough —
-// the same gate the stored PDF is served under.
+// Generates and streams the UBL/Peppol XML. `?embedPdf=true` includes the
+// already-rendered PDF when `pdf_path` is present. A read, so finance.view is
+// enough — the same gate the stored PDF is served under.
 //
 // X-Peppol-Warnings is advisory, for anyone calling the endpoint directly; the
 // SPA computes the same answer locally from the invoice it already holds. The
 // download is never blocked by it.
 router.get('/:id/ubl', async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
-  const result = await buildInvoiceUbl(pool, req.tenantId, id)
+  const result = await buildInvoiceUbl(pool, req.tenantId, id, {
+    embedPdf: req.query.embedPdf === 'true',
+  })
   if (result.error) return sendError(res, result.error)
   if (result.warnings.length > 0) {
     res.setHeader('X-Peppol-Warnings', result.warnings.map((w) => w.code).join(','))

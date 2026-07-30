@@ -12,8 +12,14 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import DateEntryField from '../DateEntryField.tsx'
-import { periodLabel } from '../../utils/invoicePeriod.ts'
+import {
+  CALENDAR_FISCAL_YEAR_START,
+  fiscalYearForDate,
+  periodLabel,
+  type FiscalYearStart,
+} from '../../utils/invoicePeriod.ts'
 import type { Period } from '../../types/entities.ts'
+import useFiscalYearStart from '../../hooks/useFiscalYearStart.ts'
 
 const MODES = ['month', 'quarter', 'fiscal_year', 'all_time'] as const
 const MONTH_KEYS = [
@@ -58,7 +64,10 @@ function GridCell({ label, hasData, isSelected, onClick }: Readonly<GridCellProp
   )
 }
 
-function buildAvailability(availableDates: string[]) {
+function buildAvailability(
+  availableDates: string[],
+  fiscalYearStart: FiscalYearStart = CALENDAR_FISCAL_YEAR_START,
+) {
   const yearsWithData = new Set<number>()
   const monthsByYear = new Map<number, Set<number>>()
   const quartersByYear = new Map<number, Set<number>>()
@@ -71,7 +80,7 @@ function buildAvailability(availableDates: string[]) {
     const y = d.getFullYear()
     const m = d.getMonth()
     const q = Math.floor(m / 3) + 1
-    yearsWithData.add(y)
+    yearsWithData.add(fiscalYearForDate(String(value).slice(0, 10), fiscalYearStart))
     if (!monthsByYear.has(y)) monthsByYear.set(y, new Set())
     monthsByYear.get(y)!.add(m)
     if (!quartersByYear.has(y)) quartersByYear.set(y, new Set())
@@ -85,9 +94,17 @@ interface PeriodPickerProps {
   availableDates: string[]
   value: Period
   onChange: (value: Period) => void
+  fiscalYearStart?: FiscalYearStart
 }
 
-export default function PeriodPicker({ availableDates, value, onChange }: Readonly<PeriodPickerProps>) {
+export default function PeriodPicker({
+  availableDates,
+  value,
+  onChange,
+  fiscalYearStart,
+}: Readonly<PeriodPickerProps>) {
+  const activeFiscalYearStart = useFiscalYearStart()
+  const resolvedFiscalYearStart = fiscalYearStart ?? activeFiscalYearStart
   const { t } = useTranslation('common')
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [pickerMode, setPickerMode] = useState<string>(
@@ -101,8 +118,8 @@ export default function PeriodPicker({ availableDates, value, onChange }: Readon
   const [customTo, setCustomTo] = useState(value.mode === 'custom' ? (value.to ?? '') : '')
 
   const { yearsWithData, monthsByYear, quartersByYear } = useMemo(
-    () => buildAvailability(availableDates),
-    [availableDates],
+    () => buildAvailability(availableDates, resolvedFiscalYearStart),
+    [availableDates, resolvedFiscalYearStart],
   )
 
   function handleOpen(e: React.MouseEvent<HTMLElement>) {

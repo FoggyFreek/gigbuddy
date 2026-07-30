@@ -31,6 +31,7 @@ import { listLedger, listLedgerPeriods } from '../api/ledger.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
+import useFiscalYearStart from '../hooks/useFiscalYearStart.ts'
 import { ALL_LEDGER_GROUPS } from '../utils/ledgerEntryType.ts'
 import { loadLedgerFilters, saveLedgerFilters } from '../utils/ledgerFilterStorage.ts'
 import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
@@ -39,6 +40,7 @@ import type { LedgerEntryRow, Period } from '../types/entities.ts'
 type SortField = 'id' | 'entry_date'
 
 export default function LedgerEntriesPage() {
+  const fiscalYearStart = useFiscalYearStart()
   const { t } = useTranslation('ledger')
   const navigate = useNavigate()
   const { can } = usePermissions()
@@ -57,7 +59,7 @@ export default function LedgerEntriesPage() {
   const [sortDesc, setSortDesc] = useState<boolean>(typeof saved?.sortDesc === 'boolean' ? saved.sortDesc : true)
   const [page, setPage] = useState<number>(typeof saved?.page === 'number' ? saved.page : 0)
   const [rowsPerPage, setRowsPerPage] = useState<number>(typeof saved?.rowsPerPage === 'number' ? saved.rowsPerPage : 50)
-  const [period, setPeriod] = useState<Period>(() => (saved?.period && typeof saved.period === 'object' ? saved.period as Period : { mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [period, setPeriod] = useState<Period>(() => (saved?.period && typeof saved.period === 'object' ? saved.period as Period : defaultPeriodForDates([], fiscalYearStart)))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
 
@@ -74,15 +76,15 @@ export default function LedgerEntriesPage() {
         const dateStrings = dates.filter(Boolean)
         setAvailableDates(dateStrings)
         setPeriod((prev) => {
-          const currentYear = new Date().getFullYear()
+          const currentYear = defaultPeriodForDates([], fiscalYearStart).year
           if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
-          return defaultPeriodForDates(dateStrings)
+          return defaultPeriodForDates(dateStrings, fiscalYearStart)
         })
       })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setPeriodsLoaded(true) })
     return () => { cancelled = true }
-  }, [])
+  }, [fiscalYearStart])
 
   const load = useCallback(async () => {
     try {

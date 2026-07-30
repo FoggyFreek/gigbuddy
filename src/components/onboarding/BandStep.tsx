@@ -4,18 +4,34 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import { VAT_COUNTRY_CODES } from '../../utils/vatRates.ts'
 import { slugFromBandName } from '../../utils/slugify.ts'
 import { useImageCrop, JPEG_PNG_WEBP } from '../../hooks/useImageCrop.ts'
 import { compressLogo } from '../../utils/compressImage.ts'
 import ImageCropDialog from '../ImageCropDialog.tsx'
 
+// Localized country name from the 2-letter code, so the accounting-country
+// dropdown reads naturally without hand-maintained i18n keys.
+function countryLabel(code: string, locale: string): string {
+  try {
+    const name = new Intl.DisplayNames([locale], { type: 'region' }).of(code.toUpperCase())
+    return name ? `${name} (${code.toUpperCase()})` : code.toUpperCase()
+  } catch {
+    return code.toUpperCase()
+  }
+}
+
 interface BandStepProps {
   bandName: string
   onBandNameChange: (name: string) => void
-  /** Band already created in an earlier attempt — name and slug are fixed. */
+  /** The band's accounting country. Required, and fixed once the band exists. */
+  countryCode: string
+  onCountryCodeChange: (code: string) => void
+  /** Band already created in an earlier attempt — name, slug and country are fixed. */
   resumedSlug: string | null
   logoFile: File | null
   /** Object URL for the selected logo, owned (created/revoked) by the parent. */
@@ -26,12 +42,14 @@ interface BandStepProps {
 export default function BandStep({
   bandName,
   onBandNameChange,
+  countryCode,
+  onCountryCodeChange,
   resumedSlug,
   logoFile,
   logoPreviewUrl,
   onLogoFileChange,
 }: Readonly<BandStepProps>) {
-  const { t } = useTranslation(['onboarding', 'profile'])
+  const { t, i18n } = useTranslation(['onboarding', 'profile'])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const slug = resumedSlug ?? slugFromBandName(bandName)
   const [logoError, setLogoError] = useState<string | null>(null)
@@ -59,6 +77,22 @@ export default function BandStep({
         autoFocus
         slotProps={{ htmlInput: { maxLength: 120 } }}
       />
+
+      {/* Asked once, at creation, and never defaulted: it decides the band's
+          bookkeeping jurisdiction and cannot be changed afterwards. */}
+      <TextField
+        select
+        label={t($ => $.band.countryLabel)}
+        value={countryCode}
+        onChange={(e) => onCountryCodeChange(e.target.value)}
+        disabled={resumedSlug !== null}
+        fullWidth
+        helperText={t($ => $.band.countryHelper)}
+      >
+        {VAT_COUNTRY_CODES.map((code) => (
+          <MenuItem key={code} value={code}>{countryLabel(code, i18n.language)}</MenuItem>
+        ))}
+      </TextField>
 
       {bandName.trim() !== '' && (
         <Stack spacing={0.5}>

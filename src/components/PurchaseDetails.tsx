@@ -384,7 +384,12 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
       <Box sx={{ mb: 2 }}>
         {embedded && cardTitle}
         {s.form && (
-          <PurchaseSupplierFields form={s.form} patchForm={s.patchForm} readOnly={s.readOnly} />
+          <PurchaseSupplierFields
+            form={s.form}
+            patchForm={s.patchForm}
+            supplierCreateDefaults={s.purchase?.supplier_import_data}
+            readOnly={s.readOnly}
+          />
         )}
         <Divider sx={{ my: 2 }} />
         {s.form && (

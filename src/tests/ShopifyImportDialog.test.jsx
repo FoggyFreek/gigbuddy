@@ -109,6 +109,13 @@ describe('ShopifyImportDialog', () => {
     expect(within(listbox).queryByText(/Primary Bank Account/)).toBeNull()
     await user.click(within(listbox).getByText(/43000 — Other revenue/))
 
+    await user.click(screen.getByRole('combobox', { name: 'VAT' }))
+    expect(screen.getByRole('option', { name: '21%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '9%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '0%' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '19%' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('option', { name: '21%' }))
+
     await user.click(screen.getByRole('button', { name: /import 1 line/i }))
     await waitFor(() => expect(api.importShopifyOrders).toHaveBeenCalledWith({
       orders: [{

@@ -8,4 +8,6 @@ export const createAccount = (body: Partial<Account>) => api<Account>('/', { met
 export const updateAccount = (id: Account['id'], body: Partial<Account>) => api<Account>(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteAccount = (id: Account['id']) => api<void>(`/${id}`, { method: 'DELETE' })
 export const getAccountingSettings = () => api<AccountingSettings>('/settings')
-export const updateAccountingSettings = (body: Partial<AccountingSettings>) => api<AccountingSettings>('/settings', { method: 'PATCH', body: JSON.stringify(body) })
+export const updateAccountingSettings = (
+  body: Partial<Omit<AccountingSettings, 'tenant_id' | 'currency'>>,
+) => api<AccountingSettings>('/settings', { method: 'PATCH', body: JSON.stringify(body) })

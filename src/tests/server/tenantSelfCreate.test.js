@@ -48,8 +48,8 @@ const asSuper = (req) =>
     .set('x-test-user-id', String(seed.superUser.id))
     .set('x-test-tenant-id', String(seed.tenantA.id))
 
-function createBody(slug = 'my-band') {
-  return { slug, band_name: 'My Band' }
+function createBody(slug = 'my-band', overrides = {}) {
+  return { slug, band_name: 'My Band', country_code: 'nl', ...overrides }
 }
 
 describe('POST /api/tenants (self-service creation)', () => {
@@ -78,12 +78,62 @@ describe('POST /api/tenants (self-service creation)', () => {
   })
 
   it('validates slug and band_name', async () => {
-    await asUserA(request(app).post('/api/tenants').send({ slug: 'Bad Slug!', band_name: 'X' })).expect(400)
-    await asUserA(request(app).post('/api/tenants').send({ slug: 'ok-slug' })).expect(400)
+    await asUserA(request(app).post('/api/tenants').send({ slug: 'Bad Slug!', band_name: 'X', country_code: 'nl' })).expect(400)
+    await asUserA(request(app).post('/api/tenants').send({ slug: 'ok-slug', country_code: 'nl' })).expect(400)
   })
 
   it('409s on a duplicate slug', async () => {
     await asUserA(request(app).post('/api/tenants').send(createBody('alpha'))).expect(409)
+  })
+
+  // The accounting country decides the bookkeeping jurisdiction and is immutable
+  // afterwards, so it must be supplied rather than silently defaulting to nl.
+  it('requires an accounting country and creates nothing without one', async () => {
+    const { rows: [before] } = await pool.query('SELECT COUNT(*)::int AS count FROM tenants')
+
+    let res = await asUserA(request(app).post('/api/tenants')
+      .send({ slug: 'no-country', band_name: 'No Country' })).expect(400)
+    expect(res.body.error).toBe('country_code_required')
+
+    res = await asUserA(request(app).post('/api/tenants')
+      .send({ slug: 'bad-country', band_name: 'Bad Country', country_code: 'zz' })).expect(400)
+    expect(res.body.error).toBe('invalid_country_code')
+
+    const { rows: [after] } = await pool.query('SELECT COUNT(*)::int AS count FROM tenants')
+    expect(after.count).toBe(before.count)
+  })
+
+  it('creates the accounting profile in the same transaction as the tenant', async () => {
+    const res = await asUserA(request(app).post('/api/tenants')
+      .send(createBody('de-band', { country_code: 'de' }))).expect(201)
+
+    const { rows: [profile] } = await pool.query(
+      'SELECT * FROM tenant_accounting_profiles WHERE tenant_id = $1', [res.body.id],
+    )
+    expect(profile).toMatchObject({
+      country_code: 'de',
+      base_currency: 'EUR',
+      profile_source: 'tenant_creation',
+      profile_status: 'incomplete',
+    })
+    // tenants.vat_country stays populated as the compatibility projection.
+    expect(res.body.vat_country).toBe('de')
+  })
+
+  it('a generated slug keeps the requested country through every retry', async () => {
+    await asUserA(request(app).post('/api/tenants')
+      .send({ band_name: 'Retry Band', country_code: 'fr' })).expect(201)
+    // Different user: bronze caps userA at one band.
+    const res = await asUserB(request(app).post('/api/tenants')
+      .send({ band_name: 'Retry Band', country_code: 'gb' })).expect(201)
+
+    expect(res.body.slug).toBe('retry-band-2')
+    expect(res.body.vat_country).toBe('gb')
+    const { rows: [profile] } = await pool.query(
+      'SELECT country_code, base_currency FROM tenant_accounting_profiles WHERE tenant_id = $1',
+      [res.body.id],
+    )
+    expect(profile).toEqual({ country_code: 'gb', base_currency: 'GBP' })
   })
 
   it('enforces the band cap (no subscription → fallback bronze: 1 band)', async () => {
@@ -169,7 +219,7 @@ describe('tenant onboarding platform setting', () => {
     ).expect(200)
 
     const created = await asSuper(
-      request(app).post('/api/admin/tenants').send({ slug: 'admin-created', band_name: 'Admin Created' }),
+      request(app).post('/api/admin/tenants').send({ slug: 'admin-created', band_name: 'Admin Created', country_code: 'nl' }),
     ).expect(201)
     expect(created.body.slug).toBe('admin-created')
   })
@@ -178,25 +228,25 @@ describe('tenant onboarding platform setting', () => {
 describe('POST /api/tenants (server-generated slug)', () => {
   it('generates a slug from band_name when slug is omitted', async () => {
     const res = await asUserA(
-      request(app).post('/api/tenants').send({ band_name: 'Thé Bänd!!' }),
+      request(app).post('/api/tenants').send({ band_name: 'Thé Bänd!!', country_code: 'nl' }),
     ).expect(201)
     expect(res.body.slug).toBe('the-band')
     expect(res.body.band_name).toBe('Thé Bänd!!')
   })
 
   it('suffixes -2 when the generated slug is taken', async () => {
-    await asUserA(request(app).post('/api/tenants').send({ band_name: 'The Band' })).expect(201)
+    await asUserA(request(app).post('/api/tenants').send({ band_name: 'The Band', country_code: 'nl' })).expect(201)
     // Different user (bronze bands:1 caps userA at one band).
     const res = await asUserB(
-      request(app).post('/api/tenants').send({ band_name: 'The Band' }),
+      request(app).post('/api/tenants').send({ band_name: 'The Band', country_code: 'nl' }),
     ).expect(201)
     expect(res.body.slug).toBe('the-band-2')
   })
 
   it('two users creating the same name concurrently get distinct slugs', async () => {
     const [a, b] = await Promise.all([
-      asUserA(request(app).post('/api/tenants').send({ band_name: 'Race Band' })),
-      asUserB(request(app).post('/api/tenants').send({ band_name: 'Race Band' })),
+      asUserA(request(app).post('/api/tenants').send({ band_name: 'Race Band', country_code: 'nl' })),
+      asUserB(request(app).post('/api/tenants').send({ band_name: 'Race Band', country_code: 'nl' })),
     ])
     expect(a.status).toBe(201)
     expect(b.status).toBe(201)
@@ -205,35 +255,35 @@ describe('POST /api/tenants (server-generated slug)', () => {
 
   it('truncates a long band name so the suffixed slug stays valid', async () => {
     const longName = 'X'.repeat(80)
-    const first = await asUserA(request(app).post('/api/tenants').send({ band_name: longName })).expect(201)
+    const first = await asUserA(request(app).post('/api/tenants').send({ band_name: longName, country_code: 'nl' })).expect(201)
     expect(first.body.slug.length).toBeLessThanOrEqual(64)
-    const second = await asUserB(request(app).post('/api/tenants').send({ band_name: longName })).expect(201)
+    const second = await asUserB(request(app).post('/api/tenants').send({ band_name: longName, country_code: 'nl' })).expect(201)
     expect(second.body.slug.length).toBeLessThanOrEqual(64)
     expect(second.body.slug).toMatch(/-2$/)
   })
 
   it('an all-symbols band name falls back to "band"', async () => {
     const res = await asUserA(
-      request(app).post('/api/tenants').send({ band_name: '!!! ***' }),
+      request(app).post('/api/tenants').send({ band_name: '!!! ***', country_code: 'nl' }),
     ).expect(201)
     expect(res.body.slug).toBe('band')
   })
 
   it('a supplied slug is still validated and still conflicts', async () => {
-    await asUserA(request(app).post('/api/tenants').send({ slug: 'Bad Slug!', band_name: 'X' })).expect(400)
-    await asUserA(request(app).post('/api/tenants').send({ slug: 'alpha', band_name: 'X' })).expect(409)
+    await asUserA(request(app).post('/api/tenants').send({ slug: 'Bad Slug!', band_name: 'X', country_code: 'nl' })).expect(400)
+    await asUserA(request(app).post('/api/tenants').send({ slug: 'alpha', band_name: 'X', country_code: 'nl' })).expect(409)
   })
 
   it('onboarding: true records the onboarding tenant pointer; a plain create does not', async () => {
     const res = await asUserA(
-      request(app).post('/api/tenants').send({ band_name: 'Onboard Band', onboarding: true }),
+      request(app).post('/api/tenants').send({ band_name: 'Onboard Band', onboarding: true, country_code: 'nl' }),
     ).expect(201)
     const { rows: [rowA] } = await pool.query(
       'SELECT onboarding_tenant_id FROM users WHERE id = $1', [seed.userA.id],
     )
     expect(rowA.onboarding_tenant_id).toBe(res.body.id)
 
-    await asUserB(request(app).post('/api/tenants').send({ band_name: 'Plain Band' })).expect(201)
+    await asUserB(request(app).post('/api/tenants').send({ band_name: 'Plain Band', country_code: 'nl' })).expect(201)
     const { rows: [rowB] } = await pool.query(
       'SELECT onboarding_tenant_id FROM users WHERE id = $1', [seed.userB.id],
     )

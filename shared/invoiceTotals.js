@@ -3,6 +3,7 @@
 // All money values are integer cents. quantity is decimal (NUMERIC 10,2 in DB),
 // tax_percentage is decimal (NUMERIC 5,2). HALF_UP rounding at each
 // intermediate result via Math.round (positive values only).
+import { VAT_CATEGORY } from './peppol.js'
 
 export function computeLineTotals(line, taxInclusive) {
   const quantity = Number(line.quantity) || 0
@@ -96,9 +97,9 @@ export function computeInvoiceTotals({ lines, taxInclusive, discountCents, disco
 // EN 16931 VAT category code for a rate. Reverse charge outranks the KOR, the
 // same precedence the PDF's VAT notes use.
 function vatCategoryCode(percent, { appliesKor, reverseCharge }) {
-  if (reverseCharge) return 'AE'
-  if (appliesKor) return 'E'
-  return percent > 0 ? 'S' : 'Z'
+  if (reverseCharge) return VAT_CATEGORY.REVERSE_CHARGE
+  if (appliesKor) return VAT_CATEGORY.EXEMPT
+  return percent > 0 ? VAT_CATEGORY.STANDARD : VAT_CATEGORY.ZERO
 }
 
 // Per-VAT-category view of an invoice, for the UBL/Peppol export.

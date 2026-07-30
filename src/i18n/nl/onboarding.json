@@ -36,7 +36,9 @@
     "uploadLogo": "Logo uploaden",
     "removeLogo": "Verwijderen",
     "slugPreview": "De webadresnaam van je band: {{slug}}",
-    "slugCaveat": "Als deze naam bezet is, wordt er automatisch een nummer toegevoegd (bijv. {{slug}}-2)."
+    "slugCaveat": "Als deze naam bezet is, wordt er automatisch een nummer toegevoegd (bijv. {{slug}}-2).",
+    "countryLabel": "Vestigingsland",
+    "countryHelper": "Waar deze band zijn boekhouding voert. Dit bepaalt de btw-regels, het rekeningschema en de verslaggevingsregels, en kan later niet worden gewijzigd."
   },
   "summary": {
     "title": "Bijna klaar",

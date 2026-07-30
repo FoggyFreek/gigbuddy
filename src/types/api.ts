@@ -9,6 +9,12 @@ export interface ApiError extends Error {
   body?: unknown
   /** Server-provided message, mirrored onto the Error via Object.assign. */
   error?: string
+  /**
+   * Machine-readable failure code from the error body (e.g.
+   * 'supplier_invoice_number_taken'). Every field of the body is mirrored onto
+   * the Error by _client.ts, so this is always readable when the server sent one.
+   */
+  code?: string
 }
 
 /** Narrowing helper for catch blocks: `if (isApiError(e) && e.status === 409)`. */

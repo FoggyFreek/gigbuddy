@@ -18,6 +18,8 @@ export interface VenueForm {
   given_name?: string
   family_name?: string
   organization_name?: string
+  kvk_number?: string
+  tax_id?: string
   street_and_number?: string
   street_additional?: string
   postal_code?: string
@@ -108,6 +110,24 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
           value={form.organization_name}
           onChange={(e) => onChange('organization_name', e.target.value)}
           slotProps={{ htmlInput: { readOnly: disabled } }}
+        />
+      </Grid>
+      <Grid size={6}>
+        <TextField
+          label={t($ => $.fields.kvkNumber)}
+          fullWidth
+          value={form.kvk_number}
+          onChange={(e) => onChange('kvk_number', e.target.value)}
+          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.kvk_number as string} /> } }}
+        />
+      </Grid>
+      <Grid size={6}>
+        <TextField
+          label={t($ => $.fields.taxId)}
+          fullWidth
+          value={form.tax_id}
+          onChange={(e) => onChange('tax_id', e.target.value)}
+          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.tax_id as string} /> } }}
         />
       </Grid>
 

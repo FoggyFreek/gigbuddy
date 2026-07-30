@@ -34,9 +34,14 @@
 import { computeVatBreakdown } from './computeInvoiceTotals.js'
 import { resolveInvoiceLng, getInvoiceT } from './invoiceI18n.js'
 import { normalizeIban } from './normalizeIban.js'
-import { korApplies, resolveVatCountry, vatIdPrefixCountry } from '../../shared/vatRates.js'
+import { resolveVatCountry, vatIdPrefixCountry } from '../../shared/vatRates.js'
 import {
+  DISCOUNT_REASON_CODE,
   EAS_NL_KVK,
+  INVOICE_TYPE_COMMERCIAL,
+  PAYMENT_MEANS_CREDIT_TRANSFER,
+  UNIT_ONE,
+  VAT_CATEGORY,
   deriveEndpointId,
   money,
   numeric,
@@ -48,11 +53,10 @@ import {
 
 const CUSTOMIZATION_ID = 'urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0'
 const PROFILE_ID = 'urn:fdc:peppol.eu:2017:poacc:billing:01:1.0'
-const COMMERCIAL_INVOICE = '380'
-const CREDIT_TRANSFER = '30'
-const DISCOUNT_REASON_CODE = '95' // UNCL5189 "Discount"
-const UNIT_ONE = 'C62' // UN/ECE Rec 20 — the unit for a service with no measure
-const CURRENCY = 'EUR'
+// The document currency, carried on every monetary element (BT-5). Read off the
+// invoice rather than fixed here: an issued invoice states the currency it was
+// issued in. Every existing row is EUR, which is what the renderer always emitted.
+const DEFAULT_CURRENCY = 'EUR'
 
 // ---------------------------------------------------------------------------
 // Serialization
@@ -93,7 +97,7 @@ function serialize(node, indent = '  ') {
   return `${indent}<${node.name}${attrs}>${escapeXml(node.text)}</${node.name}>`
 }
 
-const amount = (name, cents) => leaf(name, money(cents), { currencyID: CURRENCY })
+const amount = (name, cents, currency) => leaf(name, money(cents), { currencyID: currency })
 
 // ---------------------------------------------------------------------------
 // Document fragments
@@ -118,13 +122,13 @@ function taxCategory(category, reasons = []) {
 // has no unambiguous VATEX equivalent and picking the wrong one would trip
 // PEPPOL-EN16931-P0104..P0111, so it carries free text alone (BR-E-10 allows it).
 function exemptionReasons(category, t) {
-  if (category.code === 'AE') {
+  if (category.code === VAT_CATEGORY.REVERSE_CHARGE) {
     return [
       leaf('cbc:TaxExemptionReasonCode', 'VATEX-EU-AE'),
       leaf('cbc:TaxExemptionReason', t('reverseChargeNote')),
     ]
   }
-  if (category.code === 'E') return [leaf('cbc:TaxExemptionReason', t('korNote'))]
+  if (category.code === VAT_CATEGORY.EXEMPT) return [leaf('cbc:TaxExemptionReason', t('korNote'))]
   return []
 }
 
@@ -231,13 +235,35 @@ function paymentMeans(invoice, tenant) {
   const iban = tenant.iban ? normalizeIban(tenant.iban) : null
   if (!iban) return null
   return el('cac:PaymentMeans', null, [
-    leaf('cbc:PaymentMeansCode', CREDIT_TRANSFER),
+    leaf('cbc:PaymentMeansCode', PAYMENT_MEANS_CREDIT_TRANSFER),
     leaf('cbc:PaymentID', invoice.invoice_number),
     el('cac:PayeeFinancialAccount', null, [
       leaf('cbc:ID', iban),
       leaf('cbc:Name', tenant.formal_name || tenant.band_name),
       // No FinancialInstitutionBranch — there is no BIC column. BT-86 is
       // optional and an IBAN alone is sufficient within SEPA.
+    ]),
+  ])
+}
+
+function documentNote(invoiceMemo, embeddedPdf, t) {
+  const parts = [
+    invoiceMemo,
+    embeddedPdf === null ? t('ublPdfRenderFailedNote') : null,
+  ].filter((part) => String(part ?? '').trim())
+  return leaf('cbc:Note', parts.join('\n'))
+}
+
+function additionalDocumentReference(embeddedPdf, t) {
+  if (!embeddedPdf) return null
+  return el('cac:AdditionalDocumentReference', null, [
+    leaf('cbc:ID', embeddedPdf.filename),
+    leaf('cbc:DocumentDescription', t('ublPdfAttachmentDescription')),
+    el('cac:Attachment', null, [
+      leaf('cbc:EmbeddedDocumentBinaryObject', embeddedPdf.base64, {
+        mimeCode: 'application/pdf',
+        filename: embeddedPdf.filename,
+      }),
     ]),
   ])
 }
@@ -250,14 +276,14 @@ function paymentMeans(invoice, tenant) {
 // percentage discount: R041/R042 make them an all-or-nothing pair and R040 then
 // demands Amount = BaseAmount x pct/100, which the proportional per-category
 // allocation does not satisfy. The plain Amount is complete on its own.
-function allowances(categories, t) {
+function allowances(categories, t, currency) {
   return categories
     .filter((category) => category.allowanceCents > 0)
     .map((category) => el('cac:AllowanceCharge', null, [
       leaf('cbc:ChargeIndicator', 'false'),
       leaf('cbc:AllowanceChargeReasonCode', DISCOUNT_REASON_CODE),
       leaf('cbc:AllowanceChargeReason', t('discount')),
-      amount('cbc:Amount', category.allowanceCents),
+      amount('cbc:Amount', category.allowanceCents, currency),
       taxCategory(category),
     ]))
 }
@@ -265,29 +291,29 @@ function allowances(categories, t) {
 // Exactly one TaxTotal carrying subtotals (PEPPOL-EN16931-R053), with a subtotal
 // for EVERY category — including zero-tax ones, which computeInvoiceTotals'
 // vatByRate drops but BR-Z-08/BR-E-08/BR-AE-08 require.
-function taxTotal(totals, categories, t) {
+function taxTotal(totals, categories, t, currency) {
   return el('cac:TaxTotal', null, [
-    amount('cbc:TaxAmount', totals.taxCents),
+    amount('cbc:TaxAmount', totals.taxCents, currency),
     ...categories.map((category) => el('cac:TaxSubtotal', null, [
-      amount('cbc:TaxableAmount', category.taxableCents),
-      amount('cbc:TaxAmount', category.taxCents),
+      amount('cbc:TaxableAmount', category.taxableCents, currency),
+      amount('cbc:TaxAmount', category.taxCents, currency),
       taxCategory(category, exemptionReasons(category, t)),
     ])),
   ])
 }
 
-function legalMonetaryTotal(totals) {
+function legalMonetaryTotal(totals, currency) {
   const taxExclusive = totals.subtotalCents - totals.discountCents
   return el('cac:LegalMonetaryTotal', null, [
-    amount('cbc:LineExtensionAmount', totals.subtotalCents),
-    amount('cbc:TaxExclusiveAmount', taxExclusive),
-    amount('cbc:TaxInclusiveAmount', taxExclusive + totals.taxCents),
-    totals.discountCents > 0 ? amount('cbc:AllowanceTotalAmount', totals.discountCents) : null,
-    amount('cbc:PayableAmount', totals.totalCents),
+    amount('cbc:LineExtensionAmount', totals.subtotalCents, currency),
+    amount('cbc:TaxExclusiveAmount', taxExclusive, currency),
+    amount('cbc:TaxInclusiveAmount', taxExclusive + totals.taxCents, currency),
+    totals.discountCents > 0 ? amount('cbc:AllowanceTotalAmount', totals.discountCents, currency) : null,
+    amount('cbc:PayableAmount', totals.totalCents, currency),
   ])
 }
 
-function invoiceLines(lines, totals, categoryByRate, zeroVat) {
+function invoiceLines(lines, totals, categoryByRate, zeroVat, currency) {
   return lines.map((line, index) => {
     const netCents = totals.perLine[index].netCents
     const rate = zeroVat ? 0 : Number(line.tax_percentage) || 0
@@ -297,7 +323,7 @@ function invoiceLines(lines, totals, categoryByRate, zeroVat) {
       // while BR-21 requires a unique line identifier.
       leaf('cbc:ID', String(index + 1)),
       leaf('cbc:InvoicedQuantity', quantity(line.quantity), { unitCode: UNIT_ONE }),
-      amount('cbc:LineExtensionAmount', netCents),
+      amount('cbc:LineExtensionAmount', netCents, currency),
       el('cac:Item', null, [
         leaf('cbc:Name', line.description),
         // No exemption reason at line level — that belongs to the breakdown.
@@ -308,7 +334,7 @@ function invoiceLines(lines, totals, categoryByRate, zeroVat) {
         ]),
       ]),
       el('cac:Price', null, [
-        leaf('cbc:PriceAmount', unitPriceAmount(netCents, line.quantity), { currencyID: CURRENCY }),
+        leaf('cbc:PriceAmount', unitPriceAmount(netCents, line.quantity), { currencyID: currency }),
         // BaseQuantity omitted: it defaults to 1, and leaving it out keeps
         // R121/R130 (unit-code agreement) inert.
       ]),
@@ -318,10 +344,25 @@ function invoiceLines(lines, totals, categoryByRate, zeroVat) {
 
 // ---------------------------------------------------------------------------
 
-export function renderInvoiceUbl({ invoice, lines, tenant }) {
-  const appliesKor = Boolean(tenant.applies_kor) && korApplies(tenant.vat_country)
+// `embeddedPdf` is deliberately tri-state: undefined means a plain UBL was
+// requested, null means the embedded variant was requested but PDF rendering
+// failed, and an object carries the stored PDF.
+// `treatment` is the VAT treatment resolved by vatTreatmentService: read off the
+// invoice's own snapshot once it has been issued, resolved live for a draft. This
+// module never reads the tenant's CURRENT scheme, so downloading the XML of a
+// two-year-old invoice reproduces the document that was issued.
+//
+// Seller IDENTITY (name, address, VAT id, KvK) is still read live from the
+// tenant — not snapshotted yet, so this is regime-immutable, not
+// identity-immutable.
+export function renderInvoiceUbl({ invoice, lines, tenant, embeddedPdf, treatment = null }) {
+  const schemeExempt = Boolean(treatment?.schemeExempt)
   const reverseCharge = Boolean(invoice.reverse_charge)
-  const zeroVat = appliesKor || reverseCharge
+  const zeroVat = schemeExempt || reverseCharge
+  const currency = invoice.currency || DEFAULT_CURRENCY
+  // Falls back to the live country only when no treatment could be resolved at
+  // all (a tenant without an accounting profile), so the document still renders.
+  const sellerVatCountry = treatment?.accounting_country ?? tenant.vat_country
 
   const { totals, categories } = computeVatBreakdown({
     lines,
@@ -329,21 +370,21 @@ export function renderInvoiceUbl({ invoice, lines, tenant }) {
     discountCents: invoice.discount_cents,
     discountType: invoice.discount_type,
     discountPct: invoice.discount_pct,
-    appliesKor,
+    appliesKor: schemeExempt,
     reverseCharge,
   })
   const categoryByRate = new Map(categories.map((category) => [category.percent, category]))
 
-  const t = getInvoiceT(resolveInvoiceLng(tenant.vat_country))
+  const t = getInvoiceT(resolveInvoiceLng(sellerVatCountry))
 
   // Postal country selects the national rule set; the tax jurisdiction supplies
   // the identifiers. They are separate facts and may legitimately differ.
   const ctx = {
     sellerCountry: resolvePostalCountry(tenant.address_country),
     buyerCountry: resolvePostalCountry(invoice.customer_address_country),
-    sellerVatCountry: tenant.vat_country,
+    sellerVatCountry,
     sellerEndpoint: deriveEndpointId({
-      country: tenant.vat_country,
+      country: sellerVatCountry,
       vatId: tenant.tax_id,
       kvk: tenant.kvk_number,
     }),
@@ -371,11 +412,12 @@ export function renderInvoiceUbl({ invoice, lines, tenant }) {
     leaf('cbc:ID', invoice.invoice_number),
     leaf('cbc:IssueDate', toUblDate(invoice.issue_date)),
     leaf('cbc:DueDate', toUblDate(invoice.due_date)),
-    leaf('cbc:InvoiceTypeCode', COMMERCIAL_INVOICE),
+    leaf('cbc:InvoiceTypeCode', INVOICE_TYPE_COMMERCIAL),
     // At most one document note (PEPPOL-EN16931-R002).
-    leaf('cbc:Note', invoice.memo),
-    leaf('cbc:DocumentCurrencyCode', CURRENCY),
+    documentNote(invoice.memo, embeddedPdf, t),
+    leaf('cbc:DocumentCurrencyCode', currency),
     leaf('cbc:BuyerReference', buyerReference),
+    additionalDocumentReference(embeddedPdf, t),
     supplierParty(tenant, ctx),
     customerParty(invoice, ctx),
     // Date of supply (BT-72). Not TaxPointDate: BR-CO-3 makes the two mutually
@@ -387,10 +429,10 @@ export function renderInvoiceUbl({ invoice, lines, tenant }) {
         leaf('cbc:Note', t('paymentTerm', { count: invoice.payment_term_days })),
       ])
       : null,
-    ...allowances(categories, t),
-    taxTotal(totals, categories, t),
-    legalMonetaryTotal(totals),
-    ...invoiceLines(lines, totals, categoryByRate, zeroVat),
+    ...allowances(categories, t, currency),
+    taxTotal(totals, categories, t, currency),
+    legalMonetaryTotal(totals, currency),
+    ...invoiceLines(lines, totals, categoryByRate, zeroVat, currency),
   ])
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n${serialize(root, '')}\n`

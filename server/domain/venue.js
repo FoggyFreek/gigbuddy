@@ -1,5 +1,9 @@
 // Pure venue-domain constants and normalization shared across layers.
 import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../utils/urls.js'
+import {
+  normalizeOptionalRegistrationNumber,
+  normalizeOptionalVatId,
+} from '../utils/businessIdentifiers.js'
 
 export const VALID_VENUE_CATEGORIES = new Set(['venue', 'festival'])
 
@@ -10,6 +14,8 @@ export const VENUE_EDITABLE_FIELDS = [
   'given_name',
   'family_name',
   'organization_name',
+  'kvk_number',
+  'tax_id',
   'street_and_number',
   'street_additional',
   'postal_code',
@@ -39,6 +45,8 @@ function normalizeInsertField(key, body) {
   if (key === 'category') return VALID_VENUE_CATEGORIES.has(body.category) ? body.category : 'venue'
   if (key === 'name') return String(body.name).trim()
   if (key === 'website') return normalizeInsertWebsite(body)
+  if (key === 'kvk_number') return normalizeOptionalRegistrationNumber(body[key])
+  if (key === 'tax_id') return normalizeOptionalVatId(body[key])
   if (VENUE_COORDINATE_FIELDS.includes(key)) return body[key] ?? null
   return body[key] || null
 }

@@ -23,6 +23,7 @@ import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { getLedgerOverview, listLedgerPeriods } from '../api/ledger.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
+import useFiscalYearStart from '../hooks/useFiscalYearStart.ts'
 import type { Period } from '../types/entities.ts'
 
 interface Totals {
@@ -121,9 +122,10 @@ const compactEur = new Intl.NumberFormat('en-US', {
 const formatCompactChartValue = (value: number | null | undefined) => compactEur.format(value ?? 0)
 
 export default function FinancialDashboardPage() {
+  const fiscalYearStart = useFiscalYearStart()
   const { t } = useTranslation('financialDashboard')
   const isCompact = useCompactLayout()
-  const [period, setPeriod] = useState<Period>(() => ({ mode: 'fiscal_year', year: new Date().getFullYear() }))
+  const [period, setPeriod] = useState<Period>(() => defaultPeriodForDates([], fiscalYearStart))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
   const [data, setData] = useState<OverviewData | null>(null)
@@ -138,15 +140,15 @@ export default function FinancialDashboardPage() {
         const dateStrings = dates.filter(Boolean)
         setAvailableDates(dateStrings)
         setPeriod((prev) => {
-          const currentYear = new Date().getFullYear()
+          const currentYear = defaultPeriodForDates([], fiscalYearStart).year
           if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
-          return defaultPeriodForDates(dateStrings)
+          return defaultPeriodForDates(dateStrings, fiscalYearStart)
         })
       })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setPeriodsLoaded(true) })
     return () => { cancelled = true }
-  }, [])
+  }, [fiscalYearStart])
 
   const load = useCallback(async () => {
     try {

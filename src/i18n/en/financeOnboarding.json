@@ -2,8 +2,9 @@
   "title": "Finance setup",
   "steps": {
     "welcome": "Welcome",
+    "accountingProfile": "Accounting profile",
     "openingBalance": "Opening balance",
-    "profile": "Financial profile",
+    "financialProfile": "Financial profile",
     "integrations": "Integrations",
     "accounts": "Default accounts",
     "done": "Done"
@@ -25,10 +26,6 @@
     "date": "As of date",
     "negativeHint": "Use a negative amount if the account was overdrawn.",
     "alreadySet": "An opening balance is already set for this band."
-  },
-  "profile": {
-    "heading": "Financial profile",
-    "body": "Used on your invoices and tax filings. You can edit this later on your profile page."
   },
   "integrations": {
     "heading": "Connect Mollie and Shopify",

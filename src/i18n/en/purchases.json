@@ -18,6 +18,7 @@
   "empty": "No purchases found",
   "labels": {
     "supplier": "Supplier",
+    "supplierInvoiceNumber": "Supplier invoice number",
     "receiptDate": "Receipt date",
     "dueDate": "Due date",
     "currency": "Currency",
@@ -44,6 +45,36 @@
     "description": "Pick a supplier and the receipt date to start. You can fill in the lines next.",
     "continue": "Continue"
   },
+  "importDialog": {
+    "title": "Import e-invoice",
+    "description": "Upload a supplier's e-invoice. It becomes a draft purchase you can check and approve.",
+    "chooseFile": "Choose file",
+    "fileHint": "UBL or CII XML, or a Factur-X / ZUGFeRD PDF",
+    "created": "Draft purchase created",
+    "summary": "{{supplier}} — {{total}} across {{count}} line(s).",
+    "checkBeforeApproving": "Check before approving",
+    "adjustments": "What was inferred",
+    "openDraft": "Open draft",
+    "warnings": {
+      "vat_self_assessment_required": "This is a reverse-charge invoice ({{category}}): the supplier charged no VAT, but you owe it and deduct it in the same return. The lines were booked at 0% — a purchase cannot record both sides, so settle this with your bookkeeper before approving.",
+      "possible_duplicate": "A purchase with the same supplier, date and total already exists (#{{receipts}}). Check you are not entering this bill twice.",
+      "totals_mismatch": "The lines do not add up to the {{stated}} the invoice states — they are off by {{amount}}. Correct the lines before approving.",
+      "line_missing_description": "A line has no description. Fill it in before approving.",
+      "lines_synthesized_from_totals": "The invoice states totals but no line detail (a Factur-X MINIMUM or BASIC WL document). One line was created carrying the full amount — add a description and expense account before approving.",
+      "buyer_is_not_this_tenant": "The invoice is addressed to a different VAT or registration number than your band's. Check it is really yours before approving.",
+      "line_vat_rate_defaulted": "A line stated no VAT rate; {{to}}% was applied.",
+      "vat_rate_adjusted": "The {{from}}% rate is not a rate you can book; {{to}}% was applied instead.",
+      "document_discount_allocated": "The invoice discount was spread across the lines — a purchase has no separate discount field.",
+      "document_charge_allocated": "An invoice-level charge was spread across the lines — a purchase has no separate charge field.",
+      "prepaid_amount_ignored": "The invoice records {{amount}} already prepaid. The full amount was booked; register the payment separately.",
+      "totals_rounded": "Line amounts were adjusted by {{amount}} so the total matches the invoice.",
+      "supplier_not_matched": "No matching supplier contact was found. The name was kept as text — link a contact in the draft.",
+      "attachment_skipped": "The PDF embedded in the invoice could not be stored.",
+      "source_document_not_stored": "The original invoice file could not be stored. It is the accounting record — re-import this invoice before approving."
+    },
+    "alreadyImported": "This invoice has already been recorded as purchase #{{receipts}}.",
+    "notValidated": "Files are read, not certified: the import does not check EN 16931, XRechnung or national e-invoicing rules. Check the draft before approving."
+  },
   "detail": {
     "heading": "Purchase {{number}}",
     "editReceiptNumber": "edit receipt number",
@@ -54,7 +85,8 @@
   "supplierFields": {
     "addDueDate": "Due",
     "openReceiptDatePicker": "open receipt date picker",
-    "openDueDatePicker": "open due date picker"
+    "openDueDatePicker": "open due date picker",
+    "supplierInvoiceNumberHelp": "The number the supplier put on the bill. Used to stop the same bill being entered twice."
   },
   "supplierPicker": {
     "placeholder": "Search or type contact name…",
@@ -126,7 +158,8 @@
     "options": "attachment options",
     "pdfLoadError": "Could not load this PDF",
     "add": "Add attachment",
-    "download": "Download"
+    "download": "Download",
+    "noPreview": "No preview for this file type"
   },
   "validation": {
     "description": "Enter a description",

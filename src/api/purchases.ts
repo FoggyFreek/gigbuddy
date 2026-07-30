@@ -1,5 +1,5 @@
 import { request, requestForm } from './_client.ts'
-import type { Purchase, PurchaseAttachment, PurchasePaymentCandidate, Period, Id } from '../types/entities.ts'
+import type { Purchase, PurchaseAttachment, PurchaseImportResult, PurchasePaymentCandidate, Period, Id } from '../types/entities.ts'
 import { appendPeriodParams } from '../utils/invoicePeriod.ts'
 
 interface PaymentBody {
@@ -44,6 +44,13 @@ export const registerPurchasePayment = (id: Id, body: PaymentBody = {}) =>
 
 export const listPurchasePaymentCandidates = (id: Id) =>
   api<PurchasePaymentCandidate[]>(`/${id}/payment-candidates`)
+
+/** Creates a draft purchase from a supplier's UBL e-invoice. */
+export const importPurchaseDocument = (file: File) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return requestForm<PurchaseImportResult>('/api/purchases/import', fd)
+}
 
 export const uploadPurchaseAttachment = (id: Id, file: File) => {
   const fd = new FormData()

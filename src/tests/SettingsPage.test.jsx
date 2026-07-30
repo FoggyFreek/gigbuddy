@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -30,6 +31,18 @@ vi.mock('../api/profile.ts', () => ({
   setShopifyClientId: vi.fn(), clearShopifyClientId: vi.fn(),
   setShopifyDomain: vi.fn(), clearShopifyDomain: vi.fn(),
 }))
+vi.mock('../api/users.ts', async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, listMemberships: vi.fn().mockResolvedValue([]) }
+})
+vi.mock('../api/bandMembers.ts', async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, listMembers: vi.fn().mockResolvedValue([]) }
+})
+vi.mock('../api/invites.ts', async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, listInvites: vi.fn().mockResolvedValue([]) }
+})
 const lockedEntitlements = {
   planSlug: 'free', locked: false, financeReadOnly: false,
   flags: { finance: false, integrations: false, customization: false },
@@ -45,6 +58,7 @@ function wrap(route, { role = 'tenant_admin', entitlements = null } = {}) {
           <Routes>
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/:section" element={<SettingsPage />} />
+            <Route path="/finance-onboarding" element={<div>Wizard page</div>} />
           </Routes>
         </MemoryRouter>
       </ThemeProvider>
@@ -59,7 +73,7 @@ describe('SettingsPage — nav gating', () => {
     wrap('/settings')
     expect(await screen.findByText('Account settings')).toBeInTheDocument()
     expect(screen.getByText('Band settings')).toBeInTheDocument()
-    expect(screen.getByText('Members')).toBeInTheDocument()
+    expect(screen.getByText('Members and invites')).toBeInTheDocument()
     expect(screen.getByText('Integrations')).toBeInTheDocument()
     expect(screen.getByText('Chart of accounts')).toBeInTheDocument()
   })
@@ -68,9 +82,66 @@ describe('SettingsPage — nav gating', () => {
     wrap('/settings', { role: 'contributor' })
     expect(await screen.findByText('My preferences')).toBeInTheDocument()
     expect(screen.queryByText('Accent color')).not.toBeInTheDocument()
-    expect(screen.queryByText('Members')).not.toBeInTheDocument()
+    expect(screen.queryByText('Members and invites')).not.toBeInTheDocument()
     expect(screen.queryByText('Integrations')).not.toBeInTheDocument()
     expect(screen.queryByText('Chart of accounts')).not.toBeInTheDocument()
+  })
+
+  it('groups the finance items under their own subheader, after band settings', async () => {
+    wrap('/settings')
+    await screen.findByText('Finance and accounting settings')
+    const texts = [...document.querySelectorAll('.MuiListSubheader-root, .MuiListItemText-primary')]
+      .map((el) => el.textContent)
+    expect(texts.slice(texts.indexOf('Finance and accounting settings'))).toEqual([
+      'Finance and accounting settings',
+      'Financial profile',
+      'Accounting profile',
+      'Accounting Settings',
+      'Chart of accounts',
+    ])
+    expect(texts.indexOf('Band settings')).toBeLessThan(texts.indexOf('Finance and accounting settings'))
+  })
+
+  it('hides the finance subheader when the member cannot manage finance', async () => {
+    wrap('/settings', { role: 'contributor' })
+    expect(await screen.findByText('My preferences')).toBeInTheDocument()
+    expect(screen.queryByText('Finance and accounting settings')).not.toBeInTheDocument()
+  })
+
+  it('gives a financial_admin the whole finance group but no band settings', async () => {
+    wrap('/settings', { role: 'financial_admin' })
+    expect(await screen.findByText('Finance and accounting settings')).toBeInTheDocument()
+    for (const label of ['Financial profile', 'Accounting profile', 'Accounting Settings', 'Chart of accounts']) {
+      expect(screen.getByText(label)).toBeInTheDocument()
+    }
+    expect(screen.queryByText('Band settings')).not.toBeInTheDocument()
+    expect(screen.queryByText('Accent color')).not.toBeInTheDocument()
+  })
+})
+
+describe('SettingsPage — finance setup wizard', () => {
+  it('offers the wizard above the nav to a finance manager', async () => {
+    const user = userEvent.setup()
+    wrap('/settings', { role: 'financial_admin' })
+    expect(await screen.findByText('Finance setup wizard')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    expect(screen.getByText('Wizard page')).toBeInTheDocument()
+  })
+
+  it('hides the wizard from a member without finance.manage', async () => {
+    wrap('/settings', { role: 'contributor' })
+    expect(await screen.findByText('My preferences')).toBeInTheDocument()
+    expect(screen.queryByText('Finance setup wizard')).not.toBeInTheDocument()
+  })
+})
+
+describe('SettingsPage — members and invites', () => {
+  it('renders both the members and the invites subsection in one pane', async () => {
+    wrap('/settings/members')
+    expect(await screen.findByText('Members')).toBeInTheDocument()
+    expect(screen.getByText('Invites')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'New invite' })).toBeInTheDocument()
   })
 })
 

@@ -35,22 +35,6 @@ export interface ProfileForm {
   spotify_handle: string
   bandsintown_artist_name: string
   bandsintown_artist_id: string
-  formal_name: string
-  address_street: string
-  address_postal_code: string
-  address_city: string
-  address_country: string
-  kvk_number: string
-  registration_office: string
-  legal_form: string
-  directors: string
-  email: string
-  phone: string
-  iban: string
-  tax_id: string
-  tax_percentage: number
-  applies_kor: boolean
-  vat_country: string
 }
 
 export const EMPTY_FORM: ProfileForm = {
@@ -64,22 +48,6 @@ export const EMPTY_FORM: ProfileForm = {
   spotify_handle: '',
   bandsintown_artist_name: '',
   bandsintown_artist_id: '',
-  formal_name: '',
-  address_street: '',
-  address_postal_code: '',
-  address_city: '',
-  address_country: 'Netherlands',
-  kvk_number: '',
-  registration_office: '',
-  legal_form: '',
-  directors: '',
-  email: '',
-  phone: '',
-  iban: '',
-  tax_id: '',
-  tax_percentage: 9,
-  applies_kor: false,
-  vat_country: 'nl',
 }
 
 export function profileToForm(data: Record<string, unknown>): ProfileForm {
@@ -94,21 +62,5 @@ export function profileToForm(data: Record<string, unknown>): ProfileForm {
     spotify_handle: String(data.spotify_handle || ''),
     bandsintown_artist_name: String(data.bandsintown_artist_name || ''),
     bandsintown_artist_id: String(data.bandsintown_artist_id || ''),
-    formal_name: String(data.formal_name || ''),
-    address_street: String(data.address_street || ''),
-    address_postal_code: String(data.address_postal_code || ''),
-    address_city: String(data.address_city || ''),
-    address_country: String(data.address_country || 'Netherlands'),
-    kvk_number: String(data.kvk_number || ''),
-    registration_office: String(data.registration_office || ''),
-    legal_form: String(data.legal_form || ''),
-    directors: String(data.directors || ''),
-    email: String(data.email || ''),
-    phone: String(data.phone || ''),
-    iban: String(data.iban || ''),
-    tax_id: String(data.tax_id || ''),
-    tax_percentage: data.tax_percentage != null ? Number(data.tax_percentage) : 9,
-    applies_kor: !!data.applies_kor,
-    vat_country: String(data.vat_country || 'nl'),
   }
 }

@@ -8,7 +8,13 @@ import { randomUUID } from 'node:crypto'
 import { getObject, uploadObjectWithQuota, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from './storageService.js'
 import { computeInvoiceTotals } from '../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../utils/renderInvoicePdf.js'
-import { korApplies, normalizeVatNumber } from '../../shared/vatRates.js'
+import {
+  resolveInvoiceVatTreatment,
+  resolveLiveTreatment,
+  invoiceSnapshotColumns,
+  isIssuedInvoiceStatus,
+} from './vatTreatmentService.js'
+import { normalizeVatNumber } from '../../shared/vatRates.js'
 import {
   checkInvoiceReadyForIssue,
   checkReverseCharge,
@@ -16,6 +22,7 @@ import {
 } from '../../shared/invoiceReadiness.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../utils/imageProcess.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
 import {
   createMolliePaymentLink,
   getMollieClientForTenant,
@@ -51,6 +58,7 @@ import {
   deleteInvoiceRow,
   setCustomLogoPath,
   fetchPublicInvoiceLogoPath,
+  confirmInvoiceVatSnapshot,
 } from '../repositories/invoiceRepository.js'
 import { searchGigs as searchGigRows } from '../repositories/gigRepository.js'
 import { fetchTenant } from '../repositories/tenantRepository.js'
@@ -76,6 +84,7 @@ import {
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { notFound } from './serviceErrors.js'
 import { invoiceIssueError } from '../domain/invoiceIssueErrors.js'
+import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
 
 // Holds a session-level per-tenant accounting-settings advisory lock for the
 // duration of `fn`, which receives the lock-holding client. Session and
@@ -132,15 +141,18 @@ function viesAttestationColumns(desiredChecked, effectiveTaxId, consultation, ex
 
 // ---------- totals ----------
 
-export function computeAndApply(invoiceFields, lines, tenant) {
+// `treatment` comes from vatTreatmentService — the single owner of whether the
+// tenant's VAT scheme suppresses output VAT on this document. Reverse charge
+// stays a separate input: computeInvoiceTotals applies its own precedence, and
+// feeding it the combined answer would double-count.
+export function computeAndApply(invoiceFields, lines, treatment) {
   return computeInvoiceTotals({
     lines,
     taxInclusive: invoiceFields.tax_inclusive,
     discountCents: invoiceFields.discount_cents,
     discountType: invoiceFields.discount_type,
     discountPct: invoiceFields.discount_pct,
-    // KOR is a Dutch-only scheme; it never zeroes VAT for a non-NL tenant.
-    appliesKor: tenant.applies_kor && korApplies(tenant.vat_country),
+    appliesKor: Boolean(treatment?.schemeExempt),
     reverseCharge: invoiceFields.reverse_charge,
   })
 }
@@ -168,7 +180,12 @@ export async function renderAndStorePdf(pool, invoiceId, tenantId) {
   const lines = await fetchLines(pool, invoiceId, tenantId)
   const logoBuffer = await loadLogoBuffer(tenant, invoice.custom_logo_path, !!invoice.invert_logo)
 
-  const pdfBuffer = await renderInvoicePdf({ invoice, lines, tenant, logoBuffer })
+  // An ISSUED invoice renders from its snapshot, so re-rendering one (including
+  // via POST /:id/render, which has no finalization guard) reproduces the
+  // document that was sent rather than one derived from today's configuration.
+  const treatment = await resolveInvoiceVatTreatment(pool, tenantId, invoice)
+
+  const pdfBuffer = await renderInvoicePdf({ invoice, lines, tenant, logoBuffer, treatment })
   const previousKey = invoice.pdf_path
   const newKey = invoicePdfKey(tenantId, randomUUID())
 
@@ -231,9 +248,17 @@ function applyStatusFields(body, existing, builder) {
   }
 }
 
+// True when this PATCH is the one that ISSUES the invoice — the only moment a
+// VAT treatment snapshot may be taken. Deliberately narrower than
+// applyStatusFields' finalization: voiding a draft stamps finalized_at but never
+// issued a document, so it must leave no snapshot behind claiming otherwise.
+function issuesInvoice(body, existing) {
+  return isIssuedInvoiceStatus(body.status) && existing.finalized_at === null
+}
+
 const FINALIZED_ERROR = { status: 409, body: { error: 'Invoice is finalized', code: 'invoice_finalized' } }
 
-async function recomputeTotals(client, tenantId, invoiceId, body, tenant, requestedContentFields, builder) {
+async function recomputeTotals(client, tenantId, invoiceId, body, tenant, requestedContentFields, builder, treatment) {
   const current = await lockInvoiceTotalsState(client, tenantId, invoiceId)
   // Re-check finalization under row lock: a concurrent payment-link creation may
   // have finalized the invoice between the initial read and here. Block only
@@ -262,7 +287,7 @@ async function recomputeTotals(client, tenantId, invoiceId, body, tenant, reques
   const totals = computeAndApply(
     { tax_inclusive: taxInclusive, reverse_charge: reverseCharge, discount_type: discountType, discount_pct: discountPct, discount_cents: discountCents },
     currentLines,
-    tenant,
+    treatment,
   )
   builder.set('discount_cents', totals.discountCents)
   builder.set('subtotal_cents', totals.subtotalCents)
@@ -306,6 +331,15 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
     collectSimpleFields(body, builder)
     const contentChanged = hasContentChange(body)
 
+    // Resolved ONCE, inside the transaction, and used for both the totals and the
+    // snapshot. `tenant` was fetched outside it (applyInvoicePatch), so deriving
+    // the treatment twice could read different scheme state and store totals that
+    // disagree with the snapshot frozen alongside them.
+    const treatment = await resolveInvoiceVatTreatment(client, tenantId, {
+      ...existing,
+      reverse_charge: 'reverse_charge' in body ? Boolean(body.reverse_charge) : existing.reverse_charge,
+    })
+
     if ('lines' in body) {
       const lines = normalizeLines(body.lines)
       if (!lines.length) {
@@ -315,7 +349,7 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
     }
 
     if (contentChanged) {
-      const guard = await recomputeTotals(client, tenantId, invoiceId, body, tenant, requestedContentFields, builder)
+      const guard = await recomputeTotals(client, tenantId, invoiceId, body, tenant, requestedContentFields, builder, treatment)
       if (guard?.error) abortTransaction(guard)
     }
 
@@ -336,7 +370,11 @@ async function runPatchTransaction({ pool, client: providedClient, tenantId, inv
       abortTransaction({ error: { status: 400, body: { error: 'No valid fields to update' } } })
     }
 
-    await updateInvoiceFields(client, tenantId, invoiceId, builder.changes())
+    // The snapshot lands in the SAME statement as finalized_at and before the
+    // journal is posted, so no invoice/sent transaction can ever exist for an
+    // invoice whose treatment was never frozen.
+    const snapshot = issuesInvoice(body, existing) ? invoiceSnapshotColumns(treatment) : null
+    await updateInvoiceFields(client, tenantId, invoiceId, { ...builder.changes(), snapshot })
 
     if (body.status !== undefined) {
       await assertReadyForIssue(client, { tenantId, invoiceId, status: body.status, existing, tenant })
@@ -423,6 +461,55 @@ async function postInvoiceTransition(client, tenantId, invoiceId, prevStatus, ne
     await settleInvoice(client, tenantId, invoiceId, { actorUserId })
   } else if (newStatus === 'void' && prevStatus === 'sent') {
     await postInvoiceVoid(client, tenantId, fresh, opts)
+  }
+}
+
+// The treatments a human may assert on a legacy snapshot. Deliberately only the
+// two the software can actually have produced: reverse charge is the invoice's
+// own column, and the exotic spec §5.4 treatments have no behavior behind them.
+const CORRECTABLE_TREATMENTS = new Set(['standard', 'small_business_exempt'])
+
+// Corrects a snapshot that migration 141 INFERRED, and marks it confirmed.
+//
+// This is the escape hatch for a wrong inference — not for a wrong invoice. The
+// migration read each document's own totals as evidence, but it could not know
+// which scheme a band was really on years ago, and freezing a guess as immutable
+// would be the very thing the snapshot exists to prevent. Once confirmed (or if
+// it was written at issue) the row is closed: the repository's WHERE clause
+// enforces that, so no caller can reopen it.
+export async function correctInvoiceVatSnapshot(pool, tenantId, invoiceId, body = {}) {
+  const treatment = body.vat_treatment_snapshot
+  if (!CORRECTABLE_TREATMENTS.has(treatment)) {
+    return { error: { status: 400, body: { error: 'invalid_vat_treatment' } } }
+  }
+
+  const existing = await fetchInvoice(pool, tenantId, invoiceId)
+  if (!existing) return NOT_FOUND
+  if (existing.vat_snapshot_source !== 'legacy_inferred') {
+    return {
+      error: {
+        status: 409,
+        body: { error: 'Snapshot is already final', code: 'vat_snapshot_immutable' },
+      },
+    }
+  }
+
+  const exempt = treatment === 'small_business_exempt'
+  const updated = await confirmInvoiceVatSnapshot(pool, tenantId, invoiceId, {
+    vat_treatment_snapshot: treatment,
+    // Reverse charge suppresses output VAT regardless of the scheme, mirroring
+    // the precedence the resolver applies.
+    charges_output_vat_snapshot: !exempt && !existing.reverse_charge,
+    vat_scheme_code_snapshot: exempt ? existing.vat_scheme_code_snapshot : null,
+  })
+  if (!updated) return NOT_FOUND
+
+  return {
+    invoice: updated,
+    audit: {
+      action: 'invoice.vat_snapshot_confirmed',
+      details: { invoiceId, schemeCode: updated.vat_scheme_code_snapshot },
+    },
   }
 }
 
@@ -514,7 +601,11 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
       )
       if (readyError) abortTransaction({ error: invoiceIssueError(readyError, 422) })
     }
-    const finalized = await finalizeInvoiceForPaymentLinkRow(client, tenantId, invoiceId)
+    // Same freeze as the PATCH path, in the same statement as finalized_at.
+    const treatment = await resolveInvoiceVatTreatment(client, tenantId, current)
+    const finalized = await finalizeInvoiceForPaymentLinkRow(
+      client, tenantId, invoiceId, invoiceSnapshotColumns(treatment),
+    )
     // The invoice is now sent (revenue recognised). Idempotent if already posted
     // by a prior PATCH-to-sent.
     await postInvoiceSent(client, tenantId, finalized, { actorUserId })
@@ -527,7 +618,8 @@ export async function finalizeInvoiceForPaymentLink(pool, tenantId, invoiceId, a
 const NOT_FOUND = notFound('Not found')
 
 export async function listInvoices(pool, tenantId, query) {
-  const period = buildPeriodWhere(query, 'issue_date')
+  const behavior = await loadAccountingBehavior(pool, tenantId)
+  const period = buildPeriodWhere(query, 'issue_date', 2, behavior?.fiscalYearStart)
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
   return { invoices: await listInvoiceRows(pool, tenantId, period) }
 }
@@ -583,6 +675,8 @@ function buildBillingTarget(type, row) {
     address_city: row.city || null,
     address_country: row.country || null,
     email: row.email || null,
+    kvk_number: row.kvk_number || null,
+    tax_id: row.tax_id || null,
   }
 }
 
@@ -596,10 +690,14 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
 
   const tenant = await fetchTenant(pool, tenantId)
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
+  const behavior = await loadAccountingBehavior(pool, tenantId)
 
   const issueDate = new Date().toISOString().slice(0, 10)
   const paymentTermDays = 14
-  const taxPercentage = (tenant.applies_kor && korApplies(tenant.vat_country)) ? 0 : Number(tenant.tax_percentage ?? 9)
+  // Date-aware: prefilling a draft dated after a scheduled scheme change must
+  // offer that scheme's rate, which the legacy flag cannot express.
+  const treatment = await resolveLiveTreatment(pool, tenantId, issueDate)
+  const taxPercentage = treatment?.schemeExempt ? 0 : behavior.defaultVatRate
 
   const eventDateStr = gig.event_date
     ? new Date(gig.event_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -636,12 +734,15 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         kvk_number: tenant.kvk_number,
         iban: tenant.iban,
         tax_id: tenant.tax_id,
-        tax_percentage: tenant.tax_percentage,
-        applies_kor: tenant.applies_kor,
+        tax_percentage: behavior.defaultVatRate,
+        vat_country: behavior.accountingCountry,
+        // Resolved for this draft's date rather than echoing the legacy flag.
+        applies_kor: Boolean(treatment?.schemeExempt),
         logo_path: tenant.logo_path,
       },
       billing_targets: billingTargets.length > 1 ? billingTargets : [],
       draft: {
+        currency: behavior.currency,
         gig_id: gig.id,
         issue_date: issueDate,
         payment_term_days: paymentTermDays,
@@ -655,8 +756,8 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         customer_address_city: defaultTarget?.city || null,
         customer_address_country: defaultTarget?.country || 'NL',
         customer_email: defaultTarget?.email || null,
-        customer_kvk: null,
-        customer_tax_id: null,
+        customer_kvk: defaultTarget?.kvk_number || null,
+        customer_tax_id: defaultTarget?.tax_id || null,
         memo: null,
         tax_inclusive: false,
         reverse_charge: false,
@@ -699,19 +800,16 @@ export async function createInvoice(pool, tenantId, userId, body) {
   const tenant = await fetchTenant(pool, tenantId)
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
 
-  if (parsed.reverseCharge) {
-    const rcError = checkReverseCharge({
-      supplierCountry: tenant.vat_country,
-      customerCountry: body.customer_address_country,
-      customerTaxId: body.customer_tax_id,
-    })
-    if (rcError) return { error: invoiceIssueError(rcError, 400) }
-  }
-
+  // A create always produces a DRAFT, so no snapshot is taken — but the totals
+  // still go through the one resolver, date-aware at the new invoice's tax point,
+  // so a draft dated after a scheduled scheme change is priced under that scheme.
+  const treatment = await resolveLiveTreatment(
+    pool, tenantId, parsed.supplyDate || parsed.issueDate, { reverseCharge: parsed.reverseCharge },
+  )
   const totals = computeAndApply(
     { tax_inclusive: parsed.taxInclusive, reverse_charge: parsed.reverseCharge, discount_type: parsed.discountType, discount_pct: parsed.discountPct, discount_cents: parsed.discountCents },
     parsed.lines,
-    tenant,
+    treatment,
   )
   const year = new Date(parsed.issueDate).getUTCFullYear() || new Date().getUTCFullYear()
 
@@ -724,6 +822,16 @@ export async function createInvoice(pool, tenantId, userId, body) {
   const vies = viesAttestationColumns(parsed.viesChecked, body.customer_tax_id, parsed.viesConsultationNumber)
 
   const invoiceId = await withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
+    const behavior = await loadAccountingBehavior(client, tenantId)
+    if (parsed.reverseCharge) {
+      const rcError = checkReverseCharge({
+        supplierCountry: behavior.accountingCountry,
+        customerCountry: body.customer_address_country,
+        customerTaxId: body.customer_tax_id,
+      })
+      if (rcError) abortTransaction({ error: invoiceIssueError(rcError, 400) })
+    }
     const invoiceNumber = await nextInvoiceNumber(client, tenantId, year)
     const id = await insertInvoice(client, {
       tenant_id: tenantId,
@@ -754,6 +862,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
       subtotal_cents: totals.subtotalCents,
       tax_cents: totals.taxCents,
       total_cents: totals.totalCents,
+      currency: behavior.currency,
       created_by_user_id: userId,
       vies_checked_at: vies.vies_checked_at,
       vies_checked_vat_number: vies.vies_checked_vat_number,
@@ -762,6 +871,7 @@ export async function createInvoice(pool, tenantId, userId, body) {
     await insertInvoiceLines(client, id, tenantId, parsed.lines)
     return id
   }, { db: pool })
+  if (invoiceId?.error) return invoiceId
 
   // Post-commit: render the PDF (best-effort) and return the created invoice.
   try {

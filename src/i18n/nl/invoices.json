@@ -70,7 +70,8 @@
     "postalCode": "Postcode",
     "city": "Plaats",
     "country": "Land",
-    "customerKvk": "KVK klant (optioneel)",
+    "customerKvk": "KVK nr.",
+    "customerVatId": "BTW nr.",
     "addMemo": "Notitie toevoegen",
     "memo": "Notitie"
   },
@@ -186,6 +187,7 @@
   },
   "ubl": {
     "download": "UBL downloaden (XML)",
+    "downloadWithPdf": "UBL met ingesloten pdf-factuur",
     "downloadFailed": "Het UBL-bestand kon niet worden gemaakt.",
     "notReadyTitle": "Niet geschikt voor e-facturatie",
     "notReadyIntro": "Het bestand wordt gedownload, maar een e-facturatienetwerk zal het waarschijnlijk weigeren:",

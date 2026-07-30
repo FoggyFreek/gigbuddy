@@ -11,8 +11,6 @@ import DateEntryField from '../DateEntryField.tsx'
 import { listAccounts, getAccountingSettings, updateAccountingSettings } from '../../api/accounts.ts'
 import type { Account, AccountingSettings } from '../../types/entities.ts'
 
-const CURRENCY_OPTIONS = ['EUR', 'USD', 'GBP']
-
 // Maps settings field → expected account type, for filtering Select options.
 // The `as const` keeps the keys a literal union so the i18n selector index
 // (`$.fields[field]`) type-checks.
@@ -64,7 +62,7 @@ function AccountSelect({ field, label, value, accounts = [], onChange, saving }:
   )
 }
 
-// The editable list of default accounts (currency, per-purpose account selects,
+// The editable list of default accounts (plus derived currency,
 // and the books-closed-through date), self-loading and auto-saving each change.
 // Rendered inside AccountingSettingsSection (Settings) and standalone in the
 // finance onboarding wizard's default-accounts step.
@@ -83,7 +81,7 @@ export default function DefaultAccountsFields() {
       .finally(() => setLoading(false))
   }, [])
 
-  async function handleChange(field: AccountField | 'currency' | 'books_closed_through', value: string | null) {
+  async function handleChange(field: AccountField | 'books_closed_through', value: string | null) {
     if (!settings) return
     setSaving(true)
     setError(null)
@@ -119,12 +117,9 @@ export default function DefaultAccountsFields() {
             id="currency-select"
             value={settings.currency ?? 'EUR'}
             label={t($ => $.accounting.currency)}
-            onChange={(e) => handleChange('currency', e.target.value)}
-            disabled={saving}
+            disabled
           >
-            {CURRENCY_OPTIONS.map((c) => (
-              <MenuItem key={c} value={c}>{c}</MenuItem>
-            ))}
+            <MenuItem value={settings.currency ?? 'EUR'}>{settings.currency ?? 'EUR'}</MenuItem>
           </Select>
         </FormControl>
 

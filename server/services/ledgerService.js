@@ -45,6 +45,8 @@ import { hasReclassifiedLines } from '../repositories/journalRepository.js'
 import { badRequest, notFound } from './serviceErrors.js'
 import { openInvoiceBuckets } from '../repositories/invoiceRepository.js'
 import { upcomingBandFeesByStatus } from '../repositories/gigRepository.js'
+import { fetchAccountingProfile } from '../repositories/accountingProfileRepository.js'
+import { currentFiscalYear, fiscalYearRange } from '../../shared/fiscalYear.js'
 
 // Thrown when a journal needs a tenant default account that isn't configured.
 // The HTTP layer maps this to 409 accounting_not_configured and rolls back, so
@@ -591,7 +593,7 @@ function currentVatQuarter(now = new Date()) {
 
 // A null range means "all time": span whole months from the first to the last
 // booked entry (falling back to the current calendar year when empty).
-export async function resolveEffectiveRange(executor, tenantId, range) {
+export async function resolveEffectiveRange(executor, tenantId, range, fiscalYearStart = { month: 1, day: 1 }) {
   if (range) return range
   const dates = await listEntryDates(executor, tenantId) // DESC
   if (dates.length) {
@@ -602,8 +604,7 @@ export async function resolveEffectiveRange(executor, tenantId, range) {
       toExclusive: monthStart(Number(max.slice(0, 4)), Number(max.slice(5, 7)), 1),
     }
   }
-  const year = new Date().getFullYear()
-  return { from: `${year}-01-01`, toExclusive: `${year + 1}-01-01` }
+  return fiscalYearRange(currentFiscalYear(fiscalYearStart), fiscalYearStart)
 }
 
 // Aggregates the financial dashboard: revenue/expense/result per month over
@@ -611,20 +612,28 @@ export async function resolveEffectiveRange(executor, tenantId, range) {
 // the VAT position of the *current* quarter, and the open invoice buckets
 // (which reflect current status, not the period).
 export async function getFinancialOverview(executor, tenantId, range) {
-  const effectiveRange = await resolveEffectiveRange(executor, tenantId, range)
+  const profile = await fetchAccountingProfile(executor, tenantId)
+  const fiscalYearStart = {
+    month: Number(profile?.financial_year_start_month ?? 1),
+    day: Number(profile?.financial_year_start_day ?? 1),
+  }
+  const effectiveRange = await resolveEffectiveRange(executor, tenantId, range, fiscalYearStart)
 
   // Trailing-three-calendar-years result trend, pinned to "today" (independent
   // of the selected period, like the VAT and bank figures).
   const TREND_YEARS = 3
-  const currentYear = new Date().getFullYear()
+  const currentYear = currentFiscalYear(fiscalYearStart)
   const firstTrendYear = currentYear - (TREND_YEARS - 1)
-  const annualRange = { from: `${firstTrendYear}-01-01`, toExclusive: `${currentYear + 1}-01-01` }
+  const annualRanges = Array.from({ length: TREND_YEARS }, (_, index) => ({
+    year: firstTrendYear + index,
+    ...fiscalYearRange(firstTrendYear + index, fiscalYearStart),
+  }))
 
   const vatQuarter = currentVatQuarter()
   const [monthRows, annualRows, vat, buckets, settings, bankBalanceCents, merch, merchInventoryCents, feeRows] =
     await Promise.all([
       monthlyResultTotals(executor, tenantId, effectiveRange),
-      annualResultTotals(executor, tenantId, annualRange),
+      annualResultTotals(executor, tenantId, annualRanges),
       vatTotals(executor, tenantId, vatQuarter.range),
       openInvoiceBuckets(executor, tenantId),
       loadAccountingSettings(executor, tenantId),

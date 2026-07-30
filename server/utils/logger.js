@@ -8,7 +8,7 @@ const LOG_LEVELS = ['debug', 'info', 'warn', 'error']
 // instead, which is redacted to name/code/status and never serializes the
 // original message (see logger.error's `err` handling).
 const CONTEXT_KEYS = new Set([
-  'tenantId', 'invoiceId', 'userId', 'gigId', 'taskId', 'rehearsalId',
+  'tenantId', 'invoiceId', 'purchaseId', 'userId', 'gigId', 'taskId', 'rehearsalId',
   'operation', 'status', 'method', 'path', 'durationMs', 'endpointHost',
   'mode', 'migrated', 'reEncrypted', 'plaintextRemaining', 'port',
   'filename', 'aborted',
@@ -17,6 +17,12 @@ const CONTEXT_KEYS = new Set([
   'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
   'achievementKey',
+  // VAT scheme / issued-document snapshot audit counters. All server-computed
+  // integers, never anything off a request.
+  'missingInvoiceSnapshots', 'missingPurchaseSnapshots', 'overlappingEnrolments',
+  'projectionDrift', 'repairedInvoices', 'repairedPurchases', 'repairedProjections',
+  'invoiceEvidenceConflicts', 'inputVatPostingDivergence',
+  'inferredInvoiceSnapshots', 'inferredPurchaseSnapshots', 'unimplementedSchemeInvoices',
 ])
 
 function safeCode(value) {

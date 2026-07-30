@@ -12,6 +12,10 @@ import {
 } from '../validators/contactValidators.js'
 import { normalizeIban } from '../utils/normalizeIban.js'
 import {
+  normalizeOptionalRegistrationNumber,
+  normalizeOptionalVatId,
+} from '../utils/businessIdentifiers.js'
+import {
   listContacts as listContactRows,
   searchContacts as searchContactRows,
   findContactDuplicates,
@@ -92,7 +96,7 @@ export async function getContact(db, tenantId, contactId) {
 // ---------- writes ----------
 
 export async function createContact(db, tenantId, body) {
-  const { name, email, phone, category, iban } = body
+  const { name, email, phone, category, iban, kvk_number: kvkNumber, tax_id: taxId } = body
   if (!name || !String(name).trim()) return badRequest('name is required')
   const finalCategory = VALID_CATEGORIES.has(category) ? category : 'press'
   try {
@@ -102,6 +106,8 @@ export async function createContact(db, tenantId, body) {
       phone: phone || null,
       category: finalCategory,
       iban: normalizeIban(iban),
+      kvkNumber: normalizeOptionalRegistrationNumber(kvkNumber),
+      taxId: normalizeOptionalVatId(taxId),
     })
     return { contact }
   } catch (err) {

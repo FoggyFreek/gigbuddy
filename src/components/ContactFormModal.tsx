@@ -60,6 +60,8 @@ export default function ContactFormModal({
     phone:    initial?.phone ?? EMPTY_FORM.phone,
     category: initial?.category ?? EMPTY_FORM.category,
     iban:     initial?.iban ?? '',
+    kvk_number: initial?.kvk_number ?? '',
+    tax_id:     initial?.tax_id ?? '',
   }))
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(mode === 'edit')
@@ -87,6 +89,8 @@ export default function ContactFormModal({
           phone:    c.phone || '',
           category: c.category || 'press',
           iban:     c.iban || '',
+          kvk_number: c.kvk_number || '',
+          tax_id:     c.tax_id || '',
         })
       })
       .finally(() => setLoading(false))
@@ -141,6 +145,10 @@ export default function ContactFormModal({
       // Only send IBAN when the supplier form actually captured one, so
       // non-supplier creates keep their minimal payload.
       ...(form.category === 'supplier' && form.iban.trim() ? { iban: form.iban.trim() } : {}),
+      ...(form.category === 'supplier' && form.kvk_number.trim()
+        ? { kvk_number: form.kvk_number.trim() }
+        : {}),
+      ...(form.category === 'supplier' && form.tax_id.trim() ? { tax_id: form.tax_id.trim() } : {}),
     })
     onCreated?.(contact)
     onClose()

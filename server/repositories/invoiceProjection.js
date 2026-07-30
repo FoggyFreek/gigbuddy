@@ -10,6 +10,12 @@ const INVOICE_COLUMNS = Object.freeze([
   'mollie_payment_link_created_at', 'mollie_payment_link_expires_at', 'mollie_payment_status',
   'mollie_payment_id', 'mollie_paid_at', 'created_by_user_id',
   'vies_checked_at', 'vies_checked_vat_number', 'vies_consultation_number',
+  // The VAT treatment frozen at issue. Renderers read these instead of live
+  // tenant state, which is what makes a re-render of an old invoice reproduce the
+  // document that was actually sent.
+  'accounting_country_snapshot', 'vat_scheme_code_snapshot', 'vat_treatment_snapshot',
+  'charges_output_vat_snapshot', 'vat_treatment_version', 'vat_snapshot_source',
+  'currency',
 ])
 
 export function invoiceProjection(alias = null) {

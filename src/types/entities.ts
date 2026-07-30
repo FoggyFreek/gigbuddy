@@ -7,6 +7,7 @@
 // - Fields are optional (`?`) unless the original PropTypes marked `.isRequired`,
 //   so these types match the loose reality of server payloads we already render.
 // - `Id` is a number from Postgres, sometimes a string from the client.
+import type { PurchaseImportWarningCode } from '../utils/purchaseImportWarnings.ts'
 
 export type Id = number | string
 
@@ -15,6 +16,8 @@ export interface Venue {
   name?: string
   category?: string
   organization_name?: string
+  kvk_number?: string | null
+  tax_id?: string | null
   street_and_number?: string | null
   city?: string
   region?: string
@@ -227,6 +230,8 @@ export interface Contact {
   phone?: string | null
   category?: string
   iban?: string | null
+  kvk_number?: string | null
+  tax_id?: string | null
 }
 
 export interface DuplicateEntityMatch {
@@ -277,6 +282,15 @@ export interface Invoice {
   mollie_payment_link_id?: string
   mollie_payment_link_url?: string
   mollie_payment_status?: string
+  // The VAT treatment frozen when the invoice was ISSUED. Null on a draft, which
+  // resolves live instead. Read these rather than the tenant's current scheme
+  // whenever they are present — that is what keeps an issued invoice's figures
+  // stable after the band changes scheme.
+  accounting_country_snapshot?: string | null
+  vat_scheme_code_snapshot?: string | null
+  vat_treatment_snapshot?: string | null
+  charges_output_vat_snapshot?: boolean | null
+  currency?: string
   lines?: InvoiceLine[]
   tenant?: Tenant
 }
@@ -303,6 +317,14 @@ export interface PurchaseAttachment {
 export type PurchaseStatus = 'draft' | 'approved' | 'paid'
 export type PurchasePaymentMethod = 'bank' | 'member'
 
+export interface SupplierImportData {
+  name: string | null
+  email: string | null
+  iban: string | null
+  kvk_number: string | null
+  tax_id: string | null
+}
+
 export interface Purchase {
   id?: Id
   receipt_number?: number
@@ -313,6 +335,9 @@ export interface Purchase {
   currency?: string
   supplier_name?: string
   supplier_contact_id?: Id | null
+  supplier_import_data?: SupplierImportData | null
+  /** The supplier's OWN invoice number (EN 16931 BT-1), not our receipt_number. */
+  supplier_invoice_number?: string | null
   description?: string
   memo?: string | null
   subtotal_cents?: number
@@ -323,6 +348,33 @@ export interface Purchase {
   paid_by_band_member_id?: Id
   lines?: PurchaseLine[]
   attachments?: PurchaseAttachment[]
+}
+
+/**
+ * What the e-invoice importer inferred or could not reconcile. Same
+ * `{ code, severity }` shape as PeppolWarning, so both render the same way;
+ * 'blocking' means "check this before approving", never "the import failed".
+ */
+export interface PurchaseImportWarning {
+  code: PurchaseImportWarningCode
+  severity: 'blocking' | 'advisory'
+  /** Rate that was replaced, and what it became (vat_rate_adjusted). */
+  from?: number
+  to?: number
+  /** Amount involved, in cents (totals_rounded, totals_mismatch, prepaid_amount_ignored). */
+  cents?: number
+  /** The total the document stated, in cents (totals_mismatch). */
+  statedCents?: number
+  /** Existing purchases that look like the same bill (possible_duplicate). */
+  receiptNumbers?: number[]
+  /** UNCL5305 category the line carried (vat_self_assessment_required). */
+  category?: string
+}
+
+/** POST /purchases/import — the created draft plus what needs a human eye. */
+export interface PurchaseImportResult {
+  purchase: Purchase
+  warnings: PurchaseImportWarning[]
 }
 
 /** One band member's outstanding reimbursement balance (from /reimbursements/outstanding). */
@@ -554,6 +606,94 @@ export interface AccountingSettings {
   input_vat_account_code?: string
   merch_revenue_account_code?: string
   books_closed_through?: string
+}
+
+export type EntitySize = 'micro' | 'small' | 'other' | 'unknown'
+export type FinancialAccountingBasis = 'accrual' | 'cash' | 'simplified' | 'unknown'
+export type VatAccountingBasis = 'invoice' | 'cash' | 'not_applicable' | 'unknown'
+// 'exempt' is a registered band relieved of filing by a national small-business
+// scheme (the Dutch KOR and equivalents) — distinct from 'not_applicable', which
+// means not registered for VAT at all.
+export type VatFilingFrequency =
+  | 'monthly' | 'quarterly' | 'yearly' | 'authority_assigned'
+  | 'exempt' | 'not_applicable' | 'unconfigured'
+export type ProfileSource = 'tenant_creation' | 'legacy_backfill' | 'repair'
+// Derived by the server from profile_status + reviewed_at, so no consumer
+// re-implements the completeness/provenance combination.
+export type AccountingProfileState = 'incomplete' | 'needs_review' | 'complete'
+
+// The tenant's accounting regime. Distinct from the band profile (`Tenant`),
+// which carries the seller identity printed on invoices.
+export interface AccountingProfile {
+  tenant_id: Id
+  // Immutable after band creation; base_currency is derived from it.
+  country_code: string
+  base_currency: string
+  default_vat_rate: number
+  profile_status: 'incomplete' | 'complete'
+  profile_source: ProfileSource
+  presentation_state: AccountingProfileState
+  reviewed_at: string | null
+  reviewed_by_user_id: Id | null
+  legal_form: string | null
+  local_legal_form_code: string | null
+  local_legal_form_label: string | null
+  entity_size: EntitySize
+  financial_accounting_basis: FinancialAccountingBasis
+  vat_accounting_basis: VatAccountingBasis
+  reporting_framework_code: string | null
+  financial_year_start_month: number
+  financial_year_start_day: number
+  // Tri-state: null means "not yet confirmed", which differs from a confirmed false.
+  vat_registered: boolean | null
+  vat_filing_frequency: VatFilingFrequency
+  pack_version: string | null
+  // The sales treatment in force TODAY, resolved server-side from the scheme
+  // enrolment. The invoice form previews VAT with it instead of `applies_kor`,
+  // which a scheduled enrolment leaves stale until its boundary date passes.
+  current_sales_treatment: CurrentSalesTreatment | null
+}
+
+export interface CurrentSalesTreatment {
+  accounting_country: string
+  vat_scheme_code: string | null
+  vat_treatment: string
+  // Whether the SCHEME suppresses output VAT. Reverse charge is the invoice's
+  // own field and is applied separately.
+  scheme_exempt: boolean
+  input_vat_recoverable: boolean
+}
+
+// What GOVERNS: only a national_home enrolment drives domestic VAT treatment and
+// the filing obligation. A per-destination EU SME exemption is recorded and
+// reported but never stops the home returns.
+export type SchemeScope = 'national_home' | 'eu_sme_destination'
+// 'legacy_inferred' rows were derived from the old applies_kor boolean by
+// migration 140: the scheme is provable, the start date is not.
+export type EnrolmentStatus = 'confirmed' | 'legacy_inferred'
+
+// One period of enrolment in a VAT scheme. Editing one never changes an already
+// issued invoice — those carry their own treatment snapshot.
+export interface TaxSchemeEnrolment {
+  id: Id
+  tenant_id: Id
+  // The tenant's own country for a national scheme; the DESTINATION member state
+  // for an EU SME enrolment.
+  country_code: string
+  scheme_code: string
+  scheme_scope: SchemeScope
+  valid_from: string
+  // INCLUSIVE last day; null means still open.
+  valid_to: string | null
+  status: EnrolmentStatus
+  source_confirmation_date: string | null
+  voided_at: string | null
+  void_reason: string | null
+  // Decorated by the server from shared/taxSchemes.js so the UI never re-derives
+  // them. `scheme_implemented` false means recorded, no VAT behavior.
+  scheme_label: string
+  scheme_implemented: boolean
+  scheme_sales_treatment: string | null
 }
 
 export interface JournalLine {

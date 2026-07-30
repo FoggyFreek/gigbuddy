@@ -146,6 +146,13 @@ export default function InvoiceCustomerFields({
           onChange={(e) => patchForm({ customer_kvk: e.target.value })}
           disabled={readOnly}
         />
+        <TextField
+          label={t($ => $.customerFields.customerVatId)}
+          size="small"
+          value={form.customer_tax_id || ''}
+          onChange={(e) => patchForm({ customer_tax_id: e.target.value })}
+          disabled={readOnly}
+        />
       </Box>
 
       {!memoOpen ? (

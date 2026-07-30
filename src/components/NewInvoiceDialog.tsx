@@ -86,6 +86,8 @@ export default function NewInvoiceDialog({ onClose, onCreated }: Readonly<NewInv
         customer_address_city: target.address_city || null,
         customer_address_country: target.address_country || 'NL',
         customer_email: target.email || null,
+        customer_kvk: target.kvk_number || null,
+        customer_tax_id: target.tax_id || null,
       },
     }
     try {

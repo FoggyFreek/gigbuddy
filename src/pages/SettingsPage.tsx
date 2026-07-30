@@ -19,14 +19,16 @@ import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined'
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined'
 import GroupIcon from '@mui/icons-material/Group'
-import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined'
 import StorageIcon from '@mui/icons-material/Storage'
 import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined'
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined'
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined'
+import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined'
+import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { PERMISSIONS, type Permission } from '../auth/permissions.ts'
 import SubscriptionSummaryCard from '../components/settings/SubscriptionSummaryCard.tsx'
+import FinanceWizardCard from '../components/settings/FinanceWizardCard.tsx'
 import NotificationSettingsSection from '../components/account/NotificationSettingsSection.tsx'
 import ThemeSettingsSection from '../components/account/ThemeSettingsSection.tsx'
 import BillingSettingsSection from '../components/account/BillingSettingsSection.tsx'
@@ -37,23 +39,27 @@ import IntegrationsSection from '../components/settings/IntegrationsSection.tsx'
 import MembersSection from '../components/settings/MembersSection.tsx'
 import ChartOfAccountsSection from '../components/settings/ChartOfAccountsSection.tsx'
 import AccountingSettingsSection from '../components/settings/AccountingSettingsSection.tsx'
+import AccountingProfileSection from '../components/settings/AccountingProfileSection.tsx'
+import FinancialProfileSection from '../components/settings/FinancialProfileSection.tsx'
 import InvitesSection from '../components/InvitesSection.tsx'
 
 // A single settings surface that merges the former per-user account settings,
 // members management, and tenant (band) settings. Desktop uses a master-detail
 // layout (nav card + detail pane); mobile drills into each section separately
-// with a back arrow. The nav is role-gated: band items appear only when the
-// active tenant role grants the matching permission (see BAND_ITEMS).
+// with a back arrow. The nav is role-gated: band and finance items appear only
+// when the active tenant role grants the matching permission.
 type SectionId =
   | 'preferences' | 'billing' | 'connected-accounts'
-  | 'accent' | 'members' | 'invites' | 'storage'
+  | 'accent' | 'members' | 'storage'
   | 'integrations' | 'chart-of-accounts' | 'default-accounts'
+  | 'financial-profile' | 'accounting-profile'
 
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.
 type ItemLabelKey =
-  | 'preferences' | 'billing' | 'connectedAccounts' | 'accent' | 'members' | 'invites'
+  | 'preferences' | 'billing' | 'connectedAccounts' | 'accent' | 'membersAndInvites'
   | 'storage' | 'integrations' | 'chartOfAccounts' | 'defaultAccounts'
+  | 'financialProfile' | 'accountingProfile'
 
 interface NavItemDef {
   id: SectionId
@@ -71,12 +77,19 @@ const ACCOUNT_ITEMS: NavItemDef[] = [
 
 const BAND_ITEMS: NavItemDef[] = [
   { id: 'accent', labelKey: 'accent', icon: PaletteOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
-  { id: 'members', labelKey: 'members', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE },
-  { id: 'invites', labelKey: 'invites', icon: GroupAddOutlinedIcon, permission: PERMISSIONS.MEMBERS_MANAGE },
+  { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE },
   { id: 'storage', labelKey: 'storage', icon: StorageIcon, permission: PERMISSIONS.TENANT_MANAGE },
   { id: 'integrations', labelKey: 'integrations', icon: ExtensionOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
-  { id: 'chart-of-accounts', labelKey: 'chartOfAccounts', icon: AccountTreeOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
-  { id: 'default-accounts', labelKey: 'defaultAccounts', icon: AccountBalanceWalletOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
+]
+
+// Uniformly gated on finance.manage to match the APIs behind them (both
+// /accounts and /accounting-profile mutate under that permission), so a
+// financial_admin reaches exactly the records they are allowed to change.
+const FINANCE_ITEMS: NavItemDef[] = [
+  { id: 'financial-profile', labelKey: 'financialProfile', icon: BadgeOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
+  { id: 'accounting-profile', labelKey: 'accountingProfile', icon: GavelOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
+  { id: 'default-accounts', labelKey: 'defaultAccounts', icon: AccountBalanceWalletOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
+  { id: 'chart-of-accounts', labelKey: 'chartOfAccounts', icon: AccountTreeOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
 ]
 
 export default function SettingsPage() {
@@ -87,8 +100,10 @@ export default function SettingsPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const { can, isSuperAdmin } = usePermissions()
 
-  const bandItems = BAND_ITEMS.filter((i) => !i.permission || can(i.permission))
-  const accessible = [...ACCOUNT_ITEMS, ...bandItems]
+  const visible = (items: NavItemDef[]) => items.filter((i) => !i.permission || can(i.permission))
+  const bandItems = visible(BAND_ITEMS)
+  const financeItems = visible(FINANCE_ITEMS)
+  const accessible = [...ACCOUNT_ITEMS, ...bandItems, ...financeItems]
 
   // A section param the caller can't access falls back to the first account
   // item — access is never leaked by rendering a gated pane.
@@ -111,17 +126,24 @@ export default function SettingsPage() {
       case 'accent':
         return <AccentColorSection />
       case 'members':
-        return <MembersSection />
-      case 'invites':
-        return <InvitesSection canIssueAdmin={isSuperAdmin} />
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <MembersSection />
+            <InvitesSection canIssueAdmin={isSuperAdmin} />
+          </Box>
+        )
       case 'storage':
         return <StorageUsageSection />
       case 'integrations':
         return <IntegrationsSection />
-      case 'chart-of-accounts':
-        return <ChartOfAccountsSection />
+      case 'financial-profile':
+        return <FinancialProfileSection />
+      case 'accounting-profile':
+        return <AccountingProfileSection />
       case 'default-accounts':
         return <AccountingSettingsSection />
+      case 'chart-of-accounts':
+        return <ChartOfAccountsSection />
       default:
         return null
     }
@@ -168,6 +190,10 @@ export default function SettingsPage() {
           <ListSubheader key="band-header" disableSticky>{t($ => $.nav.bandSettings)}</ListSubheader>,
           ...bandItems.map(renderNavItem),
         ]}
+        {financeItems.length > 0 && [
+          <ListSubheader key="finance-header" disableSticky>{t($ => $.nav.financeSettings)}</ListSubheader>,
+          ...financeItems.map(renderNavItem),
+        ]}
       </List>
     </Paper>
   )
@@ -176,6 +202,7 @@ export default function SettingsPage() {
     <Box>
       <Typography variant="h5" sx={{ mb: 2 }}>{t($ => $.title)}</Typography>
       <SubscriptionSummaryCard />
+      {can(PERMISSIONS.FINANCE_MANAGE) && <FinanceWizardCard />}
       <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' } }}>
         {navCard}
         {!isMobile && <Box sx={{ flexGrow: 1, minWidth: 0 }}>{renderDetail(activeSection)}</Box>}

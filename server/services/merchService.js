@@ -13,6 +13,8 @@
 import { getStandardVatRate, isKnownVatRate } from '../../shared/vatRates.js'
 import { isValidCalendarDate } from '../validators/accountValidators.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
+import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
 import { validateGigIdForTenant } from '../repositories/invoiceRepository.js'
 import { isAccountAtOrBelow } from '../repositories/accountRepository.js'
 import {
@@ -164,7 +166,8 @@ export async function archiveProduct(executor, tenantId, id) {
 // Lists individual sales for the detail pane. Optional period (sale_date) and
 // product_id filters; returns all statuses so voided rows still show greyed.
 export async function listMerchSales(executor, tenantId, query = {}) {
-  const period = buildPeriodWhere(query, 's.sale_date')
+  const behavior = await loadAccountingBehavior(executor, tenantId)
+  const period = buildPeriodWhere(query, 's.sale_date', 2, behavior?.fiscalYearStart)
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
 
   let productId = null
@@ -180,7 +183,8 @@ export async function listMerchSales(executor, tenantId, query = {}) {
 // total). Account resolves per product (current revenue_account_code, else the
 // band default) so each product is exactly one row.
 export async function merchSalesSummary(executor, tenantId, query = {}) {
-  const period = buildPeriodWhere(query, 's.sale_date')
+  const behavior = await loadAccountingBehavior(executor, tenantId)
+  const period = buildPeriodWhere(query, 's.sale_date', 2, behavior?.fiscalYearStart)
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
 
   return { rows: await summarizeSales(executor, tenantId, period.sql, period.values) }
@@ -202,6 +206,7 @@ export async function merchSalesPeriods(executor, tenantId) {
 // imports whose discounted gross isn't divisible by quantity; manual sales omit
 // it and the gross stays quantity * unit_price_incl_cents.
 export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = null } = {}) {
+  await acquireAccountingSettingsLock(client, tenantId)
   const productId = parsePositiveInt(body.product_id)
   if (!productId) return { error: { status: 400, body: { error: 'Invalid product_id' } } }
 

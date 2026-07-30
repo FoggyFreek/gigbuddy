@@ -3,25 +3,33 @@
   "nav": {
     "accountSettings": "Accountinstellingen",
     "bandSettings": "Bandinstellingen",
+    "financeSettings": "Financiën en boekhouding",
     "backAria": "Terug naar instellingen",
     "items": {
       "preferences": "Mijn voorkeuren",
       "billing": "Facturering",
       "connectedAccounts": "Gekoppelde accounts",
       "accent": "Accentkleur",
-      "members": "Leden",
-      "invites": "Uitnodigingen",
+      "membersAndInvites": "Leden en uitnodigingen",
       "storage": "Opslag",
       "integrations": "Integraties",
       "chartOfAccounts": "Grootboekschema",
-      "defaultAccounts": "Boekhoudinstellingen"
+      "defaultAccounts": "Boekhoudinstellingen",
+      "financialProfile": "Financieel profiel",
+      "accountingProfile": "Boekhoudprofiel"
     }
   },
   "subscription": {
     "current": "Huidig abonnement",
     "manage": "Abonnement beheren"
   },
+  "financeWizard": {
+    "title": "Financiële setup-wizard",
+    "help": "Doorloop je beginsaldo, financiële profiel en standaardrekeningen.",
+    "cta": "Starten"
+  },
   "members": {
+    "title": "Leden",
     "columns": {
       "name": "Naam",
       "email": "E-mail",
@@ -55,6 +63,7 @@
     }
   },
   "invites": {
+    "title": "Uitnodigingen",
     "newInvite": "Nieuwe uitnodiging",
     "create": "Aanmaken",
     "role": "Rol",
@@ -220,10 +229,6 @@
     },
     "booksClosedThrough": "Boeken gesloten tot en met",
     "booksClosedThroughHelper": "Op of vóór deze datum kan niets worden geboekt. Laat leeg om de boeken open te houden.",
-    "wizard": {
-      "cta": "Financiële setup-wizard",
-      "help": "Doorloop je beginsaldo, financiële profiel en standaardrekeningen."
-    },
     "errors": {
       "account_has_open_balance": "Deze rekening heeft nog een openstaand saldo (onbetaalde rekeningen, niet-vereffende ledenschulden of onbetaalde facturen). Vereffen deze voordat je de rekening wijzigt.",
       "invalid_books_closed_through": "Voer een geldige datum (JJJJ-MM-DD) in of maak het veld leeg.",
@@ -279,5 +284,117 @@
     "saveFailed": "API-sleutel opslaan is mislukt.",
     "replace": "Sleutel vervangen",
     "remove": "Sleutel verwijderen"
+  },
+  "financialProfile": {
+    "title": "Financieel profiel",
+    "description": "De juridische en financiële identiteit van je band: de naam, het adres en de nummers die op je facturen staan. Je accountant en je klanten gaan ervan uit dat dit de ingeschreven gegevens zijn.",
+    "legalFormNote": "Toelichting rechtsvorm",
+    "legalFormNoteHelper": "Optioneel, voor een vorm die niet in de lijst staat of een extra detail.",
+    "postalCountryHelper": "Het land op je adres. Het land waarin je boekhouding wordt gevoerd stel je in bij Boekhoudprofiel.",
+    "errors": {
+      "unknown": "Het financieel profiel kon niet worden opgeslagen.",
+      "invalid_email": "Vul een geldig e-mailadres in.",
+      "invalid_phone": "Vul een geldig telefoonnummer in.",
+      "invalid_iban": "Vul een geldig IBAN in.",
+      "invalid_tax_id": "Dat btw-nummer past niet bij het boekhoudland van je band.",
+      "invalid_kvk_number": "Dat inschrijvingsnummer past niet bij het boekhoudland van je band."
+    }
+  },
+  "accountingProfile": {
+    "title": "Boekhoudprofiel",
+    "description": "De boekhoudregels die deze band volgt. Latere rapporten, btw-werkbladen en bewaartermijnen worden hieruit afgeleid, dus dit beschrijft feiten over de band en geen voorkeuren.",
+    "unset": "Niet ingesteld",
+    "notApplicable": "Niet van toepassing — deze band is niet btw-plichtig.",
+    "needsReview": "Deze waarden zijn overgenomen toen het boekhoudprofiel werd ingevoerd. Controleer ze en bevestig.",
+    "confirmCta": "Bevestigen",
+    "nonEuroPending": "De basisvaluta van deze band is vastgelegd maar nog niet toegepast: facturen, de UBL-export en rapporten zijn nog in euro. Boekhouden in meerdere valuta is nog niet beschikbaar.",
+    "country": "Boekhoudland",
+    "countryHelper": "Wijzigen kan alleen voordat er financiële documenten zijn en stelt landafhankelijke boekhoudinstellingen opnieuw in.",
+    "baseCurrency": "Basisvaluta",
+    "baseCurrencyHelper": "Afgeleid van het boekhoudland en gebruikt voor alle boekhouding, facturen en rapporten.",
+    "changeCountry": {
+      "action": "Boekhoudland wijzigen",
+      "title": "Boekhoudland wijzigen",
+      "warning": "Dit kan alleen voordat er facturen, inkopen, boekingen, vergoedingen, btw-aangiften, merchandiseverkopen of bankimports zijn. Btw-registratie, aangifte-instellingen, rechtsvorm, verslaggevingskader, regelingen en standaard producttarieven worden opnieuw ingesteld. Opgeslagen identificatienummers moeten geldig zijn voor het nieuwe land.",
+      "cancel": "Annuleren",
+      "confirm": "Wijzigen en opnieuw instellen"
+    },
+    "financialYearStartMonth": "Boekjaar begint (maand)",
+    "financialYearStartDay": "Dag",
+    "vatRegistered": "Btw-plichtig",
+    "vatRegisteredHelper": "Een juridisch feit, niets wat wij uit de omzet afleiden. Laat op onbevestigd staan tot je het weet.",
+    "vatRegisteredOptions": {
+      "yes": "Ja",
+      "no": "Nee",
+      "unconfirmed": "Nog niet bevestigd"
+    },
+    "vatFilingFrequency": "Btw-aangiftetijdvak",
+    "vatFilingFrequencyHelper": "Neem het tijdvak over dat de Belastingdienst je heeft toegekend; niet gokken.",
+    "vatFilingFrequencies": {
+      "monthly": "Per maand",
+      "quarterly": "Per kwartaal",
+      "yearly": "Per jaar",
+      "authority_assigned": "Zoals toegekend door de Belastingdienst"
+    },
+    "errors": {
+      "unknown": "Het boekhoudprofiel kon niet worden opgeslagen.",
+      "unavailable": "Het boekhoudprofiel kon niet worden geladen.",
+      "country_immutable": "Het boekhoudland staat vast bij het aanmaken van de band en kan hier niet worden gewijzigd.",
+      "profile_incomplete": "Vul alle velden in voordat je het profiel bevestigt.",
+      "vat_fields_require_registration": "Zet Btw-plichtig op ja voordat je een btw-grondslag of aangiftetijdvak kiest.",
+      "vat_fields_required_when_registered": "Een btw-plichtige band heeft een btw-grondslag en een aangiftetijdvak nodig.",
+      "invalid_financial_year_start": "Die dag bestaat niet in de gekozen maand.",
+      "invalid_financial_year_start_month": "Kies een geldige maand.",
+      "invalid_financial_year_start_day": "Kies een geldige dag.",
+      "accounting_country_has_financial_documents": "Het boekhoudland kan niet worden gewijzigd omdat er al financiële documenten zijn.",
+      "tax_id_incompatible_vat_country": "Het opgeslagen btw-nummer is niet geldig voor het gekozen land. Wis of vervang het eerst in het financiële profiel.",
+      "kvk_incompatible_vat_country": "Het opgeslagen registratienummer is niet geldig voor het gekozen land. Wis of vervang het eerst in het financiële profiel.",
+      "filing_frequency_derived_from_scheme": "Het aangiftetijdvak volgt de btw-regeling. Start of beëindig hieronder een regeling in plaats van dit veld te zetten.",
+      "invalid_scheme_code": "Kies een regeling uit de lijst.",
+      "scheme_country_mismatch": "Die regeling hoort niet bij het boekhoudland van deze band.",
+      "invalid_country_code": "Kies een land van bestemming.",
+      "invalid_valid_from": "Vul een geldige eerste dag in.",
+      "invalid_valid_to": "Vul een geldige laatste dag in.",
+      "valid_to_before_valid_from": "De laatste dag kan niet vóór de eerste dag liggen.",
+      "invalid_source_confirmation_date": "Vul een geldige bevestigingsdatum in.",
+      "overlapping_enrolment": "Een andere inschrijving beslaat die data al.",
+      "scheme_requires_vat_registration": "Een band in een btw-regeling is nog steeds btw-plichtig. Zet Btw-plichtig eerst op ja.",
+      "enrolment_confirmed": "Een bevestigde inschrijving wordt ingetrokken, niet verwijderd, zodat de historie intact blijft.",
+      "enrolment_referenced": "In deze periode zijn facturen of inkopen uitgereikt, dus hij kan niet worden verwijderd.",
+      "enrolment_voided": "Deze inschrijving is ingetrokken en kan niet meer worden bewerkt.",
+      "nothing_to_update": "Wijzig minstens één datum."
+    },
+    "defaultVatRate": "Standaard btw-tarief",
+    "defaultVatRateHelper": "Wordt voorgevuld op nieuwe factuurregels. Je kunt het tarief per regel nog aanpassen.",
+    "vatScheme": {
+      "title": "Btw-regeling",
+      "description": "In welke kleineondernemers- of grensoverschrijdende regeling deze band zit, en tussen welke data. Dit wijzigen verandert nooit een factuur die je al hebt verstuurd — die houdt de btw-behandeling waarmee hij is uitgereikt.",
+      "start": "Regeling starten",
+      "startTitle": "Btw-regeling starten",
+      "editTitle": "Deze inschrijving bewerken",
+      "empty": "Geen regeling vastgelegd. Deze band rekent en draagt btw gewoon af.",
+      "scheme": "Regeling",
+      "validFrom": "Eerste dag",
+      "validFromHelper": "De datum waarop de regeling is ingegaan, zoals de Belastingdienst die heeft vastgesteld.",
+      "validTo": "Laatste dag",
+      "validToHelper": "De laatste dag waarop de regeling gold — die dag telt nog mee. Laat leeg zolang de regeling doorloopt.",
+      "confirmationDate": "Bevestigingsdatum",
+      "confirmationDateHelper": "Optioneel: de datum op de brief of beschikking die de inschrijving bevestigt.",
+      "destinationCountry": "Land van bestemming",
+      "destinationCountryHelper": "De lidstaat die de vrijstelling heeft verleend. De grensoverschrijdende regeling wordt per bestemming vastgelegd.",
+      "open": "Doorlopend",
+      "destination": "Bestemming",
+      "edit": "Bewerken",
+      "retract": "Intrekken",
+      "cancel": "Annuleren",
+      "save": "Opslaan",
+      "inferred": "Ingangsdatum niet bevestigd",
+      "recordedOnly": "Alleen vastgelegd",
+      "voided": "Ingetrokken",
+      "frequencyFromScheme": "Vrijgesteld: deze band zit in een btw-regeling en doet daarom geen periodieke aangifte. Beëindig de regeling hieronder om een aangiftetijdvak te kiezen.",
+      "notImplemented": "Deze regeling wordt vastgelegd, maar het onderdrukken van btw op facturen is op dit moment alleen geïmplementeerd voor de Nederlandse KOR. Je facturen blijven btw rekenen.",
+      "destinationOnlyNote": "De grensoverschrijdende regeling geldt alleen voor verkopen naar het land van bestemming. Het verandert niets aan de btw-aangifte die je in eigen land doet.",
+      "issuedUnaffected": "Facturen die je al hebt verstuurd houden de btw-behandeling waarmee ze zijn uitgereikt, dus deze data corrigeren is veilig."
+    }
   }
 }

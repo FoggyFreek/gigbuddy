@@ -137,7 +137,7 @@ export default function BandMembersSection() {
               size="small"
               variant="outlined"
               startIcon={<GroupAddOutlinedIcon />}
-              onClick={() => navigate('/settings/invites')}
+              onClick={() => navigate('/settings/members')}
             >
               {t($ => $.members.inviteCta)}
             </Button>

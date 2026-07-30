@@ -38,7 +38,7 @@ function wrap(ui, { auth = memberAuth } = {}) {
         <MemoryRouter initialEntries={['/profile']}>
           <Routes>
             <Route path="/profile" element={ui} />
-            <Route path="/settings/invites" element={<div>Invites page</div>} />
+            <Route path="/settings/members" element={<div>Members and invites page</div>} />
           </Routes>
         </MemoryRouter>
       </AuthContext.Provider>
@@ -136,7 +136,7 @@ describe('BandMembersSection', () => {
     await waitFor(() => screen.getByText('Alice'))
 
     await user.click(screen.getByRole('button', { name: /invite to gigbuddy/i }))
-    expect(screen.getByText('Invites page')).toBeInTheDocument()
+    expect(screen.getByText('Members and invites page')).toBeInTheDocument()
   })
 
   it('hides the invite button when all lead members are gigBuddy users', async () => {

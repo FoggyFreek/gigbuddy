@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { InvoiceForm } from './invoiceFormHelpers.ts'
-import { computeInvoiceTotals, formatEur } from '../../utils/invoiceTotals.ts'
+import { computeInvoiceTotals, formatCurrency } from '../../utils/invoiceTotals.ts'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Divider from '@mui/material/Divider'
@@ -23,6 +24,7 @@ interface DiscountValueInputProps {
 }
 
 function DiscountValueInput({ form, patchForm, readOnly }: Readonly<DiscountValueInputProps>) {
+  const { profile } = useAccountingProfile()
   if (form.discount_type === 'pct') {
     return (
       <TextField
@@ -41,6 +43,7 @@ function DiscountValueInput({ form, patchForm, readOnly }: Readonly<DiscountValu
       cents={form.discount_cents}
       onChange={(c) => patchForm({ discount_cents: c })}
       disabled={readOnly}
+      currency={profile?.base_currency ?? 'EUR'}
       sx={{ width: 80 }}
     />
   )
@@ -56,6 +59,8 @@ interface DiscountEditorProps {
 
 function DiscountEditor({ form, patchForm, readOnly, totals, onRemove }: Readonly<DiscountEditorProps>) {
   const { t } = useTranslation('invoices')
+  const { profile } = useAccountingProfile()
+  const currency = profile?.base_currency ?? 'EUR'
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
       <Typography variant="body2" sx={{ flexGrow: 1 }}>{t($ => $.totals.discount)}</Typography>
@@ -68,10 +73,10 @@ function DiscountEditor({ form, patchForm, readOnly, totals, onRemove }: Readonl
         sx={{ minWidth: 70 }}
       >
         <MenuItem value="pct">%</MenuItem>
-        <MenuItem value="eur">€</MenuItem>
+        <MenuItem value="eur">{currency}</MenuItem>
       </Select>
       <Typography variant="body2" sx={{ minWidth: 80, textAlign: 'right' }}>
-        {formatEur(-totals.discountCents)}
+        {formatCurrency(-totals.discountCents, currency)}
       </Typography>
       <IconButton size="small" disabled={readOnly} onClick={onRemove} aria-label={t($ => $.totals.removeDiscount)}>
         <DeleteIcon fontSize="small" />
@@ -94,6 +99,8 @@ export default function InvoiceTotalsPanel({
   form, totals, appliesKor, readOnly, patchForm, discountOpen, setDiscountOpen,
 }: Readonly<InvoiceTotalsPanelProps>) {
   const { t } = useTranslation('invoices')
+  const { profile } = useAccountingProfile()
+  const currency = profile?.base_currency ?? 'EUR'
   function removeDiscount() {
     patchForm({ discount_pct: 0, discount_cents: 0 })
     setDiscountOpen(false)
@@ -102,7 +109,7 @@ export default function InvoiceTotalsPanel({
   return (
     <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
       <Box sx={{ minWidth: 320 }}>
-        <SummaryRow label={t($ => $.totals.subtotal)} value={formatEur(totals.subtotalCents)} />
+        <SummaryRow label={t($ => $.totals.subtotal)} value={formatCurrency(totals.subtotalCents, currency)} />
         {discountOpen ? (
           <DiscountEditor
             form={form}
@@ -117,7 +124,7 @@ export default function InvoiceTotalsPanel({
           </Button>
         )}
         {!appliesKor && !form.reverse_charge && totals.vatByRate.map(({ rate, cents }) => (
-          <SummaryRow key={rate} label={t($ => $.totals.vatRate, { rate })} value={formatEur(cents)} />
+          <SummaryRow key={rate} label={t($ => $.totals.vatRate, { rate })} value={formatCurrency(cents, currency)} />
         ))}
         {appliesKor && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'right' }}>
@@ -130,7 +137,7 @@ export default function InvoiceTotalsPanel({
           </Typography>
         )}
         <Divider sx={{ my: 1 }} />
-        <SummaryRow label={<strong>{t($ => $.labels.total)}</strong>} value={<strong>{formatEur(totals.totalCents)}</strong>} />
+        <SummaryRow label={<strong>{t($ => $.labels.total)}</strong>} value={<strong>{formatCurrency(totals.totalCents, currency)}</strong>} />
       </Box>
     </Box>
   )

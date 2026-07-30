@@ -167,6 +167,15 @@ describe('OnboardingPage — welcome step', () => {
   })
 })
 
+// The band step needs a name AND an accounting country before it can advance.
+async function fillBandStep(user, name = 'The Band', country = 'Netherlands (NL)') {
+  if (name !== null) {
+    await user.type(await screen.findByLabelText('Band name'), name)
+  }
+  await user.click(await screen.findByLabelText('Accounting country'))
+  await user.click(await screen.findByRole('option', { name: country }))
+}
+
 describe('OnboardingPage — confirm (bronze, free path)', () => {
   it('creates the band with the onboarding pointer, then completes without payment', async () => {
     createOwnedTenant.mockResolvedValue({ id: 42, slug: 'the-band', band_name: 'The Band' })
@@ -174,12 +183,12 @@ describe('OnboardingPage — confirm (bronze, free path)', () => {
     wrap()
 
     await completeWelcomeStep(user)
-    await user.type(await screen.findByLabelText('Band name'), 'The Band')
+    await fillBandStep(user)
     await user.click(screen.getByRole('button', { name: 'Next' }))
     await user.click(await screen.findByRole('button', { name: 'Create my band' }))
 
     await waitFor(() => expect(createOwnedTenant).toHaveBeenCalledWith({
-      band_name: 'The Band', onboarding: true,
+      band_name: 'The Band', country_code: 'nl', onboarding: true,
     }))
     await waitFor(() => expect(auth.switchTenant).toHaveBeenCalledWith(42))
     await waitFor(() => expect(onboardingComplete).toHaveBeenCalled())
@@ -196,7 +205,7 @@ describe('OnboardingPage — confirm (paid path)', () => {
     wrap()
 
     await completeWelcomeStep(user, 'Silver')
-    await user.type(await screen.findByLabelText('Band name'), 'The Band')
+    await fillBandStep(user)
     await user.click(screen.getByRole('button', { name: 'Next' }))
     await user.click(await screen.findByRole('button', { name: 'Continue to payment' }))
 
@@ -216,7 +225,7 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
   it('adopts only the pointer tenant and never re-creates', async () => {
     mockAuth({ onboardingTenantId: 42, termsVersion: TERMS_VERSION })
     listOwnedTenants.mockResolvedValue([
-      { id: 42, slug: 'the-band', band_name: 'The Band', archived_at: null },
+      { id: 42, slug: 'the-band', band_name: 'The Band', vat_country: 'nl', archived_at: null },
     ])
     subscribe.mockResolvedValue({ checkoutUrl: 'https://pay.test/tr_2', trial: true })
     const user = userEvent.setup()
@@ -227,6 +236,8 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
     const nameField = await screen.findByLabelText('Band name')
     expect(nameField).toHaveValue('The Band')
     expect(nameField).toBeDisabled()
+    // The accounting country is fixed once the band exists.
+    expect(await screen.findByLabelText('Accounting country')).toHaveAttribute('aria-disabled', 'true')
     await user.click(screen.getByRole('button', { name: 'Next' }))
     await user.click(await screen.findByRole('button', { name: 'Continue to payment' }))
 
@@ -239,7 +250,7 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
     getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: false })
     mockAuth({ onboardingTenantId: 42, termsVersion: TERMS_VERSION })
     listOwnedTenants.mockResolvedValue([
-      { id: 42, slug: 'the-band', band_name: 'The Band', archived_at: null },
+      { id: 42, slug: 'the-band', band_name: 'The Band', vat_country: 'nl', archived_at: null },
     ])
     const user = userEvent.setup()
     wrap()
@@ -261,7 +272,7 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
     expect(screen.queryByText('Silver')).not.toBeInTheDocument()
 
     await act(async () => {
-      resolveOwned([{ id: 42, slug: 'the-band', band_name: 'The Band', archived_at: null }])
+      resolveOwned([{ id: 42, slug: 'the-band', band_name: 'The Band', vat_country: 'nl', archived_at: null }])
     })
     expect(await screen.findByText('Silver')).toBeInTheDocument()
   })
@@ -287,7 +298,7 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
     wrap()
 
     await completeWelcomeStep(user, 'Silver')
-    await user.type(await screen.findByLabelText('Band name'), 'Second Band')
+    await fillBandStep(user, 'Second Band')
     await user.click(screen.getByRole('button', { name: 'Next' }))
     await user.click(await screen.findByRole('button', { name: 'Continue to payment' }))
 

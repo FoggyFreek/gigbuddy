@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { PurchaseForm } from './purchaseFormHelpers.ts'
+import type { SupplierImportData } from '../../types/entities.ts'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -7,6 +8,7 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
+import TextField from '@mui/material/TextField'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutlined'
 import DateEntryField from '../DateEntryField.tsx'
 import SupplierAutocomplete from './SupplierAutocomplete.tsx'
@@ -14,10 +16,16 @@ import SupplierAutocomplete from './SupplierAutocomplete.tsx'
 interface PurchaseSupplierFieldsProps {
   form: PurchaseForm
   patchForm: (patch: Partial<PurchaseForm>) => void
+  supplierCreateDefaults?: SupplierImportData | null
   readOnly?: boolean
 }
 
-export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Readonly<PurchaseSupplierFieldsProps>) {
+export default function PurchaseSupplierFields({
+  form,
+  patchForm,
+  supplierCreateDefaults,
+  readOnly,
+}: Readonly<PurchaseSupplierFieldsProps>) {
   const { t } = useTranslation('purchases')
   const [dueOpen, setDueOpen] = useState(Boolean(form.due_date))
 
@@ -32,9 +40,22 @@ export default function PurchaseSupplierFields({ form, patchForm, readOnly }: Re
         <SupplierAutocomplete
           value={form.supplier_name}
           onChange={(patch) => patchForm(patch)}
+          createDefaults={supplierCreateDefaults}
           disabled={readOnly}
           label={t($ => $.labels.supplier)}
           autoFocus
+        />
+      </Box>
+
+      <Box sx={{ mb: 2 }}>
+        <TextField
+          label={t($ => $.labels.supplierInvoiceNumber)}
+          helperText={t($ => $.supplierFields.supplierInvoiceNumberHelp)}
+          size="small"
+          fullWidth
+          value={form.supplier_invoice_number ?? ''}
+          onChange={(e) => patchForm({ supplier_invoice_number: e.target.value })}
+          disabled={readOnly}
         />
       </Box>
 

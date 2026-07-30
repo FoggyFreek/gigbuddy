@@ -7,7 +7,6 @@ import { notFound } from './serviceErrors.js'
 import { defaultReportingGroupForType } from '../domain/accountReportingGroups.js'
 import {
   validateAccountCreate,
-  validateCurrency,
   isValidCalendarDate,
   SETTINGS_TYPE_MAP,
   SETTINGS_CODE_FIELDS,
@@ -30,6 +29,8 @@ import {
   updateAccountFields,
   deleteAccount as deleteAccountRow,
 } from '../repositories/accountRepository.js'
+import { loadAccountingProfile } from './accountingProfileService.js'
+import { bookkeepingCurrency } from '../../shared/accountingProfileCodes.js'
 
 const NOT_FOUND = notFound('not_found')
 
@@ -55,12 +56,21 @@ const DEFAULT_CODES = {
 // ---------- settings ----------
 
 export async function getSettings(db, tenantId) {
+  const profile = await loadAccountingProfile(db, tenantId)
+  if (!profile) return NOT_FOUND
+  // Behavioral column: follows the currency the books are kept in, not the
+  // factual base currency.
+  const currency = bookkeepingCurrency(profile.base_currency)
   const existing = await getSettingsRow(db, tenantId)
-  if (existing) return { settings: existing }
+  if (existing) {
+    if (existing.currency === currency) return { settings: existing }
+    const repaired = await updateSettings(db, tenantId, { currency })
+    return { settings: repaired }
+  }
 
   // Backstop: settings row missing — insert with smart defaults.
   const existingCodes = new Set(await listChartCodes(db, tenantId))
-  const defaults = { currency: 'EUR' }
+  const defaults = { currency }
   for (const [field, code] of Object.entries(DEFAULT_CODES)) {
     defaults[field] = existingCodes.has(code) ? code : null
   }
@@ -87,9 +97,7 @@ async function buildSettingsUpdates(db, tenantId, body) {
   const updates = {}
 
   if ('currency' in body) {
-    const c = validateCurrency(body.currency)
-    if (!c) return { error: { status: 400, body: { error: 'invalid_currency' } } }
-    updates.currency = c
+    return { error: { status: 400, body: { error: 'currency_read_only' } } }
   }
 
   for (const field of SETTINGS_CODE_FIELDS) {
@@ -137,6 +145,8 @@ export async function patchSettings(tenantId, body = {}) {
     // loadAccountingSettings), then refuse to move an account code that still
     // carries an open balance.
     await acquireAccountingSettingsLock(client, tenantId)
+    const profile = await loadAccountingProfile(client, tenantId)
+    if (!profile) abortTransaction(NOT_FOUND)
     const current = (await getSettingsRow(client, tenantId)) || {}
 
     const conflict = await findOpenBalanceConflict(client, tenantId, updates, current)
@@ -157,7 +167,7 @@ export async function patchSettings(tenantId, body = {}) {
     if (!updated) {
       // Row didn't exist — insert it with the updates applied as defaults
       const full = {
-        currency: 'EUR',
+        currency: bookkeepingCurrency(profile.base_currency),
         receivable_account_code: null,
         default_revenue_account_code: null,
         payable_account_code: null,

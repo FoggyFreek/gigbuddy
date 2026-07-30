@@ -126,6 +126,8 @@ interface StepContentProps {
   onOpenTerms: () => void
   bandName: string
   onBandNameChange: (name: string) => void
+  countryCode: string
+  onCountryCodeChange: (code: string) => void
   onboardingTenant: Tenant | null
   logo: { file: File; previewUrl: string } | null
   onLogoFileChange: (file: File | null) => void
@@ -135,7 +137,7 @@ interface StepContentProps {
 function StepContent({
   activeStep, ready, loadError, plans, interval, onIntervalChange, selectedPlanId, onSelectPlan,
   selectedPlan, termsAgreed, onTermsAgreedChange, onOpenTerms, bandName, onBandNameChange,
-  onboardingTenant, logo, onLogoFileChange,
+  countryCode, onCountryCodeChange, onboardingTenant, logo, onLogoFileChange,
 }: Readonly<StepContentProps>) {
   if (!ready) {
     if (loadError) return null
@@ -164,6 +166,8 @@ function StepContent({
       <BandStep
         bandName={bandName}
         onBandNameChange={onBandNameChange}
+        countryCode={countryCode}
+        onCountryCodeChange={onCountryCodeChange}
         resumedSlug={onboardingTenant?.slug ?? null}
         logoFile={logo?.file ?? null}
         logoPreviewUrl={logo?.previewUrl ?? null}
@@ -189,6 +193,7 @@ interface WizardControlsProps {
   busy: boolean
   termsAgreed: boolean
   bandName: string
+  countryCode: string
   selectedPlan: SubscriptionPlan | null
   onBack: () => void
   onWelcomeNext: () => void
@@ -197,14 +202,14 @@ interface WizardControlsProps {
 }
 
 // Back/next row: per-step next label, gating, and dispatch.
-function WizardControls({ activeStep, busy, termsAgreed, bandName, selectedPlan, onBack, onWelcomeNext, onGoSummary, onConfirm }: Readonly<WizardControlsProps>) {
+function WizardControls({ activeStep, busy, termsAgreed, bandName, countryCode, selectedPlan, onBack, onWelcomeNext, onGoSummary, onConfirm }: Readonly<WizardControlsProps>) {
   const { t } = useTranslation(['onboarding', 'common'])
   const paidSelected = Boolean(selectedPlan && !selectedPlan.is_fallback)
 
   const nextDisabled =
     busy ||
     (activeStep === 0 && (!termsAgreed || !selectedPlan)) ||
-    (activeStep === 1 && bandName.trim() === '')
+    (activeStep === 1 && (bandName.trim() === '' || countryCode === ''))
 
   const handleNext = () => {
     if (activeStep === 0) onWelcomeNext()
@@ -246,6 +251,8 @@ export default function OnboardingPage() {
   const [termsAgreed, setTermsAgreed] = useState(false)
   const [termsOpen, setTermsOpen] = useState(false)
   const [bandName, setBandName] = useState('')
+  // No default: the accounting country must be chosen, not inherited.
+  const [countryCode, setCountryCode] = useState('')
   // File + its preview object URL, created/revoked in the change handler so
   // no render or effect ever mints URLs.
   const [logo, setLogo] = useState<{ file: File; previewUrl: string } | null>(null)
@@ -289,6 +296,7 @@ export default function OnboardingPage() {
           if (resumed) {
             setOnboardingTenant(resumed)
             setBandName(resumed.band_name ?? '')
+            setCountryCode(resumed.vat_country ?? '')
           }
           setResumeChecked(true)
         })
@@ -339,7 +347,9 @@ export default function OnboardingPage() {
   const ensureOnboardingTenant = useCallback(async (): Promise<Tenant | null> => {
     if (onboardingTenant) return onboardingTenant
     try {
-      const tenant = await createOwnedTenant({ band_name: bandName.trim(), onboarding: true })
+      const tenant = await createOwnedTenant({
+        band_name: bandName.trim(), country_code: countryCode, onboarding: true,
+      })
       setOnboardingTenant(tenant)
       return tenant
     } catch (err) {
@@ -357,7 +367,7 @@ export default function OnboardingPage() {
       }
       throw err
     }
-  }, [onboardingTenant, bandName])
+  }, [onboardingTenant, bandName, countryCode])
 
   const handleConfirm = useCallback(async () => {
     if (!selectedPlan) return
@@ -416,6 +426,8 @@ export default function OnboardingPage() {
         onOpenTerms={() => setTermsOpen(true)}
         bandName={bandName}
         onBandNameChange={setBandName}
+        countryCode={countryCode}
+        onCountryCodeChange={setCountryCode}
         onboardingTenant={onboardingTenant}
         logo={logo}
         onLogoFileChange={handleLogoFileChange}
@@ -429,6 +441,7 @@ export default function OnboardingPage() {
           busy={busy}
           termsAgreed={termsAgreed}
           bandName={bandName}
+          countryCode={countryCode}
           selectedPlan={selectedPlan}
           onBack={() => setActiveStep((s) => Math.max(0, s - 1))}
           onWelcomeNext={() => { void handleWelcomeNext() }}

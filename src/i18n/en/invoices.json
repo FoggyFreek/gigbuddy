@@ -70,7 +70,8 @@
     "postalCode": "Postal code",
     "city": "City",
     "country": "Country",
-    "customerKvk": "Customer KVK (optional)",
+    "customerKvk": "Chamber of Commerce number",
+    "customerVatId": "VAT ID",
     "addMemo": "Add memo",
     "memo": "Memo"
   },
@@ -186,6 +187,7 @@
   },
   "ubl": {
     "download": "Download UBL (XML)",
+    "downloadWithPdf": "UBL with embedded PDF invoice",
     "downloadFailed": "Could not generate the UBL file.",
     "notReadyTitle": "Not ready for e-invoicing",
     "notReadyIntro": "The file will download, but an e-invoicing network is likely to reject it:",

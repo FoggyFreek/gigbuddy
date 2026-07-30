@@ -298,10 +298,11 @@ describe('accounts — isolation', () => {
     await asUserB(request(app).delete(`/api/accounts/${leaf.id}`)).expect(204)
   })
 
-  it('settings changes do not leak between tenants', async () => {
-    await asUserA(request(app).patch('/api/accounts/settings'))
+  it('a rejected compatibility-currency write does not affect another tenant', async () => {
+    const rejected = await asUserA(request(app).patch('/api/accounts/settings'))
       .send({ currency: 'USD' })
-      .expect(200)
+      .expect(400)
+    expect(rejected.body.error).toBe('currency_read_only')
     const bRes = await asUserB(request(app).get('/api/accounts/settings')).expect(200)
     expect(bRes.body.currency).toBe('EUR')
   })
@@ -512,11 +513,11 @@ describe('accounts/settings — CRUD', () => {
     expect(res.body.primary_checking_account_code).toBe('11000')
   })
 
-  it('PATCH /api/accounts/settings updates currency', async () => {
+  it('PATCH /api/accounts/settings rejects currency because the profile owns it', async () => {
     const res = await asUserA(request(app).patch('/api/accounts/settings'))
       .send({ currency: 'USD' })
-      .expect(200)
-    expect(res.body.currency).toBe('USD')
+      .expect(400)
+    expect(res.body.error).toBe('currency_read_only')
   })
 
   it('PATCH /api/accounts/settings 400 on unknown code', async () => {
@@ -666,7 +667,7 @@ describe('tenant creation — seeds accounts', () => {
       .post('/api/admin/tenants')
       .set('x-test-user-id', String(seed.superUser.id))
       .set('x-test-tenant-id', String(seed.tenantA.id))
-      .send({ slug: 'gamma', band_name: 'Gamma Band', adminUserId: seed.superUser.id })
+      .send({ slug: 'gamma', band_name: 'Gamma Band', adminUserId: seed.superUser.id, country_code: 'nl' })
       .expect(201)
 
     const { rows: accs } = await pool.query(

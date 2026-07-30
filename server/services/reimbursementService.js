@@ -23,6 +23,8 @@ import {
   postReimbursementPaid,
 } from './ledgerService.js'
 import { withTransaction } from '../db/withTransaction.js'
+import { loadAccountingBehavior } from './accountingProfileService.js'
+import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
 
 // Sentinel thrown inside the transaction when a concurrent settlement claimed a
 // purchase first, so the whole reimbursement rolls back.
@@ -55,7 +57,8 @@ export async function listMemberOutstandingPurchases(pool, tenantId, bandMemberI
 }
 
 export async function listReimbursementHistory(pool, tenantId, query = {}) {
-  const period = buildReimbursementPeriodWhere(query)
+  const behavior = await loadAccountingBehavior(pool, tenantId)
+  const period = buildReimbursementPeriodWhere(query, behavior?.fiscalYearStart)
   if (period.error) return { error: { status: 400, body: { error: period.error } } }
   return { reimbursements: await listReimbursements(pool, tenantId, period) }
 }
@@ -95,6 +98,7 @@ export async function createReimbursement(pool, tenantId, body, actorUserId = nu
   const amountCents = selected.reduce((sum, p) => sum + p.total_cents, 0)
 
   return withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
     const reimbursement = await insertReimbursement(client, tenantId, {
       band_member_id: member.id,
       amount_cents: amountCents,

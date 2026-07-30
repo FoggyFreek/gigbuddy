@@ -6,8 +6,10 @@
 //
 // Ownership checks return 404, never 403, so tenant existence isn't leaked.
 import { randomBytes } from 'node:crypto'
-import { validSlug, slugFromBandName } from '../validators/tenantValidators.js'
+import { validSlug, slugFromBandName, parseTenantCountryCode } from '../validators/tenantValidators.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
+import { createAccountingProfileForTenant } from './accountingProfileService.js'
+import { defaultBaseCurrency } from '../../shared/accountingProfileCodes.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import {
   insertTenant,
@@ -32,15 +34,16 @@ const SLUG_SUFFIX_ATTEMPTS = 25
 // Inserts with a server-generated slug: base, base-2, base-3, … each via
 // ON CONFLICT DO NOTHING so a taken slug never raises 23505 (which would
 // abort the surrounding transaction). Returns the inserted tenant row.
-async function insertWithGeneratedSlug(client, bandName, userId) {
+async function insertWithGeneratedSlug(client, bandName, userId, vatCountry) {
   const base = slugFromBandName(bandName)
+  const attrs = { bandName, createdByUserId: userId, ownerUserId: userId, vatCountry }
   for (let n = 1; n <= SLUG_SUFFIX_ATTEMPTS; n++) {
     const candidate = n === 1 ? base : `${base}-${n}`
-    const tenant = await insertTenantIfSlugFree(client, candidate, bandName, userId, userId)
+    const tenant = await insertTenantIfSlugFree(client, { ...attrs, slug: candidate })
     if (tenant) return tenant
   }
   return insertTenantIfSlugFree(
-    client, `${base}-${randomBytes(3).toString('hex')}`, bandName, userId, userId,
+    client, { ...attrs, slug: `${base}-${randomBytes(3).toString('hex')}` },
   )
 }
 
@@ -57,6 +60,8 @@ export async function createOwnedTenant(db, userId, body) {
   if (!band_name || typeof band_name !== 'string') {
     return badRequest('band_name is required')
   }
+  const country = parseTenantCountryCode(body)
+  if (country.error) return badRequest(country.error)
   if (!(await isTenantOnboardingEnabled(db))) {
     return {
       error: {
@@ -74,14 +79,19 @@ export async function createOwnedTenant(db, userId, body) {
     if (capError) abortTransaction(capError)
 
     const tenant = hasSlug
-      ? await insertTenant(client, slug, band_name, userId, userId)
-      : await insertWithGeneratedSlug(client, band_name, userId)
+      ? await insertTenant(client, {
+        slug, bandName: band_name, createdByUserId: userId, ownerUserId: userId, vatCountry: country.countryCode,
+      })
+      : await insertWithGeneratedSlug(client, band_name, userId, country.countryCode)
     if (!tenant) {
       // Even the random-suffix fallback collided — effectively impossible.
       abortTransaction({ error: { status: 409, body: { error: 'Slug already in use' } } })
     }
     await ensureTenantStatistics(client, tenant.id)
-    await seedTenantAccounting(client, tenant.id)
+    await seedTenantAccounting(client, tenant.id, defaultBaseCurrency(country.countryCode))
+    // Same transaction as the tenant insert: a band must never exist without the
+    // accounting profile that states its jurisdiction.
+    await createAccountingProfileForTenant(client, tenant.id, country.countryCode)
     await insertTenantAdminMembership(client, userId, tenant.id, userId)
     if (onboarding === true) {
       await setOnboardingTenant(client, userId, tenant.id)

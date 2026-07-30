@@ -19,6 +19,7 @@ interface Props {
   /** Object key of the rendered PDF; absent until one has been generated. */
   pdfPath?: string | null
   onDownloadUbl: () => void
+  onDownloadUblWithPdf: () => void
   ublBusy: boolean
   /** The email download composes a personal message first, so it opens a dialog. */
   onOpenEmailDialog: () => void
@@ -29,12 +30,13 @@ interface Props {
 const MENU_ID = 'invoice-download-menu'
 const BUTTON_ID = 'invoice-download-button'
 
-// The three ways an invoice leaves the app, behind one control. All are reads,
+// The ways an invoice leaves the app, behind one control. All are reads,
 // so they stay available to every finance viewer; re-generating the PDF is a
 // mutation and deliberately lives outside this menu.
 export default function InvoiceDownloadMenu({
   pdfPath,
   onDownloadUbl,
+  onDownloadUblWithPdf,
   ublBusy,
   onOpenEmailDialog,
   peppolBlockers,
@@ -118,6 +120,11 @@ export default function InvoiceDownloadMenu({
               />
             </Tooltip>
           )}
+        </MenuItem>
+
+        <MenuItem onClick={choose(onDownloadUblWithPdf)} disabled={ublBusy}>
+          <ListItemIcon><CodeIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t($ => $.ubl.downloadWithPdf)}</ListItemText>
         </MenuItem>
 
         <MenuItem onClick={choose(onOpenEmailDialog)}>

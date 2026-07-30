@@ -387,6 +387,9 @@ export default function MembersSection() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+        {t($ => $.members.title)}
+      </Typography>
       {error && (
         <Typography color="error" variant="body2">
           {error}

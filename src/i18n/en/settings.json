@@ -3,25 +3,33 @@
   "nav": {
     "accountSettings": "Account settings",
     "bandSettings": "Band settings",
+    "financeSettings": "Finance and accounting settings",
     "backAria": "Back to settings",
     "items": {
       "preferences": "My preferences",
       "billing": "Billing",
       "connectedAccounts": "Connected accounts",
       "accent": "Accent color",
-      "members": "Members",
-      "invites": "Invites",
+      "membersAndInvites": "Members and invites",
       "storage": "Storage",
       "integrations": "Integrations",
       "chartOfAccounts": "Chart of accounts",
-      "defaultAccounts": "Accounting Settings"
+      "defaultAccounts": "Accounting Settings",
+      "financialProfile": "Financial profile",
+      "accountingProfile": "Accounting profile"
     }
   },
   "subscription": {
     "current": "Current plan",
     "manage": "Manage subscription"
   },
+  "financeWizard": {
+    "title": "Finance setup wizard",
+    "help": "Walk through your opening balance, financial profile and default accounts.",
+    "cta": "Start"
+  },
   "members": {
+    "title": "Members",
     "columns": {
       "name": "Name",
       "email": "Email",
@@ -55,6 +63,7 @@
     }
   },
   "invites": {
+    "title": "Invites",
     "newInvite": "New invite",
     "create": "Create",
     "role": "Role",
@@ -220,10 +229,6 @@
     },
     "booksClosedThrough": "Books closed through",
     "booksClosedThroughHelper": "Nothing can be posted on or before this date. Leave empty to keep the books open.",
-    "wizard": {
-      "cta": "Finance setup wizard",
-      "help": "Walk through your opening balance, financial profile and default accounts."
-    },
     "errors": {
       "account_has_open_balance": "This account still carries an open balance (unpaid bills, unsettled member debt or unpaid invoices). Settle them before changing the account.",
       "invalid_books_closed_through": "Enter a valid date (YYYY-MM-DD) or clear the field.",
@@ -279,5 +284,117 @@
     "saveFailed": "Saving the API key failed.",
     "replace": "Replace key",
     "remove": "Remove key"
+  },
+  "financialProfile": {
+    "title": "Financial profile",
+    "description": "Your band's legal and financial identity: the name, address and identifiers that appear on the invoices you send. Your accountant and your customers rely on these being the registered details.",
+    "legalFormNote": "Legal form note",
+    "legalFormNoteHelper": "Optional, for a form not in the list or an extra detail.",
+    "postalCountryHelper": "The country on your address. Set the country your books are kept in under Accounting profile.",
+    "errors": {
+      "unknown": "Could not save the financial profile.",
+      "invalid_email": "Enter a valid email address.",
+      "invalid_phone": "Enter a valid phone number.",
+      "invalid_iban": "Enter a valid IBAN.",
+      "invalid_tax_id": "That VAT number does not match the format for your band's accounting country.",
+      "invalid_kvk_number": "That registration number does not match the format for your band's accounting country."
+    }
+  },
+  "accountingProfile": {
+    "title": "Accounting profile",
+    "description": "The accounting rules this band's bookkeeping follows. Later reports, VAT workpapers and retention periods are derived from these answers, so they describe facts about the band rather than preferences.",
+    "unset": "Not set",
+    "notApplicable": "Not applicable — this band is not VAT registered.",
+    "needsReview": "These values were inherited when the accounting profile was introduced. Check them and confirm.",
+    "confirmCta": "Confirm",
+    "nonEuroPending": "This band's base currency is recorded but not yet applied: invoices, the UBL export and reports are still produced in euro. Multi-currency bookkeeping is not available yet.",
+    "country": "Accounting country",
+    "countryHelper": "Changing this is only possible before any financial document exists and resets country-dependent accounting settings.",
+    "baseCurrency": "Base currency",
+    "baseCurrencyHelper": "Derived from the accounting country and used for all bookkeeping, invoices and reports.",
+    "changeCountry": {
+      "action": "Change accounting country",
+      "title": "Change accounting country",
+      "warning": "This is only possible before any invoice, purchase, journal, reimbursement, VAT return, merchandise sale or bank import exists. It resets VAT registration, filing settings, legal form, reporting framework, scheme enrolments and product VAT defaults. Stored identifiers must be valid for the new country.",
+      "cancel": "Cancel",
+      "confirm": "Change and reset"
+    },
+    "financialYearStartMonth": "Financial year starts (month)",
+    "financialYearStartDay": "Day",
+    "vatRegistered": "Registered for VAT",
+    "vatRegisteredHelper": "A legal fact, not something we infer from turnover. Leave unconfirmed until you know.",
+    "vatRegisteredOptions": {
+      "yes": "Yes",
+      "no": "No",
+      "unconfirmed": "Not yet confirmed"
+    },
+    "vatFilingFrequency": "VAT filing frequency",
+    "vatFilingFrequencyHelper": "Copy the period the tax authority assigned you; do not guess.",
+    "vatFilingFrequencies": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "yearly": "Yearly",
+      "authority_assigned": "As assigned by the tax authority"
+    },
+    "errors": {
+      "unknown": "Could not save the accounting profile.",
+      "unavailable": "The accounting profile could not be loaded.",
+      "country_immutable": "The accounting country is fixed when the band is created and cannot be changed here.",
+      "profile_incomplete": "Answer every field before confirming the profile.",
+      "vat_fields_require_registration": "Set Registered for VAT to yes before choosing a VAT basis or filing frequency.",
+      "vat_fields_required_when_registered": "A VAT-registered band needs a VAT basis and a filing frequency.",
+      "invalid_financial_year_start": "That day does not exist in the chosen month.",
+      "invalid_financial_year_start_month": "Choose a valid month.",
+      "invalid_financial_year_start_day": "Choose a valid day.",
+      "accounting_country_has_financial_documents": "The accounting country cannot be changed because financial documents already exist.",
+      "tax_id_incompatible_vat_country": "The stored VAT number is not valid for the selected country. Clear or replace it in the financial profile first.",
+      "kvk_incompatible_vat_country": "The stored registration number is not valid for the selected country. Clear or replace it in the financial profile first.",
+      "filing_frequency_derived_from_scheme": "The filing period follows the VAT scheme. Start or end a scheme below instead of setting this.",
+      "invalid_scheme_code": "Choose a scheme from the list.",
+      "scheme_country_mismatch": "That scheme does not belong to this band's accounting country.",
+      "invalid_country_code": "Choose a destination country.",
+      "invalid_valid_from": "Enter a valid first day.",
+      "invalid_valid_to": "Enter a valid last day.",
+      "valid_to_before_valid_from": "The last day cannot be before the first day.",
+      "invalid_source_confirmation_date": "Enter a valid confirmation date.",
+      "overlapping_enrolment": "Another enrolment already covers those dates.",
+      "scheme_requires_vat_registration": "A band on a VAT scheme is still registered for VAT. Set Registered for VAT to yes first.",
+      "enrolment_confirmed": "A confirmed enrolment is retracted, not deleted, so the history stays intact.",
+      "enrolment_referenced": "Invoices or bills were issued during this period, so it cannot be removed.",
+      "enrolment_voided": "This enrolment has been retracted and can no longer be edited.",
+      "nothing_to_update": "Change at least one date."
+    },
+    "defaultVatRate": "Default VAT rate",
+    "defaultVatRateHelper": "Pre-filled on new invoice lines. You can still change the rate per line.",
+    "vatScheme": {
+      "title": "VAT scheme",
+      "description": "Which small-business or cross-border scheme this band is enrolled in, and between which dates. Changing this never changes an invoice you have already sent — those keep the VAT treatment they were issued with.",
+      "start": "Start a scheme",
+      "startTitle": "Start a VAT scheme",
+      "editTitle": "Edit this enrolment",
+      "empty": "No scheme recorded. This band charges and files VAT normally.",
+      "scheme": "Scheme",
+      "validFrom": "First day",
+      "validFromHelper": "The date the scheme started applying, as stated by the tax authority.",
+      "validTo": "Last day",
+      "validToHelper": "The last day the scheme applied — that day is still covered. Leave empty while the scheme is ongoing.",
+      "confirmationDate": "Confirmation date",
+      "confirmationDateHelper": "Optional: the date on the letter or notice confirming the enrolment.",
+      "destinationCountry": "Destination country",
+      "destinationCountryHelper": "The member state that granted the exemption. The cross-border scheme is recorded per destination.",
+      "open": "Ongoing",
+      "destination": "Destination",
+      "edit": "Edit",
+      "retract": "Retract",
+      "cancel": "Cancel",
+      "save": "Save",
+      "inferred": "Start date not confirmed",
+      "recordedOnly": "Recorded only",
+      "voided": "Retracted",
+      "frequencyFromScheme": "Exempt: this band is on a VAT scheme, so it does not file periodic returns. End the scheme below to choose a filing period.",
+      "notImplemented": "This scheme will be recorded, but suppressing VAT on invoices is currently only implemented for the Dutch KOR. Your invoices will keep charging VAT.",
+      "destinationOnlyNote": "The cross-border scheme applies to sales into the destination country only. It does not change the VAT returns you file at home.",
+      "issuedUnaffected": "Invoices you have already sent keep the VAT treatment they were issued with, so correcting these dates is safe."
+    }
   }
 }

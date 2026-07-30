@@ -17,6 +17,8 @@
     "givenName": "Voornaam",
     "familyName": "Achternaam",
     "organizationName": "Organisatienaam",
+    "kvkNumber": "KvK-nummer",
+    "taxId": "Btw-nummer",
     "streetAndNumber": "Straat en huisnummer",
     "streetAdditional": "Adres aanvullend",
     "postalCode": "Postcode",

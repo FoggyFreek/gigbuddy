@@ -17,11 +17,21 @@ import {
   deletePurchase,
   deletePurchaseAttachment,
 } from '../services/purchaseService.js'
+import { importPurchaseFromDocument } from '../services/purchaseImportService.js'
 
 const router = Router()
 
 const ATTACHMENT_ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png'])
 const attachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+})
+
+// An e-invoice is an XML file or a PDF carrying one, and the Content-Type a
+// browser puts on either varies by platform and is client-supplied regardless.
+// So the type is not gated here — the parser sniffs the bytes and rejects
+// anything that is not a supported e-invoice.
+const documentUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
 })
@@ -93,6 +103,20 @@ router.post('/', requirePermission(PERMISSIONS.PURCHASE_CREATE), async (req, res
   if (result.error) return sendError(res, result.error)
   const detail = await getPurchaseDetail(pool, req.tenantId, result.purchaseId)
   res.status(201).json(detail.purchase)
+})
+
+// ---------- import (e-invoice) ----------
+// Creates a draft purchase from a supplier's e-invoice — UBL or CII XML, or a
+// Factur-X / ZUGFeRD PDF carrying one. Same permission as
+// creating one by hand: the result is a draft either way, and approving it —
+// the step that posts to the ledger — stays finance.manage-gated.
+router.post('/import', requirePermission(PERMISSIONS.PURCHASE_CREATE), documentUpload.single('file'), async (req, res) => {
+  const result = await importPurchaseFromDocument({
+    db: pool, tenantId: req.tenantId, file: req.file, actorUserId: req.user.id,
+  })
+  if (result.error) return sendError(res, result.error)
+  const detail = await getPurchaseDetail(pool, req.tenantId, result.purchaseId, { withAttachments: true })
+  res.status(201).json({ purchase: detail.purchase, warnings: result.warnings })
 })
 
 // ---------- patch ----------

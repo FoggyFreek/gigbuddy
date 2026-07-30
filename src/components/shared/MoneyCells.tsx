@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
 import TableCell from '@mui/material/TableCell'
-import { formatEurParts } from '../../utils/invoiceTotals.ts'
+import { formatCurrencyParts } from '../../utils/invoiceTotals.ts'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 
 interface MoneyCellsProps {
   cents?: number | string
   bold?: boolean
+  currency?: string
 }
 
 // Renders a EUR amount as two table cells: a narrow right-aligned cell holding
@@ -16,8 +18,9 @@ interface MoneyCellsProps {
 // left rather than as a gap between the symbol and the digits. Use one
 // <MoneyCells> per money column and pair it with <MoneyHeaderCells> so column
 // counts match.
-export default function MoneyCells({ cents, bold = false }: Readonly<MoneyCellsProps>) {
-  const { symbol, value } = formatEurParts(cents)
+export default function MoneyCells({ cents, currency, bold = false }: Readonly<MoneyCellsProps>) {
+  const profileCurrency = useAccountingProfile().profile?.base_currency ?? 'EUR'
+  const { symbol, value } = formatCurrencyParts(cents, currency ?? profileCurrency)
   return (
     <>
       <TableCell align="right" padding="none" sx={{ pl: 2, color: 'text.secondary' }}>
