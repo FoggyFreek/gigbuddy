@@ -75,7 +75,12 @@ describe('DELETE /api/admin/tenants/:id', () => {
   it('includes the dashboard memory-tile image among the purged object keys', async () => {
     const memoryKey = `tenants/${seed.tenantA.id}/memory/deadbeef.jpg`
     await pool.query(
-      'UPDATE tenants SET archived_at = NOW(), memory_image_path = $2 WHERE id = $1',
+      'UPDATE tenants SET archived_at = NOW() WHERE id = $1',
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO dashboard_tiles (tenant_id, type, image_path)
+       VALUES ($1, 'memory_tile', $2)`,
       [seed.tenantA.id, memoryKey],
     )
     await asSuper(remove(seed.tenantA)).expect(204)

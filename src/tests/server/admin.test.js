@@ -332,9 +332,10 @@ describe('/api/admin/tenants — super admin only', () => {
 
   it('never returns plaintext or encrypted credential fields', async () => {
     await pool.query(
-      `UPDATE tenants SET mollie_api_key = $1, shopify_client_secret = $2,
-       mollie_api_key_encrypted = $3::jsonb, shopify_client_secret_encrypted = $4::jsonb
-       WHERE id = $5`,
+      `INSERT INTO tenant_integrations (
+         mollie_api_key, shopify_client_secret,
+         mollie_api_key_encrypted, shopify_client_secret_encrypted, tenant_id
+       ) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)`,
       ['legacy-mollie', 'legacy-shopify', '{}', '{}', seed.tenantA.id],
     )
     const list = await asSuper(request(app).get('/api/admin/tenants')).expect(200)

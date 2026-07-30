@@ -3,8 +3,7 @@
 // Consumed by the backend (enrolment validation, VAT-treatment resolution) and
 // the frontend (scheme dropdown) via the typed wrapper in src/utils/taxSchemes.ts.
 //
-// Why a registry and not two booleans: `tenants.applies_kor` could only ever
-// express one Dutch scheme. Ten country packs need their own national
+// Why a registry and not a boolean: ten country packs need their own national
 // exemptions, and the cross-border EU SME scheme is per-DESTINATION, so several
 // enrolments coexist. Which is why every entry declares a `scope`: only a
 // `national_home` scheme governs the tenant's domestic VAT treatment and its

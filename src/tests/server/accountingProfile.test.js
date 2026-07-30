@@ -183,6 +183,86 @@ describe('accounting profile — a missing row is a fault', () => {
   })
 })
 
+describe('accounting profile — audit script', () => {
+  let auditAccountingProfiles, parseArgs
+
+  beforeAll(async () => {
+    const mod = await import('../../../server/scripts/backfillAccountingProfiles.js')
+    auditAccountingProfiles = mod.auditAccountingProfiles
+    parseArgs = mod.parseArgs
+  })
+
+  it('reports a missing profile and refuses to repair it without a country', async () => {
+    await pool.query('DELETE FROM tenant_accounting_profiles WHERE tenant_id = $1', [seed.tenantA.id])
+
+    const result = await auditAccountingProfiles(pool, { apply: true })
+    expect(result.counts.migrationNeeded).toBe(1)
+    expect(result.counts.migrated).toBe(0)
+    expect(result.ok).toBe(false)
+  })
+
+  it('repairs the named tenant with the supplied country', async () => {
+    await pool.query('DELETE FROM tenant_accounting_profiles WHERE tenant_id = $1', [seed.tenantA.id])
+
+    const result = await auditAccountingProfiles(pool, {
+      apply: true,
+      repairTenant: { tenantId: seed.tenantA.id, countryCode: 'de' },
+    })
+    expect(result.counts.migrated).toBe(1)
+    expect(result.ok).toBe(true)
+
+    const { rows } = await pool.query(
+      'SELECT country_code, default_vat_rate, profile_source FROM tenant_accounting_profiles WHERE tenant_id = $1',
+      [seed.tenantA.id],
+    )
+    expect(rows[0].country_code).toBe('de')
+    expect(Number(rows[0].default_vat_rate)).toBe(19)
+    expect(rows[0].profile_source).toBe('repair')
+  })
+
+  it('does not touch a tenant that was not named', async () => {
+    await pool.query('DELETE FROM tenant_accounting_profiles WHERE tenant_id IN ($1, $2)', [
+      seed.tenantA.id, seed.tenantB.id,
+    ])
+
+    const result = await auditAccountingProfiles(pool, {
+      apply: true,
+      repairTenant: { tenantId: seed.tenantA.id, countryCode: 'nl' },
+    })
+    expect(result.counts.migrated).toBe(1)
+    expect(result.ok).toBe(false)
+
+    const { rows: [{ count }] } = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM tenant_accounting_profiles WHERE tenant_id = $1',
+      [seed.tenantB.id],
+    )
+    expect(count).toBe(0)
+  })
+
+  // The rate-fill repair exists to clear migration 144's preflight; once that
+  // migration is applied the fault it repairs is unreachable by construction.
+  it('cannot see a missing default VAT rate — the column is NOT NULL', async () => {
+    await expect(
+      pool.query(
+        'UPDATE tenant_accounting_profiles SET default_vat_rate = NULL WHERE tenant_id = $1',
+        [seed.tenantA.id],
+      ),
+    ).rejects.toThrow()
+
+    const result = await auditAccountingProfiles(pool, { apply: false })
+    expect(result.counts.rateMissing).toBe(0)
+  })
+
+  it('rejects a country it has no rate table for', () => {
+    expect(() => parseArgs(['--apply', '--tenant=1', '--country=us'])).toThrow(/Unsupported --country/)
+    expect(() => parseArgs(['--apply', '--tenant=1'])).toThrow(/together/)
+    expect(() => parseArgs(['--check', '--tenant=1'])).toThrow(/Usage/)
+    expect(parseArgs(['--apply', '--tenant=7', '--country=NL '])).toEqual({
+      apply: true, repairTenant: { tenantId: 7, countryCode: 'nl' },
+    })
+  })
+})
+
 describe('accounting profile — write', () => {
   it('applies a partial patch and leaves the other fields alone', async () => {
     const res = await patchProfile({ financial_year_start_month: 7 }).expect(200)
@@ -242,13 +322,16 @@ describe('accounting profile — write', () => {
     expect(res.body.error).toBe('invalid_local_legal_form_code')
   })
 
-  it('does not write the regime back onto the tenants row', async () => {
+  // The tenants row carries no regime columns at all, so a write-back is not
+  // expressible: `directors` is the only invoice-facing field left on it.
+  it('leaves the tenants row without any regime column', async () => {
     await patchProfile({ local_legal_form_code: 'nl_vereniging', default_vat_rate: 9 }).expect(200)
-    const { rows: [tenant] } = await pool.query(
-      'SELECT legal_form, tax_percentage FROM tenants WHERE id = $1', [seed.tenantA.id],
+    const { rows } = await pool.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'tenants'
+          AND column_name IN ('vat_country', 'legal_form', 'tax_percentage', 'applies_kor')`,
     )
-    expect(tenant.legal_form).toBeNull()
-    expect(Number(tenant.tax_percentage)).toBe(9)
+    expect(rows).toEqual([])
   })
 })
 

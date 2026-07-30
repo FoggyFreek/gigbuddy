@@ -261,21 +261,25 @@ describe('PATCH /api/profile — financial fields', () => {
     expect(res.body).not.toHaveProperty('legal_form')
   })
 
-  it('DB constraint rejects an unsupported vat_country stored via raw SQL', async () => {
+  it('DB constraint rejects an unsupported accounting country via raw SQL', async () => {
     // Defence in depth: even a path that bypasses the validator (raw SQL, an
     // import, a future service) cannot persist a country with no rate table.
     await expect(
-      pool.query('UPDATE tenants SET vat_country = $1 WHERE id = $2', ['us', seed.tenantA.id]),
+      pool.query(
+        'UPDATE tenant_accounting_profiles SET country_code = $1 WHERE tenant_id = $2',
+        ['us', seed.tenantA.id],
+      ),
     ).rejects.toThrow()
   })
 
-  it('DB constraint accepts every supported vat_country', async () => {
+  it('DB constraint accepts every supported accounting country', async () => {
     for (const code of VAT_COUNTRY_CODES) {
       const { rows } = await pool.query(
-        'UPDATE tenants SET vat_country = $1 WHERE id = $2 RETURNING vat_country',
+        `UPDATE tenant_accounting_profiles SET country_code = $1
+          WHERE tenant_id = $2 RETURNING country_code`,
         [code, seed.tenantA.id],
       )
-      expect(rows[0].vat_country).toBe(code)
+      expect(rows[0].country_code).toBe(code)
     }
   })
 
@@ -294,7 +298,10 @@ describe('PATCH /api/profile — financial fields', () => {
 
   it('DB constraint rejects an unsupported legal_form via raw SQL', async () => {
     await expect(
-      pool.query('UPDATE tenants SET legal_form = $1 WHERE id = $2', ['llc', seed.tenantA.id]),
+      pool.query(
+        'UPDATE tenant_accounting_profiles SET legal_form = $1 WHERE tenant_id = $2',
+        ['llc', seed.tenantA.id],
+      ),
     ).rejects.toThrow()
   })
 
@@ -404,13 +411,72 @@ describe('PATCH /api/profile — accent color', () => {
   )
 })
 
+describe('extracted tenant data', () => {
+  it('stores integrations and the memory tile outside tenants while preserving the profile API', async () => {
+    const movedColumns = [
+      'memory_image_path', 'memory_caption', 'memory_gig_id',
+      'bandsintown_artist_name', 'bandsintown_artist_id',
+      'bandsintown_app_id', 'bandsintown_app_id_encrypted', 'bandsintown_app_id_changed_at',
+      'shopify_client_id', 'shopify_client_secret', 'shopify_client_secret_encrypted',
+      'shopify_client_secret_changed_at', 'shopify_shop_domain',
+      'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
+      'mollie_api_key_retained_at',
+    ]
+    const { rows: tenantColumns } = await pool.query(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'tenants'
+          AND column_name = ANY($1::text[])`,
+      [movedColumns],
+    )
+    expect(tenantColumns).toEqual([])
+
+    const response = await as(seed.userA.id, seed.tenantA.id)(
+      request(app).patch('/api/profile').send({
+        memory_caption: 'Outside the tenant row',
+        memory_gig_id: seed.gigA.id,
+        bandsintown_artist_name: 'Alpha Artist',
+        bandsintown_artist_id: '12345',
+      }),
+    ).expect(200)
+
+    const { rows: [tile] } = await pool.query(
+      `SELECT tile_id, type, caption, gig_id
+         FROM dashboard_tiles
+        WHERE tenant_id = $1 AND type = 'memory_tile'`,
+      [seed.tenantA.id],
+    )
+    expect(tile).toEqual({
+      tile_id: expect.any(Number),
+      type: 'memory_tile',
+      caption: 'Outside the tenant row',
+      gig_id: seed.gigA.id,
+    })
+
+    const { rows: [integration] } = await pool.query(
+      `SELECT bandsintown_artist_name, bandsintown_artist_id
+         FROM tenant_integrations WHERE tenant_id = $1`,
+      [seed.tenantA.id],
+    )
+    expect(integration).toEqual({
+      bandsintown_artist_name: 'Alpha Artist',
+      bandsintown_artist_id: '12345',
+    })
+    expect(response.body).toMatchObject({
+      memory_caption: 'Outside the tenant row',
+      memory_gig_id: seed.gigA.id,
+      bandsintown_artist_name: 'Alpha Artist',
+      bandsintown_artist_id: '12345',
+    })
+  })
+})
+
 describe('DELETE /api/profile/memory-image', () => {
   async function seedMemory(tenantId, gigId) {
     await pool.query(
-      `UPDATE tenants
-          SET memory_image_path = $1, memory_caption = $2, memory_gig_id = $3
-        WHERE id = $4`,
-      [`tenants/${tenantId}/memory/photo.webp`, 'What a show', gigId, tenantId],
+      `INSERT INTO dashboard_tiles (tenant_id, type, image_path, caption, gig_id)
+       VALUES ($1, 'memory_tile', $2, $3, $4)`,
+      [tenantId, `tenants/${tenantId}/memory/photo.webp`, 'What a show', gigId],
     )
   }
 
@@ -423,7 +489,9 @@ describe('DELETE /api/profile/memory-image', () => {
     expect(res.body).toEqual({ memory_image_path: null, memory_caption: null, memory_gig_id: null })
 
     const { rows: [stored] } = await pool.query(
-      'SELECT memory_image_path, memory_caption, memory_gig_id FROM tenants WHERE id = $1',
+      `SELECT image_path AS memory_image_path, caption AS memory_caption, gig_id AS memory_gig_id
+         FROM dashboard_tiles
+        WHERE tenant_id = $1 AND type = 'memory_tile'`,
       [seed.tenantA.id],
     )
     expect(stored).toEqual({ memory_image_path: null, memory_caption: null, memory_gig_id: null })
@@ -439,7 +507,9 @@ describe('DELETE /api/profile/memory-image', () => {
     ).expect(200)
 
     const { rows: [stored] } = await pool.query(
-      'SELECT memory_caption FROM tenants WHERE id = $1',
+      `SELECT caption AS memory_caption
+         FROM dashboard_tiles
+        WHERE tenant_id = $1 AND type = 'memory_tile'`,
       [seed.tenantA.id],
     )
     expect(stored.memory_caption).toBe('What a show')
@@ -460,7 +530,8 @@ describe('Shopify credential management', () => {
     expect(res.headers['cache-control']).toBe('no-store')
 
     const { rows: [stored] } = await pool.query(
-      'SELECT shopify_client_secret, shopify_client_secret_encrypted FROM tenants WHERE id = $1',
+      `SELECT shopify_client_secret, shopify_client_secret_encrypted
+         FROM tenant_integrations WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
     expect(stored.shopify_client_secret).toBeNull()
@@ -546,9 +617,10 @@ describe('Shopify credential management', () => {
     ['DELETE', 'shopify-domain', null],
   ])('invalidates cached tokens after %s /%s', async (method, path, body) => {
     await pool.query(
-      `UPDATE tenants SET shopify_client_id = $1, shopify_client_secret = $2,
-                          shopify_client_secret_encrypted = NULL, shopify_shop_domain = $3
-        WHERE id = $4`,
+      `INSERT INTO tenant_integrations (
+         shopify_client_id, shopify_client_secret,
+         shopify_client_secret_encrypted, shopify_shop_domain, tenant_id
+       ) VALUES ($1, $2, NULL, $3, $4)`,
       ['a'.repeat(32), validSecret, 'test-band.myshopify.com', seed.tenantA.id],
     )
     const mint = vi.fn(async () => ({

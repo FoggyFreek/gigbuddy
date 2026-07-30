@@ -23,23 +23,30 @@ import {
 } from '../validators/profileValidators.js'
 import {
   listProfileLinks,
+  fetchProfileTenant,
   updateTenantFields,
   nextLinkSortOrder,
   insertProfileLink,
   updateProfileLink,
   deleteProfileLink,
+  getTenantImagePath,
+  setTenantImagePath,
+  gigBelongsToTenant,
+} from '../repositories/profileRepository.js'
+import {
   getShopifyClientId,
   setShopifyClientId,
   clearShopifyClientId,
   getShopifyDomain,
   setShopifyDomain,
   clearShopifyDomain,
-  getTenantImagePath,
-  setTenantImagePath,
+  updateBandsintownProfile,
+} from '../repositories/tenantIntegrationRepository.js'
+import {
   clearMemoryTile,
-  gigBelongsToTenant,
-} from '../repositories/profileRepository.js'
-import { fetchTenant, lockTenantRow } from '../repositories/tenantRepository.js'
+  updateMemoryTile,
+} from '../repositories/dashboardTileRepository.js'
+import { lockTenantRow } from '../repositories/tenantRepository.js'
 import { loadAccountingProfile } from './accountingProfileService.js'
 import { withTransaction } from '../db/withTransaction.js'
 import { DEFAULT_VAT_COUNTRY } from '../../shared/vatRates.js'
@@ -89,7 +96,7 @@ async function setIntegrationCredentialGuarded(db, tenantId, type, plaintext) {
 // ---------- profile ----------
 
 export async function getProfile(db, tenantId) {
-  const tenant = await fetchTenant(db, tenantId)
+  const tenant = await fetchProfileTenant(db, tenantId)
   if (!tenant) return notFound('Profile not found')
   const links = await listProfileLinks(db, tenantId)
   return { profile: { ...tenant, links } }
@@ -102,6 +109,7 @@ const ADMIN_ONLY_PROFILE_FIELDS = new Set([...FINANCIAL_FIELDS_SET, 'accent_colo
 // edit it — but it is still customization data, so its write takes the same
 // purge-race guard.
 const CUSTOMIZATION_PROFILE_FIELDS = new Set(['accent_color', ...MEMORY_FIELDS])
+const BANDSINTOWN_PROFILE_FIELDS = new Set(['bandsintown_artist_name', 'bandsintown_artist_id'])
 
 // `isAdmin` is computed by the route (tenant_admin or super admin); tenant-wide
 // financial and appearance settings are gated to admins.
@@ -127,13 +135,14 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
   // closes the race with a concurrent downgrade purge (route-level gate already
   // covers the common case).
   const touchesCustomization = Object.keys(body || {}).some((key) => CUSTOMIZATION_PROFILE_FIELDS.has(key))
+  const touchesExtractedIntegration = Object.keys(body || {}).some((key) => BANDSINTOWN_PROFILE_FIELDS.has(key))
 
   // The consistency check reads the stored tax_id/kvk/country and the write must
   // see the same state, so both run in one transaction under a row lock (see
   // runProfileWrite). The customization guard needs the tenant advisory lock +
   // an in-transaction entitlement recheck, so route through withFeatureWriteGuard
   // (which supplies the transaction) when either concern is present.
-  if (needsConsistencyCheck || touchesCustomization) {
+  if (needsConsistencyCheck || touchesCustomization || touchesExtractedIntegration) {
     if (touchesCustomization) {
       return withFeatureWriteGuard(db, tenantId, FEATURES.CUSTOMIZATION,
         (client) => runProfileWrite(client, tenantId, body, needsConsistencyCheck))
@@ -175,9 +184,22 @@ async function runProfileWrite(executor, tenantId, body, lockForConsistency) {
   if (built.error) return badRequest(built.error)
   if (!built.fields.length) return badRequest('No valid fields to update')
 
-  const updated = await updateTenantFields(executor, tenantId, built.fields, built.values)
-  if (!updated) return notFound('Profile not found')
-  return { profile: updated }
+  const tenantUpdates = built.updates.filter(({ field }) =>
+    !MEMORY_FIELDS.includes(field) && !BANDSINTOWN_PROFILE_FIELDS.has(field))
+  const memoryUpdates = built.updates.filter(({ field }) => MEMORY_FIELDS.includes(field))
+  const bandsintownUpdates = built.updates.filter(({ field }) => BANDSINTOWN_PROFILE_FIELDS.has(field))
+
+  if (tenantUpdates.length > 0) {
+    const fields = tenantUpdates.map(({ field }, index) => `${field} = $${index + 1}`)
+    const values = tenantUpdates.map(({ value }) => value)
+    const updated = await updateTenantFields(executor, tenantId, fields, values)
+    if (!updated) return notFound('Profile not found')
+  }
+  await updateMemoryTile(executor, tenantId, memoryUpdates)
+  await updateBandsintownProfile(executor, tenantId, bandsintownUpdates)
+
+  const profile = await fetchProfileTenant(executor, tenantId)
+  return profile ? { profile } : notFound('Profile not found')
 }
 
 // ---------- links ----------

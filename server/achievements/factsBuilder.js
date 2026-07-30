@@ -10,20 +10,21 @@ const nonBlank = (v) => typeof v === 'string' && v.trim() !== ''
 
 async function tenantFacts(db, tenantId) {
   const { rows } = await db.query(
-    `SELECT band_name, bio, logo_path, logo_dark_path, avatar_path, banner_path,
-            instagram_handle, facebook_handle, tiktok_handle, youtube_handle, spotify_handle,
-            (bandsintown_app_id_encrypted IS NOT NULL OR
-              NULLIF(BTRIM(bandsintown_app_id), '') IS NOT NULL) AS bandsintown_configured,
-            (NULLIF(BTRIM(shopify_client_id), '') IS NOT NULL AND
-              (shopify_client_secret_encrypted IS NOT NULL OR
-                NULLIF(BTRIM(shopify_client_secret), '') IS NOT NULL) AND
-              NULLIF(BTRIM(shopify_shop_domain), '') IS NOT NULL) AS shopify_configured,
-            (mollie_api_key_retained_at IS NULL AND
-              (mollie_api_key_encrypted IS NOT NULL OR
-                NULLIF(BTRIM(mollie_api_key), '') IS NOT NULL)) AS mollie_configured,
-            created_at
-       FROM tenants
-      WHERE id = $1`,
+    `SELECT t.band_name, t.bio, t.logo_path, t.logo_dark_path, t.avatar_path, t.banner_path,
+            t.instagram_handle, t.facebook_handle, t.tiktok_handle, t.youtube_handle, t.spotify_handle,
+            (ti.bandsintown_app_id_encrypted IS NOT NULL OR
+              NULLIF(BTRIM(ti.bandsintown_app_id), '') IS NOT NULL) AS bandsintown_configured,
+            (NULLIF(BTRIM(ti.shopify_client_id), '') IS NOT NULL AND
+              (ti.shopify_client_secret_encrypted IS NOT NULL OR
+                NULLIF(BTRIM(ti.shopify_client_secret), '') IS NOT NULL) AND
+              NULLIF(BTRIM(ti.shopify_shop_domain), '') IS NOT NULL) AS shopify_configured,
+            (ti.mollie_api_key_retained_at IS NULL AND
+              (ti.mollie_api_key_encrypted IS NOT NULL OR
+                NULLIF(BTRIM(ti.mollie_api_key), '') IS NOT NULL)) AS mollie_configured,
+            t.created_at
+       FROM tenants t
+       LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id
+      WHERE t.id = $1`,
     [tenantId],
   )
   const t = rows[0] ?? {}

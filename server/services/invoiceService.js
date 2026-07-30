@@ -184,8 +184,10 @@ export async function renderAndStorePdf(pool, invoiceId, tenantId) {
   // via POST /:id/render, which has no finalization guard) reproduces the
   // document that was sent rather than one derived from today's configuration.
   const treatment = await resolveInvoiceVatTreatment(pool, tenantId, invoice)
+  // The company-law disclosure block keys off the profile's legal form.
+  const { legalForm } = await issueRegime(pool, tenantId)
 
-  const pdfBuffer = await renderInvoicePdf({ invoice, lines, tenant, logoBuffer, treatment })
+  const pdfBuffer = await renderInvoicePdf({ invoice, lines, tenant, logoBuffer, treatment, legalForm })
   const previousKey = invoice.pdf_path
   const newKey = invoicePdfKey(tenantId, randomUUID())
 

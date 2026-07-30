@@ -25,7 +25,7 @@ export async function fetchCredentialRecord(executor, tenantId, type) {
   const { rows } = await executor.query(
     `SELECT ${encrypted} AS encrypted_value, ${legacy} AS legacy_value,
             ${retained ? `${retained}` : 'NULL'} AS retained_at
-       FROM tenants WHERE id = $1`,
+       FROM tenant_integrations WHERE tenant_id = $1`,
     [tenantId],
   )
   return rows[0] || null
@@ -39,7 +39,7 @@ export async function fetchCredentialStatus(executor, tenantId, type) {
   const { rows } = await executor.query(
     `SELECT (${encrypted} IS NOT NULL OR ${legacy} IS NOT NULL)${retainedGuard} AS is_set,
             ${changedAt} AS changed_at
-       FROM tenants WHERE id = $1`,
+       FROM tenant_integrations WHERE tenant_id = $1`,
     [tenantId],
   )
   return rows[0] || { is_set: false, changed_at: null }
@@ -47,14 +47,18 @@ export async function fetchCredentialStatus(executor, tenantId, type) {
 
 export async function storeEncryptedCredential(executor, tenantId, type, envelope) {
   const { legacy, encrypted, changedAt, retained } = columnsFor(type)
+  const retainedColumn = retained ? `, ${retained}` : ''
+  const retainedValue = retained ? ', NULL' : ''
   const clearRetained = retained ? `, ${retained} = NULL` : ''
   const { rows } = await executor.query(
-    `UPDATE tenants
-        SET ${encrypted} = $1::jsonb, ${legacy} = NULL,
-            ${changedAt} = NOW(), updated_at = NOW()${clearRetained}
-      WHERE id = $2
-      RETURNING ${changedAt} AS changed_at`,
-    [JSON.stringify(envelope), tenantId],
+    `INSERT INTO tenant_integrations
+       (tenant_id, ${encrypted}, ${legacy}, ${changedAt}${retainedColumn})
+     VALUES ($1, $2::jsonb, NULL, NOW()${retainedValue})
+     ON CONFLICT (tenant_id)
+     DO UPDATE SET ${encrypted} = EXCLUDED.${encrypted}, ${legacy} = NULL,
+                   ${changedAt} = NOW(), updated_at = NOW()${clearRetained}
+     RETURNING ${changedAt} AS changed_at`,
+    [tenantId, JSON.stringify(envelope)],
   )
   return rows[0] || null
 }
@@ -63,10 +67,10 @@ export async function clearCredential(executor, tenantId, type) {
   const { legacy, encrypted, changedAt, retained } = columnsFor(type)
   const clearRetained = retained ? `, ${retained} = NULL` : ''
   const { rows } = await executor.query(
-    `UPDATE tenants
+    `UPDATE tenant_integrations
         SET ${encrypted} = NULL, ${legacy} = NULL,
             ${changedAt} = NOW(), updated_at = NOW()${clearRetained}
-      WHERE id = $1
+      WHERE tenant_id = $1
       RETURNING ${changedAt} AS changed_at`,
     [tenantId],
   )
@@ -77,7 +81,9 @@ export async function clearCredential(executor, tenantId, type) {
 // the public credential status reports it absent from now on.
 export async function setMollieKeyRetained(executor, tenantId) {
   await executor.query(
-    'UPDATE tenants SET mollie_api_key_retained_at = NOW(), updated_at = NOW() WHERE id = $1',
+    `UPDATE tenant_integrations
+        SET mollie_api_key_retained_at = NOW(), updated_at = NOW()
+      WHERE tenant_id = $1`,
     [tenantId],
   )
 }

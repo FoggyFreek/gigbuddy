@@ -177,7 +177,9 @@ describe('integration secrets purge (entitlement durably lost)', () => {
     await asUserA(request(app).put('/api/profile/shopify-domain').send({ domain: 'band.myshopify.com' })).expect(200)
     await asUserA(request(app).post('/api/calendar-feed/regenerate')).expect(200)
     await pool.query(
-      `UPDATE tenants SET bandsintown_artist_name = 'Band', bandsintown_artist_id = '123' WHERE id = $1`,
+      `UPDATE tenant_integrations
+          SET bandsintown_artist_name = 'Band', bandsintown_artist_id = '123'
+        WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
 
@@ -185,7 +187,8 @@ describe('integration secrets purge (entitlement durably lost)', () => {
     await purgeIntegrationSecrets(pool, seed.tenantA.id)
 
     const { rows: [tenant] } = await pool.query(
-      `SELECT ${CREDENTIAL_COLUMNS.join(', ')} FROM tenants WHERE id = $1`,
+      `SELECT ${CREDENTIAL_COLUMNS.join(', ')}
+         FROM tenant_integrations WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
     for (const column of CREDENTIAL_COLUMNS) expect(tenant[column]).toBeNull()
@@ -208,7 +211,7 @@ describe('integration secrets purge (entitlement durably lost)', () => {
     await purgeIntegrationSecrets(pool, seed.tenantA.id)
 
     const { rows: [t] } = await pool.query(
-      'SELECT mollie_api_key_encrypted FROM tenants WHERE id = $1',
+      'SELECT mollie_api_key_encrypted FROM tenant_integrations WHERE tenant_id = $1',
       [seed.tenantB.id],
     )
     expect(t.mollie_api_key_encrypted).not.toBeNull()

@@ -73,10 +73,8 @@ function fromResolved(countryCode, resolved) {
 
 // Live, date-aware resolution. `reverseCharge` belongs to the document, not the
 // regime, so the caller supplies it.
-// No enrolment covering the tax point means no scheme applied on that date, and
-// the resolver treats that as the ordinary VAT-charging case. That is the whole
-// answer now: `tenants.applies_kor` is no longer consulted, so an enrolment is
-// the only thing that can make a document exempt.
+// An enrolment is the only thing that can make a document exempt: no enrolment
+// covering the tax point is the ordinary VAT-charging case.
 export async function resolveLiveTreatment(executor, tenantId, isoDate, { reverseCharge = false } = {}) {
   const profile = await loadAccountingProfile(executor, tenantId)
   const enrolment = await fetchHomeSchemeEnrolmentOn(executor, tenantId, profile.country_code, isoDate)

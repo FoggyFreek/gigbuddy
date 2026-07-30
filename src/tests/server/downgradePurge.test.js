@@ -140,11 +140,18 @@ async function seedTenantData(tenantId) {
      VALUES ($1, $2, $3, 'r.mp3', 'audio/mpeg', 10)`,
     [song.id, tenantId, `tenants/${tenantId}/song_recordings/rec1.mp3`])
   await pool.query(
-    `UPDATE tenants SET accent_color = '#ff0000', logo_path = $2, banner_path = $3,
-        memory_image_path = $4, memory_caption = 'Best night',
-        mollie_api_key = 'test_dummykey1234567890', bandsintown_app_id = 'bit_app_id' WHERE id = $1`,
-    [tenantId, `tenants/${tenantId}/logo/logo1.png`, `tenants/${tenantId}/banner/banner1.png`,
-      `tenants/${tenantId}/memory/memory1.jpg`])
+    `UPDATE tenants
+        SET accent_color = '#ff0000', logo_path = $2, banner_path = $3
+      WHERE id = $1`,
+    [tenantId, `tenants/${tenantId}/logo/logo1.png`, `tenants/${tenantId}/banner/banner1.png`])
+  await pool.query(
+    `INSERT INTO dashboard_tiles (tenant_id, type, image_path, caption)
+     VALUES ($1, 'memory_tile', $2, 'Best night')`,
+    [tenantId, `tenants/${tenantId}/memory/memory1.jpg`])
+  await pool.query(
+    `INSERT INTO tenant_integrations (tenant_id, mollie_api_key, bandsintown_app_id)
+     VALUES ($1, 'test_dummykey1234567890', 'bit_app_id')`,
+    [tenantId])
   return song.id
 }
 
@@ -321,7 +328,13 @@ describe('free-fallback (bronze) downgrade', () => {
     expect(await fileCount(seed.tenantA.id)).toBe(0)
     expect(await cleanupCount(seed.tenantA.id)).toBe(5) // doc + recording + banner + memory image + song cover queued for S3
     const { rows: [tenant] } = await pool.query(
-      'SELECT accent_color, logo_path, banner_path, memory_image_path, memory_caption, mollie_api_key, bandsintown_app_id FROM tenants WHERE id = $1', [seed.tenantA.id])
+      `SELECT t.accent_color, t.logo_path, t.banner_path,
+              dt.image_path AS memory_image_path, dt.caption AS memory_caption,
+              ti.mollie_api_key, ti.bandsintown_app_id
+         FROM tenants t
+         LEFT JOIN dashboard_tiles dt ON dt.tenant_id = t.id AND dt.type = 'memory_tile'
+         LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id
+        WHERE t.id = $1`, [seed.tenantA.id])
     expect(tenant.accent_color).toBeNull()
     expect(tenant.banner_path).toBeNull()
     expect(tenant.memory_image_path).toBeNull()
@@ -358,7 +371,13 @@ describe('free-fallback (bronze) downgrade', () => {
     expect(await fileCount(seed.tenantB.id)).toBe(0)
     expect(await cleanupCount(seed.tenantB.id)).toBe(5)
     const { rows: [tenant] } = await pool.query(
-      'SELECT accent_color, logo_path, banner_path, memory_image_path, mollie_api_key, bandsintown_app_id FROM tenants WHERE id = $1', [seed.tenantB.id])
+      `SELECT t.accent_color, t.logo_path, t.banner_path,
+              dt.image_path AS memory_image_path,
+              ti.mollie_api_key, ti.bandsintown_app_id
+         FROM tenants t
+         LEFT JOIN dashboard_tiles dt ON dt.tenant_id = t.id AND dt.type = 'memory_tile'
+         LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id
+        WHERE t.id = $1`, [seed.tenantB.id])
     expect(tenant.accent_color).toBeNull()
     expect(tenant.banner_path).toBeNull()
     expect(tenant.memory_image_path).toBeNull()
@@ -667,7 +686,8 @@ describe('integrations purge — mollie key retention [B4]', () => {
     await bronzeAndFinalize(subId)
 
     const { rows: [tenant] } = await pool.query(
-      'SELECT mollie_api_key, mollie_api_key_retained_at FROM tenants WHERE id = $1', [seed.tenantA.id])
+      `SELECT mollie_api_key, mollie_api_key_retained_at
+         FROM tenant_integrations WHERE tenant_id = $1`, [seed.tenantA.id])
     expect(tenant.mollie_api_key).toBe('test_dummykey1234567890') // value kept
     expect(tenant.mollie_api_key_retained_at).not.toBeNull()
 
@@ -688,7 +708,8 @@ describe('integrations purge — mollie key retention [B4]', () => {
     const set = await profileSvc.setMollieKeyValue(pool, seed.tenantA.id, { key: 'test_abcdefghijklmnopqrstuvwxyz12345' })
     expect(set.status.isSet).toBe(true)
     const { rows: [after] } = await pool.query(
-      'SELECT mollie_api_key_retained_at FROM tenants WHERE id = $1', [seed.tenantA.id])
+      `SELECT mollie_api_key_retained_at
+         FROM tenant_integrations WHERE tenant_id = $1`, [seed.tenantA.id])
     expect(after.mollie_api_key_retained_at).toBeNull()
   })
 
@@ -700,7 +721,8 @@ describe('integrations purge — mollie key retention [B4]', () => {
     await bronzeAndFinalize(subId)
 
     const { rows: [tenant] } = await pool.query(
-      'SELECT mollie_api_key, mollie_api_key_encrypted, mollie_api_key_retained_at FROM tenants WHERE id = $1',
+      `SELECT mollie_api_key, mollie_api_key_encrypted, mollie_api_key_retained_at
+         FROM tenant_integrations WHERE tenant_id = $1`,
       [seed.tenantA.id])
     expect(tenant.mollie_api_key).toBeNull()
     expect(tenant.mollie_api_key_encrypted).toBeNull()

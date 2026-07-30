@@ -339,7 +339,10 @@ describe('bank-import parse + stage', () => {
 
 describe('bank-import commit', () => {
   async function configureMollie() {
-    await pool.query(`UPDATE tenants SET mollie_api_key = 'test_key' WHERE id = $1`, [seed.tenantA.id])
+    await pool.query(
+      `INSERT INTO tenant_integrations (tenant_id, mollie_api_key) VALUES ($1, 'test_key')`,
+      [seed.tenantA.id],
+    )
   }
 
   it('reconciles an open invoice on the booking date', async () => {

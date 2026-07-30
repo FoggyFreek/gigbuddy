@@ -37,4 +37,30 @@ describe('renderInvoicePdf', () => {
     expect(text).toContain('Chamber of Commerce number: 87654321')
     expect(text).toContain('VAT ID: DE136695976')
   })
+
+  it('prints the company-law disclosure for an incorporated supplier', async () => {
+    const data = CASES['nl-standard']
+    const buffer = await renderInvoicePdf({
+      ...data,
+      tenant: { ...data.tenant, directors: 'Anna Mulder' },
+      legalForm: 'company',
+      logoBuffer: null,
+    })
+    const text = await pdfText(buffer)
+
+    expect(text).toContain('Bestuurder(s): Anna Mulder')
+  })
+
+  it('omits the disclosure for an unincorporated supplier', async () => {
+    const data = CASES['nl-standard']
+    const buffer = await renderInvoicePdf({
+      ...data,
+      tenant: { ...data.tenant, directors: 'Anna Mulder' },
+      legalForm: 'sole_trader',
+      logoBuffer: null,
+    })
+    const text = await pdfText(buffer)
+
+    expect(text).not.toContain('Anna Mulder')
+  })
 })

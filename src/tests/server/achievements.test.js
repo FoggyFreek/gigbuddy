@@ -249,11 +249,9 @@ describe('GET /api/achievements', () => {
     await getAchievements() // baseline
     await addPersonalSetlistNote(seed.tenantA.id, seed.userA.id)
     await pool.query(
-      `UPDATE tenants SET
-         bandsintown_app_id_encrypted = '{}'::jsonb,
-         shopify_client_id = 'client-id',
-         mollie_api_key_encrypted = '{}'::jsonb
-       WHERE id = $1`,
+      `INSERT INTO tenant_integrations (
+         tenant_id, bandsintown_app_id_encrypted, shopify_client_id, mollie_api_key_encrypted
+       ) VALUES ($1, '{}'::jsonb, 'client-id', '{}'::jsonb)`,
       [seed.tenantA.id],
     )
 
@@ -265,10 +263,10 @@ describe('GET /api/achievements', () => {
     expect(byKey(list, 'sync_that_chop_shop').unlocked_at).toBeNull()
 
     await pool.query(
-      `UPDATE tenants SET
+      `UPDATE tenant_integrations SET
          shopify_client_secret_encrypted = '{}'::jsonb,
          shopify_shop_domain = 'achievement.myshopify.com'
-       WHERE id = $1`,
+       WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
     list = await getAchievements()
@@ -278,13 +276,13 @@ describe('GET /api/achievements', () => {
   it('does not unlock note or integration achievements from another tenant\'s data', async () => {
     await addPersonalSetlistNote(seed.tenantA.id, seed.userA.id)
     await pool.query(
-      `UPDATE tenants SET
-         bandsintown_app_id_encrypted = '{}'::jsonb,
-         shopify_client_id = 'client-id',
-         shopify_client_secret_encrypted = '{}'::jsonb,
-         shopify_shop_domain = 'achievement.myshopify.com',
-         mollie_api_key_encrypted = '{}'::jsonb
-       WHERE id = $1`,
+      `INSERT INTO tenant_integrations (
+         tenant_id, bandsintown_app_id_encrypted, shopify_client_id,
+         shopify_client_secret_encrypted, shopify_shop_domain, mollie_api_key_encrypted
+       ) VALUES (
+         $1, '{}'::jsonb, 'client-id', '{}'::jsonb,
+         'achievement.myshopify.com', '{}'::jsonb
+       )`,
       [seed.tenantA.id],
     )
 

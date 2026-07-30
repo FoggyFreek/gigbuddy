@@ -1,7 +1,28 @@
-// Data-access helpers for the tenant profile (a view over the tenants row plus
-// profile_links) and the Mollie key / logo columns. Each query takes an
-// `executor` (a pool or transaction client) so callers control transactions.
+// Data-access helpers for the tenant profile aggregate and profile links.
+// Each query takes an `executor` so callers control transactions.
 import { tenantSafeProjection } from './tenantSafeProjection.js'
+import {
+  clearMemoryTileCustomization,
+  getMemoryImagePath,
+  setMemoryImagePath,
+} from './dashboardTileRepository.js'
+
+export async function fetchProfileTenant(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT ${tenantSafeProjection('t')},
+            ti.bandsintown_artist_name,
+            ti.bandsintown_artist_id,
+            dt.image_path AS memory_image_path,
+            dt.caption AS memory_caption,
+            dt.gig_id AS memory_gig_id
+       FROM tenants t
+       LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id
+       LEFT JOIN dashboard_tiles dt ON dt.tenant_id = t.id AND dt.type = 'memory_tile'
+      WHERE t.id = $1`,
+    [tenantId],
+  )
+  return rows[0] || null
+}
 
 export async function listProfileLinks(executor, tenantId) {
   const { rows } = await executor.query(
@@ -61,65 +82,6 @@ export async function deleteProfileLink(executor, linkId, tenantId) {
   return rowCount > 0
 }
 
-// ---------- shopify app credentials (client id + secret) ----------
-
-export async function getShopifyClientId(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT shopify_client_id FROM tenants WHERE id = $1',
-    [tenantId],
-  )
-  return rows[0]?.shopify_client_id || null
-}
-
-export async function setShopifyClientId(executor, tenantId, clientId) {
-  const { rows } = await executor.query(
-    'UPDATE tenants SET shopify_client_id = $1, updated_at = NOW() WHERE id = $2 RETURNING shopify_client_id',
-    [clientId, tenantId],
-  )
-  return rows[0]?.shopify_client_id || null
-}
-
-export async function clearShopifyClientId(executor, tenantId) {
-  await executor.query(
-    'UPDATE tenants SET shopify_client_id = NULL, updated_at = NOW() WHERE id = $1',
-    [tenantId],
-  )
-}
-
-// ---------- shopify store domain (non-secret) ----------
-
-export async function getShopifyDomain(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT shopify_shop_domain FROM tenants WHERE id = $1',
-    [tenantId],
-  )
-  return rows[0]?.shopify_shop_domain || null
-}
-
-export async function setShopifyDomain(executor, tenantId, domain) {
-  const { rows } = await executor.query(
-    'UPDATE tenants SET shopify_shop_domain = $1, updated_at = NOW() WHERE id = $2 RETURNING shopify_shop_domain',
-    [domain, tenantId],
-  )
-  return rows[0]?.shopify_shop_domain || null
-}
-
-export async function clearShopifyDomain(executor, tenantId) {
-  await executor.query(
-    'UPDATE tenants SET shopify_shop_domain = NULL, updated_at = NOW() WHERE id = $1',
-    [tenantId],
-  )
-}
-
-// Clears the Bandsintown integration configuration (non-secret, but part of
-// the integration surface purged when the entitlement is lost).
-export async function clearBandsintownArtist(executor, tenantId) {
-  await executor.query(
-    'UPDATE tenants SET bandsintown_artist_name = NULL, bandsintown_artist_id = NULL, updated_at = NOW() WHERE id = $1',
-    [tenantId],
-  )
-}
-
 // ---------- tenant image paths (logo, banner, avatar, logo_dark) ----------
 
 const IMAGE_COLUMNS = Object.freeze({
@@ -127,7 +89,6 @@ const IMAGE_COLUMNS = Object.freeze({
   banner_path: 'banner_path',
   avatar_path: 'avatar_path',
   logo_dark_path: 'logo_dark_path',
-  memory_image_path: 'memory_image_path',
 })
 
 // True when `gigId` belongs to `tenantId`. Used to tenant-scope the dashboard
@@ -142,6 +103,7 @@ export async function gigBelongsToTenant(executor, tenantId, gigId) {
 }
 
 export async function getTenantImagePath(executor, tenantId, column) {
+  if (column === 'memory_image_path') return getMemoryImagePath(executor, tenantId)
   const col = IMAGE_COLUMNS[column]
   if (!col) throw new Error(`Unknown image column: ${column}`)
   const { rows } = await executor.query(`SELECT ${col} FROM tenants WHERE id = $1`, [tenantId])
@@ -149,6 +111,7 @@ export async function getTenantImagePath(executor, tenantId, column) {
 }
 
 export async function setTenantImagePath(executor, tenantId, column, objectKey) {
+  if (column === 'memory_image_path') return setMemoryImagePath(executor, tenantId, objectKey)
   const col = IMAGE_COLUMNS[column]
   if (!col) throw new Error(`Unknown image column: ${column}`)
   const { rows } = await executor.query(
@@ -156,19 +119,6 @@ export async function setTenantImagePath(executor, tenantId, column, objectKey) 
     [objectKey, tenantId],
   )
   return rows[0][col]
-}
-
-// Clears the whole dashboard memory tile (photo + caption + gig link) in one
-// write. The caller reads the old image key first (via getTenantImagePath) to
-// remove its stored object.
-export async function clearMemoryTile(executor, tenantId) {
-  await executor.query(
-    `UPDATE tenants
-        SET memory_image_path = NULL, memory_caption = NULL, memory_gig_id = NULL,
-            updated_at = NOW()
-      WHERE id = $1`,
-    [tenantId],
-  )
 }
 
 // Downgrade purge: nulls the accent color, the gated customization images
@@ -180,16 +130,16 @@ export async function clearMemoryTile(executor, tenantId) {
 // cannot race another write.
 export async function clearTenantCustomization(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT banner_path, avatar_path, memory_image_path FROM tenants WHERE id = $1',
+    'SELECT banner_path, avatar_path FROM tenants WHERE id = $1',
     [tenantId],
   )
+  const memoryImagePath = await clearMemoryTileCustomization(executor, tenantId)
   const keys = rows[0]
-    ? [rows[0].banner_path, rows[0].avatar_path, rows[0].memory_image_path].filter(Boolean)
+    ? [rows[0].banner_path, rows[0].avatar_path, memoryImagePath].filter(Boolean)
     : []
   await executor.query(
     `UPDATE tenants
         SET accent_color = NULL, banner_path = NULL, avatar_path = NULL,
-            memory_image_path = NULL, memory_caption = NULL, memory_gig_id = NULL,
             updated_at = NOW()
       WHERE id = $1`,
     [tenantId],
