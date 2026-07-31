@@ -50,7 +50,7 @@ Login is via Google OAuth (OpenID Connect), with optional Microsoft (personal ac
 | Frontend | React 19, MUI v9, Vite, react-router v7, TipTap, dayjs |
 | Backend | Express 5, PostgreSQL (`pg`), `web-push` |
 | Auth | OpenID Connect (Google, Microsoft), `express-session`, `connect-pg-simple` |
-| Storage | MinIO-compatible object store (RustFS) for logos, banners, share photos |
+| Storage | All tenant images and files on configurable S3 (a second RustFS bucket locally, private Backblaze B2 in production); the original RustFS bucket is the temporary migration source |
 | PWA | Service worker, Web Push (VAPID), installable manifest |
 
 ## Development

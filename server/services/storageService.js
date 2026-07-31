@@ -1,4 +1,4 @@
-import { storageClient, BUCKET } from '../utils/storage.js'
+import * as storage from '../utils/storage.js'
 import pool from '../db/index.js'
 import {
   refreshTenantStorageForKey,
@@ -10,6 +10,42 @@ import { resolveTenantEntitlements } from './entitlementService.js'
 import { LIMITS } from '../auth/entitlements.js'
 import { enqueueCleanup } from '../repositories/storageCleanupRepository.js'
 import { logger } from '../utils/logger.js'
+
+const hasStorageExport = (name) => Object.prototype.hasOwnProperty.call(storage, name)
+const publicStorageClient = hasStorageExport('publicStorageClient') ? storage.publicStorageClient : storage.storageClient
+const privateStorageClient = hasStorageExport('privateStorageClient') ? storage.privateStorageClient : storage.storageClient
+const PUBLIC_BUCKET = hasStorageExport('PUBLIC_BUCKET') ? storage.PUBLIC_BUCKET : storage.BUCKET
+const PRIVATE_BUCKET = hasStorageExport('PRIVATE_BUCKET') ? storage.PRIVATE_BUCKET : storage.BUCKET
+const PUBLIC_STORE = hasStorageExport('PUBLIC_STORE') ? storage.PUBLIC_STORE : {
+  id: 'public', client: publicStorageClient, bucket: PUBLIC_BUCKET,
+}
+const PRIVATE_STORE = hasStorageExport('PRIVATE_STORE') ? storage.PRIVATE_STORE : {
+  id: 'private', client: privateStorageClient, bucket: PRIVATE_BUCKET,
+}
+
+const TENANT_KEY_RE = /^tenants\/([1-9]\d*)\/([^/]+)\/(.+)$/
+
+export function parseTenantObjectKey(key) {
+  const match = TENANT_KEY_RE.exec(key || '')
+  if (!match) return null
+  return { tenantId: Number(match[1]), category: match[2] }
+}
+
+export function storeForKey(key) {
+  const parsed = parseTenantObjectKey(key)
+  return parsed ? PRIVATE_STORE : PUBLIC_STORE
+}
+
+function sameStore(left, right) {
+  return left.client === right.client && left.bucket === right.bucket
+}
+
+export function isObjectMissing(err) {
+  return err?.code === 'NoSuchKey'
+    || err?.code === 'NotFound'
+    || err?.statusCode === 404
+    || err?.status === 404
+}
 
 // ---------- key builders ----------
 
@@ -57,14 +93,33 @@ export const songCoverKey = (tenantId, uuid, ext) =>
 
 // ---------- reads ----------
 
-export const statObject = (key) => storageClient.statObject(BUCKET, key)
+async function readWithFallback(method, key, ...args) {
+  const routed = storeForKey(key)
+  try {
+    return await routed.client[method](routed.bucket, key, ...args)
+  } catch (err) {
+    if (routed.id !== 'private' || !isObjectMissing(err) || sameStore(routed, PUBLIC_STORE)) {
+      throw err
+    }
+    return PUBLIC_STORE.client[method](PUBLIC_STORE.bucket, key, ...args)
+  }
+}
 
-export const getObject = (key) => storageClient.getObject(BUCKET, key)
+export const statObject = (key) => readWithFallback('statObject', key)
+
+export const getObject = (key) => readWithFallback('getObject', key)
+
+// Byte-range read, backing HTTP 206 responses. The client turns this into an
+// upstream Range header, so only the requested bytes leave the object store —
+// a seek costs its tail, not a whole re-download.
+export const getPartialObject = (key, offset, length) =>
+  readWithFallback('getPartialObject', key, offset, length)
 
 // ---------- mutations ----------
 
 function putObjectRaw(key, buffer, size, contentType) {
-  return storageClient.putObject(BUCKET, key, buffer, size, {
+  const { client, bucket } = storeForKey(key)
+  return client.putObject(bucket, key, buffer, size, {
     'Content-Type': contentType,
   })
 }
@@ -89,12 +144,13 @@ const MB = 1024 * 1024
 // reservation (usage stays conservative) and queue the key — the
 // reconciliation drain deletes it and releases the reservation then.
 async function rollbackFailedUpload(tenantId, key, size) {
+  const store = storeForKey(key)
   try {
-    await storageClient.removeObject(BUCKET, key)
+    await store.client.removeObject(store.bucket, key)
     await releaseStorageUsage(tenantId, size)
   } catch (err) {
     logger.warn('storage.upload_rollback_queued', { err, tenantId })
-    await enqueueCleanup(pool, tenantId, key, true).catch((queueErr) =>
+    await enqueueCleanup(pool, tenantId, key, true, store.id).catch((queueErr) =>
       logger.error('storage.cleanup_enqueue_failed', { err: queueErr, tenantId }),
     )
   }
@@ -140,13 +196,46 @@ export async function uploadObjectWithQuota(key, buffer, size, contentType) {
 }
 
 export function removeObject(key) {
-  const promise = storageClient.removeObject(BUCKET, key)
+  const routed = storeForKey(key)
+  const primary = routed.client.removeObject(routed.bucket, key)
+  let promise = primary
+  if (routed.id === 'private' && !sameStore(routed, PUBLIC_STORE)) {
+    const fallback = PUBLIC_STORE.client.removeObject(PUBLIC_STORE.bucket, key)
+    promise = Promise.allSettled([primary, fallback]).then(async (results) => {
+      const stores = [routed, PUBLIC_STORE]
+      const failures = results
+        .map((result, index) => ({ result, store: stores[index] }))
+        .filter(({ result }) => result.status === 'rejected')
+      for (const { store } of failures) {
+        const tenantId = tenantIdFromKey(key)
+        if (tenantId) {
+          await enqueueCleanup(pool, tenantId, key, false, store.id).catch((err) =>
+            logger.error('storage.cleanup_enqueue_failed', { err, tenantId }),
+          )
+        }
+      }
+      if (failures.length) throw failures[0].result.reason
+      return results[0].value
+    })
+  }
   // Refresh only after a successful delete. Return the original promise so the
   // caller's rejection timing is unchanged (safeRemove relies on it); the
   // no-op reject handler here keeps this branch from surfacing as an unhandled
   // rejection — the caller still sees the original error.
   promise.then(() => refreshTenantStorageForKey(key), () => {})
   return promise
+}
+
+export function removeObjectFromStore(key, storeTarget = 'routed') {
+  if (storeTarget === 'routed') return removeObject(key)
+  if (storeTarget === 'both') {
+    return Promise.all([
+      PUBLIC_STORE.client.removeObject(PUBLIC_STORE.bucket, key),
+      PRIVATE_STORE.client.removeObject(PRIVATE_STORE.bucket, key),
+    ])
+  }
+  const store = storeTarget === 'public' ? PUBLIC_STORE : PRIVATE_STORE
+  return store.client.removeObject(store.bucket, key)
 }
 
 // safeRemove delegates to removeObject (which already triggers the refresh), so
@@ -159,16 +248,42 @@ export function safeRemove(key, _warnMsg) {
   removeObject(key).catch((err) => logger.warn('storage.remove_failed', { err, tenantId: tenantIdFromKey(key) }))
 }
 
-function listObjectKeys(prefix) {
+function listObjects(store, prefix, includeVersions = false) {
   return new Promise((resolve, reject) => {
-    const keys = []
-    const stream = storageClient.listObjectsV2(BUCKET, prefix, true)
+    const objects = []
+    const stream = includeVersions
+      ? store.client.listObjects(store.bucket, prefix, true, { IncludeVersion: true })
+      : store.client.listObjectsV2(store.bucket, prefix, true)
     stream.on('data', (obj) => {
-      if (obj.name) keys.push(obj.name)
+      if (obj.name) objects.push(obj)
     })
     stream.on('error', reject)
-    stream.on('end', () => resolve(keys))
+    stream.on('end', () => resolve(objects))
   })
+}
+
+async function removeBatches(store, entries) {
+  for (let i = 0; i < entries.length; i += 1000) {
+    const failures = await store.client.removeObjects(store.bucket, entries.slice(i, i + 1000))
+    if (failures.length) throw new Error('Tenant object deletion failed')
+  }
+}
+
+async function purgeCurrentObjects(store, prefix, exactKeys = []) {
+  const listed = (await listObjects(store, prefix)).map(({ name }) => name)
+  const keys = [...new Set([...listed, ...exactKeys])]
+  await removeBatches(store, keys)
+  if ((await listObjects(store, prefix)).length) {
+    throw new Error('Tenant storage prefix is not empty after deletion')
+  }
+}
+
+async function purgeAllVersions(store, prefix) {
+  while (true) {
+    const versions = await listObjects(store, prefix, true)
+    if (!versions.length) return
+    await removeBatches(store, versions.map(({ name, versionId }) => ({ name, versionId })))
+  }
 }
 
 // Permanently removes every object owned by a tenant. Modern assets are found
@@ -176,15 +291,12 @@ function listObjectKeys(prefix) {
 // by the database because old unprefixed objects cannot encode ownership.
 export async function deleteTenantObjects(tenantId, legacyKeys = []) {
   const prefix = `tenants/${tenantId}/`
-  const prefixedKeys = await listObjectKeys(prefix)
-  const keys = [...new Set([...prefixedKeys, ...legacyKeys.filter(Boolean)])]
-
-  for (let i = 0; i < keys.length; i += 1000) {
-    const failures = await storageClient.removeObjects(BUCKET, keys.slice(i, i + 1000))
-    if (failures.length) throw new Error('Tenant object deletion failed')
-  }
-
-  if ((await listObjectKeys(prefix)).length) {
-    throw new Error('Tenant storage prefix is not empty after deletion')
+  const exactPublicKeys = legacyKeys.filter(Boolean).filter((key) => storeForKey(key).id === 'public')
+  await purgeCurrentObjects(PUBLIC_STORE, prefix, exactPublicKeys)
+  if (!sameStore(PRIVATE_STORE, PUBLIC_STORE)) {
+    await purgeAllVersions(PRIVATE_STORE, prefix)
+    if ((await listObjects(PRIVATE_STORE, prefix, true)).length) {
+      throw new Error('Tenant storage versions are not empty after deletion')
+    }
   }
 }

@@ -39,6 +39,7 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import UnarchiveIcon from '@mui/icons-material/Unarchive'
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import FactCheckIcon from '@mui/icons-material/FactCheck'
+import CloudSyncIcon from '@mui/icons-material/CloudSync'
 import {
   listTenants,
   createTenant,
@@ -59,6 +60,13 @@ import { formatBytes } from '../../utils/formatBytes.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import type { Tenant, Id } from '../../types/entities.ts'
 import VatTaxFactBackfillDialog from '../../components/admin/VatTaxFactBackfillDialog.tsx'
+import StorageMigrationDialog from '../../components/admin/StorageMigrationDialog.tsx'
+import {
+  getPrivateStorageConnection,
+  listStorageMigrations,
+  testPrivateStorageConnection,
+} from '../../api/storageMigrations.ts'
+import type { PrivateStorageConnection, StorageMigrationStatus } from '../../types/api.ts'
 
 interface TenantRow extends Tenant {
   slug?: string
@@ -79,6 +87,10 @@ export default function TenantsPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [storageByTenant, setStorageByTenant] = useState<Record<string, StorageStats>>({})
   const [recomputing, setRecomputing] = useState(false)
+  const [privateConnection, setPrivateConnection] = useState<PrivateStorageConnection | null>(null)
+  const [connectionTesting, setConnectionTesting] = useState(false)
+  const [migrationsByTenant, setMigrationsByTenant] = useState<Record<string, StorageMigrationStatus>>({})
+  const [migrationTenant, setMigrationTenant] = useState<TenantRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [tenantOnboardingEnabled, setTenantOnboardingEnabled] = useState<boolean | null>(null)
   const [tenantOnboardingSaving, setTenantOnboardingSaving] = useState(false)
@@ -120,12 +132,21 @@ export default function TenantsPage() {
 
   const refresh = () => {
     setLoading(true)
-    Promise.all([listTenants(), listAllUsers(), getAllStorageStats(), getTenantOnboardingStatus()])
-      .then(([t, u, stats, onboardingStatus]) => {
+    Promise.all([
+      listTenants(),
+      listAllUsers(),
+      getAllStorageStats(),
+      getTenantOnboardingStatus(),
+      getPrivateStorageConnection(),
+      listStorageMigrations(),
+    ])
+      .then(([t, u, stats, onboardingStatus, connection, migrations]) => {
         setTenants(t as TenantRow[])
         setUsers(u as AdminUser[])
         setStorageByTenant(Object.fromEntries((stats as StorageStats[]).map((s) => [String(s.tenant_id), s])))
         setTenantOnboardingEnabled(onboardingStatus.tenantOnboardingEnabled)
+        setPrivateConnection(connection)
+        setMigrationsByTenant(Object.fromEntries(migrations.map((migration) => [String(migration.tenant_id), migration])))
       })
       .finally(() => setLoading(false))
   }
@@ -145,6 +166,22 @@ export default function TenantsPage() {
     } finally {
       setRecomputing(false)
     }
+  }
+
+  const handleConnectionTest = async () => {
+    setConnectionTesting(true)
+    setError('')
+    try {
+      setPrivateConnection(await testPrivateStorageConnection())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Backblaze connection test failed')
+    } finally {
+      setConnectionTesting(false)
+    }
+  }
+
+  const handleMigrationStatus = (status: StorageMigrationStatus) => {
+    setMigrationsByTenant((current) => ({ ...current, [String(status.tenant_id)]: status }))
   }
 
   const handleTenantOnboardingChange = async (_event: unknown, checked: boolean) => {
@@ -326,6 +363,39 @@ export default function TenantsPage() {
           sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}
         >
           <Box>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Backblaze tenant storage</Typography>
+              <Chip
+                size="small"
+                label={privateConnection?.operationsVerified
+                  ? 'verified'
+                  : privateConnection?.connected ? 'connected' : 'not connected'}
+                color={privateConnection?.operationsVerified ? 'success' : privateConnection?.connected ? 'warning' : 'error'}
+              />
+            </Stack>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Tests the configured tenant-object bucket without exposing credentials.
+              {privateConnection?.errorCode ? ` Status: ${privateConnection.errorCode.replaceAll('_', ' ')}.` : ''}
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={connectionTesting ? <CircularProgress size={16} /> : <CloudSyncIcon />}
+            onClick={handleConnectionTest}
+            disabled={connectionTesting}
+          >
+            Test connection
+          </Button>
+        </Stack>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               New tenant onboarding
             </Typography>
@@ -362,6 +432,7 @@ export default function TenantsPage() {
               <TableCell>Owner</TableCell>
               <TableCell align="right">Members</TableCell>
               <TableCell align="right">Storage</TableCell>
+              <TableCell>Migration</TableCell>
               <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -371,6 +442,7 @@ export default function TenantsPage() {
               const isActive = user?.activeTenantId === t.id
               const archived = !!t.archived_at
               const stats = storageByTenant[String(t.id)]
+              const migration = migrationsByTenant[String(t.id)]
               const owner = ownerOf(t)
               let switchTooltip: string
               if (archived) {
@@ -403,6 +475,13 @@ export default function TenantsPage() {
                     </Tooltip>
                   </TableCell>
                   <TableCell>
+                    <Chip
+                      size="small"
+                      label={(migration?.state ?? 'not_scanned').replaceAll('_', ' ')}
+                      color={migration?.state === 'complete' || migration?.state === 'not_required' ? 'success' : 'default'}
+                    />
+                  </TableCell>
+                  <TableCell>
                     {archived ? (
                       <Chip size="small" label="archived" color="warning" />
                     ) : (
@@ -415,6 +494,15 @@ export default function TenantsPage() {
                       spacing={0.5}
                       sx={{ justifyContent: 'flex-end' }}
                     >
+                      <Tooltip title="Migrate tenant storage">
+                        <IconButton
+                          size="small"
+                          onClick={() => setMigrationTenant(t)}
+                          aria-label={`migrate storage for ${t.band_name}`}
+                        >
+                          <CloudSyncIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip
                         title={switchTooltip}
                       >
@@ -492,6 +580,7 @@ export default function TenantsPage() {
           const isActive = user?.activeTenantId === t.id
           const archived = !!t.archived_at
           const stats = storageByTenant[String(t.id)]
+          const migration = migrationsByTenant[String(t.id)]
           const owner = ownerOf(t)
           let switchTooltip: string
           if (archived) {
@@ -538,9 +627,21 @@ export default function TenantsPage() {
                   Storage: {formatBytes(stats?.storage_bytes)}
                   {stats ? ` · ${stats.object_count} files` : ''}
                 </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Migration: {(migration?.state ?? 'not_scanned').replaceAll('_', ' ')}
+                </Typography>
               </CardContent>
               <Divider />
               <CardActions sx={{ justifyContent: 'flex-end', px: 1, py: 0.5 }}>
+                <Tooltip title="Migrate tenant storage">
+                  <IconButton
+                    size="small"
+                    onClick={() => setMigrationTenant(t)}
+                    aria-label={`migrate storage for ${t.band_name}`}
+                  >
+                    <CloudSyncIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
                 <Tooltip
                   title={switchTooltip}
                 >
@@ -613,6 +714,14 @@ export default function TenantsPage() {
         open={vatBackfillTenant !== null}
         tenant={vatBackfillTenant}
         onClose={() => setVatBackfillTenant(null)}
+      />
+
+      <StorageMigrationDialog
+        open={migrationTenant !== null}
+        tenant={migrationTenant}
+        initialStatus={migrationTenant ? migrationsByTenant[String(migrationTenant.id)] ?? null : null}
+        onClose={() => setMigrationTenant(null)}
+        onStatusChange={handleMigrationStatus}
       />
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="xs">
@@ -784,7 +893,7 @@ export default function TenantsPage() {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2">
-              This permanently deletes all PostgreSQL and RustFS data for this tenant. This action cannot be undone.
+              This permanently deletes all PostgreSQL, Backblaze, and transitional RustFS data for this tenant. This action cannot be undone.
             </Typography>
             <Typography variant="body2">
               Type <strong>{deleteDialog.tenant?.slug}</strong> to confirm.

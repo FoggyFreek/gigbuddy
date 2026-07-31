@@ -75,6 +75,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-h5-audio-player": "^3.10.2",
     "react-i18next": "^17.0.8",
     "react-image-crop": "^11.0.10",
     "react-leaflet": "^5.0.0",

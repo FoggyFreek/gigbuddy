@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
-import { statObject, getObject } from '../services/storageService.js'
+import { statObject, getObject, getPartialObject } from '../services/storageService.js'
 import { resolveFileAccess, canReadFinanceFile, searchFiles } from '../services/fileService.js'
 import { can } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
@@ -43,8 +43,25 @@ router.get('/*objectKey', async (req, res) => {
 
   try {
     const stat = await statObject(objectKey)
+    const size = Number(stat.size)
     res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream')
-    res.setHeader('Content-Length', stat.size)
+    // Without this a browser cannot seek an <audio>/<video> src: it re-requests
+    // from byte 0 and playback restarts, re-downloading the whole object.
+    res.setHeader('Accept-Ranges', 'bytes')
+
+    // An object key embeds a fresh UUID per upload, so a key's bytes never
+    // change and a revalidation can always answer 304 — the browser only
+    // re-fetches what it dropped. `private` is load-bearing: the body is
+    // tenant-gated, so no shared cache may ever store it. max-age is the window
+    // in which a revoked member could still replay a cached file, so it stays
+    // short rather than the year `immutable` content would otherwise allow.
+    const etag = stat.etag ? `"${String(stat.etag).replaceAll('"', '')}"` : null
+    if (etag) res.setHeader('ETag', etag)
+    if (stat.lastModified) {
+      res.setHeader('Last-Modified', new Date(stat.lastModified).toUTCString())
+    }
+    res.setHeader('Cache-Control', 'private, max-age=3600, immutable')
+
     if (originalFilename) {
       // Sanitize before embedding in header to prevent response splitting (OWASP A05).
       const safeName = sanitizeFilename(originalFilename)
@@ -63,7 +80,39 @@ router.get('/*objectKey', async (req, res) => {
         res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'self'")
       }
     }
-    const stream = await getObject(objectKey)
+    // Reached only after the tenant and finance checks above, so a stale
+    // validator can never confirm a file the caller may not read.
+    if (req.fresh) return res.status(304).end()
+
+    // If-Range asks for the range only while the validator still matches. A
+    // date-form If-Range won't match our entity tag and falls back to the full
+    // body — the conservative direction, and moot for immutable keys.
+    const ifRange = req.headers['if-range']
+    const rangeUsable = !ifRange || (etag !== null && ifRange === etag)
+
+    // req.range() (range-parser) validates the untrusted header for us: it
+    // clamps end to size-1 and discards inverted, negative or non-numeric
+    // specs, reporting -1 once nothing usable is left.
+    const parsed = rangeUsable ? req.range(size) : undefined
+    if (parsed === -1) {
+      res.setHeader('Content-Range', `bytes */${size}`)
+      return res.status(416).end()
+    }
+    // A unit-less header (-2), a unit other than bytes, and multi-range requests
+    // fall through to the full 200 body, which RFC 9110 allows for any Range the
+    // server declines to honour.
+    const range = Array.isArray(parsed) && parsed.type === 'bytes' && parsed.length === 1
+      ? parsed[0]
+      : null
+    const length = range ? range.end - range.start + 1 : size
+    res.setHeader('Content-Length', length)
+    if (range) {
+      res.status(206).setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`)
+    }
+
+    const stream = range
+      ? await getPartialObject(objectKey, range.start, length)
+      : await getObject(objectKey)
     // Handle stream errors that occur after headers are sent; pipe() won't
     // propagate these to Express's error handler (OWASP A10).
     stream.on('error', (streamErr) => {
@@ -74,6 +123,11 @@ router.get('/*objectKey', async (req, res) => {
         res.destroy()
       }
     })
+    // A browser aborts mid-response constantly here: preload=metadata reads a
+    // header and disconnects, and every seek abandons the in-flight body.
+    // pipe() only unpipes on client disconnect, leaving the upstream storage
+    // response open until it times out; destroy it so the connection closes.
+    res.on('close', () => stream.destroy())
     stream.pipe(res)
   } catch (err) {
     if (err.code === 'NoSuchKey' || err.message?.includes('Not Found')) {

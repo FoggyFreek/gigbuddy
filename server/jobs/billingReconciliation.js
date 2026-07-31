@@ -7,7 +7,7 @@
 // in `finally` — session advisory locks belong to the connection, so lock and
 // unlock must never go through the pool separately.
 import pool from '../db/index.js'
-import { removeObject } from '../services/storageService.js'
+import { removeObjectFromStore } from '../services/storageService.js'
 import { refreshTenantStorage } from '../services/statisticsService.js'
 import {
   listCleanupQueue,
@@ -30,7 +30,7 @@ async function drainStorageCleanupQueue(client) {
   const rows = await listCleanupQueue(client)
   for (const row of rows) {
     try {
-      await removeObject(row.object_key)
+      await removeObjectFromStore(row.object_key, row.store_target)
       await deleteCleanupRow(client, row.id)
       if (row.release_reservation) {
         await refreshTenantStorage(row.tenant_id)

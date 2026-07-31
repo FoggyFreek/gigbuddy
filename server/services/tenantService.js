@@ -28,6 +28,7 @@ import {
   fetchTenantForDeletion,
   fetchTenantAssetKeys,
   deleteTenantRow,
+  markTenantDeletionState,
 } from '../repositories/tenantRepository.js'
 import { deleteTenantObjects } from './storageService.js'
 import { enforceMemberCap } from './limitService.js'
@@ -189,20 +190,31 @@ export async function setArchived(db, tenantId, archived) {
 }
 
 export async function deleteTenant(db, tenantId, confirmationSlug) {
-  return withTransaction(async (client) => {
+  const prepared = await withTransaction(async (client) => {
     const tenant = await fetchTenantForDeletion(client, tenantId)
     if (!tenant) abortTransaction(notFound('Tenant not found'))
     if (!tenant.archived_at) abortTransaction(conflict('Tenant must be archived before deletion'))
     if (confirmationSlug !== tenant.slug) abortTransaction(badRequest('Confirmation slug does not match'))
 
     const assetKeys = await fetchTenantAssetKeys(client, tenantId)
-    try {
-      await deleteTenantObjects(tenantId, assetKeys)
-    } catch (err) {
-      logger.error('tenant.delete_storage_failed', { err, tenantId })
-      abortTransaction({ error: { status: 502, body: { error: 'Failed to delete tenant storage' } } })
-    }
+    await markTenantDeletionState(client, tenantId, 'pending')
+    return { assetKeys }
+  }, { db })
 
+  if (prepared.error) return prepared
+
+  try {
+    await deleteTenantObjects(tenantId, prepared.assetKeys)
+  } catch (err) {
+    logger.error('tenant.delete_storage_failed', { err, tenantId })
+    await markTenantDeletionState(db, tenantId, 'failed', 'storage_purge_failed')
+    return { error: { status: 502, body: { error: 'Failed to delete tenant storage' } } }
+  }
+
+  return withTransaction(async (client) => {
+    const tenant = await fetchTenantForDeletion(client, tenantId)
+    if (!tenant) abortTransaction(notFound('Tenant not found'))
+    if (tenant.deletion_status !== 'pending') abortTransaction(conflict('Tenant deletion is not pending'))
     await deleteTenantRow(client, tenantId)
     return { audit: { action: 'tenant.delete', details: { tenantId } } }
   }, { db })

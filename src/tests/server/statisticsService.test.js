@@ -6,6 +6,7 @@ import { EventEmitter } from 'events'
 // Storage is mocked so computeTenantStorage reads from a fake object listing
 // instead of a real RustFS; the DB is real (advisory-lock + upsert path).
 let listing = []
+let privateListing = []
 function streamFrom(objects, errorMsg) {
   const stream = new EventEmitter()
   queueMicrotask(() => {
@@ -21,6 +22,18 @@ vi.mock('../../../server/utils/storage.js', () => ({
   storageClient: {
     listObjects: vi.fn(() => streamFrom(listing)),
   },
+  PUBLIC_BUCKET: 'test-bucket',
+  PRIVATE_BUCKET: 'private-bucket',
+  publicStorageClient: {
+    listObjects: vi.fn(() => streamFrom(listing)),
+  },
+  privateStorageClient: {
+    listObjects: vi.fn(() => streamFrom(privateListing)),
+  },
+  STORES: [
+    { id: 'public', bucket: 'test-bucket', client: { listObjects: vi.fn(() => streamFrom(listing)) } },
+    { id: 'private', bucket: 'private-bucket', client: { listObjects: vi.fn(() => streamFrom(privateListing)) } },
+  ],
 }))
 
 let pool, runMigrations, truncateAll, seedTwoTenants, svc, storage, seed
@@ -40,8 +53,9 @@ beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants() // creates tenants; NO tenant_statistics rows
   listing = []
-  storage.storageClient.listObjects.mockClear()
-  storage.storageClient.listObjects.mockImplementation(() => streamFrom(listing))
+  privateListing = []
+  storage.STORES[0].client.listObjects.mockClear()
+  storage.STORES[0].client.listObjects.mockImplementation(() => streamFrom(listing))
 })
 
 afterAll(async () => {
@@ -68,11 +82,25 @@ describe('computeTenantStorage', () => {
   it('lists the tenant-scoped prefix', async () => {
     listing = []
     await svc.computeTenantStorage(seed.tenantA.id)
-    expect(storage.storageClient.listObjects).toHaveBeenCalledWith(
+    expect(storage.STORES[0].client.listObjects).toHaveBeenCalledWith(
       'test-bucket',
       `tenants/${seed.tenantA.id}/`,
       true,
     )
+  })
+  it('counts the union of logical keys across stores', async () => {
+    listing = [
+      { name: `tenants/${seed.tenantA.id}/logo/a.webp`, size: 10 },
+      { name: `tenants/${seed.tenantA.id}/invoices/old.pdf`, size: 50 },
+    ]
+    privateListing = [
+      { name: `tenants/${seed.tenantA.id}/invoices/old.pdf`, size: 50 },
+      { name: `tenants/${seed.tenantA.id}/song_recordings/new.mp3`, size: 100 },
+    ]
+    await expect(svc.computeTenantStorage(seed.tenantA.id)).resolves.toEqual({
+      storageBytes: 160,
+      objectCount: 3,
+    })
   })
 })
 
@@ -124,10 +152,10 @@ describe('refreshTenantStorageForKey', () => {
   })
   it('is a no-op for a non-tenant key (no listing)', async () => {
     await svc.refreshTenantStorageForKey('logo/legacy.png')
-    expect(storage.storageClient.listObjects).not.toHaveBeenCalled()
+    expect(storage.STORES[0].client.listObjects).not.toHaveBeenCalled()
   })
   it('never throws when the listing errors (best-effort)', async () => {
-    storage.storageClient.listObjects.mockImplementationOnce(() =>
+    storage.STORES[0].client.listObjects.mockImplementationOnce(() =>
       streamFrom([], 's3 down'),
     )
     const { logger } = await import('../../../server/utils/logger.js')

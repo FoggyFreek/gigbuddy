@@ -22,6 +22,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import { useEntitlements } from '../hooks/useEntitlements.ts'
 import { formatBytes } from '../utils/formatBytes.ts'
+import AudioFilePlayer from './AudioFilePlayer.tsx'
 
 // Generic uploaded-file list for a song: used for PDF documents and mp3
 // recordings. When `isAudio` is set, each row also renders an inline player.
@@ -138,13 +139,9 @@ export default function SongFileList({
             )}
           </Stack>
           {isAudio && (
-            <Box
-              component="audio"
-              controls
-              preload="none"
-              src={`/api/files/${f.object_key}`}
-              sx={{ mt: 1, width: '100%', height: 36 }}
-            />
+            <Box sx={{ mt: 1 }}>
+              <AudioFilePlayer src={`/api/files/${f.object_key}?inline=1`} label={f.original_filename} />
+            </Box>
           )}
         </Box>
       ))}

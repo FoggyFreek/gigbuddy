@@ -86,3 +86,46 @@ export interface GigMapGig {
   venue: GigMapPlace | null
   festival: GigMapPlace | null
 }
+
+export type StorageMigrationState =
+  | 'not_scanned'
+  | 'inventorying'
+  | 'inventory_failed'
+  | 'ready_to_copy'
+  | 'copying'
+  | 'copy_failed'
+  | 'copied'
+  | 'validating'
+  | 'validation_failed'
+  | 'verified'
+  | 'deleting_source'
+  | 'delete_failed'
+  | 'complete'
+  | 'not_required'
+
+export interface StorageMigrationStatus {
+  tenant_id: import('./entities.ts').Id
+  slug: string
+  band_name: string
+  state: StorageMigrationState
+  requested_action?: 'inventory' | 'copy' | 'validate' | 'delete_rustfs' | null
+  source_object_count: number
+  source_bytes: number
+  copied_object_count: number
+  copied_bytes: number
+  database_references_checked: number
+  missing_object_count: number
+  mismatch_count: number
+  inventory_fingerprint?: string | null
+  validated_fingerprint?: string | null
+  validated_at?: string | null
+  error_code?: string | null
+  updated_at?: string | null
+}
+
+export interface PrivateStorageConnection {
+  configured: boolean
+  connected: boolean
+  operationsVerified: boolean
+  errorCode: string | null
+}

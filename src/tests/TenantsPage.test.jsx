@@ -35,6 +35,24 @@ vi.mock('../api/statistics.ts', () => ({
   getAllStorageStats: vi.fn().mockResolvedValue([]),
   refreshAllStorageStats: vi.fn(),
 }))
+vi.mock('../api/storageMigrations.ts', () => ({
+  getPrivateStorageConnection: vi.fn().mockResolvedValue({
+    configured: true, connected: true, operationsVerified: true, errorCode: null,
+  }),
+  testPrivateStorageConnection: vi.fn().mockResolvedValue({
+    configured: true, connected: true, operationsVerified: true, errorCode: null,
+  }),
+  listStorageMigrations: vi.fn().mockResolvedValue([]),
+  getStorageMigration: vi.fn().mockResolvedValue({
+    tenant_id: 1, slug: 'active-band', band_name: 'Active Band', state: 'not_scanned',
+    source_object_count: 0, source_bytes: 0, copied_object_count: 0, copied_bytes: 0,
+    database_references_checked: 0, missing_object_count: 0, mismatch_count: 0,
+  }),
+  inventoryStorageMigration: vi.fn(),
+  copyStorageMigration: vi.fn(),
+  validateStorageMigration: vi.fn(),
+  deleteRustfsMigrationCopies: vi.fn(),
+}))
 vi.mock('../contexts/authContext.ts', () => ({
   useAuth: () => ({ user: { activeTenantId: 1 }, switchTenant: vi.fn() }),
 }))
@@ -170,7 +188,7 @@ describe('TenantsPage permanent deletion', () => {
     wrap()
     await screen.findAllByText('Old Band')
     await user.click(screen.getAllByRole('button', { name: 'permanently delete Old Band' })[0])
-    expect(screen.getByRole('dialog')).toHaveTextContent('permanently deletes all PostgreSQL and RustFS data')
+    expect(screen.getByRole('dialog')).toHaveTextContent('permanently deletes all PostgreSQL, Backblaze, and transitional RustFS data')
     const confirm = screen.getByLabelText('Type old-band to confirm')
     const deleteButton = screen.getByRole('button', { name: 'Delete permanently' })
     expect(deleteButton).toBeDisabled()
