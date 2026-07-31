@@ -23,8 +23,7 @@ beforeEach(async () => {
   await pool.query(
     `UPDATE tenants SET formal_name = 'The Woods BV', address_street = 'Straat 1',
        address_postal_code = '9751TG', address_city = 'Haren', address_country = 'Netherlands',
-       tax_id = 'NL819789471B01', kvk_number = '12345678', iban = 'NL91ABNA0417164300',
-       tax_percentage = 21
+       tax_id = 'NL819789471B01', kvk_number = '12345678', iban = 'NL91ABNA0417164300'
      WHERE id = $1`,
     [seed.tenantA.id],
   )
