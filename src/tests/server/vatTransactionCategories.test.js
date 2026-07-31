@@ -158,8 +158,15 @@ describe('VAT transaction-category posting', () => {
       output_vat_cents: 42000,
       input_vat_cents: 21000,
       boxes: {
-        '1a': { base_cents: 200000, vat_cents: 42000 },
-        '5b': { vat_cents: 21000 },
+        '1a': {
+          base_cents: 200000,
+          vat_cents: 42000,
+          section: { id: '1', title: 'Rubriek 1: Prestaties binnenland' },
+        },
+        '5b': {
+          vat_cents: 21000,
+          section: { id: '5', title: 'Rubriek 5: Voorbelasting' },
+        },
       },
       reconciliation: {
         output_difference_cents: 0,
@@ -528,9 +535,20 @@ describe('VAT workpaper workflow and isolation', () => {
         box_code: '1a',
         base_raw_cents: 200000,
         vat_raw_cents: 42000,
+        section: { id: '1', title: 'Rubriek 1: Prestaties binnenland' },
       }),
     ]))
     expect(prepared.body.filed_at).toBeNull()
+
+    const detail = await asUserA(
+      request(app).get(`/api/vat-returns/${prepared.body.id}`),
+    ).expect(200)
+    expect(detail.body.boxes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        box_code: '5b',
+        section: { id: '5', title: 'Rubriek 5: Voorbelasting' },
+      }),
+    ]))
 
     const factId = prepared.body.facts[0].id
     await asUserB(request(app).get(`/api/vat-returns/${prepared.body.id}`)).expect(404)

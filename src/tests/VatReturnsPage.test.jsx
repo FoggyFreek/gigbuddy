@@ -203,6 +203,7 @@ describe('VatReturnsPage', () => {
       boxes: {
         '1a': {
           description: 'Leveringen/diensten belast met hoog tarief',
+          section: { id: '1', title: 'Rubriek 1: Prestaties binnenland' },
           base_declared_euros: 100,
           vat_declared_euros: 21,
         },
@@ -220,6 +221,7 @@ describe('VatReturnsPage', () => {
     expect(within(headers).getByText('Description')).toBeInTheDocument()
     expect(within(headers).getByText('Turnover')).toBeInTheDocument()
     expect(within(headers).getByText('VAT')).toBeInTheDocument()
+    expect(screen.getByTestId('vat-box-section-1')).toHaveTextContent('Rubriek 1: Prestaties binnenland')
     const description = screen.getByText('Leveringen/diensten belast met hoog tarief')
     expect(description).toBeInTheDocument()
     expect(within(description.parentElement).getByText(/100,00/)).toBeInTheDocument()
@@ -449,6 +451,7 @@ describe('VatReturnsPage', () => {
       boxes: [{
         box_code: '1a',
         description: 'Leveringen/diensten belast met hoog tarief',
+        section: { id: '1', title: 'Rubriek 1: Prestaties binnenland' },
         base_declared_euros: 100,
         vat_declared_euros: 21,
       }],
@@ -462,6 +465,7 @@ describe('VatReturnsPage', () => {
     expect(within(headers).getByText('Description')).toBeInTheDocument()
     expect(within(headers).getByText('Turnover')).toBeInTheDocument()
     expect(within(headers).getByText('VAT')).toBeInTheDocument()
+    expect(screen.getByTestId('vat-box-section-1')).toHaveTextContent('Rubriek 1: Prestaties binnenland')
     expect(await screen.findByText('Leveringen/diensten belast met hoog tarief')).toBeInTheDocument()
     expect(screen.getByText(/100,00/)).toBeInTheDocument()
     expect(screen.getByText(/21,00/)).toBeInTheDocument()

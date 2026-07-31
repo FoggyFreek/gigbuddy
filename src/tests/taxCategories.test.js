@@ -10,8 +10,10 @@ import {
   NL_VAT_RETURN_SCHEMA_2026,
   computeNlVatReturnBoxes,
   declaredEuroFor,
+  getNlVatReturnBoxDefinition,
   getNlVatReturnBoxDescription,
 } from '../../server/domain/vat/nlVatReturn2026.js'
+import { getVatReturnBoxDefinition } from '../../server/domain/vat/vatReturnBoxDefinitions.js'
 import { purchaseTaxFact, saleTaxFact } from '../../server/services/taxFactService.js'
 
 describe('tax category registry', () => {
@@ -19,6 +21,24 @@ describe('tax category registry', () => {
     expect(getNlVatReturnBoxDescription('1a')).toBe('Leveringen/diensten belast met hoog tarief')
     expect(getNlVatReturnBoxDescription('4b')).toBe('Leveringen/diensten uit landen binnen de EU')
     expect(getNlVatReturnBoxDescription('5c')).toBe('Subtotaal (rubriek 5a min 5b)')
+  })
+
+  it('categorises every box under its official return section', () => {
+    expect(getNlVatReturnBoxDefinition('1a')).toEqual({
+      description: 'Leveringen/diensten belast met hoog tarief',
+      section: { id: '1', title: 'Rubriek 1: Prestaties binnenland' },
+    })
+    expect(getNlVatReturnBoxDefinition('2a').section.title)
+      .toBe('Rubriek 2: Verleggingsregelingen binnenland')
+    expect(getNlVatReturnBoxDefinition('3c').section.title)
+      .toBe('Rubriek 3: Prestaties naar of in het buitenland')
+    expect(getNlVatReturnBoxDefinition('4b').section.title)
+      .toBe('Rubriek 4: Prestaties vanuit het buitenland aan u verricht')
+    expect(getNlVatReturnBoxDefinition('5c').section.title)
+      .toBe('Rubriek 5: Voorbelasting')
+    expect(getVatReturnBoxDefinition('nl', NL_VAT_RETURN_SCHEMA_2026.version, '2a'))
+      .toEqual(getNlVatReturnBoxDefinition('2a'))
+    expect(getVatReturnBoxDefinition('be', 'be-vat-2026', '00')).toBeNull()
   })
 
   it('keeps legally different zero-VAT treatments distinct', () => {

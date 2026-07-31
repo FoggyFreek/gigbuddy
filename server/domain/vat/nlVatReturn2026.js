@@ -25,10 +25,41 @@ export const NL_VAT_RETURN_BOX_DESCRIPTIONS_2026 = Object.freeze({
   '5c': 'Subtotaal (rubriek 5a min 5b)',
 })
 
+export const NL_VAT_RETURN_BOX_SECTIONS_2026 = Object.freeze({
+  '1': Object.freeze({ id: '1', title: 'Rubriek 1: Prestaties binnenland' }),
+  '2': Object.freeze({ id: '2', title: 'Rubriek 2: Verleggingsregelingen binnenland' }),
+  '3': Object.freeze({ id: '3', title: 'Rubriek 3: Prestaties naar of in het buitenland' }),
+  '4': Object.freeze({ id: '4', title: 'Rubriek 4: Prestaties vanuit het buitenland aan u verricht' }),
+  '5': Object.freeze({ id: '5', title: 'Rubriek 5: Voorbelasting' }),
+})
+
+const BOX_SECTION_IDS = Object.freeze({
+  '1a': '1',
+  '1b': '1',
+  '1c': '1',
+  '1d': '1',
+  '1e': '1',
+  '2a': '2',
+  '3a': '3',
+  '3b': '3',
+  '3c': '3',
+  '4a': '4',
+  '4b': '4',
+  '5a': '5',
+  '5b': '5',
+  '5c': '5',
+})
+
 const BOX_CODES = Object.freeze(['1a', '1b', '1c', '1d', '1e', '2a', '3a', '3b', '3c', '4a', '4b'])
 
 export function getNlVatReturnBoxDescription(code) {
   return NL_VAT_RETURN_BOX_DESCRIPTIONS_2026[code] ?? null
+}
+
+export function getNlVatReturnBoxDefinition(code) {
+  const description = getNlVatReturnBoxDescription(code)
+  const section = NL_VAT_RETURN_BOX_SECTIONS_2026[BOX_SECTION_IDS[code]]
+  return description && section ? { description, section } : null
 }
 
 function emptyBox() {

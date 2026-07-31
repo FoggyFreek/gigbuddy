@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import Checkbox from '@mui/material/Checkbox'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -30,6 +29,12 @@ const PALETTE = [
   '#e53935', '#e91e63', '#8e24aa', '#1e88e5',
   '#00897b', '#43a047', '#f4511e', '#6d4c41',
 ]
+
+const ROLE_MENU_ITEMS = BAND_MEMBER_ROLE_OPTIONS.map((role) => (
+  <MenuItem key={role} value={role} disableRipple>
+    <ListItemText primary={role} />
+  </MenuItem>
+))
 
 interface Props {
   member?: Member
@@ -104,12 +109,7 @@ export default function BandMemberDialog({ member, onClose, onSubmit }: Readonly
               onChange={handleRolesChange}
               renderValue={(selected) => selected.join(', ')}
             >
-              {BAND_MEMBER_ROLE_OPTIONS.map((role) => (
-                <MenuItem key={role} value={role}>
-                  <Checkbox checked={roles.includes(role)} />
-                  <ListItemText primary={role} />
-                </MenuItem>
-              ))}
+              {ROLE_MENU_ITEMS}
             </Select>
           </FormControl>
           {roles.length > 0 && (
