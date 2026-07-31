@@ -154,6 +154,14 @@ export async function confirmLegacyTaxFact(executor, tenantId, factId, patch, ac
             confirmed_by_user_id = $8
       WHERE id = $1 AND tenant_id = $2
         AND classification_status IN ('legacy_inferred', 'unclassified')
+        AND EXISTS (
+          SELECT 1
+            FROM ledger_transactions lt
+           WHERE lt.id = ledger_tax_facts.transaction_id
+             AND lt.tenant_id = ledger_tax_facts.tenant_id
+             AND lt.voided_at IS NULL
+             AND NOT (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')
+        )
         AND NOT EXISTS (
           SELECT 1 FROM vat_return_tax_facts rtf
            WHERE rtf.tenant_id = ledger_tax_facts.tenant_id
@@ -171,10 +179,14 @@ export async function confirmLegacyTaxFact(executor, tenantId, factId, patch, ac
 
 export async function fetchReviewableTaxFact(executor, tenantId, factId) {
   const { rows } = await executor.query(
-    `SELECT *
+    `SELECT f.*
        FROM ledger_tax_facts f
+       JOIN ledger_transactions lt
+         ON lt.id = f.transaction_id AND lt.tenant_id = f.tenant_id
       WHERE f.id = $1 AND f.tenant_id = $2
         AND f.classification_status IN ('legacy_inferred', 'unclassified')
+        AND lt.voided_at IS NULL
+        AND NOT (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')
         AND NOT EXISTS (
           SELECT 1 FROM vat_return_tax_facts rtf
            WHERE rtf.tenant_id = f.tenant_id AND rtf.tax_fact_id = f.id

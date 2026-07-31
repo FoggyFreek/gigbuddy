@@ -335,6 +335,45 @@ describe('VAT transaction-category posting', () => {
     expect(preview.body.output_vat_cents).toBe(0)
     expect(preview.body.input_vat_cents).toBe(0)
   })
+
+  it('does not allow a stale workpaper to confirm a tax fact after its entry is voided', async () => {
+    const { rows: [transaction] } = await pool.query(
+      `INSERT INTO ledger_transactions (
+         tenant_id, entry_date, description, source_type, source_id, source_event
+       ) VALUES ($1, '2026-02-20', 'Legacy sale to void', 'legacy_test', 346, 'posted')
+       RETURNING id`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO ledger_entries (
+         tenant_id, transaction_id, account_code, debit_cents, credit_cents
+       ) VALUES
+         ($1, $2, '11000', 1995, 0),
+         ($1, $2, '41000', 0, 1649),
+         ($1, $2, '24000', 0, 346)`,
+      [seed.tenantA.id, transaction.id],
+    )
+    await asSuper(
+      request(app).post(`/api/admin/tenants/${seed.tenantA.id}/vat-tax-facts/backfill`),
+    ).expect(200)
+    const [fact] = await factsFor(transaction.id)
+
+    await asUserA(request(app).post(`/api/ledger/${transaction.id}/void`)).expect(200)
+
+    await asUserA(
+      request(app).post(`/api/vat-returns/tax-facts/${fact.id}/confirm`),
+    ).send({
+      category_code: 'domestic_standard',
+      tax_jurisdiction_code: 'nl',
+      direction: 'sale',
+      rate: 21,
+      taxable_base_cents: 1649,
+      tax_amount_cents: 346,
+    }).expect(404)
+
+    const [unchanged] = await factsFor(transaction.id)
+    expect(unchanged.classification_status).toBe('unclassified')
+  })
 })
 
 describe('VAT workpaper workflow and isolation', () => {

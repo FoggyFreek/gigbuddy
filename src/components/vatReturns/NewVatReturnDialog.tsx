@@ -20,8 +20,10 @@ import {
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
 import { previousQuarter, quarterKey } from '../../utils/vatReturns.ts'
+import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import type { VatQuarter, VatReturn, VatReturnPreview, VatTaxFact } from '../../types/entities.ts'
 import VatTaxFactReviewList, { type VatFactClassification } from './VatTaxFactReviewList.tsx'
+import VatBoxesTable from './VatBoxesTable.tsx'
 
 const QUARTERS = [1, 2, 3, 4] as const
 
@@ -39,6 +41,7 @@ interface NewVatReturnDialogProps {
 // files the declaration: the backend posts the settlement journal and closes
 // the books through the period end.
 export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVatReturnDialogProps>) {
+  const currency = useAccountingProfile().profile?.base_currency ?? 'EUR'
   const { t, i18n } = useTranslation(['vatReturns', 'common'])
   const [{ year, quarter }, setPeriod] = useState<{ year: number; quarter: VatQuarter }>(() => previousQuarter())
   const [years] = useState(() => yearOptions())
@@ -63,6 +66,16 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
       .catch((e: Error) => active && setError(e.message))
     return () => { active = false }
   }, [year, quarter, refresh])
+
+  useEffect(() => {
+    const refreshAfterExternalCorrection = () => {
+      setLastPreview(null)
+      setError(null)
+      setRefresh((value) => value + 1)
+    }
+    window.addEventListener('focus', refreshAfterExternalCorrection)
+    return () => window.removeEventListener('focus', refreshAfterExternalCorrection)
+  }, [])
 
   const preview: VatReturnPreview | null =
     lastPreview?.year === year && lastPreview?.quarter === quarter ? lastPreview : null
@@ -190,20 +203,7 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
 
             {isWorkpaper && preview.boxes && (
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  {t($ => $.workpaper.boxesTitle)}
-                </Typography>
-                {Object.entries(preview.boxes).map(([code, box]) => (
-                  <Box key={code} sx={{ display: 'grid', gridTemplateColumns: '44px 1fr 1fr', gap: 1, py: 0.25 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{code}</Typography>
-                    <Typography variant="body2">
-                      {box.base_declared_euros == null ? '—' : `€ ${box.base_declared_euros}`}
-                    </Typography>
-                    <Typography variant="body2">
-                      {box.vat_declared_euros == null ? '—' : `€ ${box.vat_declared_euros}`}
-                    </Typography>
-                  </Box>
-                ))}
+                <VatBoxesTable boxes={preview.boxes} currency={currency} />
               </Box>
             )}
 
