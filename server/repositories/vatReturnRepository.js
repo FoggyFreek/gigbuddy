@@ -5,7 +5,189 @@ const RETURN_COLUMNS = `
   input_vat_cents, output_vat_cents, net_cents, direction,
   settlement_account_code,
   to_char(due_date, 'YYYY-MM-DD') AS due_date,
-  notes, filed_at, created_by_user_id`
+  notes, filed_at, created_by_user_id,
+  period_key, schema_country_code, schema_version, calculation_mode,
+  workflow_status, filing_frequency_snapshot,
+  raw_input_vat_cents, raw_output_vat_cents, raw_net_cents,
+  prepared_at, prepared_by_user_id, submitted_at, submitted_by_user_id,
+  submission_reference, boxes_snapshot, reconciliation_snapshot, exceptions_snapshot`
+
+export async function activeVatReturnForPeriod(executor, tenantId, periodFrom, periodTo) {
+  const { rows } = await executor.query(
+    `SELECT ${RETURN_COLUMNS}
+       FROM vat_returns
+      WHERE tenant_id = $1 AND period_from = $2 AND period_to = $3
+        AND workflow_status <> 'superseded'
+      FOR UPDATE`,
+    [tenantId, periodFrom, periodTo],
+  )
+  return rows[0] || null
+}
+
+export async function insertPreparedVatReturn(executor, tenantId, vatReturn) {
+  const { rows } = await executor.query(
+    `INSERT INTO vat_returns (
+       tenant_id, year, quarter, period_from, period_to, period_key,
+       schema_country_code, schema_version, calculation_mode, workflow_status,
+       filing_frequency_snapshot, input_vat_cents, output_vat_cents, net_cents,
+       raw_input_vat_cents, raw_output_vat_cents, raw_net_cents,
+       direction, settlement_account_code, due_date, notes,
+       prepared_at, prepared_by_user_id, boxes_snapshot,
+       reconciliation_snapshot, exceptions_snapshot, created_by_user_id, filed_at
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6,
+       $7, $8, 'category_workpaper', 'prepared',
+       $9, $10, $11, $12,
+       $13, $14, $15,
+       $16, NULL, $17, $18,
+       NOW(), $19, $20, $21, $22, $19, NULL
+     )
+     RETURNING ${RETURN_COLUMNS}`,
+    [
+      tenantId, vatReturn.year, vatReturn.quarter,
+      vatReturn.periodFrom, vatReturn.periodTo, vatReturn.periodKey,
+      vatReturn.schemaCountryCode, vatReturn.schemaVersion,
+      vatReturn.filingFrequency,
+      vatReturn.inputVatCents, vatReturn.outputVatCents, vatReturn.netCents,
+      vatReturn.rawInputVatCents, vatReturn.rawOutputVatCents, vatReturn.rawNetCents,
+      vatReturn.direction, vatReturn.dueDate, vatReturn.notes,
+      vatReturn.actorUserId,
+      JSON.stringify(vatReturn.boxes),
+      JSON.stringify(vatReturn.reconciliation),
+      JSON.stringify(vatReturn.exceptions),
+    ],
+  )
+  return rows[0]
+}
+
+export async function insertVatReturnBoxes(executor, tenantId, vatReturnId, boxes) {
+  for (const [boxCode, value] of Object.entries(boxes)) {
+    await executor.query(
+      `INSERT INTO vat_return_box_values (
+         tenant_id, vat_return_id, box_code, base_raw_cents, vat_raw_cents,
+         base_declared_euros, vat_declared_euros
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        tenantId, vatReturnId, boxCode,
+        value.base_cents ?? 0, value.vat_cents ?? 0,
+        value.base_declared_euros ?? null, value.vat_declared_euros ?? null,
+      ],
+    )
+  }
+}
+
+export async function linkVatReturnTaxFacts(executor, tenantId, vatReturnId, facts) {
+  for (const fact of facts) {
+    await executor.query(
+      `INSERT INTO vat_return_tax_facts (
+         tenant_id, vat_return_id, tax_fact_id, inclusion_kind
+       ) VALUES ($1, $2, $3, $4)`,
+      [tenantId, vatReturnId, fact.id, fact.inclusion_kind],
+    )
+  }
+}
+
+export async function listVatReturnBoxes(executor, tenantId, vatReturnId) {
+  const { rows } = await executor.query(
+    `SELECT box_code, base_raw_cents, vat_raw_cents,
+            base_declared_euros, vat_declared_euros
+       FROM vat_return_box_values
+      WHERE tenant_id = $1 AND vat_return_id = $2
+      ORDER BY box_code`,
+    [tenantId, vatReturnId],
+  )
+  return rows
+}
+
+export async function listVatReturnFacts(executor, tenantId, vatReturnId) {
+  const { rows } = await executor.query(
+    `SELECT f.*, rtf.inclusion_kind,
+            to_char(f.tax_point, 'YYYY-MM-DD') AS tax_point
+       FROM vat_return_tax_facts rtf
+       JOIN ledger_tax_facts f
+         ON f.id = rtf.tax_fact_id AND f.tenant_id = rtf.tenant_id
+      WHERE rtf.tenant_id = $1 AND rtf.vat_return_id = $2
+      ORDER BY f.tax_point, f.id`,
+    [tenantId, vatReturnId],
+  )
+  return rows
+}
+
+export async function listExceptionAcknowledgements(executor, tenantId, vatReturnId) {
+  const { rows } = await executor.query(
+    `SELECT exception_key, note, acknowledged_by_user_id, acknowledged_at
+       FROM vat_return_exception_acknowledgements
+      WHERE tenant_id = $1 AND vat_return_id = $2
+      ORDER BY exception_key`,
+    [tenantId, vatReturnId],
+  )
+  return rows
+}
+
+export async function acknowledgeVatReturnException(
+  executor, tenantId, vatReturnId, exceptionKey, note, actorUserId,
+) {
+  const { rows } = await executor.query(
+    `INSERT INTO vat_return_exception_acknowledgements (
+       tenant_id, vat_return_id, exception_key, note, acknowledged_by_user_id
+     )
+     SELECT $1, vr.id, $3, $4, $5
+      FROM vat_returns vr
+      WHERE vr.id = $2 AND vr.tenant_id = $1 AND vr.workflow_status = 'prepared'
+        AND EXISTS (
+          SELECT 1
+            FROM jsonb_array_elements(COALESCE(vr.exceptions_snapshot, '[]'::jsonb)) exception
+           WHERE exception->>'key' = $3
+        )
+     ON CONFLICT (vat_return_id, tenant_id, exception_key)
+     DO UPDATE SET note = EXCLUDED.note,
+                   acknowledged_by_user_id = EXCLUDED.acknowledged_by_user_id,
+                   acknowledged_at = NOW()
+     RETURNING *`,
+    [tenantId, vatReturnId, exceptionKey, note, actorUserId],
+  )
+  return rows[0] || null
+}
+
+export async function submitPreparedVatReturn(
+  executor, tenantId, vatReturnId, { settlementAccountCode, reference, actorUserId },
+) {
+  const { rows } = await executor.query(
+    `UPDATE vat_returns
+        SET workflow_status = 'submitted',
+            settlement_account_code = $3,
+            submission_reference = $4,
+            submitted_at = NOW(),
+            submitted_by_user_id = $5,
+            filed_at = NOW()
+      WHERE id = $1 AND tenant_id = $2 AND workflow_status = 'prepared'
+      RETURNING ${RETURN_COLUMNS}`,
+    [vatReturnId, tenantId, settlementAccountCode, reference, actorUserId],
+  )
+  return rows[0] || null
+}
+
+export async function lockPreparedVatReturn(executor, tenantId, vatReturnId) {
+  const { rows } = await executor.query(
+    `SELECT ${RETURN_COLUMNS}
+       FROM vat_returns
+      WHERE id = $1 AND tenant_id = $2
+      FOR UPDATE`,
+    [vatReturnId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function lockVatPeriodThrough(executor, tenantId, periodTo) {
+  await executor.query(
+    `UPDATE tenant_accounting_profiles
+        SET vat_period_locked_through =
+              GREATEST(COALESCE(vat_period_locked_through, $2::date), $2::date),
+            updated_at = NOW()
+      WHERE tenant_id = $1`,
+    [tenantId, periodTo],
+  )
+}
 
 export async function vatReturnExists(executor, tenantId, year, quarter) {
   const { rowCount } = await executor.query(
@@ -20,8 +202,8 @@ export async function insertVatReturn(executor, tenantId, vatReturn) {
     `INSERT INTO vat_returns (
        tenant_id, year, quarter, period_from, period_to,
        input_vat_cents, output_vat_cents, net_cents, direction,
-       settlement_account_code, due_date, notes, created_by_user_id
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       settlement_account_code, due_date, notes, created_by_user_id, filed_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
      RETURNING ${RETURN_COLUMNS}`,
     [tenantId, vatReturn.year, vatReturn.quarter, vatReturn.periodFrom, vatReturn.periodTo,
       vatReturn.inputVatCents, vatReturn.outputVatCents, vatReturn.netCents, vatReturn.direction,
@@ -42,7 +224,7 @@ export async function closeBooksThrough(executor, tenantId, date) {
 
 export async function lockVatReturn(executor, tenantId, vatReturnId) {
   const { rows } = await executor.query(
-    `SELECT id, net_cents, direction, settlement_account_code
+    `SELECT id, net_cents, direction, settlement_account_code, workflow_status
        FROM vat_returns WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
     [vatReturnId, tenantId],
   )
@@ -103,7 +285,9 @@ export async function listVatReturnsInRange(executor, tenantId, { from, to }) {
             to_char(filed_at, 'YYYY-MM-DD') AS filed_on,
             direction, net_cents
        FROM vat_returns
-      WHERE tenant_id = $1 AND period_from <= $3::date AND period_to >= $2::date
+      WHERE tenant_id = $1
+        AND workflow_status = 'submitted'
+        AND period_from <= $3::date AND period_to >= $2::date
       ORDER BY year, quarter`,
     [tenantId, from, to],
   )

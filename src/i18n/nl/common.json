@@ -55,7 +55,38 @@
     "no": "Nee"
   },
   "vat": {
-    "otherCountries": "Andere landen"
+    "otherCountries": "Andere landen",
+    "category": "Btw-categorie",
+    "jurisdiction": "Belastingland",
+    "inferCategory": "Afleiden van tarief",
+    "otherTreatment": "Andere btw-behandeling…",
+    "useCommonRate": "Gebruik het gebruikelijke btw-tarief",
+    "rates": {
+      "standard": "21% – algemeen btw-tarief",
+      "reduced": "9% – verlaagd btw-tarief",
+      "zero": "0% – nultarief"
+    },
+    "categories": {
+      "domestic_standard": "Binnenlands algemeen tarief",
+      "domestic_reduced": "Binnenlands verlaagd tarief",
+      "domestic_other_rate": "Binnenlands ander tarief",
+      "domestic_zero": "Binnenlands nultarief",
+      "domestic_exempt": "Binnenlandse vrijstelling",
+      "outside_scope": "Buiten de btw-heffing",
+      "domestic_reverse_charge": "Binnenlandse verlegging",
+      "private_use_adjustment": "Correctie privégebruik",
+      "export_non_eu_goods": "Uitvoer van goederen buiten de EU",
+      "intra_eu_supply_goods": "Intracommunautaire levering van goederen",
+      "intra_eu_supply_services": "Intracommunautaire dienst",
+      "eu_distance_installation_non_oss": "EU-afstandsverkoop of installatie (geen OSS)",
+      "import_article_23": "Invoer met artikel 23-vergunning",
+      "non_eu_service_reverse_charge": "Verlegde dienst van buiten de EU",
+      "intra_eu_acquisition_goods": "Intracommunautaire verwerving van goederen",
+      "intra_eu_acquisition_services": "Intracommunautaire verwerving van diensten",
+      "import_vat_paid": "Betaalde invoer-btw",
+      "foreign_vat": "Buitenlandse btw",
+      "small_business_exempt": "Vrijstelling kleineondernemersregeling"
+    }
   },
   "picker": {
     "typeMinChars_one": "Typ minstens {{count}} teken…",

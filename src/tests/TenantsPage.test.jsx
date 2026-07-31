@@ -9,6 +9,8 @@ import {
   getTenantOnboardingStatus,
   grantMembership,
   listTenants,
+  applyVatTaxFactBackfill,
+  previewVatTaxFactBackfill,
   updateTenant,
   updateTenantOnboardingStatus,
 } from '../api/tenants.ts'
@@ -23,6 +25,8 @@ vi.mock('../api/tenants.ts', () => ({
   unarchiveTenant: vi.fn(),
   grantMembership: vi.fn(),
   deleteTenant: vi.fn(),
+  previewVatTaxFactBackfill: vi.fn(),
+  applyVatTaxFactBackfill: vi.fn(),
   getTenantOnboardingStatus: vi.fn(),
   updateTenantOnboardingStatus: vi.fn(),
 }))
@@ -213,5 +217,71 @@ describe('TenantsPage tenant onboarding setting', () => {
 
     await waitFor(() => expect(updateTenantOnboardingStatus).toHaveBeenCalledWith(false))
     expect(toggle).not.toBeChecked()
+  })
+})
+
+describe('TenantsPage VAT tax-fact backfill', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    listTenants.mockResolvedValue(tenants)
+    listAllUsers.mockResolvedValue(users)
+    getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })
+    previewVatTaxFactBackfill.mockResolvedValue({
+      mode: 'preview',
+      tenant_id: 1,
+      transactions_found: 2,
+      inserted: 0,
+      assigned_to_submitted_returns: 0,
+      remaining: 2,
+      logs_truncated: false,
+      logs: [
+        { level: 'info', message: 'Found 2 ledger transactions requiring VAT classification.' },
+        { level: 'warning', message: 'Transaction 41 will be created as legacy_unclassified.' },
+      ],
+    })
+    applyVatTaxFactBackfill.mockResolvedValue({
+      mode: 'apply',
+      tenant_id: 1,
+      transactions_found: 2,
+      inserted: 2,
+      assigned_to_submitted_returns: 1,
+      remaining: 0,
+      logs_truncated: false,
+      logs: [
+        { level: 'info', message: 'Inserted 2 legacy VAT tax facts.' },
+        { level: 'info', message: 'Assigned 1 fact to an existing submitted VAT return.' },
+      ],
+    })
+  })
+
+  it('previews a tenant and renders the logs and result below the tenants table', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findAllByText('Active Band')
+
+    await user.click(screen.getAllByRole('button', { name: 'backfill VAT tax facts for Active Band' })[0])
+
+    await waitFor(() => expect(previewVatTaxFactBackfill).toHaveBeenCalledWith(1))
+    const dialog = screen.getByRole('dialog', { name: 'VAT tax-fact backfill — Active Band' })
+    expect(dialog).toHaveTextContent('Found 2 ledger transactions requiring VAT classification.')
+    expect(dialog).toHaveTextContent('Transactions found')
+    expect(dialog).toHaveTextContent('2')
+    expect(within(dialog).getByRole('button', { name: 'Apply backfill' })).toBeEnabled()
+  })
+
+  it('applies the backfill for the selected tenant and displays the final result', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findAllByText('Active Band')
+    await user.click(screen.getAllByRole('button', { name: 'backfill VAT tax facts for Active Band' })[0])
+    const dialog = await screen.findByRole('dialog', { name: 'VAT tax-fact backfill — Active Band' })
+
+    await user.click(within(dialog).getByRole('button', { name: 'Apply backfill' }))
+
+    await waitFor(() => expect(applyVatTaxFactBackfill).toHaveBeenCalledWith(1))
+    expect(dialog).toHaveTextContent('Inserted 2 legacy VAT tax facts.')
+    expect(dialog).toHaveTextContent('Inserted')
+    expect(dialog).toHaveTextContent('Assigned to submitted returns')
+    expect(within(dialog).getByRole('button', { name: 'Apply backfill' })).toBeDisabled()
   })
 })

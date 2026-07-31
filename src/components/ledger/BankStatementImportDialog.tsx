@@ -40,6 +40,8 @@ import type {
   Account, AccountingProfile, AccountingSettings, BankImportParseResult, BankStatementLine,
   BankImportDecision, BankImportResult, Id,
 } from '../../types/entities.ts'
+import TaxCategorySelect from '../shared/TaxCategorySelect.tsx'
+import { commonVatSelection, taxCategoryUsesZeroRate } from '../../../shared/taxCategories.js'
 
 type Step = 'upload' | 'review' | 'importing' | 'done'
 
@@ -52,8 +54,21 @@ type Decision =
   | { kind: 'skip' }
   | { kind: 'reconcile_invoice'; invoiceId: Id }
   | { kind: 'reconcile_purchase'; purchaseId: Id }
-  | { kind: 'journal_paid'; contraAccountCode: string; vatRate: number | null; supplier: SupplierChoice }
-  | { kind: 'journal_received'; contraAccountCode: string; vatRate: number | null }
+  | {
+      kind: 'journal_paid'
+      contraAccountCode: string
+      vatRate: number | null
+      taxCategoryCode: string | null
+      taxJurisdictionCode: string
+      supplier: SupplierChoice
+    }
+  | {
+      kind: 'journal_received'
+      contraAccountCode: string
+      vatRate: number | null
+      taxCategoryCode: string | null
+      taxJurisdictionCode: string
+    }
 
 // The VAT a direct booking should carry. `enabled` is false under a
 // small-business scheme: such a tenant neither charges output VAT nor deducts
@@ -97,7 +112,7 @@ const keyOf = (line: BankStatementLine) => String(line.id)
 // keep the same width on every line, so the VAT controls form one straight
 // column down the review list instead of stepping in and out with the content.
 const BOOKING_COLUMN = 300
-const VAT_COLUMN = 140
+const VAT_COLUMN = 230
 
 // Pre-selects the most likely booking for a line: an exact single reconcile
 // match, else a direct journal (creating a supplier for a new outgoing
@@ -108,20 +123,26 @@ function defaultDecision(line: BankStatementLine, settings: AccountingSettings |
     if (line.suggestion.purchaseMatches.length === 1) {
       return { kind: 'reconcile_purchase', purchaseId: line.suggestion.purchaseMatches[0].id }
     }
+    const selection = vat.enabled ? commonVatSelection(vat.country, vat.paid) : null
     return {
       kind: 'journal_paid',
       contraAccountCode: settings?.default_expense_account_code ?? '',
       vatRate: vat.enabled ? vat.paid : null,
+      taxCategoryCode: selection?.tax_category_code ?? null,
+      taxJurisdictionCode: selection?.tax_jurisdiction_code ?? vat.country,
       supplier: defaultSupplier(line),
     }
   }
   if (line.suggestion.invoiceMatches.length === 1) {
     return { kind: 'reconcile_invoice', invoiceId: line.suggestion.invoiceMatches[0].id }
   }
+  const selection = vat.enabled ? commonVatSelection(vat.country, vat.received) : null
   return {
     kind: 'journal_received',
     contraAccountCode: settings?.default_revenue_account_code ?? '',
     vatRate: vat.enabled ? vat.received : null,
+    taxCategoryCode: selection?.tax_category_code ?? null,
+    taxJurisdictionCode: selection?.tax_jurisdiction_code ?? vat.country,
   }
 }
 
@@ -361,6 +382,8 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
           line_id: line.id, action: 'journal_received',
           contra_account_code: d.contraAccountCode || defaultIncomeCode,
           vat_rate: d.vatRate,
+          tax_category_code: d.taxCategoryCode,
+          tax_jurisdiction_code: d.taxJurisdictionCode,
         })
       } else {
         const base = {
@@ -368,6 +391,8 @@ export default function BankStatementImportDialog({ onClose }: Readonly<BankStat
           action: 'journal_paid' as const,
           contra_account_code: d.contraAccountCode || defaultExpenseCode,
           vat_rate: d.vatRate,
+          tax_category_code: d.taxCategoryCode,
+          tax_jurisdiction_code: d.taxJurisdictionCode,
         }
         if (d.supplier.kind === 'link') out.push({ ...base, supplier_contact_id: d.supplier.id })
         else if (d.supplier.kind === 'create') out.push({ ...base, create_supplier: { name: d.supplier.name, iban: d.supplier.iban } })
@@ -729,6 +754,8 @@ function BookingDetail({
         kind: 'journal_paid',
         contraAccountCode: expenseAccounts[0]?.code ?? '',
         vatRate: vat.enabled ? vat.paid : null,
+        taxCategoryCode: null,
+        taxJurisdictionCode: vat.country,
         supplier: defaultSupplier(line),
       }
     }
@@ -736,6 +763,8 @@ function BookingDetail({
       kind: 'journal_received',
       contraAccountCode: incomeAccounts[0]?.code ?? '',
       vatRate: vat.enabled ? vat.received : null,
+      taxCategoryCode: null,
+      taxJurisdictionCode: vat.country,
     }
   }
 
@@ -863,13 +892,36 @@ function VatControl({ line, decision, setDecision, vat }: Readonly<VatControlPro
         country={vat.country}
         value={rate}
         noVatLabel={t($ => $.bankImport.vat.none)}
-        onChange={(nextRate) => setDecision(line, {
+        categoryCode={decision.taxCategoryCode}
+        onChange={(nextRate, taxPatch) => setDecision(line, {
             ...decision,
             vatRate: nextRate,
+            ...(taxPatch ? {
+              taxCategoryCode: taxPatch.tax_category_code,
+              taxJurisdictionCode: taxPatch.tax_jurisdiction_code,
+            } : {}),
           })}
         fullWidth={false}
         sx={{ width: VAT_COLUMN, flexShrink: 0 }}
       />
+      <Box>
+        <TaxCategorySelect
+          direction={line.direction === 'credit' ? 'sale' : 'purchase'}
+          categoryCode={decision.taxCategoryCode}
+          jurisdictionCode={decision.taxJurisdictionCode}
+          defaultJurisdiction={vat.country}
+          rate={rate}
+          onChange={(patch) => setDecision(line, {
+            ...decision,
+            ...(patch.tax_category_code && taxCategoryUsesZeroRate(
+              patch.tax_category_code,
+              line.direction === 'credit' ? 'sale' : 'purchase',
+            ) ? { vatRate: 0 } : {}),
+            taxCategoryCode: patch.tax_category_code,
+            taxJurisdictionCode: patch.tax_jurisdiction_code,
+          })}
+        />
+      </Box>
       {rate != null && rate > 0 && (
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {t($ => $.bankImport.vat.split, { net: formatEur(netCents), vat: formatEur(vatCents) })}

@@ -210,7 +210,7 @@ describe('AccountingProfileSection', () => {
 
     const rate = await screen.findByRole('combobox', { name: /default vat rate/i })
     await user.click(rate)
-    await user.click(await screen.findByRole('option', { name: '9%' }))
+    await user.click(await screen.findByRole('option', { name: /9%.*reduced VAT rate/i }))
 
     await waitFor(
       () => expect(profileApi.updateAccountingProfile).toHaveBeenCalledWith({ default_vat_rate: 9 }),
@@ -223,9 +223,9 @@ describe('AccountingProfileSection', () => {
     wrap()
 
     await user.click(await screen.findByRole('combobox', { name: /default vat rate/i }))
-    expect(screen.getByRole('option', { name: '21%' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '9%' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '0%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /21%.*standard VAT rate/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /9%.*reduced VAT rate/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /0%.*zero rate/i })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: '19%' })).not.toBeInTheDocument()
   })
 

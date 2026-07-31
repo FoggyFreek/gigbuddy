@@ -12,7 +12,8 @@ export async function fetchJournal(executor, tenantId, journalId) {
 
 export async function fetchJournalLines(executor, journalId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id, description, account_code, vat_rate, side, amount_cents,
+    `SELECT id, description, account_code, vat_rate, tax_category_code,
+            tax_jurisdiction_code, input_vat_recovery_percent, side, amount_cents,
             balancing_account_code, position
        FROM journal_lines
       WHERE journal_id = $1 AND tenant_id = $2
@@ -37,7 +38,8 @@ export async function listJournals(executor, tenantId) {
   if (!journals.length) return []
   const ids = journals.map((j) => j.id)
   const { rows: lines } = await executor.query(
-    `SELECT id, journal_id, description, account_code, vat_rate, side,
+    `SELECT id, journal_id, description, account_code, vat_rate, tax_category_code,
+            tax_jurisdiction_code, input_vat_recovery_percent, side,
             amount_cents, balancing_account_code, position
        FROM journal_lines
       WHERE tenant_id = $1 AND journal_id = ANY($2)
@@ -67,11 +69,15 @@ export async function insertJournalLines(executor, journalId, tenantId, lines) {
   for (const line of lines) {
     await executor.query(
       `INSERT INTO journal_lines
-         (journal_id, tenant_id, position, description, account_code, vat_rate, side, amount_cents, balancing_account_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         (journal_id, tenant_id, position, description, account_code, vat_rate,
+          tax_category_code, tax_jurisdiction_code, input_vat_recovery_percent,
+          side, amount_cents, balancing_account_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         journalId, tenantId, line.position, line.description,
-        line.account_code ?? null, line.vat_rate, line.side ?? null,
+        line.account_code ?? null, line.vat_rate,
+        line.tax_category_code ?? null, line.tax_jurisdiction_code ?? null,
+        line.input_vat_recovery_percent ?? 100, line.side ?? null,
         line.amount_cents, line.balancing_account_code ?? null,
       ],
     )

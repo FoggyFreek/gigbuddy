@@ -3,10 +3,15 @@
 // All money values are integer cents. Unlike invoices, a purchase line is
 // entered as a gross Incl. VAT amount plus a tax rate; the net (Excl. VAT) and
 // VAT amount are derived. HALF_UP rounding via Math.round.
+import { getTaxCategoryDefinition } from './taxCategories.js'
 
 export function computePurchaseLineTotals(line) {
   const grossCents = Math.round(Number(line.amount_incl_cents) || 0)
   const taxRate = Number(line.tax_rate) || 0
+  const selfAssessed = getTaxCategoryDefinition(line.tax_category_code)?.selfAssessed === true
+  if (selfAssessed) {
+    return { netCents: grossCents, vatCents: 0, grossCents }
+  }
   const netCents = Math.round((grossCents * 100) / (100 + taxRate))
   const vatCents = grossCents - netCents
   return { netCents, vatCents, grossCents }

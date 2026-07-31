@@ -13,10 +13,12 @@ import AmountCell from './AmountCell.tsx'
 import JournalLinePopper from './JournalLinePopper.tsx'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
+import TaxCategorySelect from '../shared/TaxCategorySelect.tsx'
+import { taxCategoryUsesZeroRate } from '../../../shared/taxCategories.js'
 
 // Description · Account · VAT · Debit · Credit read as one connected segmented
 // control; a connector line then bridges to the standalone balancing account.
-export const LINE_GRID = '1.6fr 2fr 1.1fr 1fr 1fr 20px 2fr 40px'
+export const LINE_GRID = '1.6fr 2fr 1.65fr 1fr 1fr 20px 2fr 40px'
 
 const GROUP_RADIUS = '12px'
 
@@ -64,7 +66,8 @@ export default function JournalLineRow({
   }
 
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: LINE_GRID, gap: 0, alignItems: 'center', mb: 1 }}>
+    <>
+      <Box sx={{ display: 'grid', gridTemplateColumns: LINE_GRID, gap: 0, alignItems: 'center', mb: 1 }}>
       <TextField
         size="small"
         fullWidth
@@ -87,7 +90,12 @@ export default function JournalLineRow({
         label={t($ => $.line.vatRate)}
         country={accountingCountry}
         value={Number.isFinite(Number(line.vat_rate)) ? Number(line.vat_rate) : 0}
-        onChange={(rate) => patchLine(idx, { vat_rate: rate ?? 0 })}
+        categoryCode={line.tax_category_code}
+        noVatLabel={t($ => $.line.noVat)}
+        onChange={(rate, taxPatch) => patchLine(idx, {
+          vat_rate: rate ?? 0,
+          ...taxPatch,
+        })}
         disabled={readOnly}
         sx={connect('mid')}
       />
@@ -135,6 +143,26 @@ export default function JournalLineRow({
         onAdd={addLine}
         canDelete={canDelete}
       />
-    </Box>
+      </Box>
+      <Box sx={{ ml: 1, mb: 1.5, maxWidth: 520 }}>
+        <TaxCategorySelect
+          direction={line.side === 'credit' ? 'sale' : 'purchase'}
+          categoryCode={line.tax_category_code}
+          jurisdictionCode={line.tax_jurisdiction_code}
+          defaultJurisdiction={accountingCountry}
+          rate={Number(line.vat_rate)}
+          disabled={readOnly}
+          onChange={(patch) => {
+            const direction = line.side === 'credit' ? 'sale' : 'purchase'
+            patchLine(idx, {
+              ...patch,
+              ...(patch.tax_category_code && taxCategoryUsesZeroRate(patch.tax_category_code, direction)
+                ? { vat_rate: 0 }
+                : {}),
+            })
+          }}
+        />
+      </Box>
+    </>
   )
 }

@@ -33,6 +33,7 @@
     "description": "Omschrijving",
     "account": "Rekening",
     "vatRate": "Btw-tarief",
+    "noVat": "Geen btw",
     "debit": "Debet",
     "credit": "Credit",
     "balancingAccount": "Tegenrekening",

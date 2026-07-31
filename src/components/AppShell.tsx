@@ -349,16 +349,9 @@ export default function AppShell() {
           )}
           <Box
             component="img"
-            src={tierLogo ?? '/icons/gigbuddy_logo_pick.png'}
+            src={tierLogo ?? (mode === 'dark' ? '/icons/gb_dark_128.png' : '/icons/gb_light_128.png')}
             alt="gigBuddy"
-            sx={{
-              height: 32,
-              width: 'auto',
-              mr: 1,
-              // The tier logos are full-color; only the monochrome default logo
-              // inverts in dark mode.
-              filter: !tierLogo && theme.palette.mode === 'dark' ? 'invert(1)' : 'none',
-            }}
+            sx={{ height: 32, width: 'auto', mr: 1 }}
           />
           <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.1 }}>

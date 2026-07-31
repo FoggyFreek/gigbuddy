@@ -12,12 +12,16 @@ import TextField from '@mui/material/TextField'
 import MoneyInput from '../invoices/MoneyInput.tsx'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
+import TaxCategorySelect from '../shared/TaxCategorySelect.tsx'
+import { commonVatSelection, taxCategoryUsesZeroRate } from '../../../shared/taxCategories.js'
 import type { Product, Account } from '../../types/entities.ts'
 
 interface ProductBody {
   name: string
   default_price_incl_cents: number
   vat_rate: number
+  tax_category_code: string | null
+  tax_jurisdiction_code: string
   unit_cost_cents?: number
   revenue_account_code: string | null
 }
@@ -39,6 +43,13 @@ export default function ProductDialog({ product, revenueAccounts = [], onSubmit,
   const [unitCostCents, setUnitCostCents] = useState(product?.unit_cost_cents ?? 0)
   const [priceInclCents, setPriceInclCents] = useState(product?.default_price_incl_cents ?? 0)
   const [vatRate, setVatRate] = useState(Number(product?.vat_rate ?? defaultVatRate))
+  const initialTaxSelection = commonVatSelection(accountingCountry, product?.vat_rate ?? defaultVatRate)
+  const [taxCategoryCode, setTaxCategoryCode] = useState<string | null>(
+    product?.tax_category_code ?? initialTaxSelection?.tax_category_code ?? null,
+  )
+  const [taxJurisdictionCode, setTaxJurisdictionCode] = useState(
+    product?.tax_jurisdiction_code ?? initialTaxSelection?.tax_jurisdiction_code ?? accountingCountry,
+  )
   const [revenueAccountCode, setRevenueAccountCode] = useState(product?.revenue_account_code ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +65,8 @@ export default function ProductDialog({ product, revenueAccounts = [], onSubmit,
         name: name.trim(),
         default_price_incl_cents: priceInclCents,
         vat_rate: vatRate,
+        tax_category_code: taxCategoryCode,
+        tax_jurisdiction_code: taxJurisdictionCode,
         // null clears the per-product account → sales fall back to the band default.
         revenue_account_code: revenueAccountCode || null,
       }
@@ -101,7 +114,28 @@ export default function ProductDialog({ product, revenueAccounts = [], onSubmit,
             label={t($ => $.productDialog.vatRate)}
             country={accountingCountry}
             value={vatRate}
-            onChange={(rate) => setVatRate(rate ?? 0)}
+            categoryCode={taxCategoryCode}
+            onChange={(rate, taxPatch) => {
+              setVatRate(rate ?? 0)
+              if (taxPatch) {
+                setTaxCategoryCode(taxPatch.tax_category_code)
+                setTaxJurisdictionCode(taxPatch.tax_jurisdiction_code)
+              }
+            }}
+          />
+          <TaxCategorySelect
+            direction="sale"
+            categoryCode={taxCategoryCode}
+            jurisdictionCode={taxJurisdictionCode}
+            defaultJurisdiction={accountingCountry}
+            rate={vatRate}
+            onChange={(patch) => {
+              setTaxCategoryCode(patch.tax_category_code)
+              setTaxJurisdictionCode(patch.tax_jurisdiction_code)
+              if (patch.tax_category_code && taxCategoryUsesZeroRate(patch.tax_category_code, 'sale')) {
+                setVatRate(0)
+              }
+            }}
           />
           {revenueAccounts.length > 0 && (
             <TextField

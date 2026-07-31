@@ -292,6 +292,7 @@ describe('PurchaseDetails', () => {
     await screen.findByText('Purchase 5')
     // Wait for the accounts to load (the seeded line resolves to an active account).
     await screen.findByDisplayValue(/62100 - Instruments & Equipment/)
+    expect(screen.queryByRole('spinbutton', { name: /recoverable vat/i })).not.toBeInTheDocument()
 
     // Type to filter the account combobox down to a single match, then pick it.
     const accountInput = screen.getByRole('combobox', { name: /expense \/ asset account/i })
@@ -307,6 +308,7 @@ describe('PurchaseDetails', () => {
     expect(payload.lines[0].account_code).toBe('61100')
     // VAT-bearing fields survive the round-trip (VAT amount is derived from these).
     expect(payload.lines[0].tax_rate).toBe(21)
+    expect(payload.lines[0].input_vat_recovery_percent).toBe(100)
     expect(payload.lines[0].amount_incl_cents).toBe(125000)
   })
 
@@ -319,9 +321,9 @@ describe('PurchaseDetails', () => {
     await screen.findByText('Purchase 5')
     await user.click(screen.getByRole('combobox', { name: /tax rate/i }))
 
-    expect(screen.getByRole('option', { name: '21%' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '9%' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '0%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /21%.*standard VAT rate/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /9%.*reduced VAT rate/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /0%.*zero rate/i })).toBeInTheDocument()
     expect(screen.queryByText('Other countries')).not.toBeInTheDocument()
     expect(screen.queryByRole('option', { name: '19%' })).not.toBeInTheDocument()
   })

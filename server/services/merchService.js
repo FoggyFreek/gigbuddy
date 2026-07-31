@@ -39,6 +39,8 @@ import {
   postMerchSaleVoided,
 } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
+import { resolveLiveTreatment } from './vatTreatmentService.js'
+import { defaultDomesticCategory } from '../../shared/taxCategories.js'
 
 const PAYMENT_METHODS = new Set(['bank', 'cash'])
 
@@ -117,6 +119,13 @@ function validateProductBody(body, vatCountry, { partial = false } = {}) {
     const rate = Number(body.vat_rate ?? getStandardVatRate(vatCountry))
     if (isKnownVatRate(rate)) out.vat_rate = rate
     else errors.push({ field: 'vat_rate', message: 'Invalid VAT rate' })
+  }
+  if (shouldSet(partial, body, 'tax_category_code')) {
+    out.tax_category_code = String(body.tax_category_code
+      ?? defaultDomesticCategory(vatCountry, out.vat_rate ?? getStandardVatRate(vatCountry))).trim() || null
+  }
+  if (shouldSet(partial, body, 'tax_jurisdiction_code')) {
+    out.tax_jurisdiction_code = String(body.tax_jurisdiction_code ?? vatCountry).trim().toLowerCase()
   }
 
   if (errors.length) {
@@ -246,10 +255,22 @@ export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = 
   if (unitPriceInclCents === null) {
     return { error: { status: 400, body: { error: 'Invalid unit_price_incl_cents' } } }
   }
-  const vatRate = Number(body.vat_rate ?? product.vat_rate)
+  let vatRate = Number(body.vat_rate ?? product.vat_rate)
   if (!isKnownVatRate(vatRate)) {
     return { error: { status: 400, body: { error: 'Invalid vat_rate' } } }
   }
+  const treatment = await resolveLiveTreatment(client, tenantId, saleDate)
+  if (!treatment.chargesOutputVat) vatRate = 0
+  const taxCategoryCode = String(
+    body.tax_category_code
+      ?? product.tax_category_code
+      ?? defaultDomesticCategory((await loadAccountingBehavior(client, tenantId)).accountingCountry, vatRate)
+      ?? '',
+  ).trim() || null
+  const taxJurisdictionCode = String(
+    body.tax_jurisdiction_code ?? product.tax_jurisdiction_code
+      ?? (await loadAccountingBehavior(client, tenantId)).accountingCountry,
+  ).trim().toLowerCase()
 
   let grossInclCents = null
   if (body.gross_incl_cents != null) {
@@ -265,6 +286,10 @@ export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = 
   const saleId = await insertSale(client, tenantId, {
     productId, gigId, saleDate, quantity, unitPriceInclCents, grossInclCents,
     vatRate, unitCostCents: product.unit_cost_cents, paymentMethod,
+    taxCategoryCode, taxJurisdictionCode,
+    taxTreatmentSnapshot: treatment.vat_treatment,
+    taxSchemeCodeSnapshot: treatment.vat_scheme_code,
+    accountingCountrySnapshot: treatment.accounting_country,
     revenueAccountCode, actorUserId,
   })
 
@@ -277,6 +302,11 @@ export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = 
     unit_price_incl_cents: unitPriceInclCents,
     gross_incl_cents: grossInclCents,
     vat_rate: vatRate,
+    tax_category_code: taxCategoryCode,
+    tax_jurisdiction_code: taxJurisdictionCode,
+    tax_treatment_snapshot: treatment.vat_treatment,
+    vat_scheme_code_snapshot: treatment.vat_scheme_code,
+    accounting_country_snapshot: treatment.accounting_country,
     unit_cost_cents: product.unit_cost_cents,
     payment_method: paymentMethod,
     revenue_account_code: revenueAccountCode,

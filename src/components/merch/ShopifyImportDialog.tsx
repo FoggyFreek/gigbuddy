@@ -30,6 +30,8 @@ import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import { formatEur } from '../../utils/purchaseTotals.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
+import TaxCategorySelect from '../shared/TaxCategorySelect.tsx'
+import { commonVatSelection, taxCategoryUsesZeroRate } from '../../../shared/taxCategories.js'
 import type {
   Account, Product, ShopifyOrder, ShopifyLineItem, ShopifyLineMapping, ShopifyImportResult,
 } from '../../types/entities.ts'
@@ -130,7 +132,7 @@ interface ShopifyImportDialogProps {
 
 export default function ShopifyImportDialog({ products, onClose }: Readonly<ShopifyImportDialogProps>) {
   const { t } = useTranslation(['merch', 'common'])
-  const { defaultVatRate } = useAccountingProfile()
+  const { accountingCountry, defaultVatRate } = useAccountingProfile()
   const shopifyErrorMessage = useShopifyErrorMessage()
   const [step, setStep] = useState<Step>('select')
   const [orders, setOrders] = useState<ShopifyOrder[]>([])
@@ -221,7 +223,18 @@ export default function ShopifyImportDialog({ products, onClose }: Readonly<Shop
     const code = value.slice('revenue:'.length)
     const existing = mappings[line.id]
     const vat = existing?.type === 'revenue' ? existing.vat_rate : defaultVatRate
-    setLineMapping(line.id, { type: 'revenue', account_code: code, vat_rate: vat })
+    const commonSelection = commonVatSelection(accountingCountry, vat)
+    setLineMapping(line.id, {
+      type: 'revenue',
+      account_code: code,
+      vat_rate: vat,
+      tax_category_code: existing?.type === 'revenue'
+        ? existing.tax_category_code
+        : (commonSelection?.tax_category_code ?? null),
+      tax_jurisdiction_code: existing?.type === 'revenue'
+        ? existing.tax_jurisdiction_code
+        : (commonSelection?.tax_jurisdiction_code ?? accountingCountry),
+    })
   }
 
   function importableLines() {
@@ -298,7 +311,14 @@ export default function ShopifyImportDialog({ products, onClose }: Readonly<Shop
             mappings={mappings}
             mappingValue={mappingValue}
             onMappingSelect={onMappingSelect}
-            onVatChange={(lineId, code, vat) => setLineMapping(lineId, { type: 'revenue', account_code: code, vat_rate: vat })}
+            onVatChange={(lineId, mapping, vat) => setLineMapping(lineId, { ...mapping, vat_rate: vat })}
+            onTaxChange={(lineId, mapping, patch) => setLineMapping(lineId, {
+              ...mapping,
+              ...patch,
+              ...(patch.tax_category_code && taxCategoryUsesZeroRate(patch.tax_category_code, 'sale')
+                ? { vat_rate: 0 }
+                : {}),
+            })}
           />
         )}
 
@@ -438,7 +458,12 @@ interface MapStepProps {
   mappings: Record<string, ShopifyLineMapping>
   mappingValue: (m: ShopifyLineMapping | undefined) => string
   onMappingSelect: (line: ShopifyLineItem, value: string) => void
-  onVatChange: (lineId: string, code: string, vat: number) => void
+  onVatChange: (lineId: string, mapping: Extract<ShopifyLineMapping, { type: 'revenue' }>, vat: number) => void
+  onTaxChange: (
+    lineId: string,
+    mapping: Extract<ShopifyLineMapping, { type: 'revenue' }>,
+    patch: { tax_category_code: string | null; tax_jurisdiction_code: string },
+  ) => void
 }
 
 interface LineMapControlProps {
@@ -448,14 +473,16 @@ interface LineMapControlProps {
   revenueAccounts: Account[]
   mappingValue: (m: ShopifyLineMapping | undefined) => string
   onMappingSelect: (line: ShopifyLineItem, value: string) => void
-  onVatChange: (lineId: string, code: string, vat: number) => void
+  onVatChange: (lineId: string, mapping: Extract<ShopifyLineMapping, { type: 'revenue' }>, vat: number) => void
+  onTaxChange: MapStepProps['onTaxChange']
   compact?: boolean
 }
 
 // The "Map to" control for a single line — locked chip, or a product/revenue
 // select with an optional VAT picker. Shared by the table and the compact cards.
 function LineMapControl({
-  line, mapping, activeProducts, revenueAccounts, mappingValue, onMappingSelect, onVatChange, compact = false,
+  line, mapping, activeProducts, revenueAccounts, mappingValue,
+  onMappingSelect, onVatChange, onTaxChange, compact = false,
 }: Readonly<LineMapControlProps>) {
   const { t } = useTranslation(['merch', 'common'])
   const { accountingCountry } = useAccountingProfile()
@@ -494,21 +521,42 @@ function LineMapControl({
           label={t($ => $.shopify.vat)}
           country={accountingCountry}
           value={Number(mapping.vat_rate)}
-          onChange={(rate) => onVatChange(line.id, mapping.account_code, rate ?? 0)}
+          categoryCode={mapping.tax_category_code}
+          onChange={(rate, taxPatch) => {
+            const nextMapping = { ...mapping, ...(taxPatch ?? {}) }
+            onVatChange(line.id, nextMapping, rate ?? 0)
+          }}
           fullWidth={false}
-          sx={compact ? { alignSelf: 'flex-start', minWidth: 120 } : { minWidth: 90 }}
+          sx={compact ? { alignSelf: 'flex-start', minWidth: 220 } : { minWidth: 210 }}
         />
+      )}
+      {mapping?.type === 'revenue' && (
+        <Box>
+          <TaxCategorySelect
+            direction="sale"
+            categoryCode={mapping.tax_category_code}
+            jurisdictionCode={mapping.tax_jurisdiction_code}
+            defaultJurisdiction={accountingCountry}
+            rate={Number(mapping.vat_rate)}
+            onChange={(patch) => onTaxChange(line.id, mapping, patch)}
+          />
+        </Box>
       )}
     </Box>
   )
 }
 
-function MapStep({ orders, products, revenueAccounts, mappings, mappingValue, onMappingSelect, onVatChange }: Readonly<MapStepProps>) {
+function MapStep({
+  orders, products, revenueAccounts, mappings, mappingValue,
+  onMappingSelect, onVatChange, onTaxChange,
+}: Readonly<MapStepProps>) {
   const { t } = useTranslation('merch')
   const isCompact = useCompactLayout()
   const activeProducts = products.filter((p) => !p.archived_at)
 
-  const controlProps = { activeProducts, revenueAccounts, mappingValue, onMappingSelect, onVatChange }
+  const controlProps = {
+    activeProducts, revenueAccounts, mappingValue, onMappingSelect, onVatChange, onTaxChange,
+  }
 
   return (
     <>

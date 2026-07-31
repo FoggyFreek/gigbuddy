@@ -36,6 +36,7 @@ import {
   isValidIsoDate,
   normalizeLines,
   findUnpostableLine,
+  validateJournalLineTaxFields,
 } from '../validators/journalValidators.js'
 import { parsePositiveId } from '../validators/common.js'
 import { ledgerErrorResult, postUserJournal, firstOpenDate } from './ledgerService.js'
@@ -95,6 +96,8 @@ export async function createJournal(pool, tenantId, body, actorUserId = null) {
   const entryDate = body.entry_date || today()
   if (!isValidIsoDate(entryDate)) return { error: { status: 400, body: { error: 'Invalid entry_date' } } }
 
+  const taxError = validateJournalLineTaxFields(body.lines)
+  if (taxError) return { error: { status: 400, body: taxError } }
   const lines = normalizeLines(body.lines)
   const codeErr = await validateDraftCodes(pool, tenantId, lines)
   if (codeErr) return codeErr
@@ -125,6 +128,8 @@ export async function updateJournal(pool, tenantId, id, body) {
 
   let lines = null
   if ('lines' in body) {
+    const taxError = validateJournalLineTaxFields(body.lines)
+    if (taxError) return { error: { status: 400, body: taxError } }
     lines = normalizeLines(body.lines)
     const codeErr = await validateDraftCodes(pool, tenantId, lines)
     if (codeErr) return codeErr

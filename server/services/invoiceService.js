@@ -72,6 +72,7 @@ import {
   parseSearchLimit,
   computeDueDate,
   validatePaymentLinkOptions,
+  validateInvoiceLineTaxFields,
 } from '../validators/invoiceValidators.js'
 import {
   ledgerErrorResult,
@@ -530,6 +531,10 @@ export async function applyInvoicePatch(pool, tenantId, invoiceId, body, actorUs
 
   const validation = validatePatchRequest(body, existing)
   if (validation.error) return validation
+  if ('lines' in body) {
+    const taxError = validateInvoiceLineTaxFields(body.lines)
+    if (taxError) return { error: { status: 400, body: taxError } }
+  }
 
   // Normalize gig_id into a copy so the caller's request body stays immutable.
   let patch = body
@@ -806,7 +811,18 @@ export async function getInvoice(pool, tenantId, invoiceId) {
 // row persists and rendering can be retried via POST /:id/render).
 export async function createInvoice(pool, tenantId, userId, body) {
   const parsed = parseCreateInvoiceBody(body)
-  if (parsed.error) return { error: { status: 400, body: { error: parsed.error } } }
+  if (parsed.error) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          error: parsed.error,
+          ...(parsed.code ? { code: parsed.code } : {}),
+          ...(parsed.line ? { line: parsed.line } : {}),
+        },
+      },
+    }
+  }
 
   const tenant = await fetchTenant(pool, tenantId)
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }

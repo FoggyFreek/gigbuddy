@@ -87,7 +87,7 @@ export interface UsePurchaseFormStateResult {
 // edited here, so this hook only deals with an existing purchase.
 export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: UsePurchaseFormStateArgs): UsePurchaseFormStateResult {
   const { t } = useTranslation('purchases')
-  const { defaultVatRate } = useAccountingProfile()
+  const { accountingCountry, defaultVatRate } = useAccountingProfile()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -220,7 +220,10 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
 
   function addLine() {
     setError(null)
-    setForm((prev) => prev ? ({ ...prev, lines: [...prev.lines, emptyLine(prev.lines.length, defaultVatRate)] }) : prev)
+    setForm((prev) => prev ? ({
+      ...prev,
+      lines: [...prev.lines, emptyLine(prev.lines.length, defaultVatRate, accountingCountry)],
+    }) : prev)
   }
 
   function removeLine(index: number) {

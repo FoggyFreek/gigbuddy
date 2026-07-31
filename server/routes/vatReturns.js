@@ -6,6 +6,8 @@ import {
   parseYearQuarter,
   validateReturnCreate,
   validatePayment,
+  validateSubmission,
+  validateExceptionAcknowledgement,
 } from '../validators/vatReturnValidators.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
@@ -14,7 +16,10 @@ import {
   recordVatPayment,
   listVatReturns,
   getVatReturn,
+  submitNlVatReturn,
+  acknowledgeVatReturnException,
 } from '../services/vatReturnService.js'
+import { confirmTaxFactClassification } from '../services/taxFactService.js'
 
 // Mounted under the financeView gate (see routes/index.js): reads require
 // finance.view and the filing/payment mutations require finance.manage. Filed
@@ -48,6 +53,45 @@ router.post('/', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res,
     const result = await createVatReturn(pool, req.tenantId, body, req.user.id)
     if (result.error) return sendError(res, result.error)
     res.status(201).json(result.vatReturn)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/:id/submit', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const body = validateSubmission(req.body || {})
+  if (body.error) return res.status(400).json(body)
+  try {
+    const result = await submitNlVatReturn(pool, req.tenantId, id, body, req.user.id)
+    if (result.error) return sendError(res, result.error)
+    res.json(result.vatReturn)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/:id/exceptions/acknowledge', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const body = validateExceptionAcknowledgement(req.body || {})
+  if (body.error) return res.status(400).json({ error: body.error })
+  try {
+    const result = await acknowledgeVatReturnException(pool, req.tenantId, id, body, req.user.id)
+    if (result.error) return sendError(res, result.error)
+    res.json(result.acknowledgement)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/tax-facts/:factId/confirm', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
+  const factId = requireParam(req, res, 'factId'); if (factId === null) return
+  try {
+    const result = await confirmTaxFactClassification(
+      pool, req.tenantId, factId, req.body || {}, req.user.id,
+    )
+    if (result.error) return sendError(res, result.error)
+    res.json(result.taxFact)
   } catch (err) {
     next(err)
   }

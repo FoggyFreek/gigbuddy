@@ -16,7 +16,35 @@ export function validateReturnCreate(body = {}) {
   const period = parseYearQuarter(body)
   if (period.error) return period
   const notes = String(body.notes ?? '').trim() || null
-  return { ...period, notes }
+  const calculationMode = body.calculation_mode === 'category_workpaper'
+    ? 'category_workpaper'
+    : 'legacy_generic'
+  return { ...period, notes, calculationMode }
+}
+
+export function validateSubmission(body = {}) {
+  const submissionReference = String(body.submission_reference ?? '').trim()
+  if (!submissionReference) {
+    return {
+      error: 'Submission reference is required',
+      code: 'submission_reference_required',
+    }
+  }
+  if (submissionReference.length > 200) {
+    return {
+      error: 'Submission reference must not exceed 200 characters',
+      code: 'submission_reference_too_long',
+    }
+  }
+  return { submissionReference }
+}
+
+export function validateExceptionAcknowledgement(body = {}) {
+  const exceptionKey = String(body.exception_key ?? '').trim()
+  const note = String(body.note ?? '').trim()
+  if (!exceptionKey) return { error: 'exception_key_required' }
+  if (!note) return { error: 'acknowledgement_note_required' }
+  return { exceptionKey, note }
 }
 
 export function validatePayment(body = {}) {

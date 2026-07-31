@@ -168,9 +168,13 @@ describe('BankStatementImportDialog', () => {
     expect(decisions).toEqual([
       {
         line_id: 1, action: 'journal_paid', contra_account_code: '62100', vat_rate: 21,
+        tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
         create_supplier: { name: 'String Supply Co', iban: 'NL00TEST0000000001' },
       },
-      { line_id: 2, action: 'journal_received', contra_account_code: '41000', vat_rate: 9 },
+      {
+        line_id: 2, action: 'journal_received', contra_account_code: '41000', vat_rate: 9,
+        tax_category_code: 'domestic_reduced', tax_jurisdiction_code: 'nl',
+      },
     ])
 
     expect(await screen.findByText('Booked 2, skipped 0.')).toBeInTheDocument()
@@ -196,6 +200,7 @@ describe('BankStatementImportDialog', () => {
     await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
     expect(commitBankImport.mock.calls[0][1]).toEqual([{
       line_id: 7, action: 'journal_paid', contra_account_code: '62100', vat_rate: 21,
+      tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
       create_supplier: { name: 'String Supply Co', iban: 'NL00TEST0000000001' },
     }])
   })
@@ -237,10 +242,12 @@ describe('BankStatementImportDialog', () => {
       expect(commitBankImport.mock.calls[0][1]).toEqual([
         {
           line_id: 21, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21,
+          tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
           create_supplier: { name: 'ACME 0012', iban: 'NL00TEST0000000001' },
         },
         {
           line_id: 22, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21,
+          tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
           create_supplier: { name: 'ACME AMSTERDAM', iban: 'NL00TEST0000000001' },
         },
       ])
@@ -300,8 +307,14 @@ describe('BankStatementImportDialog', () => {
       await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
       await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
       expect(commitBankImport.mock.calls[0][1]).toEqual([
-        { line_id: 41, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21, supplier_contact_id: 7 },
-        { line_id: 42, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21, supplier_contact_id: 7 },
+        {
+          line_id: 41, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21,
+          tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl', supplier_contact_id: 7,
+        },
+        {
+          line_id: 42, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21,
+          tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl', supplier_contact_id: 7,
+        },
       ])
     })
 
@@ -361,8 +374,14 @@ describe('BankStatementImportDialog', () => {
       await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
       await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
       expect(commitBankImport.mock.calls[0][1]).toEqual([
-        { line_id: 51, action: 'journal_received', contra_account_code: '41100', vat_rate: 9 },
-        { line_id: 52, action: 'journal_received', contra_account_code: '41100', vat_rate: 9 },
+        {
+          line_id: 51, action: 'journal_received', contra_account_code: '41100', vat_rate: 9,
+          tax_category_code: 'domestic_reduced', tax_jurisdiction_code: 'nl',
+        },
+        {
+          line_id: 52, action: 'journal_received', contra_account_code: '41100', vat_rate: 9,
+          tax_category_code: 'domestic_reduced', tax_jurisdiction_code: 'nl',
+        },
       ])
     })
 
@@ -448,7 +467,10 @@ describe('BankStatementImportDialog', () => {
       await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
       expect(commitBankImport.mock.calls[0][1]).toEqual([
         { line_id: 1, action: 'skip' },
-        { line_id: 2, action: 'journal_received', contra_account_code: '41000', vat_rate: 9 },
+        {
+          line_id: 2, action: 'journal_received', contra_account_code: '41000', vat_rate: 9,
+          tax_category_code: 'domestic_reduced', tax_jurisdiction_code: 'nl',
+        },
       ])
     })
 
@@ -471,6 +493,7 @@ describe('BankStatementImportDialog', () => {
       await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
       expect(commitBankImport.mock.calls[0][1][0]).toEqual({
         line_id: 1, action: 'journal_paid', contra_account_code: '62100', vat_rate: 21,
+        tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
         create_supplier: { name: 'String Supply Co', iban: 'NL00TEST0000000001' },
       })
     })
@@ -526,7 +549,7 @@ describe('BankStatementImportDialog', () => {
       const user = userEvent.setup()
       await user.click((await screen.findAllByRole('combobox', { name: 'VAT' }))[0])
       const options = (await screen.findAllByRole('option')).map((o) => o.textContent)
-      expect(options).toEqual(['No VAT', '21%', '12%', '6%'])
+      expect(options).toEqual(['No VAT', '21%', '12%', '6%', '0%'])
     })
 
     it('offers no VAT control at all for a band on the KOR', async () => {
@@ -600,6 +623,7 @@ describe('BankStatementImportDialog', () => {
     await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
     expect(commitBankImport.mock.calls[0][1]).toEqual([{
       line_id: 8, action: 'journal_paid', contra_account_code: '62100', vat_rate: 21,
+      tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
       create_supplier: { name: 'Manual Supplier', iban: null },
     }])
   })

@@ -244,7 +244,9 @@ export async function lockImportedPaymentCandidate(executor, tenantId, lineId) {
 
 export async function fetchPurchaseLines(executor, purchaseId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id, description, expense_category, account_code, tax_rate, amount_incl_cents, position, product_id, quantity
+    `SELECT id, description, expense_category, account_code, tax_rate,
+            tax_category_code, tax_jurisdiction_code, input_vat_recovery_percent,
+            amount_incl_cents, position, product_id, quantity
        FROM purchase_lines
       WHERE purchase_id = $1 AND tenant_id = $2
       ORDER BY position ASC, id ASC`,
@@ -268,9 +270,17 @@ export async function nextPurchaseNumber(executor, tenantId) {
 export async function insertPurchaseLines(executor, purchaseId, tenantId, lines) {
   for (const line of lines) {
     await executor.query(
-      `INSERT INTO purchase_lines (purchase_id, tenant_id, position, description, expense_category, account_code, tax_rate, amount_incl_cents, product_id, quantity)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [purchaseId, tenantId, line.position, line.description, line.expense_category, line.account_code ?? null, line.tax_rate, line.amount_incl_cents, line.product_id ?? null, line.quantity ?? null],
+      `INSERT INTO purchase_lines (
+         purchase_id, tenant_id, position, description, expense_category, account_code,
+         tax_rate, tax_category_code, tax_jurisdiction_code, input_vat_recovery_percent,
+         amount_incl_cents, product_id, quantity
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [
+        purchaseId, tenantId, line.position, line.description, line.expense_category,
+        line.account_code ?? null, line.tax_rate, line.tax_category_code ?? null,
+        line.tax_jurisdiction_code ?? null, line.input_vat_recovery_percent ?? null,
+        line.amount_incl_cents, line.product_id ?? null, line.quantity ?? null,
+      ],
     )
   }
 }

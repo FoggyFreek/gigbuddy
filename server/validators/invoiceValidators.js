@@ -1,5 +1,6 @@
 // Pure request/parameter validation for invoice routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
+import { validateTaxCategoryFields } from './taxCategoryValidators.js'
 export { formatInvoiceNumber } from '../domain/invoice.js'
 
 // The art. 226 / art. 196 / VIES rules live in shared/invoiceReadiness.js (the
@@ -69,8 +70,18 @@ export function normalizeLines(lines) {
     quantity: Number.isFinite(Number(raw.quantity)) ? Number(raw.quantity) : 1,
     unit_price_cents: Number.isInteger(Number(raw.unit_price_cents)) ? Number(raw.unit_price_cents) : 0,
     tax_percentage: Number.isFinite(Number(raw.tax_percentage)) ? Number(raw.tax_percentage) : 0,
+    tax_category_code: typeof raw.tax_category_code === 'string'
+      ? raw.tax_category_code.trim() || null
+      : null,
+    tax_jurisdiction_code: typeof raw.tax_jurisdiction_code === 'string'
+      ? raw.tax_jurisdiction_code.trim().toLowerCase() || null
+      : null,
     position: Number.isInteger(Number(raw.position)) ? Number(raw.position) : idx,
   }))
+}
+
+export function validateInvoiceLineTaxFields(lines) {
+  return validateTaxCategoryFields(lines, { direction: 'sale' })
 }
 
 export function computeDueDate(issueDate, paymentTermDays) {
@@ -100,6 +111,8 @@ export function parseCreateInvoiceBody(body) {
   const discountCents = Math.max(0, Number.isInteger(Number(body.discount_cents)) ? Number(body.discount_cents) : 0)
   const lines = normalizeLines(body.lines)
   if (!lines.length) return { error: 'At least one line is required' }
+  const taxError = validateInvoiceLineTaxFields(body.lines)
+  if (taxError) return taxError
 
   const viesChecked = Boolean(body.vies_checked)
   const viesConsultationNumber = body.vies_consultation_number != null

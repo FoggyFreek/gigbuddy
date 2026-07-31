@@ -1,5 +1,6 @@
 import { normalizeVatNumber } from '../../utils/vatRates.ts'
 import { storedViesConfirmation } from '../../utils/invoiceReadiness.ts'
+import { commonVatSelection } from '../../../shared/taxCategories.js'
 import type { InvoiceLine } from '../../types/entities.ts'
 
 /** The editable form shape used by useInvoiceFormState. */
@@ -41,11 +42,14 @@ export interface InvoiceFormLine {
   quantity: number
   unit_price_cents: number
   tax_percentage: number
+  tax_category_code: string | null
+  tax_jurisdiction_code: string | null
   position: number
 }
 
-export function emptyDraft(taxPct = 9): InvoiceForm {
+export function emptyDraft(taxPct = 9, country = 'nl'): InvoiceForm {
   const issueDate = new Date().toISOString().slice(0, 10)
+  const taxSelection = commonVatSelection(country, taxPct)
   return {
     gig_id: null,
     issue_date: issueDate,
@@ -73,7 +77,13 @@ export function emptyDraft(taxPct = 9): InvoiceForm {
     discount_pct: 0,
     discount_cents: 0,
     lines: [
-      { _key: crypto.randomUUID(), description: '', quantity: 1, unit_price_cents: 0, tax_percentage: taxPct, position: 0 },
+      {
+        _key: crypto.randomUUID(), description: '', quantity: 1, unit_price_cents: 0,
+        tax_percentage: taxPct,
+        tax_category_code: taxSelection?.tax_category_code ?? null,
+        tax_jurisdiction_code: taxSelection?.tax_jurisdiction_code ?? country,
+        position: 0,
+      },
     ],
   }
 }
@@ -136,6 +146,8 @@ export function invoiceToForm(data: Record<string, unknown> & { lines?: InvoiceL
       quantity: Number(l.quantity) || 1,
       unit_price_cents: Number(l.unit_price_cents) || 0,
       tax_percentage: Number(l.tax_percentage) || 0,
+      tax_category_code: l.tax_category_code ?? null,
+      tax_jurisdiction_code: l.tax_jurisdiction_code ?? null,
       position: l.position ?? i,
     })),
   }
@@ -178,6 +190,8 @@ export function buildInvoicePayload(form: InvoiceForm): Record<string, unknown> 
       quantity: Number(l.quantity) || 0,
       unit_price_cents: Math.round(Number(l.unit_price_cents) || 0),
       tax_percentage: Number(l.tax_percentage) || 0,
+      tax_category_code: l.tax_category_code,
+      tax_jurisdiction_code: l.tax_jurisdiction_code,
       position: i,
     })),
   }
