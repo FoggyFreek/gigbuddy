@@ -1,5 +1,11 @@
 import '@testing-library/jest-dom'
+import { configure } from '@testing-library/react'
 import i18n from '../i18n/index.ts'
+
+// Testing-library's 1 s default for waitFor/findBy is too tight for component
+// trees that chain a fetch, an effect and a lazy chunk. Stays well under
+// testTimeout so a real failure still surfaces as a readable DOM dump.
+configure({ asyncUtilTimeout: 5000 })
 
 // Components that call useTranslation() need i18next initialized; importing the
 // config side-effect here covers suites that render components directly (not via

@@ -50,8 +50,8 @@ import {
   NL_VAT_RETURN_SCHEMA_2026,
   computeNlVatReturnBoxes,
   declaredEuroFor,
-  getNlVatReturnBoxDescription,
 } from '../domain/vat/nlVatReturn2026.js'
+import { getVatReturnBoxDefinition } from '../domain/vat/vatReturnBoxDefinitions.js'
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -174,12 +174,12 @@ export async function previewVatReturn(executor, tenantId, { year, quarter }) {
   }
 }
 
-function declaredBoxes(rawBoxes) {
+function declaredBoxes(rawBoxes, countryCode, schemaVersion) {
   const boxes = Object.fromEntries(Object.entries(rawBoxes).map(([code, value]) => [
     code,
     {
       ...value,
-      description: getNlVatReturnBoxDescription(code),
+      ...getVatReturnBoxDefinition(countryCode, schemaVersion, code),
       base_declared_euros: 'base_cents' in value
         ? declaredEuroFor(value.base_cents, 'base')
         : null,
@@ -193,10 +193,10 @@ function declaredBoxes(rawBoxes) {
   return boxes
 }
 
-function describeNlBoxRows(boxes) {
+function describeBoxRows(boxes, countryCode, schemaVersion) {
   return boxes.map((box) => ({
     ...box,
-    description: getNlVatReturnBoxDescription(box.box_code),
+    ...getVatReturnBoxDefinition(countryCode, schemaVersion, box.box_code),
   }))
 }
 
@@ -248,7 +248,11 @@ async function previewNlVatReturn(executor, tenantId, { year, quarter, profile, 
     to: range.period_to,
   })
   const computed = computeNlVatReturnBoxes(facts)
-  const boxes = declaredBoxes(computed.boxes)
+  const boxes = declaredBoxes(
+    computed.boxes,
+    NL_VAT_RETURN_SCHEMA_2026.countryCode,
+    NL_VAT_RETURN_SCHEMA_2026.version,
+  )
   const reconciliation = await reconcileTaxFactsToLedger(
     executor,
     tenantId,
@@ -358,7 +362,11 @@ export async function prepareNlVatReturn(
     })
     await insertVatReturnBoxes(client, tenantId, row.id, preview.boxes)
     await linkVatReturnTaxFacts(client, tenantId, row.id, preview.facts)
-    const boxes = describeNlBoxRows(await listVatReturnBoxes(client, tenantId, row.id))
+    const boxes = describeBoxRows(
+      await listVatReturnBoxes(client, tenantId, row.id),
+      row.schema_country_code,
+      row.schema_version,
+    )
     return { vatReturn: { ...row, boxes, facts: preview.facts } }
   }, {
     db: pool,
@@ -668,7 +676,11 @@ export async function getVatReturn(executor, tenantId, vatReturnId) {
     payments,
     ledger_transaction_id: await findFilingTransactionId(executor, tenantId, vatReturnId),
     boxes: categoryWorkpaper
-      ? describeNlBoxRows(await listVatReturnBoxes(executor, tenantId, vatReturnId))
+      ? describeBoxRows(
+        await listVatReturnBoxes(executor, tenantId, vatReturnId),
+        row.schema_country_code,
+        row.schema_version,
+      )
       : [],
     facts: categoryWorkpaper ? await listVatReturnFacts(executor, tenantId, vatReturnId) : [],
     acknowledgements: categoryWorkpaper

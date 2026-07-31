@@ -299,8 +299,7 @@ describe('GigDetailContent — Terms field saving', () => {
     await openTab(user, 'Terms')
     await user.type(screen.getByLabelText(/merchandise cut/i), '15')
     await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 }),
-      { timeout: 2000 }
+      () => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 })
     )
   })
 
@@ -312,8 +311,7 @@ describe('GigDetailContent — Terms field saving', () => {
     await openTab(user, 'Terms')
     await user.type(screen.getByLabelText(/percentage of net sales/i), '20')
     await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { percentage_of_sales: 20 }),
-      { timeout: 2000 }
+      () => expect(updateGig).toHaveBeenCalledWith(1, { percentage_of_sales: 20 })
     )
   })
 
@@ -330,8 +328,7 @@ describe('GigDetailContent — Terms field saving', () => {
           admission: 'free',
           ticket_link: null,
           percentage_of_sales: null,
-        }),
-      { timeout: 2000 }
+        })
     )
   })
 })
@@ -428,8 +425,7 @@ describe('GigDetailContent — admission toggle', () => {
     await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { admission: 'paid' }),
-      { timeout: 2000 }
+      () => expect(updateGig).toHaveBeenCalledWith(1, { admission: 'paid' })
     )
   })
 
@@ -457,8 +453,7 @@ describe('GigDetailContent — admission toggle', () => {
           admission: 'free',
           ticket_link: null,
           percentage_of_sales: null,
-        }),
-      { timeout: 2000 }
+        })
     )
   })
 })
@@ -485,8 +480,7 @@ describe('GigDetailContent — ticket link field', () => {
         expect(updateGig).toHaveBeenCalledWith(
           1,
           expect.objectContaining({ ticket_link: 'https://tickets.test' })
-        ),
-      { timeout: 2000 }
+        )
     )
   })
 
@@ -543,7 +537,7 @@ describe('GigDetailContent — location map', () => {
   it('renders the map at city zoom and geocodes the venue city when no street is set', async () => {
     // default getGig mock: venue Amsterdam, city only
     wrap(<GigDetailContent gigId={1} />)
-    const map = await screen.findByTestId('gig-location-map', { timeout: 2000 })
+    const map = await screen.findByTestId('gig-location-map')
     expect(map).toHaveAttribute('data-zoom', '11')
     expect(geocodePlace).toHaveBeenCalledWith(expect.objectContaining({ city: 'Amsterdam' }))
     // marker link points at an external maps search including the city
@@ -557,7 +551,7 @@ describe('GigDetailContent — location map', () => {
       gigWith({ venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam', street_and_number: 'Piet Heinkade 3' } }),
     )
     wrap(<GigDetailContent gigId={1} />)
-    const map = await screen.findByTestId('gig-location-map', { timeout: 2000 })
+    const map = await screen.findByTestId('gig-location-map')
     expect(map).toHaveAttribute('data-zoom', '16')
     expect(geocodePlace).toHaveBeenCalledWith(
       expect.objectContaining({ city: 'Amsterdam', address: 'Piet Heinkade 3' }),
@@ -572,7 +566,7 @@ describe('GigDetailContent — location map', () => {
       }),
     )
     wrap(<GigDetailContent gigId={1} />)
-    await screen.findByTestId('gig-location-map', { timeout: 2000 })
+    await screen.findByTestId('gig-location-map')
     expect(geocodePlace).toHaveBeenCalledWith(expect.objectContaining({ city: 'Amsterdam' }))
   })
 
@@ -584,7 +578,7 @@ describe('GigDetailContent — location map', () => {
       }),
     )
     wrap(<GigDetailContent gigId={1} />)
-    await screen.findByTestId('gig-location-map', { timeout: 2000 })
+    await screen.findByTestId('gig-location-map')
     expect(geocodePlace).toHaveBeenCalledWith(expect.objectContaining({ city: 'Landgraaf' }))
   })
 

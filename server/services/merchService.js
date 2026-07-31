@@ -34,9 +34,9 @@ import {
 } from '../repositories/merchRepository.js'
 import { getSettings } from './accountService.js'
 import {
+  correctLedgerTransactionBySource,
   ledgerErrorResult,
   postMerchSaleRecorded,
-  postMerchSaleVoided,
 } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { resolveLiveTreatment } from './vatTreatmentService.js'
@@ -342,7 +342,12 @@ export async function voidMerchSale(pool, tenantId, id, actorUserId = null) {
     )
     await setProductStock(client, tenantId, sale.product_id, newQty, newCost)
 
-    await postMerchSaleVoided(client, tenantId, sale, { actorUserId })
+    const corrected = await correctLedgerTransactionBySource(client, tenantId, {
+      sourceType: 'merch_sale',
+      sourceId: sale.id,
+      sourceEvent: 'recorded',
+    }, actorUserId)
+    if (corrected.error) abortTransaction(corrected)
 
     return {}
   }, { db: pool, mapError: ledgerErrorResult })

@@ -873,12 +873,18 @@ export interface VatReturn {
 
 export interface VatReturnBoxValue {
   description?: string | null
+  section?: VatReturnBoxSection | null
   base_cents?: number
   vat_cents?: number
   base_raw_cents?: number
   vat_raw_cents?: number
   base_declared_euros?: number | null
   vat_declared_euros?: number | null
+}
+
+export interface VatReturnBoxSection {
+  id: string
+  title: string
 }
 
 export interface VatReturnBox extends VatReturnBoxValue {

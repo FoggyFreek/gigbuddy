@@ -83,6 +83,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/tests/setup.js',
+    // The heaviest component tests (gig detail, member dialogs) run ~3 s on a
+    // fast dev box and 2-3x that on a CI runner under v8 coverage. The 5 s
+    // default left no margin, so keep failures meaningful rather than timing.
+    testTimeout: 20000,
+    hookTimeout: 20000,
     // Keep agent worktrees under .claude (full repo copies) out of test discovery.
     exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'],
     // Frontend coverage. The server suite uses vitest.server.config.js so each
