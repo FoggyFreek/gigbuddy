@@ -26,18 +26,13 @@ import { useAccountingProfile } from '../contexts/accountingProfileContext.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
 import { quarterKey, statusMeta, outstandingCents } from '../utils/vatReturns.ts'
 import RecordVatPaymentDialog from '../components/vatReturns/RecordVatPaymentDialog.tsx'
+import VatBoxesTable from '../components/vatReturns/VatBoxesTable.tsx'
 import type { VatReturn, VatReturnPayment } from '../types/entities.ts'
 
 interface VatReturnDetailOutletContext {
   insideSplitView?: boolean
   onClose?: () => void
   onChanged?: () => void
-}
-
-const BOX_GRID_COLUMNS = '44px minmax(0, 1fr) 112px 112px'
-const BOX_AMOUNT_SX = {
-  textAlign: 'right',
-  fontVariantNumeric: 'tabular-nums',
 }
 
 function Row({ label, value }: Readonly<{ label: string; value?: ReactNode }>) {
@@ -200,47 +195,7 @@ export default function VatReturnDetailPage() {
           {ret.calculation_mode === 'category_workpaper' && ret.boxes && (
             <>
               <Divider sx={{ my: 1 }} />
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>{t($ => $.workpaper.boxesTitle)}</Typography>
-              <Box
-                data-testid="vat-box-column-headers"
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: BOX_GRID_COLUMNS,
-                  gap: 1,
-                  pb: 0.5,
-                  color: 'text.secondary',
-                }}
-              >
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>{t($ => $.workpaper.boxColumns.box)}</Typography>
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>{t($ => $.workpaper.boxColumns.description)}</Typography>
-                <Typography variant="caption" sx={{ ...BOX_AMOUNT_SX, fontWeight: 600 }}>{t($ => $.workpaper.boxColumns.turnover)}</Typography>
-                <Typography variant="caption" sx={{ ...BOX_AMOUNT_SX, fontWeight: 600 }}>{t($ => $.workpaper.boxColumns.vat)}</Typography>
-              </Box>
-              {ret.boxes.map((box) => (
-                <Box
-                  key={box.box_code}
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: BOX_GRID_COLUMNS,
-                    gap: 1,
-                    py: 0.5,
-                    alignItems: 'baseline',
-                  }}
-                >
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{box.box_code}</Typography>
-                  <Typography variant="body2">{box.description}</Typography>
-                  <Typography variant="body2" sx={BOX_AMOUNT_SX}>
-                    {box.base_declared_euros == null
-                      ? '—'
-                      : formatCurrency(box.base_declared_euros * 100, currency)}
-                  </Typography>
-                  <Typography variant="body2" sx={BOX_AMOUNT_SX}>
-                    {box.vat_declared_euros == null
-                      ? '—'
-                      : formatCurrency(box.vat_declared_euros * 100, currency)}
-                  </Typography>
-                </Box>
-              ))}
+              <VatBoxesTable boxes={ret.boxes} currency={currency} />
             </>
           )}
 

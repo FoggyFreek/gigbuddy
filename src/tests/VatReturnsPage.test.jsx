@@ -185,6 +185,47 @@ describe('VatReturnsPage', () => {
     expect(screen.getByTestId('settle-vat-quarter')).toBeDisabled()
   })
 
+  it('shows worksheet box descriptions with the same formatted columns as the detail page', async () => {
+    const user = userEvent.setup()
+    listVatReturns.mockResolvedValue([])
+    previewVatReturn.mockResolvedValue({
+      year: 2026,
+      quarter: 1,
+      period_from: '2026-01-01',
+      period_to: '2026-03-31',
+      due_date: '2026-04-30',
+      output_vat_cents: 2100,
+      input_vat_cents: 0,
+      net_cents: 2100,
+      direction: 'payable',
+      period_ended: true,
+      calculation_mode: 'category_workpaper',
+      boxes: {
+        '1a': {
+          description: 'Leveringen/diensten belast met hoog tarief',
+          base_declared_euros: 100,
+          vat_declared_euros: 21,
+        },
+      },
+      exceptions: [],
+      facts: [{ id: 1, classification_status: 'confirmed' }],
+    })
+
+    wrap(<VatReturnsPage />)
+    await screen.findByTestId('vat-returns-empty')
+    await user.click(screen.getByTestId('new-vat-return'))
+
+    const headers = await screen.findByTestId('vat-box-column-headers')
+    expect(within(headers).getByText('Box')).toBeInTheDocument()
+    expect(within(headers).getByText('Description')).toBeInTheDocument()
+    expect(within(headers).getByText('Turnover')).toBeInTheDocument()
+    expect(within(headers).getByText('VAT')).toBeInTheDocument()
+    const description = screen.getByText('Leveringen/diensten belast met hoog tarief')
+    expect(description).toBeInTheDocument()
+    expect(within(description.parentElement).getByText(/100,00/)).toBeInTheDocument()
+    expect(within(description.parentElement).getByText(/21,00/)).toBeInTheDocument()
+  })
+
   it('proposes and bulk-confirms an ordinary backfilled Dutch VAT transaction', async () => {
     const user = userEvent.setup()
     listVatReturns.mockResolvedValue([])
@@ -305,6 +346,66 @@ describe('VatReturnsPage', () => {
       taxable_base_cents: 1240,
       tax_amount_cents: 260,
     })
+  })
+
+  it('refreshes the workpaper when focus returns after correcting a ledger entry', async () => {
+    const user = userEvent.setup()
+    listVatReturns.mockResolvedValue([])
+    const fact = {
+      id: 55,
+      transaction_id: 77,
+      transaction_description: 'Merch sale to void',
+      transaction_amount_cents: 1995,
+      source_type: 'merch_sale',
+      source_id: 42,
+      source_event: 'recorded',
+      tax_point: '2026-02-01',
+      category_code: 'legacy_unclassified',
+      direction: 'sale',
+      rate: 0,
+      tax_jurisdiction_code: 'nl',
+      taxable_base_cents: 0,
+      tax_amount_cents: 346,
+      output_vat_cents: 346,
+      deductible_input_vat_cents: 0,
+      classification_status: 'unclassified',
+    }
+    const preview = {
+      year: 2026,
+      quarter: 1,
+      period_from: '2026-01-01',
+      period_to: '2026-03-31',
+      due_date: '2026-04-30',
+      output_vat_cents: 346,
+      input_vat_cents: 0,
+      net_cents: 346,
+      direction: 'payable',
+      period_ended: true,
+      calculation_mode: 'category_workpaper',
+      boxes: {},
+      exceptions: [{ key: 'unconfirmed_tax_categories', blocking: true, count: 1 }],
+      facts: [fact],
+    }
+    previewVatReturn
+      .mockResolvedValueOnce(preview)
+      .mockResolvedValueOnce({
+        ...preview,
+        output_vat_cents: 0,
+        net_cents: 0,
+        direction: 'nil',
+        exceptions: [],
+        facts: [],
+      })
+
+    wrap(<VatReturnsPage />)
+    await screen.findByTestId('vat-returns-empty')
+    await user.click(screen.getByTestId('new-vat-return'))
+    expect(await screen.findByTestId('vat-fact-review-55')).toBeInTheDocument()
+
+    window.dispatchEvent(new Event('focus'))
+
+    await waitFor(() => expect(previewVatReturn).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByTestId('vat-fact-review-55')).not.toBeInTheDocument())
   })
 
   it('record payment defaults to the primary checking account and posts', async () => {
