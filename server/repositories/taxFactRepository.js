@@ -1,3 +1,5 @@
+import { activeLedgerTransactionSql } from './ledgerRepository.js'
+
 export async function insertLedgerTaxFacts(executor, tenantId, transactionId, facts) {
   const inserted = []
   for (const fact of facts) {
@@ -79,8 +81,7 @@ export async function listUnreportedTaxFacts(executor, tenantId, {
         AND f.tax_jurisdiction_code = $2
         AND f.tax_point <= $3::date
         AND rtf.tax_fact_id IS NULL
-        AND lt.voided_at IS NULL
-        AND NOT (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')
+        AND ${activeLedgerTransactionSql('lt')}
       ORDER BY f.tax_point, f.id`,
     [tenantId, jurisdiction, to],
   )
@@ -119,8 +120,7 @@ export async function reconcileTaxFactsToLedger(executor, tenantId, factIds, { a
              ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
           WHERE le.tenant_id = $1
             AND lt.entry_date <= $3::date
-            AND lt.voided_at IS NULL
-            AND NOT (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')
+            AND ${activeLedgerTransactionSql('lt')}
        ) activity ON TRUE
        GROUP BY s.output_vat_account_code, s.input_vat_account_code
      ), facts AS (
@@ -159,8 +159,7 @@ export async function confirmLegacyTaxFact(executor, tenantId, factId, patch, ac
             FROM ledger_transactions lt
            WHERE lt.id = ledger_tax_facts.transaction_id
              AND lt.tenant_id = ledger_tax_facts.tenant_id
-             AND lt.voided_at IS NULL
-             AND NOT (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')
+             AND ${activeLedgerTransactionSql('lt')}
         )
         AND NOT EXISTS (
           SELECT 1 FROM vat_return_tax_facts rtf
@@ -185,8 +184,7 @@ export async function fetchReviewableTaxFact(executor, tenantId, factId) {
          ON lt.id = f.transaction_id AND lt.tenant_id = f.tenant_id
       WHERE f.id = $1 AND f.tenant_id = $2
         AND f.classification_status IN ('legacy_inferred', 'unclassified')
-        AND lt.voided_at IS NULL
-        AND NOT (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')
+        AND ${activeLedgerTransactionSql('lt')}
         AND NOT EXISTS (
           SELECT 1 FROM vat_return_tax_facts rtf
            WHERE rtf.tenant_id = f.tenant_id AND rtf.tax_fact_id = f.id
@@ -214,8 +212,7 @@ export async function listLegacyVatTransactions(executor, tenantId = null) {
          ON le.transaction_id = lt.id AND le.tenant_id = lt.tenant_id
        LEFT JOIN ledger_tax_facts f
          ON f.transaction_id = lt.id AND f.tenant_id = lt.tenant_id
-      WHERE lt.voided_at IS NULL
-        AND NOT (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')
+      WHERE ${activeLedgerTransactionSql('lt')}
         ${tenantFilter}
       GROUP BY lt.id, lt.tenant_id, lt.entry_date, lt.source_type,
                lt.source_id, lt.source_event, p.country_code

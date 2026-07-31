@@ -93,6 +93,15 @@ async function ledgerLinesFor(tenantId, sourceType, sourceId, sourceEvent) {
   return rows
 }
 
+async function correctionLinesFor(tenantId, sourceType, sourceId, sourceEvent, mode) {
+  const { rows: [original] } = await pool.query(
+    `SELECT id FROM ledger_transactions
+      WHERE tenant_id = $1 AND source_type = $2 AND source_id = $3 AND source_event = $4`,
+    [tenantId, sourceType, sourceId, sourceEvent],
+  )
+  return ledgerLinesFor(tenantId, 'ledger_transaction', original.id, mode)
+}
+
 describe('merch products — CRUD & validation', () => {
   it('creates and lists a product', async () => {
     const product = await createProduct(asUserA)
@@ -426,7 +435,9 @@ describe('merch sales — void', () => {
 
     await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
 
-    const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'voided')
+    const lines = await correctionLinesFor(
+      seed.tenantA.id, 'merch_sale', sale.body.id, 'recorded', 'void',
+    )
     const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
     expect(byCode['11000'].credit_cents).toBe(7260)
     expect(byCode['42000'].debit_cents).toBe(6000)
@@ -451,7 +462,9 @@ describe('merch sales — void', () => {
 
     await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
 
-    const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'voided')
+    const lines = await correctionLinesFor(
+      seed.tenantA.id, 'merch_sale', sale.body.id, 'recorded', 'void',
+    )
     const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
     expect(byCode['11100'].credit_cents).toBe(3630)
     expect(byCode['11000']).toBeUndefined()
@@ -467,7 +480,9 @@ describe('merch sales — void', () => {
       .send({ unit_cost_cents: 9999 }).expect(200)
     await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
 
-    const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'voided')
+    const lines = await correctionLinesFor(
+      seed.tenantA.id, 'merch_sale', sale.body.id, 'recorded', 'void',
+    )
     const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
     expect(byCode['51000'].credit_cents).toBe(1200)
   })
@@ -483,7 +498,7 @@ describe('merch sales — void', () => {
     await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
 
     const { rows } = await pool.query(
-      `SELECT voided_at, voided_by_transaction_id, reversed_by_transaction_id
+      `SELECT id, voided_at, voided_by_transaction_id, reversed_by_transaction_id
          FROM ledger_transactions
         WHERE tenant_id = $1 AND source_type = 'merch_sale'
           AND source_id = $2 AND source_event = 'recorded'`,
@@ -493,11 +508,16 @@ describe('merch sales — void', () => {
     expect(rows[0].voided_by_transaction_id).not.toBeNull()
     expect(rows[0].reversed_by_transaction_id).toBeNull()
 
-    // The ledger browser flags both halves voided (the default view hides them).
+    // The domain row and its central ledger correction are both voided.
     const list = await asUserA(request(app).get('/api/ledger')).expect(200)
     const merch = list.body.filter((r) => r.source_type === 'merch_sale')
-    expect(merch).toHaveLength(2)
-    expect(merch.every((r) => r.voided)).toBe(true)
+    const correction = list.body.find(
+      (r) => r.source_type === 'ledger_transaction'
+        && r.source_id === rows[0].id && r.source_event === 'void',
+    )
+    expect(merch).toHaveLength(1)
+    expect(merch[0].voided).toBe(true)
+    expect(correction).toMatchObject({ voided: true, type: 'Void' })
 
     // Both halves drop out of the financial overview → merch nets to zero.
     const overview = await asUserA(request(app).get('/api/ledger/overview')).expect(200)
@@ -518,7 +538,7 @@ describe('merch sales — void', () => {
 
     // The closed-period original is left untouched, only marked reversed.
     const { rows } = await pool.query(
-      `SELECT voided_at, reversed_by_transaction_id FROM ledger_transactions
+      `SELECT id, voided_at, reversed_by_transaction_id FROM ledger_transactions
         WHERE tenant_id = $1 AND source_type = 'merch_sale'
           AND source_id = $2 AND source_event = 'recorded'`,
       [seed.tenantA.id, sale.body.id],
@@ -527,11 +547,14 @@ describe('merch sales — void', () => {
     expect(rows[0].reversed_by_transaction_id).not.toBeNull()
 
     // The correction is a visible 'reversal', not a hidden 'voided' entry.
-    const reversalLines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'reversal')
+    const reversalLines = await ledgerLinesFor(
+      seed.tenantA.id, 'ledger_transaction', rows[0].id, 'reversal',
+    )
     expect(reversalLines.length).toBeGreaterThan(0)
     const list = await asUserA(request(app).get('/api/ledger')).expect(200)
     const reversal = list.body.find(
-      (r) => r.source_type === 'merch_sale' && r.source_event === 'reversal',
+      (r) => r.source_type === 'ledger_transaction'
+        && r.source_id === rows[0].id && r.source_event === 'reversal',
     )
     expect(reversal).toBeDefined()
     expect(reversal.voided).toBe(false)
@@ -661,7 +684,9 @@ describe('merch — per-product revenue account', () => {
       .send({ revenue_account_code: '42000' }).expect(200)
     await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
 
-    const lines = await ledgerLinesFor(seed.tenantA.id, 'merch_sale', sale.body.id, 'voided')
+    const lines = await correctionLinesFor(
+      seed.tenantA.id, 'merch_sale', sale.body.id, 'recorded', 'void',
+    )
     const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]))
     expect(byCode['42100'].debit_cents).toBe(3000) // reversed to the snapshot, not 42000
     expect(byCode['42000']).toBeUndefined()
@@ -736,7 +761,7 @@ describe('merch sales — list & ledger browser', () => {
     expect(res.body.merch.revenue_cents).toBe(6000)
   })
 
-  it('headline amount is the gross sale, not gross + COGS (recorded and void)', async () => {
+  it('keeps the merch gross headline on the sale and represents its cancellation centrally', async () => {
     const product = await createProduct(asUserA)
     await stockProduct(asUserA, product.id, 10)
     const sale = await asUserA(request(app).post('/api/merch/sales')).send({
@@ -750,13 +775,14 @@ describe('merch sales — list & ledger browser', () => {
     // The €36.30 gross the customer paid — the €12 COGS leg must not inflate it.
     expect(recorded.amount_cents).toBe(3630)
 
-    // The void mirror shows the same magnitude, negated — not -(gross + COGS).
+    // Cancellation uses the shared ledger correction linked to this posting.
     await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
     const after = await asUserA(request(app).get('/api/ledger')).expect(200)
     const voidRow = after.body.find(
-      (r) => r.source_type === 'merch_sale' && r.source_id === sale.body.id && r.source_event === 'voided',
+      (r) => r.source_type === 'ledger_transaction'
+        && r.source_id === recorded.id && r.source_event === 'void',
     )
-    expect(voidRow.amount_cents).toBe(-3630)
+    expect(voidRow).toMatchObject({ type: 'Void', group: 'journals', voided: true, amount_cents: null })
   })
 
   it('classifies and describes merch sales in the ledger browser', async () => {

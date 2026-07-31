@@ -336,6 +336,86 @@ describe('VAT transaction-category posting', () => {
     expect(preview.body.input_vat_cents).toBe(0)
   })
 
+  it('excludes a merch sale and its void from the workpaper when both fall in an exemption period', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-02-20T12:00:00Z'))
+    try {
+      await asUserA(request(app).post('/api/accounting-profile/schemes')).send({
+        scheme_code: 'nl_kor',
+        valid_from: '2026-01-01',
+      }).expect(201)
+      const product = await asUserA(request(app).post('/api/merch/products')).send({
+        name: 'LP Good to see you',
+        unit_cost_cents: 400,
+        default_price_incl_cents: 1500,
+        vat_rate: 21,
+        tax_category_code: 'domestic_standard',
+        tax_jurisdiction_code: 'nl',
+      }).expect(201)
+      await pool.query(
+        `UPDATE products
+            SET quantity_on_hand = 1
+          WHERE id = $1 AND tenant_id = $2`,
+        [product.body.id, seed.tenantA.id],
+      )
+      const sale = await asUserA(request(app).post('/api/merch/sales')).send({
+        product_id: product.body.id,
+        quantity: 1,
+        sale_date: '2026-02-15',
+      }).expect(201)
+      const original = await transactionFor('merch_sale', sale.body.id, 'recorded')
+
+      const beforeVoid = await asUserA(
+        request(app).get('/api/vat-returns/preview?year=2026&quarter=1'),
+      ).expect(200)
+      expect(beforeVoid.body.facts).toEqual([
+        expect.objectContaining({
+          transaction_id: original.id,
+          category_code: 'small_business_exempt',
+        }),
+      ])
+
+      await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
+      const voidedOriginal = await transactionFor('merch_sale', sale.body.id, 'recorded')
+      const voided = await transactionFor('ledger_transaction', original.id, 'void')
+      expect(voidedOriginal).toMatchObject({
+        source_event: 'recorded',
+        voided_at: expect.any(Date),
+        voided_by_transaction_id: voided.id,
+      })
+      expect(voided).toMatchObject({
+        source_type: 'ledger_transaction',
+        source_id: original.id,
+        source_event: 'void',
+      })
+      expect(await factsFor(voidedOriginal.id)).toHaveLength(1)
+      expect(await factsFor(voided.id)).toHaveLength(1)
+
+      // Older merchandise cancellations identified the compensating journal by
+      // source_event but did not always carry its own voided_at marker.
+      await pool.query(
+        `UPDATE ledger_transactions
+            SET source_type = 'merch_sale',
+                source_id = $3,
+                source_event = 'voided',
+                description = 'Merch sale voided: 1 × LP Good to see you',
+                voided_at = NULL
+          WHERE id = $1 AND tenant_id = $2`,
+        [voided.id, seed.tenantA.id, sale.body.id],
+      )
+
+      const preview = await asUserA(
+        request(app).get('/api/vat-returns/preview?year=2026&quarter=1'),
+      ).expect(200)
+      expect(preview.body.facts).toEqual([])
+      expect(preview.body.exceptions).toEqual([])
+      expect(preview.body.output_vat_cents).toBe(0)
+      expect(preview.body.input_vat_cents).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not allow a stale workpaper to confirm a tax fact after its entry is voided', async () => {
     const { rows: [transaction] } = await pool.query(
       `INSERT INTO ledger_transactions (

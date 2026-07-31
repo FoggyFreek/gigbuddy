@@ -47,13 +47,18 @@ const SOURCE_JOINS = `
   LEFT JOIN bank_statement_lines bsl
     ON lt.source_type = 'bank_statement_line' AND bsl.id = lt.source_id AND bsl.tenant_id = lt.tenant_id`
 
-// Open-period voids (the voided original and its ledger_transaction/void
-// reverser) are excluded from every financial aggregation; they stay visible
-// in the browser via "Show voided". Reversals (closed-period corrections) are
-// NOT excluded — they net the mistake out forward and must show in reports.
-// Used in queries that already join ledger_transactions AS lt.
-const EXCLUDE_VOIDED_SQL =
-  "AND lt.voided_at IS NULL AND NOT (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')"
+// One predicate owns whether a transaction participates in financial reads.
+// Event checks retain historical domain voids whose own voided_at marker may
+// be absent. Reversals remain active and net the mistake out forward.
+export function activeLedgerTransactionSql(alias = 'lt') {
+  if (!/^[a-z][a-z0-9_]*$/i.test(alias)) throw new Error('Invalid ledger transaction SQL alias')
+  return `${alias}.voided_at IS NULL
+    AND NOT (${alias}.source_type = 'ledger_transaction' AND ${alias}.source_event = 'void')
+    AND NOT (${alias}.source_type = 'invoice' AND ${alias}.source_event = 'void')
+    AND NOT (${alias}.source_type = 'merch_sale' AND ${alias}.source_event = 'voided')`
+}
+
+const EXCLUDE_VOIDED_SQL = `AND ${activeLedgerTransactionSql('lt')}`
 
 // Same exclusion as a correlated NOT EXISTS, for the running-balance queries
 // that LEFT JOIN ledger_entries directly (no lt) and must preserve their
@@ -61,8 +66,7 @@ const EXCLUDE_VOIDED_SQL =
 const NOT_VOIDED_EXISTS_SQL = `AND NOT EXISTS (
            SELECT 1 FROM ledger_transactions lt
             WHERE lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
-              AND (lt.voided_at IS NOT NULL
-                   OR (lt.source_type = 'ledger_transaction' AND lt.source_event = 'void')))`
+              AND NOT (${activeLedgerTransactionSql('lt')}))`
 
 const EMPTY_PERIOD = Object.freeze({ sql: '', values: [] })
 

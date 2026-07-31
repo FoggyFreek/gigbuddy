@@ -586,6 +586,22 @@ export async function correctLedgerTransaction(client, tenantId, transactionId, 
   return { mode, transactionId: result.transactionId }
 }
 
+// Domain workflows identify their posting by source identity, while correction
+// state and journals remain owned by the ledger. The caller keeps its domain
+// mutation in the same database transaction and rolls back on a returned error.
+export async function correctLedgerTransactionBySource(
+  client,
+  tenantId,
+  { sourceType, sourceId, sourceEvent },
+  actorUserId = null,
+) {
+  const original = await getTransactionBySource(
+    client, tenantId, sourceType, sourceId, sourceEvent,
+  )
+  if (!original) return { error: { status: 404, body: { error: 'Not found' } } }
+  return correctLedgerTransaction(client, tenantId, original.id, actorUserId)
+}
+
 // Void an open-period entry (hidden + excluded from reports). 409s a
 // closed-period entry with code use_reversal.
 export async function voidLedgerTransaction(pool, tenantId, transactionId, actorUserId = null) {
@@ -867,7 +883,7 @@ export async function postInvoicePaid(client, tenantId, invoice, opts = {}) {
 // Invoice voided: reverses the `sent` journal (CR receivable, DR revenue, DR
 // VAT) and marks that original, so the void is reflected on both halves in the
 // ledger browser. Splits on the original's booking period like a manual
-// correction (and like postMerchSaleVoided):
+// correction:
 //   open period   → the original is *voided*: both halves hide from the default
 //                   list and drop from reports. The compensating journal carries
 //                   its own voided_at so the pair still nets to zero.
@@ -1210,76 +1226,6 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
     sourceType: 'merch_sale', sourceId: sale.id, sourceEvent: 'recorded',
     lines, taxFacts: taxFact ? [taxFact] : [], ...opts,
   })
-}
-
-// Merch sale voided: an exact mirror of `recorded` (debit/credit swapped) dated
-// today (corrections-forward), which also marks the original recorded entry so
-// the void is reflected in the ledger browser. Splits on the original's booking
-// period exactly like a manual correction:
-//   open period   → the original is *voided*: both halves hide from the default
-//                   list and drop from reports. The compensating carries its own
-//                   voided_at so the pair still nets to zero.
-//   closed period → the original is *reversed*: a visible 'reversal' correction
-//                   that stays in the ledger and reports, never mutating the
-//                   closed period.
-export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
-  const original = await getTransactionBySource(client, tenantId, 'merch_sale', sale.id, 'recorded')
-  // The mirror cancels the `recorded` posting, so that posting's lines must
-  // not carry an active reclassification (lock + guard, like a manual void).
-  await assertNoActiveReclassifications(client, tenantId, original?.id)
-  const closedThrough = await fetchBooksClosedThrough(client, tenantId)
-  const isClosed = Boolean(original && closedThrough && original.entry_date <= closedThrough)
-
-  const settings = await loadAccountingSettings(client, tenantId)
-  const cashAccount = requireCode(
-    settings,
-    sale.payment_method === 'cash' ? 'cash_account_code' : 'primary_checking_account_code',
-  )
-  // Same snapshotted account as the original recorded posting so the reversal
-  // nets out exactly, even if the product's account changed since the sale.
-  const revenue = sale.revenue_account_code || requireCode(settings, 'merch_revenue_account_code')
-  // Reverse the exact same gross the original recorded (gross_incl_cents for
-  // imports, else quantity × unit price) so the pair nets to zero.
-  const grossCents = sale.gross_incl_cents ?? sale.quantity * sale.unit_price_incl_cents
-  const { netCents, vatCents } = computePurchaseLineTotals({
-    amount_incl_cents: grossCents, tax_rate: sale.vat_rate,
-  })
-  const cogsCents = sale.quantity * sale.unit_cost_cents
-  const memo = `Merch sale ${isClosed ? 'reversed' : 'voided'}: ${sale.quantity} × ${sale.product_name}`
-
-  const lines = [
-    { account_code: cashAccount, credit_cents: grossCents, memo },
-    { account_code: revenue, debit_cents: netCents, memo },
-  ]
-  if (vatCents > 0) {
-    lines.push({ account_code: requireCode(settings, 'output_vat_account_code'), debit_cents: vatCents, memo })
-  }
-  if (cogsCents > 0) {
-    lines.push(
-      { account_code: requireCode(settings, 'merch_cogs_account_code'), credit_cents: cogsCents, memo },
-      { account_code: requireCode(settings, 'merch_inventory_account_code'), debit_cents: cogsCents, memo },
-    )
-  }
-
-  const result = await postJournal(client, tenantId, {
-    entryDate: today(),
-    description: memo,
-    sourceType: 'merch_sale', sourceId: sale.id,
-    sourceEvent: isClosed ? 'reversal' : 'voided',
-    lines,
-    taxFacts: original ? reverseTaxFacts(await listTransactionTaxFacts(client, tenantId, original.id)) : [],
-    ...opts,
-  })
-
-  if (result.posted && original) {
-    if (isClosed) {
-      await markTransactionReversed(client, tenantId, original.id, result.transactionId)
-    } else {
-      await markTransactionVoided(client, tenantId, original.id, result.transactionId)
-      await markTransactionVoidedAt(client, tenantId, result.transactionId)
-    }
-  }
-  return result
 }
 
 // ---------- shopify import: revenue-only line ----------
