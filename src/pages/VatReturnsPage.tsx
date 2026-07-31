@@ -33,6 +33,7 @@ type SummaryKey = 'all' | ReturnState
 // statusMeta already encodes the settlement state as the dot colour; reuse
 // that mapping so the cards and the row dots can never disagree.
 const STATE_BY_COLOR: Record<string, ReturnState> = {
+  'info.main': 'open',
   'warning.main': 'open',
   'error.main': 'overdue',
   'success.main': 'settled',

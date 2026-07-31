@@ -18,8 +18,10 @@ import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import MoneyInput from './MoneyInput.tsx'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
+import TaxCategorySelect from '../shared/TaxCategorySelect.tsx'
+import { taxCategoryUsesZeroRate } from '../../../shared/taxCategories.js'
 
-const GRID_COLUMNS = '2fr 0.6fr 1fr 0.7fr 1fr 32px'
+const GRID_COLUMNS = '2fr 0.6fr 1fr 1.35fr 1fr 32px'
 
 // The EU VIES VAT-number validation service. We link users here rather than
 // integrating: they confirm the check, we retain the attestation.
@@ -91,18 +93,39 @@ function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readO
               label={t($ => $.lines.vatPercentage)}
               country={accountingCountry}
               value={line.tax_percentage}
-              onChange={(rate) => patchLine(idx, { tax_percentage: rate ?? 0 })}
+              categoryCode={line.tax_category_code}
+              onChange={(rate, taxPatch) => patchLine(idx, {
+                tax_percentage: rate ?? 0,
+                ...taxPatch,
+              })}
               disabled={readOnly}
             />
           )}
           <Typography variant="body2" align="right">{formatCurrency(displayCents, currency)}</Typography>
         </Box>
+        {!appliesKor && <Box sx={{ mt: 1 }}>
+          <TaxCategorySelect
+            direction="sale"
+            categoryCode={line.tax_category_code}
+            jurisdictionCode={line.tax_jurisdiction_code}
+            defaultJurisdiction={accountingCountry}
+            rate={line.tax_percentage}
+            disabled={readOnly}
+            onChange={(patch) => patchLine(idx, {
+              ...patch,
+              ...(patch.tax_category_code && taxCategoryUsesZeroRate(patch.tax_category_code, 'sale')
+                ? { tax_percentage: 0 }
+                : {}),
+            })}
+          />
+        </Box>}
       </Box>
     )
   }
 
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 1, alignItems: 'center', mb: 1 }}>
+    <>
+      <Box sx={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 1, alignItems: 'center', mb: 1 }}>
       <TextField
         size="small"
         placeholder={t($ => $.lines.descriptionPlaceholder)}
@@ -130,7 +153,11 @@ function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readO
           label={t($ => $.lines.vatPercentage)}
           country={accountingCountry}
           value={line.tax_percentage}
-          onChange={(rate) => patchLine(idx, { tax_percentage: rate ?? 0 })}
+          categoryCode={line.tax_category_code}
+          onChange={(rate, taxPatch) => patchLine(idx, {
+            tax_percentage: rate ?? 0,
+            ...taxPatch,
+          })}
           disabled={readOnly}
           hideLabel
         />
@@ -146,7 +173,24 @@ function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readO
       >
         <DeleteIcon fontSize="small" />
       </IconButton>
-    </Box>
+      </Box>
+      {!appliesKor && <Box sx={{ ml: 1, mb: 1.5, maxWidth: 520 }}>
+        <TaxCategorySelect
+          direction="sale"
+          categoryCode={line.tax_category_code}
+          jurisdictionCode={line.tax_jurisdiction_code}
+          defaultJurisdiction={accountingCountry}
+          rate={line.tax_percentage}
+          disabled={readOnly}
+          onChange={(patch) => patchLine(idx, {
+            ...patch,
+            ...(patch.tax_category_code && taxCategoryUsesZeroRate(patch.tax_category_code, 'sale')
+              ? { tax_percentage: 0 }
+              : {}),
+          })}
+        />
+      </Box>}
+    </>
   )
 }
 

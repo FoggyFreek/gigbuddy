@@ -65,6 +65,7 @@ export const DEFAULT_ACCOUNTS = [
   { code: '63200', name: 'Artwork, Photo & Video',                        type: 'expense',            parent_code: '63000' },
   { code: '63300', name: 'Digital Distribution & Software Subscriptions', type: 'expense',            parent_code: '63000' },
   { code: '64200', name: 'Hired Musicians & Contractors',                 type: 'expense',            parent_code: '64000' },
+  { code: '64900', name: 'VAT rounding differences',                      type: 'expense',            parent_code: '64000' },
 ]
 
 // No `currency`: the books follow the profile's base_currency now.
@@ -80,6 +81,7 @@ const DEFAULT_SETTINGS = {
   input_vat_account_code: '15000',
   vat_receivable_settlement_account_code: '15010',
   vat_payable_settlement_account_code: '24010',
+  vat_rounding_account_code: '64900',
   merch_inventory_account_code: '12200',
   merch_revenue_account_code: '42000',
   merch_cogs_account_code: '51000',
@@ -110,8 +112,9 @@ export async function seedTenantAccounting(client, tenantId) {
        primary_checking_account_code, cash_account_code,
        output_vat_account_code, input_vat_account_code,
        vat_receivable_settlement_account_code, vat_payable_settlement_account_code,
+       vat_rounding_account_code,
        merch_inventory_account_code, merch_revenue_account_code, merch_cogs_account_code
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      ON CONFLICT (tenant_id) DO NOTHING`,
     [
       tenantId,
@@ -126,6 +129,7 @@ export async function seedTenantAccounting(client, tenantId) {
       DEFAULT_SETTINGS.input_vat_account_code,
       DEFAULT_SETTINGS.vat_receivable_settlement_account_code,
       DEFAULT_SETTINGS.vat_payable_settlement_account_code,
+      DEFAULT_SETTINGS.vat_rounding_account_code,
       DEFAULT_SETTINGS.merch_inventory_account_code,
       DEFAULT_SETTINGS.merch_revenue_account_code,
       DEFAULT_SETTINGS.merch_cogs_account_code,

@@ -14,6 +14,8 @@ import MoneyInput from '../invoices/MoneyInput.tsx'
 import { centsToEditableEuro } from '../invoices/invoiceFormHelpers.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
+import TaxCategorySelect from '../shared/TaxCategorySelect.tsx'
+import { taxCategoryUsesZeroRate } from '../../../shared/taxCategories.js'
 
 type AccountGroupKey = 'asset' | 'cost_of_goods_sold' | 'expense'
 
@@ -173,7 +175,11 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
             label={t($ => $.lines.taxRate)}
             country={accountingCountry}
             value={Number.isFinite(Number(line.tax_rate)) ? Number(line.tax_rate) : null}
-            onChange={(rate) => patchLine(idx, { tax_rate: rate ?? 0 })}
+            categoryCode={line.tax_category_code}
+            onChange={(rate, taxPatch) => patchLine(idx, {
+              tax_rate: rate ?? 0,
+              ...taxPatch,
+            })}
             disabled={readOnly}
           />
         </Box>
@@ -198,6 +204,22 @@ function PurchaseLineRow({ line, idx, accounts = [], products = [], vatCents, er
             sx={{ width: '100%' }}
           />
         </Box>
+      </Box>
+      <Box sx={{ mt: 1.5 }}>
+        <TaxCategorySelect
+          direction="purchase"
+          categoryCode={line.tax_category_code}
+          jurisdictionCode={line.tax_jurisdiction_code}
+          defaultJurisdiction={accountingCountry}
+          rate={Number(line.tax_rate)}
+          disabled={readOnly}
+          onChange={(patch) => patchLine(idx, {
+            ...patch,
+            ...(patch.tax_category_code && taxCategoryUsesZeroRate(patch.tax_category_code, 'purchase')
+              ? { tax_rate: 0 }
+              : {}),
+          })}
+        />
       </Box>
     </Box>
   )

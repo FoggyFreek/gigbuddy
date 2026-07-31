@@ -28,12 +28,15 @@ export function outstandingCents(ret: VatReturn): number {
 
 export interface VatReturnStatusMeta {
   color: string
-  statusKey: 'paid' | 'received' | 'settled' | 'partially_paid' | 'partially_received' | 'overdue' | 'ready_to_pay' | 'to_receive'
+  statusKey: 'prepared' | 'paid' | 'received' | 'settled' | 'partially_paid' | 'partially_received' | 'overdue' | 'ready_to_pay' | 'to_receive'
 }
 
 // Maps a return's derived status (+ due date) to the legend dot and label:
 // green = fully settled, red = overdue, amber = filed and waiting on cash.
 export function statusMeta(ret: VatReturn, today = new Date().toISOString().slice(0, 10)): VatReturnStatusMeta {
+  if (ret.workflow_status === 'prepared') {
+    return { color: 'info.main', statusKey: 'prepared' }
+  }
   switch (ret.status) {
     case 'paid': return { color: 'success.main', statusKey: 'paid' }
     case 'received': return { color: 'success.main', statusKey: 'received' }

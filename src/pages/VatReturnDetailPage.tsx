@@ -12,9 +12,15 @@ import IconButton from '@mui/material/IconButton'
 import Link from '@mui/material/Link'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
+import TextField from '@mui/material/TextField'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import { getVatReturn, recordVatPayment } from '../api/vatReturns.ts'
+import {
+  acknowledgeVatException,
+  getVatReturn,
+  recordVatPayment,
+  submitVatReturn,
+} from '../api/vatReturns.ts'
 import { formatCurrency } from '../utils/invoiceTotals.ts'
 import { useAccountingProfile } from '../contexts/accountingProfileContext.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
@@ -26,6 +32,12 @@ interface VatReturnDetailOutletContext {
   insideSplitView?: boolean
   onClose?: () => void
   onChanged?: () => void
+}
+
+const BOX_GRID_COLUMNS = '44px minmax(0, 1fr) 112px 112px'
+const BOX_AMOUNT_SX = {
+  textAlign: 'right',
+  fontVariantNumeric: 'tabular-nums',
 }
 
 function Row({ label, value }: Readonly<{ label: string; value?: ReactNode }>) {
@@ -52,6 +64,9 @@ export default function VatReturnDetailPage() {
   const [ret, setRet] = useState<VatReturn & { filed_at?: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [paying, setPaying] = useState(false)
+  const [submissionReference, setSubmissionReference] = useState('')
+  const [acknowledgementNote, setAcknowledgementNote] = useState('')
+  const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {
     getVatReturn(vatReturnId)
@@ -72,10 +87,52 @@ export default function VatReturnDetailPage() {
     if (outletCtx.onChanged) outletCtx.onChanged()
   }
 
+  async function handleSubmit() {
+    if (!submissionReference.trim()) return
+    try {
+      setBusy(true)
+      await submitVatReturn(vatReturnId, submissionReference.trim())
+      load()
+      outletCtx.onChanged?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleAcknowledge(exceptionKey: string) {
+    if (!acknowledgementNote.trim()) return
+    try {
+      setBusy(true)
+      await acknowledgeVatException(vatReturnId, exceptionKey, acknowledgementNote.trim())
+      load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const outstanding = ret ? outstandingCents(ret) : 0
   const isRefund = ret?.direction === 'receivable'
   const direction = ret?.direction ?? 'nil'
   const dueLabel = t($ => $.direction[direction])
+
+  function exceptionLabel(key: string) {
+    switch (key) {
+      case 'unconfirmed_tax_categories':
+        return t($ => $.workpaper.exceptionLabels.unconfirmedTaxCategories)
+      case 'unmapped_tax_amounts':
+        return t($ => $.workpaper.exceptionLabels.unmappedTaxAmounts)
+      case 'ledger_reconciliation_difference':
+        return t($ => $.workpaper.exceptionLabels.ledgerReconciliationDifference)
+      case 'prior_period_amendments':
+        return t($ => $.workpaper.exceptionLabels.priorPeriodAmendments)
+      default:
+        return key
+    }
+  }
   const period = ret
     ? t($ => $.quarters[quarterKey(ret.quarter ?? 1)], { year: ret.year ?? 0 })
     : t($ => $.declaration)
@@ -92,9 +149,16 @@ export default function VatReturnDetailPage() {
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
           {period}
         </Typography>
-        {ret && <Chip size="small" label={t($ => $.status[statusMeta(ret).statusKey])} />}
+        {ret && (
+          <Chip
+            size="small"
+            label={ret.workflow_status === 'prepared'
+              ? t($ => $.workpaper.prepared)
+              : t($ => $.status[statusMeta(ret).statusKey])}
+          />
+        )}
         <Box sx={{ flexGrow: 1 }} />
-        {ret && ret.direction !== 'nil' && outstanding > 0 && (
+        {ret && ret.workflow_status !== 'prepared' && ret.direction !== 'nil' && outstanding > 0 && (
           <Button data-testid="record-vat-settlement" variant="contained" onClick={() => setPaying(true)}>
             {isRefund ? t($ => $.actions.recordRefund) : t($ => $.actions.recordPayment)}
           </Button>
@@ -119,6 +183,9 @@ export default function VatReturnDetailPage() {
           <Row label={t($ => $.fields.period)} value={`${formatShortDate(ret.period_from, locale)} – ${formatShortDate(ret.period_to, locale)}`} />
           <Row label={t($ => $.fields.dueDate)} value={formatShortDate(ret.due_date, locale)} />
           <Row label={t($ => $.fields.filed)} value={formatShortDate(ret.filed_at, locale)} />
+          {ret.schema_version && (
+            <Row label={t($ => $.workpaper.boxesTitle)} value={t($ => $.workpaper.schema, { version: ret.schema_version })} />
+          )}
           <Divider sx={{ my: 1 }} />
           <Row label={t($ => $.fields.outputVat)} value={formatCurrency(ret.output_vat_cents, currency)} />
           <Row label={t($ => $.fields.inputVat)} value={`− ${formatCurrency(ret.input_vat_cents, currency)}`} />
@@ -129,6 +196,105 @@ export default function VatReturnDetailPage() {
             </Typography>
             <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatCurrency(Math.abs(ret.net_cents ?? 0), currency)}</Typography>
           </Box>
+
+          {ret.calculation_mode === 'category_workpaper' && ret.boxes && (
+            <>
+              <Divider sx={{ my: 1 }} />
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>{t($ => $.workpaper.boxesTitle)}</Typography>
+              <Box
+                data-testid="vat-box-column-headers"
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: BOX_GRID_COLUMNS,
+                  gap: 1,
+                  pb: 0.5,
+                  color: 'text.secondary',
+                }}
+              >
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>{t($ => $.workpaper.boxColumns.box)}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>{t($ => $.workpaper.boxColumns.description)}</Typography>
+                <Typography variant="caption" sx={{ ...BOX_AMOUNT_SX, fontWeight: 600 }}>{t($ => $.workpaper.boxColumns.turnover)}</Typography>
+                <Typography variant="caption" sx={{ ...BOX_AMOUNT_SX, fontWeight: 600 }}>{t($ => $.workpaper.boxColumns.vat)}</Typography>
+              </Box>
+              {ret.boxes.map((box) => (
+                <Box
+                  key={box.box_code}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: BOX_GRID_COLUMNS,
+                    gap: 1,
+                    py: 0.5,
+                    alignItems: 'baseline',
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{box.box_code}</Typography>
+                  <Typography variant="body2">{box.description}</Typography>
+                  <Typography variant="body2" sx={BOX_AMOUNT_SX}>
+                    {box.base_declared_euros == null
+                      ? '—'
+                      : formatCurrency(box.base_declared_euros * 100, currency)}
+                  </Typography>
+                  <Typography variant="body2" sx={BOX_AMOUNT_SX}>
+                    {box.vat_declared_euros == null
+                      ? '—'
+                      : formatCurrency(box.vat_declared_euros * 100, currency)}
+                  </Typography>
+                </Box>
+              ))}
+            </>
+          )}
+
+          {ret.workflow_status === 'prepared' && (
+            <>
+              {(ret.exceptions_snapshot?.length ?? 0) > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>{t($ => $.workpaper.exceptionsTitle)}</Typography>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label={t($ => $.workpaper.acknowledgementNote)}
+                    value={acknowledgementNote}
+                    onChange={(event) => setAcknowledgementNote(event.target.value)}
+                    sx={{ mb: 1 }}
+                  />
+                  {ret.exceptions_snapshot?.map((exception) => {
+                    const done = ret.acknowledgements?.some((ack) => ack.exception_key === exception.key)
+                    return (
+                      <Box key={exception.key} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                          {exceptionLabel(exception.key)} {exception.count ? `(${exception.count})` : ''}
+                        </Typography>
+                        <Button
+                          size="small"
+                          disabled={busy || done || !acknowledgementNote.trim()}
+                          onClick={() => handleAcknowledge(exception.key)}
+                        >
+                          {done ? '✓' : t($ => $.actions.acknowledge)}
+                        </Button>
+                      </Box>
+                    )
+                  })}
+                </Box>
+              )}
+              <TextField
+                size="small"
+                fullWidth
+                label={t($ => $.workpaper.submissionReference)}
+                helperText={t($ => $.workpaper.submissionHelp)}
+                value={submissionReference}
+                onChange={(event) => setSubmissionReference(event.target.value)}
+                sx={{ mt: 2 }}
+              />
+              <Button
+                variant="contained"
+                disabled={busy || !submissionReference.trim()}
+                onClick={handleSubmit}
+                sx={{ mt: 1 }}
+              >
+                {t($ => $.actions.submitReturn)}
+              </Button>
+            </>
+          )}
 
           {ret.payments && ret.payments.length > 0 && (
             <>

@@ -642,9 +642,15 @@ async function journalLine(client, tenantId, line, decision, userId, expectedDir
     contraAccountCode: code,
     memo: lineMemo(line),
     vatRate,
+    taxCategoryCode: decision.taxCategoryCode,
+    taxJurisdictionCode: decision.taxJurisdictionCode,
+    inputVatRecoveryPercent: decision.inputVatRecoveryPercent,
   }, SYSTEM_OPTS(userId))
   await markLineResult(client, tenantId, line.id, {
     status: 'imported', ledgerTransactionId: posted.transactionId ?? null, vatRate,
+    taxCategoryCode: decision.taxCategoryCode,
+    taxJurisdictionCode: decision.taxJurisdictionCode,
+    inputVatRecoveryPercent: decision.inputVatRecoveryPercent,
   })
   return 'imported'
 }

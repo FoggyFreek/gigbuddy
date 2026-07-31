@@ -12,11 +12,16 @@ import Divider from '@mui/material/Divider'
 import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { previewVatReturn, createVatReturn } from '../../api/vatReturns.ts'
+import {
+  confirmVatTaxFact,
+  previewVatReturn,
+  createVatReturn,
+} from '../../api/vatReturns.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
 import { previousQuarter, quarterKey } from '../../utils/vatReturns.ts'
-import type { VatQuarter, VatReturn, VatReturnPreview } from '../../types/entities.ts'
+import type { VatQuarter, VatReturn, VatReturnPreview, VatTaxFact } from '../../types/entities.ts'
+import VatTaxFactReviewList, { type VatFactClassification } from './VatTaxFactReviewList.tsx'
 
 const QUARTERS = [1, 2, 3, 4] as const
 
@@ -40,6 +45,7 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
   const [lastPreview, setLastPreview] = useState<VatReturnPreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [refresh, setRefresh] = useState(0)
 
   // Reset the error during render when the period changes (React's
   // adjust-state-on-prop-change pattern); the stale preview needs no reset —
@@ -56,13 +62,18 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
       .then((p) => active && setLastPreview(p))
       .catch((e: Error) => active && setError(e.message))
     return () => { active = false }
-  }, [year, quarter])
+  }, [year, quarter, refresh])
 
   const preview: VatReturnPreview | null =
     lastPreview?.year === year && lastPreview?.quarter === quarter ? lastPreview : null
 
-  const nothingToSettle = preview?.output_vat_cents === 0 && preview?.input_vat_cents === 0
-  const canFile = Boolean(preview) && preview!.period_ended && !nothingToSettle && !busy
+  const isWorkpaper = preview?.calculation_mode === 'category_workpaper'
+  const reviewFacts = preview?.facts?.filter((fact) => fact.classification_status !== 'confirmed') ?? []
+  const nothingToSettle = isWorkpaper
+    ? preview?.facts?.length === 0
+    : preview?.output_vat_cents === 0 && preview?.input_vat_cents === 0
+  const canFile = Boolean(preview) && preview!.period_ended
+    && !nothingToSettle && reviewFacts.length === 0 && !busy
   const direction = preview?.direction ?? 'nil'
   const periodLabel = t($ => $.quarters[quarterKey(quarter)], { year })
   const locale = i18n.resolvedLanguage
@@ -72,7 +83,11 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
     try {
       setBusy(true)
       setError(null)
-      onFiled(await createVatReturn({ year, quarter }))
+      onFiled(await createVatReturn({
+        year,
+        quarter,
+        ...(isWorkpaper ? { calculation_mode: 'category_workpaper' } : {}),
+      }))
       onClose()
     } catch (e) {
       setError((e as Error).message)
@@ -80,8 +95,42 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
     }
   }
 
+  async function confirmFact(fact: VatTaxFact, classification: VatFactClassification) {
+    await confirmVatTaxFact(fact.id, {
+      ...classification,
+      direction: fact.direction,
+      tax_amount_cents: fact.tax_amount_cents,
+    })
+  }
+
+  async function handleConfirmFact(fact: VatTaxFact, classification: VatFactClassification) {
+    try {
+      setBusy(true)
+      setError(null)
+      await confirmFact(fact, classification)
+      setRefresh((value) => value + 1)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleConfirmAll(items: { fact: VatTaxFact; classification: VatFactClassification }[]) {
+    try {
+      setBusy(true)
+      setError(null)
+      for (const item of items) await confirmFact(item.fact, item.classification)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setRefresh((value) => value + 1)
+      setBusy(false)
+    }
+  }
+
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog open onClose={onClose} fullWidth maxWidth={isWorkpaper ? 'md' : 'xs'}>
       <DialogTitle>{t($ => $.newDialog.title)}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -139,6 +188,46 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
               </Typography>
             </Box>
 
+            {isWorkpaper && preview.boxes && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  {t($ => $.workpaper.boxesTitle)}
+                </Typography>
+                {Object.entries(preview.boxes).map(([code, box]) => (
+                  <Box key={code} sx={{ display: 'grid', gridTemplateColumns: '44px 1fr 1fr', gap: 1, py: 0.25 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{code}</Typography>
+                    <Typography variant="body2">
+                      {box.base_declared_euros == null ? '—' : `€ ${box.base_declared_euros}`}
+                    </Typography>
+                    <Typography variant="body2">
+                      {box.vat_declared_euros == null ? '—' : `€ ${box.vat_declared_euros}`}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+
+            {isWorkpaper && (preview.exceptions?.length ?? 0) > 0 && (
+              <Alert severity={preview.exceptions?.some((item) => item.blocking) ? 'warning' : 'info'} sx={{ mb: 1 }}>
+                {t($ => $.workpaper.exceptionsFound, { count: preview.exceptions?.length ?? 0 })}
+              </Alert>
+            )}
+
+            {reviewFacts.length > 0 && (
+              <VatTaxFactReviewList
+                facts={reviewFacts}
+                busy={busy}
+                onConfirm={handleConfirmFact}
+                onConfirmAll={handleConfirmAll}
+              />
+            )}
+
+            {preview.warning_code && (
+              <Alert severity="warning" sx={{ mb: 1 }}>
+                {t($ => $.workpaper.genericWarning)}
+              </Alert>
+            )}
+
             {!preview.period_ended && (
               <Alert data-testid="vat-quarter-not-ended" severity="info" sx={{ mb: 1 }}>
                 {t($ => $.newDialog.quarterNotEnded, { date: formatShortDate(preview.period_to, locale) })}
@@ -149,7 +238,9 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
             )}
             {canFile && (
               <Alert severity="warning">
-                {t($ => $.newDialog.filingWarning, { date: formatShortDate(preview.period_to, locale) })}
+                {isWorkpaper
+                  ? t($ => $.workpaper.prepareWarning)
+                  : t($ => $.newDialog.filingWarning, { date: formatShortDate(preview.period_to, locale) })}
               </Alert>
             )}
           </>
@@ -158,7 +249,7 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>{t($ => $.common.actions.cancel)}</Button>
         <Button data-testid="settle-vat-quarter" variant="contained" disabled={!canFile} onClick={handleFile}>
-          {t($ => $.actions.settleQuarter)}
+          {isWorkpaper ? t($ => $.actions.prepareWorkpaper) : t($ => $.actions.settleQuarter)}
         </Button>
       </DialogActions>
     </Dialog>

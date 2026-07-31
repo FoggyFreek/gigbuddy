@@ -110,17 +110,26 @@ describe('ShopifyImportDialog', () => {
     await user.click(within(listbox).getByText(/43000 — Other revenue/))
 
     await user.click(screen.getByRole('combobox', { name: 'VAT' }))
-    expect(screen.getByRole('option', { name: '21%' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '9%' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '0%' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /21%.*standard VAT rate/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /9%.*reduced VAT rate/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /0%.*zero rate/i })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: '19%' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('option', { name: '21%' }))
+    await user.click(screen.getByRole('option', { name: /21%.*standard VAT rate/i }))
 
     await user.click(screen.getByRole('button', { name: /import 1 line/i }))
     await waitFor(() => expect(api.importShopifyOrders).toHaveBeenCalledWith({
       orders: [{
         shopify_order_id: '1001',
-        lines: [{ shopify_line_id: '5002', mapping: { type: 'revenue', account_code: '43000', vat_rate: 21 } }],
+        lines: [{
+          shopify_line_id: '5002',
+          mapping: {
+            type: 'revenue',
+            account_code: '43000',
+            vat_rate: 21,
+            tax_category_code: 'domestic_standard',
+            tax_jurisdiction_code: 'nl',
+          },
+        }],
       }],
     }))
   })

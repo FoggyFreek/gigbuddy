@@ -16,6 +16,7 @@
     "fourth": "4th quarter {{year}}"
   },
   "status": {
+    "prepared": "Prepared",
     "paid": "Paid",
     "received": "Received",
     "settled": "Settled",
@@ -34,6 +35,10 @@
     "viewBreakdown": "View breakdown",
     "recordRefund": "Record refund",
     "recordPayment": "Record payment",
+    "prepareWorkpaper": "Prepare workpaper",
+    "submitReturn": "Mark as submitted",
+    "acknowledge": "Acknowledge",
+    "confirmCategory": "Confirm category",
     "settleQuarter": "Settle quarter",
     "viewLedgerEntry": "View settlement ledger entry",
     "returnActions": "actions for {{period}}"
@@ -56,6 +61,43 @@
   "paymentHistory": {
     "refundsReceived": "Refunds received",
     "payments": "Payments"
+  },
+  "workpaper": {
+    "boxesTitle": "Dutch VAT return boxes (whole euros)",
+    "boxColumns": {
+      "box": "Box",
+      "description": "Description",
+      "turnover": "Turnover",
+      "vat": "VAT"
+    },
+    "exceptionsFound_one": "{{count}} review item will be frozen with the workpaper.",
+    "exceptionsFound_other": "{{count}} review items will be frozen with the workpaper.",
+    "genericWarning": "No country-specific schema is available for this period. This preview uses VAT ledger balances.",
+    "prepareWarning": "Preparing freezes the included transactions and box calculation. It does not submit the return or close the general ledger.",
+    "prepared": "Prepared workpaper",
+    "submissionReference": "Submission reference",
+    "submissionHelp": "Enter the confirmation or reference from the tax authority.",
+    "exceptionsTitle": "Review items",
+    "exceptionLabels": {
+      "unconfirmedTaxCategories": "Unconfirmed VAT categories",
+      "unmappedTaxAmounts": "Unmapped VAT amounts",
+      "ledgerReconciliationDifference": "Ledger reconciliation difference",
+      "priorPeriodAmendments": "Prior-period amendments"
+    },
+    "acknowledgementNote": "Review note",
+    "amendment": "Prior-period amendment",
+    "schema": "Schema {{version}}",
+    "reviewCategories": "Review inferred transaction categories",
+    "reviewIntro": "We proposed ordinary Dutch rates where the transaction total and VAT amount match. Check the proposals and review exceptions individually.",
+    "rate": "VAT rate",
+    "chooseRate": "Choose VAT rate",
+    "taxableAmount": "Taxable amount",
+    "transactionAmount": "Transaction total",
+    "vatAmount": "VAT amount",
+    "transactionFallback": "Ledger transaction",
+    "openLedgerEntry": "Open ledger entry",
+    "confirmProposals_one": "Confirm {{count}} proposal",
+    "confirmProposals_other": "Confirm {{count}} proposals"
   },
   "newDialog": {
     "title": "New VAT declaration",

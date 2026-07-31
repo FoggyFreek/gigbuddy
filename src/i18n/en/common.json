@@ -55,7 +55,38 @@
     "no": "No"
   },
   "vat": {
-    "otherCountries": "Other countries"
+    "otherCountries": "Other countries",
+    "category": "VAT category",
+    "jurisdiction": "Tax country",
+    "inferCategory": "Infer from rate",
+    "otherTreatment": "Other VAT treatment…",
+    "useCommonRate": "Use the common VAT rate",
+    "rates": {
+      "standard": "21% – standard VAT rate",
+      "reduced": "9% – reduced VAT rate",
+      "zero": "0% – zero rate"
+    },
+    "categories": {
+      "domestic_standard": "Domestic standard rate",
+      "domestic_reduced": "Domestic reduced rate",
+      "domestic_other_rate": "Domestic other rate",
+      "domestic_zero": "Domestic zero-rated",
+      "domestic_exempt": "Domestic exempt",
+      "outside_scope": "Outside the scope of VAT",
+      "domestic_reverse_charge": "Domestic reverse charge",
+      "private_use_adjustment": "Private-use adjustment",
+      "export_non_eu_goods": "Export of goods outside the EU",
+      "intra_eu_supply_goods": "Intra-EU supply of goods",
+      "intra_eu_supply_services": "Intra-EU supply of services",
+      "eu_distance_installation_non_oss": "EU distance or installation supply (non-OSS)",
+      "import_article_23": "Import under Article 23",
+      "non_eu_service_reverse_charge": "Non-EU service reverse charge",
+      "intra_eu_acquisition_goods": "Intra-EU acquisition of goods",
+      "intra_eu_acquisition_services": "Intra-EU acquisition of services",
+      "import_vat_paid": "Import VAT paid",
+      "foreign_vat": "Foreign VAT",
+      "small_business_exempt": "Small-business scheme exemption"
+    }
   },
   "picker": {
     "typeMinChars_one": "Type at least {{count}} character…",

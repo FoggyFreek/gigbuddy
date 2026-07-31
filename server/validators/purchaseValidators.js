@@ -1,6 +1,7 @@
 // Pure request/parameter validation for purchase routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit } from './common.js'
 import { DEFAULT_VAT_COUNTRY, snapVatRate } from '../../shared/vatRates.js'
+import { validateTaxCategoryFields } from './taxCategoryValidators.js'
 
 // The NL rate set, exported for back-compat (some tests/callers reference it).
 // Country-specific rates live in shared/vatRates.js and reach the validators
@@ -54,12 +55,28 @@ export function normalizeLines(lines, country = DEFAULT_VAT_COUNTRY) {
       expense_category: category || null,
       account_code: code || null,
       tax_rate: snapTaxRate(raw.tax_rate, country),
+      tax_category_code: typeof raw.tax_category_code === 'string'
+        ? raw.tax_category_code.trim() || null
+        : null,
+      tax_jurisdiction_code: typeof raw.tax_jurisdiction_code === 'string'
+        ? raw.tax_jurisdiction_code.trim().toLowerCase() || null
+        : null,
+      input_vat_recovery_percent: Number.isFinite(Number(raw.input_vat_recovery_percent))
+        ? Math.max(0, Math.min(100, Number(raw.input_vat_recovery_percent)))
+        : null,
       amount_incl_cents: Number.isInteger(Number(raw.amount_incl_cents)) ? Number(raw.amount_incl_cents) : 0,
       position: Number.isInteger(Number(raw.position)) ? Number(raw.position) : idx,
       // A line that stocks a product carries which product and how many units.
       product_id: productId,
       quantity: productId ? quantity : null,
     }
+  })
+}
+
+export function validatePurchaseLineTaxFields(lines) {
+  return validateTaxCategoryFields(lines, {
+    direction: 'purchase',
+    validateRecovery: true,
   })
 }
 

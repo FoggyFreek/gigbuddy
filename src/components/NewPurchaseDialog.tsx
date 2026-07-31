@@ -26,7 +26,7 @@ interface NewPurchaseDialogProps {
 
 export default function NewPurchaseDialog({ onClose, onCreated }: Readonly<NewPurchaseDialogProps>) {
   const { t } = useTranslation(['purchases', 'common'])
-  const { defaultVatRate } = useAccountingProfile()
+  const { accountingCountry, defaultVatRate } = useAccountingProfile()
   const [supplierName, setSupplierName] = useState('')
   const [supplierContactId, setSupplierContactId] = useState<Id | null>(null)
   const [receiptDate, setReceiptDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -48,7 +48,7 @@ export default function NewPurchaseDialog({ onClose, onCreated }: Readonly<NewPu
         currency: 'EUR',
         memo: null,
         status: 'draft',
-        lines: [emptyLine(0, defaultVatRate)],
+        lines: [emptyLine(0, defaultVatRate, accountingCountry)],
       })
       onCreated(created.id!)
     } catch (e) {

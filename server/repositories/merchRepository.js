@@ -2,11 +2,15 @@
 // an executor so services can keep transaction ownership.
 
 const PRODUCT_COLUMNS = `id, name, unit_cost_cents, default_price_incl_cents,
-  vat_rate, quantity_on_hand, revenue_account_code, archived_at, created_at, updated_at`
+  vat_rate, tax_category_code, tax_jurisdiction_code, quantity_on_hand,
+  revenue_account_code, archived_at, created_at, updated_at`
 
 const SALE_COLUMNS = `s.id, s.product_id, p.name AS product_name, s.gig_id,
   to_char(s.sale_date, 'YYYY-MM-DD') AS sale_date,
   s.quantity, s.unit_price_incl_cents, s.gross_incl_cents, s.vat_rate, s.unit_cost_cents,
+  s.tax_category_code, s.tax_jurisdiction_code,
+  s.vat_treatment_snapshot AS tax_treatment_snapshot,
+  s.vat_scheme_code_snapshot, s.accounting_country_snapshot,
   s.payment_method, s.revenue_account_code, s.status, s.voided_at, s.created_at`
 
 export async function listProducts(executor, tenantId) {
@@ -21,10 +25,17 @@ export async function listProducts(executor, tenantId) {
 
 export async function insertProduct(executor, tenantId, product) {
   const { rows } = await executor.query(
-    `INSERT INTO products (tenant_id, name, unit_cost_cents, default_price_incl_cents, vat_rate, revenue_account_code)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO products (
+       tenant_id, name, unit_cost_cents, default_price_incl_cents, vat_rate,
+       tax_category_code, tax_jurisdiction_code, revenue_account_code
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING ${PRODUCT_COLUMNS}`,
-    [tenantId, product.name, product.unit_cost_cents, product.default_price_incl_cents, product.vat_rate, product.revenue_account_code],
+    [
+      tenantId, product.name, product.unit_cost_cents, product.default_price_incl_cents,
+      product.vat_rate, product.tax_category_code, product.tax_jurisdiction_code,
+      product.revenue_account_code,
+    ],
   )
   return rows[0]
 }
@@ -122,12 +133,16 @@ export async function insertSale(executor, tenantId, sale) {
     `INSERT INTO merch_sales
        (tenant_id, product_id, gig_id, sale_date, quantity,
         unit_price_incl_cents, gross_incl_cents, vat_rate, unit_cost_cents, payment_method,
+        tax_category_code, tax_jurisdiction_code, vat_treatment_snapshot,
+        vat_scheme_code_snapshot, accounting_country_snapshot,
         revenue_account_code, created_by_user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
      RETURNING id`,
     [tenantId, sale.productId, sale.gigId, sale.saleDate, sale.quantity,
       sale.unitPriceInclCents, sale.grossInclCents, sale.vatRate, sale.unitCostCents,
-      sale.paymentMethod, sale.revenueAccountCode, sale.actorUserId],
+      sale.paymentMethod, sale.taxCategoryCode, sale.taxJurisdictionCode,
+      sale.taxTreatmentSnapshot, sale.taxSchemeCodeSnapshot, sale.accountingCountrySnapshot,
+      sale.revenueAccountCode, sale.actorUserId],
   )
   return rows[0].id
 }

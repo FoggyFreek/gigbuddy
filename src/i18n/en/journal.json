@@ -33,6 +33,7 @@
     "description": "Description",
     "account": "Account",
     "vatRate": "VAT rate",
+    "noVat": "No VAT",
     "debit": "Debit",
     "credit": "Credit",
     "balancingAccount": "Balancing account",

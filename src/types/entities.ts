@@ -252,6 +252,8 @@ export interface InvoiceLine {
   quantity?: number
   unit_price_cents?: number
   tax_percentage?: number
+  tax_category_code?: string | null
+  tax_jurisdiction_code?: string | null
   position?: number
 }
 
@@ -306,6 +308,9 @@ export interface PurchaseLine {
   account_code?: string
   expense_category?: string
   tax_rate?: number | string
+  tax_category_code?: string | null
+  tax_jurisdiction_code?: string | null
+  input_vat_recovery_percent?: number
   amount_incl_cents?: number
   position?: number
 }
@@ -581,12 +586,21 @@ export type BankImportDecision =
   | { line_id: Id; action: 'skip' }
   | { line_id: Id; action: 'reconcile_invoice'; invoice_id: Id }
   | { line_id: Id; action: 'reconcile_purchase'; purchase_id: Id }
-  | { line_id: Id; action: 'journal_received'; contra_account_code: string; vat_rate?: number | null }
+  | {
+      line_id: Id
+      action: 'journal_received'
+      contra_account_code: string
+      vat_rate?: number | null
+      tax_category_code?: string | null
+      tax_jurisdiction_code?: string
+    }
   | {
       line_id: Id
       action: 'journal_paid'
       contra_account_code: string
       vat_rate?: number | null
+      tax_category_code?: string | null
+      tax_jurisdiction_code?: string
       supplier_contact_id?: Id | null
       create_supplier?: { name: string; iban?: string | null }
     }
@@ -706,6 +720,9 @@ export interface JournalLine {
   description?: string | null
   account_code?: string | null
   vat_rate?: number | string
+  tax_category_code?: string | null
+  tax_jurisdiction_code?: string | null
+  input_vat_recovery_percent?: number
   side?: 'debit' | 'credit' | null
   amount_cents?: number
   balancing_account_code?: string | null
@@ -839,6 +856,68 @@ export interface VatReturn {
   paid_cents?: number
   payments?: VatReturnPayment[]
   ledger_transaction_id?: Id
+  period_key?: string | null
+  schema_country_code?: string | null
+  schema_version?: string | null
+  calculation_mode?: 'legacy_generic' | 'category_workpaper'
+  workflow_status?: 'prepared' | 'submitted' | 'superseded'
+  submission_reference?: string | null
+  raw_input_vat_cents?: number | null
+  raw_output_vat_cents?: number | null
+  raw_net_cents?: number | null
+  boxes?: VatReturnBox[]
+  facts?: VatTaxFact[]
+  exceptions_snapshot?: VatReturnException[] | null
+  acknowledgements?: VatExceptionAcknowledgement[]
+}
+
+export interface VatReturnBoxValue {
+  description?: string | null
+  base_cents?: number
+  vat_cents?: number
+  base_raw_cents?: number
+  vat_raw_cents?: number
+  base_declared_euros?: number | null
+  vat_declared_euros?: number | null
+}
+
+export interface VatReturnBox extends VatReturnBoxValue {
+  box_code: string
+}
+
+export interface VatTaxFact {
+  id: Id
+  transaction_id: Id
+  transaction_description?: string | null
+  transaction_amount_cents?: number
+  source_type?: string
+  source_id?: Id
+  source_event?: string
+  tax_point: string
+  category_code: string
+  direction: 'sale' | 'purchase' | 'adjustment'
+  rate: number | string
+  tax_jurisdiction_code: string
+  taxable_base_cents: number
+  tax_amount_cents: number
+  output_vat_cents: number
+  deductible_input_vat_cents: number
+  classification_status: 'confirmed' | 'legacy_inferred' | 'unclassified'
+  inclusion_kind?: 'period' | 'amendment' | 'legacy_assigned'
+}
+
+export interface VatReturnException {
+  key: string
+  blocking: boolean
+  count?: number
+  tax_fact_ids?: Id[]
+  output_difference_cents?: number
+  input_difference_cents?: number
+}
+
+export interface VatExceptionAcknowledgement {
+  exception_key: string
+  note: string
 }
 
 /** The quarter preview returned by GET /api/vat-returns/preview. */
@@ -853,6 +932,15 @@ export interface VatReturnPreview {
   net_cents?: number
   direction?: 'payable' | 'receivable' | 'nil'
   period_ended?: boolean
+  calculation_mode?: 'legacy_generic' | 'category_workpaper'
+  warning_code?: string
+  schema_version?: string
+  schema_source_url?: string
+  period_key?: string
+  declared_net_cents?: number
+  boxes?: Record<string, VatReturnBoxValue>
+  exceptions?: VatReturnException[]
+  facts?: VatTaxFact[]
 }
 
 /** A merch product (GET /api/merch/products). */
@@ -862,6 +950,8 @@ export interface Product {
   unit_cost_cents?: number
   default_price_incl_cents?: number
   vat_rate?: number | string
+  tax_category_code?: string | null
+  tax_jurisdiction_code?: string | null
   quantity_on_hand?: number
   revenue_account_code?: string | null
   archived_at?: string
@@ -947,7 +1037,13 @@ export interface ShopifyOrdersPage {
 // Per-line mapping decision the user makes in step 2 of the import dialog.
 export type ShopifyLineMapping =
   | { type: 'product'; product_id: Id }
-  | { type: 'revenue'; account_code: string; vat_rate: number }
+  | {
+      type: 'revenue'
+      account_code: string
+      vat_rate: number
+      tax_category_code: string | null
+      tax_jurisdiction_code: string
+    }
   | { type: 'skip' }
 
 export interface ShopifyImportBody {

@@ -18,6 +18,7 @@ import {
   invoiceToForm,
 } from './invoiceFormHelpers.ts'
 import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
+import { commonVatSelection } from '../../../shared/taxCategories.js'
 
 interface UseInvoiceFormStateArgs {
   invoiceId: Id
@@ -81,7 +82,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [sentDialogOpen, setSentDialogOpen] = useState(false)
   const [paidDialogOpen, setPaidDialogOpen] = useState(false)
-  const [form, setForm] = useState<InvoiceForm>(() => emptyDraft())
+  const [form, setForm] = useState<InvoiceForm>(() => emptyDraft(9, accountingCountry))
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [memoOpen, setMemoOpen] = useState(false)
@@ -198,6 +199,8 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
   }
 
   function addLine() {
+    const taxRate = appliesKor ? 0 : Number(accountingProfile?.default_vat_rate ?? 9)
+    const taxSelection = appliesKor ? null : commonVatSelection(accountingCountry, taxRate)
     setForm((prev) => ({
       ...prev,
       lines: [
@@ -207,7 +210,9 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
           description: '',
           quantity: 1,
           unit_price_cents: 0,
-          tax_percentage: appliesKor ? 0 : Number(accountingProfile?.default_vat_rate ?? 9),
+          tax_percentage: taxRate,
+          tax_category_code: taxSelection?.tax_category_code ?? null,
+          tax_jurisdiction_code: taxSelection?.tax_jurisdiction_code ?? accountingCountry,
           position: prev.lines.length,
         },
       ],

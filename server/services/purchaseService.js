@@ -51,6 +51,7 @@ import {
   parseId,
   parseReceiptNumber,
   parseSearchLimit,
+  validatePurchaseLineTaxFields,
 } from '../validators/purchaseValidators.js'
 import {
   ledgerErrorResult,
@@ -281,6 +282,8 @@ export async function createPurchase(
   }
 
   const initialBehavior = await loadAccountingBehavior(pool, tenantId)
+  const taxError = validatePurchaseLineTaxFields(body.lines)
+  if (taxError) return { error: { status: 400, body: taxError } }
   let lines = normalizeLines(body.lines, initialBehavior.accountingCountry)
   if (!lines.length) return { error: { status: 400, body: { error: 'At least one line is required' } } }
 
@@ -504,6 +507,8 @@ async function resolvePatchSupplierContactId(pool, tenantId, body) {
 // Returns an error result or null.
 async function validatePatchedLines(pool, tenantId, body, vatCountry) {
   if (!('lines' in body)) return null
+  const taxError = validatePurchaseLineTaxFields(body.lines)
+  if (taxError) return { error: { status: 400, body: taxError } }
   const normalized = normalizeLines(body.lines, vatCountry)
   const accountErr = await validateLineAccounts(pool, tenantId, normalized)
   if (accountErr) return accountErr

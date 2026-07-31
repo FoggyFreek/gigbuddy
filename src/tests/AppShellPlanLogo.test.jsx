@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import theme from '../theme.ts'
 import AppShell from '../components/AppShell.tsx'
 
@@ -11,8 +11,9 @@ vi.mock('../contexts/authContext.ts', () => ({
 vi.mock('../contexts/profileContext.ts', () => ({
   useProfile: () => ({ bandName: 'Band A' }),
 }))
+let themeMode = 'light'
 vi.mock('../contexts/themeModeContext.ts', () => ({
-  useThemeMode: () => ({ mode: 'light', toggleTheme: vi.fn() }),
+  useThemeMode: () => ({ mode: themeMode, toggleTheme: vi.fn() }),
 }))
 vi.mock('../hooks/usePushNotifications.ts', () => ({
   usePushNotifications: () => ({
@@ -51,6 +52,10 @@ function wrap(user) {
 }
 
 describe('AppShell header plan logo', () => {
+  afterEach(() => {
+    themeMode = 'light'
+  })
+
   it('shows the tier logo for an active gold subscription', () => {
     wrap(makeUser({ planSlug: 'gold', subscriptionStatus: 'active', locked: false, financeReadOnly: false, flags: FLAGS, limits: LIMITS }))
     expect(screen.getByAltText('gigBuddy')).toHaveAttribute('src', '/icons/gb_gold.png')
@@ -58,16 +63,22 @@ describe('AppShell header plan logo', () => {
 
   it('falls back to the default logo when fallback-locked (no active subscription)', () => {
     wrap(makeUser({ planSlug: 'bronze', subscriptionStatus: null, locked: true, financeReadOnly: false, flags: FLAGS, limits: LIMITS }))
-    expect(screen.getByAltText('gigBuddy')).toHaveAttribute('src', '/icons/gigbuddy_logo_pick.png')
+    expect(screen.getByAltText('gigBuddy')).toHaveAttribute('src', '/icons/gb_light_128.png')
   })
 
   it('falls back to the default logo for an unenforced (ownerless) tenant', () => {
     wrap(makeUser(null))
-    expect(screen.getByAltText('gigBuddy')).toHaveAttribute('src', '/icons/gigbuddy_logo_pick.png')
+    expect(screen.getByAltText('gigBuddy')).toHaveAttribute('src', '/icons/gb_light_128.png')
   })
 
   it('falls back to the default logo for a plan without a tier logo', () => {
     wrap(makeUser({ planSlug: 'pro', subscriptionStatus: 'active', locked: false, financeReadOnly: false, flags: FLAGS, limits: LIMITS }))
-    expect(screen.getByAltText('gigBuddy')).toHaveAttribute('src', '/icons/gigbuddy_logo_pick.png')
+    expect(screen.getByAltText('gigBuddy')).toHaveAttribute('src', '/icons/gb_light_128.png')
+  })
+
+  it('uses the dark default logo in dark mode', () => {
+    themeMode = 'dark'
+    wrap(makeUser(null))
+    expect(screen.getByAltText('gigBuddy')).toHaveAttribute('src', '/icons/gb_dark_128.png')
   })
 })

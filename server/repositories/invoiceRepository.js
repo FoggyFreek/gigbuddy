@@ -361,7 +361,8 @@ export async function fetchPublicMollieInvoice(executor, invoiceId) {
 
 export async function fetchLines(executor, invoiceId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id, description, quantity, unit_price_cents, tax_percentage, position
+    `SELECT id, description, quantity, unit_price_cents, tax_percentage,
+            tax_category_code, tax_jurisdiction_code, position
        FROM invoice_lines
       WHERE invoice_id = $1 AND tenant_id = $2
       ORDER BY position ASC, id ASC`,
@@ -458,9 +459,15 @@ export async function fetchInvoiceWithGig(executor, tenantId, invoiceId) {
 export async function insertInvoiceLines(executor, invoiceId, tenantId, lines) {
   for (const line of lines) {
     await executor.query(
-      `INSERT INTO invoice_lines (invoice_id, tenant_id, position, description, quantity, unit_price_cents, tax_percentage)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [invoiceId, tenantId, line.position, line.description, line.quantity, line.unit_price_cents, line.tax_percentage],
+      `INSERT INTO invoice_lines (
+         invoice_id, tenant_id, position, description, quantity, unit_price_cents,
+         tax_percentage, tax_category_code, tax_jurisdiction_code
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        invoiceId, tenantId, line.position, line.description, line.quantity,
+        line.unit_price_cents, line.tax_percentage, line.tax_category_code ?? null,
+        line.tax_jurisdiction_code ?? null,
+      ],
     )
   }
 }

@@ -29,7 +29,29 @@ import {
   fetchVatReturn,
   listVatReturnPayments,
   findFilingTransactionId,
+  activeVatReturnForPeriod,
+  insertPreparedVatReturn,
+  insertVatReturnBoxes,
+  linkVatReturnTaxFacts,
+  listVatReturnBoxes,
+  listVatReturnFacts,
+  listExceptionAcknowledgements,
+  acknowledgeVatReturnException as acknowledgeExceptionRow,
+  submitPreparedVatReturn,
+  lockPreparedVatReturn,
+  lockVatPeriodThrough,
 } from '../repositories/vatReturnRepository.js'
+import { loadAccountingProfile } from './accountingProfileService.js'
+import {
+  listUnreportedTaxFacts,
+  reconcileTaxFactsToLedger,
+} from '../repositories/taxFactRepository.js'
+import {
+  NL_VAT_RETURN_SCHEMA_2026,
+  computeNlVatReturnBoxes,
+  declaredEuroFor,
+  getNlVatReturnBoxDescription,
+} from '../domain/vat/nlVatReturn2026.js'
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -114,6 +136,15 @@ function withStatus(row) {
 // The quarter's running VAT position — drives the breakdown/confirm UI.
 export async function previewVatReturn(executor, tenantId, { year, quarter }) {
   const range = quarterRange(year, quarter)
+  const profile = await loadAccountingProfile(executor, tenantId)
+  if (profile.country_code === 'nl' && year === NL_VAT_RETURN_SCHEMA_2026.year) {
+    return previewNlVatReturn(executor, tenantId, {
+      year,
+      quarter,
+      profile,
+      range,
+    })
+  }
   try {
     const settings = await loadAccountingSettings(executor, tenantId)
     requireCode(settings, 'input_vat_account_code')
@@ -135,13 +166,211 @@ export async function previewVatReturn(executor, tenantId, { year, quarter }) {
       net_cents: net,
       direction: directionFor(net),
       period_ended: range.period_to < today(),
+      calculation_mode: 'legacy_generic',
+      warning_code: profile.country_code === 'nl'
+        ? 'country_schema_unavailable'
+        : 'generic_vat_balance_fallback',
     },
   }
 }
 
+function declaredBoxes(rawBoxes) {
+  const boxes = Object.fromEntries(Object.entries(rawBoxes).map(([code, value]) => [
+    code,
+    {
+      ...value,
+      description: getNlVatReturnBoxDescription(code),
+      base_declared_euros: 'base_cents' in value
+        ? declaredEuroFor(value.base_cents, 'base')
+        : null,
+      vat_declared_euros: 'vat_cents' in value
+        ? declaredEuroFor(value.vat_cents, code === '5b' ? 'input_vat' : 'output_vat')
+        : null,
+    },
+  ]))
+  boxes['5c'].vat_declared_euros =
+    boxes['5a'].vat_declared_euros - boxes['5b'].vat_declared_euros
+  return boxes
+}
+
+function describeNlBoxRows(boxes) {
+  return boxes.map((box) => ({
+    ...box,
+    description: getNlVatReturnBoxDescription(box.box_code),
+  }))
+}
+
+function workpaperExceptions(facts, unmapped, reconciliation) {
+  const exceptions = []
+  const reviewFacts = facts.filter((fact) => fact.classification_status !== 'confirmed')
+  if (reviewFacts.length) {
+    exceptions.push({
+      key: 'unconfirmed_tax_categories',
+      blocking: true,
+      count: reviewFacts.length,
+      tax_fact_ids: reviewFacts.map((fact) => fact.id),
+    })
+  }
+  const unmappedAmounts = unmapped.filter((fact) =>
+    Number(fact.output_vat_cents) !== 0 || Number(fact.deductible_input_vat_cents) !== 0)
+  if (unmappedAmounts.length) {
+    exceptions.push({
+      key: 'unmapped_tax_amounts',
+      blocking: true,
+      count: unmappedAmounts.length,
+      tax_fact_ids: unmappedAmounts.map((fact) => fact.id),
+    })
+  }
+  if (reconciliation.output_difference_cents !== 0 || reconciliation.input_difference_cents !== 0) {
+    exceptions.push({
+      key: 'ledger_reconciliation_difference',
+      blocking: true,
+      output_difference_cents: reconciliation.output_difference_cents,
+      input_difference_cents: reconciliation.input_difference_cents,
+    })
+  }
+  const amendments = facts.filter((fact) => fact.inclusion_kind === 'amendment')
+  if (amendments.length) {
+    exceptions.push({
+      key: 'prior_period_amendments',
+      blocking: false,
+      count: amendments.length,
+      tax_fact_ids: amendments.map((fact) => fact.id),
+    })
+  }
+  return exceptions
+}
+
+async function previewNlVatReturn(executor, tenantId, { year, quarter, profile, range }) {
+  const facts = await listUnreportedTaxFacts(executor, tenantId, {
+    jurisdiction: 'nl',
+    from: range.period_from,
+    to: range.period_to,
+  })
+  const computed = computeNlVatReturnBoxes(facts)
+  const boxes = declaredBoxes(computed.boxes)
+  const reconciliation = await reconcileTaxFactsToLedger(
+    executor,
+    tenantId,
+    facts.map((fact) => fact.id),
+    { asOf: range.period_to },
+  )
+  const exceptions = workpaperExceptions(facts, computed.unmapped, reconciliation)
+  const rawOutput = boxes['5a'].vat_cents
+  const rawInput = boxes['5b'].vat_cents
+  const rawNet = rawOutput - rawInput
+  return {
+    preview: {
+      year,
+      quarter,
+      period_key: `${year}-Q${quarter}`,
+      ...range,
+      schema_country_code: 'nl',
+      schema_version: NL_VAT_RETURN_SCHEMA_2026.version,
+      schema_source_url: NL_VAT_RETURN_SCHEMA_2026.sourceUrl,
+      calculation_mode: 'category_workpaper',
+      filing_frequency: profile.vat_filing_frequency,
+      output_vat_cents: rawOutput,
+      input_vat_cents: rawInput,
+      net_cents: rawNet,
+      declared_net_cents: boxes['5c'].vat_declared_euros * 100,
+      direction: directionFor(boxes['5c'].vat_declared_euros),
+      period_ended: range.period_to < today(),
+      boxes,
+      reconciliation,
+      exceptions,
+      facts,
+      icp_candidates: computed.icp_candidates,
+    },
+  }
+}
+
+export async function prepareNlVatReturn(
+  pool, tenantId, { year, quarter, notes }, actorUserId = null,
+) {
+  const range = quarterRange(year, quarter)
+  if (range.period_to >= today()) {
+    return { error: { status: 400, body: { error: 'The quarter has not ended yet', code: 'period_not_ended' } } }
+  }
+  return withTransaction(async (client) => {
+    const profile = await loadAccountingProfile(client, tenantId)
+    if (profile.country_code !== 'nl' || year !== NL_VAT_RETURN_SCHEMA_2026.year) {
+      abortTransaction({
+        error: {
+          status: 409,
+          body: { error: 'No country workpaper is available for this period', code: 'country_schema_unavailable' },
+        },
+      })
+    }
+    if (await activeVatReturnForPeriod(client, tenantId, range.period_from, range.period_to)) {
+      abortTransaction({ error: { status: 409, body: { error: 'This period already has a return', code: 'already_filed' } } })
+    }
+    const { preview } = await previewNlVatReturn(client, tenantId, { year, quarter, profile, range })
+    if (!preview.facts.length) {
+      abortTransaction({ error: { status: 400, body: { error: 'No VAT facts in this period', code: 'nothing_to_settle' } } })
+    }
+    if (preview.facts.some((fact) => fact.classification_status !== 'confirmed')) {
+      abortTransaction({
+        error: {
+          status: 409,
+          body: {
+            error: 'Review inferred VAT categories before preparing the return',
+            code: 'vat_categories_require_review',
+          },
+        },
+      })
+    }
+    if (preview.reconciliation.output_difference_cents !== 0
+      || preview.reconciliation.input_difference_cents !== 0) {
+      abortTransaction({
+        error: {
+          status: 409,
+          body: {
+            error: 'VAT control accounts do not reconcile to tax facts',
+            code: 'vat_ledger_reconciliation_required',
+            reconciliation: preview.reconciliation,
+          },
+        },
+      })
+    }
+    const row = await insertPreparedVatReturn(client, tenantId, {
+      year,
+      quarter,
+      periodFrom: range.period_from,
+      periodTo: range.period_to,
+      periodKey: preview.period_key,
+      schemaCountryCode: 'nl',
+      schemaVersion: preview.schema_version,
+      filingFrequency: preview.filing_frequency,
+      inputVatCents: preview.boxes['5b'].vat_declared_euros * 100,
+      outputVatCents: preview.boxes['5a'].vat_declared_euros * 100,
+      netCents: preview.declared_net_cents,
+      rawInputVatCents: preview.input_vat_cents,
+      rawOutputVatCents: preview.output_vat_cents,
+      rawNetCents: preview.net_cents,
+      direction: directionFor(preview.declared_net_cents),
+      dueDate: range.due_date,
+      notes,
+      actorUserId,
+      boxes: preview.boxes,
+      reconciliation: preview.reconciliation,
+      exceptions: preview.exceptions,
+    })
+    await insertVatReturnBoxes(client, tenantId, row.id, preview.boxes)
+    await linkVatReturnTaxFacts(client, tenantId, row.id, preview.facts)
+    const boxes = describeNlBoxRows(await listVatReturnBoxes(client, tenantId, row.id))
+    return { vatReturn: { ...row, boxes, facts: preview.facts } }
+  }, {
+    db: pool,
+    mapError: (err) => err.code === '23505'
+      ? { error: { status: 409, body: { error: 'This period already has a return', code: 'already_filed' } } }
+      : null,
+  })
+}
+
 // Files the quarter: inserts the vat_returns row, posts the settlement journal
 // and auto-closes the books through the period end — all in one transaction.
-export async function createVatReturn(pool, tenantId, { year, quarter, notes }, actorUserId = null) {
+async function createLegacyVatReturn(pool, tenantId, { year, quarter, notes }, actorUserId = null) {
   const range = quarterRange(year, quarter)
   if (range.period_to >= today()) {
     return { error: { status: 400, body: { error: 'The quarter has not ended yet', code: 'period_not_ended' } } }
@@ -149,6 +378,7 @@ export async function createVatReturn(pool, tenantId, { year, quarter, notes }, 
 
   return withTransaction(async (client) => {
     const settings = await loadAccountingSettings(client, tenantId)
+    const profile = await loadAccountingProfile(client, tenantId)
     const inputCode = requireCode(settings, 'input_vat_account_code')
     const outputCode = requireCode(settings, 'output_vat_account_code')
 
@@ -203,6 +433,17 @@ export async function createVatReturn(pool, tenantId, { year, quarter, notes }, 
       notes: notes ?? null,
       createdByUserId: actorUserId,
     })
+    const legacyFacts = await listUnreportedTaxFacts(client, tenantId, {
+      jurisdiction: profile.country_code,
+      from: range.period_from,
+      to: range.period_to,
+    })
+    await linkVatReturnTaxFacts(
+      client,
+      tenantId,
+      row.id,
+      legacyFacts.map((fact) => ({ ...fact, inclusion_kind: 'legacy_assigned' })),
+    )
 
     await postJournal(client, tenantId, {
       entryDate: range.period_to,
@@ -232,6 +473,108 @@ export async function createVatReturn(pool, tenantId, { year, quarter, notes }, 
   })
 }
 
+export async function createVatReturn(pool, tenantId, request, actorUserId = null) {
+  const profile = await loadAccountingProfile(pool, tenantId)
+  if (request.calculationMode === 'category_workpaper'
+    && profile.country_code === 'nl'
+    && request.year === NL_VAT_RETURN_SCHEMA_2026.year) {
+    return prepareNlVatReturn(pool, tenantId, request, actorUserId)
+  }
+  return createLegacyVatReturn(pool, tenantId, request, actorUserId)
+}
+
+export async function acknowledgeVatReturnException(
+  pool, tenantId, vatReturnId, { exceptionKey, note }, actorUserId,
+) {
+  const row = await acknowledgeExceptionRow(
+    pool, tenantId, vatReturnId, exceptionKey, note, actorUserId,
+  )
+  return row
+    ? { acknowledgement: row }
+    : { error: { status: 404, body: { error: 'Not found' } } }
+}
+
+function sumJournalSides(lines) {
+  return lines.reduce((totals, line) => ({
+    debit: totals.debit + Number(line.debit_cents ?? 0),
+    credit: totals.credit + Number(line.credit_cents ?? 0),
+  }), { debit: 0, credit: 0 })
+}
+
+export async function submitNlVatReturn(
+  pool, tenantId, vatReturnId, { submissionReference }, actorUserId = null,
+) {
+  return withTransaction(async (client) => {
+    const ret = await lockPreparedVatReturn(client, tenantId, vatReturnId)
+    if (!ret) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
+    if (ret.calculation_mode !== 'category_workpaper' || ret.workflow_status !== 'prepared') {
+      abortTransaction({
+        error: { status: 409, body: { error: 'Return is not prepared', code: 'return_not_prepared' } },
+      })
+    }
+    const exceptions = Array.isArray(ret.exceptions_snapshot) ? ret.exceptions_snapshot : []
+    const acknowledgements = await listExceptionAcknowledgements(client, tenantId, vatReturnId)
+    const acknowledged = new Set(acknowledgements.map((item) => item.exception_key))
+    const unresolved = exceptions.filter((item) => item.blocking && !acknowledged.has(item.key))
+    if (unresolved.length) {
+      abortTransaction({
+        error: {
+          status: 409,
+          body: {
+            error: 'Blocking VAT exceptions must be resolved or acknowledged',
+            code: 'vat_exceptions_unresolved',
+            exception_keys: unresolved.map((item) => item.key),
+          },
+        },
+      })
+    }
+
+    const settings = await loadAccountingSettings(client, tenantId)
+    const inputCode = requireCode(settings, 'input_vat_account_code')
+    const outputCode = requireCode(settings, 'output_vat_account_code')
+    let settlementCode = null
+    if (ret.direction === 'payable') {
+      settlementCode = requireCode(settings, 'vat_payable_settlement_account_code')
+    } else if (ret.direction === 'receivable') {
+      settlementCode = requireCode(settings, 'vat_receivable_settlement_account_code')
+    }
+    const lines = [
+      clearingLine(outputCode, Number(ret.raw_output_vat_cents), 'debit'),
+      clearingLine(inputCode, Number(ret.raw_input_vat_cents), 'credit'),
+    ].filter(Boolean)
+    if (ret.direction === 'payable') {
+      lines.push({ account_code: settlementCode, credit_cents: Number(ret.net_cents) })
+    } else if (ret.direction === 'receivable') {
+      lines.push({ account_code: settlementCode, debit_cents: -Number(ret.net_cents) })
+    }
+    const sides = sumJournalSides(lines)
+    const roundingCents = sides.debit - sides.credit
+    if (roundingCents !== 0) {
+      const roundingCode = requireCode(settings, 'vat_rounding_account_code')
+      lines.push(roundingCents > 0
+        ? { account_code: roundingCode, credit_cents: roundingCents }
+        : { account_code: roundingCode, debit_cents: -roundingCents })
+    }
+
+    await postJournal(client, tenantId, {
+      entryDate: ret.period_to,
+      description: `VAT return ${ret.period_key}`,
+      sourceType: 'vat_settlement',
+      sourceId: ret.id,
+      sourceEvent: 'filed',
+      lines,
+      actorUserId,
+    })
+    const submitted = await submitPreparedVatReturn(client, tenantId, vatReturnId, {
+      settlementAccountCode: settlementCode,
+      reference: submissionReference,
+      actorUserId,
+    })
+    await lockVatPeriodThrough(client, tenantId, ret.period_to)
+    return { vatReturn: withStatus({ ...submitted, paid_cents: 0 }) }
+  }, { db: pool, mapError: ledgerErrorResult })
+}
+
 // Records one (partial) payment/refund against a filed return and posts the
 // cash journal. The return row is locked FOR UPDATE so concurrent payments
 // serialize and the overpay check cannot race.
@@ -241,6 +584,11 @@ export async function recordVatPayment(pool, tenantId, vatReturnId, payment, act
 
     const ret = await lockVatReturn(client, tenantId, vatReturnId)
     if (!ret) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
+    if (ret.workflow_status !== 'submitted') {
+      abortTransaction({
+        error: { status: 409, body: { error: 'Return has not been submitted', code: 'return_not_submitted' } },
+      })
+    }
 
     let required = null
     if (ret.direction === 'payable') required = 'payment'
@@ -314,9 +662,17 @@ export async function getVatReturn(executor, tenantId, vatReturnId) {
   const payments = await listVatReturnPayments(executor, tenantId, vatReturnId)
   const paidCents = payments.reduce((s, p) => s + p.amount_cents, 0)
 
+  const categoryWorkpaper = row.calculation_mode === 'category_workpaper'
   return {
     ...withStatus({ ...row, paid_cents: paidCents }),
     payments,
     ledger_transaction_id: await findFilingTransactionId(executor, tenantId, vatReturnId),
+    boxes: categoryWorkpaper
+      ? describeNlBoxRows(await listVatReturnBoxes(executor, tenantId, vatReturnId))
+      : [],
+    facts: categoryWorkpaper ? await listVatReturnFacts(executor, tenantId, vatReturnId) : [],
+    acknowledgements: categoryWorkpaper
+      ? await listExceptionAcknowledgements(executor, tenantId, vatReturnId)
+      : [],
   }
 }

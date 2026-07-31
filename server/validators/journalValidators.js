@@ -1,6 +1,7 @@
 // Pure request/parameter validation for journal routes. No DB or IO here.
 import { isValidIsoDate, parsePositiveId as parseId } from './common.js'
 import { isKnownVatRate } from '../../shared/vatRates.js'
+import { validateTaxCategoryFields } from './taxCategoryValidators.js'
 
 export const SIDES = new Set(['debit', 'credit'])
 
@@ -27,12 +28,25 @@ export function normalizeLines(lines) {
       description: String(raw.description ?? '').trim() || null,
       account_code: code || null,
       vat_rate: snapVatRate(raw.vat_rate),
+      tax_category_code: String(raw.tax_category_code ?? '').trim() || null,
+      tax_jurisdiction_code: String(raw.tax_jurisdiction_code ?? '').trim().toLowerCase() || null,
+      input_vat_recovery_percent: Math.max(0, Math.min(100,
+        Number.isFinite(Number(raw.input_vat_recovery_percent))
+          ? Number(raw.input_vat_recovery_percent)
+          : 100)),
       side: SIDES.has(side) ? side : null,
       amount_cents: Number.isInteger(Number(raw.amount_cents)) && Number(raw.amount_cents) >= 0
         ? Number(raw.amount_cents) : 0,
       balancing_account_code: balCode || null,
       position: Number.isInteger(Number(raw.position)) ? Number(raw.position) : idx,
     }
+  })
+}
+
+export function validateJournalLineTaxFields(lines) {
+  return validateTaxCategoryFields(lines, {
+    directionForLine: (line) => String(line.side).trim() === 'credit' ? 'sale' : 'purchase',
+    validateRecovery: true,
   })
 }
 

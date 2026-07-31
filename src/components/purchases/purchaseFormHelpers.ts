@@ -1,4 +1,5 @@
 import type { PurchaseLine, PurchaseStatus, Id } from '../../types/entities.ts'
+import { commonVatSelection } from '../../../shared/taxCategories.js'
 
 /** One editable line inside the purchase form (includes React key and merch fields). */
 export interface PurchaseFormLine extends Omit<PurchaseLine, 'id' | 'expense_category'> {
@@ -36,8 +37,15 @@ export function nextLineKey(): string {
 
 // `taxRate` defaults new lines to the tenant's default VAT rate (callers pass it
 // from the profile context); it falls back to the NL standard when unspecified.
-export function emptyLine(position = 0, taxRate = 21): PurchaseFormLine {
-  return { _key: nextLineKey(), description: '', account_code: '', tax_rate: taxRate, amount_incl_cents: 0, position, product_id: null, quantity: null }
+export function emptyLine(position = 0, taxRate = 21, country = 'nl'): PurchaseFormLine {
+  const taxSelection = commonVatSelection(country, taxRate)
+  return {
+    _key: nextLineKey(), description: '', account_code: '', tax_rate: taxRate,
+    tax_category_code: taxSelection?.tax_category_code ?? null,
+    tax_jurisdiction_code: taxSelection?.tax_jurisdiction_code ?? country,
+    input_vat_recovery_percent: 100,
+    amount_incl_cents: 0, position, product_id: null, quantity: null,
+  }
 }
 
 export function emptyDraft(): PurchaseForm {
@@ -70,6 +78,9 @@ export function purchaseToForm(data: Record<string, unknown> & { lines?: Purchas
       description: l.description || '',
       account_code: l.account_code || '',
       tax_rate: Number(l.tax_rate) || 0,
+      tax_category_code: l.tax_category_code ?? null,
+      tax_jurisdiction_code: l.tax_jurisdiction_code ?? null,
+      input_vat_recovery_percent: Number(l.input_vat_recovery_percent ?? 100),
       amount_incl_cents: Number(l.amount_incl_cents) || 0,
       position: l.position ?? i,
       product_id: (l as Record<string, unknown>).product_id as Id | null ?? null,
@@ -92,6 +103,9 @@ export function buildPurchasePayload(form: PurchaseForm, status?: Exclude<Purcha
       description: l.description || '',
       account_code: l.account_code?.trim() || null,
       tax_rate: Number(l.tax_rate) || 0,
+      tax_category_code: l.tax_category_code ?? null,
+      tax_jurisdiction_code: l.tax_jurisdiction_code ?? null,
+      input_vat_recovery_percent: Number(l.input_vat_recovery_percent ?? 100),
       amount_incl_cents: Math.round(Number(l.amount_incl_cents) || 0),
       position: i,
       product_id: l.product_id ?? null,

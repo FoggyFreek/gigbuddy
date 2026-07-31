@@ -16,6 +16,8 @@ import { listGigs } from '../../api/gigs.ts'
 import { formatEur } from '../../utils/purchaseTotals.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import VatRateSelect from '../shared/VatRateSelect.tsx'
+import TaxCategorySelect from '../shared/TaxCategorySelect.tsx'
+import { commonVatSelection, taxCategoryUsesZeroRate } from '../../../shared/taxCategories.js'
 import type { Product, Gig, Id } from '../../types/entities.ts'
 
 interface SaleBody {
@@ -23,6 +25,8 @@ interface SaleBody {
   quantity: number
   unit_price_incl_cents: number
   vat_rate: number
+  tax_category_code: string | null
+  tax_jurisdiction_code: string
   sale_date: string
   payment_method: string
   gig_id: Id | null
@@ -44,6 +48,13 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Readon
   const [quantity, setQuantity] = useState<number | string>(1)
   const [priceInclCents, setPriceInclCents] = useState(0)
   const [vatRate, setVatRate] = useState(defaultVatRate)
+  const initialTaxSelection = commonVatSelection(accountingCountry, defaultVatRate)
+  const [taxCategoryCode, setTaxCategoryCode] = useState<string | null>(
+    initialTaxSelection?.tax_category_code ?? null,
+  )
+  const [taxJurisdictionCode, setTaxJurisdictionCode] = useState(
+    initialTaxSelection?.tax_jurisdiction_code ?? accountingCountry,
+  )
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [paymentMethod, setPaymentMethod] = useState('bank')
   const [gigId, setGigId] = useState<Id | ''>('')
@@ -67,6 +78,11 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Readon
     if (next) {
       setPriceInclCents(next.default_price_incl_cents ?? 0)
       setVatRate(Number(next.vat_rate))
+      const commonSelection = commonVatSelection(accountingCountry, next.vat_rate)
+      setTaxCategoryCode(next.tax_category_code ?? commonSelection?.tax_category_code ?? null)
+      setTaxJurisdictionCode(
+        next.tax_jurisdiction_code ?? commonSelection?.tax_jurisdiction_code ?? accountingCountry,
+      )
     }
   }
 
@@ -84,6 +100,8 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Readon
         quantity: qty,
         unit_price_incl_cents: priceInclCents,
         vat_rate: vatRate,
+        tax_category_code: taxCategoryCode,
+        tax_jurisdiction_code: taxJurisdictionCode,
         sale_date: saleDate,
         payment_method: paymentMethod,
         gig_id: gigId || null,
@@ -135,7 +153,28 @@ export default function RecordSaleDialog({ products, onSubmit, onClose }: Readon
             label={t($ => $.saleDialog.vatRate)}
             country={accountingCountry}
             value={vatRate}
-            onChange={(rate) => setVatRate(rate ?? 0)}
+            categoryCode={taxCategoryCode}
+            onChange={(rate, taxPatch) => {
+              setVatRate(rate ?? 0)
+              if (taxPatch) {
+                setTaxCategoryCode(taxPatch.tax_category_code)
+                setTaxJurisdictionCode(taxPatch.tax_jurisdiction_code)
+              }
+            }}
+          />
+          <TaxCategorySelect
+            direction="sale"
+            categoryCode={taxCategoryCode}
+            jurisdictionCode={taxJurisdictionCode}
+            defaultJurisdiction={accountingCountry}
+            rate={vatRate}
+            onChange={(patch) => {
+              setTaxCategoryCode(patch.tax_category_code)
+              setTaxJurisdictionCode(patch.tax_jurisdiction_code)
+              if (patch.tax_category_code && taxCategoryUsesZeroRate(patch.tax_category_code, 'sale')) {
+                setVatRate(0)
+              }
+            }}
           />
           <DateEntryField
             label={t($ => $.saleDialog.saleDate)}

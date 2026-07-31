@@ -104,6 +104,8 @@ async function importRevenueLine(client, tenantId, order, line, mapping, actorUs
     entry_date: toDateString(order.created_at),
     amount_incl_cents: grossInclCents,
     vat_rate: vatRate,
+    tax_category_code: mapping.tax_category_code ?? null,
+    tax_jurisdiction_code: mapping.tax_jurisdiction_code ?? null,
     revenue_account_code: accountCode,
     memo: `Shopify ${order.name}: ${line.title}`,
   }, { actorUserId })

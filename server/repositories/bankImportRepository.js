@@ -132,13 +132,19 @@ export async function lockLine(executor, tenantId, importId, lineId) {
 
 export async function markLineResult(executor, tenantId, lineId, {
   status, ledgerTransactionId = null, matchedSourceType = null, matchedSourceId = null, vatRate = null,
+  taxCategoryCode = null, taxJurisdictionCode = null, inputVatRecoveryPercent = 100,
 }) {
   await executor.query(
     `UPDATE bank_statement_lines
         SET status = $1, ledger_transaction_id = $2,
-            matched_source_type = $3, matched_source_id = $4, vat_rate = $5
-      WHERE id = $6 AND tenant_id = $7`,
-    [status, ledgerTransactionId, matchedSourceType, matchedSourceId, vatRate, lineId, tenantId],
+            matched_source_type = $3, matched_source_id = $4, vat_rate = $5,
+            tax_category_code = $6, tax_jurisdiction_code = $7,
+            input_vat_recovery_percent = $8
+      WHERE id = $9 AND tenant_id = $10`,
+    [
+      status, ledgerTransactionId, matchedSourceType, matchedSourceId, vatRate,
+      taxCategoryCode, taxJurisdictionCode, inputVatRecoveryPercent, lineId, tenantId,
+    ],
   )
 }
 

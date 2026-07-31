@@ -4,6 +4,7 @@
 // type, tenant scope) happen in the service under row locks.
 import { parsePositiveId } from './common.js'
 import { isKnownVatRate } from '../../shared/vatRates.js'
+import { validateTaxCategoryFields } from './taxCategoryValidators.js'
 
 function trimOrNull(v) {
   if (v == null) return null
@@ -17,10 +18,28 @@ function trimOrNull(v) {
 function normalizeJournalFields(raw, action) {
   const code = trimOrNull(raw.contra_account_code)
   if (!code) return { error: `${action} needs contra_account_code` }
-  if (raw.vat_rate == null) return { contraAccountCode: code, vatRate: null }
+  const taxError = validateTaxCategoryFields([raw], {
+    direction: action === 'journal_received' ? 'sale' : 'purchase',
+    validateRecovery: true,
+  })
+  if (taxError) return { error: taxError.error }
+  const taxCategoryCode = trimOrNull(raw.tax_category_code)
+  const taxJurisdictionCode = trimOrNull(raw.tax_jurisdiction_code)?.toLowerCase() ?? null
+  const recovery = raw.input_vat_recovery_percent == null
+    ? 100
+    : Number(raw.input_vat_recovery_percent)
+  if (!Number.isFinite(recovery) || recovery < 0 || recovery > 100) {
+    return { error: 'input_vat_recovery_percent must be between 0 and 100' }
+  }
+  const taxFields = {
+    taxCategoryCode,
+    taxJurisdictionCode,
+    inputVatRecoveryPercent: recovery,
+  }
+  if (raw.vat_rate == null) return { contraAccountCode: code, vatRate: null, ...taxFields }
   const rate = Number(raw.vat_rate)
   if (!isKnownVatRate(rate)) return { error: 'vat_rate must be a known VAT rate' }
-  return { contraAccountCode: code, vatRate: rate }
+  return { contraAccountCode: code, vatRate: rate, ...taxFields }
 }
 
 // Outgoing lines may link or create a supplier. Exactly one, or neither.

@@ -12,6 +12,7 @@ import {
   computePurchaseLineAccountingAmounts,
   computePurchaseLineTotals,
 } from '../../shared/purchaseTotals.js'
+import { computeLineTotals } from '../../shared/invoiceTotals.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { classify, describe, receiptFor } from './ledgerEntryTypes.js'
 import { parseSearchLimit } from '../validators/ledgerValidators.js'
@@ -46,10 +47,16 @@ import {
 } from '../repositories/accountRepository.js'
 import { hasReclassifiedLines } from '../repositories/journalRepository.js'
 import { badRequest, notFound } from './serviceErrors.js'
-import { openInvoiceBuckets } from '../repositories/invoiceRepository.js'
+import { fetchLines as fetchInvoiceLines, openInvoiceBuckets } from '../repositories/invoiceRepository.js'
 import { upcomingBandFeesByStatus } from '../repositories/gigRepository.js'
 import { loadAccountingBehavior } from './accountingProfileService.js'
 import { currentFiscalYear, fiscalYearRange } from '../../shared/fiscalYear.js'
+import {
+  insertLedgerTaxFacts,
+  listTransactionTaxFacts,
+} from '../repositories/taxFactRepository.js'
+import { purchaseTaxFact, reverseTaxFacts, saleTaxFact } from './taxFactService.js'
+import { resolveLiveTreatment } from './vatTreatmentService.js'
 
 // Thrown when a journal needs a tenant default account that isn't configured.
 // The HTTP layer maps this to 409 accounting_not_configured and rolls back, so
@@ -203,7 +210,7 @@ export async function assertInvoiceVoidPostable(executor, tenantId, invoice) {
 
 export async function postJournal(client, tenantId, {
   entryDate, description, sourceType, sourceId, sourceEvent, lines,
-  actorUserId = null, clampToOpenPeriod = false,
+  taxFacts = [], actorUserId = null, clampToOpenPeriod = false,
 }) {
   // Period close: user postings into a closed period are rejected; system
   // postings (clampToOpenPeriod, e.g. webhook cash receipts) move to the first
@@ -236,6 +243,26 @@ export async function postJournal(client, tenantId, {
     throw new Error(`ledger: journal ${label} is unbalanced (debit ${totalDebit} != credit ${totalCredit})`)
   }
 
+  if (taxFacts.length) {
+    const settings = await loadAccountingSettings(client, tenantId)
+    const outputCode = settings.output_vat_account_code
+    const inputCode = settings.input_vat_account_code
+    const outputLedger = normalized
+      .filter((line) => line.account_code === outputCode)
+      .reduce((sum, line) => sum + line.credit_cents - line.debit_cents, 0)
+    const inputLedger = normalized
+      .filter((line) => line.account_code === inputCode)
+      .reduce((sum, line) => sum + line.debit_cents - line.credit_cents, 0)
+    const outputFacts = taxFacts.reduce((sum, fact) => sum + Number(fact.output_vat_cents || 0), 0)
+    const inputFacts = taxFacts.reduce((sum, fact) => sum + Number(fact.deductible_input_vat_cents || 0), 0)
+    if (outputLedger !== outputFacts || inputLedger !== inputFacts) {
+      throw new Error(
+        `ledger: journal ${label} tax facts do not reconcile `
+        + `(output ${outputFacts}/${outputLedger}, input ${inputFacts}/${inputLedger})`,
+      )
+    }
+  }
+
   const transactionId = await insertLedgerTransaction(client, tenantId, {
     entryDate: effectiveDate,
     description: effectiveDescription,
@@ -247,6 +274,9 @@ export async function postJournal(client, tenantId, {
   if (transactionId == null) return { posted: false }
 
   await insertLedgerEntries(client, tenantId, transactionId, normalized)
+  if (taxFacts.length) {
+    await insertLedgerTaxFacts(client, tenantId, transactionId, taxFacts)
+  }
   return { posted: true, transactionId }
 }
 
@@ -433,12 +463,22 @@ async function postReversingJournal(client, tenantId, original, mode, actorUserI
     credit_cents: l.debit_cents,
     memo: l.memo,
   }))
+  const taxFacts = reverseTaxFacts(await listTransactionTaxFacts(client, tenantId, original.id))
   return postJournal(client, tenantId, {
     entryDate: today(),
     description: `${verb} of ledger entry #${original.id}`,
     sourceType: 'ledger_transaction', sourceId: original.id, sourceEvent: mode,
-    lines, actorUserId, ...opts,
+    lines, taxFacts, actorUserId, ...opts,
   })
+}
+
+export class TaxClassificationError extends Error {
+  constructor(source) {
+    super(`${source} has an invalid VAT category classification`)
+    this.name = 'TaxClassificationError'
+    this.code = 'invalid_tax_category'
+    this.status = 400
+  }
 }
 
 // Corrects one ledger transaction by posting a reversing journal dated today
@@ -722,6 +762,62 @@ export async function getFinancialOverview(executor, tenantId, range) {
 
 // ---------- invoice journals (revenue) ----------
 
+async function invoiceTaxFacts(client, tenantId, invoice) {
+  const behavior = await loadAccountingBehavior(client, tenantId)
+  const countryCode = invoice.accounting_country_snapshot ?? behavior.accountingCountry
+  const sourceLines = await fetchInvoiceLines(client, invoice.id, tenantId)
+  if (!sourceLines.length) return []
+
+  const exempt = invoice.vat_treatment_snapshot === 'small_business_exempt'
+  const reverseCharge = invoice.vat_treatment_snapshot === 'reverse_charge' || invoice.reverse_charge
+  const prepared = sourceLines.map((line) => {
+    const effective = (exempt || reverseCharge) ? { ...line, tax_percentage: 0 } : line
+    const totals = computeLineTotals(effective, (exempt || reverseCharge) ? false : invoice.tax_inclusive)
+    return { line, net: totals.netCents }
+  })
+  const subtotal = prepared.reduce((sum, row) => sum + row.net, 0)
+  const targetBase = invoice.subtotal_cents - invoice.discount_cents
+  const bases = prepared.map((row) => subtotal === 0 ? 0 : Math.round((row.net * targetBase) / subtotal))
+  if (bases.length) {
+    bases[bases.length - 1] += targetBase - bases.reduce((sum, value) => sum + value, 0)
+  }
+
+  const facts = prepared.map(({ line }, index) => {
+    const selectedLine = reverseCharge && !line.tax_category_code
+      ? { ...line, tax_category_code: 'intra_eu_supply_services', tax_percentage: 0 }
+      : line
+    const rate = exempt || reverseCharge ? 0 : Number(line.tax_percentage)
+    const tax = (exempt || reverseCharge) ? 0 : Math.round((bases[index] * rate) / 100)
+    const taxPoint = invoice.supply_date ?? invoice.issue_date
+    return saleTaxFact({
+      line: selectedLine,
+      countryCode,
+      taxPoint,
+      taxableBaseCents: bases[index],
+      taxCents: tax,
+      schemeCode: invoice.vat_scheme_code_snapshot,
+      schemeTreatment: exempt ? 'small_business_exempt' : null,
+      counterpartyCountry: invoice.customer_address_country,
+      sourceLineKind: 'invoice_line',
+    })
+  }).filter(Boolean)
+  if (facts.length !== prepared.length) {
+    throw new TaxClassificationError('Invoice')
+  }
+
+  const output = facts.reduce((sum, fact) => sum + fact.output_vat_cents, 0)
+  const residual = invoice.tax_cents - output
+  const target = facts.find((fact) => fact.output_vat_cents !== 0)
+  if (!target && residual !== 0) {
+    throw new TaxClassificationError('Invoice')
+  }
+  if (target && residual !== 0) {
+    target.tax_amount_cents += residual
+    target.output_vat_cents += residual
+  }
+  return facts
+}
+
 // Invoice sent: DR receivable (asset up), CR revenue, CR output VAT (liability up).
 export async function postInvoiceSent(client, tenantId, invoice, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
@@ -737,11 +833,12 @@ export async function postInvoiceSent(client, tenantId, invoice, opts = {}) {
   if (invoice.tax_cents > 0) {
     lines.push({ account_code: requireCode(settings, 'output_vat_account_code'), credit_cents: invoice.tax_cents, memo })
   }
+  const taxFacts = await invoiceTaxFacts(client, tenantId, invoice)
 
   return postJournal(client, tenantId, {
     entryDate: toDateString(invoice.issue_date),
     description: `Invoice ${invoice.invoice_number} sent`,
-    sourceType: 'invoice', sourceId: invoice.id, sourceEvent: 'sent', lines, ...opts,
+    sourceType: 'invoice', sourceId: invoice.id, sourceEvent: 'sent', lines, taxFacts, ...opts,
   })
 }
 
@@ -798,12 +895,15 @@ export async function postInvoiceVoid(client, tenantId, invoice, opts = {}) {
   if (invoice.tax_cents > 0) {
     lines.push({ account_code: requireCode(settings, 'output_vat_account_code'), debit_cents: invoice.tax_cents, memo })
   }
+  const taxFacts = original
+    ? reverseTaxFacts(await listTransactionTaxFacts(client, tenantId, original.id))
+    : []
 
   const result = await postJournal(client, tenantId, {
     entryDate: today(),
     description: memo,
     sourceType: 'invoice', sourceId: invoice.id,
-    sourceEvent: isClosed ? 'reversal' : 'void', lines, ...opts,
+    sourceEvent: isClosed ? 'reversal' : 'void', lines, taxFacts, ...opts,
   })
 
   if (result.posted && original) {
@@ -824,17 +924,38 @@ export async function postInvoiceVoid(client, tenantId, invoice, opts = {}) {
 // payable amount.
 export async function postBillAccrued(client, tenantId, purchase, purchaseLines, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
+  const behavior = await loadAccountingBehavior(client, tenantId)
   const payable = requireCode(settings, 'payable_account_code')
   const memo = `Bill ${purchase.receipt_number} — ${purchase.supplier_name}`
   const inputVatRecoverable = purchase.input_vat_recoverable_snapshot !== false
+  const countryCode = purchase.accounting_country_snapshot ?? behavior.accountingCountry
+  const taxFacts = purchaseLines.map((line) => purchaseTaxFact({
+    line,
+    countryCode,
+    taxPoint: purchase.receipt_date,
+    schemeCode: purchase.vat_scheme_code_snapshot,
+    inputVatRecoverable,
+    counterpartyCountry: purchase.supplier_country_code,
+    sourceLineKind: 'purchase_line',
+  })).filter(Boolean)
+  if (taxFacts.length !== purchaseLines.length) {
+    throw new TaxClassificationError('Purchase')
+  }
 
   // Group book costs by account. Lines that stock a product book to the merch
   // inventory asset (the goods aren't an expense until sold); other lines use
   // their explicit code or fall back to the tenant default expense account.
   const costByAccount = new Map()
   let inputVatCents = 0
-  for (const line of purchaseLines) {
-    const amounts = computePurchaseLineAccountingAmounts(line, inputVatRecoverable)
+  for (let index = 0; index < purchaseLines.length; index += 1) {
+    const line = purchaseLines[index]
+    const fact = taxFacts[index]
+    const amounts = fact
+      ? {
+        costCents: fact.taxable_base_cents + fact.non_deductible_input_vat_cents,
+        inputVatCents: fact.deductible_input_vat_cents,
+      }
+      : computePurchaseLineAccountingAmounts(line, inputVatRecoverable)
     const code = line.product_id
       ? requireCode(settings, 'merch_inventory_account_code')
       : (line.account_code || requireCode(settings, 'default_expense_account_code'))
@@ -849,12 +970,20 @@ export async function postBillAccrued(client, tenantId, purchase, purchaseLines,
   if (inputVatCents > 0) {
     lines.push({ account_code: requireCode(settings, 'input_vat_account_code'), debit_cents: inputVatCents, memo })
   }
+  const selfAssessedVatCents = taxFacts.reduce((sum, fact) => sum + fact.output_vat_cents, 0)
+  if (selfAssessedVatCents > 0) {
+    lines.push({
+      account_code: requireCode(settings, 'output_vat_account_code'),
+      credit_cents: selfAssessedVatCents,
+      memo,
+    })
+  }
   lines.push({ account_code: payable, credit_cents: purchase.total_cents, memo })
 
   return postJournal(client, tenantId, {
     entryDate: toDateString(purchase.receipt_date),
     description: `Bill ${purchase.receipt_number} accrued`,
-    sourceType: 'purchase', sourceId: purchase.id, sourceEvent: 'accrued', lines, ...opts,
+    sourceType: 'purchase', sourceId: purchase.id, sourceEvent: 'accrued', lines, taxFacts, ...opts,
   })
 }
 
@@ -896,13 +1025,57 @@ export async function postBillPaid(client, tenantId, purchase, opts = {}) {
 // (computed from the VAT account balances). No rate (or 0) posts two legs as
 // before.
 export async function postBankStatementLine(client, tenantId, line, opts = {}) {
-  const { id, entryDate, amountCents, direction, contraAccountCode, memo, vatRate = null } = line
+  const {
+    id, entryDate, amountCents, direction, contraAccountCode, memo, vatRate = null,
+    taxCategoryCode = null, taxJurisdictionCode = null, inputVatRecoveryPercent = 100,
+  } = line
   const settings = await loadAccountingSettings(client, tenantId)
+  const behavior = await loadAccountingBehavior(client, tenantId)
+  const treatment = await resolveLiveTreatment(client, tenantId, toDateString(entryDate))
   const checking = requireCode(settings, 'primary_checking_account_code')
   const received = direction === 'credit'
-  const { netCents, vatCents } = computePurchaseLineTotals({
-    amount_incl_cents: amountCents, tax_rate: vatRate ?? 0,
-  })
+  const saleVatRate = received && treatment.schemeExempt ? 0 : (vatRate ?? 0)
+  const taxLine = {
+    id,
+    position: 0,
+    amount_cents: amountCents,
+    amount_incl_cents: amountCents, tax_rate: received ? saleVatRate : (vatRate ?? 0),
+    vat_rate: received ? saleVatRate : (vatRate ?? 0),
+    tax_category_code: taxCategoryCode,
+    tax_jurisdiction_code: taxJurisdictionCode,
+    input_vat_recovery_percent: inputVatRecoveryPercent,
+  }
+  const totals = computePurchaseLineTotals(taxLine)
+  const fact = vatRate == null && !taxCategoryCode
+    ? null
+    : received
+    ? saleTaxFact({
+      line: taxLine,
+      countryCode: behavior.accountingCountry,
+      taxPoint: entryDate,
+      taxableBaseCents: totals.netCents,
+      taxCents: totals.vatCents,
+      schemeCode: treatment.vat_scheme_code,
+      schemeTreatment: treatment.vat_treatment,
+      sourceLineKind: 'bank_statement_line',
+    })
+    : purchaseTaxFact({
+      line: taxLine,
+      countryCode: behavior.accountingCountry,
+      taxPoint: entryDate,
+      schemeCode: treatment.vat_scheme_code,
+      inputVatRecoverable: treatment.inputVatRecoverable,
+      sourceLineKind: 'bank_statement_line',
+    })
+  if (!fact && (vatRate != null || taxCategoryCode)) {
+    throw new TaxClassificationError('Bank line')
+  }
+  const netCents = fact
+    ? fact.taxable_base_cents + fact.non_deductible_input_vat_cents
+    : totals.netCents
+  const vatCents = received
+    ? (fact?.output_vat_cents ?? totals.vatCents)
+    : (fact?.deductible_input_vat_cents ?? totals.vatCents)
 
   const lines = received
     ? [
@@ -919,6 +1092,13 @@ export async function postBankStatementLine(client, tenantId, line, opts = {}) {
       ? { account_code: vatCode, credit_cents: vatCents, memo }
       : { account_code: vatCode, debit_cents: vatCents, memo })
   }
+  if (!received && (fact?.output_vat_cents ?? 0) > 0) {
+    lines.push({
+      account_code: requireCode(settings, 'output_vat_account_code'),
+      credit_cents: fact.output_vat_cents,
+      memo,
+    })
+  }
 
   return postJournal(client, tenantId, {
     entryDate: toDateString(entryDate),
@@ -927,6 +1107,7 @@ export async function postBankStatementLine(client, tenantId, line, opts = {}) {
     sourceId: id,
     sourceEvent: received ? 'received' : 'paid',
     lines,
+    taxFacts: fact ? [fact] : [],
     ...opts,
   })
 }
@@ -972,6 +1153,7 @@ export async function postOpeningBalance(client, tenantId, { signedAmountCents, 
 // basis at which purchases booked the goods into inventory.
 export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
+  const behavior = await loadAccountingBehavior(client, tenantId)
   const cashAccount = requireCode(
     settings,
     sale.payment_method === 'cash' ? 'cash_account_code' : 'primary_checking_account_code',
@@ -983,9 +1165,28 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
   // discounted Shopify line gross may not divide evenly by quantity; manual
   // sales fall back to quantity × unit price.
   const grossCents = sale.gross_incl_cents ?? sale.quantity * sale.unit_price_incl_cents
-  const { netCents, vatCents } = computePurchaseLineTotals({
+  const totals = computePurchaseLineTotals({
     amount_incl_cents: grossCents, tax_rate: sale.vat_rate,
   })
+  const taxFact = saleTaxFact({
+    line: {
+      id: sale.id,
+      position: 0,
+      vat_rate: sale.vat_rate,
+      tax_category_code: sale.tax_category_code,
+      tax_jurisdiction_code: sale.tax_jurisdiction_code,
+    },
+    countryCode: sale.accounting_country_snapshot ?? behavior.accountingCountry,
+    taxPoint: sale.sale_date,
+    taxableBaseCents: totals.netCents,
+    taxCents: totals.vatCents,
+    schemeCode: sale.vat_scheme_code_snapshot,
+    schemeTreatment: sale.tax_treatment_snapshot,
+    sourceLineKind: 'merch_sale',
+  })
+  if (!taxFact) throw new TaxClassificationError('Merch sale')
+  const netCents = taxFact?.taxable_base_cents ?? totals.netCents
+  const vatCents = taxFact?.output_vat_cents ?? totals.vatCents
   const cogsCents = sale.quantity * sale.unit_cost_cents
   const memo = `Merch sale: ${sale.quantity} × ${sale.product_name}`
 
@@ -1006,7 +1207,8 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
   return postJournal(client, tenantId, {
     entryDate: toDateString(sale.sale_date),
     description: memo,
-    sourceType: 'merch_sale', sourceId: sale.id, sourceEvent: 'recorded', lines, ...opts,
+    sourceType: 'merch_sale', sourceId: sale.id, sourceEvent: 'recorded',
+    lines, taxFacts: taxFact ? [taxFact] : [], ...opts,
   })
 }
 
@@ -1063,7 +1265,10 @@ export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
     entryDate: today(),
     description: memo,
     sourceType: 'merch_sale', sourceId: sale.id,
-    sourceEvent: isClosed ? 'reversal' : 'voided', lines, ...opts,
+    sourceEvent: isClosed ? 'reversal' : 'voided',
+    lines,
+    taxFacts: original ? reverseTaxFacts(await listTransactionTaxFacts(client, tenantId, original.id)) : [],
+    ...opts,
   })
 
   if (result.posted && original) {
@@ -1085,10 +1290,28 @@ export async function postMerchSaleVoided(client, tenantId, sale, opts = {}) {
 // shopify_order_imports row id, which is also the idempotency source_id.
 export async function postShopifyRevenueLine(client, tenantId, line, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
+  const behavior = await loadAccountingBehavior(client, tenantId)
   const checking = requireCode(settings, 'primary_checking_account_code')
-  const { netCents, vatCents } = computePurchaseLineTotals({
+  const totals = computePurchaseLineTotals({
     amount_incl_cents: line.amount_incl_cents, tax_rate: line.vat_rate,
   })
+  const taxFact = saleTaxFact({
+    line: {
+      id: line.id,
+      position: 0,
+      vat_rate: line.vat_rate,
+      tax_category_code: line.tax_category_code,
+      tax_jurisdiction_code: line.tax_jurisdiction_code,
+    },
+    countryCode: behavior.accountingCountry,
+    taxPoint: line.entry_date,
+    taxableBaseCents: totals.netCents,
+    taxCents: totals.vatCents,
+    sourceLineKind: 'shopify_revenue_line',
+  })
+  if (!taxFact) throw new TaxClassificationError('Shopify line')
+  const netCents = taxFact?.taxable_base_cents ?? totals.netCents
+  const vatCents = taxFact?.output_vat_cents ?? totals.vatCents
   const memo = line.memo
 
   const lines = [
@@ -1102,7 +1325,8 @@ export async function postShopifyRevenueLine(client, tenantId, line, opts = {}) 
   return postJournal(client, tenantId, {
     entryDate: toDateString(line.entry_date),
     description: memo,
-    sourceType: 'shopify_revenue_line', sourceId: line.id, sourceEvent: 'recorded', lines, ...opts,
+    sourceType: 'shopify_revenue_line', sourceId: line.id, sourceEvent: 'recorded',
+    lines, taxFacts: taxFact ? [taxFact] : [], ...opts,
   })
 }
 
@@ -1146,13 +1370,53 @@ function leg(accountCode, side, amountCents, memo) {
 // postJournal asserts. Callers must have validated postability first.
 export async function postUserJournal(client, tenantId, journal, journalLines, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
+  const behavior = await loadAccountingBehavior(client, tenantId)
+  const treatment = await resolveLiveTreatment(client, tenantId, toDateString(journal.entry_date))
   const opposite = (side) => (side === 'debit' ? 'credit' : 'debit')
   const lines = []
+  const taxFacts = []
 
   for (const jl of journalLines) {
-    const { netCents, vatCents } = computePurchaseLineTotals({
-      amount_incl_cents: jl.amount_cents, tax_rate: jl.vat_rate,
+    const effectiveVatRate = jl.side === 'credit' && treatment.schemeExempt
+      ? 0
+      : jl.vat_rate
+    const factLine = effectiveVatRate === jl.vat_rate
+      ? jl
+      : { ...jl, vat_rate: effectiveVatRate }
+    const totals = computePurchaseLineTotals({
+      amount_incl_cents: jl.amount_cents, tax_rate: effectiveVatRate,
     })
+    const fact = Number(jl.vat_rate) === 0 && !jl.tax_category_code
+      ? null
+      : jl.side === 'credit'
+      ? saleTaxFact({
+        line: factLine,
+        countryCode: behavior.accountingCountry,
+        taxPoint: journal.entry_date,
+        taxableBaseCents: totals.netCents,
+        taxCents: totals.vatCents,
+        schemeCode: treatment.vat_scheme_code,
+        schemeTreatment: treatment.vat_treatment,
+        sourceLineKind: 'journal_line',
+      })
+      : purchaseTaxFact({
+        line: factLine,
+        countryCode: behavior.accountingCountry,
+        taxPoint: journal.entry_date,
+        schemeCode: treatment.vat_scheme_code,
+        inputVatRecoverable: treatment.inputVatRecoverable,
+        sourceLineKind: 'journal_line',
+      })
+    if (!fact && (Number(jl.vat_rate) !== 0 || jl.tax_category_code)) {
+      throw new TaxClassificationError('Journal line')
+    }
+    if (fact) taxFacts.push(fact)
+    const netCents = fact
+      ? fact.taxable_base_cents + fact.non_deductible_input_vat_cents
+      : totals.netCents
+    const vatCents = jl.side === 'credit'
+      ? (fact?.output_vat_cents ?? totals.vatCents)
+      : (fact?.deductible_input_vat_cents ?? totals.vatCents)
     const memo = jl.description || journal.description || null
 
     lines.push(leg(jl.account_code, jl.side, netCents, memo))
@@ -1160,8 +1424,11 @@ export async function postUserJournal(client, tenantId, journal, journalLines, o
       const vatField = jl.side === 'debit' ? 'input_vat_account_code' : 'output_vat_account_code'
       lines.push(leg(requireCode(settings, vatField), jl.side, vatCents, memo))
     }
+    if (jl.side === 'debit' && (fact?.output_vat_cents ?? 0) > 0) {
+      lines.push(leg(requireCode(settings, 'output_vat_account_code'), 'credit', fact.output_vat_cents, memo))
+    }
     if (jl.balancing_account_code) {
-      lines.push(leg(jl.balancing_account_code, opposite(jl.side), netCents + vatCents, memo))
+      lines.push(leg(jl.balancing_account_code, opposite(jl.side), jl.amount_cents, memo))
     }
   }
 
@@ -1170,6 +1437,6 @@ export async function postUserJournal(client, tenantId, journal, journalLines, o
     // No header description → fall back to the first line's, so the ledger
     // browser doesn't show a blank row.
     description: journal.description ?? journalLines[0]?.description ?? null,
-    sourceType: 'journal', sourceId: journal.id, sourceEvent: 'posted', lines, ...opts,
+    sourceType: 'journal', sourceId: journal.id, sourceEvent: 'posted', lines, taxFacts, ...opts,
   })
 }
