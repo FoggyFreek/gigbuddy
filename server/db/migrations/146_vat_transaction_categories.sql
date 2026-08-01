@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS ledger_tax_facts (
   deductible_input_vat_cents INTEGER NOT NULL DEFAULT 0,
   non_deductible_input_vat_cents INTEGER NOT NULL DEFAULT 0,
   classification_status TEXT NOT NULL
-    CHECK (classification_status IN ('confirmed', 'legacy_inferred', 'unclassified')),
+    CHECK (classification_status = 'confirmed'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   confirmed_at TIMESTAMPTZ,
   confirmed_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

@@ -19,7 +19,6 @@ import {
   submitNlVatReturn,
   acknowledgeVatReturnException,
 } from '../services/vatReturnService.js'
-import { confirmTaxFactClassification } from '../services/taxFactService.js'
 
 // Mounted under the financeView gate (see routes/index.js): reads require
 // finance.view and the filing/payment mutations require finance.manage. Filed
@@ -79,19 +78,6 @@ router.post('/:id/exceptions/acknowledge', requirePermission(PERMISSIONS.FINANCE
     const result = await acknowledgeVatReturnException(pool, req.tenantId, id, body, req.user.id)
     if (result.error) return sendError(res, result.error)
     res.json(result.acknowledgement)
-  } catch (err) {
-    next(err)
-  }
-})
-
-router.post('/tax-facts/:factId/confirm', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res, next) => {
-  const factId = requireParam(req, res, 'factId'); if (factId === null) return
-  try {
-    const result = await confirmTaxFactClassification(
-      pool, req.tenantId, factId, req.body || {}, req.user.id,
-    )
-    if (result.error) return sendError(res, result.error)
-    res.json(result.taxFact)
   } catch (err) {
     next(err)
   }

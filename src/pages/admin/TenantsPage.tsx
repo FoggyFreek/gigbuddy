@@ -38,7 +38,6 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import UnarchiveIcon from '@mui/icons-material/Unarchive'
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
-import FactCheckIcon from '@mui/icons-material/FactCheck'
 import CloudSyncIcon from '@mui/icons-material/CloudSync'
 import {
   listTenants,
@@ -59,7 +58,6 @@ import { VAT_COUNTRY_CODES } from '../../utils/vatRates.ts'
 import { formatBytes } from '../../utils/formatBytes.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import type { Tenant, Id } from '../../types/entities.ts'
-import VatTaxFactBackfillDialog from '../../components/admin/VatTaxFactBackfillDialog.tsx'
 import {
   getStorageConnection,
   testStorageConnection,
@@ -112,8 +110,6 @@ export default function TenantsPage() {
   const [ownerChoice, setOwnerChoice] = useState('') // user id as string; '' = no owner
   const [ownerSubmitting, setOwnerSubmitting] = useState(false)
   const [ownerError, setOwnerError] = useState('')
-  const [vatBackfillTenant, setVatBackfillTenant] = useState<TenantRow | null>(null)
-
   const ownerOf = (t: TenantRow) => users.find((u) => u.id === t.owner_user_id) ?? null
   // Owner candidates: the tenant's approved members (+ the current owner, so a
   // legacy assignment outside the member list still renders as a valid choice).
@@ -513,15 +509,6 @@ export default function TenantsPage() {
                           <KeyIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Backfill VAT tax facts">
-                        <IconButton
-                          size="small"
-                          onClick={() => setVatBackfillTenant(t)}
-                          aria-label={`backfill VAT tax facts for ${t.band_name}`}
-                        >
-                          <FactCheckIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
                       <Tooltip title={archived ? 'Unarchive' : 'Archive'}>
                         <IconButton size="small" onClick={() => handleArchive(t)}>
                           {archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
@@ -639,15 +626,6 @@ export default function TenantsPage() {
                     <KeyIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Backfill VAT tax facts">
-                  <IconButton
-                    size="small"
-                    onClick={() => setVatBackfillTenant(t)}
-                    aria-label={`backfill VAT tax facts for ${t.band_name}`}
-                  >
-                    <FactCheckIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
                 <Tooltip title={archived ? 'Unarchive' : 'Archive'}>
                   <IconButton size="small" onClick={() => handleArchive(t)}>
                     {archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
@@ -671,12 +649,6 @@ export default function TenantsPage() {
           )
         })}
       </Stack>
-
-      <VatTaxFactBackfillDialog
-        open={vatBackfillTenant !== null}
-        tenant={vatBackfillTenant}
-        onClose={() => setVatBackfillTenant(null)}
-      />
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>New tenant</DialogTitle>

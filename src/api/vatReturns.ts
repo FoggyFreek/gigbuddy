@@ -4,7 +4,6 @@ import type {
   VatReturn,
   VatReturnPreview,
   VatReturnPayment,
-  VatTaxFact,
   Id,
 } from '../types/entities.ts'
 
@@ -28,9 +27,4 @@ export const acknowledgeVatException = (id: Id, exceptionKey: string, note: stri
   api<VatExceptionAcknowledgement>(`/${id}/exceptions/acknowledge`, {
     method: 'POST',
     body: JSON.stringify({ exception_key: exceptionKey, note }),
-  })
-export const confirmVatTaxFact = (id: Id, body: Record<string, unknown>) =>
-  api<VatTaxFact>(`/tax-facts/${id}/confirm`, {
-    method: 'POST',
-    body: JSON.stringify(body),
   })

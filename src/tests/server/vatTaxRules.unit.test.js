@@ -109,7 +109,7 @@ describe('tax-category inference', () => {
     expect(result.classification_status).toBe('confirmed')
   })
 
-  it('keeps an inferred zero-rate line reviewable because zero is ambiguous', () => {
+  it('confirms the deterministic domestic zero-rate fallback', () => {
     const result = saleTaxFact({
       line: { id: 1, position: 0, tax_percentage: 0 },
       countryCode: 'nl',
@@ -120,7 +120,7 @@ describe('tax-category inference', () => {
     })
 
     expect(result.category_code).toBe('domestic_zero')
-    expect(result.classification_status).toBe('legacy_inferred')
+    expect(result.classification_status).toBe('confirmed')
   })
 
   it('falls back from a cleared jurisdiction field to the tenant country', () => {

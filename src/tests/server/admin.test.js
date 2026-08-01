@@ -3,7 +3,7 @@ import './_envSetup.js'
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import request from 'supertest'
 
-let app, pool, runMigrations, truncateAll, seedTwoTenants, postJournal, withTransaction
+let app, pool, runMigrations, truncateAll, seedTwoTenants
 let seed
 
 beforeAll(async () => {
@@ -13,8 +13,6 @@ beforeAll(async () => {
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
-  ;({ postJournal } = await import('../../../server/services/ledgerService.js'))
-  ;({ withTransaction } = await import('../../../server/db/withTransaction.js'))
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -480,114 +478,6 @@ describe('/api/admin/tenants — super admin only', () => {
       [seed.userA.id, seed.tenantA.id],
     )
     expect(rows[0].role).toBe('contributor')
-  })
-})
-
-describe('/api/admin/tenants/:id/vat-tax-facts/backfill', () => {
-  async function postLegacyVatJournal(tenantId, sourceId, kind) {
-    return withTransaction(async (client) => {
-      if (kind === 'sale') {
-        return postJournal(client, tenantId, {
-          entryDate: '2026-03-15',
-          description: 'Legacy sale',
-          sourceType: 'legacy_fixture',
-          sourceId,
-          sourceEvent: 'posted',
-          lines: [
-            { account_code: '11200', debit_cents: 12100 },
-            { account_code: '41000', credit_cents: 10000 },
-            { account_code: '24000', credit_cents: 2100 },
-          ],
-        })
-      }
-      return postJournal(client, tenantId, {
-        entryDate: '2026-03-16',
-        description: 'Legacy purchase',
-        sourceType: 'legacy_fixture',
-        sourceId,
-        sourceEvent: 'posted',
-        lines: [
-          { account_code: '62100', debit_cents: 10000 },
-          { account_code: '15000', debit_cents: 2100 },
-          { account_code: '21100', credit_cents: 12100 },
-        ],
-      })
-    }, { db: pool })
-  }
-
-  it('requires a super admin for preview and apply', async () => {
-    await asUserA(
-      request(app).get(`/api/admin/tenants/${seed.tenantA.id}/vat-tax-facts/backfill`),
-    ).expect(403)
-    await asUserA(
-      request(app).post(`/api/admin/tenants/${seed.tenantA.id}/vat-tax-facts/backfill`),
-    ).expect(403)
-  })
-
-  it('returns 404 for an unknown tenant', async () => {
-    await asSuper(
-      request(app).get('/api/admin/tenants/999999/vat-tax-facts/backfill'),
-    ).expect(404)
-    await asSuper(
-      request(app).post('/api/admin/tenants/999999/vat-tax-facts/backfill'),
-    ).expect(404)
-  })
-
-  it('previews without writing, applies only to the requested tenant, and is idempotent', async () => {
-    await postLegacyVatJournal(seed.tenantA.id, 9101, 'sale')
-    await postLegacyVatJournal(seed.tenantB.id, 9201, 'purchase')
-
-    const preview = await asSuper(
-      request(app).get(`/api/admin/tenants/${seed.tenantA.id}/vat-tax-facts/backfill`),
-    ).expect(200)
-    expect(preview.body).toMatchObject({
-      mode: 'preview',
-      tenant_id: seed.tenantA.id,
-      transactions_found: 1,
-      inserted: 0,
-      remaining: 1,
-    })
-    expect(preview.body.logs).toEqual(expect.any(Array))
-
-    const before = await pool.query(
-      'SELECT tenant_id FROM ledger_tax_facts ORDER BY tenant_id',
-    )
-    expect(before.rows).toEqual([])
-
-    const applied = await asSuper(
-      request(app).post(`/api/admin/tenants/${seed.tenantA.id}/vat-tax-facts/backfill`),
-    ).expect(200)
-    expect(applied.body).toMatchObject({
-      mode: 'apply',
-      tenant_id: seed.tenantA.id,
-      transactions_found: 1,
-      inserted: 1,
-      remaining: 0,
-    })
-
-    const facts = await pool.query(
-      `SELECT tenant_id, category_code, classification_status
-         FROM ledger_tax_facts ORDER BY tenant_id`,
-    )
-    expect(facts.rows).toEqual([{
-      tenant_id: seed.tenantA.id,
-      category_code: 'legacy_unclassified',
-      classification_status: 'unclassified',
-    }])
-
-    const second = await asSuper(
-      request(app).post(`/api/admin/tenants/${seed.tenantA.id}/vat-tax-facts/backfill`),
-    ).expect(200)
-    expect(second.body).toMatchObject({
-      transactions_found: 0,
-      inserted: 0,
-      remaining: 0,
-    })
-
-    const tenantBPreview = await asSuper(
-      request(app).get(`/api/admin/tenants/${seed.tenantB.id}/vat-tax-facts/backfill`),
-    ).expect(200)
-    expect(tenantBPreview.body.transactions_found).toBe(1)
   })
 })
 

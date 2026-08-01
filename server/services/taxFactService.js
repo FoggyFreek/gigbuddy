@@ -4,10 +4,6 @@ import {
   resolveTaxCategory,
 } from '../../shared/taxCategories.js'
 import { computePurchaseLineTotals } from '../../shared/purchaseTotals.js'
-import {
-  confirmLegacyTaxFact,
-  fetchReviewableTaxFact,
-} from '../repositories/taxFactRepository.js'
 
 function isoDate(value) {
   if (typeof value === 'string') return value.slice(0, 10)
@@ -44,11 +40,7 @@ export function normalizeTaxSelection({
       direction,
     })
     : null
-  const classificationStatus = requestedCategory
-    || (inferredCategory && rate > 0)
-    ? 'confirmed'
-    : 'legacy_inferred'
-  return resolved ? { resolved, jurisdiction, classificationStatus } : null
+  return resolved ? { resolved, jurisdiction } : null
 }
 
 export function saleTaxFact({
@@ -107,7 +99,7 @@ export function saleTaxFact({
     output_vat_cents: signed(output, sign),
     deductible_input_vat_cents: 0,
     non_deductible_input_vat_cents: 0,
-    classification_status: selection.classificationStatus,
+    classification_status: 'confirmed',
   }
 }
 
@@ -172,7 +164,7 @@ export function purchaseTaxFact({
     output_vat_cents: signed(output, sign),
     deductible_input_vat_cents: signed(deductible, sign),
     non_deductible_input_vat_cents: signed(tax - deductible, sign),
-    classification_status: selection.classificationStatus,
+    classification_status: 'confirmed',
   }
 }
 
@@ -189,92 +181,4 @@ export function reverseTaxFacts(facts) {
     non_deductible_input_vat_cents: -fact.non_deductible_input_vat_cents,
     classification_status: 'confirmed',
   }))
-}
-
-export async function confirmTaxFactClassification(
-  executor, tenantId, factId, body, actorUserId,
-) {
-  const fact = await fetchReviewableTaxFact(executor, tenantId, factId)
-  if (!fact) return { error: { status: 404, body: { error: 'Not found' } } }
-  const direction = body.direction ?? fact.direction
-  const jurisdiction = String(body.tax_jurisdiction_code ?? fact.tax_jurisdiction_code).toLowerCase()
-  const rate = Number(body.rate ?? fact.rate)
-  const categoryCode = String(body.category_code ?? '')
-  const resolved = resolveTaxCategory({
-    countryCode: jurisdiction,
-    categoryCode,
-    taxPoint: isoDate(fact.tax_point),
-    rate,
-    direction,
-  })
-  if (!resolved) {
-    return {
-      error: {
-        status: 400,
-        body: { error: 'Invalid tax category classification', code: 'invalid_tax_category' },
-      },
-    }
-  }
-  const taxableBaseCents = Number(body.taxable_base_cents ?? fact.taxable_base_cents)
-  const taxAmountCents = Number(body.tax_amount_cents ?? fact.tax_amount_cents)
-  if (!Number.isInteger(taxableBaseCents) || !Number.isInteger(taxAmountCents)) {
-    return { error: { status: 400, body: { error: 'Invalid tax amounts', code: 'invalid_tax_amounts' } } }
-  }
-  if (fact.classification_status !== 'unclassified'
-    && (taxableBaseCents !== Number(fact.taxable_base_cents)
-      || taxAmountCents !== Number(fact.tax_amount_cents))) {
-    return {
-      error: {
-        status: 409,
-        body: {
-          error: 'Posted tax amounts need a correcting journal',
-          code: 'tax_fact_correction_required',
-        },
-      },
-    }
-  }
-  const expectedTax = Math.round((taxableBaseCents * rate) / 100)
-  if (Math.abs(expectedTax - taxAmountCents) > 1) {
-    return {
-      error: {
-        status: 409,
-        body: { error: 'VAT amount needs a correcting journal', code: 'tax_fact_correction_required' },
-      },
-    }
-  }
-  const outputVat = Number(fact.output_vat_cents)
-  const expectedOutput = direction === 'sale' || direction === 'adjustment'
-    ? (['standard', 'reduced'].includes(resolved.treatment) ? taxAmountCents : 0)
-    : (resolved.selfAssessed ? taxAmountCents : 0)
-  if (outputVat !== expectedOutput) {
-    return {
-      error: {
-        status: 409,
-        body: { error: 'Output VAT needs a correcting journal', code: 'tax_fact_correction_required' },
-      },
-    }
-  }
-  if (direction === 'purchase'
-    && Number(fact.deductible_input_vat_cents) > Math.abs(taxAmountCents)) {
-    return {
-      error: {
-        status: 409,
-        body: { error: 'Input VAT needs a correcting journal', code: 'tax_fact_correction_required' },
-      },
-    }
-  }
-  const updated = await confirmLegacyTaxFact(executor, tenantId, factId, {
-    tax_jurisdiction_code: jurisdiction,
-    category_code: categoryCode,
-    category_version: resolved.version,
-    treatment: resolved.treatment,
-    recovery_percent: Number(fact.recovery_percent),
-    direction,
-    rate,
-    taxable_base_cents: taxableBaseCents,
-    tax_amount_cents: taxAmountCents,
-  }, actorUserId)
-  return updated
-    ? { taxFact: updated }
-    : { error: { status: 404, body: { error: 'Not found' } } }
 }

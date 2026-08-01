@@ -908,7 +908,7 @@ export interface VatTaxFact {
   tax_amount_cents: number
   output_vat_cents: number
   deductible_input_vat_cents: number
-  classification_status: 'confirmed' | 'legacy_inferred' | 'unclassified'
+  classification_status: 'confirmed'
   inclusion_kind?: 'period' | 'amendment' | 'legacy_assigned'
 }
 

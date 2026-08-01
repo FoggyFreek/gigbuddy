@@ -64,25 +64,3 @@ export const archiveTenant = (id: Id) => api<Tenant>(`/${id}/archive`, { method:
 export const unarchiveTenant = (id: Id) => api<Tenant>(`/${id}/unarchive`, { method: 'POST' })
 export const deleteTenant = (id: Id, confirmationSlug: string) =>
   api<void>(`/${id}`, { method: 'DELETE', body: JSON.stringify({ confirmationSlug }) })
-
-export interface VatTaxFactBackfillLog {
-  level: 'info' | 'success' | 'warning'
-  message: string
-}
-
-export interface VatTaxFactBackfillResult {
-  mode: 'preview' | 'apply'
-  tenant_id: Id
-  transactions_found: number
-  inserted: number
-  assigned_to_submitted_returns: number
-  remaining: number
-  logs_truncated: boolean
-  logs: VatTaxFactBackfillLog[]
-}
-
-export const previewVatTaxFactBackfill = (id: Id) =>
-  api<VatTaxFactBackfillResult>(`/${id}/vat-tax-facts/backfill`)
-
-export const applyVatTaxFactBackfill = (id: Id) =>
-  api<VatTaxFactBackfillResult>(`/${id}/vat-tax-facts/backfill`, { method: 'POST' })

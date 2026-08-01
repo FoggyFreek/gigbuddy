@@ -16,7 +16,6 @@
     "server:debug": "nodemon --inspect-brk server/index.js",
     "migrate": "node server/db/migrate.js",
     "migrate:integration-secrets": "node server/scripts/migrateIntegrationSecrets.js",
-    "vat-facts:backfill": "node server/scripts/backfillVatTaxFacts.js",
     "test": "vitest --exclude src/tests/server",
     "test:server": "vitest run --no-file-parallelism src/tests/server",
     "test:ui": "vitest --ui",
