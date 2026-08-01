@@ -38,6 +38,8 @@ export default function JournalApproveErrorDialog({ errors, journals, onClose }:
     accounting_not_configured: t($ => $.approveErrors.codes.accounting_not_configured),
     no_lines: t($ => $.approveErrors.codes.no_lines),
     already_approved: t($ => $.approveErrors.codes.already_approved),
+    vat_control_account_protected: t($ => $.approveErrors.codes.vat_control_account_protected),
+    vat_control_reconciliation_failed: t($ => $.approveErrors.codes.vat_control_reconciliation_failed),
   }
 
   const reasonFor = (err: ApproveError): string => {

@@ -23,6 +23,7 @@ import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { getLedgerEntry, voidLedgerEntry, reverseLedgerEntry } from '../api/ledger.ts'
 import { createJournal } from '../api/journal.ts'
+import { getAccountingSettings } from '../api/accounts.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
@@ -31,6 +32,7 @@ import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.ts
 import LedgerNoteSection from '../components/ledger/LedgerNoteSection.tsx'
 import ReclassifyDialog from '../components/ledger/ReclassifyDialog.tsx'
 import type { LedgerLine, Id } from '../types/entities.ts'
+import { vatControlAccountCodes } from '../../shared/vatControlAccounts.js'
 
 const decimalEur = new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -56,6 +58,7 @@ interface LedgerEntry {
   note_updated_by_name?: string | null
   lines?: LedgerLine[]
   origin?: { path?: string; label?: string } | null
+  source_type?: string
 }
 
 export default function LedgerEntryDetailPage() {
@@ -71,6 +74,8 @@ export default function LedgerEntryDetailPage() {
   const [reclassifyOpen, setReclassifyOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [protectedAccountCodes, setProtectedAccountCodes] = useState<Set<string>>(() => new Set())
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -81,6 +86,20 @@ export default function LedgerEntryDetailPage() {
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
     return () => { cancelled = true }
   }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    getAccountingSettings()
+      .then((settings) => {
+        if (cancelled) return
+        setProtectedAccountCodes(vatControlAccountCodes(settings))
+        setSettingsLoaded(true)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setActionError(e instanceof Error ? e.message : String(e))
+      })
+    return () => { cancelled = true }
+  }, [])
 
   async function confirmVoid() {
     if (!entry?.id) return
@@ -157,12 +176,16 @@ export default function LedgerEntryDetailPage() {
   const isVoidedOriginal = entry.voided_by_transaction_id != null
   const isReversedOriginal = entry.reversed_by_transaction_id != null
   const isCorrection = entry.corrects_transaction_id != null
-  const actionable = !isVoidedOriginal && !isReversedOriginal && !isCorrection
+  const vatSettlementManaged = entry.source_type === 'vat_settlement'
+  const actionable = !isVoidedOriginal && !isReversedOriginal && !isCorrection && !vatSettlementManaged
+  const hasProtectedLine = (entry.lines ?? []).some((line) => protectedAccountCodes.has(line.account_code ?? ''))
+  const canCopy = settingsLoaded && !hasProtectedLine && !vatSettlementManaged
   // Reclassification moves one line to another account; a corrected/voided
   // entry or a correction can't start one, and neither can a line already
   // linked to a reclassification journal.
   const canReclassify = canManageFinance && actionable && !entry.voided
-    && (entry.lines ?? []).some((l) => !l.reclassification)
+    && settingsLoaded
+    && (entry.lines ?? []).some((line) => !line.reclassification && !protectedAccountCodes.has(line.account_code ?? ''))
   let correctionNotice: { text: string; linkId?: Id } | null = null
   if (isVoidedOriginal) {
     correctionNotice = { text: t($ => $.detail.notice.voided), linkId: entry.voided_by_transaction_id ?? undefined }
@@ -187,7 +210,7 @@ export default function LedgerEntryDetailPage() {
   )
   const actionButtons = (
     <>
-      <Button variant="outlined" onClick={copyToJournal} disabled={busy}>
+      <Button variant="outlined" onClick={copyToJournal} disabled={busy || !canCopy}>
         {t($ => $.actions.copy, { ns: 'common' })}
       </Button>
       {canReclassify && (

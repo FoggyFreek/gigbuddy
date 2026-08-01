@@ -53,12 +53,6 @@ jobs:
             VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
             VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
             VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
-            RUSTFS_ACCESS_KEY=${{ secrets.RUSTFS_ACCESS_KEY }}
-            RUSTFS_SECRET_KEY=${{ secrets.RUSTFS_SECRET_KEY }}
-            RUSTFS_BUCKET=${{ secrets.RUSTFS_BUCKET }}
-            RUSTFS_PORT=${{ secrets.RUSTFS_PORT }}
-            RUSTFS_USE_SSL=${{ secrets.RUSTFS_USE_SSL }}
-            RUSTFS_PRIVATE_BUCKET=${{ secrets.RUSTFS_PRIVATE_BUCKET }}
             S3_ENDPOINT=${{ secrets.S3_ENDPOINT }}
             S3_CONTAINER_ENDPOINT=${{ secrets.S3_ENDPOINT }}
             S3_PORT=443
@@ -90,10 +84,14 @@ jobs:
             # best-effort — Docker log discovery may miss a container that
             # exits within its refresh window.)
             docker compose --profile observability up -d alloy
-            docker compose up -d postgres rustfs rustfs_init
+            docker compose up -d postgres
             docker compose run --rm migrate
             docker compose up -d app
-            docker compose run --rm app node server/scripts/checkPrivateStorage.js
+            docker compose run --rm app node server/scripts/checkStorageConnection.js
+            # Retire containers left by pre-cutover deployments only after the
+            # live S3 store passes its read/write/delete probe. The named RustFS
+            # data volume is intentionally retained for manual recovery.
+            docker compose rm --stop --force rustfs rustfs_init rustfs_perms
             docker compose run --rm app node server/scripts/migrateIntegrationSecrets.js --check
             docker compose run --rm app node server/scripts/migrateIntegrationSecrets.js --apply
             docker compose run --rm app node server/scripts/migrateIntegrationSecrets.js --check

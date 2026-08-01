@@ -623,7 +623,12 @@ export interface AccountingSettings {
   cash_account_code?: string
   output_vat_account_code?: string
   input_vat_account_code?: string
+  vat_receivable_settlement_account_code?: string
+  vat_payable_settlement_account_code?: string
+  vat_rounding_account_code?: string
+  merch_inventory_account_code?: string
   merch_revenue_account_code?: string
+  merch_cogs_account_code?: string
   books_closed_through?: string
 }
 
@@ -908,7 +913,7 @@ export interface VatTaxFact {
   tax_amount_cents: number
   output_vat_cents: number
   deductible_input_vat_cents: number
-  classification_status: 'confirmed' | 'legacy_inferred' | 'unclassified'
+  classification_status: 'confirmed'
   inclusion_kind?: 'period' | 'amendment' | 'legacy_assigned'
 }
 

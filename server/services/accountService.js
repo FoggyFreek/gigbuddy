@@ -31,6 +31,8 @@ import {
 } from '../repositories/accountRepository.js'
 import { loadAccountingProfile } from './accountingProfileService.js'
 import { bookkeepingCurrency } from '../../shared/accountingProfileCodes.js'
+import { findVatControlAccountConflict } from '../../shared/vatControlAccounts.js'
+import { accountBalance } from '../repositories/ledgerRepository.js'
 
 const NOT_FOUND = notFound('not_found')
 
@@ -117,6 +119,13 @@ async function buildSettingsUpdates(db, tenantId, body) {
 }
 
 async function findOpenBalanceConflict(client, tenantId, updates, current) {
+  for (const field of ['input_vat_account_code', 'output_vat_account_code']) {
+    if (!(field in updates) || updates[field] === (current[field] ?? null)) continue
+    const currentCode = current[field]
+    if (currentCode && await accountBalance(client, tenantId, currentCode) !== 0) {
+      return { field, reason: 'the current VAT control account has a non-zero balance' }
+    }
+  }
   for (const field of GUARDED_SETTINGS_FIELDS) {
     if (!(field in updates)) continue
     if (updates[field] === (current[field] ?? null)) continue
@@ -142,6 +151,22 @@ export async function patchSettings(tenantId, body = {}) {
     await acquireAccountingSettingsLock(client, tenantId)
     const profile = await loadAccountingProfile(client, tenantId)
     const current = (await getSettingsRow(client, tenantId)) || {}
+
+    const roleConflict = findVatControlAccountConflict({ ...current, ...updates })
+    if (roleConflict) {
+      abortTransaction({
+        error: {
+          status: 400,
+          body: {
+            error: 'A VAT control account cannot be assigned to another accounting role',
+            code: 'vat_control_account_conflict',
+            field: roleConflict.field,
+            conflicting_field: roleConflict.conflictingField,
+            account_code: roleConflict.accountCode,
+          },
+        },
+      })
+    }
 
     const conflict = await findOpenBalanceConflict(client, tenantId, updates, current)
     if (conflict) {

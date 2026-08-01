@@ -116,8 +116,6 @@ export default function VatReturnDetailPage() {
 
   function exceptionLabel(key: string) {
     switch (key) {
-      case 'unconfirmed_tax_categories':
-        return t($ => $.workpaper.exceptionLabels.unconfirmedTaxCategories)
       case 'unmapped_tax_amounts':
         return t($ => $.workpaper.exceptionLabels.unmappedTaxAmounts)
       case 'ledger_reconciliation_difference':

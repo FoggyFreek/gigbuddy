@@ -230,7 +230,8 @@
     "booksClosedThrough": "Boeken gesloten tot en met",
     "booksClosedThroughHelper": "Op of vóór deze datum kan niets worden geboekt. Laat leeg om de boeken open te houden.",
     "errors": {
-      "account_has_open_balance": "Deze rekening heeft nog een openstaand saldo (onbetaalde rekeningen, niet-vereffende ledenschulden of onbetaalde facturen). Vereffen deze voordat je de rekening wijzigt.",
+      "account_has_open_balance": "Deze rekening heeft nog een openstaand saldo (onbetaalde rekeningen, niet-vereffende ledenschulden, onbetaalde facturen of een niet-vereffend btw-saldo). Vereffen dit voordat je de rekening wijzigt.",
+      "vat_control_account_conflict": "Een rekening voor voorbelasting of af te dragen btw kan niet ook aan een andere boekhoudrol zijn toegewezen.",
       "invalid_books_closed_through": "Voer een geldige datum (JJJJ-MM-DD) in of maak het veld leeg.",
       "unknown": "Onbekende fout"
     }

@@ -15,9 +15,10 @@ import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import AccountAutocomplete from '../journal/AccountAutocomplete.tsx'
 import { reclassifyLedgerEntry } from '../../api/ledger.ts'
-import { listAccounts } from '../../api/accounts.ts'
+import { getAccountingSettings, listAccounts } from '../../api/accounts.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import type { Account, Id, Journal, LedgerLine } from '../../types/entities.ts'
+import { vatControlAccountCodes } from '../../../shared/vatControlAccounts.js'
 
 interface ReclassifyDialogProps {
   entryId: Id
@@ -33,9 +34,13 @@ interface ReclassifyDialogProps {
 export default function ReclassifyDialog({ entryId, lines, onClose, onCreated }: Readonly<ReclassifyDialogProps>) {
   const { t } = useTranslation(['ledger', 'common'])
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [protectedCodes, setProtectedCodes] = useState<Set<string>>(() => new Set())
   // Lines already tied to a reclassification can't start another one; a later
   // correction must start from the destination line in the posted journal.
-  const eligibleLines = useMemo(() => lines.filter((l) => !l.reclassification), [lines])
+  const eligibleLines = useMemo(
+    () => lines.filter((line) => !line.reclassification && !protectedCodes.has(line.account_code ?? '')),
+    [lines, protectedCodes],
+  )
   const [sourceLineId, setSourceLineId] = useState<Id | ''>(eligibleLines.length === 1 ? eligibleLines[0].id ?? '' : '')
   const [destinationCode, setDestinationCode] = useState('')
   const [note, setNote] = useState('')
@@ -49,8 +54,13 @@ export default function ReclassifyDialog({ entryId, lines, onClose, onCreated }:
 
   useEffect(() => {
     let cancelled = false
-    listAccounts()
-      .then((all) => { if (!cancelled) setAccounts((all || []).filter((a) => a.is_active)) })
+    Promise.all([listAccounts(), getAccountingSettings()])
+      .then(([all, settings]) => {
+        if (cancelled) return
+        const vatCodes = vatControlAccountCodes(settings)
+        setProtectedCodes(vatCodes)
+        setAccounts((all || []).filter((account) => account.is_active && !vatCodes.has(account.code)))
+      })
       .catch(() => { if (!cancelled) setAccountsFailed(true) })
     return () => { cancelled = true }
   }, [accountsAttempt])
@@ -60,7 +70,10 @@ export default function ReclassifyDialog({ entryId, lines, onClose, onCreated }:
     setAccountsAttempt((n) => n + 1)
   }
 
-  const sourceLine = eligibleLines.find((l) => l.id === sourceLineId) ?? null
+  const effectiveSourceLineId = eligibleLines.some((line) => line.id === sourceLineId)
+    ? sourceLineId
+    : (eligibleLines.length === 1 ? eligibleLines[0].id ?? '' : '')
+  const sourceLine = eligibleLines.find((line) => line.id === effectiveSourceLineId) ?? null
   // The destination is any other active account — the source account itself is
   // not offered (the server rejects it too).
   const destinationOptions = useMemo(
@@ -129,7 +142,7 @@ export default function ReclassifyDialog({ entryId, lines, onClose, onCreated }:
             <Select
               labelId="reclassify-source-label"
               label={t($ => $.detail.reclassifyDialog.sourceLine)}
-              value={sourceLineId}
+              value={effectiveSourceLineId}
               disabled={busy}
               onChange={(e) => setSourceLineId(e.target.value as Id | '')}
             >

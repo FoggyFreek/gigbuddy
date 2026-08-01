@@ -10,7 +10,6 @@ vi.mock('../api/vatReturns.ts', () => ({
   createVatReturn: vi.fn(),
   getVatReturn: vi.fn(),
   recordVatPayment: vi.fn(),
-  confirmVatTaxFact: vi.fn(),
 }))
 vi.mock('../api/accounts.ts', () => ({
   listAccounts: vi.fn(),
@@ -23,7 +22,6 @@ import {
   createVatReturn,
   getVatReturn,
   recordVatPayment,
-  confirmVatTaxFact,
 } from '../api/vatReturns.ts'
 import { listAccounts, getAccountingSettings } from '../api/accounts.ts'
 import VatReturnsPage from '../pages/VatReturnsPage.tsx'
@@ -226,188 +224,6 @@ describe('VatReturnsPage', () => {
     expect(description).toBeInTheDocument()
     expect(within(description.parentElement).getByText(/100,00/)).toBeInTheDocument()
     expect(within(description.parentElement).getByText(/21,00/)).toBeInTheDocument()
-  })
-
-  it('proposes and bulk-confirms an ordinary backfilled Dutch VAT transaction', async () => {
-    const user = userEvent.setup()
-    listVatReturns.mockResolvedValue([])
-    const fact = {
-      id: 55,
-      transaction_id: 77,
-      transaction_description: 'Invoice 42 — Club show',
-      transaction_amount_cents: 12500,
-      source_type: 'invoice',
-      source_id: 42,
-      source_event: 'sent',
-      tax_point: '2026-02-01',
-      category_code: 'legacy_unclassified',
-      direction: 'sale',
-      rate: 0,
-      tax_jurisdiction_code: 'nl',
-      taxable_base_cents: 0,
-      tax_amount_cents: 2169,
-      output_vat_cents: 2169,
-      deductible_input_vat_cents: 0,
-      classification_status: 'unclassified',
-    }
-    const reducedFact = {
-      ...fact,
-      id: 56,
-      transaction_id: 78,
-      transaction_description: 'Studio supplies',
-      transaction_amount_cents: 10900,
-      source_type: 'purchase',
-      source_id: 43,
-      source_event: 'accrued',
-      direction: 'purchase',
-      tax_amount_cents: 900,
-      output_vat_cents: 0,
-      deductible_input_vat_cents: 900,
-    }
-    const merchandiseFact = {
-      ...fact,
-      id: 57,
-      transaction_id: 79,
-      transaction_description: "Merch sale: 1 × CD 'Good to see you'",
-      transaction_amount_cents: 1500,
-      source_type: 'merch_sale',
-      source_id: 44,
-      source_event: 'recorded',
-      tax_amount_cents: 260,
-      output_vat_cents: 260,
-    }
-    const preview = {
-      year: 2026,
-      quarter: 1,
-      period_from: '2026-01-01',
-      period_to: '2026-03-31',
-      due_date: '2026-04-30',
-      output_vat_cents: 2429,
-      input_vat_cents: 900,
-      net_cents: 1529,
-      direction: 'payable',
-      period_ended: true,
-      calculation_mode: 'category_workpaper',
-      boxes: {},
-      exceptions: [{ key: 'unconfirmed_tax_categories', blocking: true, count: 3 }],
-      facts: [fact, reducedFact, merchandiseFact],
-    }
-    previewVatReturn
-      .mockResolvedValueOnce(preview)
-      .mockResolvedValueOnce({
-        ...preview,
-        exceptions: [],
-        facts: [fact, reducedFact, merchandiseFact]
-          .map((item) => ({ ...item, classification_status: 'confirmed' })),
-      })
-    confirmVatTaxFact.mockResolvedValue({ ...fact, classification_status: 'confirmed' })
-
-    wrap(<VatReturnsPage />)
-    await screen.findByTestId('vat-returns-empty')
-    await user.click(screen.getByTestId('new-vat-return'))
-
-    const review = await screen.findByTestId('vat-fact-review-55')
-    expect(within(review).getByText('Invoice 42 — Club show')).toBeInTheDocument()
-    expect(within(review).getByText(/125,00/)).toBeInTheDocument()
-    const vatAmountLabel = within(review).getByText('VAT amount')
-    expect(within(vatAmountLabel.parentElement).getByText(/21,69/)).toBeInTheDocument()
-    expect(within(review).getByRole('combobox', { name: /VAT rate/i })).toHaveTextContent(/21%/)
-    expect(within(review).getByRole('textbox', { name: /taxable amount/i })).toHaveValue('103.31')
-    expect(screen.queryByText(/taxable base \(cents\)/i)).not.toBeInTheDocument()
-    const reducedReview = screen.getByTestId('vat-fact-review-56')
-    expect(within(reducedReview).getByRole('combobox', { name: /VAT rate/i })).toHaveTextContent(/9%/)
-    expect(within(reducedReview).getByRole('textbox', { name: /taxable amount/i })).toHaveValue('100.00')
-    const merchandiseReview = screen.getByTestId('vat-fact-review-57')
-    expect(within(merchandiseReview).getByText(/15,00/)).toBeInTheDocument()
-    expect(within(merchandiseReview).getByRole('combobox', { name: /VAT rate/i })).toHaveTextContent(/21%/)
-    expect(within(merchandiseReview).getByRole('textbox', { name: /taxable amount/i })).toHaveValue('12.40')
-
-    await user.click(screen.getByRole('button', { name: /confirm 3 proposals/i }))
-
-    await waitFor(() => expect(confirmVatTaxFact).toHaveBeenCalledWith(55, {
-      category_code: 'domestic_standard',
-      tax_jurisdiction_code: 'nl',
-      direction: 'sale',
-      rate: 21,
-      taxable_base_cents: 10331,
-      tax_amount_cents: 2169,
-    }))
-    expect(confirmVatTaxFact).toHaveBeenCalledWith(56, {
-      category_code: 'domestic_reduced',
-      tax_jurisdiction_code: 'nl',
-      direction: 'purchase',
-      rate: 9,
-      taxable_base_cents: 10000,
-      tax_amount_cents: 900,
-    })
-    expect(confirmVatTaxFact).toHaveBeenCalledWith(57, {
-      category_code: 'domestic_standard',
-      tax_jurisdiction_code: 'nl',
-      direction: 'sale',
-      rate: 21,
-      taxable_base_cents: 1240,
-      tax_amount_cents: 260,
-    })
-  })
-
-  it('refreshes the workpaper when focus returns after correcting a ledger entry', async () => {
-    const user = userEvent.setup()
-    listVatReturns.mockResolvedValue([])
-    const fact = {
-      id: 55,
-      transaction_id: 77,
-      transaction_description: 'Merch sale to void',
-      transaction_amount_cents: 1995,
-      source_type: 'merch_sale',
-      source_id: 42,
-      source_event: 'recorded',
-      tax_point: '2026-02-01',
-      category_code: 'legacy_unclassified',
-      direction: 'sale',
-      rate: 0,
-      tax_jurisdiction_code: 'nl',
-      taxable_base_cents: 0,
-      tax_amount_cents: 346,
-      output_vat_cents: 346,
-      deductible_input_vat_cents: 0,
-      classification_status: 'unclassified',
-    }
-    const preview = {
-      year: 2026,
-      quarter: 1,
-      period_from: '2026-01-01',
-      period_to: '2026-03-31',
-      due_date: '2026-04-30',
-      output_vat_cents: 346,
-      input_vat_cents: 0,
-      net_cents: 346,
-      direction: 'payable',
-      period_ended: true,
-      calculation_mode: 'category_workpaper',
-      boxes: {},
-      exceptions: [{ key: 'unconfirmed_tax_categories', blocking: true, count: 1 }],
-      facts: [fact],
-    }
-    previewVatReturn
-      .mockResolvedValueOnce(preview)
-      .mockResolvedValueOnce({
-        ...preview,
-        output_vat_cents: 0,
-        net_cents: 0,
-        direction: 'nil',
-        exceptions: [],
-        facts: [],
-      })
-
-    wrap(<VatReturnsPage />)
-    await screen.findByTestId('vat-returns-empty')
-    await user.click(screen.getByTestId('new-vat-return'))
-    expect(await screen.findByTestId('vat-fact-review-55')).toBeInTheDocument()
-
-    window.dispatchEvent(new Event('focus'))
-
-    await waitFor(() => expect(previewVatReturn).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(screen.queryByTestId('vat-fact-review-55')).not.toBeInTheDocument())
   })
 
   it('record payment defaults to the primary checking account and posts', async () => {

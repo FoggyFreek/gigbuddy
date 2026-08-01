@@ -46,11 +46,6 @@ function asUserB(req) {
     .set('x-test-tenant-id', String(seed.tenantB.id))
 }
 
-function asSuper(req) {
-  return req.set('x-test-user-id', String(seed.superUser.id))
-    .set('x-test-tenant-id', String(seed.tenantA.id))
-}
-
 async function createSentInvoice(line = {}) {
   const created = await asUserA(request(app).post('/api/invoices')).send({
     customer_name: 'VAT customer',
@@ -422,102 +417,9 @@ describe('VAT transaction-category posting', () => {
       vi.useRealTimers()
     }
   })
-
-  it('does not allow a stale workpaper to confirm a tax fact after its entry is voided', async () => {
-    const { rows: [transaction] } = await pool.query(
-      `INSERT INTO ledger_transactions (
-         tenant_id, entry_date, description, source_type, source_id, source_event
-       ) VALUES ($1, '2026-02-20', 'Legacy sale to void', 'legacy_test', 346, 'posted')
-       RETURNING id`,
-      [seed.tenantA.id],
-    )
-    await pool.query(
-      `INSERT INTO ledger_entries (
-         tenant_id, transaction_id, account_code, debit_cents, credit_cents
-       ) VALUES
-         ($1, $2, '11000', 1995, 0),
-         ($1, $2, '41000', 0, 1649),
-         ($1, $2, '24000', 0, 346)`,
-      [seed.tenantA.id, transaction.id],
-    )
-    await asSuper(
-      request(app).post(`/api/admin/tenants/${seed.tenantA.id}/vat-tax-facts/backfill`),
-    ).expect(200)
-    const [fact] = await factsFor(transaction.id)
-
-    await asUserA(request(app).post(`/api/ledger/${transaction.id}/void`)).expect(200)
-
-    await asUserA(
-      request(app).post(`/api/vat-returns/tax-facts/${fact.id}/confirm`),
-    ).send({
-      category_code: 'domestic_standard',
-      tax_jurisdiction_code: 'nl',
-      direction: 'sale',
-      rate: 21,
-      taxable_base_cents: 1649,
-      tax_amount_cents: 346,
-    }).expect(404)
-
-    const [unchanged] = await factsFor(transaction.id)
-    expect(unchanged.classification_status).toBe('unclassified')
-  })
 })
 
 describe('VAT workpaper workflow and isolation', () => {
-  it('confirms a €125 inventory purchase with €21.69 VAT and a €103.31 taxable amount', async () => {
-    const { rows: [transaction] } = await pool.query(
-      `INSERT INTO ledger_transactions (
-         tenant_id, entry_date, description, source_type, source_id, source_event
-       ) VALUES ($1, '2026-02-20', 'Inventory merchandise', 'legacy_test', 125, 'accrued')
-       RETURNING id`,
-      [seed.tenantA.id],
-    )
-    await pool.query(
-      `INSERT INTO ledger_entries (
-         tenant_id, transaction_id, account_code, debit_cents, credit_cents
-       ) VALUES
-         ($1, $2, '12200', 10331, 0),
-         ($1, $2, '15000', 2169, 0),
-         ($1, $2, '21100', 0, 12500)`,
-      [seed.tenantA.id, transaction.id],
-    )
-
-    await asSuper(
-      request(app).post(`/api/admin/tenants/${seed.tenantA.id}/vat-tax-facts/backfill`),
-    ).expect(200)
-    const preview = await asUserA(
-      request(app).get('/api/vat-returns/preview?year=2026&quarter=1'),
-    ).expect(200)
-    expect(preview.body.facts).toEqual([
-      expect.objectContaining({
-        transaction_id: transaction.id,
-        transaction_amount_cents: 12500,
-        tax_amount_cents: 2169,
-        taxable_base_cents: 0,
-        classification_status: 'unclassified',
-      }),
-    ])
-
-    const fact = preview.body.facts[0]
-    const confirmed = await asUserA(
-      request(app).post(`/api/vat-returns/tax-facts/${fact.id}/confirm`),
-    ).send({
-      category_code: 'domestic_standard',
-      tax_jurisdiction_code: 'nl',
-      direction: 'purchase',
-      rate: 21,
-      taxable_base_cents: 10331,
-      tax_amount_cents: 2169,
-    }).expect(200)
-    expect(confirmed.body).toMatchObject({
-      category_code: 'domestic_standard',
-      taxable_base_cents: 10331,
-      deductible_input_vat_cents: 2169,
-      classification_status: 'confirmed',
-    })
-    expect(Number(confirmed.body.rate)).toBe(21)
-  })
-
   it('freezes a prepared return, submits it, and returns cross-tenant 404s', async () => {
     await createSentInvoice()
     const prepared = await asUserA(request(app).post('/api/vat-returns')).send({
@@ -550,15 +452,10 @@ describe('VAT workpaper workflow and isolation', () => {
       }),
     ]))
 
-    const factId = prepared.body.facts[0].id
     await asUserB(request(app).get(`/api/vat-returns/${prepared.body.id}`)).expect(404)
     await asUserB(request(app).post(`/api/vat-returns/${prepared.body.id}/submit`))
       .send({ submission_reference: 'B-should-not-see-this' })
       .expect(404)
-    await asUserB(request(app).post(`/api/vat-returns/tax-facts/${factId}/confirm`))
-      .send({ category_code: 'domestic_standard' })
-      .expect(404)
-
     const submitted = await asUserA(
       request(app).post(`/api/vat-returns/${prepared.body.id}/submit`),
     ).send({ submission_reference: 'NL-2026-Q1-test' }).expect(200)
@@ -610,48 +507,6 @@ describe('VAT workpaper workflow and isolation', () => {
     expect(prepared.body.code).toBe('vat_ledger_reconciliation_required')
   })
 
-  it('requires a correcting journal instead of letting a posted base be rewritten', async () => {
-    const journal = await asUserA(request(app).post('/api/journal')).send({
-      entry_date: '2026-02-20',
-      lines: [{
-        account_code: '41000',
-        vat_rate: 0,
-        side: 'credit',
-        amount_cents: 10000,
-        balancing_account_code: '11000',
-        position: 0,
-        tax_category_code: 'outside_scope',
-      }],
-    }).expect(201)
-    await asUserA(request(app).post(`/api/journal/${journal.body.id}/approve`)).expect(200)
-    const transaction = await transactionFor('journal', journal.body.id, 'posted')
-    const [fact] = await factsFor(transaction.id)
-    await pool.query(
-      `UPDATE ledger_tax_facts
-          SET classification_status = 'legacy_inferred'
-        WHERE id = $1 AND tenant_id = $2`,
-      [fact.id, seed.tenantA.id],
-    )
-
-    const response = await asUserA(
-      request(app).post(`/api/vat-returns/tax-facts/${fact.id}/confirm`),
-    ).send({
-      category_code: 'outside_scope',
-      tax_jurisdiction_code: 'nl',
-      rate: 0,
-      taxable_base_cents: 999999,
-      tax_amount_cents: 0,
-    }).expect(409)
-    expect(response.body.code).toBe('tax_fact_correction_required')
-    const { rows: [unchanged] } = await pool.query(
-      'SELECT taxable_base_cents, classification_status FROM ledger_tax_facts WHERE id = $1',
-      [fact.id],
-    )
-    expect(unchanged).toMatchObject({
-      taxable_base_cents: 10000,
-      classification_status: 'legacy_inferred',
-    })
-  })
 })
 
 describe('VAT category boundary validation', () => {

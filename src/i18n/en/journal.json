@@ -76,7 +76,9 @@
       "invalid_balancing_account": "A balancing account is inactive.",
       "accounting_not_configured": "Required accounting accounts are not configured (check Settings).",
       "no_lines": "The entry has no lines.",
-      "already_approved": "The entry was already approved."
+      "already_approved": "The entry was already approved.",
+      "vat_control_account_protected": "Input and output VAT accounts are posted automatically. Choose an ordinary account and a VAT treatment.",
+      "vat_control_reconciliation_failed": "The VAT account movement does not match the entry's VAT classification."
     }
   }
 }

@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { Buffer } from 'node:buffer'
-import process from 'node:process'
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest'
 import express from 'express'
 import supertest from 'supertest'
@@ -348,15 +347,26 @@ describe('rate limiting', () => {
     // The limiters capture NODE_ENV at module load (`isTest` makes them skip every
     // request), so the route tree has to be imported fresh in production mode. That
     // import is the expensive part of these tests — do it once, in a hook.
+    // server/utils/storage.js validates its S3 config at module load and hard-fails
+    // when NODE_ENV=production, so the import needs a complete S3_* config stubbed
+    // in (CI runs the frontend suite without any storage credentials).
     beforeAll(async () => {
-      const oldEnv = process.env.NODE_ENV
-      process.env.NODE_ENV = 'production'
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('S3_ENDPOINT', 's3.example.test')
+      vi.stubEnv('S3_PORT', '443')
+      vi.stubEnv('S3_USE_SSL', 'true')
+      vi.stubEnv('S3_REGION', 'eu-central-003')
+      vi.stubEnv('S3_ACCESS_KEY', 'test-access-key')
+      vi.stubEnv('S3_SECRET_KEY', 'test-secret-key')
+      vi.stubEnv('S3_BUCKET', 'test-bucket')
       vi.resetModules()
-      const { default: routes } = await import('../../server/routes/index.js')
-      process.env.NODE_ENV = oldEnv
-
-      app = express()
-      app.use('/api', routes)
+      try {
+        const { default: routes } = await import('../../server/routes/index.js')
+        app = express()
+        app.use('/api', routes)
+      } finally {
+        vi.unstubAllEnvs()
+      }
     })
 
     // draft-8 appends one RateLimit-Policy entry per limiter that ran, so a single

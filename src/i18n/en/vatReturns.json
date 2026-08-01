@@ -38,7 +38,6 @@
     "prepareWorkpaper": "Prepare workpaper",
     "submitReturn": "Mark as submitted",
     "acknowledge": "Acknowledge",
-    "confirmCategory": "Confirm category",
     "settleQuarter": "Settle quarter",
     "viewLedgerEntry": "View settlement ledger entry",
     "returnActions": "actions for {{period}}"
@@ -79,25 +78,13 @@
     "submissionHelp": "Enter the confirmation or reference from the tax authority.",
     "exceptionsTitle": "Review items",
     "exceptionLabels": {
-      "unconfirmedTaxCategories": "Unconfirmed VAT categories",
       "unmappedTaxAmounts": "Unmapped VAT amounts",
       "ledgerReconciliationDifference": "Ledger reconciliation difference",
       "priorPeriodAmendments": "Prior-period amendments"
     },
     "acknowledgementNote": "Review note",
     "amendment": "Prior-period amendment",
-    "schema": "Schema {{version}}",
-    "reviewCategories": "Review inferred transaction categories",
-    "reviewIntro": "We proposed ordinary Dutch rates where the transaction total and VAT amount match. Check the proposals and review exceptions individually.",
-    "rate": "VAT rate",
-    "chooseRate": "Choose VAT rate",
-    "taxableAmount": "Taxable amount",
-    "transactionAmount": "Transaction total",
-    "vatAmount": "VAT amount",
-    "transactionFallback": "Ledger transaction",
-    "openLedgerEntry": "Open ledger entry",
-    "confirmProposals_one": "Confirm {{count}} proposal",
-    "confirmProposals_other": "Confirm {{count}} proposals"
+    "schema": "Schema {{version}}"
   },
   "newDialog": {
     "title": "New VAT declaration",

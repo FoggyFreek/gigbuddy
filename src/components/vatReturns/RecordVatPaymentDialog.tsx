@@ -16,6 +16,7 @@ import { listAccounts, getAccountingSettings } from '../../api/accounts.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { quarterKey, outstandingCents } from '../../utils/vatReturns.ts'
 import type { VatReturn, Account } from '../../types/entities.ts'
+import { vatControlAccountCodes } from '../../../shared/vatControlAccounts.js'
 
 interface PaymentBody {
   amount_cents: number
@@ -50,7 +51,8 @@ export default function RecordVatPaymentDialog({ vatReturn, onSubmit, onClose }:
     Promise.all([listAccounts(), getAccountingSettings()])
       .then(([accs, settings]) => {
         if (!active) return
-        const assets = accs.filter((a) => a.type === 'asset' && a.is_active)
+        const protectedCodes = vatControlAccountCodes(settings)
+        const assets = accs.filter((a) => a.type === 'asset' && a.is_active && !protectedCodes.has(a.code))
         setAccounts(assets)
         const preferred = settings?.primary_checking_account_code
         if (preferred && assets.some((a) => a.code === preferred)) setBankCode(preferred)

@@ -11,10 +11,6 @@ import {
   setArchived,
   deleteTenant,
 } from '../services/tenantService.js'
-import {
-  applyVatTaxFactBackfill,
-  previewVatTaxFactBackfill,
-} from '../services/vatTaxFactBackfillService.js'
 import { auditLog } from '../utils/auditLog.js'
 import { requireParam, sendError } from './routeHelpers.js'
 
@@ -29,22 +25,6 @@ router.get('/:id', async (req, res) => {
   const result = await getTenant(pool, tenantId)
   if (result.error) return sendError(res, result.error)
   res.json(result.tenant)
-})
-
-router.get('/:id/vat-tax-facts/backfill', async (req, res) => {
-  const tenantId = requireParam(req, res, 'id'); if (tenantId === null) return
-  const result = await previewVatTaxFactBackfill(pool, tenantId)
-  if (result.error) return sendError(res, result.error)
-  auditLog(req, result.audit.action, result.audit.details)
-  res.json(result.backfill)
-})
-
-router.post('/:id/vat-tax-facts/backfill', async (req, res) => {
-  const tenantId = requireParam(req, res, 'id'); if (tenantId === null) return
-  const result = await applyVatTaxFactBackfill(pool, tenantId)
-  if (result.error) return sendError(res, result.error)
-  auditLog(req, result.audit.action, result.audit.details)
-  res.json(result.backfill)
 })
 
 router.post('/', async (req, res) => {

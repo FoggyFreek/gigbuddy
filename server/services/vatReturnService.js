@@ -15,6 +15,7 @@ import {
   assertPeriodOpen,
   AccountingNotConfiguredError,
 } from './ledgerService.js'
+import { isVatControlAccount } from '../../shared/vatControlAccounts.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { vatAccountBalances } from '../repositories/ledgerRepository.js'
 import {
@@ -202,15 +203,6 @@ function describeBoxRows(boxes, countryCode, schemaVersion) {
 
 function workpaperExceptions(facts, unmapped, reconciliation) {
   const exceptions = []
-  const reviewFacts = facts.filter((fact) => fact.classification_status !== 'confirmed')
-  if (reviewFacts.length) {
-    exceptions.push({
-      key: 'unconfirmed_tax_categories',
-      blocking: true,
-      count: reviewFacts.length,
-      tax_fact_ids: reviewFacts.map((fact) => fact.id),
-    })
-  }
   const unmappedAmounts = unmapped.filter((fact) =>
     Number(fact.output_vat_cents) !== 0 || Number(fact.deductible_input_vat_cents) !== 0)
   if (unmappedAmounts.length) {
@@ -312,17 +304,6 @@ export async function prepareNlVatReturn(
     const { preview } = await previewNlVatReturn(client, tenantId, { year, quarter, profile, range })
     if (!preview.facts.length) {
       abortTransaction({ error: { status: 400, body: { error: 'No VAT facts in this period', code: 'nothing_to_settle' } } })
-    }
-    if (preview.facts.some((fact) => fact.classification_status !== 'confirmed')) {
-      abortTransaction({
-        error: {
-          status: 409,
-          body: {
-            error: 'Review inferred VAT categories before preparing the return',
-            code: 'vat_categories_require_review',
-          },
-        },
-      })
     }
     if (preview.reconciliation.output_difference_cents !== 0
       || preview.reconciliation.input_difference_cents !== 0) {
@@ -622,6 +603,19 @@ export async function recordVatPayment(pool, tenantId, vatReturnId, payment, act
     }
 
     const bankCode = payment.bank_account_code ?? requireCode(settings, 'primary_checking_account_code')
+    if (isVatControlAccount(settings, bankCode)) {
+      abortTransaction({
+        error: {
+          status: 400,
+          body: {
+            error: 'VAT control accounts cannot be used as bank accounts',
+            code: 'vat_control_account_protected',
+            account_code: bankCode,
+            field: 'bank_account_code',
+          },
+        },
+      })
+    }
     if (await getAccountType(client, tenantId, bankCode) !== 'asset') {
       abortTransaction({ error: { status: 400, body: { error: 'Bank account must be an asset account', code: 'invalid_bank_account' } } })
     }

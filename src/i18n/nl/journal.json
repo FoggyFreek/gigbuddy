@@ -76,7 +76,9 @@
       "invalid_balancing_account": "Een tegenrekening is inactief.",
       "accounting_not_configured": "Vereiste grootboekrekeningen zijn niet geconfigureerd (controleer Instellingen).",
       "no_lines": "De boeking heeft geen regels.",
-      "already_approved": "De boeking is al goedgekeurd."
+      "already_approved": "De boeking is al goedgekeurd.",
+      "vat_control_account_protected": "Rekeningen voor voorbelasting en af te dragen btw worden automatisch geboekt. Kies een gewone rekening en een btw-behandeling.",
+      "vat_control_reconciliation_failed": "De mutatie op de btw-rekening komt niet overeen met de btw-classificatie van de boeking."
     }
   }
 }

@@ -13,7 +13,6 @@ import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import {
-  confirmVatTaxFact,
   previewVatReturn,
   createVatReturn,
 } from '../../api/vatReturns.ts'
@@ -21,8 +20,7 @@ import { formatEur } from '../../utils/invoiceTotals.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
 import { previousQuarter, quarterKey } from '../../utils/vatReturns.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
-import type { VatQuarter, VatReturn, VatReturnPreview, VatTaxFact } from '../../types/entities.ts'
-import VatTaxFactReviewList, { type VatFactClassification } from './VatTaxFactReviewList.tsx'
+import type { VatQuarter, VatReturn, VatReturnPreview } from '../../types/entities.ts'
 import VatBoxesTable from './VatBoxesTable.tsx'
 
 const QUARTERS = [1, 2, 3, 4] as const
@@ -48,7 +46,6 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
   const [lastPreview, setLastPreview] = useState<VatReturnPreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [refresh, setRefresh] = useState(0)
 
   // Reset the error during render when the period changes (React's
   // adjust-state-on-prop-change pattern); the stale preview needs no reset —
@@ -65,28 +62,17 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
       .then((p) => active && setLastPreview(p))
       .catch((e: Error) => active && setError(e.message))
     return () => { active = false }
-  }, [year, quarter, refresh])
-
-  useEffect(() => {
-    const refreshAfterExternalCorrection = () => {
-      setLastPreview(null)
-      setError(null)
-      setRefresh((value) => value + 1)
-    }
-    window.addEventListener('focus', refreshAfterExternalCorrection)
-    return () => window.removeEventListener('focus', refreshAfterExternalCorrection)
-  }, [])
+  }, [year, quarter])
 
   const preview: VatReturnPreview | null =
     lastPreview?.year === year && lastPreview?.quarter === quarter ? lastPreview : null
 
   const isWorkpaper = preview?.calculation_mode === 'category_workpaper'
-  const reviewFacts = preview?.facts?.filter((fact) => fact.classification_status !== 'confirmed') ?? []
   const nothingToSettle = isWorkpaper
     ? preview?.facts?.length === 0
     : preview?.output_vat_cents === 0 && preview?.input_vat_cents === 0
   const canFile = Boolean(preview) && preview!.period_ended
-    && !nothingToSettle && reviewFacts.length === 0 && !busy
+    && !nothingToSettle && !busy
   const direction = preview?.direction ?? 'nil'
   const periodLabel = t($ => $.quarters[quarterKey(quarter)], { year })
   const locale = i18n.resolvedLanguage
@@ -104,40 +90,6 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
       onClose()
     } catch (e) {
       setError((e as Error).message)
-      setBusy(false)
-    }
-  }
-
-  async function confirmFact(fact: VatTaxFact, classification: VatFactClassification) {
-    await confirmVatTaxFact(fact.id, {
-      ...classification,
-      direction: fact.direction,
-      tax_amount_cents: fact.tax_amount_cents,
-    })
-  }
-
-  async function handleConfirmFact(fact: VatTaxFact, classification: VatFactClassification) {
-    try {
-      setBusy(true)
-      setError(null)
-      await confirmFact(fact, classification)
-      setRefresh((value) => value + 1)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function handleConfirmAll(items: { fact: VatTaxFact; classification: VatFactClassification }[]) {
-    try {
-      setBusy(true)
-      setError(null)
-      for (const item of items) await confirmFact(item.fact, item.classification)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setRefresh((value) => value + 1)
       setBusy(false)
     }
   }
@@ -211,15 +163,6 @@ export default function NewVatReturnDialog({ onFiled, onClose }: Readonly<NewVat
               <Alert severity={preview.exceptions?.some((item) => item.blocking) ? 'warning' : 'info'} sx={{ mb: 1 }}>
                 {t($ => $.workpaper.exceptionsFound, { count: preview.exceptions?.length ?? 0 })}
               </Alert>
-            )}
-
-            {reviewFacts.length > 0 && (
-              <VatTaxFactReviewList
-                facts={reviewFacts}
-                busy={busy}
-                onConfirm={handleConfirmFact}
-                onConfirmAll={handleConfirmAll}
-              />
             )}
 
             {preview.warning_code && (

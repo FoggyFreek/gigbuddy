@@ -481,6 +481,55 @@ describe('accounts/settings — CRUD', () => {
     expect(res.body.input_vat_account_code).toBe('15000')
   })
 
+  it('rejects assigning a configured VAT control account to another accounting role', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ primary_checking_account_code: '15000' })
+      .expect(400)
+    expect(res.body).toMatchObject({
+      code: 'vat_control_account_conflict',
+      field: 'input_vat_account_code',
+      conflicting_field: 'primary_checking_account_code',
+      account_code: '15000',
+    })
+  })
+
+  it('enforces VAT control account distinctness at the database boundary', async () => {
+    await expect(pool.query(
+      `UPDATE tenant_accounting_settings SET primary_checking_account_code = input_vat_account_code
+        WHERE tenant_id = $1`,
+      [seed.tenantA.id],
+    )).rejects.toMatchObject({ constraint: 'tenant_accounting_settings_input_vat_distinct' })
+  })
+
+  it('requires the old VAT control account to have a zero balance before reassignment', async () => {
+    await pool.query(
+      `INSERT INTO ledger_transactions (tenant_id, entry_date, description, source_type, source_id, source_event)
+       VALUES ($1, '2026-06-01', 'test', 'test', 1, 'posted')`,
+      [seed.tenantA.id],
+    )
+    const { rows: [txn] } = await pool.query(
+      `SELECT id FROM ledger_transactions WHERE tenant_id = $1 AND source_type = 'test'`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO ledger_entries (tenant_id, transaction_id, account_code, debit_cents, credit_cents)
+       VALUES ($1, $2, '15000', 100, 0), ($1, $2, '39000', 0, 100)`,
+      [seed.tenantA.id, txn.id],
+    )
+
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ input_vat_account_code: '13000' })
+      .expect(409)
+    expect(res.body).toMatchObject({ code: 'account_has_open_balance', field: 'input_vat_account_code' })
+  })
+
+  it('allows VAT control account reassignment when the old balance is zero', async () => {
+    const res = await asUserA(request(app).patch('/api/accounts/settings'))
+      .send({ input_vat_account_code: '13000' })
+      .expect(200)
+    expect(res.body.input_vat_account_code).toBe('13000')
+  })
+
   it('PATCH /api/accounts/settings updates the reimbursement account to a liability', async () => {
     const res = await asUserA(request(app).patch('/api/accounts/settings'))
       .send({ default_reimbursement_account_code: '21100' })

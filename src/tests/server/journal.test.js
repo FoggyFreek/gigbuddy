@@ -157,6 +157,17 @@ describe('draft normalization', () => {
     expect(r.body.code).toBe('unknown_account_code')
   })
 
+  it.each([
+    ['line account', { account_code: '15000', balancing_account_code: '11000' }],
+    ['balancing account', { account_code: '62100', balancing_account_code: '24000' }],
+  ])('rejects a configured VAT control account as the %s', async (_name, accounts) => {
+    const draft = await createDraft()
+    const r = await asUserA(request(app).patch(`/api/journal/${draft.id}`)).send({
+      lines: [{ ...accounts, vat_rate: 0, side: 'debit', amount_cents: 100, position: 0 }],
+    }).expect(400)
+    expect(r.body.code).toBe('vat_control_account_protected')
+  })
+
   it('allows an inactive-but-existing account on a draft', async () => {
     await pool.query(
       `UPDATE chart_of_accounts SET is_active = false WHERE tenant_id = $1 AND code = '62200'`,

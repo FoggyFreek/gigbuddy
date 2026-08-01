@@ -20,6 +20,10 @@ vi.mock('../api/accounts.ts', () => ({
     { id: 2, code: '64200', name: 'Hired Musicians & Contractors', type: 'expense', is_active: true },
     { id: 3, code: '65000', name: 'Old account', type: 'expense', is_active: false },
   ]),
+  getAccountingSettings: vi.fn(async () => ({
+    input_vat_account_code: '120501009',
+    output_vat_account_code: '24000',
+  })),
 }))
 vi.mock('../hooks/usePermissions.ts', () => ({
   usePermissions: vi.fn(() => ({ canManageFinance: true })),
@@ -230,6 +234,10 @@ describe('LedgerEntryDetailPage', () => {
 
   it('copy action creates a draft journal from the lines and navigates to the journal page', async () => {
     createJournal.mockResolvedValue({ id: 12 })
+    getLedgerEntry.mockResolvedValue({
+      ...DETAIL,
+      lines: [DETAIL.lines[0], DETAIL.lines[2]],
+    })
     wrap()
     await waitFor(() => expect(screen.getByRole('button', { name: /copy/i })).toBeInTheDocument())
 
@@ -239,10 +247,16 @@ describe('LedgerEntryDetailPage', () => {
     expect(body.description).toBe(DETAIL.description)
     expect(body.lines).toEqual([
       { description: 'TEST', account_code: '421', vat_rate: 0, side: 'debit', amount_cents: 2066 },
-      { description: 'TEST', account_code: '120501009', vat_rate: 0, side: 'debit', amount_cents: 434 },
       { description: null, account_code: '120301', vat_rate: 0, side: 'credit', amount_cents: 2500 },
     ])
     await waitFor(() => expect(screen.getByText('journal-route')).toBeInTheDocument())
+  })
+
+  it('disables copying an entry that contains a configured VAT control account', async () => {
+    wrap()
+    const copy = await screen.findByRole('button', { name: /copy/i })
+    await waitFor(() => expect(copy).toBeDisabled())
+    expect(createJournal).not.toHaveBeenCalled()
   })
 
   it('back button navigates to the ledger list', async () => {
@@ -372,7 +386,8 @@ describe('LedgerEntryDetailPage — reclassify', () => {
 
     const options = await screen.findAllByRole('option')
     const labels = options.map((o) => o.textContent)
-    expect(labels.some((l) => l.includes('120501009'))).toBe(true)
+    expect(labels.some((l) => l.includes('120501009'))).toBe(false)
+    expect(labels.some((l) => l.includes('120301'))).toBe(true)
     expect(labels.some((l) => l.includes('421 ·'))).toBe(false)
   })
 

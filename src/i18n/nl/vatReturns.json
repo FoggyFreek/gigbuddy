@@ -38,7 +38,6 @@
     "prepareWorkpaper": "Werkdocument voorbereiden",
     "submitReturn": "Markeren als ingediend",
     "acknowledge": "Bevestigen",
-    "confirmCategory": "Categorie bevestigen",
     "settleQuarter": "Kwartaal afrekenen",
     "viewLedgerEntry": "Boeking van afrekening bekijken",
     "returnActions": "acties voor {{period}}"
@@ -79,25 +78,13 @@
     "submissionHelp": "Vul de bevestiging of het kenmerk van de Belastingdienst in.",
     "exceptionsTitle": "Controlepunten",
     "exceptionLabels": {
-      "unconfirmedTaxCategories": "Onbevestigde btw-categorieën",
       "unmappedTaxAmounts": "Niet-toegewezen btw-bedragen",
       "ledgerReconciliationDifference": "Verschil met btw-grootboekrekeningen",
       "priorPeriodAmendments": "Correcties uit eerdere tijdvakken"
     },
     "acknowledgementNote": "Beoordelingsnotitie",
     "amendment": "Suppletie uit eerdere periode",
-    "schema": "Schema {{version}}",
-    "reviewCategories": "Afgeleide transactiecategorieën controleren",
-    "reviewIntro": "We hebben een gangbaar Nederlands tarief voorgesteld als het transactietotaal en btw-bedrag overeenkomen. Controleer de voorstellen en beoordeel uitzonderingen apart.",
-    "rate": "Btw-tarief",
-    "chooseRate": "Kies btw-tarief",
-    "taxableAmount": "Belastbaar bedrag",
-    "transactionAmount": "Transactietotaal",
-    "vatAmount": "Btw-bedrag",
-    "transactionFallback": "Grootboekboeking",
-    "openLedgerEntry": "Grootboekboeking openen",
-    "confirmProposals_one": "{{count}} voorstel bevestigen",
-    "confirmProposals_other": "{{count}} voorstellen bevestigen"
+    "schema": "Schema {{version}}"
   },
   "newDialog": {
     "title": "Nieuwe btw-aangifte",
