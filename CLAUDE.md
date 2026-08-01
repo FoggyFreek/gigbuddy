@@ -26,7 +26,7 @@ The `test` slug sets `PGDATABASE=gigbuddy_test`. Do not run backend tests with t
 
 Start both before running locally: `docker start bosdat-postgres` (Postgres) and `docker start bosdat-v2-rustfs-1` (S3-compatible storage).
 
-The `app`/`migrate`/`rustfs_init` compose services are for container deploys; for local dev run the app on the host (below) against the Dockerized Postgres + RustFS. RustFS is S3-compatible (MinIO client). Outside Docker use `RUSTFS_ENDPOINT=localhost` and `S3_ENDPOINT=localhost`; the `app` container overrides them to `rustfs`. All tenant-scoped images and files use the generic `S3_*` bucket (a second RustFS bucket locally and private Backblaze B2 in production). The `RUSTFS_*` bucket remains the temporary source/fallback for migrating existing tenant objects.
+The `app`/`migrate` compose services are used for container deploys; `rustfs_init` only initializes local object storage. For local dev run the app on the host (below) against the Dockerized Postgres + RustFS. RustFS is S3-compatible (MinIO client). Outside Docker, `S3_*` may be left empty to use the `RUSTFS_*` local-development fallback at `localhost`; the `app` container uses `S3_CONTAINER_ENDPOINT=rustfs`. All images and files use this single S3-compatible bucket: RustFS locally and private Backblaze B2 in production.
 
 ## Commands
 
@@ -146,7 +146,7 @@ The financial core is an **immutable double-entry ledger** (`ledger_transactions
 
 ## Cross-cutting services
 
-- Storage: every valid `tenants/<id>/...` image/file uses configurable S3 (a second RustFS bucket locally, private Backblaze B2 in production); the original RustFS bucket is only the temporary migration source/fallback. MinIO clients live in `server/utils/storage.js`; routing, tenant keys, quotas, cleanup, missing-only transition fallback, and version-aware tenant purge live in `server/services/storageService.js`; resumable super-admin migration lives in `server/{routes,services,repositories,jobs}/storageMigration*`; encrypted integration credentials live in `server/security/integrationSecrets.js`.
+- Storage: every image/file uses one configurable S3-compatible bucket (RustFS locally, private Backblaze B2 in production). The MinIO client lives in `server/utils/storage.js`; tenant keys, quotas, cleanup, and version-aware tenant purge live in `server/services/storageService.js`; encrypted integration credentials live in `server/security/integrationSecrets.js`.
 - Notifications `server/services/notificationService.js`; web push `server/services/pushService.js` + `public/sw.js`.
 - Achievements: single registry `server/achievements/definitions.js`, facts SQL in `factsBuilder.js`, evaluated lazily on read (no scheduler). **Never rename a shipped achievement key** (persisted, doubles as i18n/icon key).
 - Metrics `server/metrics.js`; Grafana Alloy config `observability/config.alloy`.

@@ -35,7 +35,7 @@ import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
 import adminSubscriptionsRouter from './adminSubscriptions.js'
-import adminStorageMigrationsRouter from './adminStorageMigrations.js'
+import adminStorageRouter from './adminStorage.js'
 import billingRouter from './billing.js'
 import publicBillingMollieRouter from './publicBillingMollie.js'
 import sharePhotosRouter from './sharePhotos.js'
@@ -168,7 +168,7 @@ router.use('/admin/users', superAdmin, adminUsersRouter)
 router.use('/admin/plans', superAdmin, adminPlansRouter)
 router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
-router.use('/admin/storage-migrations', superAdmin, adminStorageMigrationsRouter)
+router.use('/admin/storage', superAdmin, adminStorageRouter)
 router.use('/invites', membersManage, invitesAdminRouter)
 router.use('/users', membersManage, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)

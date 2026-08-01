@@ -1,6 +1,6 @@
 import pool from '../db/index.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
-import * as storage from '../utils/storage.js'
+import { storageClient, BUCKET } from '../utils/storage.js'
 import { logger } from '../utils/logger.js'
 import {
   lockTenantStatistics,
@@ -28,31 +28,16 @@ export function tenantIdFromKey(key) {
 
 // List the tenant's prefix and sum object sizes + count. Source of truth.
 export function computeTenantStorage(tenantId) {
-  const stores = Object.prototype.hasOwnProperty.call(storage, 'STORES') ? storage.STORES : [{
-    id: 'public', client: storage.storageClient, bucket: storage.BUCKET,
-  }]
   const prefix = `tenants/${tenantId}/`
-  const listings = stores.map((store) => new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const objects = []
-    const stream = store.client.listObjects(store.bucket, prefix, true)
+    const stream = storageClient.listObjects(BUCKET, prefix, true)
     stream.on('data', (obj) => objects.push(obj))
     stream.on('error', reject)
-    stream.on('end', () => resolve({ store, objects }))
-  }))
-
-  return Promise.all(listings).then((results) => {
-    const logicalObjects = new Map()
-    for (const { store, objects } of results) {
-      objects.forEach((obj, index) => {
-        const key = obj.name || `${store.id}:${index}`
-        const existing = logicalObjects.get(key)
-        if (!existing || store.id === 'private') logicalObjects.set(key, obj)
-      })
-    }
-    return {
-      storageBytes: [...logicalObjects.values()].reduce((sum, obj) => sum + (obj.size || 0), 0),
-      objectCount: logicalObjects.size,
-    }
+    stream.on('end', () => resolve({
+      storageBytes: objects.reduce((sum, obj) => sum + (obj.size || 0), 0),
+      objectCount: objects.length,
+    }))
   })
 }
 

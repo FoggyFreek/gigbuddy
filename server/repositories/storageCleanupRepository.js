@@ -2,12 +2,12 @@
 // keys whose deletion must be retried until confirmed. Drained by the billing
 // reconciliation job.
 
-export async function enqueueCleanup(executor, tenantId, objectKey, releaseReservation, storeTarget = 'routed') {
+export async function enqueueCleanup(executor, tenantId, objectKey, releaseReservation) {
   await executor.query(
-    `INSERT INTO storage_cleanup_queue (tenant_id, object_key, release_reservation, store_target)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (object_key, store_target) DO NOTHING`,
-    [tenantId, objectKey, releaseReservation, storeTarget],
+    `INSERT INTO storage_cleanup_queue (tenant_id, object_key, release_reservation)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (object_key) DO NOTHING`,
+    [tenantId, objectKey, releaseReservation],
   )
 }
 

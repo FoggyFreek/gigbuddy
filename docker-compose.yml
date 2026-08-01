@@ -57,7 +57,6 @@ services:
     entrypoint: >
       /bin/sh -c "
         mc alias set local http://rustfs:9000 $${RUSTFS_ACCESS_KEY} $${RUSTFS_SECRET_KEY};
-        mc mb --ignore-existing local/$${RUSTFS_BUCKET};
         mc mb --ignore-existing local/$${RUSTFS_PRIVATE_BUCKET:-gigbuddy-tenant};
         exit 0
       "
@@ -70,12 +69,9 @@ services:
       - "127.0.0.1:3002:3002"
     env_file: .env
     environment:
-      RUSTFS_ENDPOINT: rustfs
       S3_ENDPOINT: ${S3_CONTAINER_ENDPOINT:-rustfs}
     depends_on:
       postgres:
-        condition: service_healthy
-      rustfs:
         condition: service_healthy
 
   migrate:

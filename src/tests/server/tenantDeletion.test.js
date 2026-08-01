@@ -56,7 +56,7 @@ describe('DELETE /api/admin/tenants/:id', () => {
     expect(deleteTenantObjects).not.toHaveBeenCalled()
   })
 
-  it('deletes RustFS data and cascades only the selected tenant database data', async () => {
+  it('deletes S3 data and cascades only the selected tenant database data', async () => {
     await pool.query('UPDATE tenants SET archived_at = NOW() WHERE id = $1', [seed.tenantA.id])
     const res = await asSuper(remove(seed.tenantA)).expect(204)
     expect(res.body).toEqual({})
@@ -90,7 +90,7 @@ describe('DELETE /api/admin/tenants/:id', () => {
     )
   })
 
-  it('keeps the archived tenant when RustFS cleanup fails so deletion can be retried', async () => {
+  it('keeps the archived tenant when S3 cleanup fails so deletion can be retried', async () => {
     await pool.query('UPDATE tenants SET archived_at = NOW() WHERE id = $1', [seed.tenantA.id])
     deleteTenantObjects.mockRejectedValueOnce(new Error('storage unavailable'))
     await asSuper(remove(seed.tenantA)).expect(502)

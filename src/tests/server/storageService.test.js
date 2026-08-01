@@ -11,6 +11,7 @@ vi.mock('../../../server/utils/storage.js', () => ({
     statObject: vi.fn(async () => ({ size: 0, metaData: {} })),
     removeObject: vi.fn(async () => undefined),
     listObjectsV2: vi.fn(() => Readable.from([])),
+    listObjects: vi.fn(() => Readable.from([])),
     removeObjects: vi.fn(async () => []),
   },
 }))
@@ -120,6 +121,29 @@ describe('deleteTenantObjects', () => {
       .mockReturnValueOnce(Readable.from([{ name: 'tenants/9/a' }]))
     storageClient.removeObjects.mockResolvedValueOnce([])
     await expect(deleteTenantObjects(9)).rejects.toThrow('prefix is not empty')
+  })
+
+  it('purges every version of exact legacy keys', async () => {
+    const { storageClient } = await import('../../../server/utils/storage.js')
+    const { deleteTenantObjects } = await import('../../../server/services/storageService.js')
+    let legacyVersionExists = true
+    storageClient.listObjectsV2.mockImplementation(() => Readable.from([]))
+    storageClient.listObjects.mockImplementation((_bucket, prefix) => Readable.from(
+      prefix === 'legacy/logo.png' && legacyVersionExists
+        ? [{ name: 'legacy/logo.png', versionId: 'v1' }]
+        : [],
+    ))
+    storageClient.removeObjects.mockImplementation(async (_bucket, entries) => {
+      if (entries.some((entry) => entry.versionId === 'v1')) legacyVersionExists = false
+      return []
+    })
+
+    await deleteTenantObjects(10, ['legacy/logo.png'])
+
+    expect(storageClient.removeObjects).toHaveBeenCalledWith(
+      'test-bucket',
+      [{ name: 'legacy/logo.png', versionId: 'v1' }],
+    )
   })
 })
 
