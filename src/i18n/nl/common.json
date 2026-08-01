@@ -32,6 +32,16 @@
   "confirmation": {
     "cannotUndo": "Dit kan niet ongedaan worden gemaakt."
   },
+  "audioPlayer": {
+    "player": "Audiospeler",
+    "playerFor": "Audiospeler voor {{name}}",
+    "progressControl": "Audiovoortgang",
+    "volumeControl": "Volumeregeling",
+    "play": "Afspelen",
+    "pause": "Pauzeren",
+    "volume": "Dempen",
+    "volumeMute": "Dempen opheffen"
+  },
   "readOnly": {
     "planning": "Je hebt alleen-lezen toegang. Je kunt deze informatie bekijken, maar niet bewerken."
   },

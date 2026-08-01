@@ -58,6 +58,15 @@ jobs:
             RUSTFS_BUCKET=${{ secrets.RUSTFS_BUCKET }}
             RUSTFS_PORT=${{ secrets.RUSTFS_PORT }}
             RUSTFS_USE_SSL=${{ secrets.RUSTFS_USE_SSL }}
+            RUSTFS_PRIVATE_BUCKET=gigbuddy-tenant
+            S3_ENDPOINT=${{ secrets.BACKBLAZE_ENDPOINT }}
+            S3_CONTAINER_ENDPOINT=${{ secrets.BACKBLAZE_ENDPOINT }}
+            S3_PORT=443
+            S3_USE_SSL=true
+            S3_REGION=${{ secrets.BACKBLAZE_REGION }}
+            S3_ACCESS_KEY=${{ secrets.BACKBLAZE_KEYID }}
+            S3_SECRET_KEY=${{ secrets.BACKBLAZE_APPKEY }}
+            S3_BUCKET=${{ secrets.BACKBLAZE_BUCKET }}
             INTEGRATION_SECRETS_KEYS=${{ secrets.INTEGRATION_SECRETS_KEYS }}
             INTEGRATION_SECRETS_ACTIVE_KEY_ID=${{ secrets.INTEGRATION_SECRETS_ACTIVE_KEY_ID }}
             NODE_ENV=production
@@ -84,6 +93,7 @@ jobs:
             docker compose up -d postgres rustfs rustfs_init
             docker compose run --rm migrate
             docker compose up -d app
+            docker compose run --rm app node server/scripts/checkPrivateStorage.js
             docker compose run --rm app node server/scripts/migrateIntegrationSecrets.js --check
             docker compose run --rm app node server/scripts/migrateIntegrationSecrets.js --apply
             docker compose run --rm app node server/scripts/migrateIntegrationSecrets.js --check

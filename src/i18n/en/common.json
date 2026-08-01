@@ -32,6 +32,16 @@
   "confirmation": {
     "cannotUndo": "This cannot be undone."
   },
+  "audioPlayer": {
+    "player": "Audio player",
+    "playerFor": "Audio player for {{name}}",
+    "progressControl": "Audio progress control",
+    "volumeControl": "Volume control",
+    "play": "Play",
+    "pause": "Pause",
+    "volume": "Mute",
+    "volumeMute": "Unmute"
+  },
   "readOnly": {
     "planning": "You have read-only access. You can view this information, but you can't edit it."
   },

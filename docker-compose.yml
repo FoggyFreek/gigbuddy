@@ -58,6 +58,7 @@ services:
       /bin/sh -c "
         mc alias set local http://rustfs:9000 $${RUSTFS_ACCESS_KEY} $${RUSTFS_SECRET_KEY};
         mc mb --ignore-existing local/$${RUSTFS_BUCKET};
+        mc mb --ignore-existing local/$${RUSTFS_PRIVATE_BUCKET:-gigbuddy-tenant};
         exit 0
       "
     restart: "no"
@@ -70,6 +71,7 @@ services:
     env_file: .env
     environment:
       RUSTFS_ENDPOINT: rustfs
+      S3_ENDPOINT: ${S3_CONTAINER_ENDPOINT:-rustfs}
     depends_on:
       postgres:
         condition: service_healthy

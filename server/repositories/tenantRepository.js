@@ -128,6 +128,7 @@ export async function updateTenantFields(executor, tenantId, fields, values) {
   const whereIdx = values.length + 1
   const { rows } = await executor.query(
     `UPDATE tenants SET ${assignments.join(', ')} WHERE id = $${whereIdx}
+       AND deletion_status IS NULL
      RETURNING ${tenantSafeProjection()}`,
     [...values, tenantId],
   )
@@ -187,7 +188,7 @@ export async function demoteAdminToContributor(executor, tenantId, userId) {
 export async function setTenantArchived(executor, tenantId, archived) {
   const { rows } = await executor.query(
     `UPDATE tenants SET archived_at = ${archived ? 'NOW()' : 'NULL'}, updated_at = NOW()
-      WHERE id = $1 RETURNING ${tenantSafeProjection()}`,
+      WHERE id = $1 AND deletion_status IS NULL RETURNING ${tenantSafeProjection()}`,
     [tenantId],
   )
   return rows[0] || null
@@ -195,7 +196,7 @@ export async function setTenantArchived(executor, tenantId, archived) {
 
 export async function fetchTenantForDeletion(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT id, slug, archived_at FROM tenants WHERE id = $1 FOR UPDATE',
+    'SELECT id, slug, archived_at, deletion_status FROM tenants WHERE id = $1 FOR UPDATE',
     [tenantId],
   )
   return rows[0] || null
@@ -231,4 +232,16 @@ export async function fetchTenantAssetKeys(executor, tenantId) {
 export async function deleteTenantRow(executor, tenantId) {
   const { rowCount } = await executor.query('DELETE FROM tenants WHERE id = $1', [tenantId])
   return rowCount > 0
+}
+
+export async function markTenantDeletionState(executor, tenantId, status, errorCode = null) {
+  await executor.query(
+    `UPDATE tenants
+        SET deletion_status = $2,
+            deletion_error_code = $3,
+            deletion_requested_at = CASE WHEN $2 = 'pending' THEN NOW() ELSE deletion_requested_at END,
+            updated_at = NOW()
+      WHERE id = $1`,
+    [tenantId, status, errorCode],
+  )
 }
