@@ -99,6 +99,19 @@ export class ReclassifiedLinesError extends Error {
   }
 }
 
+export class VatControlReconciliationError extends Error {
+  constructor({ outputFacts, outputLedger, inputFacts, inputLedger }) {
+    super('VAT control account movements do not reconcile to tax facts')
+    this.name = 'VatControlReconciliationError'
+    this.code = 'vat_control_reconciliation_failed'
+    this.status = 409
+    this.outputFacts = outputFacts
+    this.outputLedger = outputLedger
+    this.inputFacts = inputFacts
+    this.inputLedger = inputLedger
+  }
+}
+
 // Maps the ledger guard errors to a discriminated { error } result for the HTTP
 // layer, or null when the error is not a ledger guard and should propagate.
 export function ledgerErrorResult(err) {
@@ -110,6 +123,19 @@ export function ledgerErrorResult(err) {
   }
   if (err instanceof ReclassifiedLinesError) {
     return { error: { status: err.status, body: { error: err.message, code: err.code } } }
+  }
+  if (err instanceof VatControlReconciliationError) {
+    return {
+      error: {
+        status: err.status,
+        body: {
+          error: err.message,
+          code: err.code,
+          output_difference_cents: err.outputFacts - err.outputLedger,
+          input_difference_cents: err.inputFacts - err.inputLedger,
+        },
+      },
+    }
   }
   return null
 }
@@ -243,10 +269,11 @@ export async function postJournal(client, tenantId, {
     throw new Error(`ledger: journal ${label} is unbalanced (debit ${totalDebit} != credit ${totalCredit})`)
   }
 
-  if (taxFacts.length) {
-    const settings = await loadAccountingSettings(client, tenantId)
-    const outputCode = settings.output_vat_account_code
-    const inputCode = settings.input_vat_account_code
+  const settings = await loadAccountingSettings(client, tenantId)
+  const isVatSettlement = sourceType === 'vat_settlement' && sourceEvent === 'filed'
+  if (!isVatSettlement) {
+    const outputCode = settings?.output_vat_account_code
+    const inputCode = settings?.input_vat_account_code
     const outputLedger = normalized
       .filter((line) => line.account_code === outputCode)
       .reduce((sum, line) => sum + line.credit_cents - line.debit_cents, 0)
@@ -256,10 +283,7 @@ export async function postJournal(client, tenantId, {
     const outputFacts = taxFacts.reduce((sum, fact) => sum + Number(fact.output_vat_cents || 0), 0)
     const inputFacts = taxFacts.reduce((sum, fact) => sum + Number(fact.deductible_input_vat_cents || 0), 0)
     if (outputLedger !== outputFacts || inputLedger !== inputFacts) {
-      throw new Error(
-        `ledger: journal ${label} tax facts do not reconcile `
-        + `(output ${outputFacts}/${outputLedger}, input ${inputFacts}/${inputLedger})`,
-      )
+      throw new VatControlReconciliationError({ outputFacts, outputLedger, inputFacts, inputLedger })
     }
   }
 
@@ -495,6 +519,9 @@ export class TaxClassificationError extends Error {
 // Row-state guards shared by void and reverse: a correction can't itself be
 // corrected, nor a row already voided/reversed. Returns an error body or null.
 function correctionRowConflict(row) {
+  if (row.source_type === 'vat_settlement') {
+    return { status: 409, body: { error: 'VAT settlements must be corrected through the VAT return workflow', code: 'vat_settlement_managed' } }
+  }
   if (classify(row.source_type, row.source_event).voided || row.source_event === 'reversal') {
     return { status: 409, body: { error: 'A correction entry cannot be voided or reversed', code: 'void_of_void' } }
   }

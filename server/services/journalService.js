@@ -43,7 +43,8 @@ import { ledgerErrorResult, postUserJournal, firstOpenDate } from './ledgerServi
 import { classify } from './ledgerEntryTypes.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
-import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
+import { acquireAccountingSettingsLock, getSettings as getAccountingSettings } from '../repositories/accountRepository.js'
+import { isVatControlAccount } from '../../shared/vatControlAccounts.js'
 
 const NOT_FOUND = notFound('Not found')
 const APPROVED_LOCKED = { status: 409, body: { error: 'Approved journals cannot be edited', code: 'journal_approved' } }
@@ -68,6 +69,26 @@ async function validateDraftCodes(executor, tenantId, lines) {
   const bad = codes.find((c) => !existing.has(c))
   if (bad) {
     return { error: { status: 400, body: { error: 'Unknown account_code', code: 'unknown_account_code', account_code: bad } } }
+  }
+  const settings = await getAccountingSettings(executor, tenantId)
+  for (let index = 0; index < lines.length; index++) {
+    for (const field of ['account_code', 'balancing_account_code']) {
+      const code = lines[index][field]
+      if (isVatControlAccount(settings, code)) {
+        return {
+          error: {
+            status: 400,
+            body: {
+              error: 'VAT control accounts are posted automatically from the VAT treatment',
+              code: 'vat_control_account_protected',
+              account_code: code,
+              field,
+              line: index + 1,
+            },
+          },
+        }
+      }
+    }
   }
   return null
 }
@@ -99,11 +120,11 @@ export async function createJournal(pool, tenantId, body, actorUserId = null) {
   const taxError = validateJournalLineTaxFields(body.lines)
   if (taxError) return { error: { status: 400, body: taxError } }
   const lines = normalizeLines(body.lines)
-  const codeErr = await validateDraftCodes(pool, tenantId, lines)
-  if (codeErr) return codeErr
 
   return withTransaction(async (client) => {
     await acquireAccountingSettingsLock(client, tenantId)
+    const codeErr = await validateDraftCodes(client, tenantId, lines)
+    if (codeErr) abortTransaction(codeErr)
     const id = await createJournalRepo(client, tenantId, {
       entryDate, description: body.description?.trim() || null,
       createdByUserId: actorUserId, note: normalizeNote(body.note),
@@ -136,6 +157,11 @@ export async function updateJournal(pool, tenantId, id, body) {
   }
 
   return withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
+    if (lines !== null) {
+      const codeErr = await validateDraftCodes(client, tenantId, lines)
+      if (codeErr) abortTransaction(codeErr)
+    }
     await updateJournalHeader(client, tenantId, id, {
       entryDate,
       description: 'description' in body ? (body.description?.trim() || null) : existing.description,
@@ -173,6 +199,9 @@ export async function approveJournal(pool, tenantId, id, actorUserId = null) {
       abortTransaction({ error: { status: 400, body: { error: 'Journal has no lines', code: 'no_lines' } } })
     }
 
+    await acquireAccountingSettingsLock(client, tenantId)
+    const protectedErr = await validateDraftCodes(client, tenantId, lines)
+    if (protectedErr) abortTransaction(protectedErr)
     const codes = lines.flatMap((l) => [l.account_code, l.balancing_account_code]).filter(Boolean)
     const activeCodes = await fetchActiveAccountCodes(client, tenantId, codes)
     const bad = findUnpostableLine(lines, activeCodes)
@@ -242,6 +271,7 @@ function isReclassifiable(txn) {
     && txn.reversed_by_transaction_id == null
     && txn.source_event !== 'reversal'
     && txn.source_type !== 'ledger_transaction'
+    && txn.source_type !== 'vat_settlement'
 }
 
 // Moves one complete posted ledger line to another account: reverse the amount
@@ -271,10 +301,23 @@ export async function createReclassification(pool, tenantId, transactionId, body
       abortTransaction(conflict('Voided, reversed, and correction entries cannot be reclassified', { code: 'not_reclassifiable' }))
     }
 
+    await acquireAccountingSettingsLock(client, tenantId)
+    const settings = await getAccountingSettings(client, tenantId)
+
     const source = (await listLedgerLines(client, tenantId, transactionId))
       .find((l) => l.id === sourceLineId)
     if (!source) {
       abortTransaction(badRequest('Source line does not belong to this transaction', { code: 'invalid_source_line' }))
+    }
+    if (isVatControlAccount(settings, source.account_code)) {
+      abortTransaction(badRequest('VAT control account lines cannot be reclassified', {
+        code: 'vat_control_account_protected', account_code: source.account_code, field: 'source_line_id',
+      }))
+    }
+    if (isVatControlAccount(settings, destination)) {
+      abortTransaction(badRequest('VAT control accounts cannot be reclassification destinations', {
+        code: 'vat_control_account_protected', account_code: destination, field: 'destination_account_code',
+      }))
     }
     if (source.account_code === destination) {
       abortTransaction(badRequest('Destination equals the source account', { code: 'same_account' }))

@@ -434,6 +434,18 @@ describe('purchases — capitalizing fixed assets', () => {
     expect(res.status).toBe(400)
     expect(res.body.code).toBe('invalid_account_code')
   })
+
+  it('rejects the configured input VAT account even if it is marked capitalizable', async () => {
+    await pool.query(
+      `UPDATE chart_of_accounts SET is_capitalizable = true
+        WHERE tenant_id = $1 AND code = '15000'`,
+      [seed.tenantA.id],
+    )
+    const res = await asUserA(request(app).post('/api/purchases'))
+      .send(basePayload({ lines: [{ description: 'x', account_code: '15000', tax_rate: 21, amount_incl_cents: 1000 }] }))
+      .expect(400)
+    expect(res.body.code).toBe('vat_control_account_protected')
+  })
 })
 
 describe('purchases — attachments', () => {

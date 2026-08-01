@@ -31,7 +31,7 @@ export default function JournalPage() {
   }, [setWideContent, compact])
 
   const {
-    journals, accounts, accountingSettings, loading, error,
+    journals, accounts, postableAccounts, accountingSettings, loading, error,
     approvalErrors, clearApprovalErrors,
     selected, draftIds, liveForms,
     registerFlush, reportForm, reportSaveStatus, saveStatus,
@@ -150,7 +150,7 @@ export default function JournalPage() {
         <JournalEntryRow
           key={journal.id}
           journal={journal}
-          accounts={accounts}
+          accounts={postableAccounts}
           selected={selected.has(journal.id!)}
           onToggleSelect={toggleSelect}
           registerFlush={registerFlush as (id: Id, fn: (() => void) | null) => void}

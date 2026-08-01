@@ -512,6 +512,22 @@ describe('reclassification — POST /api/ledger/:id/reclassify', () => {
     expect(same.body.code).toBe('same_account')
   })
 
+  it('rejects configured VAT control accounts as reclassification source or destination', async () => {
+    const detail = await purchaseLedgerDetail()
+    const expense = lineByAccount(detail, '62100')
+    const inputVat = lineByAccount(detail, '15000')
+
+    const destination = await reclassify(detail.id, {
+      source_line_id: expense.id, destination_account_code: '15000',
+    }).expect(400)
+    expect(destination.body.code).toBe('vat_control_account_protected')
+
+    const source = await reclassify(detail.id, {
+      source_line_id: inputVat.id, destination_account_code: '64200',
+    }).expect(400)
+    expect(source.body.code).toBe('vat_control_account_protected')
+  })
+
   it('rejects a line that does not belong to the transaction, and missing params', async () => {
     const detail = await purchaseLedgerDetail()
     // A second transaction whose line id is valid but on another transaction.

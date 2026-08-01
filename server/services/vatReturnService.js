@@ -15,6 +15,7 @@ import {
   assertPeriodOpen,
   AccountingNotConfiguredError,
 } from './ledgerService.js'
+import { isVatControlAccount } from '../../shared/vatControlAccounts.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { vatAccountBalances } from '../repositories/ledgerRepository.js'
 import {
@@ -602,6 +603,19 @@ export async function recordVatPayment(pool, tenantId, vatReturnId, payment, act
     }
 
     const bankCode = payment.bank_account_code ?? requireCode(settings, 'primary_checking_account_code')
+    if (isVatControlAccount(settings, bankCode)) {
+      abortTransaction({
+        error: {
+          status: 400,
+          body: {
+            error: 'VAT control accounts cannot be used as bank accounts',
+            code: 'vat_control_account_protected',
+            account_code: bankCode,
+            field: 'bank_account_code',
+          },
+        },
+      })
+    }
     if (await getAccountType(client, tenantId, bankCode) !== 'asset') {
       abortTransaction({ error: { status: 400, body: { error: 'Bank account must be an asset account', code: 'invalid_bank_account' } } })
     }

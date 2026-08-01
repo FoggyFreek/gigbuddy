@@ -395,6 +395,22 @@ export async function vatAccountBalances(executor, tenantId, { asOf }) {
   return rows[0] || { output_cents: 0, input_cents: 0 }
 }
 
+// Complete running balance for one account, including future-dated postings.
+// Voided transaction pairs are excluded consistently with financial reports.
+export async function accountBalance(executor, tenantId, accountCode) {
+  const { rows } = await executor.query(
+    `SELECT COALESCE(SUM(le.debit_cents - le.credit_cents), 0)::int AS balance_cents
+       FROM ledger_entries le
+       JOIN ledger_transactions lt
+         ON lt.id = le.transaction_id AND lt.tenant_id = le.tenant_id
+      WHERE le.tenant_id = $1
+        AND le.account_code = $2
+        ${EXCLUDE_VOIDED_SQL}`,
+    [tenantId, accountCode],
+  )
+  return rows[0]?.balance_cents ?? 0
+}
+
 // Per-account debit/credit totals of entries inside [from, toExclusive),
 // joined to the chart of accounts. Accounts without activity are absent.
 export async function accountActivity(executor, tenantId, { from, toExclusive }) {

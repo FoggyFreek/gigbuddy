@@ -32,6 +32,7 @@ const ACCOUNTS = [
   { id: 7,  code: '61200', name: 'Equipment & Instr.',   type: 'expense',   is_active: true,  tenant_id: 1 },
   { id: 8,  code: '24000', name: 'VAT Payable',          type: 'liability', is_active: true,  tenant_id: 1 },
   { id: 9,  code: '15000', name: 'VAT Receivable',       type: 'asset',     is_active: true,  tenant_id: 1 },
+  { id: 11, code: '24100', name: 'Alternative VAT',      type: 'liability', is_active: true,  tenant_id: 1 },
 ]
 
 const SETTINGS = {
@@ -131,24 +132,35 @@ describe('AccountingSettingsSection — rendering', () => {
       )
     })
   })
+
+  it('does not offer configured VAT control accounts for operational roles', async () => {
+    const user = userEvent.setup()
+    wrap(<AccountingSettingsSection />)
+    await waitFor(() => screen.getByLabelText(/primary checking account/i))
+
+    await user.click(screen.getByRole('combobox', { name: /primary checking account/i }))
+    expect(await screen.findByRole('option', { name: /11000/ })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /15000/ })).not.toBeInTheDocument()
+  })
 })
 
 describe('AccountingSettingsSection — VAT accounts', () => {
   it('calls updateAccountingSettings when the output VAT account changes', async () => {
-    accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, output_vat_account_code: '21100' })
+    accountsApi.updateAccountingSettings.mockResolvedValue({ ...SETTINGS, output_vat_account_code: '24100' })
     const user = userEvent.setup()
     wrap(<AccountingSettingsSection />)
     await waitFor(() => screen.getByLabelText(/output vat/i))
 
     const vatSelect = screen.getByRole('combobox', { name: /output vat/i })
     await user.click(vatSelect)
-    // Output VAT filters to active liability accounts (21100, 24000)
-    await waitFor(() => screen.getByRole('option', { name: /21100/ }))
-    await user.click(screen.getByRole('option', { name: /21100/ }))
+    // Assigned operational liabilities are excluded; an unassigned liability remains available.
+    await waitFor(() => screen.getByRole('option', { name: /24100/ }))
+    expect(screen.queryByRole('option', { name: /21100/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('option', { name: /24100/ }))
 
     await waitFor(() => {
       expect(accountsApi.updateAccountingSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ output_vat_account_code: '21100' }),
+        expect.objectContaining({ output_vat_account_code: '24100' }),
       )
     })
   })

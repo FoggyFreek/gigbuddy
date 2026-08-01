@@ -355,6 +355,14 @@ describe('VAT returns — payments and refunds', () => {
     expect(p.body.bank_account_code).toBe('11000')
   })
 
+  it('rejects the configured input VAT account as a settlement bank account', async () => {
+    const ret = await filePayableReturn()
+    const res = await asUserA(request(app).post(`/api/vat-returns/${ret.id}/payments`))
+      .send({ amount_cents: 1000, paid_on: '2026-04-15', direction: 'payment', bank_account_code: '15000' })
+      .expect(400)
+    expect(res.body.code).toBe('vat_control_account_protected')
+  })
+
   it('refund on a receivable return: DR bank / CR 15010', async () => {
     await createBill()  // input 21000, no output → receivable 21000
     const ret = (await fileReturn().expect(201)).body

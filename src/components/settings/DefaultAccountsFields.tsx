@@ -10,6 +10,7 @@ import Stack from '@mui/material/Stack'
 import DateEntryField from '../DateEntryField.tsx'
 import { listAccounts, getAccountingSettings, updateAccountingSettings } from '../../api/accounts.ts'
 import type { Account, AccountingSettings } from '../../types/entities.ts'
+import { VAT_CONTROL_ACCOUNT_FIELDS, vatControlAccountCodes } from '../../../shared/vatControlAccounts.js'
 
 // Maps settings field → expected account type, for filtering Select options.
 // The `as const` keeps the keys a literal union so the i18n selector index
@@ -34,13 +35,16 @@ interface AccountSelectProps {
   label: string
   value?: string
   accounts?: Account[]
+  excludedCodes?: Set<string>
   onChange: (field: AccountField, value: string | null) => void
   saving?: boolean
 }
 
-function AccountSelect({ field, label, value, accounts = [], onChange, saving }: Readonly<AccountSelectProps>) {
+function AccountSelect({ field, label, value, accounts = [], excludedCodes = new Set(), onChange, saving }: Readonly<AccountSelectProps>) {
   const { t } = useTranslation('common')
-  const filtered = accounts.filter((a) => a.type === FIELD_TYPE[field] && a.is_active)
+  const filtered = accounts.filter((a) => (
+    a.type === FIELD_TYPE[field] && a.is_active && !excludedCodes.has(a.code ?? '')
+  ))
   const selectId = `accounting-${field}`
   return (
     <FormControl fullWidth size="small">
@@ -91,7 +95,7 @@ export default function DefaultAccountsFields() {
     } catch (err) {
       const e = err as { code?: string; message?: string }
       const code = e.code ?? e.message ?? ''
-      if (code === 'account_has_open_balance' || code === 'invalid_books_closed_through') {
+      if (code === 'account_has_open_balance' || code === 'invalid_books_closed_through' || code === 'vat_control_account_conflict') {
         setError(t($ => $.accounting.errors[code]))
       } else {
         setError(e.message ?? t($ => $.accounting.errors.unknown))
@@ -102,6 +106,20 @@ export default function DefaultAccountsFields() {
   }
 
   if (loading || !settings) return <CircularProgress size={20} />
+  const loadedSettings = settings
+
+  function excludedCodesFor(field: AccountField) {
+    if (VAT_CONTROL_ACCOUNT_FIELDS.includes(field)) {
+      return new Set(
+        Object.entries(loadedSettings)
+          .filter(([otherField, code]) => (
+            otherField !== field && otherField.endsWith('_account_code') && Boolean(code)
+          ))
+          .map(([, code]) => String(code)),
+      )
+    }
+    return vatControlAccountCodes(loadedSettings)
+  }
 
   return (
     <>
@@ -130,6 +148,7 @@ export default function DefaultAccountsFields() {
             label={t($ => $.accounting.fields[field])}
             value={(settings as Record<string, string | undefined>)[field]}
             accounts={accounts}
+            excludedCodes={excludedCodesFor(field)}
             onChange={handleChange}
             saving={saving}
           />

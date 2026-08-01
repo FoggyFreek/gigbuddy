@@ -20,6 +20,7 @@ vi.mock('../api/accounts.ts', () => ({
     { id: 2, code: '11000', name: 'Primary Bank Account', type: 'asset', is_active: true },
     { id: 3, code: '15000', name: 'VAT Receivable', type: 'asset', is_active: true },
     { id: 4, code: '41000', name: 'Gig fees', type: 'revenue', is_active: true },
+    { id: 5, code: '24000', name: 'VAT Payable', type: 'liability', is_active: true },
   ]),
   getAccountingSettings: vi.fn(async () => ({
     input_vat_account_code: '15000',
@@ -64,6 +65,20 @@ describe('JournalPage', () => {
     wrap(<JournalPage />)
     expect(await screen.findByText('1 ledger entry')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Gear')).toBeInTheDocument()
+  })
+
+  it('excludes configured VAT control accounts from journal account pickers', async () => {
+    const user = userEvent.setup()
+    journalApi.listJournals.mockResolvedValue([draft({
+      lines: [{ id: 1, description: '', account_code: '', vat_rate: 0, side: null, amount_cents: 0, balancing_account_code: '', position: 0 }],
+    })])
+    wrap(<JournalPage />)
+    await screen.findByText('1 ledger entry')
+
+    await user.click(screen.getByPlaceholderText('Account'))
+    expect(await screen.findByRole('option', { name: /62100/ })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /15000/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /24000/ })).not.toBeInTheDocument()
   })
 
   it('hides the editor on a compact screen and shows the entry count + desktop nudge', async () => {

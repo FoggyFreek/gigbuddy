@@ -18,6 +18,7 @@ import type { Purchase, PurchaseAttachment, PurchasePaymentCandidate, PurchasePa
 import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormHelpers.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 import type { PurchaseForm, PurchaseFormLine } from './purchaseFormHelpers.ts'
+import { vatControlAccountCodes } from '../../../shared/vatControlAccounts.js'
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -95,7 +96,6 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
   const [form, setForm] = useState<PurchaseForm | null>(null)
   const [purchase, setPurchase] = useState<Purchase | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
-  const [lineAccounts, setLineAccounts] = useState<Account[]>([])
   const [accountsLoaded, setAccountsLoaded] = useState(false)
   const [accountingSettings, setAccountingSettings] = useState<AccountingSettings | null>(null)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
@@ -140,20 +140,23 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
       .then((accts) => {
         if (cancelled) return
         setAccounts(accts || [])
-        setLineAccounts(
-          (accts || []).filter(
-            (a) => a.is_active && (
-              a.type === 'expense'
-              || a.type === 'cost_of_goods_sold'
-              || (a.type === 'asset' && a.is_capitalizable)
-            ),
-          ),
-        )
       })
       .catch(() => { /* best-effort; leave lineAccounts empty */ })
       .finally(() => { if (!cancelled) setAccountsLoaded(true) })
     return () => { cancelled = true }
   }, [])
+
+  const lineAccounts = useMemo(() => {
+    if (!settingsLoaded || !accountingSettings) return []
+    const protectedCodes = vatControlAccountCodes(accountingSettings)
+    return accounts.filter(
+      (account) => account.is_active && !protectedCodes.has(account.code) && (
+        account.type === 'expense'
+        || account.type === 'cost_of_goods_sold'
+        || (account.type === 'asset' && account.is_capitalizable)
+      ),
+    )
+  }, [accounts, accountingSettings, settingsLoaded])
 
   useEffect(() => {
     let cancelled = false

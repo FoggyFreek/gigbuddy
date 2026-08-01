@@ -42,6 +42,7 @@ import { getTransactionBySource } from '../repositories/ledgerRepository.js'
 import { buildPeriodWhere } from '../utils/periodQuery.js'
 import { loadAccountingBehavior } from './accountingProfileService.js'
 import { acquireAccountingSettingsLock } from '../repositories/accountRepository.js'
+import { isVatControlAccount } from '../../shared/vatControlAccounts.js'
 import {
   CONTENT_FIELDS_SET,
   FINALIZED_LOCKED_FIELDS_SET,
@@ -144,6 +145,21 @@ export async function createPurchaseAttachment({ db, tenantId, purchaseId, file,
 async function validateLineAccounts(executor, tenantId, lines) {
   const codes = lines.map((l) => l.account_code).filter(Boolean)
   if (!codes.length) return null
+  const settings = await loadAccountingSettings(executor, tenantId)
+  const protectedCode = codes.find((code) => isVatControlAccount(settings, code))
+  if (protectedCode) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          error: 'VAT control accounts are posted automatically from the VAT treatment',
+          code: 'vat_control_account_protected',
+          account_code: protectedCode,
+          field: 'account_code',
+        },
+      },
+    }
+  }
   const valid = await fetchValidPurchaseLineCodes(executor, tenantId, codes)
   const invalid = codes.find((c) => !valid.has(c))
   if (invalid) {

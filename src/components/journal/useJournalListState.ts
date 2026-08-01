@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   listJournals,
   createJournal,
@@ -10,12 +10,14 @@ import type { Journal, Account, AccountingSettings, Id } from '../../types/entit
 import type { SaveStatus } from '../../hooks/useDebouncedSave.ts'
 import { emptyLine } from './journalFormHelpers.ts'
 import type { JournalForm } from './journalFormHelpers.ts'
+import { vatControlAccountCodes } from '../../../shared/vatControlAccounts.js'
 
 type FlushFn = () => Promise<void>
 
 interface UseJournalListStateResult {
   journals: Journal[]
   accounts: Account[]
+  postableAccounts: Account[]
   accountingSettings: AccountingSettings | null
   loading: boolean
   error: string | null
@@ -44,6 +46,7 @@ export function useJournalListState(): UseJournalListStateResult {
   const [journals, setJournals] = useState<Journal[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountingSettings, setAccountingSettings] = useState<AccountingSettings | null>(null)
+  const [accountOptionsLoaded, setAccountOptionsLoaded] = useState(false)
   const [liveForms, setLiveForms] = useState<Map<Id, JournalForm>>(() => new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -123,16 +126,24 @@ export function useJournalListState(): UseJournalListStateResult {
 
   useEffect(() => {
     let cancelled = false
-    listAccounts()
-      .then((all) => { if (!cancelled) setAccounts((all || []).filter((a) => a.is_active)) })
-      .catch(() => { /* best-effort; leave accounts empty */ })
-    // Settings are only needed to route the VAT split in the effects preview;
-    // without them the preview keeps VAT on the line account.
-    getAccountingSettings()
-      .then((s) => { if (!cancelled) setAccountingSettings(s) })
-      .catch(() => { /* best-effort; leave settings null */ })
+    Promise.all([listAccounts(), getAccountingSettings()])
+      .then(([all, settings]) => {
+        if (cancelled) return
+        setAccounts((all || []).filter((a) => a.is_active))
+        setAccountingSettings(settings)
+        setAccountOptionsLoaded(true)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
     return () => { cancelled = true }
   }, [])
+
+  const postableAccounts = useMemo(() => {
+    if (!accountOptionsLoaded || !accountingSettings) return []
+    const protectedCodes = vatControlAccountCodes(accountingSettings)
+    return accounts.filter((account) => !protectedCodes.has(account.code))
+  }, [accountOptionsLoaded, accountingSettings, accounts])
 
   const draftIds = journals.filter((j) => j.status === 'draft').map((j) => j.id as Id)
 
@@ -192,7 +203,7 @@ export function useJournalListState(): UseJournalListStateResult {
   }, [selected, load])
 
   return {
-    journals, accounts, accountingSettings, loading, error,
+    journals, accounts, postableAccounts, accountingSettings, loading, error,
     approvalErrors, clearApprovalErrors,
     selected, draftIds, liveForms,
     registerFlush, reportForm, reportSaveStatus, saveStatus,

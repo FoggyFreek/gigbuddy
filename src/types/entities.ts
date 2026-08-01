@@ -623,7 +623,12 @@ export interface AccountingSettings {
   cash_account_code?: string
   output_vat_account_code?: string
   input_vat_account_code?: string
+  vat_receivable_settlement_account_code?: string
+  vat_payable_settlement_account_code?: string
+  vat_rounding_account_code?: string
+  merch_inventory_account_code?: string
   merch_revenue_account_code?: string
+  merch_cogs_account_code?: string
   books_closed_through?: string
 }
 
