@@ -16,7 +16,7 @@
     },
     "theme": {
       "title": "Theme",
-      "description": "Choose the surface style for this device. Your band's accent color still applies within each theme.",
+      "description": "Choose your favorite theme. Your band's accent color still applies within each theme.",
       "variants": {
         "default": { "label": "Default", "description": "Material 3 violet" },
         "warm": { "label": "Warm", "description": "Sand & earth tones" },

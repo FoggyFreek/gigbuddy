@@ -1197,9 +1197,9 @@ export async function postOpeningBalance(client, tenantId, { signedAmountCents, 
 export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const behavior = await loadAccountingBehavior(client, tenantId)
-  const cashAccount = requireCode(
-    settings,
-    sale.payment_method === 'cash' ? 'cash_account_code' : 'primary_checking_account_code',
+  const { receiptAccountCode = null, ...journalOpts } = opts
+  const cashAccount = receiptAccountCode || requireCode(
+    settings, sale.payment_method === 'cash' ? 'cash_account_code' : 'primary_checking_account_code',
   )
   // The sale snapshots the product's chosen revenue account; fall back to the
   // band default (incl. pre-snapshot sales whose code is null).
@@ -1251,7 +1251,7 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
     entryDate: toDateString(sale.sale_date),
     description: memo,
     sourceType: 'merch_sale', sourceId: sale.id, sourceEvent: 'recorded',
-    lines, taxFacts: taxFact ? [taxFact] : [], ...opts,
+    lines, taxFacts: taxFact ? [taxFact] : [], ...journalOpts,
   })
 }
 
@@ -1264,7 +1264,8 @@ export async function postMerchSaleRecorded(client, tenantId, sale, opts = {}) {
 export async function postShopifyRevenueLine(client, tenantId, line, opts = {}) {
   const settings = await loadAccountingSettings(client, tenantId)
   const behavior = await loadAccountingBehavior(client, tenantId)
-  const checking = requireCode(settings, 'primary_checking_account_code')
+  const { receiptAccountCode = null, ...journalOpts } = opts
+  const checking = receiptAccountCode || requireCode(settings, 'primary_checking_account_code')
   const totals = computePurchaseLineTotals({
     amount_incl_cents: line.amount_incl_cents, tax_rate: line.vat_rate,
   })
@@ -1299,7 +1300,181 @@ export async function postShopifyRevenueLine(client, tenantId, line, opts = {}) 
     entryDate: toDateString(line.entry_date),
     description: memo,
     sourceType: 'shopify_revenue_line', sourceId: line.id, sourceEvent: 'recorded',
-    lines, taxFacts: taxFact ? [taxFact] : [], ...opts,
+    lines, taxFacts: taxFact ? [taxFact] : [], ...journalOpts,
+  })
+}
+
+// Shopify Payments processing fee. `feeCents` is a signed cost: positive fees
+// reduce clearing; negative values are fee refunds and reverse the expense.
+export async function postShopifyPaymentFee(client, tenantId, tx, opts = {}) {
+  if (!tx.feeCents) return { posted: false, transactionId: null }
+  const settings = await loadAccountingSettings(client, tenantId)
+  const clearing = requireCode(settings, 'shopify_clearing_account_code')
+  const expense = requireCode(settings, 'shopify_fee_expense_account_code')
+  const amount = Math.abs(tx.feeCents)
+  const remoteId = String(tx.remoteId)
+  const displayId = remoteId.slice(remoteId.lastIndexOf('/') + 1)
+  const memo = `Shopify Payments fee (${displayId})`
+  const lines = tx.feeCents > 0
+    ? [
+      { account_code: expense, debit_cents: amount, memo },
+      { account_code: clearing, credit_cents: amount, memo },
+    ]
+    : [
+      { account_code: clearing, debit_cents: amount, memo },
+      { account_code: expense, credit_cents: amount, memo },
+    ]
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(tx.transactionDate),
+    description: memo,
+    sourceType: 'shopify_balance_transaction', sourceId: tx.id, sourceEvent: 'fee',
+    lines, ...opts,
+  })
+}
+
+// Revenue/VAT and optional inventory correction for a successful Shopify
+// refund. One journal covers every mapped component belonging to the remote
+// balance transaction, keeping its source idempotent.
+export async function postShopifyRefund(client, tenantId, refund, opts = {}) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const clearing = requireCode(settings, 'shopify_clearing_account_code')
+  const memo = `Shopify refund ${refund.remoteId}`
+  const lines = [{ account_code: clearing, credit_cents: refund.grossCents, memo }]
+  const taxFacts = []
+  for (const component of refund.components) {
+    const originalFacts = await listTransactionTaxFacts(
+      client, tenantId, component.ledgerTransactionId,
+    )
+    const originalFact = originalFacts[0]
+    if (!originalFact) throw new TaxClassificationError('Shopify refund')
+    const outputVatCents = originalFact.output_vat_cents === 0 ? 0 : component.taxCents
+    taxFacts.push({
+      ...originalFact,
+      id: undefined,
+      source_line_kind: 'shopify_refund_component',
+      source_line_id: component.id,
+      source_line_position: null,
+      tax_point: toDateString(refund.transactionDate),
+      taxable_base_cents: -component.netRevenueCents,
+      tax_amount_cents: -component.taxCents,
+      output_vat_cents: -outputVatCents,
+      deductible_input_vat_cents: 0,
+      non_deductible_input_vat_cents: 0,
+      classification_status: 'confirmed',
+    })
+    lines.push({
+      account_code: component.revenueAccountCode,
+      debit_cents: component.grossCents - outputVatCents,
+      memo,
+    })
+    if (outputVatCents > 0) {
+      lines.push({
+        account_code: requireCode(settings, 'output_vat_account_code'),
+        debit_cents: outputVatCents,
+        memo,
+      })
+    }
+    if (component.restocked && component.cogsCents > 0) {
+      lines.push(
+        {
+          account_code: requireCode(settings, 'merch_inventory_account_code'),
+          debit_cents: component.cogsCents,
+          memo,
+        },
+        {
+          account_code: requireCode(settings, 'merch_cogs_account_code'),
+          credit_cents: component.cogsCents,
+          memo,
+        },
+      )
+    }
+  }
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(refund.transactionDate),
+    description: memo,
+    sourceType: 'shopify_balance_transaction', sourceId: refund.id, sourceEvent: 'refund',
+    lines, taxFacts, ...opts,
+  })
+}
+
+// Non-order payout activity (adjustment, dispute, reserve movement, etc.). The
+// reviewer supplies the P&L account; Shopify's signed net controls direction.
+export async function postShopifyPayoutAdjustment(client, tenantId, tx, accountCode, opts = {}) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const clearing = requireCode(settings, 'shopify_clearing_account_code')
+  const amount = Math.abs(tx.netCents)
+  const memo = `Shopify payout adjustment ${tx.remoteId}`
+  const lines = tx.netCents > 0
+    ? [
+      { account_code: clearing, debit_cents: amount, memo },
+      { account_code: accountCode, credit_cents: amount, memo },
+    ]
+    : [
+      { account_code: accountCode, debit_cents: amount, memo },
+      { account_code: clearing, credit_cents: amount, memo },
+    ]
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(tx.transactionDate),
+    description: memo,
+    sourceType: 'shopify_balance_transaction', sourceId: tx.id, sourceEvent: 'adjustment',
+    lines, ...opts,
+  })
+}
+
+export async function postShopifyPayoutSettlement(client, tenantId, payout, opts = {}) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const clearing = requireCode(settings, 'shopify_clearing_account_code')
+  const bank = requireCode(settings, 'primary_checking_account_code')
+  const amount = Math.abs(payout.netCents)
+  const memo = `Shopify payout ${payout.remoteId}`
+  const deposit = payout.transactionType === 'DEPOSIT'
+  const lines = deposit
+    ? [
+      { account_code: bank, debit_cents: amount, memo },
+      { account_code: clearing, credit_cents: amount, memo },
+    ]
+    : [
+      { account_code: clearing, debit_cents: amount, memo },
+      { account_code: bank, credit_cents: amount, memo },
+    ]
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(payout.entryDate),
+    description: memo,
+    sourceType: 'shopify_payout', sourceId: payout.id, sourceEvent: 'settled',
+    lines, ...opts,
+  })
+}
+
+// PayPal exposes the order gross in Shopify, while its actual processor costs
+// become known only from the bank deposit. The difference is explicitly booked
+// to the reviewer-selected P&L account as part of the same settlement journal.
+export async function postPaypalPayoutSettlement(client, tenantId, payout, opts = {}) {
+  const settings = await loadAccountingSettings(client, tenantId)
+  const clearing = requireCode(settings, 'paypal_clearing_account_code')
+  const bank = requireCode(settings, 'primary_checking_account_code')
+  const memo = `PayPal payout reconciliation #${payout.id}`
+  const lines = [
+    { account_code: bank, debit_cents: payout.depositCents, memo },
+    { account_code: clearing, credit_cents: payout.grossCents, memo },
+  ]
+  if (payout.differenceCents > 0) {
+    lines.push({
+      account_code: payout.differenceAccountCode,
+      debit_cents: payout.differenceCents,
+      memo,
+    })
+  } else if (payout.differenceCents < 0) {
+    lines.push({
+      account_code: payout.differenceAccountCode,
+      credit_cents: Math.abs(payout.differenceCents),
+      memo,
+    })
+  }
+  return postJournal(client, tenantId, {
+    entryDate: toDateString(payout.entryDate),
+    description: memo,
+    sourceType: 'paypal_payout', sourceId: payout.id, sourceEvent: 'settled',
+    lines, ...opts,
   })
 }
 

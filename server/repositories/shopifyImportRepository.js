@@ -14,24 +14,28 @@ export async function listImportedLineIds(executor, tenantId, orderIds) {
   return new Set(rows.map((r) => r.shopify_line_id))
 }
 
-// Whether a specific line was already imported (the dedupe gate at import time).
-export async function isLineImported(executor, tenantId, lineId) {
+export async function listFinanciallyImportedOrderIds(executor, tenantId, orderIds) {
+  if (!orderIds.length) return new Set()
   const { rows } = await executor.query(
-    'SELECT 1 FROM shopify_order_imports WHERE tenant_id = $1 AND shopify_line_id = $2',
-    [tenantId, String(lineId)],
+    `SELECT shopify_order_legacy_id FROM shopify_order_financials
+      WHERE tenant_id = $1 AND shopify_order_legacy_id = ANY($2::text[])`,
+    [tenantId, orderIds.map(String)],
   )
-  return rows.length > 0
+  return new Set(rows.map((r) => r.shopify_order_legacy_id))
 }
 
 export async function insertImport(executor, tenantId, {
-  shopifyOrderId, shopifyLineId, kind, merchSaleId = null, ledgerTransactionId = null, createdByUserId = null,
+  shopifyOrderId, shopifyLineId, kind, merchSaleId = null, ledgerTransactionId = null,
+  createdByUserId = null, orderFinancialId = null,
 }) {
   const { rows } = await executor.query(
     `INSERT INTO shopify_order_imports
-       (tenant_id, shopify_order_id, shopify_line_id, kind, merch_sale_id, ledger_transaction_id, created_by_user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (tenant_id, shopify_order_id, shopify_line_id, kind, merch_sale_id,
+        ledger_transaction_id, created_by_user_id, shopify_order_financial_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
-    [tenantId, String(shopifyOrderId), String(shopifyLineId), kind, merchSaleId, ledgerTransactionId, createdByUserId],
+    [tenantId, String(shopifyOrderId), String(shopifyLineId), kind, merchSaleId,
+      ledgerTransactionId, createdByUserId, orderFinancialId],
   )
   return rows[0]
 }

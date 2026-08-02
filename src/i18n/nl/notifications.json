@@ -16,7 +16,7 @@
     },
     "theme": {
       "title": "Thema",
-      "description": "Kies de stijl van het oppervlak voor dit apparaat. De accentkleur van je band blijft binnen elk thema gelden.",
+      "description": "Kies jouw favorite stijl. De accentkleur van je band blijft binnen elk thema gelden.",
       "variants": {
         "default": { "label": "Standaard", "description": "Material 3-violet" },
         "warm": { "label": "Warm", "description": "Zand- en aardetinten" },

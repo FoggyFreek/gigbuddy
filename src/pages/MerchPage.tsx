@@ -20,6 +20,7 @@ import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined'
 import CloudDownloadOutlinedIcon from '@mui/icons-material/CloudDownloadOutlined'
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
 import ProductDialog from '../components/merch/ProductDialog.tsx'
@@ -27,6 +28,7 @@ import RecordSaleDialog from '../components/merch/RecordSaleDialog.tsx'
 import NoStockDialog from '../components/merch/NoStockDialog.tsx'
 import ArchiveProductDialog from '../components/merch/ArchiveProductDialog.tsx'
 import ShopifyImportDialog from '../components/merch/ShopifyImportDialog.tsx'
+import ShopifyPayoutDialog from '../components/merch/ShopifyPayoutDialog.tsx'
 import { useMerchState } from '../components/merch/useMerchState.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import PeriodPicker from '../components/shared/periodPicker.tsx'
@@ -39,6 +41,7 @@ import { formatCurrency } from '../utils/invoiceTotals.ts'
 import { useAccountingProfile } from '../contexts/accountingProfileContext.ts'
 import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
 import type { Product, MerchSale, MerchSalesSummaryRow, Period, Id } from '../types/entities.ts'
+import { useProfile } from '../contexts/profileContext.ts'
 
 interface SaleBody {
   product_id: Id
@@ -52,6 +55,8 @@ interface SaleBody {
 
 export default function MerchPage() {
   const { t } = useTranslation('merch')
+  const { isIntegrationConfigured } = useProfile()
+  const shopifyConfigured = isIntegrationConfigured('shopify')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -62,6 +67,7 @@ export default function MerchPage() {
   const [archiveTarget, setArchiveTarget] = useState<Product | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [shopifyOpen, setShopifyOpen] = useState(false)
+  const [shopifyPayoutOpen, setShopifyPayoutOpen] = useState(false)
 
   // Merch defaults to all-time: bands want their full sales-per-product picture
   // first, then narrow by period if they care to.
@@ -197,12 +203,22 @@ export default function MerchPage() {
               <Typography variant="h6">{t($ => $.summary.heading)}</Typography>
               <Chip size="small" label={summary.length} />
             </Box>
-            <Button
-              startIcon={<CloudDownloadOutlinedIcon />}
-              onClick={() => setShopifyOpen(true)}
-            >
-              {t($ => $.summary.importShopify)}
-            </Button>
+            {shopifyConfigured && (
+              <>
+                <Button
+                  startIcon={<CloudDownloadOutlinedIcon />}
+                  onClick={() => setShopifyOpen(true)}
+                >
+                  {t($ => $.summary.importShopify)}
+                </Button>
+                <Button
+                  startIcon={<AccountBalanceWalletOutlinedIcon />}
+                  onClick={() => setShopifyPayoutOpen(true)}
+                >
+                  {t($ => $.summary.recordShopifyPayout)}
+                </Button>
+              </>
+            )}
             <PeriodPicker availableDates={availableDates} value={period} onChange={setPeriod} />
           </Box>
 
@@ -241,7 +257,7 @@ export default function MerchPage() {
           onClose={() => setArchiveTarget(null)}
         />
       )}
-      {shopifyOpen && (
+      {shopifyConfigured && shopifyOpen && (
         <ShopifyImportDialog
           products={products || []}
           onClose={(imported) => {
@@ -249,6 +265,9 @@ export default function MerchPage() {
             if (imported) handleSalesChanged()
           }}
         />
+      )}
+      {shopifyConfigured && shopifyPayoutOpen && (
+        <ShopifyPayoutDialog onClose={() => setShopifyPayoutOpen(false)} />
       )}
     </SplitView>
   )

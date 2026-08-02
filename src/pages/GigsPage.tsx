@@ -28,6 +28,7 @@ import { ALL_STATUSES } from '../utils/gigStatus.ts'
 import { isPastDate, localDateString } from '../utils/dateFormat.ts'
 import type { ListCollectionCursor } from '../types/api.ts'
 import type { Gig } from '../types/entities.ts'
+import { useProfile } from '../contexts/profileContext.ts'
 
 // Bounded page size for the Upcoming/Past tabs — matches the server's
 // MAX_LIST_LIMIT. Past gigs paginate further via a keyset cursor ("load more").
@@ -37,6 +38,8 @@ const SEARCH_MIN_CHARS = 3
 export default function GigsPage() {
   const { t } = useTranslation(['gigs', 'common'])
   const { canWritePlanning } = usePermissions()
+  const { isIntegrationConfigured } = useProfile()
+  const bandsintownConfigured = isIntegrationConfigured('bandsintown')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -188,8 +191,9 @@ export default function GigsPage() {
   }, [search])
 
   useEffect(() => {
+    if (!bandsintownConfigured) return
     getProfile().then((p) => setBandsintownArtistName((p as { bandsintown_artist_name?: string }).bandsintown_artist_name || '')).catch(() => {})
-  }, [])
+  }, [bandsintownConfigured])
 
   function refreshAll() {
     if (allGigsRequested) load()
@@ -267,7 +271,7 @@ export default function GigsPage() {
           {t($ => $.title)}
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
-        {canWritePlanning && (
+        {canWritePlanning && bandsintownConfigured && (
           <>
             <Tooltip title={t($ => $.toolbar.import)}>
               <IconButton onClick={(e) => setImportMenuAnchor(e.currentTarget)}>
@@ -317,18 +321,20 @@ export default function GigsPage() {
               {t($ => $.toolbar.exportTourDates)}
             </Button>
           </MenuItem>
-          <MenuItem
-            disabled={loading || filteredForExport.length === 0}
-            onClick={() => {
-              setExportMenuAnchor(null)
-              downloadBandsintownCsv(filteredForExport, bandsintownArtistName)
-            }}
-            dense
-          >
-            <Button variant="outlined" size="small" fullWidth disabled={loading || filteredForExport.length === 0}>
-              {t($ => $.toolbar.exportToBandsintown)}
-            </Button>
-          </MenuItem>
+          {bandsintownConfigured && (
+            <MenuItem
+              disabled={loading || filteredForExport.length === 0}
+              onClick={() => {
+                setExportMenuAnchor(null)
+                downloadBandsintownCsv(filteredForExport, bandsintownArtistName)
+              }}
+              dense
+            >
+              <Button variant="outlined" size="small" fullWidth disabled={loading || filteredForExport.length === 0}>
+                {t($ => $.toolbar.exportToBandsintown)}
+              </Button>
+            </MenuItem>
+          )}
         </Menu>
         <Tooltip title={t($ => $.toolbar.shareTourDates)}>
           <IconButton onClick={(e) => { requestAllGigs(); setTourMenuAnchor(e.currentTarget) }}>
@@ -417,7 +423,7 @@ export default function GigsPage() {
         gigs={filteredForCardShare}
       />
 
-      {bandsintownApiImportOpen && (
+      {bandsintownConfigured && bandsintownApiImportOpen && (
         <BandsintownApiImportDialog
           onClose={(didImport) => {
             setBandsintownApiImportOpen(false)
@@ -425,7 +431,7 @@ export default function GigsPage() {
           }}
         />
       )}
-      {bandsintownImportOpen && (
+      {bandsintownConfigured && bandsintownImportOpen && (
         <BandsintownImportDialog
           onClose={(didImport) => {
             setBandsintownImportOpen(false)

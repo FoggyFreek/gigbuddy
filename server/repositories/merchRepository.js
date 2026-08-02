@@ -169,6 +169,41 @@ export async function lockSaleWithProduct(executor, tenantId, saleId) {
   return rows[0] || null
 }
 
+export async function getSaleImportSnapshot(executor, tenantId, saleId) {
+  const { rows } = await executor.query(
+    `SELECT s.id, s.vat_rate, s.unit_cost_cents, s.revenue_account_code,
+            s.quantity, s.gross_incl_cents, s.unit_price_incl_cents,
+            p.name AS product_name
+       FROM merch_sales s
+       JOIN products p ON p.id = s.product_id AND p.tenant_id = s.tenant_id
+      WHERE s.id = $1 AND s.tenant_id = $2`,
+    [saleId, tenantId],
+  )
+  return rows[0] ?? null
+}
+
+export async function incrementProductStock(executor, tenantId, productId, quantity) {
+  await executor.query(
+    `UPDATE products SET quantity_on_hand = quantity_on_hand + $1, updated_at = NOW()
+      WHERE id = $2 AND tenant_id = $3`,
+    [quantity, productId, tenantId],
+  )
+}
+
+export async function restoreProductStock(
+  executor, tenantId, productId, quantity, returnedUnitCostCents,
+) {
+  await executor.query(
+    `UPDATE products
+        SET unit_cost_cents = ROUND((quantity_on_hand * unit_cost_cents + $1::int * $2::int)::numeric
+          / (quantity_on_hand + $1::int))::int,
+            quantity_on_hand = quantity_on_hand + $1::int,
+            updated_at = NOW()
+      WHERE id = $3 AND tenant_id = $4`,
+    [quantity, returnedUnitCostCents, productId, tenantId],
+  )
+}
+
 export async function markSaleVoided(executor, tenantId, saleId) {
   await executor.query(
     `UPDATE merch_sales SET status = 'voided', voided_at = NOW()

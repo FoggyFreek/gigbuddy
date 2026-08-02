@@ -53,6 +53,9 @@ const DEFAULT_CODES = {
   merch_inventory_account_code: '12200',
   merch_revenue_account_code: '42000',
   merch_cogs_account_code: '51000',
+  shopify_clearing_account_code: '11300',
+  paypal_clearing_account_code: '11400',
+  shopify_fee_expense_account_code: '64100',
 }
 
 // ---------- settings ----------
@@ -201,6 +204,9 @@ export async function patchSettings(tenantId, body = {}) {
         merch_inventory_account_code: null,
         merch_revenue_account_code: null,
         merch_cogs_account_code: null,
+        shopify_clearing_account_code: null,
+        paypal_clearing_account_code: null,
+        shopify_fee_expense_account_code: null,
         books_closed_through: null,
         ...updates,
       }

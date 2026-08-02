@@ -1,0 +1,216 @@
+%% Mollie integration map. The upper path is tenant-owned customer invoice
+%% payment links; the lower path is GigBuddy platform subscription billing.
+%% They use separate credentials and separate lifecycle models.
+flowchart LR
+  subgraph db["Persistence"]
+    TI[(tenant_integrations<br/>tenant Mollie API key)]
+    INV[(invoices and immutable ledger)]
+    BILL[(users, subscriptions, subscription_payments,<br/>billing_operations and plans)]
+  end
+
+  subgraph configrepo["Tenant integration repository functions"]
+    CRECORD["fetchCredentialRecord"]
+    CSTATUS["fetchCredentialStatus"]
+    CSTORE["storeEncryptedCredential"]
+    CCLEAR["clearCredential"]
+    CRETAIN["setMollieKeyRetained"]
+    CONFIG["tenantIntegrationRepository.fetchIntegrationConfiguration"]
+  end
+  TI --> CRECORD
+  TI --> CSTATUS
+  TI --> CSTORE
+  TI --> CCLEAR
+  TI --> CRETAIN
+  TI --> CONFIG
+
+  subgraph invoicerepo["Invoice repository functions used by Mollie"]
+    IR1["fetchInvoice"]
+    IR2["fetchPublicMollieInvoice"]
+    IR3["setInvoicePaymentLink"]
+    IR4["clearInvoicePaymentLink"]
+    IR5["updateInvoicePaymentState"]
+  end
+  INV --> IR1
+  INV --> IR2
+  INV --> IR3
+  INV --> IR4
+  INV --> IR5
+
+  subgraph platformrepo["Platform billing repository functions"]
+    RBS["subscriptionRepository used by billingService<br/>fetchLiveSubscriptionForUser, fetchLiveSubscriptionForUpdate<br/>insertSubscription, hasUsedTrial, setPendingChange<br/>setPendingPaymentId, clearPendingChange, switchPlanTrial<br/>setCancelAtPeriodEnd, clearCancelAtPeriodEnd, cancelSubscriptionNow<br/>setScheduleStale, setDowngradeCancel, setDowngradePending, setPurgeManifest"]
+    RSG["subscriptionRepository used by billingSaga<br/>fetchSubscriptionById, fetchUserMollieCustomerId<br/>setUserMollieCustomerId, setMandateLinkage, setScheduleStale<br/>setBillingRepairNeeded, applyDowngradeSchedule"]
+    RSI["subscriptionRepository used by payment ingestion<br/>fetchSubscriptionById, fetchSubscriptionByIdForUpdate<br/>fetchUserMollieCustomerId, setMandateLinkage, setStatusGuarded<br/>setScheduleStale, advanceSubscriptionPeriod, markSubscriptionPastDue<br/>applyPlanChangeActivation, applyDowngradeActivation, clearPendingChange"]
+    RSJ["subscriptionRepository used by reconciliation jobs<br/>listStalePendingMandate, listStalePendingActivation, listScheduleStale<br/>listCancelAtPeriodEndDue, listPastDueExpired, listExpiredComplimentary<br/>listTrialReminderDue, listDowngradeSchedulePending<br/>listPendingActivationDowngrades, listPendingDowngradesDue, listPendingPurges<br/>subscriptionHasNonterminalPayment, markTrialReminderSent<br/>cancelSubscriptionNow, clearPendingChange, flipToPendingActivation<br/>fetchUserMollieCustomerId"]
+    RSP1["subscriptionPaymentRepository.upsertPaymentOutcome"]
+    RSP2["subscriptionPaymentRepository.fetchPaymentByMollieId"]
+    RSP3["subscriptionPaymentRepository.listNonterminalPaymentsForSubscription"]
+    RSP4["subscriptionPaymentRepository.listStaleNonterminalPayments"]
+    RBO1["billingOperationRepository.claimOperation"]
+    RBO2["billingOperationRepository.markOperation"]
+    RBO3["billingOperationRepository.listStalePendingOperations"]
+    RBO4["billingOperationRepository.fetchOperationByKey<br/>no production consumer"]
+    RPLAN["planRepository.fetchPlan"]
+    RLIMIT["limitRepository<br/>countActiveOwnedTenants, countRosterMembers<br/>countApprovedMemberships, listOwnedTenants<br/>getTenantStorageBytes, lockUserForCapCheck, lockTenantForCapCheck"]
+  end
+  BILL --> RBS
+  BILL --> RSG
+  BILL --> RSI
+  BILL --> RSJ
+  BILL --> RSP1
+  BILL --> RSP2
+  BILL --> RSP3
+  BILL --> RSP4
+  BILL --> RBO1
+  BILL --> RBO2
+  BILL --> RBO3
+  BILL --> RBO4
+  BILL --> RPLAN
+  BILL --> RLIMIT
+
+  subgraph tenantservices["Tenant invoice-payment services"]
+    CREDENTIALS["integrationCredentialService<br/>loadIntegrationCredential<br/>loadRetainedIntegrationCredential<br/>status, set and clear"]
+    ICONFIG["integrationService.getIntegrationConfiguration"]
+    PROFILE["profileService<br/>get/set/clearMollieKey"]
+    MPL["molliePaymentLinkService<br/>get tenant client, create/deactivate/remove link<br/>sync status and handle webhook"]
+    INVOICESVC["invoiceService<br/>create/remove/syncInvoicePaymentLink<br/>finalize, advisory lock and PDF rerender"]
+    LEDGERSVC["ledgerService<br/>postInvoiceSent and postInvoicePaid"]
+    BANKSVC["bankImportService<br/>deactivate link before manual bank settlement"]
+    PURGE["entitlementPurgeService<br/>remove outstanding links; retain key only when needed"]
+  end
+  CRECORD --> CREDENTIALS
+  CSTATUS --> CREDENTIALS
+  CSTORE --> CREDENTIALS
+  CCLEAR --> CREDENTIALS
+  CRETAIN --> PURGE
+  CONFIG --> ICONFIG
+  CREDENTIALS --> PROFILE
+  CREDENTIALS --> MPL
+  IR1 --> MPL
+  IR2 --> MPL
+  IR3 --> MPL
+  IR4 --> MPL
+  IR5 --> MPL
+  MPL --> INVOICESVC
+  MPL --> LEDGERSVC
+  MPL --> BANKSVC
+  MPL --> PURGE
+
+  subgraph platformservices["Platform subscription services"]
+    BILLINGSVC["billingService<br/>get state, subscribe, change/downgrade plan<br/>cancel, resume and sync"]
+    SAGA["billingSaga<br/>durable remote mutations through billing_operations"]
+    INGEST["paymentIngestionService<br/>single transactional outcome funnel"]
+    JOBS["billingTasks + billingReconciliation<br/>repair, polling and cleanup"]
+    PORT["PaymentProvider port<br/>ensureCustomer, mandate/on-demand charge<br/>getPayment, create/get/cancel subscription"]
+    ADAPTER["MollieProvider adapter<br/>status and error normalization"]
+  end
+  RBS --> BILLINGSVC
+  RSP1 --> BILLINGSVC
+  RSP2 --> BILLINGSVC
+  RSP3 --> BILLINGSVC
+  RPLAN --> BILLINGSVC
+  RLIMIT --> BILLINGSVC
+  RSG --> SAGA
+  RBO1 --> SAGA
+  RBO2 --> SAGA
+  RPLAN --> SAGA
+  RSI --> INGEST
+  RSP1 --> INGEST
+  RSJ --> JOBS
+  RSP4 --> JOBS
+  RBO3 --> JOBS
+  BILLINGSVC --> SAGA
+  BILLINGSVC --> INGEST
+  JOBS --> SAGA
+  JOBS --> INGEST
+  SAGA --> PORT
+  INGEST --> PORT
+  JOBS --> PORT
+  PORT --> ADAPTER
+
+  subgraph external["External Mollie APIs"]
+    LINKS["Tenant account<br/>Mollie Payment Links and Payments APIs"]
+    PLATFORM["GigBuddy platform account<br/>Mollie Customers, Payments and Subscriptions APIs"]
+  end
+  MPL <--> LINKS
+  ADAPTER <--> PLATFORM
+
+  subgraph express["Express APIs and webhooks"]
+    PROFILEAPI["/api/profile/mollie-key<br/>GET PUT DELETE"]
+    INVOICEAPI["/api/invoices/:id/payment-link<br/>POST create, DELETE remove, POST sync"]
+    LINKWEBHOOK["POST /api/public/mollie/payment-links/webhook"]
+    PUBLICLOGO["GET /api/public/invoices/:id/logo"]
+    BILLINGAPI["/api/billing<br/>GET state; POST subscribe/change/downgrade<br/>preview/cancel/resume/sync"]
+    BILLWEBHOOK["POST /api/public/billing/mollie/webhook"]
+  end
+  PROFILE --> PROFILEAPI
+  ICONFIG --> PROFILEAPI
+  INVOICESVC --> INVOICEAPI
+  MPL --> LINKWEBHOOK
+  INVOICESVC --> PUBLICLOGO
+  BILLINGSVC --> BILLINGAPI
+  INGEST --> BILLWEBHOOK
+  LINKS --> LINKWEBHOOK
+  PLATFORM --> BILLWEBHOOK
+
+  subgraph frontendapi["Frontend API and shared state"]
+    FPROFILE["src/api/profile.ts<br/>get/set/clearMollieKey"]
+    FINVOICE["src/api/invoices.ts<br/>create, delete and sync invoice payment link"]
+    FBILLING["src/api/billing.ts<br/>get state, subscribe/change/downgrade<br/>preview/cancel/resume/sync"]
+    FCONTEXT["ProfileProvider + integrations utility<br/>isIntegrationConfigured('mollie')"]
+  end
+  PROFILEAPI --> FPROFILE
+  INVOICEAPI --> FINVOICE
+  BILLINGAPI --> FBILLING
+  FPROFILE --> FCONTEXT
+
+  subgraph ui["UI and output consumers"]
+    SETTINGS["IntegrationsSection<br/>tenant Mollie key editor"]
+    INVDETAILS["InvoiceDetails<br/>tenant integration gate"]
+    PANEL["PaymentLinkPanel<br/>create, open, refresh and remove"]
+    EMAILPDF["Invoice PDF/email rendering<br/>payment URL and QR code"]
+    THANKS["PaymentThanksPage<br/>redirect target and public logo"]
+    BILLSETTINGS["BillingSettingsSection + DowngradeDialog"]
+    ONBOARD["OnboardingPage<br/>checkout redirect and settlement polling"]
+    SUMMARY["SubscriptionSummaryCard"]
+  end
+  FPROFILE --> SETTINGS
+  FCONTEXT --> INVDETAILS
+  FINVOICE --> PANEL
+  INVDETAILS --> PANEL
+  INVOICESVC --> EMAILPDF
+  PUBLICLOGO --> THANKS
+  FBILLING --> BILLSETTINGS
+  FBILLING --> ONBOARD
+  FBILLING --> SUMMARY
+  BILLINGSVC --> ONBOARD
+
+  subgraph review["Review: generic behavior, maintainability and reuse"]
+    SPLIT["Correct domain split: tenant invoice payments and user-level platform subscriptions have separate credentials, routes and state machines."]
+    STRONG["Strong platform design: PaymentProvider port, normalized statuses, outbox saga, idempotent ingestion and no remote provider calls inside business transactions."]
+    LEAK["Genericity gap: provider-neutral platform layers still expose mollie-named persistence fields and functions such as fetchPaymentByMollieId and fetchUserMollieCustomerId."]
+    DUP["Reuse gap: tenant payment links construct a concrete Mollie client instead of using the PaymentProvider port; SDK error/status handling is maintained in two paths."]
+    SCALE["Maintainability risk: billingService, billingSaga, ingestion and reconciliation form a large distributed state machine; invariants rely on tests and comments across several files."]
+    CLEANUP["Cleanup candidate: billingOperationRepository.fetchOperationByKey has no production consumer."]
+    SAFE["Strong tenant behavior: encrypted keys, retained-key isolation, authoritative webhook re-fetch, tenant-scoped invoice updates and idempotent ledger posting."]
+  end
+  MPL -.-> SPLIT
+  BILLINGSVC -.-> SPLIT
+  PORT -.-> STRONG
+  RSP2 -.-> LEAK
+  MPL -.-> DUP
+  BILLINGSVC -.-> SCALE
+  RBO4 -.-> CLEANUP
+  CREDENTIALS -.-> SAFE
+
+  classDef repo fill:#e8f1ff,stroke:#3569a8,color:#10233f
+  classDef service fill:#eaf7ec,stroke:#3d7c47,color:#17351c
+  classDef api fill:#fff4d6,stroke:#a87916,color:#47350c
+  classDef ui fill:#f5eaff,stroke:#7d4aa8,color:#2d173f
+  classDef external fill:#ffe9e9,stroke:#a84a4a,color:#431818
+  classDef finding fill:#f3f3f3,stroke:#666,color:#222
+  class CRECORD,CSTATUS,CSTORE,CCLEAR,CRETAIN,CONFIG,IR1,IR2,IR3,IR4,IR5,RBS,RSG,RSI,RSJ,RSP1,RSP2,RSP3,RSP4,RBO1,RBO2,RBO3,RBO4,RPLAN,RLIMIT repo
+  class CREDENTIALS,ICONFIG,PROFILE,MPL,INVOICESVC,LEDGERSVC,BANKSVC,PURGE,BILLINGSVC,SAGA,INGEST,JOBS,PORT,ADAPTER service
+  class PROFILEAPI,INVOICEAPI,LINKWEBHOOK,PUBLICLOGO,BILLINGAPI,BILLWEBHOOK,FPROFILE,FINVOICE,FBILLING,FCONTEXT api
+  class SETTINGS,INVDETAILS,PANEL,EMAILPDF,THANKS,BILLSETTINGS,ONBOARD,SUMMARY ui
+  class LINKS,PLATFORM external
+  class SPLIT,STRONG,LEAK,DUP,SCALE,CLEANUP,SAFE finding

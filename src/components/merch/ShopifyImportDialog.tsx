@@ -34,6 +34,7 @@ import TaxCategorySelect from '../shared/TaxCategorySelect.tsx'
 import { commonVatSelection, taxCategoryUsesZeroRate } from '../../../shared/taxCategories.js'
 import type {
   Account, Product, ShopifyOrder, ShopifyLineItem, ShopifyLineMapping, ShopifyImportResult,
+  ShopifyExtraComponent, ShopifyImportBody,
 } from '../../types/entities.ts'
 
 type Step = 'select' | 'map' | 'importing' | 'done'
@@ -45,9 +46,14 @@ const LINE_STATUS_KEYS = [
   'skipped_refunded_line', 'skipped_invalid_mapping', 'skipped_invalid_account',
   'skipped_closed_period', 'skipped_cancelled', 'skipped_unsupported_currency',
   'skipped_unpaid', 'skipped_not_found', 'skipped_accounting_not_configured',
+  'skipped_incomplete_mapping', 'skipped_order_total_mismatch',
 ] as const
 
-const ORDER_SKIP_KEYS = ['skipped_cancelled', 'skipped_unsupported_currency', 'skipped_unpaid'] as const
+const ORDER_SKIP_KEYS = [
+  'skipped_cancelled', 'skipped_unsupported_currency', 'skipped_unpaid',
+  'skipped_incomplete_order', 'skipped_payment_pending', 'skipped_payment_mismatch',
+  'skipped_test_order', 'skipped_legacy_partial_import', 'skipped_unsupported_payment_gateway',
+] as const
 
 // Multi-row card shell for the compact (mobile) layout, matching the merch list cards.
 const cardSx = {
@@ -118,11 +124,31 @@ function OrderStatusChip({ order }: Readonly<{ order: ShopifyOrder }>) {
 }
 
 // Default each mappable line to a product with a matching name, else skip.
-function defaultMapping(line: ShopifyLineItem, products: Product[]): ShopifyLineMapping {
+function revenueMapping(account: Account | undefined, vat: number, country: string): ShopifyLineMapping | undefined {
+  if (!account?.code) return undefined
+  const selection = commonVatSelection(country, vat)
+  return {
+    type: 'revenue', account_code: account.code, vat_rate: vat,
+    tax_category_code: selection?.tax_category_code ?? null,
+    tax_jurisdiction_code: selection?.tax_jurisdiction_code ?? country,
+  }
+}
+
+function defaultMapping(
+  line: ShopifyLineItem, products: Product[],
+): ShopifyLineMapping | undefined {
   const match = products.find(
     (p) => !p.archived_at && p.name?.toLowerCase() === line.title.toLowerCase(),
   )
-  return match?.id != null ? { type: 'product', product_id: match.id } : { type: 'skip' }
+  return match?.id != null ? { type: 'product', product_id: match.id } : undefined
+}
+
+function extraAsLine(extra: ShopifyExtraComponent): ShopifyLineItem {
+  return {
+    id: extra.key, title: extra.title, sku: null, quantity: 1, current_quantity: 1,
+    price: (extra.amount_cents / 100).toFixed(2), total_discount: '0.00',
+    already_imported: false, skip_reason: null,
+  }
 }
 
 interface ShopifyImportDialogProps {
@@ -196,7 +222,16 @@ export default function ShopifyImportDialog({ products, onClose }: Readonly<Shop
       const next = { ...prev }
       for (const order of selectedOrders) {
         for (const line of order.line_items) {
-          if (lineMappable(line) && !next[line.id]) next[line.id] = defaultMapping(line, products)
+          if (lineMappable(line) && !next[line.id]) {
+            const mapping = defaultMapping(line, products)
+            if (mapping) next[line.id] = mapping
+          }
+        }
+        for (const extra of order.extra_components ?? []) {
+          if (!next[extra.key]) {
+            const mapping = revenueMapping(revenueAccounts[0], defaultVatRate, accountingCountry)
+            if (mapping) next[extra.key] = mapping
+          }
         }
       }
       return next
@@ -237,32 +272,34 @@ export default function ShopifyImportDialog({ products, onClose }: Readonly<Shop
     })
   }
 
-  function importableLines() {
-    const out: { shopify_order_id: string; shopify_line_id: string; mapping: ShopifyLineMapping }[] = []
+  function importableOrders() {
+    const out: ShopifyImportBody['orders'] = []
     for (const order of selectedOrders) {
-      for (const line of order.line_items) {
-        const m = mappings[line.id]
-        if (lineMappable(line) && m && m.type !== 'skip') {
-          out.push({ shopify_order_id: order.id, shopify_line_id: line.id, mapping: m })
-        }
-      }
+      const lines = order.line_items.filter(lineMappable).map((line) => ({
+        shopify_line_id: line.id, mapping: mappings[line.id],
+      }))
+      const extras = (order.extra_components ?? []).map((extra) => ({
+        component_key: extra.key, mapping: mappings[extra.key],
+      }))
+      if (lines.some((line) => !line.mapping || line.mapping.type === 'skip')) continue
+      if (extras.some((extra) => !extra.mapping || extra.mapping.type !== 'revenue')) continue
+      out.push({
+        shopify_order_id: order.id,
+        lines: lines as ShopifyImportBody['orders'][number]['lines'],
+        ...((order.extra_components ?? []).length ? {
+          extra_components: extras as ShopifyImportBody['orders'][number]['extra_components'],
+        } : {}),
+      })
     }
     return out
   }
 
-  const importable = importableLines()
+  const importable = importableOrders()
 
   async function runImport() {
     setStep('importing')
     setError(null)
-    // Group selected lines back under their orders for the request body.
-    const byOrder = new Map<string, { shopify_line_id: string; mapping: ShopifyLineMapping }[]>()
-    for (const l of importable) {
-      const arr = byOrder.get(l.shopify_order_id) ?? []
-      arr.push({ shopify_line_id: l.shopify_line_id, mapping: l.mapping })
-      byOrder.set(l.shopify_order_id, arr)
-    }
-    const body = { orders: [...byOrder.entries()].map(([id, lines]) => ({ shopify_order_id: id, lines })) }
+    const body = { orders: importable }
     try {
       setResult(await importShopifyOrders(body))
       setStep('done')
@@ -341,7 +378,7 @@ export default function ShopifyImportDialog({ products, onClose }: Readonly<Shop
         {step === 'map' && (
           <>
             <Button onClick={() => setStep('select')}>{t($ => $.common.actions.back)}</Button>
-            <Button variant="contained" disabled={!importable.length} onClick={runImport}>
+            <Button variant="contained" disabled={importable.length !== selectedOrders.length} onClick={runImport}>
               {t($ => $.shopify.importLines, { count: importable.length })}
             </Button>
           </>
@@ -400,6 +437,11 @@ function SelectStep({ orders, selected, onToggle, nextCursor, loadingMore, onLoa
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                     {o.created_at?.slice(0, 10)} · {t($ => $.shopify.lineCount, { count: lines })} · {formatEur(o.total_incl_cents)}
+                    {o.payment?.payment_gateway === 'paypal'
+                      ? <>{' · '}{t($ => $.shopify.paypalFeesPending)}</>
+                      : o.payment?.fee_cents != null && o.payment.net_cents != null
+                        ? <>{' · '}{t($ => $.shopify.paymentSummary, { fee: formatEur(o.payment.fee_cents), net: formatEur(o.payment.net_cents) })}</>
+                        : null}
                   </Typography>
                 </Box>
               </Box>
@@ -476,13 +518,14 @@ interface LineMapControlProps {
   onVatChange: (lineId: string, mapping: Extract<ShopifyLineMapping, { type: 'revenue' }>, vat: number) => void
   onTaxChange: MapStepProps['onTaxChange']
   compact?: boolean
+  allowProducts?: boolean
 }
 
 // The "Map to" control for a single line — locked chip, or a product/revenue
 // select with an optional VAT picker. Shared by the table and the compact cards.
 function LineMapControl({
   line, mapping, activeProducts, revenueAccounts, mappingValue,
-  onMappingSelect, onVatChange, onTaxChange, compact = false,
+  onMappingSelect, onVatChange, onTaxChange, compact = false, allowProducts = true,
 }: Readonly<LineMapControlProps>) {
   const { t } = useTranslation(['merch', 'common'])
   const { accountingCountry } = useAccountingProfile()
@@ -502,9 +545,8 @@ function LineMapControl({
           value={mappingValue(mapping)}
           onChange={(e) => onMappingSelect(line, e.target.value)}
         >
-          <MenuItem value="skip">{t($ => $.shopify.skip)}</MenuItem>
-          {activeProducts.length > 0 && <ListSubheader>{t($ => $.shopify.productsGroup)}</ListSubheader>}
-          {activeProducts.map((p) => (
+          {allowProducts && activeProducts.length > 0 && <ListSubheader>{t($ => $.shopify.productsGroup)}</ListSubheader>}
+          {allowProducts && activeProducts.map((p) => (
             <MenuItem key={String(p.id)} value={`product:${p.id}`}>{p.name}</MenuItem>
           ))}
           {revenueAccounts.length > 0 && <ListSubheader>{t($ => $.shopify.revenueAccountsGroup)}</ListSubheader>}
@@ -581,6 +623,15 @@ function MapStep({
                   <LineMapControl line={line} mapping={mappings[line.id]} compact {...controlProps} />
                 </Box>
               ))}
+              {(order.extra_components ?? []).map((extra) => {
+                const line = extraAsLine(extra)
+                return (
+                  <Box key={extra.key} sx={{ ...cardSx, flexDirection: 'column', alignItems: 'stretch' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{extra.title}</Typography>
+                    <LineMapControl line={line} mapping={mappings[extra.key]} compact allowProducts={false} {...controlProps} />
+                  </Box>
+                )
+              })}
             </Paper>
           ) : (
             <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
@@ -607,6 +658,18 @@ function MapStep({
                       </TableCell>
                     </TableRow>
                   ))}
+                  {(order.extra_components ?? []).map((extra) => {
+                    const line = extraAsLine(extra)
+                    return (
+                      <TableRow key={extra.key}>
+                        <TableCell>{extra.title}</TableCell>
+                        <TableCell align="right">1</TableCell>
+                        <TableCell>
+                          <LineMapControl line={line} mapping={mappings[extra.key]} allowProducts={false} {...controlProps} />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </Paper>
@@ -633,9 +696,9 @@ function DoneStep({ result }: Readonly<{ result: ShopifyImportResult }>) {
         isCompact ? (
           <Paper variant="outlined">
             {skippedReasons.map((r) => (
-              <Box key={r.shopify_line_id} sx={{ ...cardSx, justifyContent: 'space-between' }}>
+              <Box key={r.shopify_order_id} sx={{ ...cardSx, justifyContent: 'space-between' }}>
                 <Typography variant="body2" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {r.shopify_line_id}
+                  {r.shopify_order_id} · {r.net_cents == null ? t($ => $.shopify.paypalFeesPending) : formatEur(r.net_cents)}
                 </Typography>
                 <Chip size="small" variant="outlined" label={lineStatusLabel(r.status)} sx={{ flexShrink: 0 }} />
               </Box>
@@ -651,8 +714,8 @@ function DoneStep({ result }: Readonly<{ result: ShopifyImportResult }>) {
             </TableHead>
             <TableBody>
               {skippedReasons.map((r) => (
-                <TableRow key={r.shopify_line_id}>
-                  <TableCell>{r.shopify_line_id}</TableCell>
+                <TableRow key={r.shopify_order_id}>
+                  <TableCell>{r.shopify_order_id} · {r.net_cents == null ? t($ => $.shopify.paypalFeesPending) : formatEur(r.net_cents)}</TableCell>
                   <TableCell>{lineStatusLabel(r.status)}</TableCell>
                 </TableRow>
               ))}

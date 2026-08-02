@@ -30,8 +30,8 @@ services:
       rustfs_perms:
         condition: service_completed_successfully
     environment:
-      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
-      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-}
       RUSTFS_CONSOLE_ENABLE: "true"
     ports:
       # 9000 bound to 127.0.0.1 only — reachable from the host for local dev,

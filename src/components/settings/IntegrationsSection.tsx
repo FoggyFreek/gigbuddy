@@ -17,8 +17,9 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import PremiumDiamond from '../PremiumDiamond.tsx'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
-import { clearMollieKey, getMollieKey, setMollieKey, clearBandsintownKey, getBandsintownKey, setBandsintownKey, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain } from '../../api/profile.ts'
+import { clearMollieKey, getMollieKey, setMollieKey, clearBandsintownKey, getBandsintownKey, setBandsintownKey, clearBandsintownArtistId, getBandsintownArtistId, setBandsintownArtistId, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain } from '../../api/profile.ts'
 import Divider from '@mui/material/Divider'
+import { useProfile } from '../../contexts/profileContext.ts'
 
 // Shopify client ids aren't secret but are long; collapse the middle so the
 // display value doesn't eat the card's horizontal space.
@@ -327,6 +328,7 @@ function ShopifyDomainBlock({ domain, savedDomain, saving, error, onChange, onSa
 
 export function ShopifyKeySection() {
   const { t } = useTranslation(['settings', 'common'])
+  const { setIntegrationConfigured } = useProfile()
   const [status, setStatus] = useState<ShopifyKeyStatus | null>(null)
   const [editing, setEditing] = useState(false)
   const [inputKey, setInputKey] = useState('')
@@ -356,6 +358,11 @@ export function ShopifyKeySection() {
       setClientIdInput(c.clientId ?? '')
     }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (status === null) return
+    setIntegrationConfigured('shopify', Boolean(status.isSet && savedDomain && savedClientId))
+  }, [savedClientId, savedDomain, setIntegrationConfigured, status])
 
   async function handleSaveDomain() {
     const trimmed = domain.trim()
@@ -589,6 +596,7 @@ function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, er
 
 export function MollieKeySection() {
   const { t } = useTranslation('settings')
+  const { setIntegrationConfigured } = useProfile()
   const [status, setStatus] = useState<MollieKeyStatus | null>(null)
   const [editing, setEditing] = useState(false)
   const [inputKey, setInputKey] = useState('')
@@ -599,6 +607,10 @@ export function MollieKeySection() {
   useEffect(() => {
     getMollieKey().then((s) => setStatus(s as unknown as MollieKeyStatus)).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (status !== null) setIntegrationConfigured('mollie', Boolean(status.isSet))
+  }, [setIntegrationConfigured, status])
 
   function startEditing() {
     setInputKey('')
@@ -686,10 +698,67 @@ export function MollieKeySection() {
   )
 }
 
+interface BandsintownArtistIdBlockProps {
+  artistId: string
+  savedArtistId: string | null
+  saving: boolean
+  error: string | null
+  onChange: (value: string) => void
+  onSave: () => void
+  onClear: () => void
+}
+
+function BandsintownArtistIdBlock({ artistId, savedArtistId, saving, error, onChange, onSave, onClear }: Readonly<BandsintownArtistIdBlockProps>) {
+  const { t } = useTranslation(['settings', 'common'])
+  return (
+    <Box sx={{ mt: 3 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+        {t($ => $.bandsintown.artistId.label)}
+      </Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+        {t($ => $.bandsintown.artistId.description)}
+      </Typography>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+        <TextField
+          size="small"
+          fullWidth
+          value={artistId}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={t($ => $.bandsintown.artistId.placeholder)}
+          error={!!error}
+          helperText={error || t($ => $.bandsintown.artistId.helper)}
+          autoComplete="off"
+          slotProps={{ htmlInput: { spellCheck: false, inputMode: 'numeric' } }}
+        />
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={onSave}
+          disabled={saving || !artistId.trim() || artistId.trim() === savedArtistId}
+          startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
+        >
+          {t($ => $.actions.save, { ns: 'common' })}
+        </Button>
+        {savedArtistId && (
+          <Tooltip title={t($ => $.bandsintown.artistId.remove)}>
+            <span>
+              <IconButton size="small" color="error" onClick={onClear} disabled={saving}>
+                <DeleteOutlineIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+      </Stack>
+    </Box>
+  )
+}
+
 // Bandsintown API key (app_id) — same encrypted per-tenant credential storage
-// as the Mollie key; used by the artist/socials fetch and the gig import.
+// as the Mollie key — plus the artist ID. Both are required before the artist
+// fetch and the gig import can call the API.
 function BandsintownKeySection() {
   const { t } = useTranslation(['settings', 'common'])
+  const { setIntegrationConfigured } = useProfile()
   const [status, setStatus] = useState<MollieKeyStatus | null>(null)
   const [editing, setEditing] = useState(false)
   const [inputKey, setInputKey] = useState('')
@@ -697,9 +766,53 @@ function BandsintownKeySection() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [artistId, setArtistIdInput] = useState('')
+  const [savedArtistId, setSavedArtistId] = useState<string | null>(null)
+  const [artistIdSaving, setArtistIdSaving] = useState(false)
+  const [artistIdError, setArtistIdError] = useState<string | null>(null)
+
   useEffect(() => {
     getBandsintownKey().then((s) => setStatus(s as unknown as MollieKeyStatus)).catch(() => {})
+    getBandsintownArtistId().then((a) => {
+      setSavedArtistId(a.artistId ?? null)
+      setArtistIdInput(a.artistId ?? '')
+    }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (status === null) return
+    setIntegrationConfigured('bandsintown', Boolean(status.isSet && savedArtistId))
+  }, [savedArtistId, setIntegrationConfigured, status])
+
+  async function handleSaveArtistId() {
+    const trimmed = artistId.trim()
+    if (!trimmed) return
+    setArtistIdSaving(true)
+    setArtistIdError(null)
+    try {
+      const result = await setBandsintownArtistId(trimmed)
+      setSavedArtistId(result.artistId ?? null)
+      setArtistIdInput(result.artistId ?? '')
+    } catch (err: unknown) {
+      setArtistIdError(err instanceof Error && err.message === 'invalid_bandsintown_artist_id'
+        ? t($ => $.bandsintown.artistId.invalidFormat)
+        : t($ => $.bandsintown.artistId.saveFailed))
+    } finally {
+      setArtistIdSaving(false)
+    }
+  }
+
+  async function handleClearArtistId() {
+    setArtistIdSaving(true)
+    setArtistIdError(null)
+    try {
+      await clearBandsintownArtistId()
+      setSavedArtistId(null)
+      setArtistIdInput('')
+    } finally {
+      setArtistIdSaving(false)
+    }
+  }
 
   function startEditing() {
     setInputKey('')
@@ -744,9 +857,12 @@ function BandsintownKeySection() {
       alt="Bandsintown"
       title={t($ => $.bandsintown.title)}
       description={t($ => $.bandsintown.description)}
-      configured={!!status?.isSet}
+      configured={!!status?.isSet || !!savedArtistId}
       mt={2}
     >
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+        {t($ => $.bandsintown.label)}
+      </Typography>
       {editing ? (
         <Stack spacing={1.5}>
           <TextField
@@ -812,6 +928,15 @@ function BandsintownKeySection() {
           )}
         </Stack>
       )}
+      <BandsintownArtistIdBlock
+        artistId={artistId}
+        savedArtistId={savedArtistId}
+        saving={artistIdSaving}
+        error={artistIdError}
+        onChange={(value) => { setArtistIdInput(value); setArtistIdError(null) }}
+        onSave={handleSaveArtistId}
+        onClear={handleClearArtistId}
+      />
     </IntegrationCard>
   )
 }

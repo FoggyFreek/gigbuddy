@@ -9,6 +9,7 @@ import { settleInvoice } from '../../../server/services/invoiceService.js'
 import { settlePurchase } from '../../../server/services/purchaseService.js'
 import { markInvoicePaid } from '../../../server/repositories/invoiceRepository.js'
 import { markPurchasePaid } from '../../../server/repositories/purchaseRepository.js'
+import { postShopifyPayoutSettlement } from '../../../server/services/ledgerService.js'
 
 // Stub MinIO (invoice PDF path is a no-op; we assert DB/ledger state).
 vi.mock('../../../server/utils/storage.js', () => ({
@@ -132,6 +133,36 @@ async function insertPaidPurchase(tenantId, { receipt, total, paidOn, supplier =
   return rows[0]
 }
 
+async function insertManuallySettledShopifyPayout(tenantId, {
+  amount, paidOn, reference = 'Manual Shopify payout',
+}) {
+  const unique = `${tenantId}-${reference}`
+  const { rows: [payout] } = await pool.query(
+    `INSERT INTO shopify_payments_payouts (
+       tenant_id, shopify_payout_gid, shopify_payout_legacy_id, status,
+       transaction_type, currency, net_cents, issued_at, external_trace_id,
+       sync_complete, origin
+     ) VALUES ($1,$2,$3,'PAID','DEPOSIT','EUR',$4,$5::date,$6,TRUE,'custom')
+     RETURNING *`,
+    [tenantId, `gid://gigbuddy/ShopifyPaymentsPayout/${unique}`, `custom-${unique}`, amount, paidOn, reference],
+  )
+  const posted = await postShopifyPayoutSettlement(pool, tenantId, {
+    id: payout.id,
+    remoteId: reference,
+    netCents: amount,
+    transactionType: 'DEPOSIT',
+    entryDate: paidOn,
+  })
+  await pool.query(
+    `UPDATE shopify_payments_payouts
+        SET ledger_transaction_id = $1, settlement_method = 'manual',
+            settlement_entry_date = $2::date, settled_at = NOW()
+      WHERE id = $3 AND tenant_id = $4`,
+    [posted.transactionId, paidOn, payout.id, tenantId],
+  )
+  return payout
+}
+
 async function journalsFor(tenantId, sourceType, sourceId) {
   const { rows } = await pool.query(
     `SELECT lt.id, lt.source_event, lt.entry_date,
@@ -231,6 +262,37 @@ describe('bank-import parse + stage', () => {
       })
       const res = await parse(asUserA, EUR)
       expect(lineBy(res.body.lines, 'Cafe De Kroon').suggestion.paidPurchaseMatches).toEqual([])
+    })
+  })
+
+  describe('manually recorded Shopify payouts (double-booking guard)', () => {
+    it('marks an exact bank deposit match as already recorded without offering reconciliation', async () => {
+      const payout = await insertManuallySettledShopifyPayout(seed.tenantA.id, {
+        amount: 60000, paidOn: '2026-02-04', reference: 'Legacy January payout',
+      })
+
+      const res = await parse(asUserA, EUR)
+      const line = lineBy(res.body.lines, 'Cafe De Kroon')
+
+      expect(line.suggestion.recordedShopifyPayoutMatches).toEqual([{
+        id: payout.id,
+        shopify_payout_id: 'Legacy January payout',
+        settlement_entry_date: '2026-02-04',
+        transaction_type: 'DEPOSIT',
+        currency: 'EUR',
+        net_cents: 60000,
+      }])
+      expect(line.suggestion.shopifyPayoutMatches).toEqual([])
+    })
+
+    it('never exposes another tenant\'s manually recorded payout', async () => {
+      await insertManuallySettledShopifyPayout(seed.tenantB.id, {
+        amount: 60000, paidOn: '2026-02-04', reference: 'Other tenant payout',
+      })
+
+      const res = await parse(asUserA, EUR)
+      expect(lineBy(res.body.lines, 'Cafe De Kroon')
+        .suggestion.recordedShopifyPayoutMatches).toEqual([])
     })
   })
 

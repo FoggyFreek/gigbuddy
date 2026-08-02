@@ -1,0 +1,161 @@
+%% Bandsintown integration map.
+%% Solid arrows mean "feeds/is consumed by". Dashed arrows are review findings.
+flowchart LR
+  subgraph db["Persistence"]
+    TI[(tenant_integrations)]
+    VEN[(venues)]
+    GIG[(gigs and gig_participants)]
+  end
+
+  subgraph repositories["Repository functions"]
+    CFGGET["getIntegrationConfigField"]
+    CFGSET["setIntegrationConfigField"]
+    CFGCLEAR["clearIntegrationConfigField"]
+    ARTGET["getBandsintownArtistId"]
+    ARTSET["setBandsintownArtistId"]
+    ARTCLEAR["clearBandsintownArtistId"]
+    BIPROFILE["updateBandsintownProfile"]
+    BIARTCLEAR["clearBandsintownArtist"]
+    CONFIG["fetchIntegrationConfiguration"]
+
+    CRECORD["fetchCredentialRecord"]
+    CSTATUS["fetchCredentialStatus"]
+    CSTORE["storeEncryptedCredential"]
+    CCLEAR["clearCredential"]
+
+    VINSERT["venueRepository.insertVenue"]
+    LEADS["gigRepository.getLeadMemberIds"]
+    GINSERT["gigRepository.insertGigForImport"]
+    GPART["gigRepository.insertGigParticipant"]
+  end
+
+  TI --> CFGGET
+  TI --> CFGSET
+  TI --> CFGCLEAR
+  CFGGET --> ARTGET
+  CFGSET --> ARTSET
+  CFGCLEAR --> ARTCLEAR
+  TI --> BIPROFILE
+  TI --> BIARTCLEAR
+  TI --> CONFIG
+  TI --> CRECORD
+  TI --> CSTATUS
+  TI --> CSTORE
+  TI --> CCLEAR
+  VEN --> VINSERT
+  GIG --> LEADS
+  GIG --> GINSERT
+  GIG --> GPART
+
+  subgraph services["Services and domain behavior"]
+    CREDENTIALS["integrationCredentialService<br/>loadIntegrationCredential<br/>getIntegrationCredentialStatus<br/>setIntegrationCredential<br/>clearIntegrationCredential"]
+    ICONFIG["integrationService.getIntegrationConfiguration"]
+    PROFILE["profileService<br/>get/set/clearBandsintownKey<br/>get/set/clearBandsintownArtistId<br/>patchProfile"]
+    ARTIST["bandsintownService.fetchArtistById"]
+    EVENTS["bandsintownService.fetchArtistEvents"]
+    IMPORT["bandsintownService.importEvents"]
+    RAWSQL["Service-local SQL<br/>listVenuesForMatching<br/>listGigsForDuplicateCheck<br/>fetchVenueInTenant"]
+    VALIDATE["bandsintownValidators<br/>normalize, match, deduplicate"]
+    NOTIFY["gigService.notifyGigsImported"]
+  end
+
+  CRECORD --> CREDENTIALS
+  CSTATUS --> CREDENTIALS
+  CSTORE --> CREDENTIALS
+  CCLEAR --> CREDENTIALS
+  ARTGET --> PROFILE
+  ARTSET --> PROFILE
+  ARTCLEAR --> PROFILE
+  BIPROFILE --> PROFILE
+  CONFIG --> ICONFIG
+  CREDENTIALS --> PROFILE
+  CREDENTIALS --> ARTIST
+  CREDENTIALS --> EVENTS
+  ARTGET --> EVENTS
+  VINSERT --> IMPORT
+  LEADS --> IMPORT
+  GINSERT --> IMPORT
+  GPART --> IMPORT
+  RAWSQL --> EVENTS
+  RAWSQL --> IMPORT
+  VALIDATE --> ARTIST
+  VALIDATE --> EVENTS
+  VALIDATE --> IMPORT
+  IMPORT --> NOTIFY
+
+  subgraph external["External API"]
+    BITARTIST["Bandsintown REST<br/>GET /artists/id_artistId"]
+    BITEVENTS["Bandsintown REST<br/>GET /artists/artistName/events"]
+  end
+  BITARTIST <--> ARTIST
+  BITARTIST <--> EVENTS
+  BITEVENTS <--> EVENTS
+
+  subgraph express["Express APIs"]
+    PROFILEAPI["/api/profile<br/>GET PUT DELETE /bandsintown-key<br/>GET PUT DELETE /bandsintown-artist-id<br/>PATCH /"]
+    ARTISTAPI["GET /api/bandsintown/artist/:artistId"]
+    EVENTSAPI["GET /api/bandsintown/events"]
+    IMPORTAPI["POST /api/bandsintown/import"]
+  end
+  PROFILE --> PROFILEAPI
+  ICONFIG --> PROFILEAPI
+  ARTIST --> ARTISTAPI
+  EVENTS --> EVENTSAPI
+  IMPORT --> IMPORTAPI
+  NOTIFY --> IMPORTAPI
+
+  subgraph frontendapi["Typed frontend API wrappers"]
+    FPROFILE["src/api/profile.ts<br/>get/set/clearBandsintownKey<br/>get/set/clearBandsintownArtistId<br/>getProfile and updateProfile"]
+    FBANDS["src/api/bandsintown.ts<br/>getBandsintownArtist<br/>getBandsintownEvents<br/>importBandsintownEvents"]
+    FCONTEXT["ProfileProvider + integrations utility<br/>isIntegrationConfigured('bandsintown')"]
+  end
+  PROFILEAPI --> FPROFILE
+  ARTISTAPI --> FBANDS
+  EVENTSAPI --> FBANDS
+  IMPORTAPI --> FBANDS
+  FPROFILE --> FCONTEXT
+
+  subgraph ui["UI consumers"]
+    SETTINGS["IntegrationsSection<br/>key and artist ID configuration"]
+    SOCIALS["ProfilePage / ProfileSocialsTab<br/>artist lookup and social autofill"]
+    GIGSPAGE["GigsPage<br/>integration gate and import/export menu"]
+    APIDIALOG["BandsintownApiImportDialog<br/>fetch, review and import"]
+    CSVDIALOG["BandsintownImportDialog<br/>CSV parse, review and same import API"]
+    CSVEXPORT["bandsintownExport.ts<br/>client-side CSV export"]
+  end
+  FPROFILE --> SETTINGS
+  FPROFILE --> SOCIALS
+  FCONTEXT --> SOCIALS
+  FCONTEXT --> GIGSPAGE
+  FBANDS --> SOCIALS
+  FBANDS --> APIDIALOG
+  FBANDS --> CSVDIALOG
+  GIGSPAGE --> APIDIALOG
+  GIGSPAGE --> CSVDIALOG
+  GIGSPAGE --> CSVEXPORT
+
+  subgraph review["Review: generic behavior, maintainability and reuse"]
+    GOOD["Strong: one encrypted-credential service and one integration-status model are shared across all integrations; API fetch accepts injected fetchImpl."]
+    REUSE["Strong: API and CSV inputs converge on one normalized import contract and one transactional import service."]
+    LAYER["Maintainability risk: three tenant-scoped SQL reads live in bandsintownService instead of repositories, contrary to route to service to repository layering."]
+    COUPLING["Reuse limit: importEvents owns the default transaction dependency and creates GigBuddy-specific venues, gigs and lead participants; extraction into an import adapter would improve testability."]
+    UIREUSE["UI reuse: configuration status is generic, but IntegrationsSection implements provider-specific editor state and casts the shared secret status type."]
+  end
+  CREDENTIALS -.-> GOOD
+  IMPORT -.-> REUSE
+  RAWSQL -.-> LAYER
+  IMPORT -.-> COUPLING
+  SETTINGS -.-> UIREUSE
+
+  classDef repo fill:#e8f1ff,stroke:#3569a8,color:#10233f
+  classDef service fill:#eaf7ec,stroke:#3d7c47,color:#17351c
+  classDef api fill:#fff4d6,stroke:#a87916,color:#47350c
+  classDef ui fill:#f5eaff,stroke:#7d4aa8,color:#2d173f
+  classDef external fill:#ffe9e9,stroke:#a84a4a,color:#431818
+  classDef finding fill:#f3f3f3,stroke:#666,color:#222
+  class CFGGET,CFGSET,CFGCLEAR,ARTGET,ARTSET,ARTCLEAR,BIPROFILE,BIARTCLEAR,CONFIG,CRECORD,CSTATUS,CSTORE,CCLEAR,VINSERT,LEADS,GINSERT,GPART repo
+  class CREDENTIALS,ICONFIG,PROFILE,ARTIST,EVENTS,IMPORT,RAWSQL,VALIDATE,NOTIFY service
+  class PROFILEAPI,ARTISTAPI,EVENTSAPI,IMPORTAPI,FPROFILE,FBANDS,FCONTEXT api
+  class SETTINGS,SOCIALS,GIGSPAGE,APIDIALOG,CSVDIALOG,CSVEXPORT ui
+  class BITARTIST,BITEVENTS external
+  class GOOD,REUSE,LAYER,COUPLING,UIREUSE finding

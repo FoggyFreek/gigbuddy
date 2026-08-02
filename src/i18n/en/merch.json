@@ -32,6 +32,7 @@
   "summary": {
     "heading": "Sales by product",
     "importShopify": "Import from Shopify",
+    "recordShopifyPayout": "Record Shopify payout",
     "empty": "No sales in this period.",
     "table": {
       "product": "Product",
@@ -103,8 +104,8 @@
     "title": "Import orders from Shopify",
     "notConnected": "Shopify isn't connected yet. Add your API key and store domain in <settingsLink>Settings → Integrations</settingsLink> first.",
     "next": "Next ({{count}})",
-    "importLines_one": "Import {{count}} line",
-    "importLines_other": "Import {{count}} lines",
+    "importLines_one": "Import {{count}} order",
+    "importLines_other": "Import {{count}} orders",
     "noOrders": "No recent orders found.",
     "loadMore": "Load older orders",
     "imported": "Imported",
@@ -115,7 +116,9 @@
     "vat": "VAT",
     "lineCount_one": "{{count}} line",
     "lineCount_other": "{{count}} lines",
-    "mapIntro": "Map each line to a product (revenue uses the product's account and adjusts stock) or to a revenue account, or skip it. Already-imported and refunded lines are locked.",
+    "paymentSummary": "fee {{fee}}, payout contribution {{net}}",
+    "paypalFeesPending": "PayPal fee determined during bank reconciliation",
+    "mapIntro": "Map every order component. Product mappings adjust stock; revenue mappings post directly to the selected account. Shopify Payments orders wait for fee details; PayPal orders are imported gross and their fee is recorded during bank reconciliation.",
     "table": {
       "order": "Order",
       "date": "Date",
@@ -129,11 +132,11 @@
       "mapTo": "Map to"
     },
     "done": {
-      "importedOnly_one": "Imported {{count}} line.",
-      "importedOnly_other": "Imported {{count}} lines.",
-      "importedWithSkipped_one": "Imported {{count}} line, skipped {{skipped}}.",
-      "importedWithSkipped_other": "Imported {{count}} lines, skipped {{skipped}}.",
-      "line": "Line",
+      "importedOnly_one": "Imported {{count}} order.",
+      "importedOnly_other": "Imported {{count}} orders.",
+      "importedWithSkipped_one": "Imported {{count}} order, skipped {{skipped}}.",
+      "importedWithSkipped_other": "Imported {{count}} orders, skipped {{skipped}}.",
+      "line": "Order",
       "reason": "Reason"
     },
     "errors": {
@@ -158,11 +161,52 @@
       "skipped_unpaid": "Order unpaid",
       "skipped_not_found": "Order not found",
       "skipped_accounting_not_configured": "Accounting not configured"
+      ,"skipped_incomplete_mapping": "Map every order component"
+      ,"skipped_order_total_mismatch": "Order components do not match the Shopify payment"
     },
     "orderSkip": {
       "skipped_cancelled": "Cancelled",
       "skipped_unsupported_currency": "Not EUR",
-      "skipped_unpaid": "Unpaid"
+      "skipped_unpaid": "Unpaid",
+      "skipped_incomplete_order": "Order details incomplete",
+      "skipped_payment_pending": "Payment details pending",
+      "skipped_payment_mismatch": "Payment totals mismatch",
+      "skipped_test_order": "Test order",
+      "skipped_legacy_partial_import": "Partly imported by the former workflow",
+      "skipped_unsupported_payment_gateway": "Unsupported payment provider"
+    }
+  },
+  "shopifyPayout": {
+    "title": "Record Shopify payouts",
+    "intro": "Record a paid Shopify payout directly on the primary bank account when you do not import bank statements. Shopify fees are already included in the net payout.",
+    "fromDate": "Payouts from",
+    "toDate": "Payouts through",
+    "refresh": "Refresh Shopify payouts",
+    "createCustom": "Create custom payout",
+    "customIntro": "Create a local payout for imported orders whose payout is no longer available through Shopify. Select the order contributions included in the bank payment.",
+    "customReference": "Reference",
+    "customDate": "Payout date",
+    "customAmount": "Actual payout amount",
+    "customOrders": "Order contributions",
+    "customSourcePayout": "Shopify payout {{id}}",
+    "customDifference": "Difference to categorize after creation: {{amount}}",
+    "customSubmit": "Create payout",
+    "customCancel": "Cancel",
+    "customEmpty": "No unassigned Shopify order contributions are available.",
+    "empty": "No unsettled paid Shopify payouts found. Refresh a date range to check Shopify.",
+    "payoutLabel": "Shopify payout {{id}}",
+    "adjustmentsIntro": "Categorize each non-order adjustment before recording this payout.",
+    "incomplete": "This payout is not ready because its balance transactions are incomplete.",
+    "paymentDate": "Bank payment date",
+    "recordDeposit": "Record on bank account",
+    "recordWithdrawal": "Record bank withdrawal",
+    "recorded": "Payout recorded on the primary bank account.",
+    "close": "Close",
+    "errors": {
+      "load": "Shopify payouts could not be loaded.",
+      "refresh": "Shopify payouts could not be refreshed.",
+      "create": "The custom Shopify payout could not be created.",
+      "settle": "The Shopify payout could not be recorded."
     }
   }
 }

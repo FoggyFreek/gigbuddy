@@ -16,7 +16,7 @@ const CONTEXT_KEYS = new Set([
   'migrationNeeded', 'reEncryptionNeeded', 'rateMissing', 'ratesFilled',
   'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
-  'achievementKey',
+  'achievementKey', 'shopifyResponseJson',
   // VAT scheme / issued-document snapshot audit counters. All server-computed
   // integers, never anything off a request.
   'missingInvoiceSnapshots', 'missingPurchaseSnapshots', 'overlappingEnrolments',

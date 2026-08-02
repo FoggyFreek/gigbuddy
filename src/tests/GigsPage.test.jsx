@@ -55,6 +55,7 @@ import GigDetailPage from '../pages/GigDetailPage.tsx'
 import { deleteGig, getGig, listGigs, listPastGigs, listUpcomingGigs, searchGigs } from '../api/gigs.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
+import { ProfileContext } from '../contexts/profileContext.ts'
 
 const limitedCollection = (items, total = items.length) => ({ items, meta: { limit: 100, returned: items.length, total } })
 const pastCollection = (items) => ({ items, meta: { limit: 100, returned: items.length, nextCursor: null } })
@@ -63,12 +64,21 @@ const pastCollection = (items) => ({ items, meta: { limit: 100, returned: items.
 // create/edit/delete affordances gated on canWritePlanning are present.
 const writerAuth = { user: { isSuperAdmin: true } }
 
-function wrap(ui, { initialEntries = ['/'] } = {}) {
+const integrationProfile = (configured = true) => ({
+  bandName: '', setBandName: vi.fn(), accentColor: null, setAccentColor: vi.fn(),
+  integrations: { shopify: configured, bandsintown: configured, mollie: configured },
+  isIntegrationConfigured: () => configured,
+  setIntegrationConfigured: vi.fn(),
+})
+
+function wrap(ui, { initialEntries = ['/'], integrationsConfigured = true } = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
         <AuthContext.Provider value={writerAuth}>
-          <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+          <ProfileContext.Provider value={integrationProfile(integrationsConfigured)}>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+          </ProfileContext.Provider>
         </AuthContext.Provider>
       </ThemeProvider>
     </MemoryRouter>
@@ -129,6 +139,16 @@ describe('GigsPage', () => {
     // the legacy bare listGigs() (used only by Tour Share/Export/Banner
     // Mosaic) must stay untouched until one of those is actually opened.
     expect(listGigs).not.toHaveBeenCalled()
+  })
+
+  it('hides Bandsintown actions when Bandsintown is not configured', async () => {
+    const user = userEvent.setup()
+    wrap(<GigsPage />, { integrationsConfigured: false })
+    await screen.findByText('Jazz Night')
+
+    expect(screen.queryByRole('button', { name: /^import$/i })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^export$/i }))
+    expect(screen.queryByRole('button', { name: /bandsintown/i })).not.toBeInTheDocument()
   })
 
   it('lazily fetches the full gig list the first time Export or Share is opened', async () => {

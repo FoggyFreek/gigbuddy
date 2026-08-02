@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../contexts/authContext.ts'
+import { ProfileContext } from '../contexts/profileContext.ts'
 import ProfilePage from '../pages/ProfilePage.tsx'
 import theme from '../theme.ts'
 
@@ -34,6 +35,7 @@ vi.mock('../api/profile.ts', () => ({
     youtube_handle: '',
     spotify_handle: '',
     bandsintown_artist_name: 'The Testers',
+    bandsintown_artist_id: '12345',
     formal_name: '',
     address_street: '',
     address_postal_code: '',
@@ -72,7 +74,7 @@ vi.mock('../utils/compressImage.ts', () => ({
 import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '../api/profile.ts'
 import { compressLogo } from '../utils/compressImage.ts'
 
-function wrap(ui, { user } = {}) {
+function wrap(ui, { user, bandsintown = true } = {}) {
   const activeUser = user ?? {
     isSuperAdmin: false,
     activeTenantRole: 'contributor',
@@ -81,7 +83,14 @@ function wrap(ui, { user } = {}) {
   return render(
     <ThemeProvider theme={theme}>
       <AuthContext.Provider value={{ user: activeUser, logout: vi.fn() }}>
-        <MemoryRouter>{ui}</MemoryRouter>
+        <ProfileContext.Provider value={{
+          bandName: '', setBandName: vi.fn(), accentColor: null, setAccentColor: vi.fn(),
+          integrations: { shopify: true, bandsintown, mollie: true },
+          isIntegrationConfigured: (integration) => integration !== 'bandsintown' || bandsintown,
+          setIntegrationConfigured: vi.fn(),
+        }}>
+          <MemoryRouter>{ui}</MemoryRouter>
+        </ProfileContext.Provider>
       </AuthContext.Provider>
     </ThemeProvider>
   )
@@ -224,6 +233,21 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
     const label = await screen.findByText(/Bandsintown artist name/i)
     expect(label.parentElement).toHaveTextContent('The Testers')
+  })
+
+  it('keeps Bandsintown profile fields but hides the API fetch when the integration is not configured', async () => {
+    const user = userEvent.setup()
+    wrap(<ProfilePage />, { bandsintown: false })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+
+    expect(await screen.findByText(/Bandsintown artist name/i)).toBeInTheDocument()
+    expect(screen.getByText(/Bandsintown artist ID/i)).toBeInTheDocument()
+
+    const editButtons = await screen.findAllByRole('button', { name: /^edit$/i })
+    await user.click(editButtons.at(-1))
+    expect(screen.queryByRole('button', { name: /Fetch from Bandsintown/i })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Bandsintown artist name')).toBeInTheDocument()
+    expect(screen.getByLabelText('Bandsintown artist ID')).toBeInTheDocument()
   })
 
   it('renders social edit helpers without invalid nested block elements', async () => {

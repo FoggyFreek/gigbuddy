@@ -22,14 +22,16 @@ vi.mock('../api/profile.ts', () => ({
   updateProfile: vi.fn().mockResolvedValue({}),
   getMollieKey: vi.fn().mockResolvedValue({ isSet: false }),
   getBandsintownKey: vi.fn().mockResolvedValue({ isSet: false }),
+  getBandsintownArtistId: vi.fn().mockResolvedValue({ artistId: null }),
   getShopifySecret: vi.fn().mockResolvedValue({ isSet: false }),
   getShopifyClientId: vi.fn().mockResolvedValue({ clientId: null }),
   getShopifyDomain: vi.fn().mockResolvedValue({ domain: null }),
   setMollieKey: vi.fn(), clearMollieKey: vi.fn(),
   setBandsintownKey: vi.fn(), clearBandsintownKey: vi.fn(),
+  setBandsintownArtistId: vi.fn(), clearBandsintownArtistId: vi.fn(),
   setShopifySecret: vi.fn(), clearShopifySecret: vi.fn(),
   setShopifyClientId: vi.fn(), clearShopifyClientId: vi.fn(),
-  setShopifyDomain: vi.fn(), clearShopifyDomain: vi.fn(),
+  setShopifyDomain: vi.fn(),
 }))
 vi.mock('../api/users.ts', async (importOriginal) => {
   const actual = await importOriginal()

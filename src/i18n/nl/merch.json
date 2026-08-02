@@ -32,6 +32,7 @@
   "summary": {
     "heading": "Verkoop per product",
     "importShopify": "Importeren uit Shopify",
+    "recordShopifyPayout": "Shopify-uitbetaling boeken",
     "empty": "Geen verkopen in deze periode.",
     "table": {
       "product": "Product",
@@ -103,8 +104,8 @@
     "title": "Bestellingen importeren uit Shopify",
     "notConnected": "Shopify is nog niet verbonden. Voeg eerst je API-sleutel en winkeldomein toe in <settingsLink>Instellingen → Integraties</settingsLink>.",
     "next": "Volgende ({{count}})",
-    "importLines_one": "{{count}} regel importeren",
-    "importLines_other": "{{count}} regels importeren",
+    "importLines_one": "{{count}} bestelling importeren",
+    "importLines_other": "{{count}} bestellingen importeren",
     "noOrders": "Geen recente bestellingen gevonden.",
     "loadMore": "Oudere bestellingen laden",
     "imported": "Geïmporteerd",
@@ -115,7 +116,9 @@
     "vat": "Btw",
     "lineCount_one": "{{count}} regel",
     "lineCount_other": "{{count}} regels",
-    "mapIntro": "Koppel elke regel aan een product (opbrengst gebruikt de rekening van het product en past de voorraad aan) of aan een opbrengstrekening, of sla hem over. Reeds geïmporteerde en terugbetaalde regels zijn vergrendeld.",
+    "paymentSummary": "kosten {{fee}}, bijdrage aan uitbetaling {{net}}",
+    "paypalFeesPending": "PayPal-kosten worden bepaald bij de bankafstemming",
+    "mapIntro": "Koppel elk onderdeel van de bestelling. Productkoppelingen passen de voorraad aan; omzetkoppelingen boeken rechtstreeks op de gekozen rekening. Shopify Payments-bestellingen wachten op kostengegevens; PayPal-bestellingen worden bruto geïmporteerd en de kosten worden bij de bankafstemming geboekt.",
     "table": {
       "order": "Bestelling",
       "date": "Datum",
@@ -129,11 +132,11 @@
       "mapTo": "Koppelen aan"
     },
     "done": {
-      "importedOnly_one": "{{count}} regel geïmporteerd.",
-      "importedOnly_other": "{{count}} regels geïmporteerd.",
-      "importedWithSkipped_one": "{{count}} regel geïmporteerd, {{skipped}} overgeslagen.",
-      "importedWithSkipped_other": "{{count}} regels geïmporteerd, {{skipped}} overgeslagen.",
-      "line": "Regel",
+      "importedOnly_one": "{{count}} bestelling geïmporteerd.",
+      "importedOnly_other": "{{count}} bestellingen geïmporteerd.",
+      "importedWithSkipped_one": "{{count}} bestelling geïmporteerd, {{skipped}} overgeslagen.",
+      "importedWithSkipped_other": "{{count}} bestellingen geïmporteerd, {{skipped}} overgeslagen.",
+      "line": "Bestelling",
       "reason": "Reden"
     },
     "errors": {
@@ -158,11 +161,52 @@
       "skipped_unpaid": "Bestelling onbetaald",
       "skipped_not_found": "Bestelling niet gevonden",
       "skipped_accounting_not_configured": "Boekhouding niet geconfigureerd"
+      ,"skipped_incomplete_mapping": "Koppel elk onderdeel van de bestelling"
+      ,"skipped_order_total_mismatch": "Bestelonderdelen komen niet overeen met de Shopify-betaling"
     },
     "orderSkip": {
       "skipped_cancelled": "Geannuleerd",
       "skipped_unsupported_currency": "Niet EUR",
-      "skipped_unpaid": "Onbetaald"
+      "skipped_unpaid": "Onbetaald",
+      "skipped_incomplete_order": "Bestelgegevens onvolledig",
+      "skipped_payment_pending": "Betaalgegevens nog niet beschikbaar",
+      "skipped_payment_mismatch": "Betaaltotalen komen niet overeen",
+      "skipped_test_order": "Testbestelling",
+      "skipped_legacy_partial_import": "Deels geïmporteerd met de eerdere werkwijze",
+      "skipped_unsupported_payment_gateway": "Niet-ondersteunde betaalprovider"
+    }
+  },
+  "shopifyPayout": {
+    "title": "Shopify-uitbetalingen boeken",
+    "intro": "Boek een betaalde Shopify-uitbetaling rechtstreeks op de primaire bankrekening als je geen bankafschriften importeert. Shopify-kosten zijn al verwerkt in de netto-uitbetaling.",
+    "fromDate": "Uitbetalingen vanaf",
+    "toDate": "Uitbetalingen tot en met",
+    "refresh": "Shopify-uitbetalingen vernieuwen",
+    "createCustom": "Aangepaste uitbetaling maken",
+    "customIntro": "Maak een lokale uitbetaling voor geïmporteerde bestellingen waarvan de uitbetaling niet meer via Shopify beschikbaar is. Selecteer de orderbijdragen in de bankbetaling.",
+    "customReference": "Referentie",
+    "customDate": "Uitbetalingsdatum",
+    "customAmount": "Werkelijk uitbetalingsbedrag",
+    "customOrders": "Orderbijdragen",
+    "customSourcePayout": "Shopify-uitbetaling {{id}}",
+    "customDifference": "Verschil om na het aanmaken te categoriseren: {{amount}}",
+    "customSubmit": "Uitbetaling maken",
+    "customCancel": "Annuleren",
+    "customEmpty": "Er zijn geen niet-toegewezen Shopify-orderbijdragen beschikbaar.",
+    "empty": "Geen openstaande betaalde Shopify-uitbetalingen gevonden. Vernieuw een datumbereik om Shopify te controleren.",
+    "payoutLabel": "Shopify-uitbetaling {{id}}",
+    "adjustmentsIntro": "Categoriseer elke aanpassing zonder bestelling voordat je deze uitbetaling boekt.",
+    "incomplete": "Deze uitbetaling is nog niet gereed omdat de saldotransacties onvolledig zijn.",
+    "paymentDate": "Datum bankbetaling",
+    "recordDeposit": "Boeken op bankrekening",
+    "recordWithdrawal": "Bankopname boeken",
+    "recorded": "Uitbetaling geboekt op de primaire bankrekening.",
+    "close": "Sluiten",
+    "errors": {
+      "load": "Shopify-uitbetalingen konden niet worden geladen.",
+      "refresh": "Shopify-uitbetalingen konden niet worden vernieuwd.",
+      "create": "De aangepaste Shopify-uitbetaling kon niet worden gemaakt.",
+      "settle": "De Shopify-uitbetaling kon niet worden geboekt."
     }
   }
 }

@@ -21,6 +21,7 @@ import {
   buildProfileUpdate,
   buildLinkUpdate,
 } from '../validators/profileValidators.js'
+import { parseArtistId } from '../validators/bandsintownValidators.js'
 import {
   listProfileLinks,
   fetchProfileTenant,
@@ -41,6 +42,9 @@ import {
   setShopifyDomain,
   clearShopifyDomain,
   updateBandsintownProfile,
+  getBandsintownArtistId,
+  setBandsintownArtistId,
+  clearBandsintownArtistId,
 } from '../repositories/tenantIntegrationRepository.js'
 import {
   clearMemoryTile,
@@ -61,6 +65,7 @@ import { withFeatureWriteGuard, withIntegrationWriteLock } from './featureGuards
 import { resolveTenantEntitlements } from './entitlementService.js'
 import { FEATURES } from '../auth/entitlements.js'
 import { badRequest, notFound } from './serviceErrors.js'
+import { getIntegrationConfiguration } from './integrationService.js'
 
 function entitlementRequired(feature) {
   return {
@@ -98,8 +103,11 @@ async function setIntegrationCredentialGuarded(db, tenantId, type, plaintext) {
 export async function getProfile(db, tenantId) {
   const tenant = await fetchProfileTenant(db, tenantId)
   if (!tenant) return notFound('Profile not found')
-  const links = await listProfileLinks(db, tenantId)
-  return { profile: { ...tenant, links } }
+  const [links, integrations] = await Promise.all([
+    listProfileLinks(db, tenantId),
+    getIntegrationConfiguration(db, tenantId),
+  ])
+  return { profile: { ...tenant, links, integrations } }
 }
 
 const ADMIN_ONLY_PROFILE_FIELDS = new Set([...FINANCIAL_FIELDS_SET, 'accent_color'])
@@ -109,6 +117,9 @@ const ADMIN_ONLY_PROFILE_FIELDS = new Set([...FINANCIAL_FIELDS_SET, 'accent_colo
 // edit it — but it is still customization data, so its write takes the same
 // purge-race guard.
 const CUSTOMIZATION_PROFILE_FIELDS = new Set(['accent_color', ...MEMORY_FIELDS])
+// Live in tenant_integrations, not on the tenant row. The artist ID is also
+// editable from Settings → Integrations (/profile/bandsintown-artist-id) — both
+// paths write this same column and validate it the same way.
 const BANDSINTOWN_PROFILE_FIELDS = new Set(['bandsintown_artist_name', 'bandsintown_artist_id'])
 
 // `isAdmin` is computed by the route (tenant_admin or super admin); tenant-wide
@@ -260,6 +271,29 @@ export async function setBandsintownKeyValue(db, tenantId, body) {
 
 export async function clearBandsintownKeyValue(db, tenantId) {
   return clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.BANDSINTOWN_APP_ID)
+}
+
+// ---------- bandsintown artist id ----------
+
+// Not a secret, so it is returned in full. Every Bandsintown API call needs it
+// alongside the app_id, which is why it sits with the credential rather than in
+// the band profile.
+export async function getBandsintownArtistIdStatus(db, tenantId) {
+  const artistId = await getBandsintownArtistId(db, tenantId)
+  return { artistId: artistId || null }
+}
+
+export async function setBandsintownArtistIdValue(db, tenantId, body) {
+  const artistId = parseArtistId(body?.artistId)
+  if (!artistId) return badRequest('invalid_bandsintown_artist_id')
+  return guardedIntegrationWrite(db, tenantId, async () => ({
+    status: { artistId: await setBandsintownArtistId(db, tenantId, artistId) },
+  }))
+}
+
+export async function clearBandsintownArtistIdValue(db, tenantId) {
+  await clearBandsintownArtistId(db, tenantId)
+  return { artistId: null }
 }
 
 // ---------- shopify app credentials ----------

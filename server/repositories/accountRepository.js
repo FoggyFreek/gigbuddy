@@ -9,6 +9,7 @@ const SETTINGS_INSERT_COLUMNS = [
   'output_vat_account_code', 'input_vat_account_code',
   'vat_receivable_settlement_account_code', 'vat_payable_settlement_account_code',
   'merch_inventory_account_code', 'merch_revenue_account_code', 'merch_cogs_account_code',
+  'shopify_clearing_account_code', 'paypal_clearing_account_code', 'shopify_fee_expense_account_code',
 ]
 
 // Shared transaction-scoped lock serializing ledger postings with accounting
@@ -40,6 +41,24 @@ const OPEN_BALANCE_GUARDS = {
   receivable_account_code: {
     sql: `SELECT 1 FROM invoices WHERE tenant_id = $1 AND status = 'sent' LIMIT 1`,
     reason: 'sent unpaid invoices exist',
+  },
+  shopify_clearing_account_code: {
+    sql: `SELECT 1
+            FROM ledger_entries le
+            JOIN tenant_accounting_settings tas ON tas.tenant_id = le.tenant_id
+           WHERE le.tenant_id = $1 AND le.account_code = tas.shopify_clearing_account_code
+           GROUP BY le.tenant_id
+          HAVING SUM(le.debit_cents - le.credit_cents) <> 0`,
+    reason: 'unsettled Shopify payouts exist',
+  },
+  paypal_clearing_account_code: {
+    sql: `SELECT 1
+            FROM ledger_entries le
+            JOIN tenant_accounting_settings tas ON tas.tenant_id = le.tenant_id
+           WHERE le.tenant_id = $1 AND le.account_code = tas.paypal_clearing_account_code
+           GROUP BY le.tenant_id
+          HAVING SUM(le.debit_cents - le.credit_cents) <> 0`,
+    reason: 'unsettled PayPal payouts exist',
   },
 }
 
@@ -157,8 +176,7 @@ export async function listAccounts(executor, tenantId) {
 }
 
 // True when `code` is an existing active account of the given type for the
-// tenant. Used to validate a revenue account chosen for a Shopify revenue-only
-// import line. Tenant-scoped so one tenant's chart can't satisfy another's.
+// tenant. 
 export async function accountExistsOfType(executor, tenantId, code, type) {
   const { rows } = await executor.query(
     `SELECT 1 FROM chart_of_accounts
@@ -213,7 +231,10 @@ export async function isCodeReferencedInSettings(executor, tenantId, code) {
        vat_payable_settlement_account_code = $2 OR
        merch_inventory_account_code = $2 OR
        merch_revenue_account_code = $2 OR
-       merch_cogs_account_code = $2
+       merch_cogs_account_code = $2 OR
+       shopify_clearing_account_code = $2 OR
+       paypal_clearing_account_code = $2 OR
+       shopify_fee_expense_account_code = $2
      )`,
     [tenantId, code],
   )

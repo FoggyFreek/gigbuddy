@@ -213,7 +213,9 @@ export async function merchSalesPeriods(executor, tenantId) {
 // `body.gross_incl_cents` is the exact inclusive line total override used by
 // imports whose discounted gross isn't divisible by quantity; manual sales omit
 // it and the gross stays quantity * unit_price_incl_cents.
-export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = null } = {}) {
+export async function recordMerchSaleTx(client, tenantId, body, {
+  actorUserId = null, receiptAccountCode = null,
+} = {}) {
   await acquireAccountingSettingsLock(client, tenantId)
   const productId = parsePositiveInt(body.product_id)
   if (!productId) return { error: { status: 400, body: { error: 'Invalid product_id' } } }
@@ -295,7 +297,7 @@ export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = 
 
   await decrementProductStock(client, tenantId, productId, quantity)
 
-  await postMerchSaleRecorded(client, tenantId, {
+  const posted = await postMerchSaleRecorded(client, tenantId, {
     id: saleId,
     sale_date: saleDate,
     quantity,
@@ -311,9 +313,9 @@ export async function recordMerchSaleTx(client, tenantId, body, { actorUserId = 
     payment_method: paymentMethod,
     revenue_account_code: revenueAccountCode,
     product_name: product.name,
-  }, { actorUserId })
+  }, { actorUserId, receiptAccountCode })
 
-  return { saleId }
+  return { saleId, ledgerTransactionId: posted.transactionId ?? null }
 }
 
 export async function recordMerchSale(pool, tenantId, body, actorUserId = null) {

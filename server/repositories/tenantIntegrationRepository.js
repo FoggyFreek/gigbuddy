@@ -50,6 +50,15 @@ export const setShopifyClientId = (executor, tenantId, clientId) =>
 export const clearShopifyClientId = (executor, tenantId) =>
   clearIntegrationConfigField(executor, tenantId, 'shopify_client_id')
 
+export const getBandsintownArtistId = (executor, tenantId) =>
+  getIntegrationConfigField(executor, tenantId, 'bandsintown_artist_id')
+
+export const setBandsintownArtistId = (executor, tenantId, artistId) =>
+  setIntegrationConfigField(executor, tenantId, 'bandsintown_artist_id', artistId)
+
+export const clearBandsintownArtistId = (executor, tenantId) =>
+  clearIntegrationConfigField(executor, tenantId, 'bandsintown_artist_id')
+
 export const getShopifyDomain = (executor, tenantId) =>
   getIntegrationConfigField(executor, tenantId, 'shopify_shop_domain')
 
@@ -84,13 +93,22 @@ export async function clearBandsintownArtist(executor, tenantId) {
   )
 }
 
-export async function fetchBandsintownArtist(executor, tenantId) {
+export async function fetchIntegrationConfiguration(executor, tenantId) {
   const { rows } = await executor.query(
-    `SELECT ti.bandsintown_artist_id, ti.bandsintown_artist_name
-       FROM tenants t
-       LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id
-      WHERE t.id = $1`,
+    `SELECT
+       (NULLIF(BTRIM(shopify_client_id), '') IS NOT NULL
+        AND (shopify_client_secret_encrypted IS NOT NULL
+          OR NULLIF(BTRIM(shopify_client_secret), '') IS NOT NULL)
+        AND NULLIF(BTRIM(shopify_shop_domain), '') IS NOT NULL) AS shopify,
+       ((bandsintown_app_id_encrypted IS NOT NULL
+         OR NULLIF(BTRIM(bandsintown_app_id), '') IS NOT NULL)
+        AND NULLIF(BTRIM(bandsintown_artist_id), '') IS NOT NULL) AS bandsintown,
+       (mollie_api_key_retained_at IS NULL
+        AND (mollie_api_key_encrypted IS NOT NULL
+          OR NULLIF(BTRIM(mollie_api_key), '') IS NOT NULL)) AS mollie
+       FROM tenant_integrations
+      WHERE tenant_id = $1`,
     [tenantId],
   )
-  return rows[0] || null
+  return rows[0] || { shopify: false, bandsintown: false, mollie: false }
 }
