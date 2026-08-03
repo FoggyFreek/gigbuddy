@@ -8,6 +8,9 @@
 // returns query-completion segments (brand/category/plaintext) with no address,
 // phone, website or coordinates, so it cannot populate a single field.
 import { logger } from '../utils/logger.js'
+import {
+  LATITUDE_MAX, LATITUDE_MIN, LONGITUDE_MAX, LONGITUDE_MIN, coordinateOrNull,
+} from '../utils/coordinates.js'
 import { parsePlaceQuery } from '../validators/placeValidators.js'
 import { badRequest } from './serviceErrors.js'
 
@@ -71,19 +74,14 @@ function toStreetAndNumber(address = {}) {
   return number ? `${street} ${number}` : street
 }
 
-function toCoordinate(value, min, max) {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null
-  return parsed
-}
-
 // Pure TomTom result -> app suggestion mapping. The single owner of the field
 // mapping; exported so it can be unit-tested without touching the network.
 export function mapPoiResult(result = {}) {
   const address = result.address ?? {}
   const poi = result.poi ?? {}
-  const latitude = toCoordinate(result.position?.lat, -90, 90)
-  const longitude = toCoordinate(result.position?.lon, -180, 180)
+  // Provider coordinates are dropped rather than rejected when unusable.
+  const latitude = coordinateOrNull(result.position?.lat, LATITUDE_MIN, LATITUDE_MAX)
+  const longitude = coordinateOrNull(result.position?.lon, LONGITUDE_MIN, LONGITUDE_MAX)
   const pairedCoords = latitude !== null && longitude !== null
 
   return {

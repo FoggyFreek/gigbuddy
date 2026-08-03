@@ -1,5 +1,8 @@
 // Input parsing and pure mapping helpers for the Bandsintown integration.
 // No DB or network access here.
+import {
+  LATITUDE_MAX, LATITUDE_MIN, LONGITUDE_MAX, LONGITUDE_MIN, coordinateOrNull,
+} from '../utils/coordinates.js'
 
 export const VALID_IMPORT_STATUSES = ['option', 'confirmed', 'announced']
 export const VALID_IMPORT_CATEGORIES = new Set(['venue', 'festival'])
@@ -67,8 +70,8 @@ export function normalizeBandsintownEvent(event) {
   const offers = Array.isArray(event.offers) ? event.offers : []
   const description = trimmed(event.title) || trimmed(event.description) || trimmed(venue.name)
   if (!description) return null
-  const latitude = normalizedCoordinate(venue.latitude, -90, 90)
-  const longitude = normalizedCoordinate(venue.longitude, -180, 180)
+  const latitude = normalizedCoordinate(venue.latitude, LATITUDE_MIN, LATITUDE_MAX)
+  const longitude = normalizedCoordinate(venue.longitude, LONGITUDE_MIN, LONGITUDE_MAX)
   const hasCoordinatePair = latitude !== null && longitude !== null
 
   return {
@@ -95,11 +98,12 @@ export function normalizeBandsintownEvent(event) {
   }
 }
 
+// Range checks come from utils/coordinates.js; this keeps returning the original
+// string, which is what the import insert expects.
 function normalizedCoordinate(value, min, max) {
   const text = trimmed(value)
   if (!text) return null
-  const number = Number(text)
-  return Number.isFinite(number) && number >= min && number <= max ? text : null
+  return coordinateOrNull(text, min, max) === null ? null : text
 }
 
 // venues.country is a CHAR(2) ISO code; Bandsintown sends full English

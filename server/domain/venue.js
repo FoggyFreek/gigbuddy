@@ -4,6 +4,9 @@ import {
   normalizeOptionalRegistrationNumber,
   normalizeOptionalVatId,
 } from '../utils/businessIdentifiers.js'
+import {
+  LATITUDE_MAX, LATITUDE_MIN, LONGITUDE_MAX, LONGITUDE_MIN, parseCoordinate,
+} from '../utils/coordinates.js'
 
 export const VALID_VENUE_CATEGORIES = new Set(['venue', 'festival'])
 
@@ -33,23 +36,21 @@ export const VENUE_EDITABLE_FIELDS = [
 export const VENUE_COORDINATE_FIELDS = ['latitude', 'longitude']
 export const VENUE_INSERT_FIELDS = [...VENUE_EDITABLE_FIELDS, ...VENUE_COORDINATE_FIELDS]
 
-function parseCoordinate(value, min, max, field) {
-  if (value === null || value === undefined || String(value).trim() === '') return { value: null }
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
-    return { error: `${field} must be a number between ${min} and ${max}` }
-  }
-  return { value: parsed }
+function parsePairMember(value, min, max, field) {
+  const parsed = parseCoordinate(value, min, max)
+  return parsed.error
+    ? { error: `${field} must be a number between ${min} and ${max}` }
+    : parsed
 }
 
-// The one owner of the coordinate-pair rule, shared by import, create and enrich.
-// Mirrors the venues_latitude_range / venues_longitude_range /
-// venues_coordinate_pair constraints so a bad pair fails before it reaches SQL.
+// The one owner of the coordinate-*pair* rule, shared by import, create and
+// enrich; range checks come from utils/coordinates.js. Mirrors the
+// venues_coordinate_pair constraint so a bad pair fails before it reaches SQL.
 // Returns `{ latitude, longitude }` or `{ error }`.
 export function normalizeCoordinatePair(row = {}) {
-  const latitude = parseCoordinate(row.latitude, -90, 90, 'latitude')
+  const latitude = parsePairMember(row.latitude, LATITUDE_MIN, LATITUDE_MAX, 'latitude')
   if (latitude.error) return latitude
-  const longitude = parseCoordinate(row.longitude, -180, 180, 'longitude')
+  const longitude = parsePairMember(row.longitude, LONGITUDE_MIN, LONGITUDE_MAX, 'longitude')
   if (longitude.error) return longitude
   if ((latitude.value === null) !== (longitude.value === null)) {
     return { error: 'latitude and longitude must be provided together' }
