@@ -11,7 +11,6 @@ import {
   postOpeningBalance,
   postShopifyPayoutAdjustment,
   postShopifyPayoutSettlement,
-  postPaypalPayoutSettlement,
   ledgerErrorResult,
 } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
@@ -35,6 +34,7 @@ import { badRequest } from './serviceErrors.js'
 import { clearInvoicePaymentLink, markInvoicePaid } from '../repositories/invoiceRepository.js'
 import { deactivateMolliePaymentLink } from './molliePaymentLinkService.js'
 import { syncShopifyPayouts, syncShopifyPayoutById } from './shopifyPayoutService.js'
+import { postPaypalSettlementInTransaction } from './paypalPayoutService.js'
 import {
   listPayoutCandidates,
   listManuallySettledPayouts,
@@ -44,10 +44,7 @@ import {
   markBalanceTransaction,
   markPayoutReconciled,
   listUnreconciledPaypalOrders,
-  lockUnreconciledPaypalOrders,
-  insertPaypalPayoutReconciliation,
-  linkPaypalReconciliationOrders,
-  markPaypalReconciliationPosted,
+  listManuallySettledPaypalPayouts,
 } from '../repositories/shopifyPaymentsRepository.js'
 import {
   findImportByHash,
@@ -209,6 +206,11 @@ async function decorateImport(db, tenantId, imp) {
       db, tenantId, pending.map((line) => line.amount_cents), dates[0], dates[dates.length - 1],
     )
     : []
+  const manuallySettledPaypalPayouts = dates.length
+    ? await listManuallySettledPaypalPayouts(
+      db, tenantId, pending.map((line) => line.amount_cents), dates[0], dates[dates.length - 1],
+    )
+    : []
   const payoutTransactions = await listBalanceTransactionsForPayouts(
     db, tenantId, payoutCandidates.map((payout) => payout.id),
   )
@@ -216,6 +218,9 @@ async function decorateImport(db, tenantId, imp) {
   const payoutsByAmount = groupBy(payoutCandidates, (payout) => Math.abs(payout.net_cents))
   const settledPayoutsByAmount = groupBy(
     manuallySettledPayouts, (payout) => Math.abs(payout.net_cents),
+  )
+  const settledPaypalPayoutsByAmount = groupBy(
+    manuallySettledPaypalPayouts, (payout) => payout.deposit_cents,
   )
   const paypalOrders = dates.length && pending.some((line) => line.direction === 'credit')
     ? await listUnreconciledPaypalOrders(
@@ -237,6 +242,7 @@ async function decorateImport(db, tenantId, imp) {
       paidPurchaseMatches: [],
       shopifyPayoutMatches: [],
       recordedShopifyPayoutMatches: [],
+      recordedPaypalPayoutMatches: [],
       paypalOrderMatches: [],
     }
     const identity = duplicateIdentity({
@@ -319,6 +325,21 @@ async function decorateImport(db, tenantId, imp) {
           transaction_type: payout.transaction_type,
           currency: payout.currency,
           net_cents: payout.net_cents,
+        }))
+      suggestion.recordedPaypalPayoutMatches = (
+        settledPaypalPayoutsByAmount.get(line.amount_cents) ?? []
+      )
+        .filter((payout) => (
+          line.direction === 'credit'
+          && toDateOnly(payout.settlement_entry_date) === toDateOnly(line.booking_date)
+          && (!line.currency || payout.currency === line.currency)
+        ))
+        .map((payout) => ({
+          id: payout.id,
+          reference: payout.reference,
+          settlement_entry_date: toDateOnly(payout.settlement_entry_date),
+          currency: payout.currency,
+          deposit_cents: payout.deposit_cents,
         }))
     }
     return { ...line, suggestion }
@@ -753,50 +774,26 @@ async function reconcileShopifyPayout(client, tenantId, line, decision, userId) 
 
 async function reconcilePaypalPayout(client, tenantId, line, decision, userId) {
   if (line.direction !== 'credit') return 'skipped_direction_mismatch'
-  const requestedIds = [...new Set(decision.orderFinancialIds)]
-  const orders = await lockUnreconciledPaypalOrders(client, tenantId, requestedIds)
-  if (orders.length !== requestedIds.length) return 'skipped_not_found'
-  const currencies = new Set(orders.map((order) => order.currency))
-  if (currencies.size !== 1 || (line.currency && !currencies.has(line.currency))) {
-    return 'skipped_currency_mismatch'
-  }
-  const grossCents = orders.reduce((sum, order) => sum + order.gross_cents, 0)
-  const differenceCents = grossCents - line.amount_cents
-  let differenceAccountCode = null
-  if (differenceCents !== 0) {
-    differenceAccountCode = decision.differenceAccountCode
-    if (!differenceAccountCode) return 'skipped_payout_mapping_required'
-    const validAccount = (await accountExistsOfType(client, tenantId, differenceAccountCode, 'revenue'))
-      || (await accountExistsOfType(client, tenantId, differenceAccountCode, 'expense'))
-      || (await accountExistsOfType(client, tenantId, differenceAccountCode, 'cost_of_goods_sold'))
-    if (!validAccount) return 'skipped_invalid_account'
-  }
-  const reconciliation = await insertPaypalPayoutReconciliation(client, tenantId, {
+  const result = await postPaypalSettlementInTransaction(client, tenantId, {
     bankStatementLineId: line.id,
-    currency: orders[0].currency,
-    grossCents,
+    currency: line.currency,
+    orderFinancialIds: decision.orderFinancialIds,
     depositCents: line.amount_cents,
-    differenceCents,
-    differenceAccountCode,
-    actorUserId: userId,
-  })
-  await linkPaypalReconciliationOrders(
-    client, tenantId, reconciliation.id, orders.map((order) => order.id),
-  )
-  const posted = await postPaypalPayoutSettlement(client, tenantId, {
-    id: reconciliation.id,
-    grossCents,
-    depositCents: line.amount_cents,
-    differenceCents,
-    differenceAccountCode,
+    differenceAccountCode: decision.differenceAccountCode,
     entryDate: line.booking_date,
-  }, SYSTEM_OPTS(userId))
-  await markPaypalReconciliationPosted(
-    client, tenantId, reconciliation.id, posted.transactionId ?? null,
-  )
+    settlementMethod: 'bank_import',
+  }, userId)
+  const statusByCode = {
+    not_found: 'skipped_not_found',
+    currency_mismatch: 'skipped_currency_mismatch',
+    mapping_required: 'skipped_payout_mapping_required',
+    invalid_account: 'skipped_invalid_account',
+  }
+  if (result.code) return statusByCode[result.code]
   await markLineResult(client, tenantId, line.id, {
-    status: 'reconciled_paypal_payout', ledgerTransactionId: posted.transactionId ?? null,
-    matchedSourceType: 'paypal_payout', matchedSourceId: reconciliation.id,
+    status: 'reconciled_paypal_payout',
+    ledgerTransactionId: result.reconciliation.ledger_transaction_id,
+    matchedSourceType: 'paypal_payout', matchedSourceId: result.reconciliation.id,
   })
   return 'reconciled_paypal_payout'
 }

@@ -5,7 +5,7 @@ import request from 'supertest'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let importShopifyOrders, fetchRecentOrders, fetchOrdersByIds, resetShopifyTokenCacheForTests
-let syncShopifyPayouts, listManualShopifyPayouts, settleShopifyPayoutManually, commitImport
+let syncShopifyPayouts, listManualShopifyPayouts, settleShopifyPayoutManually, commitImport, getImport
 let seed
 
 beforeAll(async () => {
@@ -22,7 +22,7 @@ beforeAll(async () => {
   ;({ fetchRecentOrders, fetchOrdersByIds } = shopMod)
   ;({ resetShopifyTokenCacheForTests } = tokenMod)
   ;({ syncShopifyPayouts, listManualShopifyPayouts, settleShopifyPayoutManually } = payoutMod)
-  ;({ commitImport } = bankMod)
+  ;({ commitImport, getImport } = bankMod)
   await runMigrations()
 })
 
@@ -816,6 +816,141 @@ describe('Shopify payout reconciliation', () => {
 })
 
 describe('PayPal payout reconciliation', () => {
+  it('records selected outstanding PayPal orders directly on the bank account', async () => {
+    const tenantId = seed.tenantA.id
+    await configureShopify(tenantId)
+    const product = await createProduct()
+    await stockProduct(product.id, 10)
+    const orders = [
+      paypalOrderNode({ orderId: 1001, lineId: 5001, transactionId: 7001, amount: '36.30' }),
+      paypalOrderNode({ orderId: 1002, lineId: 5002, transactionId: 7002, amount: '20.00' }),
+    ]
+    await importShopifyOrders(pool, tenantId, {
+      orders: [
+        selectedOrder(product.id, 1001, 5001),
+        selectedOrder(product.id, 1002, 5002),
+      ],
+    }, seed.userA.id, shopifyFetch({ orders, balances: [] }))
+
+    const candidates = await asUserA(request(app)
+      .get('/api/merch/paypal/payouts/candidates?limit=100'))
+      .expect(200)
+    expect(candidates.body.items).toHaveLength(2)
+
+    const recorded = await asUserA(request(app).post('/api/merch/paypal/payouts/custom'))
+      .send({
+        reference: 'PayPal June payout',
+        entry_date: '2026-06-05',
+        deposit_cents: 5500,
+        order_financial_ids: candidates.body.items.map((item) => item.id),
+        difference_account_code: '64100',
+      })
+      .expect(201)
+    expect(recorded.body.reconciliation).toMatchObject({
+      reference: 'PayPal June payout', settlement_method: 'manual',
+      settlement_entry_date: '2026-06-05', gross_cents: 5630,
+      deposit_cents: 5500, difference_cents: 130,
+    })
+
+    const { rows: entries } = await pool.query(
+      `SELECT le.account_code, le.debit_cents, le.credit_cents
+         FROM ledger_transactions lt
+         JOIN ledger_entries le ON le.transaction_id = lt.id AND le.tenant_id = lt.tenant_id
+        WHERE lt.tenant_id = $1 AND lt.source_type = 'paypal_payout'
+        ORDER BY le.account_code`, [tenantId],
+    )
+    expect(entries).toEqual([
+      expect.objectContaining({ account_code: '11000', debit_cents: 5500, credit_cents: 0 }),
+      expect.objectContaining({ account_code: '11400', debit_cents: 0, credit_cents: 5630 }),
+      expect.objectContaining({ account_code: '64100', debit_cents: 130, credit_cents: 0 }),
+    ])
+
+    const { rows: imports } = await pool.query(
+      `INSERT INTO bank_statement_imports
+         (tenant_id, filename, format, currency, file_hash, created_by_user_id)
+       VALUES ($1, 'paypal-manual.xml', 'camt053', 'EUR', 'paypal-manual-test', $2)
+       RETURNING *`, [tenantId, seed.userA.id],
+    )
+    await pool.query(
+      `INSERT INTO bank_statement_lines
+         (tenant_id, import_id, line_index, booking_date, amount_cents, direction, currency)
+       VALUES ($1, $2, 0, '2026-06-05', 5500, 'credit', 'EUR')`,
+      [tenantId, imports[0].id],
+    )
+    const decorated = await getImport(pool, tenantId, imports[0].id)
+    expect(decorated.lines[0].suggestion.recordedPaypalPayoutMatches).toEqual([
+      expect.objectContaining({ id: recorded.body.reconciliation.id, deposit_cents: 5500 }),
+    ])
+    expect(decorated.lines[0].suggestion.paypalOrderMatches).toEqual([])
+  })
+
+  it('does not expose or settle another tenant\'s outstanding PayPal orders', async () => {
+    const tenantId = seed.tenantA.id
+    await configureShopify(tenantId)
+    const product = await createProduct()
+    await stockProduct(product.id, 2)
+    await importShopifyOrders(pool, tenantId, {
+      orders: [selectedOrder(product.id, 1001, 5001)],
+    }, seed.userA.id, shopifyFetch({
+      orders: [paypalOrderNode({ orderId: 1001, lineId: 5001, transactionId: 7001, amount: '36.30' })],
+      balances: [],
+    }))
+    const own = await asUserA(request(app)
+      .get('/api/merch/paypal/payouts/candidates?limit=100'))
+      .expect(200)
+    const candidateId = own.body.items[0].id
+
+    const otherCandidates = await request(app)
+      .get('/api/merch/paypal/payouts/candidates?limit=100')
+      .set('x-test-user-id', String(seed.userB.id))
+      .set('x-test-tenant-id', String(seed.tenantB.id))
+      .expect(200)
+    expect(otherCandidates.body.items).toEqual([])
+
+    await request(app)
+      .post('/api/merch/paypal/payouts/custom')
+      .set('x-test-user-id', String(seed.userB.id))
+      .set('x-test-tenant-id', String(seed.tenantB.id))
+      .send({
+        reference: 'Cross tenant', entry_date: '2026-06-05', deposit_cents: 3630,
+        order_financial_ids: [candidateId], difference_account_code: null,
+      })
+      .expect(404)
+  })
+
+  it('requires a difference account and prevents recording a PayPal order twice', async () => {
+    const tenantId = seed.tenantA.id
+    await configureShopify(tenantId)
+    const product = await createProduct()
+    await stockProduct(product.id, 2)
+    await importShopifyOrders(pool, tenantId, {
+      orders: [selectedOrder(product.id, 1001, 5001)],
+    }, seed.userA.id, shopifyFetch({
+      orders: [paypalOrderNode({ orderId: 1001, lineId: 5001, transactionId: 7001, amount: '36.30' })],
+      balances: [],
+    }))
+    const candidates = await asUserA(request(app)
+      .get('/api/merch/paypal/payouts/candidates?limit=100'))
+      .expect(200)
+    const orderId = candidates.body.items[0].id
+    const body = {
+      reference: 'PayPal exact payout', entry_date: '2026-06-05',
+      deposit_cents: 3500, order_financial_ids: [orderId], difference_account_code: null,
+    }
+
+    const missingMapping = await asUserA(request(app).post('/api/merch/paypal/payouts/custom'))
+      .send(body)
+      .expect(400)
+    expect(missingMapping.body.code).toBe('paypal_payout_mapping_required')
+
+    await asUserA(request(app).post('/api/merch/paypal/payouts/custom'))
+      .send({ ...body, deposit_cents: 3630 })
+      .expect(201)
+    await asUserA(request(app).post('/api/merch/paypal/payouts/custom'))
+      .send({ ...body, deposit_cents: 3630 })
+      .expect(404)
+  })
+
   it('groups PayPal orders and reports the actual deposit difference as a fee', async () => {
     const tenantId = seed.tenantA.id
     await configureShopify(tenantId)

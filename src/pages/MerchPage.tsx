@@ -28,7 +28,7 @@ import RecordSaleDialog from '../components/merch/RecordSaleDialog.tsx'
 import NoStockDialog from '../components/merch/NoStockDialog.tsx'
 import ArchiveProductDialog from '../components/merch/ArchiveProductDialog.tsx'
 import ShopifyImportDialog from '../components/merch/ShopifyImportDialog.tsx'
-import ShopifyPayoutDialog from '../components/merch/ShopifyPayoutDialog.tsx'
+import RecordPaymentDialog from '../components/merch/RecordPaymentDialog.tsx'
 import { useMerchState } from '../components/merch/useMerchState.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import PeriodPicker from '../components/shared/periodPicker.tsx'
@@ -267,7 +267,7 @@ export default function MerchPage() {
         />
       )}
       {shopifyConfigured && shopifyPayoutOpen && (
-        <ShopifyPayoutDialog onClose={() => setShopifyPayoutOpen(false)} />
+        <RecordPaymentDialog onClose={() => setShopifyPayoutOpen(false)} />
       )}
     </SplitView>
   )

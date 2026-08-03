@@ -49,8 +49,8 @@
     "incomeAccountLabel": "Income account for unmatched incoming lines",
     "reviewIntro": "Review each line. Sort or filter by date or counterparty, tick Skip to leave a line out, and set how each remaining line books.",
     "shopify": {
-      "refresh": "Refresh Shopify payouts",
-      "refreshing": "Refreshing Shopify payouts…",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…",
       "match": "Match Shopify payout {{id}} ({{date}})",
       "adjustmentsIntro": "Categorize each non-order payout adjustment before reconciling."
     },

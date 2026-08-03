@@ -32,7 +32,7 @@
   "summary": {
     "heading": "Sales by product",
     "importShopify": "Import from Shopify",
-    "recordShopifyPayout": "Record Shopify payout",
+    "recordShopifyPayout": "Record payment",
     "empty": "No sales in this period.",
     "table": {
       "product": "Product",
@@ -177,7 +177,15 @@
     }
   },
   "shopifyPayout": {
-    "title": "Record Shopify payouts",
+    "title": "Record payment",
+    "recordPayment": "Record payment",
+    "recordPaymentIntro": "Record Shopify Payments or PayPal deposits directly on the primary bank account when you do not import bank statements.",
+    "customPayment": "Custom payment",
+    "provider": "Payment provider",
+    "providers": {
+      "shopify": "Shopify Payments",
+      "paypal": "PayPal"
+    },
     "intro": "Record a paid Shopify payout directly on the primary bank account when you do not import bank statements. Shopify fees are already included in the net payout.",
     "fromDate": "Payouts from",
     "toDate": "Payouts through",
@@ -200,12 +208,21 @@
     "paymentDate": "Bank payment date",
     "recordDeposit": "Record on bank account",
     "recordWithdrawal": "Record bank withdrawal",
-    "recorded": "Payout recorded on the primary bank account.",
+    "recorded": "Payment recorded on the primary bank account.",
+    "paypal": {
+      "title": "Custom PayPal payment",
+      "intro": "Select the outstanding PayPal orders included in this bank deposit. Any difference is booked as a fee or adjustment.",
+      "deposit": "Actual bank deposit",
+      "orders": "Outstanding PayPal orders",
+      "summary": "Order gross {{gross}} · bank deposit {{deposit}} · difference {{difference}}",
+      "differenceAccount": "PayPal fee or adjustment account"
+    },
     "close": "Close",
     "errors": {
       "load": "Shopify payouts could not be loaded.",
       "refresh": "Shopify payouts could not be refreshed.",
       "create": "The custom Shopify payout could not be created.",
+      "createPaypal": "The custom PayPal payment could not be recorded.",
       "settle": "The Shopify payout could not be recorded."
     }
   }

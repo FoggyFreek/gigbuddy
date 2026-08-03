@@ -24,6 +24,10 @@ import {
   createCustomShopifyPayout,
   settleShopifyPayoutManually,
 } from '../services/shopifyPayoutService.js'
+import {
+  createCustomPaypalPayout,
+  listPaypalPayoutCandidates,
+} from '../services/paypalPayoutService.js'
 
 const router = Router()
 
@@ -138,6 +142,20 @@ router.post('/shopify/payouts/:id/settle', requirePermission(PERMISSIONS.FINANCE
   )
   if (result.error) return sendError(res, result.error)
   res.json(result)
+})
+
+router.get('/paypal/payouts/candidates', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+  const result = await listPaypalPayoutCandidates(pool, req.tenantId, req.query.limit)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.post('/paypal/payouts/custom', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+  const result = await createCustomPaypalPayout(
+    pool, req.tenantId, req.body || {}, req.user.id,
+  )
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result)
 })
 
 export default router

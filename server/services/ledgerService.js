@@ -1452,7 +1452,9 @@ export async function postPaypalPayoutSettlement(client, tenantId, payout, opts 
   const settings = await loadAccountingSettings(client, tenantId)
   const clearing = requireCode(settings, 'paypal_clearing_account_code')
   const bank = requireCode(settings, 'primary_checking_account_code')
-  const memo = `PayPal payout reconciliation #${payout.id}`
+  const memo = payout.reference
+    ? `PayPal payout ${payout.reference}`
+    : `PayPal payout reconciliation #${payout.id}`
   const lines = [
     { account_code: bank, debit_cents: payout.depositCents, memo },
     { account_code: clearing, credit_cents: payout.grossCents, memo },

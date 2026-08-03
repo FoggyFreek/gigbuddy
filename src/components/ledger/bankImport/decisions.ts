@@ -47,6 +47,17 @@ export type Decision =
 
 export type PaidDecision = Extract<Decision, { kind: 'journal_paid' }>
 export type JournalDecision = PaidDecision | Extract<Decision, { kind: 'journal_received' }>
+export type PayoutDecision = Extract<Decision, {
+  kind: 'reconcile_shopify_payout' | 'reconcile_paypal_payout'
+}>
+
+export function isJournalDecision(decision: Decision | undefined): decision is JournalDecision {
+  return decision?.kind === 'journal_paid' || decision?.kind === 'journal_received'
+}
+
+export function isPayoutDecision(decision: Decision | undefined): decision is PayoutDecision {
+  return decision?.kind === 'reconcile_shopify_payout' || decision?.kind === 'reconcile_paypal_payout'
+}
 
 // The VAT a direct booking should carry. `enabled` is false under a
 // small-business scheme: such a tenant neither charges output VAT nor deducts

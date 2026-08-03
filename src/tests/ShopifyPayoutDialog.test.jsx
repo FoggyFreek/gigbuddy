@@ -2,9 +2,11 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ShopifyPayoutDialog from '../components/merch/ShopifyPayoutDialog.tsx'
+import RecordPaymentDialog from '../components/merch/RecordPaymentDialog.tsx'
 import {
+  createCustomPaypalPayout,
   createCustomShopifyPayout,
+  listPaypalPayoutCandidates,
   listManualShopifyPayouts,
   settleShopifyPayoutManually,
 } from '../api/merch.ts'
@@ -13,6 +15,8 @@ import theme from '../theme.ts'
 
 vi.mock('../api/merch.ts', () => ({
   createCustomShopifyPayout: vi.fn(),
+  createCustomPaypalPayout: vi.fn(),
+  listPaypalPayoutCandidates: vi.fn(),
   listManualShopifyPayouts: vi.fn(),
   refreshManualShopifyPayouts: vi.fn(),
   settleShopifyPayoutManually: vi.fn(),
@@ -48,7 +52,16 @@ const CUSTOM_CANDIDATE = {
   balance_transaction_ids: [17],
 }
 
-describe('ShopifyPayoutDialog', () => {
+const PAYPAL_CANDIDATE = {
+  id: 31,
+  order_name: '#2001',
+  shopify_order_id: '2001',
+  processed_at: '2026-06-01T10:00:00Z',
+  currency: 'EUR',
+  gross_cents: 3630,
+}
+
+describe('RecordPaymentDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     listManualShopifyPayouts.mockResolvedValue({
@@ -58,17 +71,23 @@ describe('ShopifyPayoutDialog', () => {
       { code: '42000', name: 'Merchandise Sales', type: 'revenue', is_active: true },
       { code: '64100', name: 'Payment Processing Fees', type: 'expense', is_active: true },
     ])
+    listPaypalPayoutCandidates.mockResolvedValue({ items: [], meta: { limit: 100 } })
     settleShopifyPayoutManually.mockResolvedValue({
       payout: { ...PAYOUT, settlement_method: 'manual' },
     })
     createCustomShopifyPayout.mockResolvedValue({
       items: [PAYOUT], custom_candidates: [], meta: { limit: 100 },
     })
+    createCustomPaypalPayout.mockResolvedValue({
+      reconciliation: { id: 45, settlement_method: 'manual' },
+    })
   })
 
   it('records a ready payout on the primary bank account and removes it from the list', async () => {
     const onClose = vi.fn()
-    wrap(<ShopifyPayoutDialog onClose={onClose} />)
+    wrap(<RecordPaymentDialog onClose={onClose} />)
+
+    expect(await screen.findByRole('heading', { name: 'Record payment' })).toBeInTheDocument()
 
     expect(await screen.findByText('Shopify payout 9001')).toBeInTheDocument()
     expect(screen.getByText('#1001')).toBeInTheDocument()
@@ -78,7 +97,7 @@ describe('ShopifyPayoutDialog', () => {
       entry_date: '2026-06-03',
       adjustment_mappings: [],
     }))
-    expect(await screen.findByText('Payout recorded on the primary bank account.')).toBeInTheDocument()
+    expect(await screen.findByText('Payment recorded on the primary bank account.')).toBeInTheDocument()
     expect(screen.queryByText('Shopify payout 9001')).not.toBeInTheDocument()
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Close' }))
@@ -89,9 +108,11 @@ describe('ShopifyPayoutDialog', () => {
     listManualShopifyPayouts.mockResolvedValue({
       items: [], custom_candidates: [CUSTOM_CANDIDATE], meta: { limit: 100 },
     })
-    wrap(<ShopifyPayoutDialog onClose={vi.fn()} />)
+    wrap(<RecordPaymentDialog onClose={vi.fn()} />)
 
-    await userEvent.setup().click(await screen.findByRole('button', { name: 'Create custom payout' }))
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Custom payment' }))
+    await userEvent.setup().click(screen.getByLabelText('Payment provider'))
+    await userEvent.setup().click(await screen.findByRole('option', { name: 'Shopify Payments' }))
     await userEvent.setup().type(screen.getByLabelText('Reference'), 'Legacy payout January')
     await userEvent.setup().click(screen.getByRole('checkbox', { name: /#1001/ }))
     await userEvent.setup().click(screen.getByRole('button', { name: 'Create payout' }))
@@ -102,5 +123,34 @@ describe('ShopifyPayoutDialog', () => {
       net_cents: 3530,
       balance_transaction_ids: [17],
     }))
+  })
+
+  it('records selected PayPal orders and their fee difference as a custom payment', async () => {
+    listManualShopifyPayouts.mockResolvedValue({
+      items: [], custom_candidates: [], meta: { limit: 100 },
+    })
+    listPaypalPayoutCandidates.mockResolvedValue({
+      items: [PAYPAL_CANDIDATE], meta: { limit: 100 },
+    })
+    wrap(<RecordPaymentDialog onClose={vi.fn()} />)
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Custom payment' }))
+    await user.click(screen.getByLabelText('Payment provider'))
+    await user.click(await screen.findByRole('option', { name: 'PayPal' }))
+    await user.type(screen.getByLabelText('Reference'), 'PayPal June payout')
+    await user.click(screen.getByRole('checkbox', { name: /#2001/ }))
+    await user.clear(screen.getByLabelText('Actual bank deposit'))
+    await user.type(screen.getByLabelText('Actual bank deposit'), '35')
+    await user.click(screen.getByRole('button', { name: 'Record payment' }))
+
+    await waitFor(() => expect(createCustomPaypalPayout).toHaveBeenCalledWith({
+      reference: 'PayPal June payout',
+      entry_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      deposit_cents: 3500,
+      order_financial_ids: [31],
+      difference_account_code: '64100',
+    }))
+    expect(await screen.findByText('Payment recorded on the primary bank account.')).toBeInTheDocument()
   })
 })

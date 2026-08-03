@@ -8,10 +8,15 @@ import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import MenuItem from '@mui/material/MenuItem'
+import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
 import DateEntryField from '../DateEntryField.tsx'
+import { PaypalCustomPayoutForm } from './shopifyPayoutDialog/PaypalCustomPayoutForm.tsx'
 import { ShopifyCustomPayoutForm } from './shopifyPayoutDialog/ShopifyCustomPayoutForm.tsx'
 import { ShopifyPayoutCard } from './shopifyPayoutDialog/ShopifyPayoutCard.tsx'
 import { useShopifyPayoutDialog } from './useShopifyPayoutDialog.ts'
@@ -20,16 +25,16 @@ interface Props {
   onClose: (recorded: boolean) => void
 }
 
-export default function ShopifyPayoutDialog({ onClose }: Readonly<Props>) {
+export default function RecordPaymentDialog({ onClose }: Readonly<Props>) {
   const { t } = useTranslation('merch')
   const dialog = useShopifyPayoutDialog()
 
   return (
     <Dialog open fullWidth maxWidth="md">
-      <DialogTitle>{t($ => $.shopifyPayout.title)}</DialogTitle>
+      <DialogTitle>{t($ => $.shopifyPayout.recordPayment)}</DialogTitle>
       <DialogContent dividers>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
-          {t($ => $.shopifyPayout.intro)}
+          {t($ => $.shopifyPayout.recordPaymentIntro)}
         </Typography>
         {dialog.error && <Alert severity="error" sx={{ mb: 2 }}>{dialog.error}</Alert>}
         {dialog.success && (
@@ -62,30 +67,74 @@ export default function ShopifyPayoutDialog({ onClose }: Readonly<Props>) {
           <Button
             variant="outlined"
             startIcon={<AddIcon />}
-            disabled={!dialog.customCandidates.length}
+            disabled={!dialog.hasCustomCandidates}
             onClick={dialog.openCustom}
           >
-            {t($ => $.shopifyPayout.createCustom)}
+            {t($ => $.shopifyPayout.customPayment)}
           </Button>
         </Stack>
 
         {dialog.customOpen && (
-          <ShopifyCustomPayoutForm
-            candidates={dialog.customCandidates}
-            selectedCandidates={dialog.selectedCandidates}
-            selected={dialog.customSelected}
-            reference={dialog.customReference}
-            date={dialog.customDate}
-            netCents={dialog.customNetCents}
-            expectedNetCents={dialog.expectedCustomNet}
-            creating={dialog.creatingCustom}
-            onReferenceChange={dialog.setCustomReference}
-            onDateChange={dialog.setCustomDate}
-            onNetCentsChange={dialog.setCustomNetCents}
-            onCandidateToggle={dialog.toggleCustomCandidate}
-            onCreate={dialog.createCustom}
-            onCancel={dialog.closeCustom}
-          />
+          <>
+            <FormControl size="small" fullWidth sx={{ mb: 2 }}>
+              <InputLabel id="custom-payment-provider-label">
+                {t($ => $.shopifyPayout.provider)}
+              </InputLabel>
+              <Select
+                id="custom-payment-provider"
+                labelId="custom-payment-provider-label"
+                label={t($ => $.shopifyPayout.provider)}
+                value={dialog.customProvider}
+                onChange={(event) => dialog.setCustomProvider(event.target.value as 'shopify' | 'paypal')}
+              >
+                <MenuItem value="shopify" disabled={!dialog.customCandidates.length}>
+                  {t($ => $.shopifyPayout.providers.shopify)}
+                </MenuItem>
+                <MenuItem value="paypal" disabled={!dialog.paypalCandidates.length}>
+                  {t($ => $.shopifyPayout.providers.paypal)}
+                </MenuItem>
+              </Select>
+            </FormControl>
+            {dialog.customProvider === 'shopify' && (
+              <ShopifyCustomPayoutForm
+                candidates={dialog.customCandidates}
+                selectedCandidates={dialog.selectedCandidates}
+                selected={dialog.customSelected}
+                reference={dialog.customReference}
+                date={dialog.customDate}
+                netCents={dialog.customNetCents}
+                expectedNetCents={dialog.expectedCustomNet}
+                creating={dialog.creatingCustom}
+                onReferenceChange={dialog.setCustomReference}
+                onDateChange={dialog.setCustomDate}
+                onNetCentsChange={dialog.setCustomNetCents}
+                onCandidateToggle={dialog.toggleCustomCandidate}
+                onCreate={dialog.createCustom}
+                onCancel={dialog.closeCustom}
+              />
+            )}
+            {dialog.customProvider === 'paypal' && (
+              <PaypalCustomPayoutForm
+                candidates={dialog.paypalCandidates}
+                selectedCandidates={dialog.selectedPaypalCandidates}
+                selected={dialog.paypalSelected}
+                accounts={dialog.pnlAccounts}
+                reference={dialog.customReference}
+                date={dialog.customDate}
+                depositCents={dialog.paypalDepositCents}
+                grossCents={dialog.expectedPaypalGross}
+                differenceAccountCode={dialog.paypalDifferenceAccountCode}
+                creating={dialog.creatingCustom}
+                onReferenceChange={dialog.setCustomReference}
+                onDateChange={dialog.setCustomDate}
+                onDepositChange={dialog.setPaypalDepositCents}
+                onDifferenceAccountChange={dialog.setPaypalDifferenceAccountCode}
+                onCandidateToggle={dialog.togglePaypalCandidate}
+                onRecord={dialog.recordCustomPaypal}
+                onCancel={dialog.closeCustom}
+              />
+            )}
+          </>
         )}
 
         {dialog.loading ? (

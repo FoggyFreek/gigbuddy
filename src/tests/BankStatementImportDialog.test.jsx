@@ -52,7 +52,7 @@ const ACCOUNTS = [
 
 const emptySuggestion = {
   possibleDuplicate: false, supplierMatches: [], invoiceMatches: [], purchaseMatches: [], paidPurchaseMatches: [],
-  recordedShopifyPayoutMatches: [],
+  recordedShopifyPayoutMatches: [], recordedPaypalPayoutMatches: [],
 }
 
 // The dialog reads the scheme in force TODAY off the accounting profile — the
@@ -143,6 +143,31 @@ describe('BankStatementImportDialog', () => {
             transaction_type: 'DEPOSIT',
             currency: 'EUR',
             net_cents: 60000,
+          }],
+        },
+      }],
+    })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    expect(await screen.findByText('Payout already recorded')).toBeInTheDocument()
+    expect(within(cell(2, 'skip')).getByRole('checkbox')).toBeChecked()
+  })
+
+  it('defaults a manually recorded PayPal payout deposit to skip and explains why', async () => {
+    parseBankStatement.mockResolvedValue({
+      import: PARSE_RESULT.import,
+      lines: [{
+        ...PARSE_RESULT.lines[1],
+        suggestion: {
+          ...emptySuggestion,
+          recordedPaypalPayoutMatches: [{
+            id: 45,
+            reference: 'PayPal June payout',
+            settlement_entry_date: '2026-02-04',
+            currency: 'EUR',
+            deposit_cents: 60000,
           }],
         },
       }],

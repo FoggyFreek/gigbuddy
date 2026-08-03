@@ -32,7 +32,7 @@
   "summary": {
     "heading": "Verkoop per product",
     "importShopify": "Importeren uit Shopify",
-    "recordShopifyPayout": "Shopify-uitbetaling boeken",
+    "recordShopifyPayout": "Betaling boeken",
     "empty": "Geen verkopen in deze periode.",
     "table": {
       "product": "Product",
@@ -118,7 +118,7 @@
     "lineCount_other": "{{count}} regels",
     "paymentSummary": "kosten {{fee}}, bijdrage aan uitbetaling {{net}}",
     "paypalFeesPending": "PayPal-kosten worden bepaald bij de bankafstemming",
-    "mapIntro": "Koppel elk onderdeel van de bestelling. Productkoppelingen passen de voorraad aan; omzetkoppelingen boeken rechtstreeks op de gekozen rekening. Shopify Payments-bestellingen wachten op kostengegevens; PayPal-bestellingen worden bruto geïmporteerd en de kosten worden bij de bankafstemming geboekt.",
+    "mapIntro": "Koppel elk onderdeel van de bestelling. Productkoppelingen passen de voorraad aan; omzetkoppelingen boeken rechtstreeks op de gekozen rekening. Betalingen door Shopify wachten op kostengegevens voordat ze kunnen worden geboekt; PayPal-bestellingen worden bruto geïmporteerd, boek dus eventuele kosten apart.",
     "table": {
       "order": "Bestelling",
       "date": "Datum",
@@ -177,13 +177,21 @@
     }
   },
   "shopifyPayout": {
-    "title": "Shopify-uitbetalingen boeken",
-    "intro": "Boek een betaalde Shopify-uitbetaling rechtstreeks op de primaire bankrekening als je geen bankafschriften importeert. Shopify-kosten zijn al verwerkt in de netto-uitbetaling.",
+    "title": "Betaling boeken",
+    "recordPayment": "Betaling boeken",
+    "recordPaymentIntro": "Boek stortingen van Shopify Payments of PayPal rechtstreeks op de primaire bankrekening als je geen bankafschriften importeert.",
+    "customPayment": "Handmatige betaling",
+    "provider": "Betaalprovider",
+    "providers": {
+      "shopify": "Shopify Payments",
+      "paypal": "PayPal"
+    },
+    "intro": "Boek een betaalde Shopify-uitbetaling rechtstreeks op de bankrekening als je geen bankafschriften importeert. Shopify-kosten zijn al verwerkt in de netto-uitbetaling.",
     "fromDate": "Uitbetalingen vanaf",
     "toDate": "Uitbetalingen tot en met",
-    "refresh": "Shopify-uitbetalingen vernieuwen",
-    "createCustom": "Aangepaste uitbetaling maken",
-    "customIntro": "Maak een lokale uitbetaling voor geïmporteerde bestellingen waarvan de uitbetaling niet meer via Shopify beschikbaar is. Selecteer de orderbijdragen in de bankbetaling.",
+    "refresh": "Vernieuwen",
+    "createCustom": "Handmatig",
+    "customIntro": "Maak een handmatige uitbetaling voor geïmporteerde bestellingen waarvan de uitbetaling niet meer via de Shopify API beschikbaar is. Selecteer de orders in de bankbetaling.",
     "customReference": "Referentie",
     "customDate": "Uitbetalingsdatum",
     "customAmount": "Werkelijk uitbetalingsbedrag",
@@ -192,20 +200,29 @@
     "customDifference": "Verschil om na het aanmaken te categoriseren: {{amount}}",
     "customSubmit": "Uitbetaling maken",
     "customCancel": "Annuleren",
-    "customEmpty": "Er zijn geen niet-toegewezen Shopify-orderbijdragen beschikbaar.",
-    "empty": "Geen openstaande betaalde Shopify-uitbetalingen gevonden. Vernieuw een datumbereik om Shopify te controleren.",
+    "customEmpty": "Er zijn geen niet-toegewezen orders beschikbaar.",
+    "empty": "Geen openstaande uitbetalingen gevonden. Kies een ander datumbereik.",
     "payoutLabel": "Shopify-uitbetaling {{id}}",
     "adjustmentsIntro": "Categoriseer elke aanpassing zonder bestelling voordat je deze uitbetaling boekt.",
     "incomplete": "Deze uitbetaling is nog niet gereed omdat de saldotransacties onvolledig zijn.",
     "paymentDate": "Datum bankbetaling",
     "recordDeposit": "Boeken op bankrekening",
     "recordWithdrawal": "Bankopname boeken",
-    "recorded": "Uitbetaling geboekt op de primaire bankrekening.",
+    "recorded": "Betaling geboekt op de primaire bankrekening.",
+    "paypal": {
+      "title": "Handmatige PayPal-betaling",
+      "intro": "Selecteer de openstaande PayPal-bestellingen in deze bankstorting. Een verschil wordt als kosten of correctie geboekt.",
+      "deposit": "Werkelijke bankstorting",
+      "orders": "Openstaande PayPal-bestellingen",
+      "summary": "Bruto bestellingen {{gross}} · bankstorting {{deposit}} · verschil {{difference}}",
+      "differenceAccount": "Rekening voor PayPal-kosten of correctie"
+    },
     "close": "Sluiten",
     "errors": {
       "load": "Shopify-uitbetalingen konden niet worden geladen.",
       "refresh": "Shopify-uitbetalingen konden niet worden vernieuwd.",
       "create": "De aangepaste Shopify-uitbetaling kon niet worden gemaakt.",
+      "createPaypal": "De handmatige PayPal-betaling kon niet worden geboekt.",
       "settle": "De Shopify-uitbetaling kon niet worden geboekt."
     }
   }

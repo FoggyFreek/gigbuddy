@@ -49,8 +49,8 @@
     "incomeAccountLabel": "Opbrengstrekening voor niet-gematchte inkomende regels",
     "reviewIntro": "Controleer elke regel. Sorteer of filter op datum of tegenpartij, vink Overslaan aan om een regel over te slaan, en stel per overige regel in hoe die geboekt wordt.",
     "shopify": {
-      "refresh": "Shopify-uitbetalingen vernieuwen",
-      "refreshing": "Shopify-uitbetalingen vernieuwen…",
+      "refresh": "Vernieuwen",
+      "refreshing": "Vernieuwen…",
       "match": "Koppel Shopify-uitbetaling {{id}} ({{date}})",
       "adjustmentsIntro": "Rubriceer elke aanpassing zonder bestelling voordat je de uitbetaling koppelt."
     },

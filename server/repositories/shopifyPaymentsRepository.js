@@ -396,6 +396,43 @@ export async function listUnreconciledPaypalOrders(executor, tenantId, fromDate,
   return rows
 }
 
+export async function listManualPaypalPayoutCandidates(executor, tenantId, limit = 100) {
+  const { rows } = await executor.query(
+    `SELECT sof.id, sof.order_name, sof.currency, sof.gross_cents,
+            sof.shopify_order_legacy_id, sof.processed_at
+       FROM shopify_order_financials sof
+      WHERE sof.tenant_id = $1
+        AND sof.payment_gateway = 'paypal'
+        AND NOT EXISTS (
+          SELECT 1 FROM paypal_payout_reconciliation_orders ppro
+           WHERE ppro.tenant_id = sof.tenant_id
+             AND ppro.order_financial_id = sof.id
+        )
+      ORDER BY sof.processed_at, sof.id
+      LIMIT $2`,
+    [tenantId, limit],
+  )
+  return rows
+}
+
+export async function listManuallySettledPaypalPayouts(
+  executor, tenantId, amounts, fromDate, toDate,
+) {
+  if (!amounts.length) return []
+  const { rows } = await executor.query(
+    `SELECT *
+       FROM paypal_payout_reconciliations
+      WHERE tenant_id = $1
+        AND deposit_cents = ANY($2::int[])
+        AND settlement_method = 'manual'
+        AND settlement_entry_date BETWEEN $3::date AND $4::date
+        AND ledger_transaction_id IS NOT NULL
+      ORDER BY settlement_entry_date, id`,
+    [tenantId, amounts, fromDate, toDate],
+  )
+  return rows
+}
+
 export async function lockUnreconciledPaypalOrders(executor, tenantId, orderIds) {
   if (!orderIds.length) return []
   const { rows } = await executor.query(
@@ -420,13 +457,13 @@ export async function insertPaypalPayoutReconciliation(executor, tenantId, data)
   const { rows } = await executor.query(
     `INSERT INTO paypal_payout_reconciliations (
        tenant_id, bank_statement_line_id, currency, gross_cents, deposit_cents,
-       difference_cents, difference_account_code, created_by_user_id
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       difference_cents, difference_account_code, reference, created_by_user_id
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      RETURNING *`,
     [
-      tenantId, data.bankStatementLineId, data.currency, data.grossCents,
+      tenantId, data.bankStatementLineId ?? null, data.currency, data.grossCents,
       data.depositCents, data.differenceCents, data.differenceAccountCode ?? null,
-      data.actorUserId ?? null,
+      data.reference ?? null, data.actorUserId ?? null,
     ],
   )
   return rows[0]
@@ -445,12 +482,18 @@ export async function linkPaypalReconciliationOrders(
 }
 
 export async function markPaypalReconciliationPosted(
-  executor, tenantId, reconciliationId, ledgerTransactionId,
+  executor, tenantId, reconciliationId, data,
 ) {
-  await executor.query(
+  const { rows } = await executor.query(
     `UPDATE paypal_payout_reconciliations
-        SET ledger_transaction_id = $1
-      WHERE id = $2 AND tenant_id = $3`,
-    [ledgerTransactionId, reconciliationId, tenantId],
+        SET ledger_transaction_id = $1, settlement_method = $2,
+            settlement_entry_date = $3, settled_at = NOW(), settled_by_user_id = $4
+      WHERE id = $5 AND tenant_id = $6
+      RETURNING *`,
+    [
+      data.ledgerTransactionId, data.settlementMethod, data.entryDate,
+      data.actorUserId ?? null, reconciliationId, tenantId,
+    ],
   )
+  return rows[0] ?? null
 }

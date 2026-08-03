@@ -540,6 +540,7 @@ export interface BankLineSuggestion {
   }[]
   shopifyPayoutMatches?: ShopifyPayoutMatch[]
   recordedShopifyPayoutMatches?: RecordedShopifyPayoutMatch[]
+  recordedPaypalPayoutMatches?: RecordedPaypalPayoutMatch[]
   paypalOrderMatches?: PaypalOrderMatch[]
 }
 
@@ -550,6 +551,14 @@ export interface RecordedShopifyPayoutMatch {
   transaction_type: 'DEPOSIT' | 'WITHDRAWAL'
   currency: string
   net_cents: number
+}
+
+export interface RecordedPaypalPayoutMatch {
+  id: Id
+  reference: string
+  settlement_entry_date: string
+  currency: string
+  deposit_cents: number
 }
 
 export interface PaypalOrderMatch {
@@ -1202,6 +1211,34 @@ export interface ShopifyCustomPayoutBody {
 export interface ShopifyManualPayoutSettlementBody {
   entry_date: string
   adjustment_mappings: { balance_transaction_id: Id; account_code: string }[]
+}
+
+export interface PaypalPayoutCandidatesResult {
+  items: PaypalOrderMatch[]
+  meta: { limit: number }
+}
+
+export interface PaypalCustomPayoutBody {
+  reference: string
+  entry_date: string
+  deposit_cents: number
+  order_financial_ids: Id[]
+  difference_account_code: string | null
+}
+
+export interface PaypalCustomPayoutResult {
+  reconciliation: {
+    id: Id
+    reference: string
+    settlement_method: 'manual'
+    settlement_entry_date: string
+    currency: string
+    gross_cents: number
+    deposit_cents: number
+    difference_cents: number
+    difference_account_code: string | null
+    ledger_transaction_id: Id
+  }
 }
 
 // ---------- Achievements ----------

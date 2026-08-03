@@ -5,6 +5,7 @@ import type {
   ShopifyOrdersPage, ShopifyImportBody, ShopifyImportResult,
   ShopifyCustomPayoutBody, ShopifyManualPayoutsResult,
   ShopifyManualPayoutSettlementBody,
+  PaypalCustomPayoutBody, PaypalCustomPayoutResult, PaypalPayoutCandidatesResult,
 } from '../types/entities.ts'
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
@@ -70,3 +71,11 @@ export const settleShopifyPayoutManually = (
   `/shopify/payouts/${payoutId}/settle`,
   { method: 'POST', body: JSON.stringify(body) },
 )
+
+export const listPaypalPayoutCandidates = () =>
+  api<PaypalPayoutCandidatesResult>('/paypal/payouts/candidates?limit=100')
+
+export const createCustomPaypalPayout = (body: PaypalCustomPayoutBody) =>
+  api<PaypalCustomPayoutResult>('/paypal/payouts/custom', {
+    method: 'POST', body: JSON.stringify(body),
+  })
