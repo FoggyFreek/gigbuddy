@@ -120,10 +120,6 @@ export interface PlaceSuggestion {
   categories: string[]
 }
 
-export interface PlaceSearchResponse {
-  items: PlaceSuggestion[]
-}
-
 /** Result of applying a place suggestion to a record: what actually got filled. */
 export interface PlaceEnrichResponse<T> {
   venue: T

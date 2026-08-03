@@ -8,20 +8,21 @@ import { describe, it, beforeAll, beforeEach, afterAll, afterEach, expect, vi } 
 import request from 'supertest'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
-let mapPoiResult, resetPlaceSearchCacheForTests
+let mapPoiResult, resetPlaceSearchCacheForTests, searchPlaces
 let seed
 const realFetch = globalThis.fetch
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
-  const svc = await import('../../../server/services/placeSearchService.js')
+  const svc = await import('../../../server/services/placeService.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   mapPoiResult = svc.mapPoiResult
   resetPlaceSearchCacheForTests = svc.resetPlaceSearchCacheForTests
+  searchPlaces = svc.searchPlaces
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -128,6 +129,24 @@ describe('mapPoiResult', () => {
   })
 })
 
+describe('searchPlaces — validation lives at the service boundary', () => {
+  it('rejects a short query without contacting the upstream, even called directly', async () => {
+    const fetchImpl = vi.fn()
+    const result = await searchPlaces({ q: 'ab' }, { fetchImpl })
+
+    expect(result.error.status).toBe(400)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('clamps a direct caller\'s oversized limit rather than passing it upstream', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ results: [] }) }))
+    const result = await searchPlaces({ q: 'Paradiso', limit: 999 }, { fetchImpl })
+
+    expect(fetchImpl.mock.calls[0][0]).toContain('limit=10')
+    expect(result.meta.limit).toBe(10)
+  })
+})
+
 describe('GET /api/places/search', () => {
   it('returns mapped suggestions', async () => {
     stubFetch({ results: [PARADISO] })
@@ -170,6 +189,32 @@ describe('GET /api/places/search', () => {
     await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso', limit: '500' })).expect(200)
 
     expect(fetchMock.mock.calls[0][0]).toContain('limit=10')
+  })
+
+  it('returns the bounded-collection envelope echoing the applied limit', async () => {
+    stubFetch({ results: [PARADISO] })
+
+    const res = await asUserA(
+      request(app).get('/api/places/search').query({ q: 'Paradiso', limit: '3' }),
+    ).expect(200)
+
+    expect(res.body.meta).toEqual({ limit: 3, returned: 1 })
+    expect(res.body.meta.returned).toBe(res.body.items.length)
+  })
+
+  it('bounds the outbound request with an abort signal', async () => {
+    const fetchMock = stubFetch({ results: [] })
+
+    await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(200)
+
+    expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('502s when the upstream request times out', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw Object.assign(new Error('The operation was aborted'), { name: 'TimeoutError' })
+    })
+    await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(502)
   })
 
   it('passes a complete lat/lon bias through and ignores a half pair', async () => {

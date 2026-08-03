@@ -27,10 +27,9 @@ export const VENUE_EDITABLE_FIELDS = [
   'email',
 ]
 
-// Coordinates are persisted for map/geocoder reuse and are set by the system
-// (imports, the geocoder, and a validated place lookup on create/enrich). They
-// deliberately stay outside VENUE_EDITABLE_FIELDS so venue forms and PATCH
-// requests never expose them as editable fields.
+// Coordinates are persisted for map/geocoder reuse. They stay outside
+// VENUE_EDITABLE_FIELDS so venue forms and PATCH never expose them as editable
+// fields
 export const VENUE_COORDINATE_FIELDS = ['latitude', 'longitude']
 export const VENUE_INSERT_FIELDS = [...VENUE_EDITABLE_FIELDS, ...VENUE_COORDINATE_FIELDS]
 

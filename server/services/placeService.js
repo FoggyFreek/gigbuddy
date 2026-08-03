@@ -8,9 +8,12 @@
 // returns query-completion segments (brand/category/plaintext) with no address,
 // phone, website or coordinates, so it cannot populate a single field.
 import { logger } from '../utils/logger.js'
+import { parsePlaceQuery } from '../validators/placeValidators.js'
+import { badRequest } from './serviceErrors.js'
 
 const API_BASE = 'https://api.tomtom.com/search/2/poiSearch'
 const API_KEY = process.env.TOMTOM_API_KEY || ''
+const REQUEST_TIMEOUT_MS = 5000
 
 const NOT_CONFIGURED = {
   error: { status: 400, body: { error: 'Place search is not configured' } },
@@ -124,10 +127,15 @@ function cacheKey({ query, limit, language, lat, lon }) {
   return [norm(query), limit, norm(language), lat ?? '', lon ?? ''].join('|')
 }
 
-async function requestPlaces(url, fetchImpl) {
+async function requestPlaces(url, limit, fetchImpl) {
   let res
   try {
-    res = await fetchImpl(url, { headers: { Accept: 'application/json' } })
+    // Without a deadline a stalled upstream would pin both the Express request
+    // and this query's inflight cache entry open indefinitely.
+    res = await fetchImpl(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
   } catch (err) {
     logger.warn('placeSearch.request_failed', { err })
     return UPSTREAM_FAILED
@@ -144,15 +152,22 @@ async function requestPlaces(url, fetchImpl) {
     return UPSTREAM_FAILED
   }
   const results = Array.isArray(json?.results) ? json.results : []
-  return { items: results.map(mapPoiResult).filter((item) => item.name) }
+  const items = results.map(mapPoiResult).filter((item) => item.name)
+  // Bounded-collection envelope: meta echoes the scope actually applied.
+  return { items, meta: { limit, returned: items.length } }
 }
 
-// `{ items }` on success, or the `{ error }` service contract. Never throws on a
-// network fault — a dead upstream must not 500 the SPA.
-export async function searchPlaces(params = {}, { fetchImpl = globalThis.fetch } = {}) {
+// Validates at the service boundary so a direct caller cannot build a malformed
+// upstream request. Returns the bounded `{ items, meta }` envelope, or the
+// `{ error }` service contract. Never throws on a network fault — a dead upstream
+// must not 500 the SPA.
+export async function searchPlaces(query = {}, { fetchImpl = globalThis.fetch } = {}) {
+  const parsed = parsePlaceQuery(query)
+  if (parsed.error) return badRequest(parsed.error)
   if (!API_KEY) return NOT_CONFIGURED
   if (typeof fetchImpl !== 'function') return UPSTREAM_FAILED
 
+  const params = parsed.params
   const key = cacheKey(params)
   const cached = readCache(key)
   if (cached !== undefined) return cached
@@ -160,7 +175,7 @@ export async function searchPlaces(params = {}, { fetchImpl = globalThis.fetch }
   const pending = inflight.get(key)
   if (pending) return pending
 
-  const promise = requestPlaces(buildUrl(params), fetchImpl)
+  const promise = requestPlaces(buildUrl(params), params.limit, fetchImpl)
     .then((result) => {
       // Only successful lookups are cached; a transient 502 must be retryable.
       if (!result.error) writeCache(key, result)

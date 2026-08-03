@@ -219,8 +219,9 @@ export default function VenueDetailPage() {
   ], [t])
 
   // The server decides what actually gets filled (it re-checks the stored row),
-  // so the response — not the suggestion — is what we merge back into the form.
+  // so the response, not the suggestion, is what we merge back into the form.
   async function handleEnrichApply(suggestion: PlaceSuggestion) {
+    if (!canWrite) return
     await flush()
     const { venue } = await enrichVenue(venueId, suggestion)
     const row = venue as Record<string, unknown>

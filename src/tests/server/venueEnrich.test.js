@@ -135,6 +135,17 @@ describe('POST /api/venues/:id/enrich', () => {
     expect(Number(rows[0].longitude)).toBeCloseTo(5.12, 4)
   })
 
+  it('returns the same updated_at the database holds after both writes', async () => {
+    const v = venueA()
+    await clearAddress(v.id)
+
+    const res = await enrich(v.id).expect(200)
+
+    const { rows } = await pool.query('SELECT updated_at FROM venues WHERE id = $1', [v.id])
+    expect(new Date(res.body.venue.updated_at).toISOString())
+      .toBe(new Date(rows[0].updated_at).toISOString())
+  })
+
   it('reports an empty fill set when the suggestion adds nothing', async () => {
     const v = venueA()
     await clearAddress(v.id)

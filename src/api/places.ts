@@ -1,5 +1,5 @@
 import { request } from './_client.ts'
-import type { PlaceSuggestion, PlaceSearchResponse } from '../types/api.ts'
+import type { LimitedCollectionResponse, PlaceSuggestion } from '../types/api.ts'
 
 export interface PlaceSearchOptions {
   limit?: number
@@ -21,6 +21,8 @@ export async function searchPlaces(
     params.set('lat', String(lat))
     params.set('lon', String(lon))
   }
-  const { items } = await request<PlaceSearchResponse>(`/api/places/search?${params}`, { signal })
+  const { items } = await request<LimitedCollectionResponse<PlaceSuggestion>>(
+    `/api/places/search?${params}`, { signal },
+  )
   return items
 }

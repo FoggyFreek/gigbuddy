@@ -236,10 +236,12 @@ export async function enrichVenue(tenantId, venueId, suggestion) {
     }
 
     if (needsCoords) {
+      // Returns the full row, so this is the later snapshot of the two writes and
+      // replaces (not merges into) the earlier one — no stale updated_at.
       const written = await updateVenueGeocode(
         client, coords.latitude, coords.longitude, venueId, tenantId,
       )
-      if (written) updated = { ...updated, ...written }
+      if (written) updated = written
     }
 
     return { venue: updated, filled }
