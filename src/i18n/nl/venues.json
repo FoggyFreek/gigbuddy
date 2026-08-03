@@ -13,6 +13,8 @@
     "category": "Categorie",
     "venueName": "Naam locatie",
     "festivalName": "Festival- / evenementnaam",
+    "searchVenueName": "Zoek naam locatie",
+    "searchFestivalName": "Zoek festival- / evenementnaam",
     "title": "Aanhef",
     "givenName": "Voornaam",
     "familyName": "Achternaam",
@@ -66,7 +68,10 @@
     "openContact": "Contact openen",
     "openContactAria": "open contact",
     "removeContactAria": "remove contact",
-    "deleteTitle": "Locatie verwijderen?"
+    "deleteTitle": "Locatie verwijderen?",
+    "enrichButton": "Adres opzoeken",
+    "enrichTooltip": "Zoek op deze naam en vul lege adresvelden aan",
+    "enrichNeedsName": "Vul eerst een naam in"
   },
   "modal": {
     "addTitle": "Locatie toevoegen",

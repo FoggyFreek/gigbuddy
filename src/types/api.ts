@@ -96,3 +96,36 @@ export interface StorageConnection {
   operationsVerified: boolean
   errorCode: string | null
 }
+
+/**
+ * A place-lookup result, normalized server-side onto the app's own field names so
+ * consumers never see the upstream provider's shape. The text fields line up with
+ * `PLACE_FILLABLE_FIELDS` in `shared/placeFields.js`, so a suggestion can be
+ * merged straight into a form. `freeform_address` and `categories` are display
+ * only and are never persisted.
+ */
+export interface PlaceSuggestion {
+  id: string | null
+  name: string | null
+  street_and_number: string | null
+  postal_code: string | null
+  city: string | null
+  region: string | null
+  country: string | null
+  website: string | null
+  phone: string | null
+  latitude: number | null
+  longitude: number | null
+  freeform_address: string | null
+  categories: string[]
+}
+
+export interface PlaceSearchResponse {
+  items: PlaceSuggestion[]
+}
+
+/** Result of applying a place suggestion to a record: what actually got filled. */
+export interface PlaceEnrichResponse<T> {
+  venue: T
+  filled: string[]
+}

@@ -59,6 +59,17 @@ describe('VenueFields — label changes by category', () => {
     expect(screen.queryByLabelText(/^Venue name$/i)).not.toBeInTheDocument()
   })
 
+  it('renders a supplied nameField in place of the plain name input', () => {
+    wrap(venueForm, { nameField: <input aria-label="custom name control" /> })
+    expect(screen.getByLabelText('custom name control')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^Venue name/i)).not.toBeInTheDocument()
+  })
+
+  it('still renders the plain name input when no slot is supplied', () => {
+    wrap(venueForm)
+    expect(screen.getByLabelText(/Venue name/i)).toHaveValue('Café De Zwaan')
+  })
+
   it('shows optional registration and VAT identifier fields for both categories', () => {
     const { unmount } = wrap(venueForm)
     expect(screen.getByLabelText('Chamber of Commerce number')).toBeInTheDocument()

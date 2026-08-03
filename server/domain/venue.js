@@ -27,11 +27,36 @@ export const VENUE_EDITABLE_FIELDS = [
   'email',
 ]
 
-// Coordinates are persisted for map/geocoder reuse and accepted by imports,
-// but deliberately stay outside VENUE_EDITABLE_FIELDS so normal venue forms
-// and PATCH requests do not expose them.
+// Coordinates are persisted for map/geocoder reuse and are set by the system
+// (imports, the geocoder, and a validated place lookup on create/enrich). They
+// deliberately stay outside VENUE_EDITABLE_FIELDS so venue forms and PATCH
+// requests never expose them as editable fields.
 export const VENUE_COORDINATE_FIELDS = ['latitude', 'longitude']
 export const VENUE_INSERT_FIELDS = [...VENUE_EDITABLE_FIELDS, ...VENUE_COORDINATE_FIELDS]
+
+function parseCoordinate(value, min, max, field) {
+  if (value === null || value === undefined || String(value).trim() === '') return { value: null }
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    return { error: `${field} must be a number between ${min} and ${max}` }
+  }
+  return { value: parsed }
+}
+
+// The one owner of the coordinate-pair rule, shared by import, create and enrich.
+// Mirrors the venues_latitude_range / venues_longitude_range /
+// venues_coordinate_pair constraints so a bad pair fails before it reaches SQL.
+// Returns `{ latitude, longitude }` or `{ error }`.
+export function normalizeCoordinatePair(row = {}) {
+  const latitude = parseCoordinate(row.latitude, -90, 90, 'latitude')
+  if (latitude.error) return latitude
+  const longitude = parseCoordinate(row.longitude, -180, 180, 'longitude')
+  if (longitude.error) return longitude
+  if ((latitude.value === null) !== (longitude.value === null)) {
+    return { error: 'latitude and longitude must be provided together' }
+  }
+  return { latitude: latitude.value, longitude: longitude.value }
+}
 
 function normalizeInsertWebsite(body) {
   try {

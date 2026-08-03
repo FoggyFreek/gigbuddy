@@ -13,6 +13,8 @@
     "category": "Category",
     "venueName": "Venue name",
     "festivalName": "Festival / event name",
+    "searchVenueName": "Search venue name",
+    "searchFestivalName": "Search festival / event name",
     "title": "Title",
     "givenName": "Given name",
     "familyName": "Family name",
@@ -66,7 +68,10 @@
     "openContact": "Open contact",
     "openContactAria": "open contact",
     "removeContactAria": "remove contact",
-    "deleteTitle": "Delete venue?"
+    "deleteTitle": "Delete venue?",
+    "enrichButton": "Look up address",
+    "enrichTooltip": "Search for this name and fill any empty address fields",
+    "enrichNeedsName": "Enter a name first"
   },
   "modal": {
     "addTitle": "Add venue",

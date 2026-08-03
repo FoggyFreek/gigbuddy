@@ -1,6 +1,6 @@
 import { request } from './_client.ts'
 import type { Venue, Contact, DuplicateEntityMatch, Id } from '../types/entities.ts'
-import type { LimitedCollectionResponse } from '../types/api.ts'
+import type { LimitedCollectionResponse, PlaceEnrichResponse, PlaceSuggestion } from '../types/api.ts'
 
 interface VenueCategoryImpact {
   affected_count?: number
@@ -33,6 +33,13 @@ export const createVenue = (body: Partial<Venue>) =>
 export const updateVenue = (id: Id, body: Partial<Venue>) =>
   api<Venue>(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteVenue = (id: Id) => api<void>(`/${id}`, { method: 'DELETE' })
+// Fills only the venue's empty fields from a place suggestion. The server
+// recomputes the fill set against the stored row, so `filled` is authoritative.
+export const enrichVenue = (id: Id, suggestion: PlaceSuggestion) =>
+  api<PlaceEnrichResponse<Venue>>(`/${id}/enrich`, {
+    method: 'POST',
+    body: JSON.stringify({ suggestion }),
+  })
 export const importVenues = (rows: Partial<Venue>[]) =>
   api<Venue[]>('/import', { method: 'POST', body: JSON.stringify(rows) })
 export const searchVenues = (q: string, category?: string) => {

@@ -24,6 +24,7 @@ import enSetlists from './en/setlists.json'
 import enContacts from './en/contacts.json'
 import enSuppliers from './en/suppliers.json'
 import enVenues from './en/venues.json'
+import enPlaces from './en/places.json'
 import enEmailTemplates from './en/emailTemplates.json'
 import enInvoices from './en/invoices.json'
 import enPurchases from './en/purchases.json'
@@ -59,6 +60,7 @@ import nlSetlists from './nl/setlists.json'
 import nlContacts from './nl/contacts.json'
 import nlSuppliers from './nl/suppliers.json'
 import nlVenues from './nl/venues.json'
+import nlPlaces from './nl/places.json'
 import nlEmailTemplates from './nl/emailTemplates.json'
 import nlInvoices from './nl/invoices.json'
 import nlPurchases from './nl/purchases.json'
@@ -97,6 +99,7 @@ const en = {
   contacts: enContacts,
   suppliers: enSuppliers,
   venues: enVenues,
+  places: enPlaces,
   emailTemplates: enEmailTemplates,
   invoices: enInvoices,
   purchases: enPurchases,
@@ -142,6 +145,7 @@ const nl = {
   contacts: nlContacts,
   suppliers: nlSuppliers,
   venues: nlVenues,
+  places: nlPlaces,
   emailTemplates: nlEmailTemplates,
   invoices: nlInvoices,
   purchases: nlPurchases,

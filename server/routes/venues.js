@@ -12,6 +12,7 @@ import {
   getCategoryImpact,
   createVenue,
   patchVenue,
+  enrichVenue,
   deleteVenue,
   listVenueContacts,
   linkVenueContact,
@@ -65,6 +66,14 @@ router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, 
   const result = await patchVenue(req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.venue)
+})
+
+// Fill empty fields from a place-lookup suggestion; never overwrites.
+router.post('/:id/enrich', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await enrichVenue(req.tenantId, id, req.body?.suggestion)
+  if (result.error) return sendError(res, result.error)
+  res.json({ venue: result.venue, filled: result.filled })
 })
 
 // Delete venue

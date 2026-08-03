@@ -18,9 +18,12 @@ import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
+import PlaceSearchField from './shared/PlaceSearchField.tsx'
+import { pickFillableUpdates } from '../utils/placeFill.ts'
 import VenueFields from './VenueFields.tsx'
 import type { VenueForm } from './VenueFields.tsx'
 import type { DuplicateEntityMatch } from '../types/entities.ts'
+import type { PlaceSuggestion } from '../types/api.ts'
 
 const REQUIRED_FIELDS = ['name']
 
@@ -176,6 +179,25 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
     setCategoryChange(null)
   }
 
+  // A picked place fills only the fields still empty, so anything the user
+  // already typed wins. Coordinates ride along in state but are never rendered —
+  // they are not editable fields; POST /venues validates and stores them.
+  function handlePlaceSelect(suggestion: PlaceSuggestion) {
+    setDuplicateMatches([])
+    setErrors((prev) => ({ ...prev, name: undefined }))
+    setForm((prev) => {
+      const updates = pickFillableUpdates(prev, suggestion) as Partial<VenueForm>
+      if (updates.country) updates.country = String(updates.country).slice(0, 2).toUpperCase()
+      return {
+        ...prev,
+        ...updates,
+        name: suggestion.name ?? prev.name,
+        latitude: suggestion.latitude,
+        longitude: suggestion.longitude,
+      }
+    })
+  }
+
   function handleChange(field: string, value: string) {
     if (mode === 'edit' && !canWrite) return
     setDuplicateMatches([])
@@ -215,6 +237,8 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
       website: form.website || null,
       phone: form.phone || null,
       email: form.email || null,
+      latitude: form.latitude ?? null,
+      longitude: form.longitude ?? null,
     })
     onCreated?.(venue)
     onClose()
@@ -243,6 +267,19 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
               errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
               lockedCategory={lockedCategory}
               disabled={mode === 'edit' && !canWrite}
+              nameField={mode === 'create' ? (
+                <PlaceSearchField
+                  value={form.name ?? ''}
+                  onValueChange={(value) => handleChange('name', value)}
+                  onPlaceSelect={handlePlaceSelect}
+                  label={form.category === 'festival'
+                    ? t($ => $.fields.searchFestivalName)
+                    : t($ => $.fields.searchVenueName)}
+                  required
+                  error={!!errors.name}
+                  helperText={errors.name}
+                />
+              ) : undefined}
             />
           </Grid>
           {duplicateMatches.map((match) => (
