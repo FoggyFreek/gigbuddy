@@ -28,6 +28,7 @@ import * as gigsApi from '../api/gigs.ts'
 import * as accountsApi from '../api/accounts.ts'
 import MerchPage from '../pages/MerchPage.tsx'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
+import { ProfileContext } from '../contexts/profileContext.ts'
 import theme from '../theme.ts'
 
 function DetailStub() {
@@ -37,17 +38,26 @@ function DetailStub() {
 
 // Renders MerchPage inside the real nested-route shape so summary-row clicks can
 // navigate to the detail outlet.
-function wrap(ui, { compact = false } = {}) {
+const integrationProfile = (shopify) => ({
+  bandName: '', setBandName: vi.fn(), accentColor: null, setAccentColor: vi.fn(),
+  integrations: { shopify, bandsintown: true, mollie: true },
+  isIntegrationConfigured: (integration) => integration !== 'shopify' || shopify,
+  setIntegrationConfigured: vi.fn(),
+})
+
+function wrap(ui, { compact = false, shopify = true } = {}) {
   return render(
     <MemoryRouter initialEntries={['/merch']}>
       <ThemeProvider theme={theme}>
-        <CompactLayoutContext.Provider value={compact}>
-          <Routes>
-            <Route path="/merch" element={ui}>
-              <Route path=":id" element={<DetailStub />} />
-            </Route>
-          </Routes>
-        </CompactLayoutContext.Provider>
+        <ProfileContext.Provider value={integrationProfile(shopify)}>
+          <CompactLayoutContext.Provider value={compact}>
+            <Routes>
+              <Route path="/merch" element={ui}>
+                <Route path=":id" element={<DetailStub />} />
+              </Route>
+            </Routes>
+          </CompactLayoutContext.Provider>
+        </ProfileContext.Provider>
       </ThemeProvider>
     </MemoryRouter>,
   )
@@ -93,6 +103,14 @@ const REVENUE_ACCOUNTS = [
 ]
 
 describe('MerchPage — products', () => {
+  it('hides Shopify actions when Shopify is not configured', async () => {
+    wrap(<MerchPage />, { shopify: false })
+    await screen.findAllByText('Band T-Shirt')
+
+    expect(screen.queryByRole('button', { name: /import from shopify/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /shopify payout/i })).not.toBeInTheDocument()
+  })
+
   it('renders the product table with stock and prices', async () => {
     wrap(<MerchPage />)
     // The name shows in both the products table and the per-product summary.
@@ -263,4 +281,3 @@ describe('MerchPage — recording a sale', () => {
     expect(await screen.findByText(/insufficient stock/i)).toBeInTheDocument()
   })
 })
-

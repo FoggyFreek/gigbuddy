@@ -30,6 +30,7 @@ import InvoiceStatusActions from './invoices/InvoiceStatusActions.tsx'
 import InvoiceEmlDialog from './invoices/InvoiceEmlDialog.tsx'
 import PaymentLinkPanel from './invoices/PaymentLinkPanel.tsx'
 import InvoiceDownloadMenu from './invoices/InvoiceDownloadMenu.tsx'
+import { useProfile } from '../contexts/profileContext.ts'
 
 interface InvoiceDetailsProps {
   invoiceId: Id
@@ -44,6 +45,8 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
   const { t } = useTranslation(['invoices', 'common'])
   const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate, canWrite })
   const isCompact = useCompactLayout()
+  const { isIntegrationConfigured } = useProfile()
+  const mollieConfigured = isIntegrationConfigured('mollie')
 
   useEffect(() => {
     if (s.invoice?.invoice_number != null) {
@@ -220,7 +223,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
             setDiscountOpen={s.setDiscountOpen}
           />
 
-          {s.invoice && (
+          {s.invoice && mollieConfigured && (
             <>
               <Divider sx={{ my: 2 }} />
               <PaymentLinkPanel

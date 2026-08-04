@@ -3,6 +3,7 @@ import { parsePositiveId as parseId } from './common.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
 import { DEFAULT_VAT_COUNTRY, isValidVatId, normalizeVatNumber } from '../../shared/vatRates.js'
 import { isValidRegistrationNumber, normalizeRegistrationNumber } from '../../shared/businessRegistry.js'
+import { parseArtistId } from './bandsintownValidators.js'
 
 // Mollie API keys: live_<alphanum 25+> or test_<alphanum 25+>
 export const MOLLIE_KEY_RE = /^(live|test)_[A-Za-z0-9]{25,}$/
@@ -69,9 +70,18 @@ function validateShortBio(raw) {
   return { value: raw }
 }
 
+// The same column Settings → Integrations writes, so the shape is enforced here
+// too — the integration cannot call the API with a non-numeric id.
+function validateBandsintownArtistId(raw) {
+  if (raw === null || raw === undefined || raw === '') return { value: null }
+  const artistId = parseArtistId(raw)
+  return artistId ? { value: artistId } : { error: 'invalid_bandsintown_artist_id' }
+}
+
 // Per-key validators for PROFILE_FIELDS. Keys absent here are stored as sent.
 const PROFILE_VALIDATORS = {
   short_bio: validateShortBio,
+  bandsintown_artist_id: validateBandsintownArtistId,
 }
 
 // Dashboard memory tile (customization data). The caption is free text; the gig

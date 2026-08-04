@@ -3,6 +3,9 @@ import { appendPeriodParams } from '../utils/invoicePeriod.ts'
 import type {
   Product, MerchSale, MerchSalesSummaryRow, Period, Id,
   ShopifyOrdersPage, ShopifyImportBody, ShopifyImportResult,
+  ShopifyCustomPayoutBody, ShopifyManualPayoutsResult,
+  ShopifyManualPayoutSettlementBody,
+  PaypalCustomPayoutBody, PaypalCustomPayoutResult, PaypalPayoutCandidatesResult,
 } from '../types/entities.ts'
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
@@ -48,3 +51,31 @@ export const fetchShopifyOrders = (params: { cursor?: string; limit?: number } =
 
 export const importShopifyOrders = (body: ShopifyImportBody) =>
   api<ShopifyImportResult>('/shopify/import', { method: 'POST', body: JSON.stringify(body) })
+
+export const listManualShopifyPayouts = () =>
+  api<ShopifyManualPayoutsResult>('/shopify/payouts?limit=100')
+
+export const refreshManualShopifyPayouts = (fromDate: string, toDate: string) =>
+  api<ShopifyManualPayoutsResult>('/shopify/payouts/refresh', {
+    method: 'POST', body: JSON.stringify({ from_date: fromDate, to_date: toDate }),
+  })
+
+export const createCustomShopifyPayout = (body: ShopifyCustomPayoutBody) =>
+  api<ShopifyManualPayoutsResult>('/shopify/payouts/custom', {
+    method: 'POST', body: JSON.stringify(body),
+  })
+
+export const settleShopifyPayoutManually = (
+  payoutId: Id, body: ShopifyManualPayoutSettlementBody,
+) => api<{ payout: { id: Id; settlement_method: 'manual' } }>(
+  `/shopify/payouts/${payoutId}/settle`,
+  { method: 'POST', body: JSON.stringify(body) },
+)
+
+export const listPaypalPayoutCandidates = () =>
+  api<PaypalPayoutCandidatesResult>('/paypal/payouts/candidates?limit=100')
+
+export const createCustomPaypalPayout = (body: PaypalCustomPayoutBody) =>
+  api<PaypalCustomPayoutResult>('/paypal/payouts/custom', {
+    method: 'POST', body: JSON.stringify(body),
+  })

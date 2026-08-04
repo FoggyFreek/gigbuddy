@@ -45,6 +45,8 @@ export const DEFAULT_ACCOUNTS = [
 
   // ---- level 2 ----
   { code: '11200', name: 'Accounts Receivable',                           type: 'asset',              parent_code: '11000' },
+  { code: '11300', name: 'Shopify Payments Clearing',                    type: 'asset',              parent_code: '11000' },
+  { code: '11400', name: 'PayPal Clearing',                              type: 'asset',              parent_code: '11000' },
   { code: '12100', name: 'Inventory - Vinyl and CDs',                     type: 'asset',              parent_code: '12000' },
   { code: '12200', name: 'Inventory - Merchandise',                       type: 'asset',              parent_code: '12000' },
   { code: '13100', name: 'Accumulated Depreciation - Gear',               type: 'asset',              parent_code: '13000' },
@@ -65,6 +67,7 @@ export const DEFAULT_ACCOUNTS = [
   { code: '63200', name: 'Artwork, Photo & Video',                        type: 'expense',            parent_code: '63000' },
   { code: '63300', name: 'Digital Distribution & Software Subscriptions', type: 'expense',            parent_code: '63000' },
   { code: '64200', name: 'Hired Musicians & Contractors',                 type: 'expense',            parent_code: '64000' },
+  { code: '64100', name: 'Payment Processing Fees',                       type: 'expense',            parent_code: '64000' },
   { code: '64900', name: 'VAT rounding differences',                      type: 'expense',            parent_code: '64000' },
 ]
 
@@ -85,6 +88,9 @@ const DEFAULT_SETTINGS = {
   merch_inventory_account_code: '12200',
   merch_revenue_account_code: '42000',
   merch_cogs_account_code: '51000',
+  shopify_clearing_account_code: '11300',
+  paypal_clearing_account_code: '11400',
+  shopify_fee_expense_account_code: '64100',
 }
 
 // Seeds the chart of accounts + settings row for a single tenant.
@@ -113,8 +119,9 @@ export async function seedTenantAccounting(client, tenantId) {
        output_vat_account_code, input_vat_account_code,
        vat_receivable_settlement_account_code, vat_payable_settlement_account_code,
        vat_rounding_account_code,
-       merch_inventory_account_code, merch_revenue_account_code, merch_cogs_account_code
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       merch_inventory_account_code, merch_revenue_account_code, merch_cogs_account_code,
+       shopify_clearing_account_code, paypal_clearing_account_code, shopify_fee_expense_account_code
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
      ON CONFLICT (tenant_id) DO NOTHING`,
     [
       tenantId,
@@ -133,6 +140,9 @@ export async function seedTenantAccounting(client, tenantId) {
       DEFAULT_SETTINGS.merch_inventory_account_code,
       DEFAULT_SETTINGS.merch_revenue_account_code,
       DEFAULT_SETTINGS.merch_cogs_account_code,
+      DEFAULT_SETTINGS.shopify_clearing_account_code,
+      DEFAULT_SETTINGS.paypal_clearing_account_code,
+      DEFAULT_SETTINGS.shopify_fee_expense_account_code,
     ],
   )
 }

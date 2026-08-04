@@ -78,7 +78,7 @@ describe('ShopifyImportDialog', () => {
 
     // Step 2: the line defaults to the matching product; import it.
     expect(await screen.findByText('Map to')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /import 1 line/i }))
+    await user.click(screen.getByRole('button', { name: /import 1 order/i }))
 
     await waitFor(() => expect(api.importShopifyOrders).toHaveBeenCalledWith({
       orders: [{
@@ -86,7 +86,7 @@ describe('ShopifyImportDialog', () => {
         lines: [{ shopify_line_id: '5001', mapping: { type: 'product', product_id: 1 } }],
       }],
     }))
-    expect(await screen.findByText(/imported 1 line/i)).toBeInTheDocument()
+    expect(await screen.findByText(/imported 1 order/i)).toBeInTheDocument()
   })
 
   it('maps a line to a revenue account', async () => {
@@ -116,7 +116,7 @@ describe('ShopifyImportDialog', () => {
     expect(screen.queryByRole('option', { name: '19%' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('option', { name: /21%.*standard VAT rate/i }))
 
-    await user.click(screen.getByRole('button', { name: /import 1 line/i }))
+    await user.click(screen.getByRole('button', { name: /import 1 order/i }))
     await waitFor(() => expect(api.importShopifyOrders).toHaveBeenCalledWith({
       orders: [{
         shopify_order_id: '1001',

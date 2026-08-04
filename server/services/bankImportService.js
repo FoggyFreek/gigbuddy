@@ -9,6 +9,8 @@ import { parseBankStatement, BankStatementParseError } from './bankStatement/ind
 import {
   postBankStatementLine,
   postOpeningBalance,
+  postShopifyPayoutAdjustment,
+  postShopifyPayoutSettlement,
   ledgerErrorResult,
 } from './ledgerService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
@@ -31,6 +33,19 @@ import { indexSuppliers, matchSuppliers } from '../utils/supplierMatch.js'
 import { badRequest } from './serviceErrors.js'
 import { clearInvoicePaymentLink, markInvoicePaid } from '../repositories/invoiceRepository.js'
 import { deactivateMolliePaymentLink } from './molliePaymentLinkService.js'
+import { syncShopifyPayouts, syncShopifyPayoutById } from './shopifyPayoutService.js'
+import { postPaypalSettlementInTransaction } from './paypalPayoutService.js'
+import {
+  listPayoutCandidates,
+  listManuallySettledPayouts,
+  listBalanceTransactionsForPayouts,
+  lockBalanceTransactionsForPayout,
+  lockPayout,
+  markBalanceTransaction,
+  markPayoutReconciled,
+  listUnreconciledPaypalOrders,
+  listManuallySettledPaypalPayouts,
+} from '../repositories/shopifyPaymentsRepository.js'
 import {
   findImportByHash,
   insertImport,
@@ -179,6 +194,39 @@ async function decorateImport(db, tenantId, imp) {
   const suppliers = debits.length
     ? await findSuppliersForImport(db, tenantId, debits.map((l) => l.counterparty_iban), debits.map((l) => l.counterparty_name))
     : []
+  const dates = pending.map((line) => toDateOnly(line.booking_date)).filter(Boolean).sort()
+  const payoutCandidates = dates.length
+    ? await listPayoutCandidates(
+      db, tenantId, pending.map((line) => line.amount_cents),
+      shiftDays(dates[0], -7), shiftDays(dates[dates.length - 1], 7),
+    )
+    : []
+  const manuallySettledPayouts = dates.length
+    ? await listManuallySettledPayouts(
+      db, tenantId, pending.map((line) => line.amount_cents), dates[0], dates[dates.length - 1],
+    )
+    : []
+  const manuallySettledPaypalPayouts = dates.length
+    ? await listManuallySettledPaypalPayouts(
+      db, tenantId, pending.map((line) => line.amount_cents), dates[0], dates[dates.length - 1],
+    )
+    : []
+  const payoutTransactions = await listBalanceTransactionsForPayouts(
+    db, tenantId, payoutCandidates.map((payout) => payout.id),
+  )
+  const payoutTransactionsById = groupBy(payoutTransactions, (row) => row.payout_id)
+  const payoutsByAmount = groupBy(payoutCandidates, (payout) => Math.abs(payout.net_cents))
+  const settledPayoutsByAmount = groupBy(
+    manuallySettledPayouts, (payout) => Math.abs(payout.net_cents),
+  )
+  const settledPaypalPayoutsByAmount = groupBy(
+    manuallySettledPaypalPayouts, (payout) => payout.deposit_cents,
+  )
+  const paypalOrders = dates.length && pending.some((line) => line.direction === 'credit')
+    ? await listUnreconciledPaypalOrders(
+      db, tenantId, shiftDays(dates[0], -30), shiftDays(dates[dates.length - 1], 30),
+    )
+    : []
 
   const invByAmount = groupBy(openInvoices, (i) => i.total_cents)
   const purByAmount = groupBy(openPurchases, (p) => p.total_cents)
@@ -192,6 +240,10 @@ async function decorateImport(db, tenantId, imp) {
       invoiceMatches: [],
       purchaseMatches: [],
       paidPurchaseMatches: [],
+      shopifyPayoutMatches: [],
+      recordedShopifyPayoutMatches: [],
+      recordedPaypalPayoutMatches: [],
+      paypalOrderMatches: [],
     }
     const identity = duplicateIdentity({
       accountIban: imp.account_iban,
@@ -214,7 +266,81 @@ async function decorateImport(db, tenantId, imp) {
         )
       } else {
         suggestion.invoiceMatches = invByAmount.get(line.amount_cents) ?? []
+        suggestion.paypalOrderMatches = paypalOrders
+          .filter((order) => !line.currency || order.currency === line.currency)
+          .map((order) => ({
+            id: order.id,
+            order_name: order.order_name,
+            shopify_order_id: order.shopify_order_legacy_id,
+            processed_at: order.processed_at,
+            currency: order.currency,
+            gross_cents: order.gross_cents,
+          }))
       }
+      suggestion.shopifyPayoutMatches = (payoutsByAmount.get(line.amount_cents) ?? [])
+        .filter((payout) => (
+          (payout.transaction_type === 'DEPOSIT' && line.direction === 'credit')
+          || (payout.transaction_type === 'WITHDRAWAL' && line.direction === 'debit')
+        ))
+        .map((payout) => {
+          const transactions = payoutTransactionsById.get(payout.id) ?? []
+          const unresolved = transactions.filter((row) => row.processing_status === 'needs_review')
+          return {
+            id: payout.id,
+            shopify_payout_id: payout.shopify_payout_legacy_id,
+            issued_at: payout.issued_at,
+            transaction_type: payout.transaction_type,
+            currency: payout.currency,
+            net_cents: payout.net_cents,
+            external_trace_id: payout.external_trace_id,
+            sync_complete: payout.sync_complete,
+            balance_net_cents: payout.balance_net_cents,
+            ready: payout.sync_complete
+              && payout.balance_net_cents === payout.net_cents
+              && Boolean(payout.covered),
+            adjustments: unresolved.map((row) => ({
+              id: row.id,
+              type: row.transaction_type,
+              source_type: row.source_type,
+              transaction_date: row.transaction_date,
+              net_cents: row.net_cents,
+            })),
+          }
+        })
+      suggestion.recordedShopifyPayoutMatches = (
+        settledPayoutsByAmount.get(line.amount_cents) ?? []
+      )
+        .filter((payout) => (
+          toDateOnly(payout.settlement_entry_date) === toDateOnly(line.booking_date)
+          && (!line.currency || payout.currency === line.currency)
+          && ((payout.transaction_type === 'DEPOSIT' && line.direction === 'credit')
+            || (payout.transaction_type === 'WITHDRAWAL' && line.direction === 'debit'))
+        ))
+        .map((payout) => ({
+          id: payout.id,
+          shopify_payout_id: payout.origin === 'custom'
+            ? payout.external_trace_id
+            : payout.shopify_payout_legacy_id,
+          settlement_entry_date: toDateOnly(payout.settlement_entry_date),
+          transaction_type: payout.transaction_type,
+          currency: payout.currency,
+          net_cents: payout.net_cents,
+        }))
+      suggestion.recordedPaypalPayoutMatches = (
+        settledPaypalPayoutsByAmount.get(line.amount_cents) ?? []
+      )
+        .filter((payout) => (
+          line.direction === 'credit'
+          && toDateOnly(payout.settlement_entry_date) === toDateOnly(line.booking_date)
+          && (!line.currency || payout.currency === line.currency)
+        ))
+        .map((payout) => ({
+          id: payout.id,
+          reference: payout.reference,
+          settlement_entry_date: toDateOnly(payout.settlement_entry_date),
+          currency: payout.currency,
+          deposit_cents: payout.deposit_cents,
+        }))
     }
     return { ...line, suggestion }
   })
@@ -230,6 +356,21 @@ async function decorateImport(db, tenantId, imp) {
     lines: decorated,
     openingBalanceSuggested,
   }
+}
+
+export async function refreshShopifyPayoutsForImport(db, tenantId, importId, userId) {
+  const imp = await fetchImport(db, tenantId, importId)
+  if (!imp) return { error: { status: 404, body: { error: 'Not found' } } }
+  const lines = await listLines(db, tenantId, importId)
+  const dates = lines.map((line) => toDateOnly(line.booking_date)).filter(Boolean).sort()
+  if (!dates.length) return decorateImport(db, tenantId, imp)
+  const synced = await syncShopifyPayouts(db, tenantId, {
+    fromDate: shiftDays(dates[0], -7),
+    toDate: shiftDays(dates[dates.length - 1], 7),
+    actorUserId: userId,
+  })
+  if (synced.error) return synced
+  return decorateImport(db, tenantId, imp)
 }
 
 // How far a bill's recorded payment date may sit from the bank booking date and
@@ -366,13 +507,15 @@ export async function setOpeningBalanceFromImport(db, tenantId, importId, userId
 
 // ---------- commit ----------
 
-export async function commitImport(db, tenantId, importId, decisions, userId) {
+export async function commitImport(
+  db, tenantId, importId, decisions, userId, fetchImpl = globalThis.fetch,
+) {
   const imp = await fetchImport(db, tenantId, importId)
   if (!imp) return { error: { status: 404, body: { error: 'Not found' } } }
 
   const results = []
   for (const decision of decisions) {
-    const status = await commitDecision(db, tenantId, importId, decision, userId)
+    const status = await commitDecision(db, tenantId, importId, decision, userId, fetchImpl)
     results.push({ line_id: decision.lineId, status })
   }
   // Finalize only once every line has a terminal status; a partial commit leaves
@@ -382,11 +525,18 @@ export async function commitImport(db, tenantId, importId, decisions, userId) {
   }
 
   const imported = results.filter((r) => r.status === 'imported'
-    || r.status === 'reconciled_invoice' || r.status === 'reconciled_purchase').length
+    || r.status === 'reconciled_invoice' || r.status === 'reconciled_purchase'
+    || r.status === 'reconciled_shopify_payout'
+    || r.status === 'reconciled_paypal_payout').length
   return { imported, skipped: results.length - imported, results }
 }
 
-async function commitDecision(db, tenantId, importId, decision, userId) {
+async function commitDecision(db, tenantId, importId, decision, userId, fetchImpl) {
+  if (decision.action === 'reconcile_shopify_payout') {
+    const synced = await syncShopifyPayoutById(db, tenantId, decision.payoutId, userId, fetchImpl)
+    if (synced.error) return 'skipped_shopify_sync_error'
+    return commitLine(db, tenantId, importId, decision, userId)
+  }
   if (decision.action !== 'reconcile_invoice') {
     return commitLine(db, tenantId, importId, decision, userId)
   }
@@ -528,7 +678,9 @@ async function commitLine(db, tenantId, importId, decision, userId) {
       return status
     }
     // A non-terminal status means the decision backed out — roll back and report it.
-    if (status !== 'imported' && status !== 'reconciled_invoice' && status !== 'reconciled_purchase') {
+    if (status !== 'imported' && status !== 'reconciled_invoice'
+        && status !== 'reconciled_purchase' && status !== 'reconciled_shopify_payout'
+        && status !== 'reconciled_paypal_payout') {
       abortTransaction(status)
     }
     return status
@@ -553,6 +705,10 @@ async function applyDecision(client, tenantId, line, decision, userId) {
       return reconcileInvoice(client, tenantId, line, decision, userId)
     case 'reconcile_purchase':
       return reconcilePurchase(client, tenantId, line, decision, userId)
+    case 'reconcile_shopify_payout':
+      return reconcileShopifyPayout(client, tenantId, line, decision, userId)
+    case 'reconcile_paypal_payout':
+      return reconcilePaypalPayout(client, tenantId, line, decision, userId)
     case 'journal_received':
       return journalLine(client, tenantId, line, decision, userId, 'credit', 'revenue')
     case 'journal_paid':
@@ -560,6 +716,86 @@ async function applyDecision(client, tenantId, line, decision, userId) {
     default:
       return 'skipped'
   }
+}
+
+async function reconcileShopifyPayout(client, tenantId, line, decision, userId) {
+  const payout = await lockPayout(client, tenantId, decision.payoutId)
+  if (!payout) return 'skipped_not_found'
+  if (payout.reconciled_bank_statement_line_id != null || payout.ledger_transaction_id != null) {
+    return 'skipped_payout_reconciled'
+  }
+  const expectedDirection = payout.transaction_type === 'DEPOSIT' ? 'credit' : 'debit'
+  if (line.direction !== expectedDirection) return 'skipped_direction_mismatch'
+  if (Math.abs(payout.net_cents) !== line.amount_cents) return 'skipped_amount_mismatch'
+  if (line.currency && payout.currency !== line.currency) return 'skipped_currency_mismatch'
+  if (payout.status !== 'PAID' || !payout.sync_complete) return 'skipped_payout_incomplete'
+
+  const transactions = await lockBalanceTransactionsForPayout(client, tenantId, payout.id)
+  if (!transactions.length
+      || transactions.reduce((sum, row) => sum + row.net_cents, 0) !== payout.net_cents) {
+    return 'skipped_payout_incomplete'
+  }
+  const mappings = new Map(
+    decision.adjustmentMappings.map((mapping) => [mapping.balanceTransactionId, mapping.accountCode]),
+  )
+  for (const transaction of transactions) {
+    if (transaction.processing_status === 'recorded') continue
+    if (transaction.processing_status !== 'needs_review') return 'skipped_payout_incomplete'
+    const accountCode = mappings.get(transaction.id)
+    if (!accountCode) return 'skipped_payout_mapping_required'
+    const validAccount = (await accountExistsOfType(client, tenantId, accountCode, 'revenue'))
+      || (await accountExistsOfType(client, tenantId, accountCode, 'expense'))
+      || (await accountExistsOfType(client, tenantId, accountCode, 'cost_of_goods_sold'))
+    if (!validAccount) return 'skipped_invalid_account'
+    const posted = await postShopifyPayoutAdjustment(client, tenantId, {
+      id: transaction.id,
+      remoteId: transaction.shopify_balance_transaction_gid,
+      netCents: transaction.net_cents,
+      transactionDate: transaction.transaction_date,
+    }, accountCode, SYSTEM_OPTS(userId))
+    await markBalanceTransaction(client, tenantId, transaction.id, {
+      status: 'recorded', accountCode, ledgerTransactionId: posted.transactionId ?? null,
+    })
+  }
+  const posted = await postShopifyPayoutSettlement(client, tenantId, {
+    id: payout.id,
+    remoteId: payout.shopify_payout_legacy_id,
+    netCents: payout.net_cents,
+    transactionType: payout.transaction_type,
+    entryDate: line.booking_date,
+  }, SYSTEM_OPTS(userId))
+  await markPayoutReconciled(client, tenantId, payout.id, line.id, posted.transactionId ?? null)
+  await markLineResult(client, tenantId, line.id, {
+    status: 'reconciled_shopify_payout', ledgerTransactionId: posted.transactionId ?? null,
+    matchedSourceType: 'shopify_payout', matchedSourceId: payout.id,
+  })
+  return 'reconciled_shopify_payout'
+}
+
+async function reconcilePaypalPayout(client, tenantId, line, decision, userId) {
+  if (line.direction !== 'credit') return 'skipped_direction_mismatch'
+  const result = await postPaypalSettlementInTransaction(client, tenantId, {
+    bankStatementLineId: line.id,
+    currency: line.currency,
+    orderFinancialIds: decision.orderFinancialIds,
+    depositCents: line.amount_cents,
+    differenceAccountCode: decision.differenceAccountCode,
+    entryDate: line.booking_date,
+    settlementMethod: 'bank_import',
+  }, userId)
+  const statusByCode = {
+    not_found: 'skipped_not_found',
+    currency_mismatch: 'skipped_currency_mismatch',
+    mapping_required: 'skipped_payout_mapping_required',
+    invalid_account: 'skipped_invalid_account',
+  }
+  if (result.code) return statusByCode[result.code]
+  await markLineResult(client, tenantId, line.id, {
+    status: 'reconciled_paypal_payout',
+    ledgerTransactionId: result.reconciliation.ledger_transaction_id,
+    matchedSourceType: 'paypal_payout', matchedSourceId: result.reconciliation.id,
+  })
+  return 'reconciled_paypal_payout'
 }
 
 async function reconcileInvoice(client, tenantId, line, decision, userId) {

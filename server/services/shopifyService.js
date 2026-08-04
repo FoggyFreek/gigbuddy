@@ -1,150 +1,500 @@
-// Shopify Admin REST API client for order import. The only module that talks to
-// Shopify over HTTP — isolating it keeps a later GraphQL migration to one file
-// (REST is Shopify-legacy as of Oct 1 2024). Reads the per-tenant token + store
-// domain (085/086/087) and never returns the token to callers.
-//
-// Errors map to the standard { error: { status, body } } contract so routes can
-// translate them directly. The access token is minted on demand from the tenant's
-// app credentials by shopifyTokenService (client_credentials grant).
-import { listImportedLineIds } from '../repositories/shopifyImportRepository.js'
+import {
+  listImportedLineIds,
+  listFinanciallyImportedOrderIds,
+} from '../repositories/shopifyImportRepository.js'
 import { getAccessToken, invalidateToken } from './shopifyTokenService.js'
-import { orderSkipReason, lineSkipReason, currentQuantity } from './shopifyImportMapping.js'
+import {
+  computeLineGrossInclCents,
+  orderSkipReason,
+  lineSkipReason,
+  currentQuantity,
+} from './shopifyImportMapping.js'
+import { logger } from '../utils/logger.js'
 
-export const SHOPIFY_API_VERSION = '2026-01'
-const MAX_IDS_PER_REQUEST = 250
+export const SHOPIFY_API_VERSION = '2026-07'
+const PAGE_SIZE = 50
+const BALANCE_PAGE_SIZE = 250
+const BALANCE_LOOKBACK_MS = 24 * 60 * 60 * 1000
+
+const ORDERS_QUERY = `#graphql
+  query GigbuddyOrders($first: Int!, $after: String) {
+    orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true) {
+      nodes {
+        id
+        legacyResourceId
+        name
+        createdAt
+        processedAt
+        cancelledAt
+        currencyCode
+        taxesIncluded
+        test
+        displayFinancialStatus
+        displayFulfillmentStatus
+        currentTotalPriceSet { shopMoney { amount currencyCode } }
+        netPaymentSet { shopMoney { amount currencyCode } }
+        currentShippingPriceSet { shopMoney { amount currencyCode } }
+        totalTipReceivedSet { shopMoney { amount currencyCode } }
+        currentTotalDutiesSet { shopMoney { amount currencyCode } }
+        currentTotalAdditionalFeesSet { shopMoney { amount currencyCode } }
+        transactions {
+          id
+          kind
+          status
+          gateway
+          test
+        }
+        lineItems(first: 250) {
+          nodes {
+            id
+            title
+            sku
+            quantity
+            currentQuantity
+            originalUnitPriceSet { shopMoney { amount currencyCode } }
+            totalDiscountSet { shopMoney { amount currencyCode } }
+            discountAllocations { allocatedAmountSet { shopMoney { amount currencyCode } } }
+          }
+          pageInfo { hasNextPage endCursor }
+        }
+        refunds {
+          id
+          createdAt
+          totalRefundedSet { shopMoney { amount currencyCode } }
+          transactions(first: 250) {
+            nodes { id kind status gateway test }
+          }
+          refundLineItems(first: 250) {
+            nodes {
+              id
+              quantity
+              restocked
+              restockType
+              subtotalSet { shopMoney { amount currencyCode } }
+              totalTaxSet { shopMoney { amount currencyCode } }
+              lineItem { id }
+            }
+            pageInfo { hasNextPage }
+          }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }`
+
+const NODES_QUERY = `#graphql
+  query GigbuddyOrderNodes($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on Order {
+        id
+        legacyResourceId
+        name
+        createdAt
+        processedAt
+        cancelledAt
+        currencyCode
+        taxesIncluded
+        test
+        displayFinancialStatus
+        displayFulfillmentStatus
+        currentTotalPriceSet { shopMoney { amount currencyCode } }
+        netPaymentSet { shopMoney { amount currencyCode } }
+        currentShippingPriceSet { shopMoney { amount currencyCode } }
+        totalTipReceivedSet { shopMoney { amount currencyCode } }
+        currentTotalDutiesSet { shopMoney { amount currencyCode } }
+        currentTotalAdditionalFeesSet { shopMoney { amount currencyCode } }
+        transactions { id kind status gateway test }
+        lineItems(first: 250) {
+          nodes {
+            id title sku quantity currentQuantity
+            originalUnitPriceSet { shopMoney { amount currencyCode } }
+            totalDiscountSet { shopMoney { amount currencyCode } }
+            discountAllocations { allocatedAmountSet { shopMoney { amount currencyCode } } }
+          }
+          pageInfo { hasNextPage endCursor }
+        }
+        refunds {
+          id createdAt
+          totalRefundedSet { shopMoney { amount currencyCode } }
+          transactions(first: 250) { nodes { id kind status gateway test } }
+          refundLineItems(first: 250) {
+            nodes {
+              id quantity restocked restockType
+              subtotalSet { shopMoney { amount currencyCode } }
+              totalTaxSet { shopMoney { amount currencyCode } }
+              lineItem { id }
+            }
+            pageInfo { hasNextPage }
+          }
+        }
+      }
+    }
+  }`
+
+const BALANCE_QUERY = `#graphql
+  query GigbuddyBalanceTransactions($first: Int!, $after: String, $query: String) {
+    shopifyPaymentsAccount {
+      balanceTransactions(
+        first: $first, after: $after, query: $query,
+        sortKey: PROCESSED_AT, reverse: true, hideTransfers: true
+      ) {
+        nodes {
+          id type sourceType sourceOrderTransactionId test transactionDate
+          associatedOrder { id }
+          associatedPayout { id status }
+          amount { amount currencyCode }
+          fee { amount currencyCode }
+          net { amount currencyCode }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }`
 
 function shopifyError(status, error, extra = {}) {
   return { error: { status, body: { error, ...extra } } }
 }
 
-// One authenticated GET against the Admin API. Returns { body, link } on success,
-// or { error } mapping the upstream failure (401 unauthorized, 429 rate-limited
-// with Retry-After). On 401 the cached token is dropped so the next call re-mints.
-async function shopifyGet(tenantId, domain, token, path, fetchImpl) {
-  const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}${path}`
-  let res
-  try {
-    res = await fetchImpl(url, {
-      headers: { 'X-Shopify-Access-Token': token, Accept: 'application/json' },
+export function moneyToCents(value) {
+  const raw = String(value ?? '').trim()
+  const match = raw.match(/^(-?)(\d+)(?:\.(\d{1,2}))?$/)
+  if (!match) throw new Error('Invalid Shopify money amount')
+  const cents = Number(match[2]) * 100 + Number((match[3] ?? '').padEnd(2, '0'))
+  if (!Number.isSafeInteger(cents)) throw new Error('Shopify money amount is out of range')
+  return match[1] ? -cents : cents
+}
+
+export function legacyId(gid) {
+  const value = String(gid ?? '')
+  return value.slice(value.lastIndexOf('/') + 1)
+}
+
+function orderGid(id) {
+  const value = String(id)
+  return value.startsWith('gid://') ? value : `gid://shopify/Order/${value}`
+}
+
+function graphqlError(errors) {
+  const codes = new Set((errors ?? []).map((e) => e?.extensions?.code))
+  if (codes.has('THROTTLED')) return shopifyError(429, 'shopify_rate_limited')
+  if (codes.has('ACCESS_DENIED')) {
+    return shopifyError(400, 'shopify_payments_scope_required', {
+      message: 'The Shopify app needs read_shopify_payments and payout access.',
     })
+  }
+  return shopifyError(502, 'shopify_error')
+}
+
+function graphqlOperationName(query) {
+  return String(query).match(/\b(?:query|mutation)\s+([_A-Za-z][_0-9A-Za-z]*)/)?.[1]
+    ?? 'anonymous'
+}
+
+function dumpGraphqlResponse(tenantId, query, status, body) {
+  if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test') return
+  logger.info('shopify.graphql_response', {
+    tenantId,
+    operation: graphqlOperationName(query),
+    status,
+    shopifyResponseJson: JSON.stringify(body),
+  })
+}
+
+export async function shopifyGraphql(executor, tenantId, query, variables, fetchImpl = globalThis.fetch) {
+  const creds = await getAccessToken(executor, tenantId, fetchImpl)
+  if (creds.error) return creds
+  let response
+  try {
+    response = await fetchImpl(
+      `https://${creds.domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': creds.token,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, variables }),
+      },
+    )
   } catch {
     return shopifyError(502, 'shopify_unreachable')
   }
-  if (res.status === 401) {
-    // 400 (not 401) so the SPA's session-expiry handler doesn't log the user out;
-    // a rejected token usually means the app is missing the read_orders scope.
+  if (response.status === 401) {
     invalidateToken(tenantId)
     return shopifyError(400, 'shopify_unauthorized', {
-      message: 'Shopify rejected the access token. Make sure the app has the read_orders scope.',
+      message: 'Shopify rejected the access token.',
     })
   }
-  if (res.status === 429) {
-    const retryAfter = Number(res.headers.get('Retry-After')) || null
+  if (response.status === 429) {
+    const retryAfter = Number(response.headers.get('Retry-After')) || null
     return shopifyError(429, 'shopify_rate_limited', { retry_after: retryAfter })
   }
-  if (!res.ok) return shopifyError(502, 'shopify_error', { upstream_status: res.status })
-  const body = await res.json()
-  return { body, link: res.headers.get('Link') || res.headers.get('link') || null }
+  if (!response.ok) return shopifyError(502, 'shopify_error', { upstream_status: response.status })
+  const body = await response.json()
+  dumpGraphqlResponse(tenantId, query, response.status, body)
+  if (body.errors?.length) return graphqlError(body.errors)
+  return { data: body.data }
 }
 
-// Extracts the page_info cursor from the rel="next" entry of a Link header.
-function parseNextPageInfo(linkHeader) {
-  if (!linkHeader) return null
-  for (const part of linkHeader.split(',')) {
-    const match = part.match(/<([^>]+)>;\s*rel="?next"?/)
-    if (match) {
-      try {
-        return new URL(match[1]).searchParams.get('page_info')
-      } catch {
-        return null
-      }
+function moneyBagCents(bag) {
+  return moneyToCents(bag?.shopMoney?.amount ?? 0)
+}
+
+function moneyCurrency(money) {
+  return String(money?.currencyCode ?? '').toUpperCase()
+}
+
+function toExtra(key, kind, title, bag) {
+  const amountCents = moneyBagCents(bag)
+  if (!amountCents) return null
+  return {
+    key,
+    kind,
+    title,
+    amount_cents: amountCents,
+    currency: moneyCurrency(bag?.shopMoney),
+  }
+}
+
+function isTipLine(line) {
+  return new Set(['tip', 'tips', 'fooi']).has(String(line.title ?? '').trim().toLowerCase())
+}
+
+function tipAlreadyRepresentedByLines(order, lineItems) {
+  const reportedTipCents = moneyBagCents(order.totalTipReceivedSet)
+  if (!reportedTipCents) return false
+  const tipLineCents = lineItems
+    .filter(isTipLine)
+    .reduce((sum, line) => sum + computeLineGrossInclCents(
+      { taxes_included: true }, line, 0,
+    ), 0)
+  return tipLineCents === reportedTipCents
+}
+
+function toSlimOrder(order) {
+  const id = String(order.legacyResourceId ?? legacyId(order.id))
+  const lineItemsIncomplete = Boolean(order.lineItems?.pageInfo?.hasNextPage)
+  const refundsIncomplete = (order.refunds ?? []).some((r) => r.refundLineItems?.pageInfo?.hasNextPage)
+  const lineItems = (order.lineItems?.nodes ?? []).map((line) => ({
+    id: legacyId(line.id),
+    gid: line.id,
+    title: line.title,
+    sku: line.sku ?? null,
+    quantity: line.quantity,
+    current_quantity: currentQuantity({ current_quantity: line.currentQuantity, quantity: line.quantity }),
+    price: line.originalUnitPriceSet?.shopMoney?.amount ?? '0.00',
+    total_discount: line.totalDiscountSet?.shopMoney?.amount ?? '0.00',
+    discount_allocations: (line.discountAllocations ?? []).map((allocation) => ({
+      amount: allocation.allocatedAmountSet?.shopMoney?.amount ?? '0.00',
+    })),
+  }))
+  const tipIsLineItem = tipAlreadyRepresentedByLines(order, lineItems)
+  const extraComponents = [
+    toExtra(`${id}:shipping`, 'shipping', 'Shipping', order.currentShippingPriceSet),
+    tipIsLineItem ? null : toExtra(`${id}:tip`, 'tip', 'Tips', order.totalTipReceivedSet),
+    toExtra(`${id}:duty`, 'duty', 'Duties', order.currentTotalDutiesSet),
+    toExtra(`${id}:additional-fee`, 'additional_fee', 'Additional fees', order.currentTotalAdditionalFeesSet),
+  ].filter(Boolean)
+  return {
+    id,
+    gid: order.id,
+    name: order.name,
+    created_at: order.createdAt,
+    processed_at: order.processedAt,
+    financial_status: String(order.displayFinancialStatus ?? '').toLowerCase(),
+    fulfillment_status: order.displayFulfillmentStatus
+      ? String(order.displayFulfillmentStatus).toLowerCase()
+      : null,
+    cancelled_at: order.cancelledAt ?? null,
+    currency: String(order.currencyCode ?? '').toUpperCase(),
+    taxes_included: Boolean(order.taxesIncluded),
+    test: Boolean(order.test),
+    total_incl_cents: moneyBagCents(order.currentTotalPriceSet),
+    net_payment_cents: moneyBagCents(order.netPaymentSet),
+    transaction_ids: (order.transactions ?? [])
+      .filter((tx) => tx.status === 'SUCCESS')
+      .map((tx) => legacyId(tx.id)),
+    transactions: order.transactions ?? [],
+    refunds: order.refunds ?? [],
+    incomplete: lineItemsIncomplete || refundsIncomplete,
+    line_items: lineItems,
+    extra_components: extraComponents,
+  }
+}
+
+function toBalanceTransaction(node) {
+  const currencies = [
+    moneyCurrency(node.amount), moneyCurrency(node.fee), moneyCurrency(node.net),
+  ].filter(Boolean)
+  return {
+    id: node.id,
+    type: node.type,
+    source_type: node.sourceType ?? null,
+    source_order_transaction_id: node.sourceOrderTransactionId == null
+      ? null
+      : String(node.sourceOrderTransactionId),
+    associated_order_gid: node.associatedOrder?.id ?? null,
+    payout_gid: node.associatedPayout?.id ?? null,
+    payout_status: node.associatedPayout?.status ?? null,
+    transaction_date: node.transactionDate,
+    amount_cents: moneyToCents(node.amount?.amount ?? 0),
+    fee_cents: moneyToCents(node.fee?.amount ?? 0),
+    net_cents: moneyToCents(node.net?.amount ?? 0),
+    currency: currencies[0] ?? '',
+    currency_mismatch: new Set(currencies).size > 1,
+    test: Boolean(node.test),
+  }
+}
+
+export async function fetchBalanceTransactions(executor, tenantId, {
+  processedSince = null, payoutLegacyId = null,
+} = {}, fetchImpl = globalThis.fetch) {
+  const filters = []
+  if (processedSince) filters.push(`processed_at:>=${JSON.stringify(String(processedSince))}`)
+  if (payoutLegacyId) filters.push(`payments_transfer_id:${payoutLegacyId}`)
+  const search = filters.length ? filters.join(' ') : null
+  const transactions = []
+  let after = null
+  do {
+    const result = await shopifyGraphql(executor, tenantId, BALANCE_QUERY, {
+      first: BALANCE_PAGE_SIZE, after, query: search,
+    }, fetchImpl)
+    if (result.error) return result
+    const connection = result.data?.shopifyPaymentsAccount?.balanceTransactions
+    if (!connection) return shopifyError(400, 'shopify_payments_unavailable')
+    transactions.push(...connection.nodes.map(toBalanceTransaction))
+    after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null
+  } while (after)
+  return { transactions }
+}
+
+function matchTransactions(order, transactions) {
+  const transactionIds = new Set(order.transaction_ids)
+  const seen = new Set()
+  return transactions.filter((tx) => {
+    const matches = tx.associated_order_gid === order.gid
+      || (tx.source_order_transaction_id && transactionIds.has(tx.source_order_transaction_id))
+    if (!matches || seen.has(tx.id)) return false
+    seen.add(tx.id)
+    return true
+  })
+}
+
+function paymentSummary(order, transactions) {
+  const orderGateway = (order.transactions ?? []).some(
+    (tx) => String(tx.gateway ?? '').toLowerCase().includes('paypal'),
+  ) ? 'paypal' : 'shopify_payments'
+  if (order.test || transactions.some((tx) => tx.test)) {
+    return {
+      status: 'test', payment_gateway: orderGateway, amount_cents: 0,
+      fee_cents: 0, net_cents: 0, transactions: [], payout_ids: [],
     }
   }
-  return null
-}
-
-// Slim DTO. Keeps the effective/current fields the monetary helper needs
-// (current_quantity, price, total_discount, discount_allocations) so import can
-// recompute amounts authoritatively. Shopify ids are stringified (bigints).
-function toSlimOrder(order) {
+  if (!transactions.length) {
+    const successfulGateways = [...new Set((order.transactions ?? [])
+      .filter((tx) => tx.status === 'SUCCESS')
+      .map((tx) => String(tx.gateway ?? '').trim().toLowerCase())
+      .filter(Boolean))]
+    if (successfulGateways.length === 1 && successfulGateways[0].includes('paypal')) {
+      return {
+        status: 'ready', payment_gateway: 'paypal', amount_cents: order.net_payment_cents,
+        fee_cents: null, net_cents: null, transactions: [], payout_ids: [],
+      }
+    }
+    if (successfulGateways.length && !successfulGateways.includes('shopify_payments')) {
+      return {
+        status: 'unsupported', payment_gateway: successfulGateways.join(','),
+        amount_cents: order.net_payment_cents, fee_cents: null, net_cents: null,
+        transactions: [], payout_ids: [],
+      }
+    }
+    return {
+      status: 'pending', payment_gateway: 'shopify_payments', amount_cents: 0,
+      fee_cents: 0, net_cents: 0, transactions: [], payout_ids: [],
+    }
+  }
+  const amount = transactions.reduce((sum, tx) => sum + tx.amount_cents, 0)
+  const fee = transactions.reduce((sum, tx) => sum + tx.fee_cents, 0)
+  const net = transactions.reduce((sum, tx) => sum + tx.net_cents, 0)
+  const invalid = transactions.some((tx) => tx.currency_mismatch || tx.currency !== order.currency)
+    || amount - fee !== net
+    || amount !== order.net_payment_cents
   return {
-    id: String(order.id),
-    name: order.name,
-    created_at: order.created_at,
-    processed_at: order.processed_at,
-    financial_status: order.financial_status,
-    fulfillment_status: order.fulfillment_status,
-    cancelled_at: order.cancelled_at ?? null,
-    currency: order.currency,
-    taxes_included: Boolean(order.taxes_included),
-    total_incl_cents: Math.round(Number(order.current_total_price ?? order.total_price ?? 0) * 100),
-    line_items: (order.line_items || []).map((li) => ({
-      id: String(li.id),
-      title: li.title,
-      sku: li.sku ?? null,
-      quantity: li.quantity,
-      current_quantity: currentQuantity(li),
-      price: li.price,
-      total_discount: li.total_discount,
-      discount_allocations: li.discount_allocations ?? [],
-    })),
+    status: invalid ? 'mismatch' : 'ready',
+    payment_gateway: 'shopify_payments',
+    amount_cents: amount,
+    fee_cents: fee,
+    net_cents: net,
+    transactions,
+    payout_ids: [...new Set(transactions.map((tx) => tx.payout_gid).filter(Boolean))],
   }
 }
 
-// Adds UI flags to a slim order: per-line already-imported + skip reason, the
-// order-level eligibility reason, and fully_imported (every importable line
-// already tracked). `importedLineIds` is a Set of shopify_line_id.
-function annotate(order, importedLineIds) {
-  const skip_reason = orderSkipReason(order)
-  const line_items = order.line_items.map((line) => ({
-    ...line,
-    already_imported: importedLineIds.has(line.id),
-    skip_reason: lineSkipReason(line),
-  }))
-  const importable = line_items.filter((l) => !l.skip_reason)
-  const fully_imported = !skip_reason
-    && importable.length > 0
-    && importable.every((l) => l.already_imported)
-  return { ...order, line_items, skip_reason, fully_imported }
+async function annotateOrders(executor, tenantId, orders, balanceTransactions) {
+  const ids = orders.map((order) => order.id)
+  const [importedLineIds, financiallyImportedIds] = await Promise.all([
+    listImportedLineIds(executor, tenantId, ids),
+    listFinanciallyImportedOrderIds(executor, tenantId, ids),
+  ])
+  return orders.map((order) => {
+    const payment = paymentSummary(order, matchTransactions(order, balanceTransactions))
+    let skipReason = orderSkipReason(order)
+    if (!skipReason && order.incomplete) skipReason = 'skipped_incomplete_order'
+    if (!skipReason && payment.status === 'pending') skipReason = 'skipped_payment_pending'
+    if (!skipReason && payment.status === 'mismatch') skipReason = 'skipped_payment_mismatch'
+    if (!skipReason && payment.status === 'test') skipReason = 'skipped_test_order'
+    if (!skipReason && payment.status === 'unsupported') skipReason = 'skipped_unsupported_payment_gateway'
+    const lineItems = order.line_items.map((line) => ({
+      ...line,
+      already_imported: importedLineIds.has(line.id),
+      skip_reason: lineSkipReason(line),
+    }))
+    const legacyPartial = !financiallyImportedIds.has(order.id)
+      && lineItems.some((line) => line.already_imported)
+    if (!skipReason && legacyPartial) skipReason = 'skipped_legacy_partial_import'
+    return {
+      ...order,
+      line_items: lineItems,
+      payment,
+      skip_reason: skipReason,
+      fully_imported: financiallyImportedIds.has(order.id),
+    }
+  })
 }
 
-// Recent orders for the import picker. First page sends status=any&limit;
-// subsequent pages send ONLY page_info (+limit) — page_info can't be combined
-// with status/date filters. Returns { orders, nextCursor }.
-export async function fetchRecentOrders(executor, tenantId, { cursor, limit = 50 } = {}, fetchImpl = globalThis.fetch) {
-  const creds = await getAccessToken(executor, tenantId, fetchImpl)
-  if (creds.error) return creds
+async function balancesForOrders(executor, tenantId, orders, fetchImpl) {
+  if (!orders.length) return { transactions: [] }
+  const oldest = orders.map((order) => order.processed_at).filter(Boolean).sort()[0]
+  const oldestTimestamp = Date.parse(oldest)
+  const processedSince = Number.isFinite(oldestTimestamp)
+    ? new Date(oldestTimestamp - BALANCE_LOOKBACK_MS).toISOString().replace('.000Z', 'Z')
+    : oldest
+  return fetchBalanceTransactions(executor, tenantId, { processedSince }, fetchImpl)
+}
 
-  const limitNum = Math.min(Math.max(Number(limit) || 50, 1), MAX_IDS_PER_REQUEST)
-  const params = new URLSearchParams({ limit: String(limitNum) })
-  if (cursor) params.set('page_info', cursor)
-  else params.set('status', 'any')
-
-  const result = await shopifyGet(tenantId, creds.domain, creds.token, `/orders.json?${params}`, fetchImpl)
+export async function fetchRecentOrders(executor, tenantId, { cursor, limit = PAGE_SIZE } = {}, fetchImpl = globalThis.fetch) {
+  const first = Math.min(Math.max(Number(limit) || PAGE_SIZE, 1), PAGE_SIZE)
+  const result = await shopifyGraphql(executor, tenantId, ORDERS_QUERY, {
+    first, after: cursor || null,
+  }, fetchImpl)
   if (result.error) return result
-
-  const orders = (result.body.orders || []).map(toSlimOrder)
-  const importedLineIds = await listImportedLineIds(executor, tenantId, orders.map((o) => o.id))
+  const connection = result.data?.orders
+  const orders = (connection?.nodes ?? []).map(toSlimOrder)
+  const balances = await balancesForOrders(executor, tenantId, orders, fetchImpl)
+  if (balances.error) return balances
   return {
-    orders: orders.map((o) => annotate(o, importedLineIds)),
-    nextCursor: parseNextPageInfo(result.link),
+    orders: await annotateOrders(executor, tenantId, orders, balances.transactions),
+    nextCursor: connection?.pageInfo?.hasNextPage ? connection.pageInfo.endCursor : null,
   }
 }
 
-// Authoritative re-fetch of specific orders by id (used at import time so amounts
-// come from Shopify, not the client). Chunks ids to Shopify's max of 250.
 export async function fetchOrdersByIds(executor, tenantId, ids, fetchImpl = globalThis.fetch) {
-  const creds = await getAccessToken(executor, tenantId, fetchImpl)
-  if (creds.error) return creds
-
-  const unique = [...new Set(ids.map(String))]
-  const orders = []
-  for (let i = 0; i < unique.length; i += MAX_IDS_PER_REQUEST) {
-    const chunk = unique.slice(i, i + MAX_IDS_PER_REQUEST)
-    const params = new URLSearchParams({ status: 'any', limit: String(MAX_IDS_PER_REQUEST), ids: chunk.join(',') })
-    const result = await shopifyGet(tenantId, creds.domain, creds.token, `/orders.json?${params}`, fetchImpl)
-    if (result.error) return result
-    orders.push(...(result.body.orders || []).map(toSlimOrder))
-  }
-  return { orders }
+  const unique = [...new Set(ids.map(orderGid))]
+  const result = await shopifyGraphql(executor, tenantId, NODES_QUERY, { ids: unique }, fetchImpl)
+  if (result.error) return result
+  const orders = (result.data?.nodes ?? []).filter(Boolean).map(toSlimOrder)
+  const balances = await balancesForOrders(executor, tenantId, orders, fetchImpl)
+  if (balances.error) return balances
+  return { orders: await annotateOrders(executor, tenantId, orders, balances.transactions) }
 }

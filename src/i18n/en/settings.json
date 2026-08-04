@@ -175,7 +175,7 @@
   },
   "shopify": {
     "title": "Shopify app credentials",
-    "description": "Connect your Shopify store to read orders and import them to merchandise. Enter your app's Client ID and secret (from the Shopify Dev Dashboard) and your store domain — a short-lived access token is fetched automatically when importing. The secret is stored securely and never shown in full after saving.",
+    "description": "Connect Shopify to import complete paid orders, processing fees and payout data. The app needs read_orders and read_shopify_payments. Enter its Client ID, secret and store domain; the secret is stored securely and never shown in full after saving.",
     "clientId": {
       "label": "Client ID",
       "placeholder": "32-character app Client ID",
@@ -195,7 +195,7 @@
     },
     "domain": {
       "label": "Store domain",
-      "description": "Your myshopify.com domain — required to read orders for import.",
+      "description": "Your myshopify.com domain — required to read orders, payment fees and payouts.",
       "placeholder": "yourband.myshopify.com",
       "error": "Invalid domain. Use the form yourband.myshopify.com."
     }
@@ -225,7 +225,10 @@
       "default_expense_account_code": "Default expense account",
       "output_vat_account_code": "Output VAT account (sales)",
       "input_vat_account_code": "Input VAT account (purchases)",
-      "merch_revenue_account_code": "Merchandise revenue account"
+      "merch_revenue_account_code": "Merchandise revenue account",
+      "shopify_clearing_account_code": "Shopify Payments clearing account",
+      "paypal_clearing_account_code": "PayPal clearing account",
+      "shopify_fee_expense_account_code": "Shopify Payments fee account"
     },
     "booksClosedThrough": "Books closed through",
     "booksClosedThroughHelper": "Nothing can be posted on or before this date. Leave empty to keep the books open.",
@@ -284,7 +287,16 @@
     "invalidFormat": "This doesn't look like a valid Bandsintown API key.",
     "saveFailed": "Saving the API key failed.",
     "replace": "Replace key",
-    "remove": "Remove key"
+    "remove": "Remove key",
+    "artistId": {
+      "label": "Artist ID",
+      "description": "The ID of your Bandsintown artist page.",
+      "placeholder": "12345678",
+      "helper": "Find it in your Bandsintown artist URL: bandsintown.com/a/<artist ID>.",
+      "invalidFormat": "The artist ID is the number in your Bandsintown artist URL.",
+      "saveFailed": "Saving the artist ID failed.",
+      "remove": "Remove artist ID"
+    }
   },
   "financialProfile": {
     "title": "Financial profile",

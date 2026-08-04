@@ -61,6 +61,31 @@ function as(userId, tenantId) {
       .set('x-test-tenant-id', tenantId === null ? 'null' : String(tenantId))
 }
 
+describe('GET /api/profile — integration configuration', () => {
+  it('reports only fully configured tenant integrations', async () => {
+    await pool.query(
+      `INSERT INTO tenant_integrations
+         (tenant_id, bandsintown_app_id, bandsintown_artist_id, shopify_client_id, shopify_client_secret,
+          shopify_shop_domain, mollie_api_key)
+       VALUES ($1, 'bands-key', '12345', 'client-id', 'client-secret', 'alpha.myshopify.com', 'test_mollie')`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      // Bandsintown app_id without an artist id cannot call the API → not configured.
+      `INSERT INTO tenant_integrations
+         (tenant_id, bandsintown_app_id, shopify_client_id, mollie_api_key, mollie_api_key_retained_at)
+       VALUES ($1, 'bands-key', 'incomplete-client-id', 'retained-key', NOW())`,
+      [seed.tenantB.id],
+    )
+
+    const tenantA = await as(seed.userA.id, seed.tenantA.id)(request(app).get('/api/profile')).expect(200)
+    expect(tenantA.body.integrations).toEqual({ shopify: true, bandsintown: true, mollie: true })
+
+    const tenantB = await as(seed.userB.id, seed.tenantB.id)(request(app).get('/api/profile')).expect(200)
+    expect(tenantB.body.integrations).toEqual({ shopify: false, bandsintown: false, mollie: false })
+  })
+})
+
 describe('PATCH /api/profile — financial fields', () => {
   it('tenant_admin can update financial fields and they persist', async () => {
     // superUser is tenant_admin of tenantA per seed

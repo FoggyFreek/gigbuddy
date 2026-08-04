@@ -18,20 +18,28 @@ import {
 } from '../validators/bandsintownValidators.js'
 import { venueImportKey } from '../domain/venue.js'
 import { badRequest } from './serviceErrors.js'
-import { insertVenue } from '../repositories/venueRepository.js'
+import {
+  insertVenue,
+  fetchVenue,
+  listVenuesForImportMatching,
+} from '../repositories/venueRepository.js'
 import {
   getLeadMemberIds,
   insertGigForImport,
   insertGigParticipant,
+  listGigsForImportDuplicateCheck,
 } from '../repositories/gigRepository.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
 import { loadIntegrationCredential } from './integrationCredentialService.js'
-import { fetchBandsintownArtist } from '../repositories/tenantIntegrationRepository.js'
+import { getBandsintownArtistId } from '../repositories/tenantIntegrationRepository.js'
 
 const API_BASE = 'https://rest.bandsintown.com'
 
 const NOT_CONFIGURED = {
   error: { status: 400, body: { error: 'Bandsintown API key is not configured' } },
+}
+const ARTIST_ID_NOT_CONFIGURED = {
+  error: { status: 400, body: { error: 'Bandsintown artist ID is not configured' } },
 }
 const ARTIST_NOT_FOUND = {
   error: { status: 404, body: { error: 'Artist not found on Bandsintown' } },
@@ -96,42 +104,24 @@ async function fetchArtistWithAppId(appId, artistIdRaw, fetchImpl) {
   return { artist: toArtistPayload(result.json) }
 }
 
-// GET /artists/id_{artist_id} — returns the artist name, images and the
-// social links mapped onto profile handle fields.
+// Both credentials an API call needs: the app_id and the tenant's artist ID
+// (set from the band profile or Settings → Integrations — the same stored
+// field). Returns { error } | { appId, artistId }.
+async function loadApiConfig(db, tenantId) {
+  const appId = await loadAppId(db, tenantId)
+  if (!appId) return NOT_CONFIGURED
+  const artistId = parseArtistId(await getBandsintownArtistId(db, tenantId))
+  if (!artistId) return ARTIST_ID_NOT_CONFIGURED
+  return { appId, artistId }
+}
+
+// GET /artists/id_{artist_id} — returns the artist name, images and the social
+// links mapped onto profile handle fields. Takes the id explicitly so the
+// profile socials editor can look up the value being typed before it is saved.
 export async function fetchArtistById(db, tenantId, artistIdRaw, fetchImpl = globalThis.fetch) {
   const appId = await loadAppId(db, tenantId)
   if (!appId) return NOT_CONFIGURED
   return fetchArtistWithAppId(appId, artistIdRaw, fetchImpl)
-}
-
-async function loadTenantArtistConfig(db, tenantId) {
-  return fetchBandsintownArtist(db, tenantId)
-}
-
-// Lean projection of tenant venues for matching (no contacts/years).
-async function listVenuesForMatching(db, tenantId) {
-  const { rows } = await db.query(
-    `SELECT id, category, name, city, region, country, postal_code, street_and_number
-       FROM venues WHERE tenant_id = $1`,
-    [tenantId],
-  )
-  return rows
-}
-
-// Existing gigs with their venue/festival names, for duplicate detection.
-async function listGigsForDuplicateCheck(db, tenantId) {
-  const { rows } = await db.query(
-    `SELECT g.id, to_char(g.event_date, 'YYYY-MM-DD') AS event_date, g.event_link,
-            g.venue_id, g.festival_id,
-            COALESCE(v.name, f.name) AS place_name,
-            COALESCE(v.city, f.city) AS place_city
-       FROM gigs g
-       LEFT JOIN venues v ON v.id = g.venue_id AND v.tenant_id = g.tenant_id
-       LEFT JOIN venues f ON f.id = g.festival_id AND f.tenant_id = g.tenant_id
-      WHERE g.tenant_id = $1`,
-    [tenantId],
-  )
-  return rows
 }
 
 function isDuplicateOfExisting(row, matchedVenueId, existingGigs, existingEventIds) {
@@ -156,28 +146,17 @@ function collectExistingEventIds(existingGigs) {
   return ids
 }
 
-// Resolves the tenant's Bandsintown artist (id preferred, stored name as
-// fallback) and fetches its upcoming events, annotated with the best matching
-// existing venue and a duplicate flag. Returns
-// { error } | { artist, events }.
+// Resolves the tenant's configured Bandsintown artist and fetches its upcoming
+// events, annotated with the best matching existing venue and a duplicate flag.
+// Returns { error } | { artist, events }.
 export async function fetchArtistEvents(db, tenantId, fetchImpl = globalThis.fetch) {
-  const appId = await loadAppId(db, tenantId)
-  if (!appId) return NOT_CONFIGURED
+  const config = await loadApiConfig(db, tenantId)
+  if (config.error) return config
 
-  const config = await loadTenantArtistConfig(db, tenantId)
-  if (!config) return { error: { status: 404, body: { error: 'Not found' } } }
-
-  let artist = null
-  const artistId = parseArtistId(config.bandsintown_artist_id)
-  if (artistId) {
-    const result = await fetchArtistWithAppId(appId, artistId, fetchImpl)
-    if (result.error) return result
-    artist = result.artist
-  } else if (config.bandsintown_artist_name?.trim()) {
-    artist = { name: config.bandsintown_artist_name.trim() }
-  } else {
-    return badRequest('Set the Bandsintown artist ID in the band profile first')
-  }
+  const { appId } = config
+  const result = await fetchArtistWithAppId(appId, config.artistId, fetchImpl)
+  if (result.error) return result
+  const artist = result.artist
 
   const eventsResult = await bandsintownGet(
     `/artists/${encodeURIComponent(artist.name)}/events`,
@@ -189,8 +168,8 @@ export async function fetchArtistEvents(db, tenantId, fetchImpl = globalThis.fet
   const rawEvents = Array.isArray(eventsResult.json) ? eventsResult.json : []
 
   const [venues, existingGigs] = await Promise.all([
-    listVenuesForMatching(db, tenantId),
-    listGigsForDuplicateCheck(db, tenantId),
+    listVenuesForImportMatching(db, tenantId),
+    listGigsForImportDuplicateCheck(db, tenantId),
   ])
   const existingEventIds = collectExistingEventIds(existingGigs)
 
@@ -219,21 +198,13 @@ export async function fetchArtistEvents(db, tenantId, fetchImpl = globalThis.fet
   return { artist, events }
 }
 
-async function fetchVenueInTenant(client, venueId, tenantId) {
-  const { rows } = await client.query(
-    'SELECT id, category, name, city FROM venues WHERE id = $1 AND tenant_id = $2',
-    [venueId, tenantId],
-  )
-  return rows[0] ?? null
-}
-
 // Looks up the venue for one import row without creating anything: an
 // explicit venue_id must exist in the tenant; otherwise reuse an existing
 // venue with the same name+city (or one created earlier in this batch).
 // Returns { error } | { venue } — venue null means "would need to be created".
 async function lookupImportVenue(client, tenantId, row, venuesByKey) {
   if (row.venue_id !== null) {
-    const venue = await fetchVenueInTenant(client, row.venue_id, tenantId)
+    const venue = await fetchVenue(client, row.venue_id, tenantId)
     if (!venue) return { error: 'venue_id not found' }
     return { venue }
   }
@@ -271,8 +242,8 @@ function parseImportRows(items) {
 // Everything one import batch shares: lead members, dedupe state (updated as
 // rows import so later rows dedupe against earlier ones), and the summary.
 async function loadImportContext(client, tenantId) {
-  const venues = await listVenuesForMatching(client, tenantId)
-  const existingGigs = await listGigsForDuplicateCheck(client, tenantId)
+  const venues = await listVenuesForImportMatching(client, tenantId)
+  const existingGigs = await listGigsForImportDuplicateCheck(client, tenantId)
   const leadIds = await getLeadMemberIds(client, tenantId)
   return {
     leadIds,

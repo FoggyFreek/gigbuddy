@@ -538,6 +538,56 @@ export interface BankLineSuggestion {
     total_cents: number
     paid_at: string
   }[]
+  shopifyPayoutMatches?: ShopifyPayoutMatch[]
+  recordedShopifyPayoutMatches?: RecordedShopifyPayoutMatch[]
+  recordedPaypalPayoutMatches?: RecordedPaypalPayoutMatch[]
+  paypalOrderMatches?: PaypalOrderMatch[]
+}
+
+export interface RecordedShopifyPayoutMatch {
+  id: Id
+  shopify_payout_id: string
+  settlement_entry_date: string
+  transaction_type: 'DEPOSIT' | 'WITHDRAWAL'
+  currency: string
+  net_cents: number
+}
+
+export interface RecordedPaypalPayoutMatch {
+  id: Id
+  reference: string
+  settlement_entry_date: string
+  currency: string
+  deposit_cents: number
+}
+
+export interface PaypalOrderMatch {
+  id: Id
+  order_name: string
+  shopify_order_id: string
+  processed_at: string
+  currency: string
+  gross_cents: number
+}
+
+export interface ShopifyPayoutMatch {
+  id: Id
+  shopify_payout_id: string
+  issued_at: string
+  transaction_type: 'DEPOSIT' | 'WITHDRAWAL'
+  currency: string
+  net_cents: number
+  external_trace_id: string | null
+  sync_complete: boolean
+  balance_net_cents: number
+  ready: boolean
+  adjustments: {
+    id: Id
+    type: string
+    source_type: string | null
+    transaction_date: string
+    net_cents: number
+  }[]
 }
 
 export interface BankStatementLine {
@@ -588,6 +638,18 @@ export type BankImportDecision =
   | { line_id: Id; action: 'reconcile_purchase'; purchase_id: Id }
   | {
       line_id: Id
+      action: 'reconcile_shopify_payout'
+      payout_id: Id
+      adjustment_mappings: { balance_transaction_id: Id; account_code: string }[]
+    }
+  | {
+      line_id: Id
+      action: 'reconcile_paypal_payout'
+      order_financial_ids: Id[]
+      difference_account_code: string | null
+    }
+  | {
+      line_id: Id
       action: 'journal_received'
       contra_account_code: string
       vat_rate?: number | null
@@ -629,6 +691,9 @@ export interface AccountingSettings {
   merch_inventory_account_code?: string
   merch_revenue_account_code?: string
   merch_cogs_account_code?: string
+  shopify_clearing_account_code?: string
+  paypal_clearing_account_code?: string
+  shopify_fee_expense_account_code?: string
   books_closed_through?: string
 }
 
@@ -1023,9 +1088,27 @@ export interface ShopifyLineItem {
   skip_reason: string | null
 }
 
+export interface ShopifyExtraComponent {
+  key: string
+  kind: 'shipping' | 'tip' | 'duty' | 'additional_fee' | 'other'
+  title: string
+  amount_cents: number
+  currency: string
+}
+
+export interface ShopifyPaymentSummary {
+  status: 'ready' | 'pending' | 'mismatch' | 'test' | 'unsupported'
+  payment_gateway: string
+  amount_cents: number
+  fee_cents: number | null
+  net_cents: number | null
+  payout_ids: string[]
+}
+
 // A Shopify order as returned by GET /api/merch/shopify/orders.
 export interface ShopifyOrder {
   id: string
+  gid: string
   name: string
   created_at: string
   processed_at: string
@@ -1034,8 +1117,11 @@ export interface ShopifyOrder {
   cancelled_at: string | null
   currency: string
   taxes_included: boolean
+  test: boolean
   total_incl_cents: number
   line_items: ShopifyLineItem[]
+  extra_components: ShopifyExtraComponent[]
+  payment: ShopifyPaymentSummary
   skip_reason: string | null
   fully_imported: boolean
 }
@@ -1061,13 +1147,98 @@ export interface ShopifyImportBody {
   orders: {
     shopify_order_id: string
     lines: { shopify_line_id: string; mapping: ShopifyLineMapping }[]
+    extra_components?: { component_key: string; mapping: Extract<ShopifyLineMapping, { type: 'revenue' }> }[]
   }[]
 }
 
 export interface ShopifyImportResult {
   imported: number
   skipped: number
-  results: { shopify_line_id: string; status: string }[]
+  results: { shopify_order_id: string; status: string; fee_cents: number | null; net_cents: number | null }[]
+}
+
+export interface ShopifyManualPayoutAdjustment {
+  id: Id
+  type: string
+  source_type: string | null
+  transaction_date: string
+  net_cents: number
+}
+
+export interface ShopifyManualPayout {
+  id: Id
+  shopify_payout_id: string
+  origin: 'shopify_api' | 'custom'
+  issued_at: string
+  transaction_type: 'DEPOSIT' | 'WITHDRAWAL'
+  currency: string
+  net_cents: number
+  external_trace_id: string | null
+  ready: boolean
+  orders: {
+    id: Id
+    order_name: string
+    shopify_order_id: string
+    net_cents: number
+  }[]
+  adjustments: ShopifyManualPayoutAdjustment[]
+}
+
+export interface ShopifyCustomPayoutCandidate {
+  order_financial_id: Id
+  order_name: string
+  shopify_order_id: string
+  processed_at: string
+  source_payout_id: string | null
+  currency: string
+  net_cents: number
+  balance_transaction_ids: Id[]
+}
+
+export interface ShopifyManualPayoutsResult {
+  items: ShopifyManualPayout[]
+  custom_candidates: ShopifyCustomPayoutCandidate[]
+  meta: { limit: number }
+}
+
+export interface ShopifyCustomPayoutBody {
+  reference: string
+  issued_at: string
+  net_cents: number
+  balance_transaction_ids: Id[]
+}
+
+export interface ShopifyManualPayoutSettlementBody {
+  entry_date: string
+  adjustment_mappings: { balance_transaction_id: Id; account_code: string }[]
+}
+
+export interface PaypalPayoutCandidatesResult {
+  items: PaypalOrderMatch[]
+  meta: { limit: number }
+}
+
+export interface PaypalCustomPayoutBody {
+  reference: string
+  entry_date: string
+  deposit_cents: number
+  order_financial_ids: Id[]
+  difference_account_code: string | null
+}
+
+export interface PaypalCustomPayoutResult {
+  reconciliation: {
+    id: Id
+    reference: string
+    settlement_method: 'manual'
+    settlement_entry_date: string
+    currency: string
+    gross_cents: number
+    deposit_cents: number
+    difference_cents: number
+    difference_account_code: string | null
+    ledger_transaction_id: Id
+  }
 }
 
 // ---------- Achievements ----------

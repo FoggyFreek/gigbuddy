@@ -22,6 +22,9 @@ export const SETTINGS_TYPE_MAP = {
   merch_inventory_account_code: 'asset',
   merch_revenue_account_code: 'revenue',
   merch_cogs_account_code: 'cost_of_goods_sold',
+  shopify_clearing_account_code: 'asset',
+  paypal_clearing_account_code: 'asset',
+  shopify_fee_expense_account_code: 'expense',
 }
 
 export const SETTINGS_CODE_FIELDS = Object.keys(SETTINGS_TYPE_MAP)

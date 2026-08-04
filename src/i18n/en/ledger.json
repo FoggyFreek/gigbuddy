@@ -47,17 +47,32 @@
     "parsing": "Parsing statement…",
     "accountMismatch": "This statement is for account {{iban}}. Make sure it is your bank account before importing.",
     "incomeAccountLabel": "Income account for unmatched incoming lines",
-    "reviewIntro": "Review each line. Matched invoices and bills are pre-selected; a new supplier can be created per outgoing line.",
+    "reviewIntro": "Review each line. Sort or filter by date or counterparty, tick Skip to leave a line out, and set how each remaining line books.",
+    "shopify": {
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…",
+      "match": "Match Shopify payout {{id}} ({{date}})",
+      "adjustmentsIntro": "Categorize each non-order payout adjustment before reconciling."
+    },
+    "paypal": {
+      "match": "Match PayPal payout",
+      "orders": "PayPal orders in this deposit",
+      "selectedOrders_one": "{{count}} order selected",
+      "selectedOrders_other": "{{count}} orders selected",
+      "summary": "Order gross {{gross}} · bank deposit {{deposit}} · difference {{difference}}",
+      "differenceAccount": "PayPal fee or adjustment account"
+    },
     "duplicate": "Bank reference appeared in an earlier import",
     "alreadyPaid": "Bill #{{number}} was already paid on {{date}} — skipped to avoid booking it twice",
     "skippedCurrency": "Foreign currency — skipped",
     "empty": "No transactions to import.",
     "table": {
       "date": "Date",
-      "counterparty": "Counterparty",
+      "from": "From",
       "description": "Description",
       "amount": "Amount",
-      "action": "Booking"
+      "skip": "Skip",
+      "account": "Account"
     },
     "actions": {
       "skip": "Skip",
@@ -70,20 +85,36 @@
     "supplier": {
       "label": "Supplier",
       "create": "Create \"{{name}}\"",
-      "createNew": "Create new supplier",
+      "createNew": "Create new supplier…",
       "name": "Supplier name",
+      "nameTitle": "New supplier",
+      "saveName": "Use this name",
       "none": "No supplier"
     },
     "applyToRelation": {
-      "paid": {
-        "title": "Apply to all payments to {{name}}?",
-        "body_one": "{{count}} other payment to {{name}} in this statement is booked to a different account. Book it to {{account}} as well?",
-        "body_other": "{{count}} other payments to {{name}} in this statement are booked to a different account. Book them all to {{account}} as well?"
+      "account": {
+        "paid": {
+          "title": "Apply to all payments to {{name}}?",
+          "body_one": "{{count}} other payment to {{name}} in this statement is booked to a different account. Book it to {{value}} as well?",
+          "body_other": "{{count}} other payments to {{name}} in this statement are booked to a different account. Book them all to {{value}} as well?"
+        },
+        "received": {
+          "title": "Apply to all receipts from {{name}}?",
+          "body_one": "{{count}} other receipt from {{name}} in this statement is booked to a different account. Book it to {{value}} as well?",
+          "body_other": "{{count}} other receipts from {{name}} in this statement are booked to a different account. Book them all to {{value}} as well?"
+        }
       },
-      "received": {
-        "title": "Apply to all receipts from {{name}}?",
-        "body_one": "{{count}} other receipt from {{name}} in this statement is booked to a different account. Book it to {{account}} as well?",
-        "body_other": "{{count}} other receipts from {{name}} in this statement are booked to a different account. Book them all to {{account}} as well?"
+      "vat": {
+        "paid": {
+          "title": "Apply to all payments to {{name}}?",
+          "body_one": "{{count}} other payment to {{name}} in this statement has a different VAT treatment. Set it to {{value}} as well?",
+          "body_other": "{{count}} other payments to {{name}} in this statement have a different VAT treatment. Set them all to {{value}} as well?"
+        },
+        "received": {
+          "title": "Apply to all receipts from {{name}}?",
+          "body_one": "{{count}} other receipt from {{name}} in this statement has a different VAT treatment. Set it to {{value}} as well?",
+          "body_other": "{{count}} other receipts from {{name}} in this statement have a different VAT treatment. Set them all to {{value}} as well?"
+        }
       },
       "applyAll": "Apply to all",
       "keepSingle": "Only this line"
@@ -91,18 +122,11 @@
     "vat": {
       "label": "VAT",
       "none": "No VAT",
-      "rate": "{{rate}}%",
-      "split": "net {{net}} · VAT {{vat}}"
+      "rate": "{{rate}}%"
     },
-    "expenseAccount": "Expense account",
-    "incomeAccount": "Income account",
     "bookingMethod": "How to book",
+    "payoutAlreadyRecorded": "Payout already recorded",
     "gigLabel": "Gig: {{details}}",
-    "decision": {
-      "income": "Income",
-      "expense": "Expense",
-      "skip": "Skip"
-    },
     "importButton": "Import {{count}} selected",
     "finish": "Finish",
     "back": "Back",
@@ -122,6 +146,8 @@
       "imported": "Booked",
       "reconciled_invoice": "Matched to invoice",
       "reconciled_purchase": "Matched to bill",
+      "reconciled_shopify_payout": "Matched to Shopify payout",
+      "reconciled_paypal_payout": "Matched to PayPal payout",
       "skipped": "Skipped",
       "skipped_currency": "Foreign currency — skipped",
       "pending": "Not yet booked",
@@ -139,7 +165,18 @@
       "skipped_vat_not_allowed": "VAT not allowed (small-business scheme)",
       "skipped_invalid_supplier": "Invalid supplier",
       "skipped_closed_period": "Closed period",
-      "skipped_accounting_not_configured": "Accounting not configured"
+      "skipped_accounting_not_configured": "Accounting not configured",
+      "skipped_shopify_sync_error": "Shopify payout refresh failed",
+      "skipped_payout_reconciled": "Payout already reconciled",
+      "skipped_payout_incomplete": "Payout details incomplete",
+      "skipped_payout_mapping_required": "Adjustment mapping required",
+      "skipped_currency_mismatch": "Currency mismatch"
+    },
+    "mapping": {
+      "title": "Payout details",
+      "configure": "Configure…",
+      "done": "Done",
+      "nothingToMap": "This payout has no adjustments to categorize."
     }
   },
   "detail": {

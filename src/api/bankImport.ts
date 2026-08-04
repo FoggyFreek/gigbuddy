@@ -15,6 +15,10 @@ export function getBankImport(id: Id): Promise<BankImportParseResult> {
   return request<BankImportParseResult>(`/api/bank-import/${id}`)
 }
 
+export function refreshShopifyPayouts(id: Id): Promise<BankImportParseResult> {
+  return request<BankImportParseResult>(`/api/bank-import/${id}/shopify-payouts`, { method: 'POST' })
+}
+
 export function cancelBankImport(id: Id): Promise<void> {
   return request<void>(`/api/bank-import/${id}`, { method: 'DELETE' })
 }

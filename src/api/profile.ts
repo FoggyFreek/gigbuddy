@@ -1,5 +1,6 @@
 import { request, requestForm } from './_client.ts'
 import type { Tenant, Id } from '../types/entities.ts'
+import type { IntegrationConfiguration } from '../utils/integrations.ts'
 
 interface ProfileLink {
   id?: Id
@@ -10,6 +11,7 @@ interface ProfileLink {
 
 interface Profile extends Tenant {
   links?: ProfileLink[]
+  integrations?: IntegrationConfiguration
 }
 
 export interface IntegrationSecretStatus {
@@ -92,6 +94,16 @@ export const setBandsintownKey = (key: string) =>
   api<IntegrationSecretStatus>('/bandsintown-key', { method: 'PUT', body: JSON.stringify({ key }) })
 export const clearBandsintownKey = () => api<IntegrationSecretStatus>('/bandsintown-key', { method: 'DELETE' })
 
+interface BandsintownArtistId {
+  artistId?: string | null
+}
+
+export const getBandsintownArtistId = () => api<BandsintownArtistId>('/bandsintown-artist-id')
+export const setBandsintownArtistId = (artistId: string) =>
+  api<BandsintownArtistId>('/bandsintown-artist-id', { method: 'PUT', body: JSON.stringify({ artistId }) })
+export const clearBandsintownArtistId = () =>
+  api<BandsintownArtistId>('/bandsintown-artist-id', { method: 'DELETE' })
+
 export const getMollieKey = () => api<IntegrationSecretStatus>('/mollie-key')
 export const setMollieKey = (key: string) =>
   api<IntegrationSecretStatus>('/mollie-key', { method: 'PUT', body: JSON.stringify({ key }) })
@@ -118,4 +130,3 @@ interface ShopifyDomain {
 export const getShopifyDomain = () => api<ShopifyDomain>('/shopify-domain')
 export const setShopifyDomain = (domain: string) =>
   api<ShopifyDomain>('/shopify-domain', { method: 'PUT', body: JSON.stringify({ domain }) })
-export const clearShopifyDomain = () => api<ShopifyDomain>('/shopify-domain', { method: 'DELETE' })

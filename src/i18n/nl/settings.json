@@ -175,7 +175,7 @@
   },
   "shopify": {
     "title": "Shopify-app-inloggegevens",
-    "description": "Verbind je Shopify-winkel om bestellingen te lezen en als merchandise te importeren. Voer de Client ID en het secret van je app in (uit het Shopify Dev Dashboard) en je winkeldomein — er wordt automatisch een kortlevend toegangstoken opgehaald bij het importeren. Het secret wordt veilig opgeslagen en na het opslaan nooit meer volledig getoond.",
+    "description": "Verbind Shopify om complete betaalde bestellingen, transactiekosten en uitbetalingen te importeren. De app heeft read_orders en read_shopify_payments nodig. Voer de Client ID, het secret en je winkeldomein in; het secret wordt veilig opgeslagen.",
     "clientId": {
       "label": "Client ID",
       "placeholder": "Client ID van 32 tekens",
@@ -195,7 +195,7 @@
     },
     "domain": {
       "label": "Winkeldomein",
-      "description": "Je myshopify.com-domein — vereist om bestellingen te kunnen lezen voor import.",
+      "description": "Je myshopify.com-domein — vereist voor bestellingen, transactiekosten en uitbetalingen.",
       "placeholder": "jouwband.myshopify.com",
       "error": "Ongeldig domein. Gebruik de vorm jouwband.myshopify.com."
     }
@@ -225,7 +225,10 @@
       "default_expense_account_code": "Standaard kostenrekening",
       "output_vat_account_code": "Btw-rekening verkopen (af te dragen)",
       "input_vat_account_code": "Btw-rekening inkopen (te vorderen)",
-      "merch_revenue_account_code": "Omzetrekening merchandise"
+      "merch_revenue_account_code": "Omzetrekening merchandise",
+      "shopify_clearing_account_code": "Tussenrekening Shopify Payments",
+      "paypal_clearing_account_code": "Tussenrekening PayPal",
+      "shopify_fee_expense_account_code": "Kostenrekening Shopify Payments"
     },
     "booksClosedThrough": "Boeken gesloten tot en met",
     "booksClosedThroughHelper": "Op of vóór deze datum kan niets worden geboekt. Laat leeg om de boeken open te houden.",
@@ -284,7 +287,16 @@
     "invalidFormat": "Dit lijkt geen geldige Bandsintown API-sleutel.",
     "saveFailed": "API-sleutel opslaan is mislukt.",
     "replace": "Sleutel vervangen",
-    "remove": "Sleutel verwijderen"
+    "remove": "Sleutel verwijderen",
+    "artistId": {
+      "label": "Artiest-ID",
+      "description": "Het ID van je Bandsintown-artiestenpagina",
+      "placeholder": "12345678",
+      "helper": "Je vindt het in de URL van je Bandsintown-artiestenpagina: bandsintown.com/a/<artiest-ID>.",
+      "invalidFormat": "Het artiest-ID is het nummer uit de URL van je Bandsintown-artiestenpagina.",
+      "saveFailed": "Artiest-ID opslaan is mislukt.",
+      "remove": "Artiest-ID verwijderen"
+    }
   },
   "financialProfile": {
     "title": "Financieel profiel",

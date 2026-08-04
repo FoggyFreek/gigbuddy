@@ -17,6 +17,9 @@ export default defineConfig({
           }
           // MUI icons ship thousands of SVG components; isolate so it only loads once
           if (id.includes('@mui/icons-material')) return 'vendor-mui-icons'
+          // The data grid is its own ~400 kB runtime and only the bank-import
+          // review uses it — keep it out of the charts/pickers chunk.
+          if (id.includes('@mui/x-data-grid')) return 'vendor-mui-datagrid'
           // MUI X packages pull in D3 / heavier chart/picker logic
           if (id.includes('@mui/x-')) return 'vendor-mui-x'
           // MUI core + Emotion styling runtime

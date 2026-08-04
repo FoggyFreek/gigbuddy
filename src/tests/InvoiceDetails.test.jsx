@@ -27,22 +27,34 @@ import * as invoicesApi from '../api/invoices.ts'
 import { compressLogo } from '../utils/compressImage.ts'
 import InvoiceDetails from '../components/InvoiceDetails.tsx'
 import { AccountingProfileContext } from '../contexts/accountingProfileContext.ts'
+import { ProfileContext } from '../contexts/profileContext.ts'
 import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
 
-function wrap(ui, accountingProfile = null) {
-  const content = accountingProfile
-    ? (
-      <AccountingProfileContext.Provider value={{ profile: accountingProfile, loading: false, applyProfile: vi.fn() }}>
-        {ui}
-      </AccountingProfileContext.Provider>
+function wrap(ui, accountingProfile = null, mollie = true) {
+  const wrapContent = (child) => {
+    const content = accountingProfile
+      ? (
+        <AccountingProfileContext.Provider value={{ profile: accountingProfile, loading: false, applyProfile: vi.fn() }}>
+          {child}
+        </AccountingProfileContext.Provider>
+      )
+      : child
+    return (
+      <ThemeProvider theme={theme}>
+        <ProfileContext.Provider value={{
+          bandName: '', setBandName: vi.fn(), accentColor: null, setAccentColor: vi.fn(),
+          integrations: { shopify: true, bandsintown: true, mollie },
+          isIntegrationConfigured: (integration) => integration !== 'mollie' || mollie,
+          setIntegrationConfigured: vi.fn(),
+        }}>
+          {content}
+        </ProfileContext.Provider>
+      </ThemeProvider>
     )
-    : ui
-  return render(
-    <ThemeProvider theme={theme}>
-      {content}
-    </ThemeProvider>,
-  )
+  }
+  const result = render(wrapContent(ui))
+  return { ...result, rerender: (nextUi) => result.rerender(wrapContent(nextUi)) }
 }
 
 // PDF, UBL and email all live behind one "Download" menu button, so every
@@ -158,6 +170,15 @@ describe('InvoiceDetails', () => {
     // Payment-link panel is only rendered in edit mode once the invoice loads.
     expect(screen.getByText('Payment link')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create payment link/ })).toBeInTheDocument()
+  })
+
+  it('hides Mollie payment-link UI when Mollie is not configured', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />, null, false)
+
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+    expect(screen.queryByText('Payment link')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Create payment link/ })).not.toBeInTheDocument()
   })
 
   it('only offers VAT rates from the tenant accounting country on invoice lines', async () => {
@@ -411,9 +432,7 @@ describe('InvoiceDetails', () => {
       // writer pass, then drive the click past the disabled-pointer check:
       // the guard in the hook must still refuse the call.
       rerender(
-        <ThemeProvider theme={theme}>
-          <InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />
-        </ThemeProvider>,
+        <InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />,
       )
       expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
       expect(invoicesApi.renderInvoice).not.toHaveBeenCalled()

@@ -6,6 +6,8 @@ import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
+import { requireEntitlement } from '../middleware/entitlements.js'
+import { FEATURES } from '../auth/entitlements.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
   parseAndStage,
@@ -13,6 +15,7 @@ import {
   cancelImport,
   commitImport,
   setOpeningBalanceFromImport,
+  refreshShopifyPayoutsForImport,
 } from '../services/bankImportService.js'
 import { parseCommitBody } from '../validators/bankImportValidators.js'
 
@@ -49,6 +52,13 @@ router.delete('/:id', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req,
 router.post('/:id/opening-balance', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await setOpeningBalanceFromImport(pool, req.tenantId, id, req.user.id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.post('/:id/shopify-payouts', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await refreshShopifyPayoutsForImport(pool, req.tenantId, id, req.user.id)
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })

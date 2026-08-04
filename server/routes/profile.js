@@ -19,6 +19,9 @@ import {
   getBandsintownKeyStatus,
   setBandsintownKeyValue,
   clearBandsintownKeyValue,
+  getBandsintownArtistIdStatus,
+  setBandsintownArtistIdValue,
+  clearBandsintownArtistIdValue,
   getShopifyClientIdStatus,
   setShopifyClientIdValue,
   clearShopifyClientIdValue,
@@ -159,6 +162,26 @@ router.put('/bandsintown-key', setIntegration, noStore, async (req, res) => {
 router.delete('/bandsintown-key', manageIntegration, noStore, async (req, res) => {
   const status = await clearBandsintownKeyValue(pool, req.tenantId)
   auditLog(req, 'integration.bandsintown_key.clear')
+  res.json(status)
+})
+
+// Get the Bandsintown artist ID (non-secret, returned in full)
+router.get('/bandsintown-artist-id', manageIntegration, noStore, async (req, res) => {
+  res.json(await getBandsintownArtistIdStatus(pool, req.tenantId))
+})
+
+// Set or replace the Bandsintown artist ID (tenant admin only)
+router.put('/bandsintown-artist-id', setIntegration, noStore, async (req, res) => {
+  const result = await setBandsintownArtistIdValue(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  auditLog(req, 'integration.bandsintown_artist_id.set')
+  res.json(result.status)
+})
+
+// Clear the Bandsintown artist ID (tenant admin only)
+router.delete('/bandsintown-artist-id', manageIntegration, noStore, async (req, res) => {
+  const status = await clearBandsintownArtistIdValue(pool, req.tenantId)
+  auditLog(req, 'integration.bandsintown_artist_id.clear')
   res.json(status)
 })
 

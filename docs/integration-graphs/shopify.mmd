@@ -1,0 +1,282 @@
+%% Shopify integration map, including order import, payout sync/manual settlement,
+%% bank-statement reconciliation, configuration and UI gating.
+flowchart LR
+  subgraph db["Persistence"]
+    TI[(tenant_integrations)]
+    IMP[(shopify_order_imports)]
+    PAY[(shopify order, component, transaction and payout tables)]
+    MERCH[(merch_products and merch_sales)]
+    LEDGER[(accounts and immutable ledger)]
+  end
+
+  subgraph configrepo["Configuration repository functions"]
+    CFGGET["getIntegrationConfigField"]
+    CFGSET["setIntegrationConfigField"]
+    CFGCLEAR["clearIntegrationConfigField"]
+    CIDGET["getShopifyClientId"]
+    CIDSET["setShopifyClientId"]
+    CIDCLEAR["clearShopifyClientId"]
+    DOMGET["getShopifyDomain"]
+    DOMSET["setShopifyDomain"]
+    DOMCLEAR["clearShopifyDomain"]
+    CONFIG["fetchIntegrationConfiguration"]
+    CRECORD["fetchCredentialRecord"]
+    CSTATUS["fetchCredentialStatus"]
+    CSTORE["storeEncryptedCredential"]
+    CCLEAR["clearCredential"]
+  end
+  TI --> CFGGET
+  TI --> CFGSET
+  TI --> CFGCLEAR
+  CFGGET --> CIDGET
+  CFGSET --> CIDSET
+  CFGCLEAR --> CIDCLEAR
+  CFGGET --> DOMGET
+  CFGSET --> DOMSET
+  CFGCLEAR --> DOMCLEAR
+  TI --> CONFIG
+  TI --> CRECORD
+  TI --> CSTATUS
+  TI --> CSTORE
+  TI --> CCLEAR
+
+  subgraph importrepo["shopifyImportRepository functions"]
+    RI1["listImportedLineIds"]
+    RI2["listFinanciallyImportedOrderIds"]
+    RI4["insertImport"]
+    RI5["setImportLedgerTransaction"]
+  end
+  IMP --> RI1
+  IMP --> RI2
+  IMP --> RI4
+  IMP --> RI5
+
+  subgraph paymentrepo["shopifyPaymentsRepository functions"]
+    RP1["findOrderFinancial"]
+    RP2["insertOrderFinancial"]
+    RP3["insertOrderComponent"]
+    RP4["listOrderComponents"]
+    RP5["upsertPayout"]
+    RP6["insertCustomPayout"]
+    RP7["setPayoutSyncComplete"]
+    RP8["upsertBalanceTransaction"]
+    RP9["listCustomPayoutCandidates"]
+    RP10["lockCustomPayoutTransactions"]
+    RP11["assignBalanceTransactionsToPayout"]
+    RP12["markBalanceTransaction"]
+    RP14["lockBalanceTransactionsForPayout"]
+    RP15["listBalanceTransactionsForPayouts"]
+    RP16["listPayoutCandidates"]
+    RP17["listManuallySettledPayouts"]
+    RP18["getPayout"]
+    RP19["lockPayout"]
+    RP20["markPayoutReconciled"]
+    RP21["listManualPayoutCandidates"]
+    RP22["markPayoutManuallySettled"]
+    RP23["insertComponentAdjustment"]
+    RP25["listUnreconciledPaypalOrders"]
+    RP26["lockUnreconciledPaypalOrders"]
+    RP27["insertPaypalPayoutReconciliation"]
+    RP28["linkPaypalReconciliationOrders"]
+    RP29["markPaypalReconciliationPosted"]
+  end
+  PAY --> RP1
+  PAY --> RP2
+  PAY --> RP3
+  PAY --> RP4
+  PAY --> RP5
+  PAY --> RP6
+  PAY --> RP7
+  PAY --> RP8
+  PAY --> RP9
+  PAY --> RP10
+  PAY --> RP11
+  PAY --> RP12
+  PAY --> RP14
+  PAY --> RP15
+  PAY --> RP16
+  PAY --> RP17
+  PAY --> RP18
+  PAY --> RP19
+  PAY --> RP20
+  PAY --> RP21
+  PAY --> RP22
+  PAY --> RP23
+  PAY --> RP25
+  PAY --> RP26
+  PAY --> RP27
+  PAY --> RP28
+  PAY --> RP29
+
+  subgraph sharedrepo["Direct shared-repository dependencies"]
+    RM1["merchRepository.lockProduct"]
+    RM2["merchRepository.getSaleImportSnapshot"]
+    RM3["merchRepository.restoreProductStock"]
+    RA1["accountRepository.accountExistsOfType"]
+    RAS["accountRepository.getSettings via accountService"]
+  end
+  MERCH --> RM1
+  MERCH --> RM2
+  MERCH --> RM3
+  LEDGER --> RA1
+  LEDGER --> RAS
+
+  subgraph services["Services"]
+    CREDENTIALS["integrationCredentialService<br/>load/status/set/clear encrypted Shopify secret"]
+    ICONFIG["integrationService.getIntegrationConfiguration"]
+    PROFILE["profileService<br/>get/set/clear client ID<br/>get/set/clear secret<br/>get/set/clear domain"]
+    TOKEN["shopifyTokenService<br/>getAccessToken, invalidateToken<br/>tenant token cache"]
+    SHOPAPI["shopifyService<br/>shopifyGraphql<br/>fetchRecentOrders and fetchOrdersByIds<br/>fetchBalanceTransactions and annotations"]
+    IMPORTSVC["merchShopifyService.importShopifyOrders<br/>validate mapping, record sale/revenue,<br/>persist order components and payments"]
+    PAYOUTSVC["shopifyPayoutService<br/>sync payouts and refunds/disputes<br/>list/create/refresh/manual settlement"]
+    BANKSVC["bankImportService<br/>refresh Shopify candidates<br/>reconcile Shopify or PayPal payout on commit"]
+    SHARED["Shared domain services<br/>merchService, accountService, ledgerService<br/>transaction and accounting invariants"]
+  end
+  CRECORD --> CREDENTIALS
+  CSTATUS --> CREDENTIALS
+  CSTORE --> CREDENTIALS
+  CCLEAR --> CREDENTIALS
+  CONFIG --> ICONFIG
+  CIDGET --> PROFILE
+  CIDSET --> PROFILE
+  CIDCLEAR --> PROFILE
+  DOMGET --> PROFILE
+  DOMSET --> PROFILE
+  DOMCLEAR --> PROFILE
+  CREDENTIALS --> PROFILE
+  CIDGET --> TOKEN
+  DOMGET --> TOKEN
+  CREDENTIALS --> TOKEN
+  TOKEN --> SHOPAPI
+
+  RI1 --> SHOPAPI
+  RI2 --> SHOPAPI
+  RI4 --> IMPORTSVC
+  RI5 --> IMPORTSVC
+  RP1 --> IMPORTSVC
+  RP2 --> IMPORTSVC
+  RP3 --> IMPORTSVC
+  RP8 --> IMPORTSVC
+  RP12 --> IMPORTSVC
+  RM1 --> IMPORTSVC
+  RM2 --> IMPORTSVC
+  RA1 --> IMPORTSVC
+  RAS --> IMPORTSVC
+  SHOPAPI --> IMPORTSVC
+
+  RP1 --> PAYOUTSVC
+  RP4 --> PAYOUTSVC
+  RP5 --> PAYOUTSVC
+  RP6 --> PAYOUTSVC
+  RP7 --> PAYOUTSVC
+  RP8 --> PAYOUTSVC
+  RP9 --> PAYOUTSVC
+  RP10 --> PAYOUTSVC
+  RP11 --> PAYOUTSVC
+  RP12 --> PAYOUTSVC
+  RP14 --> PAYOUTSVC
+  RP15 --> PAYOUTSVC
+  RP18 --> PAYOUTSVC
+  RP19 --> PAYOUTSVC
+  RP21 --> PAYOUTSVC
+  RP22 --> PAYOUTSVC
+  RP23 --> PAYOUTSVC
+  RM3 --> PAYOUTSVC
+  RA1 --> PAYOUTSVC
+  RAS --> PAYOUTSVC
+  SHOPAPI --> PAYOUTSVC
+
+  RP12 --> BANKSVC
+  RP14 --> BANKSVC
+  RP15 --> BANKSVC
+  RP16 --> BANKSVC
+  RP17 --> BANKSVC
+  RP19 --> BANKSVC
+  RP20 --> BANKSVC
+  RP25 --> BANKSVC
+  RP26 --> BANKSVC
+  RP27 --> BANKSVC
+  RP28 --> BANKSVC
+  RP29 --> BANKSVC
+  PAYOUTSVC --> BANKSVC
+  IMPORTSVC --> SHARED
+  PAYOUTSVC --> SHARED
+  BANKSVC --> SHARED
+
+  subgraph external["External Shopify APIs"]
+    OAUTH["Shopify OAuth<br/>POST /admin/oauth/access_token"]
+    GRAPHQL["Shopify Admin GraphQL 2026-07<br/>orders, transactions and payouts"]
+  end
+  TOKEN <--> OAUTH
+  SHOPAPI <--> GRAPHQL
+
+  subgraph express["Express APIs"]
+    PROFILEAPI["/api/profile<br/>client ID, secret and domain GET PUT DELETE"]
+    ORDERAPI["GET /api/merch/shopify/orders"]
+    IMPORTAPI["POST /api/merch/shopify/import"]
+    PAYOUTAPI["/api/merch/shopify/payouts<br/>GET list, POST refresh/custom/:id settle"]
+    BANKAPI["POST /api/bank-import/:id/shopify-payouts<br/>POST /api/bank-import/:id/commit"]
+  end
+  PROFILE --> PROFILEAPI
+  ICONFIG --> PROFILEAPI
+  SHOPAPI --> ORDERAPI
+  IMPORTSVC --> IMPORTAPI
+  PAYOUTSVC --> PAYOUTAPI
+  BANKSVC --> BANKAPI
+
+  subgraph frontendapi["Frontend API and shared state"]
+    FPROFILE["src/api/profile.ts<br/>get/set/clear client ID and secret<br/>get/set domain"]
+    FMERCH["src/api/merch.ts<br/>fetch/import orders<br/>list/refresh/create/settle payouts"]
+    FBANK["src/api/bankImport.ts.refreshShopifyPayouts<br/>plus commitBankImport"]
+    FCONTEXT["ProfileProvider + integrations utility<br/>isIntegrationConfigured('shopify')"]
+  end
+  PROFILEAPI --> FPROFILE
+  ORDERAPI --> FMERCH
+  IMPORTAPI --> FMERCH
+  PAYOUTAPI --> FMERCH
+  BANKAPI --> FBANK
+  FPROFILE --> FCONTEXT
+
+  subgraph ui["UI consumers"]
+    SETTINGS["IntegrationsSection<br/>Shopify client ID, secret and domain"]
+    MERCHPAGE["MerchPage<br/>configuration gate and dialog launchers"]
+    IMPORTDIALOG["ShopifyImportDialog<br/>paged order review and account/product mapping"]
+    PAYOUTDIALOG["ShopifyPayoutDialog<br/>API/custom payout review and manual settlement"]
+    BANKDIALOG["BankStatementImportDialog<br/>refresh, match and reconcile payouts"]
+    ACCOUNTS["DefaultAccountsFields<br/>Shopify clearing and fee accounts"]
+  end
+  FPROFILE --> SETTINGS
+  FCONTEXT --> MERCHPAGE
+  FCONTEXT --> BANKDIALOG
+  FCONTEXT --> ACCOUNTS
+  FMERCH --> IMPORTDIALOG
+  FMERCH --> PAYOUTDIALOG
+  FBANK --> BANKDIALOG
+  MERCHPAGE --> IMPORTDIALOG
+  MERCHPAGE --> PAYOUTDIALOG
+
+  subgraph review["Review: generic behavior, maintainability and reuse"]
+    GOOD["Strong generic core: encrypted credentials, configuration state, tenant scoping, injected fetchImpl and the typed request client are shared patterns."]
+    TX["Strong accounting behavior: order imports, payout settlement and bank reconciliation converge on shared transaction and immutable-ledger services."]
+    LARGE["Maintainability risk: shopifyPayoutService is 500+ lines and shopifyPaymentsRepository mixes orders, refunds, payouts, manual settlement and PayPal reconciliation."]
+    REUSE["Reusable within Shopify: token acquisition and GraphQL normalization serve order import and payout flows. Cross-provider reuse is limited because Shopify DTOs and accounting decisions share the same services."]
+    BOUNDARY["Boundary concern: PayPal payout persistence lives in shopifyPaymentsRepository; a provider-neutral commerce-settlement repository would make ownership clearer."]
+  end
+  CREDENTIALS -.-> GOOD
+  SHARED -.-> TX
+  PAYOUTSVC -.-> LARGE
+  SHOPAPI -.-> REUSE
+  RP25 -.-> BOUNDARY
+
+  classDef repo fill:#e8f1ff,stroke:#3569a8,color:#10233f
+  classDef service fill:#eaf7ec,stroke:#3d7c47,color:#17351c
+  classDef api fill:#fff4d6,stroke:#a87916,color:#47350c
+  classDef ui fill:#f5eaff,stroke:#7d4aa8,color:#2d173f
+  classDef external fill:#ffe9e9,stroke:#a84a4a,color:#431818
+  classDef finding fill:#f3f3f3,stroke:#666,color:#222
+  class CFGGET,CFGSET,CFGCLEAR,CIDGET,CIDSET,CIDCLEAR,DOMGET,DOMSET,DOMCLEAR,CONFIG,CRECORD,CSTATUS,CSTORE,CCLEAR,RI1,RI2,RI4,RI5,RP1,RP2,RP3,RP4,RP5,RP6,RP7,RP8,RP9,RP10,RP11,RP12,RP14,RP15,RP16,RP17,RP18,RP19,RP20,RP21,RP22,RP23,RP25,RP26,RP27,RP28,RP29,RM1,RM2,RM3,RA1,RAS repo
+  class CREDENTIALS,ICONFIG,PROFILE,TOKEN,SHOPAPI,IMPORTSVC,PAYOUTSVC,BANKSVC,SHARED service
+  class PROFILEAPI,ORDERAPI,IMPORTAPI,PAYOUTAPI,BANKAPI,FPROFILE,FMERCH,FBANK,FCONTEXT api
+  class SETTINGS,MERCHPAGE,IMPORTDIALOG,PAYOUTDIALOG,BANKDIALOG,ACCOUNTS ui
+  class OAUTH,GRAPHQL external
+  class GOOD,TX,LARGE,REUSE,BOUNDARY finding

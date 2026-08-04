@@ -76,6 +76,44 @@ const ACTION_NORMALIZERS = {
     if (purchaseId === null) return { error: 'reconcile_purchase needs purchase_id' }
     return { purchaseId }
   },
+  reconcile_shopify_payout: (raw) => {
+    const payoutId = parsePositiveId(raw.payout_id)
+    if (payoutId === null) return { error: 'reconcile_shopify_payout needs payout_id' }
+    const mappings = Array.isArray(raw.adjustment_mappings) ? raw.adjustment_mappings : []
+    const adjustmentMappings = []
+    const seen = new Set()
+    for (const mapping of mappings) {
+      const balanceTransactionId = parsePositiveId(mapping?.balance_transaction_id)
+      const accountCode = trimOrNull(mapping?.account_code)
+      if (balanceTransactionId === null || !accountCode) {
+        return { error: 'invalid Shopify payout adjustment mapping' }
+      }
+      if (seen.has(balanceTransactionId)) {
+        return { error: `duplicate Shopify adjustment mapping for ${balanceTransactionId}` }
+      }
+      seen.add(balanceTransactionId)
+      adjustmentMappings.push({ balanceTransactionId, accountCode })
+    }
+    return { payoutId, adjustmentMappings }
+  },
+  reconcile_paypal_payout: (raw) => {
+    if (!Array.isArray(raw.order_financial_ids) || raw.order_financial_ids.length === 0) {
+      return { error: 'reconcile_paypal_payout needs order_financial_ids' }
+    }
+    const orderFinancialIds = []
+    const seen = new Set()
+    for (const value of raw.order_financial_ids) {
+      const id = parsePositiveId(value)
+      if (id === null) return { error: 'invalid PayPal order financial id' }
+      if (seen.has(id)) return { error: `duplicate PayPal order financial id ${id}` }
+      seen.add(id)
+      orderFinancialIds.push(id)
+    }
+    return {
+      orderFinancialIds,
+      differenceAccountCode: trimOrNull(raw.difference_account_code),
+    }
+  },
   journal_received: (raw) => normalizeJournalFields(raw, 'journal_received'),
   journal_paid: (raw) => {
     const journal = normalizeJournalFields(raw, 'journal_paid')

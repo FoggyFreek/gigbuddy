@@ -18,6 +18,16 @@ import {
 } from '../services/merchService.js'
 import { fetchRecentOrders } from '../services/shopifyService.js'
 import { importShopifyOrders } from '../services/merchShopifyService.js'
+import {
+  listManualShopifyPayouts,
+  refreshManualShopifyPayouts,
+  createCustomShopifyPayout,
+  settleShopifyPayoutManually,
+} from '../services/shopifyPayoutService.js'
+import {
+  createCustomPaypalPayout,
+  listPaypalPayoutCandidates,
+} from '../services/paypalPayoutService.js'
 
 const router = Router()
 
@@ -101,6 +111,51 @@ router.post('/shopify/import', requirePermission(PERMISSIONS.FINANCE_MANAGE), re
   const result = await importShopifyOrders(pool, req.tenantId, req.body || {}, req.user.id)
   if (result.error) return sendError(res, result.error)
   res.json(result)
+})
+
+router.get('/shopify/payouts', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+  const result = await listManualShopifyPayouts(pool, req.tenantId, req.query.limit)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.post('/shopify/payouts/refresh', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+  const result = await refreshManualShopifyPayouts(
+    pool, req.tenantId, req.body || {}, req.user.id,
+  )
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.post('/shopify/payouts/custom', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+  const result = await createCustomShopifyPayout(
+    pool, req.tenantId, req.body || {}, req.user.id,
+  )
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result)
+})
+
+router.post('/shopify/payouts/:id/settle', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await settleShopifyPayoutManually(
+    pool, req.tenantId, id, req.body || {}, req.user.id,
+  )
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.get('/paypal/payouts/candidates', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+  const result = await listPaypalPayoutCandidates(pool, req.tenantId, req.query.limit)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.post('/paypal/payouts/custom', requirePermission(PERMISSIONS.FINANCE_MANAGE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+  const result = await createCustomPaypalPayout(
+    pool, req.tenantId, req.body || {}, req.user.id,
+  )
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result)
 })
 
 export default router

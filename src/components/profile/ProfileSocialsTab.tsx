@@ -20,6 +20,7 @@ import { SOCIALS } from './profileForm.ts'
 import { getBandsintownArtist } from '../../api/bandsintown.ts'
 import type { BandsintownArtistSocials } from '../../api/bandsintown.ts'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
+import { useProfile } from '../../contexts/profileContext.ts'
 
 interface CopyButtonProps {
   copied?: boolean
@@ -188,9 +189,11 @@ interface ProfileSocialsTabProps {
 
 export default function ProfileSocialsTab({ form, editing, canEdit = true, onToggleEditing, onChange, copiedField, onCopy }: Readonly<ProfileSocialsTabProps>) {
   const { t } = useTranslation('common')
+  const { isIntegrationConfigured } = useProfile()
+  const bandsintownConfigured = isIntegrationConfigured('bandsintown')
   return (
     <Box sx={{ p: 3 }}>
-      {editing && (
+      {editing && bandsintownConfigured && (
         <BandsintownFetchButton artistId={form.bandsintown_artist_id} onChange={onChange} />
       )}
 

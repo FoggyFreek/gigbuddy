@@ -228,9 +228,60 @@ describe('GET /api/bandsintown/artist/:artistId', () => {
 
   it('uses the per-tenant key: configuring tenant A does not enable tenant B', async () => {
     await setAppId(seed.tenantA.id)
+    await setTenantArtist(seed.tenantB.id)
     const result = await fetchArtistEvents(pool, seed.tenantB.id, fakeBandsintown())
     expect(result.error.status).toBe(400)
     expect(result.error.body.error).toBe('Bandsintown API key is not configured')
+  })
+})
+
+describe('/api/profile/bandsintown-artist-id', () => {
+  it('sets, reports and clears the artist ID', async () => {
+    const empty = await asUserA(request(app).get('/api/profile/bandsintown-artist-id'))
+    expect(empty.body).toEqual({ artistId: null })
+
+    const put = await asUserA(request(app).put('/api/profile/bandsintown-artist-id'))
+      .send({ artistId: ' 15556138 ' })
+    expect(put.status).toBe(200)
+    expect(put.body).toEqual({ artistId: '15556138' })
+
+    const del = await asUserA(request(app).delete('/api/profile/bandsintown-artist-id'))
+    expect(del.body).toEqual({ artistId: null })
+  })
+
+  it('rejects a non-numeric artist ID', async () => {
+    const res = await asUserA(request(app).put('/api/profile/bandsintown-artist-id'))
+      .send({ artistId: 'The Woods' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invalid_bandsintown_artist_id')
+  })
+
+  // The integrations settings field and the profile socials field are two
+  // editors over one stored value.
+  it('shares the stored field with the profile socials editor', async () => {
+    await asUserA(request(app).put('/api/profile/bandsintown-artist-id'))
+      .send({ artistId: '15556138' }).expect(200)
+    const profile = await asUserA(request(app).get('/api/profile')).expect(200)
+    expect(profile.body.bandsintown_artist_id).toBe('15556138')
+
+    await asUserA(request(app).patch('/api/profile'))
+      .send({ bandsintown_artist_id: '999' }).expect(200)
+    const reread = await asUserA(request(app).get('/api/profile/bandsintown-artist-id'))
+    expect(reread.body).toEqual({ artistId: '999' })
+  })
+
+  it('rejects a non-numeric artist ID through the profile PATCH as well', async () => {
+    const res = await asUserA(request(app).patch('/api/profile'))
+      .send({ bandsintown_artist_id: 'The Woods' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('invalid_bandsintown_artist_id')
+  })
+
+  it('keeps the artist ID scoped to the setting tenant', async () => {
+    await asUserA(request(app).put('/api/profile/bandsintown-artist-id'))
+      .send({ artistId: '15556138' }).expect(200)
+    const forB = await asUserB(request(app).get('/api/profile/bandsintown-artist-id'))
+    expect(forB.body).toEqual({ artistId: null })
   })
 })
 
@@ -282,8 +333,16 @@ describe('fetchArtistEvents', () => {
     expect(result.events[0].is_duplicate).toBe(false)
   })
 
-  it('400s when the tenant has no artist id or name configured', async () => {
+  it('400s when the tenant has no artist ID configured', async () => {
     await setAppId(seed.tenantA.id)
+    const result = await fetchArtistEvents(pool, seed.tenantA.id, fakeBandsintown())
+    expect(result.error.status).toBe(400)
+    expect(result.error.body.error).toBe('Bandsintown artist ID is not configured')
+  })
+
+  it('ignores a stored artist name when no artist ID is set', async () => {
+    await setAppId(seed.tenantA.id)
+    await setTenantArtist(seed.tenantA.id, { id: null, name: 'The Woods (NL)' })
     const result = await fetchArtistEvents(pool, seed.tenantA.id, fakeBandsintown())
     expect(result.error.status).toBe(400)
   })

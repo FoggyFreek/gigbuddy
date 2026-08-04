@@ -47,17 +47,32 @@
     "parsing": "Afschrift verwerken…",
     "accountMismatch": "Dit afschrift is voor rekening {{iban}}. Controleer of dit je bankrekening is voordat je importeert.",
     "incomeAccountLabel": "Opbrengstrekening voor niet-gematchte inkomende regels",
-    "reviewIntro": "Controleer elke regel. Gematchte facturen en inkoopfacturen zijn voorgeselecteerd; per uitgaande regel kan een nieuwe leverancier worden aangemaakt.",
+    "reviewIntro": "Controleer elke regel. Sorteer of filter op datum of tegenpartij, vink Overslaan aan om een regel over te slaan, en stel per overige regel in hoe die geboekt wordt.",
+    "shopify": {
+      "refresh": "Vernieuwen",
+      "refreshing": "Vernieuwen…",
+      "match": "Koppel Shopify-uitbetaling {{id}} ({{date}})",
+      "adjustmentsIntro": "Rubriceer elke aanpassing zonder bestelling voordat je de uitbetaling koppelt."
+    },
+    "paypal": {
+      "match": "PayPal-uitbetaling afstemmen",
+      "orders": "PayPal-bestellingen in deze storting",
+      "selectedOrders_one": "{{count}} bestelling geselecteerd",
+      "selectedOrders_other": "{{count}} bestellingen geselecteerd",
+      "summary": "Bruto bestellingen {{gross}} · bankstorting {{deposit}} · verschil {{difference}}",
+      "differenceAccount": "Rekening voor PayPal-kosten of correctie"
+    },
     "duplicate": "Bankreferentie kwam voor in een eerdere import",
     "alreadyPaid": "Inkoop #{{number}} is al betaald op {{date}} — overgeslagen om dubbel boeken te voorkomen",
     "skippedCurrency": "Vreemde valuta — overgeslagen",
     "empty": "Geen transacties om te importeren.",
     "table": {
       "date": "Datum",
-      "counterparty": "Tegenpartij",
+      "from": "Van",
       "description": "Omschrijving",
       "amount": "Bedrag",
-      "action": "Boeking"
+      "skip": "Overslaan",
+      "account": "Grootboekrekening"
     },
     "actions": {
       "skip": "Overslaan",
@@ -70,20 +85,36 @@
     "supplier": {
       "label": "Leverancier",
       "create": "\"{{name}}\" aanmaken",
-      "createNew": "Nieuwe leverancier aanmaken",
+      "createNew": "Nieuwe leverancier aanmaken…",
       "name": "Naam leverancier",
+      "nameTitle": "Nieuwe leverancier",
+      "saveName": "Deze naam gebruiken",
       "none": "Geen leverancier"
     },
     "applyToRelation": {
-      "paid": {
-        "title": "Toepassen op alle betalingen aan {{name}}?",
-        "body_one": "{{count}} andere betaling aan {{name}} in dit afschrift staat op een andere rekening. Deze ook op {{account}} boeken?",
-        "body_other": "{{count}} andere betalingen aan {{name}} in dit afschrift staan op een andere rekening. Deze allemaal op {{account}} boeken?"
+      "account": {
+        "paid": {
+          "title": "Toepassen op alle betalingen aan {{name}}?",
+          "body_one": "{{count}} andere betaling aan {{name}} in dit afschrift staat op een andere rekening. Deze ook op {{value}} boeken?",
+          "body_other": "{{count}} andere betalingen aan {{name}} in dit afschrift staan op een andere rekening. Deze allemaal op {{value}} boeken?"
+        },
+        "received": {
+          "title": "Toepassen op alle ontvangsten van {{name}}?",
+          "body_one": "{{count}} andere ontvangst van {{name}} in dit afschrift staat op een andere rekening. Deze ook op {{value}} boeken?",
+          "body_other": "{{count}} andere ontvangsten van {{name}} in dit afschrift staan op een andere rekening. Deze allemaal op {{value}} boeken?"
+        }
       },
-      "received": {
-        "title": "Toepassen op alle ontvangsten van {{name}}?",
-        "body_one": "{{count}} andere ontvangst van {{name}} in dit afschrift staat op een andere rekening. Deze ook op {{account}} boeken?",
-        "body_other": "{{count}} andere ontvangsten van {{name}} in dit afschrift staan op een andere rekening. Deze allemaal op {{account}} boeken?"
+      "vat": {
+        "paid": {
+          "title": "Toepassen op alle betalingen aan {{name}}?",
+          "body_one": "{{count}} andere betaling aan {{name}} in dit afschrift heeft een andere btw-behandeling. Deze ook op {{value}} zetten?",
+          "body_other": "{{count}} andere betalingen aan {{name}} in dit afschrift hebben een andere btw-behandeling. Deze allemaal op {{value}} zetten?"
+        },
+        "received": {
+          "title": "Toepassen op alle ontvangsten van {{name}}?",
+          "body_one": "{{count}} andere ontvangst van {{name}} in dit afschrift heeft een andere btw-behandeling. Deze ook op {{value}} zetten?",
+          "body_other": "{{count}} andere ontvangsten van {{name}} in dit afschrift hebben een andere btw-behandeling. Deze allemaal op {{value}} zetten?"
+        }
       },
       "applyAll": "Op alle toepassen",
       "keepSingle": "Alleen deze regel"
@@ -91,18 +122,11 @@
     "vat": {
       "label": "Btw",
       "none": "Geen btw",
-      "rate": "{{rate}}%",
-      "split": "netto {{net}} · btw {{vat}}"
+      "rate": "{{rate}}%"
     },
-    "expenseAccount": "Kostenrekening",
-    "incomeAccount": "Opbrengstrekening",
     "bookingMethod": "Hoe boeken",
+    "payoutAlreadyRecorded": "Uitbetaling al geboekt",
     "gigLabel": "Optreden: {{details}}",
-    "decision": {
-      "income": "Inkomsten",
-      "expense": "Uitgave",
-      "skip": "Overslaan"
-    },
     "importButton": "{{count}} geselecteerde importeren",
     "finish": "Voltooien",
     "back": "Terug",
@@ -122,6 +146,8 @@
       "imported": "Geboekt",
       "reconciled_invoice": "Gekoppeld aan factuur",
       "reconciled_purchase": "Gekoppeld aan inkoop",
+      "reconciled_shopify_payout": "Gekoppeld aan Shopify-uitbetaling",
+      "reconciled_paypal_payout": "Gekoppeld aan PayPal-uitbetaling",
       "skipped": "Overgeslagen",
       "skipped_currency": "Vreemde valuta — overgeslagen",
       "pending": "Nog niet geboekt",
@@ -139,7 +165,18 @@
       "skipped_vat_not_allowed": "Btw niet toegestaan (KOR)",
       "skipped_invalid_supplier": "Ongeldige leverancier",
       "skipped_closed_period": "Gesloten periode",
-      "skipped_accounting_not_configured": "Boekhouding niet ingesteld"
+      "skipped_accounting_not_configured": "Boekhouding niet ingesteld",
+      "skipped_shopify_sync_error": "Vernieuwen van Shopify-uitbetaling mislukt",
+      "skipped_payout_reconciled": "Uitbetaling is al gekoppeld",
+      "skipped_payout_incomplete": "Uitbetalingsgegevens onvolledig",
+      "skipped_payout_mapping_required": "Koppeling voor aanpassing vereist",
+      "skipped_currency_mismatch": "Valuta komt niet overeen"
+    },
+    "mapping": {
+      "title": "Uitbetalingsdetails",
+      "configure": "Instellen…",
+      "done": "Klaar",
+      "nothingToMap": "Deze uitbetaling heeft geen correcties om te categoriseren."
     }
   },
   "detail": {

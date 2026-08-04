@@ -213,6 +213,23 @@ export async function listGigMapData(executor, tenantId, from, to) {
   return rows
 }
 
+// Minimal projection used by event imports to detect duplicates: date, event
+// link and the linked venue/festival name + city, whichever is set.
+export async function listGigsForImportDuplicateCheck(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT g.id, to_char(g.event_date, 'YYYY-MM-DD') AS event_date, g.event_link,
+            g.venue_id, g.festival_id,
+            COALESCE(v.name, fv.name) AS place_name,
+            COALESCE(v.city, fv.city) AS place_city
+       FROM gigs g
+       ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
+      WHERE g.tenant_id = $1`,
+    [tenantId],
+  )
+  return rows
+}
+
 // Full-text-ish search over a tenant's gigs: matches the event name, linked
 // venue/festival name or city, or a tag. Exact name matches on the event sort
 // first, then by most recent date. Tenant-scoped like every other query.

@@ -69,8 +69,8 @@
     "category": "Btw-categorie",
     "jurisdiction": "Belastingland",
     "inferCategory": "Afleiden van tarief",
-    "otherTreatment": "Andere btw-behandeling…",
-    "useCommonRate": "Gebruik het gebruikelijke btw-tarief",
+    "otherTreatment": "Anders…",
+    "useCommonRate": "Gebruikelijke btw-tarief",
     "rates": {
       "standard": "21% – algemeen btw-tarief",
       "reduced": "9% – verlaagd btw-tarief",

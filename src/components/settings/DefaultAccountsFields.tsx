@@ -11,6 +11,7 @@ import DateEntryField from '../DateEntryField.tsx'
 import { listAccounts, getAccountingSettings, updateAccountingSettings } from '../../api/accounts.ts'
 import type { Account, AccountingSettings } from '../../types/entities.ts'
 import { VAT_CONTROL_ACCOUNT_FIELDS, vatControlAccountCodes } from '../../../shared/vatControlAccounts.js'
+import { useProfile } from '../../contexts/profileContext.ts'
 
 // Maps settings field → expected account type, for filtering Select options.
 // The `as const` keeps the keys a literal union so the i18n selector index
@@ -26,6 +27,9 @@ const FIELD_TYPE = {
   output_vat_account_code: 'liability',
   input_vat_account_code: 'asset',
   merch_revenue_account_code: 'revenue',
+  shopify_clearing_account_code: 'asset',
+  paypal_clearing_account_code: 'asset',
+  shopify_fee_expense_account_code: 'expense',
 } as const
 
 type AccountField = keyof typeof FIELD_TYPE
@@ -72,6 +76,8 @@ function AccountSelect({ field, label, value, accounts = [], excludedCodes = new
 // finance onboarding wizard's default-accounts step.
 export default function DefaultAccountsFields() {
   const { t } = useTranslation('settings')
+  const { isIntegrationConfigured } = useProfile()
+  const shopifyConfigured = isIntegrationConfigured('shopify')
   const [accounts, setAccounts] = useState<Account[]>([])
   const [settings, setSettings] = useState<AccountingSettings | null>(null)
   const [saving, setSaving] = useState(false)
@@ -141,7 +147,9 @@ export default function DefaultAccountsFields() {
           </Select>
         </FormControl>
 
-        {(Object.keys(FIELD_TYPE) as AccountField[]).map((field) => (
+        {(Object.keys(FIELD_TYPE) as AccountField[])
+          .filter((field) => shopifyConfigured || !field.startsWith('shopify_'))
+          .map((field) => (
           <AccountSelect
             key={field}
             field={field}
@@ -152,7 +160,7 @@ export default function DefaultAccountsFields() {
             onChange={handleChange}
             saving={saving}
           />
-        ))}
+          ))}
 
         <DateEntryField
           id="accounting-books-closed-through"

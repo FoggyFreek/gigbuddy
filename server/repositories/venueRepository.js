@@ -252,6 +252,17 @@ export async function deleteVenueContact(executor, venueId, contactId, tenantId)
   return rowCount > 0
 }
 
+// Lean projection used to match imported events against existing venues
+// (no contacts, no gig years).
+export async function listVenuesForImportMatching(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id, category, name, city, region, country, postal_code, street_and_number
+       FROM venues WHERE tenant_id = $1`,
+    [tenantId],
+  )
+  return rows
+}
+
 export async function loadExistingImportKeys(executor, tenantId, incomingNames) {
   if (!incomingNames.length) return []
   const { rows } = await executor.query(
