@@ -181,12 +181,23 @@ async function requestJson(url, options, fetchImpl) {
   }
 }
 
-function suggestBody({ query, limit, lat, lon }) {
+const norm = (value) => String(value ?? '').trim().toLowerCase()
+
+// v3 filters have no city key — only countryCodesIso2 and geometry — so a known
+// city narrows the search as query text, the way a person would type it. Skipped
+// when the query already names it, to avoid "Paradiso Amsterdam Amsterdam".
+function suggestQuery(query, city) {
+  if (!city || norm(query).includes(norm(city))) return query
+  return `${query} ${city}`
+}
+
+function suggestBody({ query, limit, lat, lon, country, city }) {
   const body = {
-    query,
+    query: suggestQuery(query, city),
     maxResults: limit,
     filters: { types: ['poi'] },
   }
+  if (country) body.filters.countryCodesIso2 = [country]
   if (lat !== null && lat !== undefined && lon !== null && lon !== undefined) {
     const point = { type: 'point', coordinates: [lon, lat] }
     body.origin = point
@@ -195,10 +206,11 @@ function suggestBody({ query, limit, lat, lon }) {
   return body
 }
 
-const norm = (value) => String(value ?? '').trim().toLowerCase()
-
-function cacheKey({ query, limit, language, lat, lon, sessionId }) {
-  return ['suggest', norm(query), limit, norm(language), lat ?? '', lon ?? '', sessionId ?? ''].join('|')
+function cacheKey({ query, limit, language, lat, lon, country, city, sessionId }) {
+  return [
+    'suggest', norm(query), limit, norm(language), lat ?? '', lon ?? '',
+    country ?? '', norm(city), sessionId ?? '',
+  ].join('|')
 }
 
 async function requestPlaces(params, fetchImpl) {

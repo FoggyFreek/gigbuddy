@@ -9,7 +9,9 @@ const MAX_QUERY_LENGTH = 120
 // Well under parseSearchLimit's 25 ceiling: this fronts a metered upstream hit
 // once per debounced keystroke, and TomTom's typeahead limit is 10.
 const MAX_LIMIT = 10
+const MAX_CITY_LENGTH = 60
 const PLACE_ID_RE = /^[A-Za-z0-9_-]{1,200}$/
+const COUNTRY_CODE_RE = /^[A-Za-z]{2}$/
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[47][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function parseSessionId(value) {
@@ -43,6 +45,13 @@ export function parsePlaceQuery(query = {}) {
   const sessionId = parseSessionId(query.sessionId)
   if (sessionId.error) return { error: sessionId.error }
 
+  // Country and city come from the record being edited, where the country is a
+  // free-typed two-character field. A half-typed or junk value is dropped like a
+  // half bias pair rather than 400ing the search the user is in the middle of.
+  const rawCountry = String(query.country ?? '').trim()
+  const country = COUNTRY_CODE_RE.test(rawCountry) ? rawCountry.toUpperCase() : null
+  const city = String(query.city ?? '').trim().slice(0, MAX_CITY_LENGTH) || null
+
   return {
     params: {
       query: raw,
@@ -50,6 +59,8 @@ export function parsePlaceQuery(query = {}) {
       language,
       lat: paired ? lat.value : null,
       lon: paired ? lon.value : null,
+      country,
+      city,
       sessionId: sessionId.value,
     },
   }

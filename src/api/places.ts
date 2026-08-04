@@ -8,6 +8,10 @@ export interface PlaceSearchOptions {
   /** Optional bias point — results near it rank first. Both are required together. */
   lat?: number | null
   lon?: number | null
+  /** ISO 3166-1 alpha-2 country the record is already known to be in. */
+  country?: string | null
+  /** City the record is already known to be in. */
+  city?: string | null
   signal?: AbortSignal
   /** Stable UUID for one as-you-type and selection journey. */
   sessionId?: string
@@ -15,12 +19,14 @@ export interface PlaceSearchOptions {
 
 export async function searchPlaces(
   query: string,
-  { limit, language, lat, lon, signal, sessionId }: PlaceSearchOptions = {},
+  { limit, language, lat, lon, country, city, signal, sessionId }: PlaceSearchOptions = {},
 ): Promise<PlaceSuggestion[]> {
   const params = new URLSearchParams({ q: query })
   if (limit !== undefined) params.set('limit', String(limit))
   if (language) params.set('language', language)
   if (sessionId) params.set('sessionId', sessionId)
+  if (country?.trim()) params.set('country', country.trim())
+  if (city?.trim()) params.set('city', city.trim())
   if (lat !== null && lat !== undefined && lon !== null && lon !== undefined) {
     params.set('lat', String(lat))
     params.set('lon', String(lon))

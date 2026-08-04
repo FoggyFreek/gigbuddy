@@ -15,9 +15,10 @@ vi.mock('../api/venues.ts', () => ({
 // Stand in for the real search control: exposes a button that reports a pick, so
 // the dialog's fill behavior is tested without driving an Autocomplete.
 vi.mock('../components/shared/PlaceSearchField.tsx', () => ({
-  default: ({ value, onValueChange, onPlaceSelect }) => (
+  default: ({ value, onValueChange, onPlaceSelect, country, city }) => (
     <div>
       <input aria-label="place search" value={value} onChange={(e) => onValueChange(e.target.value)} />
+      <span data-testid="lookup-scope">{`${country ?? ''}|${city ?? ''}`}</span>
       <button type="button" onClick={() => onPlaceSelect(PARADISO)}>pick place</button>
     </div>
   ),
@@ -84,6 +85,18 @@ describe('VenueFormModal — create mode place lookup', () => {
     expect(screen.getByLabelText(/Country/)).toHaveValue('NL')
     expect(screen.getByLabelText(/Website/)).toHaveValue('https://www.paradiso.nl')
     expect(screen.getByLabelText(/Phone/)).toHaveValue('+31 20 626 4521')
+  })
+
+  it('hands the already-filled country and city to the search control', async () => {
+    const user = userEvent.setup()
+    render(ui())
+
+    expect(screen.getByTestId('lookup-scope')).toHaveTextContent('|')
+
+    await user.type(screen.getByLabelText(/Country/), 'nl')
+    await user.type(screen.getByLabelText(/City/), 'Utrecht')
+
+    expect(screen.getByTestId('lookup-scope')).toHaveTextContent('NL|Utrecht')
   })
 
   it('leaves a field the user already typed untouched', async () => {

@@ -27,6 +27,10 @@ interface PlaceSearchFieldProps {
   /** Optional bias point so nearby places rank first. Both values or neither. */
   biasLat?: number | null
   biasLon?: number | null
+  /** Country the record is already known to be in — narrows the provider search. */
+  country?: string | null
+  /** City the record is already known to be in — narrows the provider search. */
+  city?: string | null
 }
 
 // Reusable place lookup: an Autocomplete over the generic /api/places/search
@@ -49,6 +53,8 @@ export default function PlaceSearchField({
   autoFocus,
   biasLat = null,
   biasLon = null,
+  country = null,
+  city = null,
 }: Readonly<PlaceSearchFieldProps>) {
   const { t, i18n } = useTranslation(['places', 'common'])
   const sessionId = useRef(crypto.randomUUID()).current
@@ -58,11 +64,11 @@ export default function PlaceSearchField({
   // guarding — never add a second debounce on top of it.
   const { inputValue, options, loading, tooShort, minChars, onInputChange } = useRemoteSearch<PlaceSuggestion>({
     search: (query) => searchPlaces(query, {
-      language: i18n.language, lat: biasLat, lon: biasLon, sessionId,
+      language: i18n.language, lat: biasLat, lon: biasLon, country, city, sessionId,
     }),
     inputValue: value,
     onInputValueChange: onValueChange,
-    dependencyKey: `${i18n.language}:${biasLat ?? ''}:${biasLon ?? ''}`,
+    dependencyKey: `${i18n.language}:${biasLat ?? ''}:${biasLon ?? ''}:${country ?? ''}:${city ?? ''}`,
     enabled: !disabled,
   })
 

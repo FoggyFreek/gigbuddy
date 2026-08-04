@@ -278,6 +278,8 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
                   required
                   error={!!errors.name}
                   helperText={errors.name}
+                  country={form.country ?? null}
+                  city={form.city ?? null}
                 />
               ) : undefined}
             />

@@ -192,6 +192,18 @@ describe('VenueDetailPage — address enrichment', () => {
     expect(await screen.findByRole('button', { name: 'Look up address' })).toBeDisabled()
   })
 
+  it('narrows the lookup with the address the venue already has', async () => {
+    getVenue.mockResolvedValue({ ...VENUE, city: 'Amsterdam', country: 'NL' })
+    const user = userEvent.setup()
+    wrap()
+
+    await user.click(await screen.findByRole('button', { name: 'Look up address' }))
+
+    await waitFor(() => expect(searchPlaces).toHaveBeenCalledWith(
+      'Test Venue', expect.objectContaining({ country: 'NL', city: 'Amsterdam' }),
+    ))
+  })
+
   it('applies the server-reported row rather than the raw suggestion', async () => {
     enrichVenue.mockResolvedValue({
       venue: { ...VENUE, city: 'Amsterdam', postal_code: '1017SG' },

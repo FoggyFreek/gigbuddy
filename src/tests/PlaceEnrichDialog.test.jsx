@@ -77,6 +77,14 @@ describe('PlaceEnrichDialog', () => {
     ))
   })
 
+  it('narrows the lookup with the record’s own country and city', async () => {
+    render(ui({ country: 'NL', city: 'Amsterdam' }))
+
+    await waitFor(() => expect(searchPlaces).toHaveBeenCalledWith(
+      'Paradiso', expect.objectContaining({ country: 'NL', city: 'Amsterdam' }),
+    ))
+  })
+
   it('previews every field it would fill and counts them in the confirm button', async () => {
     searchPlaces.mockResolvedValue([PARADISO])
     render(ui())
