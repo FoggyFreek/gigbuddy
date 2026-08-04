@@ -66,8 +66,8 @@ describe('GET /api/profile — integration configuration', () => {
     await pool.query(
       `INSERT INTO tenant_integrations
          (tenant_id, bandsintown_app_id, bandsintown_artist_id, shopify_client_id, shopify_client_secret,
-          shopify_shop_domain, mollie_api_key)
-       VALUES ($1, 'bands-key', '12345', 'client-id', 'client-secret', 'alpha.myshopify.com', 'test_mollie')`,
+           shopify_shop_domain, mollie_api_key, resend_api_key_encrypted)
+       VALUES ($1, 'bands-key', '12345', 'client-id', 'client-secret', 'alpha.myshopify.com', 'test_mollie', '{}'::jsonb)`,
       [seed.tenantA.id],
     )
     await pool.query(
@@ -79,10 +79,10 @@ describe('GET /api/profile — integration configuration', () => {
     )
 
     const tenantA = await as(seed.userA.id, seed.tenantA.id)(request(app).get('/api/profile')).expect(200)
-    expect(tenantA.body.integrations).toEqual({ shopify: true, bandsintown: true, mollie: true })
+    expect(tenantA.body.integrations).toEqual({ shopify: true, bandsintown: true, mollie: true, resend: true })
 
     const tenantB = await as(seed.userB.id, seed.tenantB.id)(request(app).get('/api/profile')).expect(200)
-    expect(tenantB.body.integrations).toEqual({ shopify: false, bandsintown: false, mollie: false })
+    expect(tenantB.body.integrations).toEqual({ shopify: false, bandsintown: false, mollie: false, resend: false })
   })
 })
 
@@ -560,7 +560,10 @@ describe('Shopify credential management', () => {
       [seed.tenantA.id],
     )
     expect(stored.shopify_client_secret).toBeNull()
-    expect(stored.shopify_client_secret_encrypted).toEqual(expect.objectContaining({ v: 1, kid: 'test' }))
+    expect(stored.shopify_client_secret_encrypted).toEqual(expect.objectContaining({
+      v: 1,
+      kid: process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID,
+    }))
   })
 
   it('persists the secret so a re-read reports only set status', async () => {
@@ -669,6 +672,94 @@ describe('Shopify credential management', () => {
       expect(result.error).toBeDefined()
     } else {
       expect(after).toHaveBeenCalledTimes(1)
+    }
+  })
+})
+
+describe('Resend credential management', () => {
+  const validKey = `re_${'a'.repeat(32)}`
+
+  it('encrypts a valid key and exposes status without credential material', async () => {
+    const res = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).put('/api/profile/resend-key').send({ key: validKey }),
+    ).expect(200)
+
+    expect(res.body).toEqual({ isSet: true, changedAt: expect.any(String) })
+    expect(res.headers['cache-control']).toBe('no-store')
+    expect(JSON.stringify(res.body)).not.toContain(validKey)
+
+    const { rows: [stored] } = await pool.query(
+      `SELECT resend_api_key_encrypted, resend_api_key_changed_at
+         FROM tenant_integrations WHERE tenant_id = $1`,
+      [seed.tenantA.id],
+    )
+    expect(stored.resend_api_key_encrypted).toEqual(expect.objectContaining({
+      v: 1,
+      kid: process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID,
+    }))
+    expect(stored.resend_api_key_changed_at).not.toBeNull()
+  })
+
+  it('keeps status tenant-scoped and supports erasure', async () => {
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).put('/api/profile/resend-key').send({ key: validKey }),
+    ).expect(200)
+
+    const otherTenant = await as(seed.userB.id, seed.tenantB.id)(
+      request(app).get('/api/profile/resend-key'),
+    ).expect(200)
+    expect(otherTenant.body).toEqual({ isSet: false, changedAt: null })
+
+    const cleared = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).delete('/api/profile/resend-key'),
+    ).expect(200)
+    expect(cleared.body).toEqual({ isSet: false, changedAt: expect.any(String) })
+  })
+
+  it('constructs the SDK client from the decrypted tenant credential', async () => {
+    await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).put('/api/profile/resend-key').send({ key: validKey }),
+    ).expect(200)
+
+    const { getResendClientForTenant } = await import('../../../server/services/resendService.js')
+    const configured = await getResendClientForTenant(pool, seed.tenantA.id)
+    expect(configured.resend?.constructor.name).toBe('Resend')
+
+    const missing = await getResendClientForTenant(pool, seed.tenantB.id)
+    expect(missing.error).toEqual({
+      status: 400,
+      body: { error: 'Resend API key is not configured', code: 'resend_not_configured' },
+    })
+  })
+
+  it('rejects malformed keys and forbids non-admin writes', async () => {
+    const invalid = await as(seed.superUser.id, seed.tenantA.id)(
+      request(app).put('/api/profile/resend-key').send({ key: 'not-a-resend-key' }),
+    ).expect(400)
+    expect(invalid.body.error).toBe('invalid_resend_key')
+
+    await as(seed.userA.id, seed.tenantA.id)(
+      request(app).put('/api/profile/resend-key').send({ key: validKey }),
+    ).expect(403)
+  })
+
+  it('audits changes without logging the key', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await as(seed.superUser.id, seed.tenantA.id)(
+        request(app).put('/api/profile/resend-key').send({ key: validKey }),
+      ).expect(200)
+      const event = JSON.parse(log.mock.calls.at(-1)[0])
+      expect(event).toMatchObject({
+        action: 'integration.resend_key.set',
+        userId: seed.superUser.id,
+        tenantId: seed.tenantA.id,
+      })
+      expect(JSON.stringify([...log.mock.calls, ...error.mock.calls])).not.toContain(validKey)
+    } finally {
+      log.mockRestore()
+      error.mockRestore()
     }
   })
 })

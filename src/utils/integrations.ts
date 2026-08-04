@@ -1,4 +1,4 @@
-export const INTEGRATION_NAMES = ['shopify', 'bandsintown', 'mollie'] as const
+export const INTEGRATION_NAMES = ['shopify', 'bandsintown', 'mollie', 'resend'] as const
 
 export type IntegrationName = typeof INTEGRATION_NAMES[number]
 export type IntegrationConfiguration = Record<IntegrationName, boolean>
@@ -7,6 +7,7 @@ export const EMPTY_INTEGRATION_CONFIGURATION: IntegrationConfiguration = {
   shopify: false,
   bandsintown: false,
   mollie: false,
+  resend: false,
 }
 
 export function isIntegrationConfigured(

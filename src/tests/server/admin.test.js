@@ -39,6 +39,7 @@ const asSuper = (req, tenantId = seed.tenantA.id) => as(seed.superUser.id, tenan
 const CREDENTIAL_FIELDS = [
   'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
   'shopify_client_secret', 'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+  'resend_api_key_encrypted', 'resend_api_key_changed_at',
 ]
 
 function expectNoCredentialFields(value) {

@@ -82,8 +82,9 @@ describe('integration credential migration', () => {
 
   it('re-encrypts valid envelopes to the active key without changing the credential timestamp', async () => {
     await setIntegrationCredential(pool, seed.tenantA.id, CREDENTIAL_TYPES.MOLLIE_API_KEY, 'test_rotation_value')
+    await setIntegrationCredential(pool, seed.tenantA.id, CREDENTIAL_TYPES.RESEND_API_KEY, `re_${'r'.repeat(32)}`)
     const { rows: [before] } = await pool.query(
-      'SELECT mollie_api_key_changed_at FROM tenant_integrations WHERE tenant_id = $1',
+      'SELECT mollie_api_key_changed_at, resend_api_key_changed_at FROM tenant_integrations WHERE tenant_id = $1',
       [seed.tenantA.id],
     )
     const originalKeys = process.env.INTEGRATION_SECRETS_KEYS
@@ -95,16 +96,21 @@ describe('integration credential migration', () => {
       process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID = 'next'
 
       const result = await migrateIntegrationSecrets(pool, { apply: true })
-      expect(result).toMatchObject({ ok: true, counts: { reEncrypted: 1 } })
+      expect(result).toMatchObject({ ok: true, counts: { reEncrypted: 2 } })
       const { rows: [after] } = await pool.query(
-        `SELECT mollie_api_key_encrypted, mollie_api_key_changed_at
+        `SELECT mollie_api_key_encrypted, mollie_api_key_changed_at,
+                resend_api_key_encrypted, resend_api_key_changed_at
            FROM tenant_integrations WHERE tenant_id = $1`,
         [seed.tenantA.id],
       )
       expect(after.mollie_api_key_encrypted.kid).toBe('next')
+      expect(after.resend_api_key_encrypted.kid).toBe('next')
       expect(after.mollie_api_key_changed_at.toISOString()).toBe(before.mollie_api_key_changed_at.toISOString())
+      expect(after.resend_api_key_changed_at.toISOString()).toBe(before.resend_api_key_changed_at.toISOString())
       await expect(loadIntegrationCredential(pool, seed.tenantA.id, CREDENTIAL_TYPES.MOLLIE_API_KEY))
         .resolves.toBe('test_rotation_value')
+      await expect(loadIntegrationCredential(pool, seed.tenantA.id, CREDENTIAL_TYPES.RESEND_API_KEY))
+        .resolves.toBe(`re_${'r'.repeat(32)}`)
     } finally {
       process.env.INTEGRATION_SECRETS_KEYS = originalKeys
       process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID = originalActive

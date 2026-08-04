@@ -25,6 +25,10 @@ const wrongKeyForA = parseIntegrationSecretsConfig({
 describe('integration secret AES-256-GCM envelopes', () => {
   const type = CREDENTIAL_TYPES.MOLLIE_API_KEY
 
+  it('registers Resend as a distinct credential context', () => {
+    expect(CREDENTIAL_TYPES.RESEND_API_KEY).toBe('resend_api_key')
+  })
+
   it('round-trips and randomizes ciphertext', () => {
     const first = encryptIntegrationSecret('test_secret', 1, type, configA)
     const second = encryptIntegrationSecret('test_secret', 1, type, configA)
@@ -40,6 +44,7 @@ describe('integration secret AES-256-GCM envelopes', () => {
     expect(() => decryptIntegrationSecret({ ...envelope, tag: Buffer.alloc(16).toString('base64') }, 1, type, configA)).toThrow()
     expect(() => decryptIntegrationSecret(envelope, 2, type, configA)).toThrow()
     expect(() => decryptIntegrationSecret(envelope, 1, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET, configA)).toThrow()
+    expect(() => decryptIntegrationSecret(envelope, 1, CREDENTIAL_TYPES.RESEND_API_KEY, configA)).toThrow()
   })
 
   it('rejects malformed envelopes and missing key configuration', () => {

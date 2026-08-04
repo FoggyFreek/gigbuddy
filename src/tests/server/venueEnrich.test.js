@@ -76,7 +76,9 @@ describe('POST /api/venues/:id/enrich', () => {
       city: 'Amsterdam',
       region: 'Noord-Holland',
       country: 'NL',
-      website: 'https://www.paradiso.nl',
+      // Stored canonicalized: normalizeOptionalUrl returns URL.href, which gives
+      // a bare origin a trailing slash.
+      website: 'https://www.paradiso.nl/',
       phone: '+31 20 626 4521',
     })
     expect(res.body.filled.sort()).toEqual([

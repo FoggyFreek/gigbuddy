@@ -19,7 +19,11 @@ import {
 import { postInvoiceSent, postInvoicePaid } from './ledgerService.js'
 import { withTransaction } from '../db/withTransaction.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
-import { loadIntegrationCredential, loadRetainedIntegrationCredential } from './integrationCredentialService.js'
+import {
+  loadCredentialOrError,
+  loadIntegrationCredential,
+  loadRetainedIntegrationCredential,
+} from './integrationCredentialService.js'
 import { withIntegrationWriteLock } from './featureGuards.js'
 import { logger } from '../utils/logger.js'
 
@@ -36,19 +40,14 @@ function mollieStatusCode(err) {
 // webhook/sync). Creation flows must NOT pass it — a retained key reads as
 // "not configured" so no new links can be minted with it.
 export async function getMollieClientForTenant(executor, tenantId, { includeRetained = false } = {}) {
-  let apiKey
-  try {
-    apiKey = includeRetained
-      ? await loadRetainedIntegrationCredential(executor, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
-      : await loadIntegrationCredential(executor, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
-  } catch (err) {
-    logger.error('mollie.credential_decryption_failed', { err, tenantId })
-    return { error: { status: 503, body: { error: 'mollie_credential_unavailable' } } }
-  }
-  if (!apiKey) {
-    return { error: { status: 400, body: { error: 'Mollie API key is not configured', code: 'mollie_not_configured' } } }
-  }
-  return { mollie: createTenantMollieClient(apiKey) }
+  const result = await loadCredentialOrError(executor, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY, {
+    integration: 'mollie',
+    logEvent: 'mollie.credential_decryption_failed',
+    label: 'Mollie API key',
+    load: includeRetained ? loadRetainedIntegrationCredential : loadIntegrationCredential,
+  })
+  if (result.error) return result
+  return { mollie: createTenantMollieClient(result.value) }
 }
 
 function buildPaymentLinkPayload({ tenant, invoice, invoiceId, opts }) {

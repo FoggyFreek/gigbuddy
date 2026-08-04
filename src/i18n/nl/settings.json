@@ -190,8 +190,8 @@
       "helper": "Plak het client secret van je app uit het Shopify Dev Dashboard.",
       "invalidFormat": "Ongeldig secret-formaat. Het app-secret begint met \"shpss_\" gevolgd door 32 hexadecimale tekens.",
       "saveFailed": "Het app-secret kon niet worden opgeslagen. Probeer het opnieuw.",
-      "replace": "Secret vervangen",
-      "remove": "Secret verwijderen"
+      "replace": "Sleutel vervangen",
+      "remove": "Sleutel verwijderen"
     },
     "domain": {
       "label": "Winkeldomein",
@@ -201,12 +201,23 @@
     }
   },
   "mollie": {
-    "title": "Mollie-API-sleutel",
+    "title": "Verstuur betaallinks via Mollie",
     "description": "Wordt gebruikt om betaallinks via Mollie te maken. De sleutel wordt veilig opgeslagen en na het opslaan nooit meer volledig getoond.",
-    "label": "Mollie-API-sleutel",
+    "label": "Verstuur betaallinks via Mollie",
     "placeholder": "live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     "helper": "Plak je live- of test-sleutel uit het Mollie-dashboard.",
     "invalidFormat": "Ongeldig sleutelformaat. Sleutels beginnen met live_ of test_ gevolgd door minstens 25 alfanumerieke tekens.",
+    "saveFailed": "De sleutel kon niet worden opgeslagen. Probeer het opnieuw.",
+    "replace": "Sleutel vervangen",
+    "remove": "Sleutel verwijderen"
+  },
+  "resend": {
+    "title": "Verstuur e-mails via Resend",
+    "description": "Koppel Resend voor het versturen van e-mail vanuit je eigen domein binnen GigBuddy. De sleutel wordt veilig opgeslagen en na het opslaan nooit volledig getoond.",
+    "label": "Resend-API-sleutel",
+    "placeholder": "re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "helper": "Gebruik een Resend-sleutel met alleen verzendrechten en beperk deze waar mogelijk tot je geverifieerde verzenddomein.",
+    "invalidFormat": "Ongeldig sleutelformaat. Resend-API-sleutels beginnen met re_.",
     "saveFailed": "De sleutel kon niet worden opgeslagen. Probeer het opnieuw.",
     "replace": "Sleutel vervangen",
     "remove": "Sleutel verwijderen"

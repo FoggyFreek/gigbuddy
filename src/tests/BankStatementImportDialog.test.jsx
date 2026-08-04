@@ -32,7 +32,7 @@ function wrap(ui, { shopify = true } = {}) {
       <ThemeProvider theme={theme}>
         <ProfileContext.Provider value={{
           bandName: '', setBandName: vi.fn(), accentColor: null, setAccentColor: vi.fn(),
-          integrations: { shopify, bandsintown: true, mollie: true },
+          integrations: { shopify, bandsintown: true, mollie: true, resend: true },
           isIntegrationConfigured: (integration) => integration !== 'shopify' || shopify,
           setIntegrationConfigured: vi.fn(),
         }}>

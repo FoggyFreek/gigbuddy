@@ -66,7 +66,7 @@ const writerAuth = { user: { isSuperAdmin: true } }
 
 const integrationProfile = (configured = true) => ({
   bandName: '', setBandName: vi.fn(), accentColor: null, setAccentColor: vi.fn(),
-  integrations: { shopify: configured, bandsintown: configured, mollie: configured },
+  integrations: { shopify: configured, bandsintown: configured, mollie: configured, resend: configured },
   isIntegrationConfigured: () => configured,
   setIntegrationConfigured: vi.fn(),
 })

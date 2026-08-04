@@ -81,6 +81,7 @@
     "react-leaflet": "^5.0.0",
     "react-pdf": "^10.4.1",
     "react-router-dom": "^7.14.1",
+    "resend": "^6.18.1",
     "sharp": "^0.34.5",
     "web-push": "^3.6.7"
   },

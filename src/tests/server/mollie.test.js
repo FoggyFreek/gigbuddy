@@ -694,6 +694,7 @@ describe('GET /api/profile — Mollie key hardening', () => {
     for (const field of [
       'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
       'shopify_client_secret', 'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+      'resend_api_key_encrypted', 'resend_api_key_changed_at',
     ]) expect(res.body).not.toHaveProperty(field)
   })
 
@@ -736,7 +737,10 @@ describe('GET /api/profile/mollie-key', () => {
       [seed.tenantA.id],
     )
     expect(stored.mollie_api_key).toBeNull()
-    expect(stored.mollie_api_key_encrypted).toEqual(expect.objectContaining({ v: 1, kid: 'test' }))
+    expect(stored.mollie_api_key_encrypted).toEqual(expect.objectContaining({
+      v: 1,
+      kid: process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID,
+    }))
 
     const cleared = await asUserA(request(app).delete('/api/profile/mollie-key')).expect(200)
     expect(cleared.body).toEqual({ isSet: false, changedAt: expect.any(String) })
@@ -785,6 +789,7 @@ describe('GET /api/invoices/:id — Mollie key hardening (review #1)', () => {
     for (const field of [
       'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
       'shopify_client_secret', 'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+      'resend_api_key_encrypted', 'resend_api_key_changed_at',
     ]) expect(res.body.tenant).not.toHaveProperty(field)
     // Verify the tenant object still contains expected display fields
     expect(res.body.tenant.band_name).toBe('Alpha Band')

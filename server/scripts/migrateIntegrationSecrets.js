@@ -18,6 +18,14 @@ const CREDENTIALS = Object.freeze([
     type: CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET,
     legacy: 'shopify_client_secret', encrypted: 'shopify_client_secret_encrypted', changedAt: 'shopify_client_secret_changed_at',
   },
+  {
+    type: CREDENTIAL_TYPES.BANDSINTOWN_APP_ID,
+    legacy: 'bandsintown_app_id', encrypted: 'bandsintown_app_id_encrypted', changedAt: 'bandsintown_app_id_changed_at',
+  },
+  {
+    type: CREDENTIAL_TYPES.RESEND_API_KEY,
+    encrypted: 'resend_api_key_encrypted', changedAt: 'resend_api_key_changed_at',
+  },
 ])
 
 function emptyCounts(tenantCount) {
@@ -48,7 +56,7 @@ function scanEncryptedCredential(row, credential, envelope, config, counts, oper
 }
 
 function scanCredential(row, credential, config, counts, operations) {
-  const plaintext = row[credential.legacy]
+  const plaintext = credential.legacy ? row[credential.legacy] : null
   const envelope = row[credential.encrypted]
   if (plaintext !== null) counts.plaintext += 1
   if (envelope !== null) counts.encrypted += 1
@@ -68,10 +76,11 @@ async function applyOperation(executor, operation, config) {
   const { row, credential, value, kind } = operation
   const envelope = encryptIntegrationSecret(value, row.id, credential.type, config)
   decryptIntegrationSecret(envelope, row.id, credential.type, config)
+  const clearLegacy = credential.legacy ? `${credential.legacy} = NULL,` : ''
   await executor.query(
     `UPDATE tenant_integrations
         SET ${credential.encrypted} = $1::jsonb,
-            ${credential.legacy} = NULL,
+            ${clearLegacy}
             ${credential.changedAt} = ${kind === 'migrate' ? 'COALESCE(' + credential.changedAt + ', NOW())' : credential.changedAt},
             updated_at = NOW()
       WHERE tenant_id = $2`,
@@ -87,7 +96,8 @@ async function applyOperations(executor, operations, config, counts) {
   }
   const { rows: [remaining] } = await executor.query(
     `SELECT ((COUNT(*) FILTER (WHERE mollie_api_key IS NOT NULL))
-            + (COUNT(*) FILTER (WHERE shopify_client_secret IS NOT NULL)))::int AS count
+            + (COUNT(*) FILTER (WHERE shopify_client_secret IS NOT NULL))
+            + (COUNT(*) FILTER (WHERE bandsintown_app_id IS NOT NULL)))::int AS count
        FROM tenant_integrations`,
   )
   counts.plaintextRemaining = remaining.count
@@ -101,7 +111,9 @@ export async function migrateIntegrationSecrets(executor, { apply = false } = {}
     const { rows } = await executor.query(
       `SELECT tenant_id AS id,
               mollie_api_key, mollie_api_key_encrypted, mollie_api_key_changed_at,
-              shopify_client_secret, shopify_client_secret_encrypted, shopify_client_secret_changed_at
+              shopify_client_secret, shopify_client_secret_encrypted, shopify_client_secret_changed_at,
+              bandsintown_app_id, bandsintown_app_id_encrypted, bandsintown_app_id_changed_at,
+              resend_api_key_encrypted, resend_api_key_changed_at
          FROM tenant_integrations ORDER BY tenant_id FOR UPDATE`,
     )
     const counts = emptyCounts(rows.length)

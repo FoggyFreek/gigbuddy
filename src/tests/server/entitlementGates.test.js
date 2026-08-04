@@ -107,10 +107,16 @@ describe('integrations gates', () => {
       await asUserA(request(app).put('/api/profile/mollie-key').send({ key: `test_${'a'.repeat(25)}` })),
       'integrations',
     )
+    expectEntitlementDenied(
+      await asUserA(request(app).put('/api/profile/resend-key').send({ key: `re_${'a'.repeat(32)}` })),
+      'integrations',
+    )
     // An admin must always be able to see and remove stored secrets.
     await asUserA(request(app).get('/api/profile/mollie-key')).expect(200)
     await asUserA(request(app).delete('/api/profile/mollie-key')).expect(200)
     await asUserA(request(app).delete('/api/profile/shopify-secret')).expect(200)
+    await asUserA(request(app).get('/api/profile/resend-key')).expect(200)
+    await asUserA(request(app).delete('/api/profile/resend-key')).expect(200)
   })
 
   it('blocks minting feed tokens but keeps describe and revoke open', async () => {
@@ -164,6 +170,7 @@ describe('integration secrets purge (entitlement durably lost)', () => {
     'mollie_api_key', 'mollie_api_key_encrypted',
     'bandsintown_app_id', 'bandsintown_app_id_encrypted',
     'shopify_client_secret', 'shopify_client_secret_encrypted',
+    'resend_api_key_encrypted',
     'shopify_client_id', 'shopify_shop_domain',
     'bandsintown_artist_name', 'bandsintown_artist_id',
   ]
@@ -175,6 +182,7 @@ describe('integration secrets purge (entitlement durably lost)', () => {
     await asUserA(request(app).put('/api/profile/shopify-client-id').send({ clientId: 'a'.repeat(32) })).expect(200)
     await asUserA(request(app).put('/api/profile/shopify-secret').send({ secret: `shpss_${'a'.repeat(32)}` })).expect(200)
     await asUserA(request(app).put('/api/profile/shopify-domain').send({ domain: 'band.myshopify.com' })).expect(200)
+    await asUserA(request(app).put('/api/profile/resend-key').send({ key: `re_${'a'.repeat(32)}` })).expect(200)
     await asUserA(request(app).post('/api/calendar-feed/regenerate')).expect(200)
     await pool.query(
       `UPDATE tenant_integrations

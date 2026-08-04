@@ -12,6 +12,9 @@ const COLUMNS = Object.freeze({
   bandsintown_app_id: {
     legacy: 'bandsintown_app_id', encrypted: 'bandsintown_app_id_encrypted', changedAt: 'bandsintown_app_id_changed_at',
   },
+  resend_api_key: {
+    encrypted: 'resend_api_key_encrypted', changedAt: 'resend_api_key_changed_at',
+  },
 })
 
 function columnsFor(type) {
@@ -22,8 +25,9 @@ function columnsFor(type) {
 
 export async function fetchCredentialRecord(executor, tenantId, type) {
   const { legacy, encrypted, retained } = columnsFor(type)
+  const legacyValue = legacy || 'NULL'
   const { rows } = await executor.query(
-    `SELECT ${encrypted} AS encrypted_value, ${legacy} AS legacy_value,
+    `SELECT ${encrypted} AS encrypted_value, ${legacyValue} AS legacy_value,
             ${retained ? `${retained}` : 'NULL'} AS retained_at
        FROM tenant_integrations WHERE tenant_id = $1`,
     [tenantId],
@@ -36,8 +40,11 @@ export async function fetchCredentialStatus(executor, tenantId, type) {
   // A retained key is reported ABSENT: the public status must not reveal that
   // a value is still stored for webhook/sync of paid links.
   const retainedGuard = retained ? ` AND ${retained} IS NULL` : ''
+  const hasValue = legacy
+    ? `(${encrypted} IS NOT NULL OR ${legacy} IS NOT NULL)`
+    : `(${encrypted} IS NOT NULL)`
   const { rows } = await executor.query(
-    `SELECT (${encrypted} IS NOT NULL OR ${legacy} IS NOT NULL)${retainedGuard} AS is_set,
+    `SELECT ${hasValue}${retainedGuard} AS is_set,
             ${changedAt} AS changed_at
        FROM tenant_integrations WHERE tenant_id = $1`,
     [tenantId],
@@ -47,15 +54,18 @@ export async function fetchCredentialStatus(executor, tenantId, type) {
 
 export async function storeEncryptedCredential(executor, tenantId, type, envelope) {
   const { legacy, encrypted, changedAt, retained } = columnsFor(type)
+  const legacyColumn = legacy ? `, ${legacy}` : ''
+  const legacyValue = legacy ? ', NULL' : ''
+  const clearLegacy = legacy ? `, ${legacy} = NULL` : ''
   const retainedColumn = retained ? `, ${retained}` : ''
   const retainedValue = retained ? ', NULL' : ''
   const clearRetained = retained ? `, ${retained} = NULL` : ''
   const { rows } = await executor.query(
     `INSERT INTO tenant_integrations
-       (tenant_id, ${encrypted}, ${legacy}, ${changedAt}${retainedColumn})
-     VALUES ($1, $2::jsonb, NULL, NOW()${retainedValue})
+       (tenant_id, ${encrypted}${legacyColumn}, ${changedAt}${retainedColumn})
+     VALUES ($1, $2::jsonb${legacyValue}, NOW()${retainedValue})
      ON CONFLICT (tenant_id)
-     DO UPDATE SET ${encrypted} = EXCLUDED.${encrypted}, ${legacy} = NULL,
+     DO UPDATE SET ${encrypted} = EXCLUDED.${encrypted}${clearLegacy},
                    ${changedAt} = NOW(), updated_at = NOW()${clearRetained}
      RETURNING ${changedAt} AS changed_at`,
     [tenantId, JSON.stringify(envelope)],
@@ -65,10 +75,11 @@ export async function storeEncryptedCredential(executor, tenantId, type, envelop
 
 export async function clearCredential(executor, tenantId, type) {
   const { legacy, encrypted, changedAt, retained } = columnsFor(type)
+  const clearLegacy = legacy ? `, ${legacy} = NULL` : ''
   const clearRetained = retained ? `, ${retained} = NULL` : ''
   const { rows } = await executor.query(
     `UPDATE tenant_integrations
-        SET ${encrypted} = NULL, ${legacy} = NULL,
+        SET ${encrypted} = NULL${clearLegacy},
             ${changedAt} = NOW(), updated_at = NOW()${clearRetained}
       WHERE tenant_id = $1
       RETURNING ${changedAt} AS changed_at`,

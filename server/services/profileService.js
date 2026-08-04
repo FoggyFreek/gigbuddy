@@ -13,6 +13,7 @@ import {
   MEMORY_FIELDS,
   isValidMollieKey,
   isValidBandsintownAppId,
+  isValidResendApiKey,
   isValidShopifyClientId,
   isValidShopifyClientSecret,
   isValidShopifyDomain,
@@ -255,6 +256,22 @@ export async function setMollieKeyValue(db, tenantId, body) {
 export async function clearMollieKeyValue(db, tenantId) {
   return withIntegrationWriteLock(db, tenantId, () =>
     clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY))
+}
+
+// ---------- resend api key ----------
+
+export async function getResendKeyStatus(db, tenantId) {
+  return getIntegrationCredentialStatus(db, tenantId, CREDENTIAL_TYPES.RESEND_API_KEY)
+}
+
+export async function setResendKeyValue(db, tenantId, body) {
+  const { key } = body || {}
+  if (!isValidResendApiKey(key)) return badRequest('invalid_resend_key')
+  return setIntegrationCredentialGuarded(db, tenantId, CREDENTIAL_TYPES.RESEND_API_KEY, key.trim())
+}
+
+export async function clearResendKeyValue(db, tenantId) {
+  return clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.RESEND_API_KEY)
 }
 
 // ---------- bandsintown api key ----------

@@ -85,7 +85,7 @@ function wrap(ui, { user, bandsintown = true } = {}) {
       <AuthContext.Provider value={{ user: activeUser, logout: vi.fn() }}>
         <ProfileContext.Provider value={{
           bandName: '', setBandName: vi.fn(), accentColor: null, setAccentColor: vi.fn(),
-          integrations: { shopify: true, bandsintown, mollie: true },
+          integrations: { shopify: true, bandsintown, mollie: true, resend: true },
           isIntegrationConfigured: (integration) => integration !== 'bandsintown' || bandsintown,
           setIntegrationConfigured: vi.fn(),
         }}>

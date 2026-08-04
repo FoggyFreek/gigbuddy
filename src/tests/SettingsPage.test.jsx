@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../contexts/authContext.ts'
 import SettingsPage from '../pages/SettingsPage.tsx'
 import theme from '../theme.ts'
+import { clearResendKey, setResendKey } from '../api/profile.ts'
 
 vi.mock('../api/billing.ts', async (importOriginal) => {
   const actual = await importOriginal()
@@ -21,12 +22,14 @@ vi.mock('../hooks/usePushNotifications.ts', () => ({
 vi.mock('../api/profile.ts', () => ({
   updateProfile: vi.fn().mockResolvedValue({}),
   getMollieKey: vi.fn().mockResolvedValue({ isSet: false }),
+  getResendKey: vi.fn().mockResolvedValue({ isSet: false }),
   getBandsintownKey: vi.fn().mockResolvedValue({ isSet: false }),
   getBandsintownArtistId: vi.fn().mockResolvedValue({ artistId: null }),
   getShopifySecret: vi.fn().mockResolvedValue({ isSet: false }),
   getShopifyClientId: vi.fn().mockResolvedValue({ clientId: null }),
   getShopifyDomain: vi.fn().mockResolvedValue({ domain: null }),
   setMollieKey: vi.fn(), clearMollieKey: vi.fn(),
+  setResendKey: vi.fn(), clearResendKey: vi.fn(),
   setBandsintownKey: vi.fn(), clearBandsintownKey: vi.fn(),
   setBandsintownArtistId: vi.fn(), clearBandsintownArtistId: vi.fn(),
   setShopifySecret: vi.fn(), clearShopifySecret: vi.fn(),
@@ -158,6 +161,33 @@ describe('SettingsPage — plan gating', () => {
     wrap('/settings/integrations', { entitlements: lockedEntitlements })
     const link = await screen.findByRole('link')
     expect(link).toHaveAttribute('href', '/upgrade/integrations')
+  })
+
+  it('shows the Resend integration with the supplied theme wordmark', async () => {
+    wrap('/settings/integrations', { entitlements: lockedEntitlements })
+    const logo = await screen.findByAltText('Resend')
+    expect(logo).toHaveAttribute('src', '/share/resend/resend-wordmark-light-256px.png')
+    expect(logo.closest('.MuiPaper-outlined')).not.toBeNull()
+  })
+
+  it('configures and removes the Resend key without displaying its saved value', async () => {
+    setResendKey.mockResolvedValue({ isSet: true, changedAt: '2026-08-04T12:00:00.000Z' })
+    clearResendKey.mockResolvedValue({ isSet: false, changedAt: '2026-08-04T12:01:00.000Z' })
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: lockedEntitlements })
+
+    const logo = await screen.findByAltText('Resend')
+    let card = logo.closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Add integration' }))
+    card = (await screen.findByText('Send Emails through Resend')).closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Configure' }))
+    await user.type(within(card).getByLabelText('Resend API key'), `re_${'a'.repeat(32)}`)
+    await user.click(within(card).getByRole('button', { name: 'Save' }))
+
+    expect(setResendKey).toHaveBeenCalledWith(`re_${'a'.repeat(32)}`)
+    expect(within(card).queryByDisplayValue(`re_${'a'.repeat(32)}`)).not.toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'Remove key' }))
+    expect(clearResendKey).toHaveBeenCalledOnce()
   })
 
   it('shows no premium diamond when the tenant is unenforced (ownerless)', async () => {
