@@ -111,12 +111,14 @@ export async function fetchVenueGeocode(executor, venueId, tenantId) {
   return rows[0] || null
 }
 
+// Returns the whole row so callers that also patched other columns can respond
+// with a single coherent snapshot (updated_at included).
 export async function updateVenueGeocode(executor, latitude, longitude, venueId, tenantId) {
   const { rows } = await executor.query(
     `UPDATE venues
         SET latitude = $1, longitude = $2, updated_at = NOW()
       WHERE id = $3 AND tenant_id = $4
-      RETURNING latitude, longitude`,
+      RETURNING *`,
     [latitude, longitude, venueId, tenantId],
   )
   return rows[0] || null

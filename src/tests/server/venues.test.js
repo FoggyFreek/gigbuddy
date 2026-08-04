@@ -84,6 +84,40 @@ describe('POST /api/venues — create venue', () => {
     expect(res.body.tenant_id).toBe(seed.tenantA.id)
   })
 
+  // Coordinates are not form fields, but a place lookup resolves them at create
+  // time and they are worth keeping — the map then opens at street zoom.
+  it('stores validated coordinates supplied by a place lookup', async () => {
+    const res = await asUserA(
+      request(app).post('/api/venues').send({
+        name: 'Located Hall', city: 'Amsterdam', latitude: 52.3624, longitude: 4.8838,
+      })
+    ).expect(201)
+
+    expect(Number(res.body.latitude)).toBeCloseTo(52.3624, 4)
+    expect(Number(res.body.longitude)).toBeCloseTo(4.8838, 4)
+  })
+
+  it('leaves coordinates null when none are supplied', async () => {
+    const res = await asUserA(
+      request(app).post('/api/venues').send({ name: 'Unlocated Hall', city: 'Amsterdam' })
+    ).expect(201)
+
+    expect(res.body.latitude).toBeNull()
+    expect(res.body.longitude).toBeNull()
+  })
+
+  it('rejects a half coordinate pair', async () => {
+    await asUserA(
+      request(app).post('/api/venues').send({ name: 'Half Hall', latitude: 52.3624 })
+    ).expect(400)
+  })
+
+  it('rejects an out-of-range coordinate', async () => {
+    await asUserA(
+      request(app).post('/api/venues').send({ name: 'Bad Hall', latitude: 91, longitude: 4.8 })
+    ).expect(400)
+  })
+
   it('returns 409 (not 500) when name+city duplicates an existing venue in the same tenant', async () => {
     await asUserA(
       request(app).post('/api/venues').send({ name: 'The Garage', city: 'Utrecht' })

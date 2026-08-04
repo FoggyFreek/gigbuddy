@@ -33,7 +33,10 @@ import {
   setVenueContactPrimary,
   deleteVenueContact,
   loadExistingImportKeys,
+  updateVenueGeocode,
 } from '../repositories/venueRepository.js'
+import { normalizeCoordinatePair } from '../domain/venue.js'
+import { pickFillableUpdates } from '../../shared/placeFields.js'
 import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../utils/urls.js'
 import { badRequest, conflict, notFound } from './serviceErrors.js'
 
@@ -120,10 +123,13 @@ export async function createVenue(db, tenantId, body) {
   const legacyNameError = validateNoFestivalName(body)
   if (legacyNameError) return legacyNameError
 
+  // Coordinates are never form fields; they arrive only from a place lookup the
+  // client just resolved, and are range/pair-validated before insert.
+  const coords = normalizeCoordinatePair(body)
+  if (coords.error) return badRequest(coords.error)
+
   try {
-    // Coordinates are system/import-managed and are intentionally ignored by
-    // the ordinary create endpoint used by venue forms.
-    return { venue: await insertVenue(db, tenantId, { ...body, latitude: null, longitude: null }) }
+    return { venue: await insertVenue(db, tenantId, { ...body, ...coords }) }
   } catch (err) {
     if (err.code === '23505') {
       return conflict('A venue with this name and city already exists')
@@ -193,6 +199,53 @@ export async function patchVenue(tenantId, venueId, body) {
 
   const categoryResult = await handleCategoryChange(venueId, tenantId, body, patch)
   return categoryResult ?? applyVenuePatch(pool, patch)
+}
+
+// Applies a place-lookup suggestion to an existing venue, filling only the fields
+// that are currently empty. The fill set is recomputed here from the stored row —
+// the client's view of what is blank is never trusted — so a stale form can never
+// overwrite data. Coordinates are written only when the row has none, keeping the
+// place lookup's street-level precision without clobbering an earlier fix.
+// Returns { venue, filled: [fieldKeys] } | { error }.
+export async function enrichVenue(tenantId, venueId, suggestion) {
+  if (!suggestion || typeof suggestion !== 'object') {
+    return badRequest('suggestion is required')
+  }
+  const coords = normalizeCoordinatePair(suggestion)
+  if (coords.error) return badRequest(coords.error)
+
+  return withTransaction(async (client) => {
+    const venue = await fetchVenue(client, venueId, tenantId)
+    if (!venue) return abortTransaction(NOT_FOUND)
+
+    const updates = pickFillableUpdates(venue, suggestion)
+    const filled = Object.keys(updates)
+    const needsCoords = coords.latitude !== null
+      && venue.latitude === null && venue.longitude === null
+
+    if (!filled.length && !needsCoords) return { venue, filled: [] }
+
+    let updated = venue
+    if (filled.length) {
+      const patch = buildVenueUpdateFields(updates)
+      if (patch.error) return abortTransaction(badRequest(patch.error))
+      patch.fields.push('updated_at = NOW()')
+      patch.values.push(venueId, tenantId)
+      updated = await updateVenueFields(client, patch)
+      if (!updated) return abortTransaction(NOT_FOUND)
+    }
+
+    if (needsCoords) {
+      // Returns the full row, so this is the later snapshot of the two writes and
+      // replaces (not merges into) the earlier one — no stale updated_at.
+      const written = await updateVenueGeocode(
+        client, coords.latitude, coords.longitude, venueId, tenantId,
+      )
+      if (written) updated = written
+    }
+
+    return { venue: updated, filled }
+  })
 }
 
 export async function deleteVenue(db, tenantId, venueId) {

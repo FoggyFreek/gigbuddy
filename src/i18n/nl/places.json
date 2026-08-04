@@ -1,0 +1,25 @@
+{
+  "search": {
+    "label": "Zoek een locatie",
+    "placeholder": "Begin met typen…",
+    "typeMoreChars": "Typ minstens {{count}} tekens om te zoeken",
+    "searching": "Zoeken…",
+    "noMatches": "Geen resultaten — typ verder om de gegevens zelf in te vullen.",
+    "clear": "Wissen",
+    "open": "Openen"
+  },
+  "enrich": {
+    "title": "Adresgegevens opzoeken",
+    "candidatesHeading": "Kies de juiste locatie:",
+    "noCandidates": "Geen locaties gevonden voor \"{{query}}\". Vul de gegevens zelf in.",
+    "willFill_one": "Vult {{count}} leeg veld:",
+    "willFill_other": "Vult {{count}} lege velden:",
+    "untouchedNote": "Velden die al een waarde hebben blijven ongewijzigd.",
+    "nothingToFill": "Deze locatie voegt niets toe — alles wat bekend is, is al ingevuld.",
+    "fieldColumn": "Veld",
+    "valueColumn": "Nieuwe waarde",
+    "apply_one": "Vul {{count}} veld",
+    "apply_other": "Vul {{count}} velden",
+    "failed": "Het opzoeken is mislukt. Probeer het opnieuw."
+  }
+}

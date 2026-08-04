@@ -41,6 +41,7 @@ import publicBillingMollieRouter from './publicBillingMollie.js'
 import sharePhotosRouter from './sharePhotos.js'
 import filesRouter from './files.js'
 import geocodeRouter from './geocode.js'
+import placesRouter from './places.js'
 import bandsintownRouter from './bandsintown.js'
 import { adminRouter as invitesAdminRouter, redeemRouter as invitesRedeemRouter } from './invites.js'
 import { tenantRouter as statisticsRouter, adminRouter as adminStatisticsRouter } from './statistics.js'
@@ -118,6 +119,18 @@ const publicWebhookLimiter = rateLimit({
   skip: () => isTest,
 })
 
+// Place lookup hits a metered third-party API once per debounced keystroke, so
+// the blanket apiLimiter (1000) is far too loose to bound the upstream bill.
+const placeSearchLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
+  skip: () => isTest,
+})
+
 router.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
@@ -174,6 +187,7 @@ router.use('/users', membersManage, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)
 router.use('/gigs', tenantMember, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
+router.use('/places', tenantMember, placeSearchLimiter, placesRouter)
 router.use('/bandsintown', tenantMember, integrations, bandsintownRouter)
 router.use('/tasks', tenantMember, tasksRouter)
 router.use('/profile', tenantMember, profileRouter)

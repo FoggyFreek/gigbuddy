@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import FormControl from '@mui/material/FormControl'
 import Grid from '@mui/material/Grid'
@@ -38,9 +39,15 @@ interface VenueFieldsProps {
   errors?: Record<string, string | undefined>
   lockedCategory?: string
   disabled?: boolean
+  /**
+   * Replaces the plain name input, so a caller can drop in a richer control (the
+   * add dialog uses a place search field). Keeps this component free of any
+   * lookup coupling; without it the ordinary text field renders.
+   */
+  nameField?: ReactNode
 }
 
-export default function VenueFields({ form, onChange, errors = {}, lockedCategory, disabled = false }: Readonly<VenueFieldsProps>) {
+export default function VenueFields({ form, onChange, errors = {}, lockedCategory, disabled = false, nameField }: Readonly<VenueFieldsProps>) {
   const { t } = useTranslation('venues')
   const isFestival = form.category === 'festival'
   return (
@@ -62,16 +69,18 @@ export default function VenueFields({ form, onChange, errors = {}, lockedCategor
         </Grid>
       )}
       <Grid size={8}>
-        <TextField
-          label={isFestival ? t($ => $.fields.festivalName) : t($ => $.fields.venueName)}
-          fullWidth
-          required
-          value={form.name}
-          onChange={(e) => onChange('name', e.target.value)}
-          error={!!errors.name}
-          helperText={errors.name}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
+        {nameField ?? (
+          <TextField
+            label={isFestival ? t($ => $.fields.festivalName) : t($ => $.fields.venueName)}
+            fullWidth
+            required
+            value={form.name}
+            onChange={(e) => onChange('name', e.target.value)}
+            error={!!errors.name}
+            helperText={errors.name}
+            slotProps={{ htmlInput: { readOnly: disabled } }}
+          />
+        )}
       </Grid>
 
       <Grid size={3}>

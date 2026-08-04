@@ -1,0 +1,25 @@
+{
+  "search": {
+    "label": "Search for a place",
+    "placeholder": "Start typing a name…",
+    "typeMoreChars": "Type at least {{count}} characters to search",
+    "searching": "Searching…",
+    "noMatches": "No matches — keep typing to enter the details by hand.",
+    "clear": "Clear",
+    "open": "Open"
+  },
+  "enrich": {
+    "title": "Look up address details",
+    "candidatesHeading": "Select the matching place:",
+    "noCandidates": "No places found for \"{{query}}\". Enter the details by hand.",
+    "willFill_one": "Will fill {{count}} empty field:",
+    "willFill_other": "Will fill {{count}} empty fields:",
+    "untouchedNote": "Fields that already have a value are left untouched.",
+    "nothingToFill": "This place adds nothing new — every field it knows is already filled.",
+    "fieldColumn": "Field",
+    "valueColumn": "New value",
+    "apply_one": "Fill {{count}} field",
+    "apply_other": "Fill {{count}} fields",
+    "failed": "The lookup failed. Please try again."
+  }
+}

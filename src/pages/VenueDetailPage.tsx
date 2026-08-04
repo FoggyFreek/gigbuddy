@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
@@ -16,6 +16,7 @@ import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
@@ -24,6 +25,7 @@ import StarBorderIcon from '@mui/icons-material/StarBorder'
 import {
   addVenueContact,
   deleteVenue,
+  enrichVenue,
   getVenue,
   getVenueCategoryImpact,
   listVenueContacts,
@@ -37,9 +39,11 @@ import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import ContactPicker from '../components/ContactPicker.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
+import PlaceEnrichDialog from '../components/shared/PlaceEnrichDialog.tsx'
 import VenueFields from '../components/VenueFields.tsx'
 import type { VenueForm } from '../components/VenueFields.tsx'
 import type { Venue, Contact, Id } from '../types/entities.ts'
+import type { PlaceSuggestion } from '../types/api.ts'
 
 interface VenueDetailOutletContext {
   insideSplitView?: boolean
@@ -94,6 +98,7 @@ export default function VenueDetailPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [categoryChange, setCategoryChange] = useState<CategoryChange | null>(null)
   const [categorySaving, setCategorySaving] = useState(false)
+  const [enriching, setEnriching] = useState(false)
 
   const saveFn = useCallback(
     async (patch: Partial<VenueForm>) => { await updateVenue(venueId, patch as Partial<Venue>) },
@@ -202,6 +207,33 @@ export default function VenueDetailPage() {
     schedule({ [field]: value || null } as Partial<VenueForm>)
   }
 
+  // Labels for the generic enrich dialog. Order follows the form's visual order.
+  const enrichFields = useMemo(() => [
+    { key: 'street_and_number', label: t($ => $.fields.streetAndNumber) },
+    { key: 'postal_code', label: t($ => $.fields.postalCode) },
+    { key: 'city', label: t($ => $.fields.city) },
+    { key: 'region', label: t($ => $.fields.region) },
+    { key: 'country', label: t($ => $.fields.country) },
+    { key: 'website', label: t($ => $.fields.website) },
+    { key: 'phone', label: t($ => $.fields.phone) },
+  ], [t])
+
+  // The server decides what actually gets filled (it re-checks the stored row),
+  // so the response, not the suggestion, is what we merge back into the form.
+  async function handleEnrichApply(suggestion: PlaceSuggestion) {
+    if (!canWrite) return
+    await flush()
+    const { venue } = await enrichVenue(venueId, suggestion)
+    const row = venue as Record<string, unknown>
+    setForm((prev) => {
+      const next = { ...prev }
+      for (const { key } of enrichFields) next[key] = String(row[key] ?? '')
+      return next
+    })
+    outletCtx.onVenueUpdate?.(venueId, venue)
+    setEnriching(false)
+  }
+
   async function handleDelete() {
     setConfirmingDelete(false)
     await deleteVenue(venueId)
@@ -250,6 +282,22 @@ export default function VenueDetailPage() {
               disabled={!canWrite}
             />
           </Grid>
+
+          {canWrite && (
+            <Box sx={{ mt: 2 }}>
+              <Tooltip title={form.name?.trim() ? t($ => $.detail.enrichTooltip) : t($ => $.detail.enrichNeedsName)}>
+                <span>
+                  <Button
+                    startIcon={<AutoFixHighIcon />}
+                    onClick={() => setEnriching(true)}
+                    disabled={!form.name?.trim()}
+                  >
+                    {t($ => $.detail.enrichButton)}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+          )}
 
           <Divider sx={{ my: 3 }} />
 
@@ -350,6 +398,16 @@ export default function VenueDetailPage() {
         </DialogActions>
       </Dialog>
     </Box>
+
+    {enriching && (
+      <PlaceEnrichDialog
+        query={form.name ?? ''}
+        current={form as Record<string, unknown>}
+        fields={enrichFields}
+        onApply={handleEnrichApply}
+        onClose={() => setEnriching(false)}
+      />
+    )}
 
     {categoryChange && (
       <Dialog open onClose={handleCategoryCancel} maxWidth="sm" fullWidth>

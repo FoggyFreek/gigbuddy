@@ -50,6 +50,8 @@ jobs:
             # required together; the feature stays disabled while either is unset.
             LINKPAGE_SECRET=${{ secrets.LINKPAGE_SECRET }}
             LINKPAGE_URL=${{ secrets.LINKPAGE_URL }}
+            # TomTom Search API key for venue address autocomplete/enrichment.
+            TOMTOM_API_KEY=${{ secrets.TOMTOM_API_KEY }}
             VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
             VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
             VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}

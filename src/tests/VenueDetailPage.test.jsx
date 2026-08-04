@@ -9,6 +9,7 @@ vi.mock('../api/venues.ts', () => ({
   updateVenue: vi.fn().mockResolvedValue({}),
   deleteVenue: vi.fn().mockResolvedValue({}),
   getVenueCategoryImpact: vi.fn().mockResolvedValue({ affected_gigs: [] }),
+  enrichVenue: vi.fn(),
   listVenueContacts: vi.fn(),
   addVenueContact: vi.fn(),
   setVenueContactPrimary: vi.fn().mockResolvedValue({}),
@@ -22,15 +23,21 @@ vi.mock('../api/contacts.ts', () => ({
   updateContact: vi.fn().mockResolvedValue({}),
 }))
 
+vi.mock('../api/places.ts', () => ({
+  searchPlaces: vi.fn().mockResolvedValue([]),
+}))
+
 import VenueDetailPage from '../pages/VenueDetailPage.tsx'
 import {
   getVenue,
+  enrichVenue,
   listVenueContacts,
   addVenueContact,
   setVenueContactPrimary,
   removeVenueContact,
 } from '../api/venues.ts'
 import { searchContacts } from '../api/contacts.ts'
+import { searchPlaces } from '../api/places.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
 
@@ -51,10 +58,16 @@ function ContactStub() {
   return <div>Contact page {id}</div>
 }
 
-function wrap() {
+// A reader keeps app.view but loses planning.write.
+const READER_AUTH_VALUE = {
+  ...AUTH_VALUE,
+  user: { id: 1, permissions: ['app.view'], activeTenantRole: 'reader' },
+}
+
+function wrap(authValue = AUTH_VALUE) {
   return render(
     <MemoryRouter initialEntries={['/venues/1']}>
-      <AuthContext.Provider value={AUTH_VALUE}>
+      <AuthContext.Provider value={authValue}>
         <ThemeProvider theme={theme}>
           <Routes>
             <Route path="/venues/:id" element={<VenueDetailPage />} />
@@ -73,6 +86,8 @@ beforeEach(() => {
   setVenueContactPrimary.mockClear()
   removeVenueContact.mockClear()
   searchContacts.mockReset().mockResolvedValue([])
+  searchPlaces.mockReset().mockResolvedValue([])
+  enrichVenue.mockReset()
 })
 
 describe('VenueDetailPage — Contacts section', () => {
@@ -152,5 +167,59 @@ describe('VenueDetailPage — Contacts section', () => {
 
     await waitFor(() => expect(addVenueContact).toHaveBeenCalledWith(1, 9))
     await waitFor(() => expect(screen.getByText('Carol (carol@x.com)')).toBeInTheDocument())
+  })
+})
+
+describe('VenueDetailPage — address enrichment', () => {
+  it('offers the lookup button to a writer', async () => {
+    wrap()
+    expect(await screen.findByRole('button', { name: 'Look up address' })).toBeInTheDocument()
+  })
+
+  it('hides the lookup button from a reader', async () => {
+    wrap(READER_AUTH_VALUE)
+
+    await waitFor(() => expect(getVenue).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: 'Look up address' })).not.toBeInTheDocument()
+  })
+
+  it('disables the lookup until the venue has a name to search on', async () => {
+    getVenue.mockResolvedValue({ id: 1, category: 'venue', name: '' })
+    wrap()
+
+    expect(await screen.findByRole('button', { name: 'Look up address' })).toBeDisabled()
+  })
+
+  it('applies the server-reported row rather than the raw suggestion', async () => {
+    enrichVenue.mockResolvedValue({
+      venue: { ...VENUE, city: 'Amsterdam', postal_code: '1017SG' },
+      filled: ['city', 'postal_code'],
+    })
+    searchPlaces.mockResolvedValue([{
+      id: 'poi-1',
+      name: 'Test Venue',
+      street_and_number: 'Weteringschans 6',
+      postal_code: '1017SG',
+      city: 'Amsterdam',
+      region: null,
+      country: null,
+      website: null,
+      phone: null,
+      latitude: 52.3624,
+      longitude: 4.8838,
+      freeform_address: 'Weteringschans 6, 1017SG Amsterdam',
+      categories: [],
+    }])
+    const user = userEvent.setup()
+    wrap()
+
+    await user.click(await screen.findByRole('button', { name: 'Look up address' }))
+    await user.click(await screen.findByRole('button', { name: /^Fill/ }))
+
+    await waitFor(() => expect(enrichVenue).toHaveBeenCalledWith(1, expect.objectContaining({ id: 'poi-1' })))
+    // The server said street_and_number was NOT filled, so it must stay empty
+    // even though the suggestion carried a value.
+    await waitFor(() => expect(screen.getByLabelText(/City/)).toHaveValue('Amsterdam'))
+    expect(screen.getByLabelText(/Street and number/)).toHaveValue('')
   })
 })
