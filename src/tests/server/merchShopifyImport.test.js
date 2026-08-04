@@ -27,6 +27,7 @@ beforeAll(async () => {
 })
 
 beforeEach(async () => {
+  vi.unstubAllGlobals()
   await truncateAll()
   seed = await seedTwoTenants()
   resetShopifyTokenCacheForTests()
@@ -177,6 +178,49 @@ function importBody(productId) {
     lines: [{ shopify_line_id: '5001', mapping: { type: 'product', product_id: productId } }],
     extra_components: [],
   }] }
+}
+
+function camtCredit(amount, bookingDate, reference) {
+  return Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+    <Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+      <BkToCstmrStmt><Stmt>
+        <Id>${reference}</Id>
+        <Acct><Id><IBAN>NL02RABO0123456789</IBAN></Id><Ccy>EUR</Ccy></Acct>
+        <Ntry>
+          <Amt Ccy="EUR">${amount}</Amt>
+          <CdtDbtInd>CRDT</CdtDbtInd>
+          <BookgDt><Dt>${bookingDate}</Dt></BookgDt>
+          <AcctSvcrRef>${reference}</AcctSvcrRef>
+          <NtryDtls><TxDtls><RmtInf><Ustrd>${reference}</Ustrd></RmtInf></TxDtls></NtryDtls>
+        </Ntry>
+      </Stmt></BkToCstmrStmt>
+    </Document>`)
+}
+
+async function fetchAndImportThroughApi(productId, fetchImpl) {
+  vi.stubGlobal('fetch', fetchImpl)
+  const fetched = await asUserA(request(app).get('/api/merch/shopify/orders')).expect(200)
+  expect(fetched.body.orders.length).toBeGreaterThan(0)
+  const imported = await asUserA(request(app).post('/api/merch/shopify/import'))
+    .send({
+      orders: fetched.body.orders.map((order) => ({
+        shopify_order_id: order.id,
+        lines: order.line_items.map((line) => ({
+          shopify_line_id: line.id,
+          mapping: { type: 'product', product_id: productId },
+        })),
+        extra_components: [],
+      })),
+    })
+    .expect(200)
+  expect(imported.body).toMatchObject({ imported: fetched.body.orders.length, skipped: 0 })
+  return fetched.body.orders
+}
+
+async function parseStatement(buffer, filename) {
+  return asUserA(request(app).post('/api/bank-import/parse'))
+    .attach('file', buffer, filename)
+    .expect(201)
 }
 
 function paypalOrderNode({ orderId, lineId, transactionId, amount }) {
@@ -479,31 +523,30 @@ describe('Shopify payout reconciliation', () => {
     )
   })
 
-  it('manually records a paid Shopify payout on the primary bank account exactly once', async () => {
+  it('fetches and imports a Shopify order, then manually records its payout exactly once', async () => {
     const tenantId = seed.tenantA.id
     await configureShopify(tenantId)
     const product = await createProduct()
     await stockProduct(product.id, 10)
-    const fetchImpl = shopifyFetch()
-    expect((await importShopifyOrders(
-      pool, tenantId, importBody(product.id), seed.userA.id, fetchImpl,
-    )).imported).toBe(1)
-    expect((await syncShopifyPayouts(pool, tenantId, {
-      fromDate: '2026-06-01', toDate: '2026-06-05', actorUserId: seed.userA.id,
-    }, fetchImpl)).synced).toBe(1)
+    await fetchAndImportThroughApi(product.id, shopifyFetch())
+    await asUserA(request(app).post('/api/merch/shopify/payouts/refresh'))
+      .send({ from_date: '2026-06-01', to_date: '2026-06-05' })
+      .expect(200)
 
-    const candidates = await listManualShopifyPayouts(pool, tenantId)
-    expect(candidates.items).toEqual([
+    const candidates = await asUserA(request(app).get('/api/merch/shopify/payouts?limit=100'))
+      .expect(200)
+    expect(candidates.body.items).toEqual([
       expect.objectContaining({
         net_cents: 3530, ready: true,
         orders: [expect.objectContaining({ order_name: '#1001', net_cents: 3530 })],
       }),
     ])
-    const payout = candidates.items[0]
-    const settled = await settleShopifyPayoutManually(pool, tenantId, payout.id, {
-      entry_date: '2026-06-04', adjustment_mappings: [],
-    }, seed.userA.id)
-    expect(settled).toMatchObject({
+    const payout = candidates.body.items[0]
+    const settled = await asUserA(request(app)
+      .post(`/api/merch/shopify/payouts/${payout.id}/settle`))
+      .send({ entry_date: '2026-06-04', adjustment_mappings: [] })
+      .expect(200)
+    expect(settled.body).toMatchObject({
       payout: { id: payout.id, settlement_method: 'manual' },
     })
 
@@ -524,13 +567,14 @@ describe('Shopify payout reconciliation', () => {
     )
     expect(clearing[0].balance).toBe(0)
 
-    const duplicate = await settleShopifyPayoutManually(pool, tenantId, payout.id, {
-      entry_date: '2026-06-04', adjustment_mappings: [],
-    }, seed.userA.id)
-    expect(duplicate.error).toMatchObject({
-      status: 409, body: { code: 'shopify_payout_already_settled' },
-    })
-    expect((await listManualShopifyPayouts(pool, tenantId)).items).toEqual([])
+    const duplicate = await asUserA(request(app)
+      .post(`/api/merch/shopify/payouts/${payout.id}/settle`))
+      .send({ entry_date: '2026-06-04', adjustment_mappings: [] })
+      .expect(409)
+    expect(duplicate.body.code).toBe('shopify_payout_already_settled')
+    const remaining = await asUserA(request(app).get('/api/merch/shopify/payouts?limit=100'))
+      .expect(200)
+    expect(remaining.body.items).toEqual([])
   })
 
   it('creates and settles a custom payout from older unassigned order contributions', async () => {
@@ -682,7 +726,7 @@ describe('Shopify payout reconciliation', () => {
       .expect(404)
   })
 
-  it('reviews a non-order adjustment and clears the exact payout against the bank deposit', async () => {
+  it('fetches and imports a Shopify order, then clears its adjusted payout from CAMT.053', async () => {
     const tenantId = seed.tenantA.id
     await configureShopify(tenantId)
     const product = await createProduct()
@@ -703,44 +747,42 @@ describe('Shopify payout reconciliation', () => {
         externalTraceId: 'TRACE-9001', net: { amount: '35.40', currencyCode: 'EUR' },
       }],
     })
-    expect((await importShopifyOrders(
-      pool, tenantId, importBody(product.id), seed.userA.id, fetchImpl,
-    )).imported).toBe(1)
-    expect((await syncShopifyPayouts(pool, tenantId, {
-      fromDate: '2026-06-01', toDate: '2026-06-05', actorUserId: seed.userA.id,
-    }, fetchImpl)).synced).toBe(1)
+    await fetchAndImportThroughApi(product.id, fetchImpl)
+    const staged = await parseStatement(
+      camtCredit('35.40', '2026-06-03', 'SHOPIFY-PAYOUT-9001'),
+      'shopify-payout.xml',
+    )
+    const refreshed = await asUserA(request(app)
+      .post(`/api/bank-import/${staged.body.import.id}/shopify-payouts`))
+      .expect(200)
+    const line = refreshed.body.lines[0]
+    const payout = line.suggestion.shopifyPayoutMatches[0]
+    expect(payout).toMatchObject({ net_cents: 3540, ready: true })
+    expect(payout.adjustments).toHaveLength(1)
 
-    const { rows: payouts } = await pool.query(
-      'SELECT * FROM shopify_payments_payouts WHERE tenant_id = $1', [tenantId],
-    )
-    const { rows: adjustments } = await pool.query(
-      `SELECT * FROM shopify_payments_balance_transactions
-        WHERE tenant_id = $1 AND processing_status = 'needs_review'`, [tenantId],
-    )
-    expect(payouts[0]).toMatchObject({ net_cents: 3540, sync_complete: true })
-    expect(adjustments).toHaveLength(1)
+    const committed = await asUserA(request(app)
+      .post(`/api/bank-import/${staged.body.import.id}/commit`))
+      .send({ decisions: [{
+        line_id: line.id,
+        action: 'reconcile_shopify_payout',
+        payout_id: payout.id,
+        adjustment_mappings: [{
+          balance_transaction_id: payout.adjustments[0].id,
+          account_code: '42000',
+        }],
+      }] })
+      .expect(200)
+    expect(committed.body.results[0].status).toBe('reconciled_shopify_payout')
 
-    const { rows: imports } = await pool.query(
-      `INSERT INTO bank_statement_imports
-         (tenant_id, filename, format, currency, file_hash, created_by_user_id)
-       VALUES ($1, 'shopify.xml', 'camt053', 'EUR', 'shopify-payout-test', $2)
-       RETURNING *`, [tenantId, seed.userA.id],
+    const { rows: [settled] } = await pool.query(
+      `SELECT settlement_method, reconciled_bank_statement_line_id
+         FROM shopify_payments_payouts WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, payout.id],
     )
-    const { rows: lines } = await pool.query(
-      `INSERT INTO bank_statement_lines
-         (tenant_id, import_id, line_index, booking_date, amount_cents, direction, currency)
-       VALUES ($1, $2, 0, '2026-06-03', 3540, 'credit', 'EUR') RETURNING *`,
-      [tenantId, imports[0].id],
-    )
-    const result = await commitImport(pool, tenantId, imports[0].id, [{
-      lineId: lines[0].id,
-      action: 'reconcile_shopify_payout',
-      payoutId: payouts[0].id,
-      adjustmentMappings: [{
-        balanceTransactionId: adjustments[0].id, accountCode: '42000',
-      }],
-    }], seed.userA.id, fetchImpl)
-    expect(result.results[0].status).toBe('reconciled_shopify_payout')
+    expect(settled).toMatchObject({
+      settlement_method: 'bank_import',
+      reconciled_bank_statement_line_id: line.id,
+    })
 
     const { rows: clearing } = await pool.query(
       `SELECT COALESCE(SUM(debit_cents - credit_cents), 0)::int balance
@@ -816,7 +858,7 @@ describe('Shopify payout reconciliation', () => {
 })
 
 describe('PayPal payout reconciliation', () => {
-  it('records selected outstanding PayPal orders directly on the bank account', async () => {
+  it('fetches and imports PayPal orders, then records them directly on the bank account', async () => {
     const tenantId = seed.tenantA.id
     await configureShopify(tenantId)
     const product = await createProduct()
@@ -825,12 +867,7 @@ describe('PayPal payout reconciliation', () => {
       paypalOrderNode({ orderId: 1001, lineId: 5001, transactionId: 7001, amount: '36.30' }),
       paypalOrderNode({ orderId: 1002, lineId: 5002, transactionId: 7002, amount: '20.00' }),
     ]
-    await importShopifyOrders(pool, tenantId, {
-      orders: [
-        selectedOrder(product.id, 1001, 5001),
-        selectedOrder(product.id, 1002, 5002),
-      ],
-    }, seed.userA.id, shopifyFetch({ orders, balances: [] }))
+    await fetchAndImportThroughApi(product.id, shopifyFetch({ orders, balances: [] }))
 
     const candidates = await asUserA(request(app)
       .get('/api/merch/paypal/payouts/candidates?limit=100'))
@@ -951,7 +988,7 @@ describe('PayPal payout reconciliation', () => {
       .expect(404)
   })
 
-  it('groups PayPal orders and reports the actual deposit difference as a fee', async () => {
+  it('fetches and imports PayPal orders, then groups them into a CAMT.053 deposit', async () => {
     const tenantId = seed.tenantA.id
     await configureShopify(tenantId)
     const product = await createProduct()
@@ -960,38 +997,24 @@ describe('PayPal payout reconciliation', () => {
       paypalOrderNode({ orderId: 1001, lineId: 5001, transactionId: 7001, amount: '36.30' }),
       paypalOrderNode({ orderId: 1002, lineId: 5002, transactionId: 7002, amount: '20.00' }),
     ]
-    const imported = await importShopifyOrders(pool, tenantId, {
-      orders: [
-        selectedOrder(product.id, 1001, 5001),
-        selectedOrder(product.id, 1002, 5002),
-      ],
-    }, seed.userA.id, shopifyFetch({ orders, balances: [] }))
-    expect(imported.imported).toBe(2)
+    await fetchAndImportThroughApi(product.id, shopifyFetch({ orders, balances: [] }))
+    const staged = await parseStatement(
+      camtCredit('55.00', '2026-06-05', 'PAYPAL-PAYOUT-JUNE'),
+      'paypal-payout.xml',
+    )
+    const line = staged.body.lines[0]
+    expect(line.suggestion.paypalOrderMatches).toHaveLength(2)
 
-    const { rows: financials } = await pool.query(
-      `SELECT * FROM shopify_order_financials
-        WHERE tenant_id = $1 AND payment_gateway = 'paypal' ORDER BY id`, [tenantId],
-    )
-    const { rows: imports } = await pool.query(
-      `INSERT INTO bank_statement_imports
-         (tenant_id, filename, format, currency, file_hash, created_by_user_id)
-       VALUES ($1, 'paypal.xml', 'camt053', 'EUR', 'paypal-payout-test', $2)
-       RETURNING *`, [tenantId, seed.userA.id],
-    )
-    const { rows: lines } = await pool.query(
-      `INSERT INTO bank_statement_lines
-         (tenant_id, import_id, line_index, booking_date, amount_cents, direction, currency)
-       VALUES ($1, $2, 0, '2026-06-05', 5500, 'credit', 'EUR') RETURNING *`,
-      [tenantId, imports[0].id],
-    )
-
-    const result = await commitImport(pool, tenantId, imports[0].id, [{
-      lineId: lines[0].id,
-      action: 'reconcile_paypal_payout',
-      orderFinancialIds: financials.map((row) => row.id),
-      differenceAccountCode: '64100',
-    }], seed.userA.id)
-    expect(result.results[0].status).toBe('reconciled_paypal_payout')
+    const committed = await asUserA(request(app)
+      .post(`/api/bank-import/${staged.body.import.id}/commit`))
+      .send({ decisions: [{
+        line_id: line.id,
+        action: 'reconcile_paypal_payout',
+        order_financial_ids: line.suggestion.paypalOrderMatches.map((row) => row.id),
+        difference_account_code: '64100',
+      }] })
+      .expect(200)
+    expect(committed.body.results[0].status).toBe('reconciled_paypal_payout')
 
     const { rows: settlementEntries } = await pool.query(
       `SELECT le.account_code, le.debit_cents, le.credit_cents
@@ -1010,7 +1033,8 @@ describe('PayPal payout reconciliation', () => {
     )
     expect(reconciliation[0]).toMatchObject({
       gross_cents: 5630, deposit_cents: 5500, difference_cents: 130,
-      difference_account_code: '64100',
+      difference_account_code: '64100', settlement_method: 'bank_import',
+      bank_statement_line_id: line.id,
     })
     const { rows: clearing } = await pool.query(
       `SELECT COALESCE(SUM(debit_cents - credit_cents), 0)::int balance
