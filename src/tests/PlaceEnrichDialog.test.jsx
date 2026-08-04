@@ -5,10 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/places.ts', () => ({
   searchPlaces: vi.fn().mockResolvedValue([]),
+  getPlaceDetails: vi.fn(async (suggestion) => suggestion),
 }))
 
 import PlaceEnrichDialog from '../components/shared/PlaceEnrichDialog.tsx'
-import { searchPlaces } from '../api/places.ts'
+import { getPlaceDetails, searchPlaces } from '../api/places.ts'
 import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
 
@@ -65,12 +66,15 @@ function ui(props = {}) {
 beforeEach(async () => {
   await i18n.changeLanguage('en')
   searchPlaces.mockReset().mockResolvedValue([])
+  getPlaceDetails.mockReset().mockImplementation(async (suggestion) => suggestion)
 })
 
 describe('PlaceEnrichDialog', () => {
   it('looks the query up on open', async () => {
     render(ui())
-    await waitFor(() => expect(searchPlaces).toHaveBeenCalledWith('Paradiso'))
+    await waitFor(() => expect(searchPlaces).toHaveBeenCalledWith(
+      'Paradiso', expect.objectContaining({ sessionId: expect.any(String) }),
+    ))
   })
 
   it('previews every field it would fill and counts them in the confirm button', async () => {
@@ -80,6 +84,23 @@ describe('PlaceEnrichDialog', () => {
     expect(await screen.findByText('Will fill 7 empty fields:')).toBeInTheDocument()
     expect(screen.getByText('Weteringschans 6')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill 7 fields' })).toBeEnabled()
+  })
+
+  it('resolves the selected v3 suggestion before building the preview', async () => {
+    const partial = {
+      ...PARADISO,
+      website: null,
+      phone: null,
+      latitude: null,
+      longitude: null,
+      details: { id: 'poi-paradiso', session_id: '34a45e58-9f68-4ca6-bc0e-4f04311fbc42' },
+    }
+    searchPlaces.mockResolvedValue([partial])
+    getPlaceDetails.mockResolvedValue(PARADISO)
+    render(ui())
+
+    await waitFor(() => expect(getPlaceDetails).toHaveBeenCalledWith(partial))
+    expect(await screen.findByText('Will fill 7 empty fields:')).toBeInTheDocument()
   })
 
   it('lists only the empty fields, never the populated ones', async () => {

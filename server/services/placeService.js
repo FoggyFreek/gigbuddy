@@ -1,21 +1,20 @@
-// Generic place lookup backed by the TomTom Search API. Entity-agnostic on
-// purpose: it returns a normalized suggestion shape keyed on the app's own field
-// names, so any resource (venues today, contacts/suppliers later) can consume it
-// without knowing anything about TomTom. Structured like geocodeService.js — the
-// other outbound third-party lookup — with an injectable `fetchImpl` for tests.
-//
-// We use POI Search (/poiSearch), NOT the Autocomplete service: autocomplete only
-// returns query-completion segments (brand/category/plaintext) with no address,
-// phone, website or coordinates, so it cannot populate a single field.
+// Generic place lookup backed by TomTom Places Search API v3. Suggest stays
+// lightweight while the user types; Details is called only for the selected
+// result so the app can fill coordinates and contact fields without multiplying
+// metered requests for every suggestion.
 import { logger } from '../utils/logger.js'
 import {
   LATITUDE_MAX, LATITUDE_MIN, LONGITUDE_MAX, LONGITUDE_MIN, coordinateOrNull,
 } from '../utils/coordinates.js'
-import { parsePlaceQuery } from '../validators/placeValidators.js'
+import { parsePlaceDetailsParams, parsePlaceQuery } from '../validators/placeValidators.js'
 import { badRequest } from './serviceErrors.js'
 
-const API_BASE = 'https://api.tomtom.com/search/2/poiSearch'
+const API_BASE = 'https://api.tomtom.com/maps/orbis/places'
+const SUGGEST_URL = `${API_BASE}/suggest`
 const API_KEY = process.env.TOMTOM_API_KEY || ''
+const API_VERSION = '3'
+const SUGGEST_ATTRIBUTES = 'results(id,type,title,subtitles,address,poiTypes,more)'
+const DETAILS_ATTRIBUTES = 'id,type,title,subtitles,position,address,contacts,poiTypes'
 const REQUEST_TIMEOUT_MS = 5000
 
 const NOT_CONFIGURED = {
@@ -25,11 +24,10 @@ const UPSTREAM_FAILED = {
   error: { status: 502, body: { error: 'Place search request failed' } },
 }
 
-// Shorter than the geocoder's 7 days: TomTom is a metered upstream, so caching is
-// about collapsing the keystroke burst behind one query, not long-term storage.
+// Short-lived and bounded: this mainly collapses repeated debounced queries in
+// one provider session while keeping the metered upstream protected.
 const CACHE_TTL_MS = 10 * 60 * 1000
 const MAX_CACHE_ENTRIES = 500
-
 const cache = new Map()
 const inflight = new Map()
 
@@ -44,8 +42,6 @@ function readCache(key) {
 }
 
 function writeCache(key, value) {
-  // Bounded FIFO — search keys are unbounded (every prefix a user types), so an
-  // unevicted Map would grow for the lifetime of the process.
   if (cache.size >= MAX_CACHE_ENTRIES) {
     const oldest = cache.keys().next()
     if (!oldest.done) cache.delete(oldest.value)
@@ -58,9 +54,6 @@ const text = (value) => {
   return trimmed || null
 }
 
-// TomTom returns bare hosts ("www.paradiso.nl"). normalizeOptionalUrl (applied
-// downstream when the venue is written) rejects scheme-less values, so give every
-// url an explicit scheme here.
 function toWebsite(value) {
   const raw = text(value)
   if (!raw) return null
@@ -68,97 +61,162 @@ function toWebsite(value) {
 }
 
 function toStreetAndNumber(address = {}) {
-  const street = text(address.streetName)
-  const number = text(address.streetNumber)
+  const street = text(address.street)
+  const number = text(address.houseNumber)
   if (!street) return number
   return number ? `${street} ${number}` : street
 }
 
-// Pure TomTom result -> app suggestion mapping. The single owner of the field
-// mapping; exported so it can be unit-tested without touching the network.
-export function mapPoiResult(result = {}) {
+function subtitles(result = {}) {
+  if (!Array.isArray(result.subtitles)) return null
+  const values = result.subtitles.map(text).filter(Boolean)
+  return values.length ? values.join(', ') : null
+}
+
+function categories(result = {}) {
+  if (!Array.isArray(result.poiTypes)) return []
+  return result.poiTypes.map((category) => text(category?.name) ?? text(category?.id)).filter(Boolean)
+}
+
+function detailArgument(result, parameter) {
+  if (result?.more?.operation !== 'details' || !Array.isArray(result.more.pathParameters)) return null
+  return text(result.more.pathParameters.find((item) => item?.parameter === parameter)?.argument)
+}
+
+function firstContactValue(result, field) {
+  if (!Array.isArray(result.contacts)) return null
+  for (const contact of result.contacts) {
+    if (!Array.isArray(contact?.[field])) continue
+    const value = contact[field].map(text).find(Boolean)
+    if (value) return value
+  }
+  return null
+}
+
+function basePlace(result = {}) {
+  return {
+    id: text(result.id),
+    name: text(result.title),
+    street_and_number: null,
+    postal_code: null,
+    city: null,
+    region: null,
+    country: null,
+    website: null,
+    phone: null,
+    latitude: null,
+    longitude: null,
+    freeform_address: subtitles(result),
+    categories: categories(result),
+  }
+}
+
+export function mapSuggestResult(result = {}, sessionId = null) {
+  const mapped = basePlace(result)
+  const detailsId = detailArgument(result, 'id') ?? mapped.id
+  return {
+    ...mapped,
+    details: detailsId ? { id: detailsId, session_id: sessionId } : null,
+  }
+}
+
+export function mapPlaceDetails(result = {}) {
+  const mapped = basePlace(result)
   const address = result.address ?? {}
-  const poi = result.poi ?? {}
-  // Provider coordinates are dropped rather than rejected when unusable.
-  const latitude = coordinateOrNull(result.position?.lat, LATITUDE_MIN, LATITUDE_MAX)
-  const longitude = coordinateOrNull(result.position?.lon, LONGITUDE_MIN, LONGITUDE_MAX)
+  const coordinates = Array.isArray(result.position?.coordinates)
+    ? result.position.coordinates
+    : []
+  const longitude = coordinateOrNull(coordinates[0], LONGITUDE_MIN, LONGITUDE_MAX)
+  const latitude = coordinateOrNull(coordinates[1], LATITUDE_MIN, LATITUDE_MAX)
   const pairedCoords = latitude !== null && longitude !== null
 
   return {
-    id: text(result.id),
-    name: text(poi.name) ?? text(address.freeformAddress),
+    ...mapped,
     street_and_number: toStreetAndNumber(address),
     postal_code: text(address.postalCode),
     city: text(address.municipality),
     region: text(address.countrySubdivision),
-    country: text(address.countryCode)?.slice(0, 2).toUpperCase() ?? null,
-    website: toWebsite(poi.url),
-    phone: text(poi.phone),
+    country: text(address.countryCodeIso2)?.slice(0, 2).toUpperCase() ?? null,
+    website: toWebsite(firstContactValue(result, 'websites')),
+    phone: firstContactValue(result, 'phones'),
     latitude: pairedCoords ? latitude : null,
     longitude: pairedCoords ? longitude : null,
-    // Display only — never persisted.
-    freeform_address: text(address.freeformAddress),
-    categories: Array.isArray(poi.categories) ? poi.categories.filter((c) => typeof c === 'string') : [],
+    details: null,
   }
 }
 
-function buildUrl({ query, limit, language, lat, lon }) {
-  const params = new URLSearchParams({
-    key: API_KEY,
-    typeahead: 'true',
-    limit: String(limit),
+function providerHeaders(attributes, { language = null, sessionId = null } = {}) {
+  const headers = new Headers({
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    'TomTom-Api-Key': API_KEY,
+    'TomTom-Api-Version': API_VERSION,
+    Attributes: attributes,
   })
-  if (language) params.set('language', language)
-  // lat/lon is TomTom's only soft bias. We deliberately do NOT send countrySet:
-  // that is a hard restriction and would make foreign venues unfindable, and
-  // bands tour abroad.
-  if (lat !== null && lat !== undefined && lon !== null && lon !== undefined) {
-    params.set('lat', String(lat))
-    params.set('lon', String(lon))
-  }
-  return `${API_BASE}/${encodeURIComponent(query)}.json?${params}`
+  if (language) headers.set('Accept-Language', language)
+  if (sessionId) headers.set('Session-Id', sessionId)
+  return headers
 }
 
-const norm = (v) => String(v ?? '').trim().toLowerCase()
-
-function cacheKey({ query, limit, language, lat, lon }) {
-  return [norm(query), limit, norm(language), lat ?? '', lon ?? ''].join('|')
-}
-
-async function requestPlaces(url, limit, fetchImpl) {
-  let res
+async function requestJson(url, options, fetchImpl) {
+  let response
   try {
-    // Without a deadline a stalled upstream would pin both the Express request
-    // and this query's inflight cache entry open indefinitely.
-    res = await fetchImpl(url, {
-      headers: { Accept: 'application/json' },
+    response = await fetchImpl(url, {
+      ...options,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
   } catch (err) {
     logger.warn('placeSearch.request_failed', { err })
     return UPSTREAM_FAILED
   }
-  if (!res.ok) {
-    logger.warn('placeSearch.request_failed', { status: res.status })
+  if (!response.ok) {
+    logger.warn('placeSearch.request_failed', { status: response.status })
     return UPSTREAM_FAILED
   }
-  let json
   try {
-    json = await res.json()
+    return { json: await response.json() }
   } catch (err) {
     logger.warn('placeSearch.request_failed', { err })
     return UPSTREAM_FAILED
   }
-  const results = Array.isArray(json?.results) ? json.results : []
-  const items = results.map(mapPoiResult).filter((item) => item.name)
-  // Bounded-collection envelope: meta echoes the scope actually applied.
-  return { items, meta: { limit, returned: items.length } }
 }
 
-// Validates at the service boundary so a direct caller cannot build a malformed
-// upstream request. Returns the bounded `{ items, meta }` envelope, or the
-// `{ error }` service contract. Never throws on a network fault — a dead upstream
-// must not 500 the SPA.
+function suggestBody({ query, limit, lat, lon }) {
+  const body = {
+    query,
+    maxResults: limit,
+    filters: { types: ['poi'] },
+  }
+  if (lat !== null && lat !== undefined && lon !== null && lon !== undefined) {
+    const point = { type: 'point', coordinates: [lon, lat] }
+    body.origin = point
+    body.preferences = { geometry: point }
+  }
+  return body
+}
+
+const norm = (value) => String(value ?? '').trim().toLowerCase()
+
+function cacheKey({ query, limit, language, lat, lon, sessionId }) {
+  return ['suggest', norm(query), limit, norm(language), lat ?? '', lon ?? '', sessionId ?? ''].join('|')
+}
+
+async function requestPlaces(params, fetchImpl) {
+  const requested = await requestJson(SUGGEST_URL, {
+    method: 'POST',
+    headers: providerHeaders(SUGGEST_ATTRIBUTES, params),
+    body: JSON.stringify(suggestBody(params)),
+  }, fetchImpl)
+  if (requested.error) return requested
+
+  const results = Array.isArray(requested.json?.results) ? requested.json.results : []
+  const items = results
+    .filter((result) => result?.type === 'poi')
+    .map((result) => mapSuggestResult(result, params.sessionId))
+    .filter((item) => item.name)
+  return { items, meta: { limit: params.limit, returned: items.length } }
+}
+
 export async function searchPlaces(query = {}, { fetchImpl = globalThis.fetch } = {}) {
   const parsed = parsePlaceQuery(query)
   if (parsed.error) return badRequest(parsed.error)
@@ -173,9 +231,8 @@ export async function searchPlaces(query = {}, { fetchImpl = globalThis.fetch } 
   const pending = inflight.get(key)
   if (pending) return pending
 
-  const promise = requestPlaces(buildUrl(params), params.limit, fetchImpl)
+  const promise = requestPlaces(params, fetchImpl)
     .then((result) => {
-      // Only successful lookups are cached; a transient 502 must be retryable.
       if (!result.error) writeCache(key, result)
       return result
     })
@@ -183,6 +240,21 @@ export async function searchPlaces(query = {}, { fetchImpl = globalThis.fetch } 
 
   inflight.set(key, promise)
   return promise
+}
+
+export async function getPlaceDetails(input = {}, { fetchImpl = globalThis.fetch } = {}) {
+  const parsed = parsePlaceDetailsParams(input)
+  if (parsed.error) return badRequest(parsed.error)
+  if (!API_KEY) return NOT_CONFIGURED
+  if (typeof fetchImpl !== 'function') return UPSTREAM_FAILED
+
+  const { id, sessionId } = parsed.params
+  const requested = await requestJson(`${API_BASE}/details/pois/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    headers: providerHeaders(DETAILS_ATTRIBUTES, { sessionId }),
+  }, fetchImpl)
+  if (requested.error) return requested
+  return mapPlaceDetails(requested.json)
 }
 
 export function isPlaceSearchConfigured() {

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { useRef, useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
@@ -6,7 +7,7 @@ import InputAdornment from '@mui/material/InputAdornment'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import SearchIcon from '@mui/icons-material/Search'
-import { searchPlaces } from '../../api/places.ts'
+import { getPlaceDetails, searchPlaces } from '../../api/places.ts'
 import useRemoteSearch from '../../hooks/useRemoteSearch.ts'
 import type { PlaceSuggestion } from '../../types/api.ts'
 
@@ -50,11 +51,15 @@ export default function PlaceSearchField({
   biasLon = null,
 }: Readonly<PlaceSearchFieldProps>) {
   const { t, i18n } = useTranslation(['places', 'common'])
+  const sessionId = useRef(crypto.randomUUID()).current
+  const [resolving, setResolving] = useState(false)
 
   // useRemoteSearch owns the debounce, the 3-char minimum and stale-response
   // guarding — never add a second debounce on top of it.
   const { inputValue, options, loading, tooShort, minChars, onInputChange } = useRemoteSearch<PlaceSuggestion>({
-    search: (query) => searchPlaces(query, { language: i18n.language, lat: biasLat, lon: biasLon }),
+    search: (query) => searchPlaces(query, {
+      language: i18n.language, lat: biasLat, lon: biasLon, sessionId,
+    }),
     inputValue: value,
     onInputValueChange: onValueChange,
     dependencyKey: `${i18n.language}:${biasLat ?? ''}:${biasLon ?? ''}`,
@@ -71,14 +76,22 @@ export default function PlaceSearchField({
     return undefined
   }
 
-  function handleChange(_event: SyntheticEvent, picked: PlaceSuggestion | string | null) {
+  async function handleChange(_event: SyntheticEvent, picked: PlaceSuggestion | string | null) {
     if (!picked) return
     // A raw string is the free-typed text; it is already the value.
     if (typeof picked === 'string') {
       onValueChange(picked)
       return
     }
-    onPlaceSelect(picked)
+    setResolving(true)
+    try {
+      onPlaceSelect(await getPlaceDetails(picked))
+    } catch {
+      // Suggestion fields still provide a useful manual-entry starting point.
+      onPlaceSelect(picked)
+    } finally {
+      setResolving(false)
+    }
   }
 
   return (
@@ -91,7 +104,7 @@ export default function PlaceSearchField({
       options={options}
       // The server already filtered — never re-filter client-side.
       filterOptions={(x) => x}
-      loading={loading}
+      loading={loading || resolving}
       disabled={disabled}
       clearText={t($ => $.search.clear)}
       openText={t($ => $.search.open)}

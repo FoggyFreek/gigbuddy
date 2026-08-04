@@ -256,13 +256,25 @@ export default function VenueDetailPage() {
           </IconButton>
         )}
         <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.detailTitle)}</Typography>
+        <Box sx={{ flexGrow: 1 }} />
+        {canWrite && !loading && (
+          <Tooltip title={form.name?.trim() ? t($ => $.detail.enrichTooltip) : t($ => $.detail.enrichNeedsName)}>
+            <span>
+              <Button
+                size="small"
+                startIcon={<AutoFixHighIcon />}
+                onClick={() => setEnriching(true)}
+                disabled={!form.name?.trim()}
+              >
+                {t($ => $.detail.enrichButton)}
+              </Button>
+            </span>
+          </Tooltip>
+        )}
         {insideSplitView && (
-          <>
-            <Box sx={{ flexGrow: 1 }} />
-            <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
-              <CloseIcon />
-            </IconButton>
-          </>
+          <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
+            <CloseIcon />
+          </IconButton>
         )}
       </Box>
 
@@ -282,22 +294,6 @@ export default function VenueDetailPage() {
               disabled={!canWrite}
             />
           </Grid>
-
-          {canWrite && (
-            <Box sx={{ mt: 2 }}>
-              <Tooltip title={form.name?.trim() ? t($ => $.detail.enrichTooltip) : t($ => $.detail.enrichNeedsName)}>
-                <span>
-                  <Button
-                    startIcon={<AutoFixHighIcon />}
-                    onClick={() => setEnriching(true)}
-                    disabled={!form.name?.trim()}
-                  >
-                    {t($ => $.detail.enrichButton)}
-                  </Button>
-                </span>
-              </Tooltip>
-            </Box>
-          )}
 
           <Divider sx={{ my: 3 }} />
 

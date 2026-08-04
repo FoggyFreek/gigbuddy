@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -19,7 +19,7 @@ import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
-import { searchPlaces } from '../../api/places.ts'
+import { getPlaceDetails, searchPlaces } from '../../api/places.ts'
 import { pickFillableUpdates } from '../../utils/placeFill.ts'
 import type { PlaceSuggestion } from '../../types/api.ts'
 
@@ -55,12 +55,15 @@ export default function PlaceEnrichDialog({
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [applying, setApplying] = useState(false)
+  const [resolving, setResolving] = useState(false)
+  const sessionId = useRef(crypto.randomUUID()).current
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setFailed(false)
-    searchPlaces(query)
+    setCandidates([])
+    searchPlaces(query, { sessionId })
       .then((items) => {
         if (!active) return
         setCandidates(items)
@@ -69,9 +72,25 @@ export default function PlaceEnrichDialog({
       .catch(() => { if (active) setFailed(true) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [query])
+  }, [query, sessionId])
 
   const selected = candidates[selectedIndex] ?? null
+
+  useEffect(() => {
+    if (!selected?.details) return
+    let active = true
+    setResolving(true)
+    getPlaceDetails(selected)
+      .then((details) => {
+        if (!active) return
+        setCandidates((current) => current.map((candidate, index) => (
+          index === selectedIndex ? details : candidate
+        )))
+      })
+      .catch(() => { if (active) setFailed(true) })
+      .finally(() => { if (active) setResolving(false) })
+    return () => { active = false }
+  }, [selected, selectedIndex])
 
   const fieldKeys = useMemo(() => fields.map((f) => f.key), [fields])
   const updates = useMemo(
@@ -91,7 +110,7 @@ export default function PlaceEnrichDialog({
   }
 
   function renderBody() {
-    if (loading) {
+    if (loading || resolving) {
       return (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
