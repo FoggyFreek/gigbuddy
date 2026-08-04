@@ -9,6 +9,15 @@ const MAX_QUERY_LENGTH = 120
 // Well under parseSearchLimit's 25 ceiling: this fronts a metered upstream hit
 // once per debounced keystroke, and TomTom's typeahead limit is 10.
 const MAX_LIMIT = 10
+const PLACE_ID_RE = /^[A-Za-z0-9_-]{1,200}$/
+const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[47][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function parseSessionId(value) {
+  const sessionId = String(value ?? '').trim()
+  if (!sessionId) return { value: null }
+  if (!SESSION_ID_RE.test(sessionId)) return { error: 'sessionId must be a UUID v4 or v7' }
+  return { value: sessionId }
+}
 
 // `{ params }` for the service, or `{ error }` carrying a 400 message.
 export function parsePlaceQuery(query = {}) {
@@ -31,6 +40,8 @@ export function parsePlaceQuery(query = {}) {
   const paired = lat.value !== null && lon.value !== null
 
   const language = String(query.language ?? '').trim().slice(0, 10) || null
+  const sessionId = parseSessionId(query.sessionId)
+  if (sessionId.error) return { error: sessionId.error }
 
   return {
     params: {
@@ -39,8 +50,17 @@ export function parsePlaceQuery(query = {}) {
       language,
       lat: paired ? lat.value : null,
       lon: paired ? lon.value : null,
+      sessionId: sessionId.value,
     },
   }
+}
+
+export function parsePlaceDetailsParams({ id, sessionId } = {}) {
+  const normalizedId = String(id ?? '').trim()
+  if (!PLACE_ID_RE.test(normalizedId)) return { error: 'Invalid place id' }
+  const parsedSessionId = parseSessionId(sessionId)
+  if (parsedSessionId.error) return { error: parsedSessionId.error }
+  return { params: { id: normalizedId, sessionId: parsedSessionId.value } }
 }
 
 export { MIN_QUERY_LENGTH, MAX_QUERY_LENGTH, MAX_LIMIT }

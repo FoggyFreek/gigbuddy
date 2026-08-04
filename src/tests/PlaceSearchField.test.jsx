@@ -7,10 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // The control's only side effect is the debounced place lookup.
 vi.mock('../api/places.ts', () => ({
   searchPlaces: vi.fn().mockResolvedValue([]),
+  getPlaceDetails: vi.fn(async (suggestion) => suggestion),
 }))
 
 import PlaceSearchField from '../components/shared/PlaceSearchField.tsx'
-import { searchPlaces } from '../api/places.ts'
+import { getPlaceDetails, searchPlaces } from '../api/places.ts'
 import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
 
@@ -51,6 +52,7 @@ function wrap(ui) {
 beforeEach(async () => {
   await i18n.changeLanguage('en')
   searchPlaces.mockReset().mockResolvedValue([])
+  getPlaceDetails.mockReset().mockImplementation(async (suggestion) => suggestion)
 })
 
 describe('PlaceSearchField', () => {
@@ -87,6 +89,29 @@ describe('PlaceSearchField', () => {
     await screen.findByText('Weteringschans 6, 1017SG Amsterdam')
     await user.keyboard('{ArrowDown}{Enter}')
 
+    await waitFor(() => expect(onPlaceSelect).toHaveBeenCalledWith(PARADISO))
+  })
+
+  it('resolves a lightweight v3 suggestion before emitting it', async () => {
+    const partial = {
+      ...PARADISO,
+      website: null,
+      phone: null,
+      latitude: null,
+      longitude: null,
+      details: { id: 'poi-paradiso', session_id: '34a45e58-9f68-4ca6-bc0e-4f04311fbc42' },
+    }
+    const onPlaceSelect = vi.fn()
+    searchPlaces.mockResolvedValue([partial])
+    getPlaceDetails.mockResolvedValue(PARADISO)
+    const user = userEvent.setup()
+    render(wrap(<Harness onPlaceSelect={onPlaceSelect} />))
+
+    await user.type(screen.getByRole('combobox'), 'Paradiso')
+    await screen.findByText('Weteringschans 6, 1017SG Amsterdam')
+    await user.keyboard('{ArrowDown}{Enter}')
+
+    await waitFor(() => expect(getPlaceDetails).toHaveBeenCalledWith(partial))
     expect(onPlaceSelect).toHaveBeenCalledWith(PARADISO)
   })
 

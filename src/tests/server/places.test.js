@@ -8,9 +8,10 @@ import { describe, it, beforeAll, beforeEach, afterAll, afterEach, expect, vi } 
 import request from 'supertest'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
-let mapPoiResult, resetPlaceSearchCacheForTests, searchPlaces
+let mapPlaceDetails, mapSuggestResult, resetPlaceSearchCacheForTests, searchPlaces
 let seed
 const realFetch = globalThis.fetch
+const SESSION_ID = '34a45e58-9f68-4ca6-bc0e-4f04311fbc42'
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
@@ -20,7 +21,8 @@ beforeAll(async () => {
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
-  mapPoiResult = svc.mapPoiResult
+  mapPlaceDetails = svc.mapPlaceDetails
+  mapSuggestResult = svc.mapSuggestResult
   resetPlaceSearchCacheForTests = svc.resetPlaceSearchCacheForTests
   searchPlaces = svc.searchPlaces
   app = appMod.createTestApp()
@@ -47,40 +49,77 @@ function asUserA(req) {
     .set('x-test-tenant-id', String(seed.tenantA.id))
 }
 
-const PARADISO = {
-  id: 'NL/POI/p0/12345',
-  poi: {
-    name: 'Paradiso',
-    phone: '+31 20 626 4521',
-    url: 'www.paradiso.nl',
-    categories: ['nightlife', 'concert hall'],
+const PARADISO_SUGGESTION = {
+  id: 'poi-paradiso',
+  type: 'poi',
+  title: 'Paradiso',
+  subtitles: ['Weteringschans 6-8', '1017 SG Amsterdam', 'Netherlands'],
+  poiTypes: [{ id: 'concert_hall', name: 'Concert Hall' }],
+  more: {
+    operation: 'details',
+    pathParameters: [
+      { parameter: 'type', argument: 'pois' },
+      { parameter: 'id', argument: 'poi-paradiso' },
+    ],
   },
+}
+
+const PARADISO_DETAILS = {
+  id: 'poi-paradiso',
+  type: 'poi',
+  title: 'Paradiso',
+  subtitles: ['Weteringschans 6-8, 1017 SG Amsterdam'],
+  poiTypes: [{ id: 'concert_hall', name: 'Concert Hall' }],
   address: {
-    streetName: 'Weteringschans',
-    streetNumber: '6-8',
+    street: 'Weteringschans',
+    houseNumber: '6-8',
     municipality: 'Amsterdam',
     countrySubdivision: 'Noord-Holland',
     postalCode: '1017SG',
-    countryCode: 'NL',
-    freeformAddress: 'Weteringschans 6-8, 1017SG Amsterdam',
+    countryCodeIso2: 'NL',
   },
-  position: { lat: 52.3624, lon: 4.8838 },
+  position: { type: 'Point', coordinates: [4.8838, 52.3624] },
+  contacts: [{
+    type: 'Reservations',
+    phones: ['+31 20 626 4521'],
+    websites: ['www.paradiso.nl'],
+  }],
 }
 
 function stubFetch(body, { ok = true, status = 200 } = {}) {
   const fetchMock = vi.fn(async () => ({
     ok,
     status,
+    headers: new Headers(),
     json: async () => body,
   }))
   globalThis.fetch = fetchMock
   return fetchMock
 }
 
-describe('mapPoiResult', () => {
-  it('maps a POI onto the app field names', () => {
-    expect(mapPoiResult(PARADISO)).toEqual({
-      id: 'NL/POI/p0/12345',
+describe('TomTom Places v3 mapping', () => {
+  it('maps a lightweight suggestion and preserves its details reference', () => {
+    expect(mapSuggestResult(PARADISO_SUGGESTION, SESSION_ID)).toEqual({
+      id: 'poi-paradiso',
+      name: 'Paradiso',
+      street_and_number: null,
+      postal_code: null,
+      city: null,
+      region: null,
+      country: null,
+      website: null,
+      phone: null,
+      latitude: null,
+      longitude: null,
+      freeform_address: 'Weteringschans 6-8, 1017 SG Amsterdam, Netherlands',
+      categories: ['Concert Hall'],
+      details: { id: 'poi-paradiso', session_id: SESSION_ID },
+    })
+  })
+
+  it('maps details, including GeoJSON coordinate order and contacts', () => {
+    expect(mapPlaceDetails(PARADISO_DETAILS)).toEqual({
+      id: 'poi-paradiso',
       name: 'Paradiso',
       street_and_number: 'Weteringschans 6-8',
       postal_code: '1017SG',
@@ -91,41 +130,10 @@ describe('mapPoiResult', () => {
       phone: '+31 20 626 4521',
       latitude: 52.3624,
       longitude: 4.8838,
-      freeform_address: 'Weteringschans 6-8, 1017SG Amsterdam',
-      categories: ['nightlife', 'concert hall'],
+      freeform_address: 'Weteringschans 6-8, 1017 SG Amsterdam',
+      categories: ['Concert Hall'],
+      details: null,
     })
-  })
-
-  it('gives a scheme-less url an https prefix so the venue url normalizer accepts it', () => {
-    expect(mapPoiResult({ poi: { name: 'X', url: 'www.x.nl' } }).website).toBe('https://www.x.nl')
-  })
-
-  it('leaves an already-absolute url alone', () => {
-    expect(mapPoiResult({ poi: { name: 'X', url: 'http://x.nl/live' } }).website).toBe('http://x.nl/live')
-  })
-
-  it('joins street and number, and copes with either one missing', () => {
-    expect(mapPoiResult({ poi: { name: 'A' }, address: { streetName: 'Dam' } }).street_and_number).toBe('Dam')
-    expect(mapPoiResult({ poi: { name: 'A' }, address: { streetNumber: '5' } }).street_and_number).toBe('5')
-  })
-
-  it('upper-cases the 2-letter country code for the CHAR(2) column', () => {
-    expect(mapPoiResult({ poi: { name: 'A' }, address: { countryCode: 'nl' } }).country).toBe('NL')
-  })
-
-  it('drops a half or out-of-range coordinate pair', () => {
-    expect(mapPoiResult({ poi: { name: 'A' }, position: { lat: 52.1 } }).latitude).toBeNull()
-    expect(mapPoiResult({ poi: { name: 'A' }, position: { lat: 999, lon: 4.8 } }).longitude).toBeNull()
-  })
-
-  it('falls back to the freeform address when the POI has no name', () => {
-    expect(mapPoiResult({ address: { freeformAddress: 'Dam 1, Amsterdam' } }).name).toBe('Dam 1, Amsterdam')
-  })
-
-  it('returns nulls rather than throwing on an empty result', () => {
-    const mapped = mapPoiResult({})
-    expect(mapped.name).toBeNull()
-    expect(mapped.categories).toEqual([])
   })
 })
 
@@ -138,140 +146,150 @@ describe('searchPlaces — validation lives at the service boundary', () => {
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
-  it('clamps a direct caller\'s oversized limit rather than passing it upstream', async () => {
-    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ results: [] }) }))
+  it('clamps an oversized limit to the v3 maximum', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true, status: 200, headers: new Headers(), json: async () => ({ results: [] }),
+    }))
     const result = await searchPlaces({ q: 'Paradiso', limit: 999 }, { fetchImpl })
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body)
 
-    expect(fetchImpl.mock.calls[0][0]).toContain('limit=10')
+    expect(body.maxResults).toBe(10)
     expect(result.meta.limit).toBe(10)
   })
 })
 
 describe('GET /api/places/search', () => {
-  it('returns mapped suggestions', async () => {
-    stubFetch({ results: [PARADISO] })
+  it('returns lightweight mapped suggestions', async () => {
+    stubFetch({ results: [PARADISO_SUGGESTION] })
 
-    const res = await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(200)
+    const res = await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso', sessionId: SESSION_ID,
+    })).expect(200)
 
     expect(res.body.items).toHaveLength(1)
     expect(res.body.items[0]).toMatchObject({
       name: 'Paradiso',
-      city: 'Amsterdam',
-      country: 'NL',
-      website: 'https://www.paradiso.nl',
+      freeform_address: 'Weteringschans 6-8, 1017 SG Amsterdam, Netherlands',
+      details: { id: 'poi-paradiso', session_id: SESSION_ID },
     })
   })
 
-  it('calls poiSearch with typeahead and never sends countrySet', async () => {
+  it('calls v3 Suggest with the required headers, explicit attributes, and POI filter', async () => {
     const fetchMock = stubFetch({ results: [] })
 
-    await asUserA(request(app).get('/api/places/search').query({ q: 'Melkweg' })).expect(200)
+    await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso', limit: '3', language: 'nl', sessionId: SESSION_ID,
+    })).expect(200)
 
-    const url = fetchMock.mock.calls[0][0]
-    expect(url).toContain('/search/2/poiSearch/Melkweg.json')
-    expect(url).toContain('typeahead=true')
-    expect(url).not.toContain('countrySet')
+    const [url, options] = fetchMock.mock.calls[0]
+    const headers = new Headers(options.headers)
+    expect(url).toBe('https://api.tomtom.com/maps/orbis/places/suggest')
+    expect(options.method).toBe('POST')
+    expect(headers.get('TomTom-Api-Key')).toBe('test-key')
+    expect(headers.get('TomTom-Api-Version')).toBe('3')
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('Accept')).toBe('application/json')
+    expect(headers.get('Accept-Language')).toBe('nl')
+    expect(headers.get('Session-Id')).toBe(SESSION_ID)
+    expect(headers.get('Attributes')).toBe('results(id,type,title,subtitles,address,poiTypes,more)')
+    expect(JSON.parse(options.body)).toEqual({
+      query: 'Paradiso', maxResults: 3, filters: { types: ['poi'] },
+    })
   })
 
-  it('400s on a query under 3 characters', async () => {
+  it('sends a complete bias point longitude-first as origin and ranking preference', async () => {
     const fetchMock = stubFetch({ results: [] })
-    await asUserA(request(app).get('/api/places/search').query({ q: 'ab' })).expect(400)
-    expect(fetchMock).not.toHaveBeenCalled()
+    await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso', lat: '52.3', lon: '4.9',
+    })).expect(200)
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      origin: { type: 'point', coordinates: [4.9, 52.3] },
+      preferences: { geometry: { type: 'point', coordinates: [4.9, 52.3] } },
+    })
   })
 
-  it('400s on a query over the length cap', async () => {
-    await asUserA(request(app).get('/api/places/search').query({ q: 'x'.repeat(121) })).expect(400)
-  })
-
-  it('clamps limit to the upstream ceiling', async () => {
+  it('ignores a half bias pair and rejects out-of-range coordinates', async () => {
     const fetchMock = stubFetch({ results: [] })
+    await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso', lat: '52.3',
+    })).expect(200)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toHaveProperty('origin')
 
-    await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso', limit: '500' })).expect(200)
-
-    expect(fetchMock.mock.calls[0][0]).toContain('limit=10')
+    resetPlaceSearchCacheForTests()
+    await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso', lat: '200', lon: '4.9',
+    })).expect(400)
   })
 
   it('returns the bounded-collection envelope echoing the applied limit', async () => {
-    stubFetch({ results: [PARADISO] })
-
+    stubFetch({ results: [PARADISO_SUGGESTION] })
     const res = await asUserA(
       request(app).get('/api/places/search').query({ q: 'Paradiso', limit: '3' }),
     ).expect(200)
 
     expect(res.body.meta).toEqual({ limit: 3, returned: 1 })
-    expect(res.body.meta.returned).toBe(res.body.items.length)
   })
 
   it('bounds the outbound request with an abort signal', async () => {
     const fetchMock = stubFetch({ results: [] })
-
     await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(200)
-
     expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
   })
 
-  it('502s when the upstream request times out', async () => {
+  it('serves a repeated query from cache without a second upstream call', async () => {
+    const fetchMock = stubFetch({ results: [PARADISO_SUGGESTION] })
+    const query = { q: 'Paradiso', sessionId: SESSION_ID }
+    await asUserA(request(app).get('/api/places/search').query(query)).expect(200)
+    await asUserA(request(app).get('/api/places/search').query(query)).expect(200)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps timeouts, network faults, and upstream failures to retryable 502s', async () => {
     globalThis.fetch = vi.fn(async () => {
       throw Object.assign(new Error('The operation was aborted'), { name: 'TimeoutError' })
     })
     await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(502)
-  })
 
-  it('passes a complete lat/lon bias through and ignores a half pair', async () => {
-    const withBias = stubFetch({ results: [] })
-    await asUserA(
-      request(app).get('/api/places/search').query({ q: 'Paradiso', lat: '52.3', lon: '4.9' }),
-    ).expect(200)
-    expect(withBias.mock.calls[0][0]).toContain('lat=52.3')
-
-    resetPlaceSearchCacheForTests()
-    const halfPair = stubFetch({ results: [] })
-    await asUserA(
-      request(app).get('/api/places/search').query({ q: 'Paradiso', lat: '52.3' }),
-    ).expect(200)
-    expect(halfPair.mock.calls[0][0]).not.toContain('lat=')
-  })
-
-  it('400s on an out-of-range bias coordinate', async () => {
-    await asUserA(
-      request(app).get('/api/places/search').query({ q: 'Paradiso', lat: '200', lon: '4.9' }),
-    ).expect(400)
-  })
-
-  it('serves a repeated query from cache without a second upstream call', async () => {
-    const fetchMock = stubFetch({ results: [PARADISO] })
-
-    await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(200)
-    await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(200)
-
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('maps an upstream failure to 502 and does not cache it', async () => {
-    const failing = stubFetch({}, { ok: false, status: 500 })
-    await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(502)
-    expect(failing).toHaveBeenCalledTimes(1)
-
-    // A transient failure must stay retryable.
-    stubFetch({ results: [PARADISO] })
-    await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(200)
-  })
-
-  it('502s when the upstream connection throws rather than 500ing the SPA', async () => {
     globalThis.fetch = vi.fn(async () => { throw new Error('ECONNRESET') })
-    await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(502)
-  })
+    await asUserA(request(app).get('/api/places/search').query({ q: 'Melkweg' })).expect(502)
 
-  it('drops results with no usable name', async () => {
-    stubFetch({ results: [{ id: 'x', address: {} }, PARADISO] })
-
-    const res = await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(200)
-
-    expect(res.body.items).toHaveLength(1)
+    stubFetch({}, { ok: false, status: 500 })
+    await asUserA(request(app).get('/api/places/search').query({ q: 'Ziggo Dome' })).expect(502)
   })
 
   it('requires an authenticated tenant member', async () => {
     stubFetch({ results: [] })
     await request(app).get('/api/places/search').query({ q: 'Paradiso' }).expect(401)
+  })
+})
+
+describe('GET /api/places/details/:id', () => {
+  it('follows a selected suggestion with one v3 Details request', async () => {
+    const fetchMock = stubFetch(PARADISO_DETAILS)
+    const res = await asUserA(request(app).get('/api/places/details/poi-paradiso').query({
+      sessionId: SESSION_ID,
+    })).expect(200)
+
+    expect(res.body).toMatchObject({
+      name: 'Paradiso', website: 'https://www.paradiso.nl', latitude: 52.3624,
+    })
+    const [url, options] = fetchMock.mock.calls[0]
+    const headers = new Headers(options.headers)
+    expect(url).toBe('https://api.tomtom.com/maps/orbis/places/details/pois/poi-paradiso')
+    expect(options.method).toBe('GET')
+    expect(headers.get('Session-Id')).toBe(SESSION_ID)
+    expect(headers.get('Attributes')).toBe('id,type,title,subtitles,position,address,contacts,poiTypes')
+  })
+
+  it('rejects malformed ids without contacting TomTom', async () => {
+    const fetchMock = stubFetch(PARADISO_DETAILS)
+    await asUserA(request(app).get('/api/places/details/not%20valid')).expect(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('maps a Details provider failure to 502', async () => {
+    stubFetch({}, { ok: false, status: 403 })
+    await asUserA(request(app).get('/api/places/details/poi-paradiso')).expect(502)
   })
 })

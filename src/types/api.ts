@@ -118,6 +118,11 @@ export interface PlaceSuggestion {
   longitude: number | null
   freeform_address: string | null
   categories: string[]
+  /** Present on lightweight v3 suggestions until the Details follow-up resolves them. */
+  details?: {
+    id: string
+    session_id: string | null
+  } | null
 }
 
 /** Result of applying a place suggestion to a record: what actually got filled. */

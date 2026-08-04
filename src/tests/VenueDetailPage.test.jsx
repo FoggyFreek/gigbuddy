@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
@@ -173,7 +173,9 @@ describe('VenueDetailPage — Contacts section', () => {
 describe('VenueDetailPage — address enrichment', () => {
   it('offers the lookup button to a writer', async () => {
     wrap()
-    expect(await screen.findByRole('button', { name: 'Look up address' })).toBeInTheDocument()
+    const button = await screen.findByRole('button', { name: 'Look up address' })
+    const heading = screen.getByRole('heading', { name: 'Venue' })
+    expect(within(heading.parentElement).getByRole('button', { name: 'Look up address' })).toBe(button)
   })
 
   it('hides the lookup button from a reader', async () => {

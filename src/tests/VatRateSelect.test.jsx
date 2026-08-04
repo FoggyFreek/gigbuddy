@@ -93,7 +93,7 @@ describe('Dutch VAT selector', () => {
     )
 
     expect(screen.queryByRole('combobox', { name: 'Btw-categorie' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /andere btw-behandeling/i }))
+    await user.click(screen.getByRole('button', { name: /anders/i }))
     expect(screen.getByRole('combobox', { name: 'Btw-categorie' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Belastingland' })).toBeInTheDocument()
   })
