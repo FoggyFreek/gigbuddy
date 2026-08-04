@@ -5,6 +5,7 @@ export const CREDENTIAL_TYPES = Object.freeze({
   MOLLIE_API_KEY: 'mollie_api_key',
   SHOPIFY_CLIENT_SECRET: 'shopify_client_secret',
   BANDSINTOWN_APP_ID: 'bandsintown_app_id',
+  RESEND_API_KEY: 'resend_api_key',
 })
 
 const VALID_TYPES = new Set(Object.values(CREDENTIAL_TYPES))

@@ -123,7 +123,7 @@ async function subscribeUser(slug, { activate = true } = {}) {
   return subId
 }
 
-// Purgeable data across every category on a tenant, plus the legacy mollie key.
+// Purgeable data across every category on a tenant, plus integration credentials.
 async function seedTenantData(tenantId) {
   const { rows: [song] } = await pool.query(
     'INSERT INTO songs (tenant_id, title, cover_image_path) VALUES ($1, $2, $3) RETURNING id',
@@ -148,10 +148,8 @@ async function seedTenantData(tenantId) {
     `INSERT INTO dashboard_tiles (tenant_id, type, image_path, caption)
      VALUES ($1, 'memory_tile', $2, 'Best night')`,
     [tenantId, `tenants/${tenantId}/memory/memory1.jpg`])
-  await pool.query(
-    `INSERT INTO tenant_integrations (tenant_id, mollie_api_key, bandsintown_app_id)
-     VALUES ($1, 'test_dummykey1234567890', 'bit_app_id')`,
-    [tenantId])
+  await credSvc.setIntegrationCredential(pool, tenantId, 'mollie_api_key', 'test_dummykey1234567890')
+  await credSvc.setIntegrationCredential(pool, tenantId, 'bandsintown_app_id', 'bit_app_id')
   return song.id
 }
 
@@ -330,7 +328,7 @@ describe('free-fallback (bronze) downgrade', () => {
     const { rows: [tenant] } = await pool.query(
       `SELECT t.accent_color, t.logo_path, t.banner_path,
               dt.image_path AS memory_image_path, dt.caption AS memory_caption,
-              ti.mollie_api_key, ti.bandsintown_app_id
+              ti.mollie_api_key_encrypted, ti.bandsintown_app_id_encrypted
          FROM tenants t
          LEFT JOIN dashboard_tiles dt ON dt.tenant_id = t.id AND dt.type = 'memory_tile'
          LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id
@@ -345,8 +343,8 @@ describe('free-fallback (bronze) downgrade', () => {
     expect(coverSong.cover_image_path).toBeNull()
     // Band logos are settable on every plan and are never purged.
     expect(tenant.logo_path).toBe(`tenants/${seed.tenantA.id}/logo/logo1.png`)
-    expect(tenant.mollie_api_key).toBeNull() // no payment links → key deleted
-    expect(tenant.bandsintown_app_id).toBeNull()
+    expect(tenant.mollie_api_key_encrypted).toBeNull() // no payment links → key deleted
+    expect(tenant.bandsintown_app_id_encrypted).toBeNull()
 
     // Finance is never purged; the other tenant is untouched.
     expect(await countRows('SELECT COUNT(*)::int n FROM ledger_transactions WHERE tenant_id = $1', [seed.tenantA.id])).toBe(1)
@@ -373,7 +371,7 @@ describe('free-fallback (bronze) downgrade', () => {
     const { rows: [tenant] } = await pool.query(
       `SELECT t.accent_color, t.logo_path, t.banner_path,
               dt.image_path AS memory_image_path,
-              ti.mollie_api_key, ti.bandsintown_app_id
+              ti.mollie_api_key_encrypted, ti.bandsintown_app_id_encrypted
          FROM tenants t
          LEFT JOIN dashboard_tiles dt ON dt.tenant_id = t.id AND dt.type = 'memory_tile'
          LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id
@@ -382,8 +380,8 @@ describe('free-fallback (bronze) downgrade', () => {
     expect(tenant.banner_path).toBeNull()
     expect(tenant.memory_image_path).toBeNull()
     expect(tenant.logo_path).toBe(`tenants/${seed.tenantB.id}/logo/logo1.png`) // logos survive the purge
-    expect(tenant.mollie_api_key).toBeNull()
-    expect(tenant.bandsintown_app_id).toBeNull()
+    expect(tenant.mollie_api_key_encrypted).toBeNull()
+    expect(tenant.bandsintown_app_id_encrypted).toBeNull()
   })
 
   it('resume before period end clears the manifest and snapshot', async () => {
@@ -686,9 +684,9 @@ describe('integrations purge — mollie key retention [B4]', () => {
     await bronzeAndFinalize(subId)
 
     const { rows: [tenant] } = await pool.query(
-      `SELECT mollie_api_key, mollie_api_key_retained_at
+      `SELECT mollie_api_key_encrypted, mollie_api_key_retained_at
          FROM tenant_integrations WHERE tenant_id = $1`, [seed.tenantA.id])
-    expect(tenant.mollie_api_key).toBe('test_dummykey1234567890') // value kept
+    expect(tenant.mollie_api_key_encrypted).not.toBeNull() // value kept
     expect(tenant.mollie_api_key_retained_at).not.toBeNull()
 
     // Unpaid link was removed; the paid one stays.
@@ -721,10 +719,9 @@ describe('integrations purge — mollie key retention [B4]', () => {
     await bronzeAndFinalize(subId)
 
     const { rows: [tenant] } = await pool.query(
-      `SELECT mollie_api_key, mollie_api_key_encrypted, mollie_api_key_retained_at
+      `SELECT mollie_api_key_encrypted, mollie_api_key_retained_at
          FROM tenant_integrations WHERE tenant_id = $1`,
       [seed.tenantA.id])
-    expect(tenant.mollie_api_key).toBeNull()
     expect(tenant.mollie_api_key_encrypted).toBeNull()
     expect(tenant.mollie_api_key_retained_at).toBeNull()
   })

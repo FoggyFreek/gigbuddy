@@ -16,6 +16,9 @@ import {
   getMollieKeyStatus,
   setMollieKeyValue,
   clearMollieKeyValue,
+  getResendKeyStatus,
+  setResendKeyValue,
+  clearResendKeyValue,
   getBandsintownKeyStatus,
   setBandsintownKeyValue,
   clearBandsintownKeyValue,
@@ -142,6 +145,23 @@ router.put('/mollie-key', setIntegration, noStore, async (req, res) => {
 router.delete('/mollie-key', manageIntegration, noStore, async (req, res) => {
   const status = await clearMollieKeyValue(pool, req.tenantId)
   auditLog(req, 'integration.mollie_key.clear')
+  res.json(status)
+})
+
+router.get('/resend-key', manageIntegration, noStore, async (req, res) => {
+  res.json(await getResendKeyStatus(pool, req.tenantId))
+})
+
+router.put('/resend-key', setIntegration, noStore, async (req, res) => {
+  const result = await setResendKeyValue(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  auditLog(req, 'integration.resend_key.set')
+  res.json(result.status)
+})
+
+router.delete('/resend-key', manageIntegration, noStore, async (req, res) => {
+  const status = await clearResendKeyValue(pool, req.tenantId)
+  auditLog(req, 'integration.resend_key.clear')
   res.json(status)
 })
 

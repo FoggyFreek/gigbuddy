@@ -40,7 +40,7 @@ function DetailStub() {
 // navigate to the detail outlet.
 const integrationProfile = (shopify) => ({
   bandName: '', setBandName: vi.fn(), accentColor: null, setAccentColor: vi.fn(),
-  integrations: { shopify, bandsintown: true, mollie: true },
+  integrations: { shopify, bandsintown: true, mollie: true, resend: true },
   isIntegrationConfigured: (integration) => integration !== 'shopify' || shopify,
   setIntegrationConfigured: vi.fn(),
 })

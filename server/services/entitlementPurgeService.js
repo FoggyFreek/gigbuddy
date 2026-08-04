@@ -29,6 +29,7 @@ import {
 } from '../auth/entitlements.js'
 import {
   clearBandsintownKeyValue,
+  clearResendKeyValue,
   clearShopifyClientIdValue,
   clearShopifySecretValue,
   clearShopifyDomainValue,
@@ -73,6 +74,7 @@ export async function purgeIntegrationSecrets(db, tenantId, { includeMollie = tr
     await clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
   }
   await clearBandsintownKeyValue(db, tenantId)
+  await clearResendKeyValue(db, tenantId)
   await clearShopifyClientIdValue(db, tenantId)
   await clearShopifySecretValue(db, tenantId)
   await clearShopifyDomainValue(db, tenantId)

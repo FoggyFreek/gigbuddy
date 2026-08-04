@@ -93,9 +93,20 @@ async function satisfyAllProfileGoals(tenantId, redeemedByUserId) {
   )
 }
 
+// Finance facts count only COMPLETED calendar months, and factsBuilder derives
+// that cutoff from today — so these dates have to move with the clock.
+const NOW = new Date()
+const monthDay = (monthsAgo, day) =>
+  new Date(Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth() - monthsAgo, day))
+    .toISOString().slice(0, 10)
+
+const CURRENT_MONTH = monthDay(0, 1)
+const COMPLETED_MONTH = monthDay(1, 15)
+const EARLIER_COMPLETED_MONTH = monthDay(2, 15)
+
 function journalPayload(overrides = {}) {
   return {
-    entry_date: '2026-06-15',
+    entry_date: COMPLETED_MONTH,
     description: 'gig revenue',
     lines: [{
       description: 'gig fee', account_code: '41000', vat_rate: 0,
@@ -220,13 +231,13 @@ describe('GET /api/achievements', () => {
 
   it('counts only completed months for finance goals and ignores voided ledger entries', async () => {
     // Revenue booked in the CURRENT month must not unlock (month not complete).
-    await postApprovedJournal({ entry_date: '2026-07-01' })
+    await postApprovedJournal({ entry_date: CURRENT_MONTH })
     clearAchievementCache()
     let list = await getAchievements()
     expect(byKey(list, 'black_ink_sabbath').unlocked_at).toBeNull()
 
     // Revenue in a completed month, but voided → still locked.
-    const journal = await postApprovedJournal({ entry_date: '2026-06-15' })
+    const journal = await postApprovedJournal({ entry_date: COMPLETED_MONTH })
     const { rows: [txn] } = await pool.query(
       `SELECT id FROM ledger_transactions
         WHERE tenant_id = $1 AND source_type = 'journal' AND source_id = $2`,
@@ -239,7 +250,7 @@ describe('GET /api/achievements', () => {
     expect(byKey(list, 'black_ink_sabbath').unlocked_at).toBeNull()
 
     // A live completed-month revenue posting unlocks it.
-    await postApprovedJournal({ entry_date: '2026-05-15' })
+    await postApprovedJournal({ entry_date: EARLIER_COMPLETED_MONTH })
     clearAchievementCache()
     list = await getAchievements()
     expect(byKey(list, 'black_ink_sabbath').unlocked_at).not.toBeNull()

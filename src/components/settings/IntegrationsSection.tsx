@@ -17,9 +17,11 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import PremiumDiamond from '../PremiumDiamond.tsx'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
-import { clearMollieKey, getMollieKey, setMollieKey, clearBandsintownKey, getBandsintownKey, setBandsintownKey, clearBandsintownArtistId, getBandsintownArtistId, setBandsintownArtistId, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain } from '../../api/profile.ts'
+import { clearMollieKey, getMollieKey, setMollieKey, clearResendKey, getResendKey, setResendKey, clearBandsintownKey, getBandsintownKey, setBandsintownKey, clearBandsintownArtistId, getBandsintownArtistId, setBandsintownArtistId, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain } from '../../api/profile.ts'
+import type { IntegrationSecretStatus } from '../../api/profile.ts'
 import Divider from '@mui/material/Divider'
 import { useProfile } from '../../contexts/profileContext.ts'
+import type { IntegrationName } from '../../utils/integrations.ts'
 
 // Shopify client ids aren't secret but are long; collapse the middle so the
 // display value doesn't eat the card's horizontal space.
@@ -42,6 +44,7 @@ export default function IntegrationsSection() {
         </Typography>
         <PremiumDiamond feature="integrations" />
       </Stack>
+      <ResendKeySection />
       <MollieKeySection />
       <ShopifyKeySection />
       <BandsintownKeySection />
@@ -82,14 +85,14 @@ function IntegrationCard({ logoLight, logoDark, alt, title, description, configu
 
   if (!expanded) {
     return (
-      <Box sx={{ p: compact ? 1.5 : 3, mt:2 }}>
+      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box sx={{ flex: 1, display: 'flex' }}>{logo}</Box>
           <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setManuallyExpanded(true)}>
             {t($ => $.integrations.add)}
           </Button>
         </Stack>
-      </Box>
+      </Paper>
     )
   }
 
@@ -532,7 +535,7 @@ function KeyStatusDisplay({ status }: Readonly<{ status: MollieKeyStatus | null 
   return <Typography variant="body2" color="text.disabled">{t($ => $.integrations.notConfigured)}</Typography>
 }
 
-interface MollieKeyEditorProps {
+interface SecretKeyEditorProps {
   inputKey: string
   onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   showKey?: boolean
@@ -541,22 +544,25 @@ interface MollieKeyEditorProps {
   saving?: boolean
   onSave: () => void
   onCancel: () => void
+  label: string
+  placeholder: string
+  helper: string
 }
 
-function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, error, saving, onSave, onCancel }: Readonly<MollieKeyEditorProps>) {
+function SecretKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, error, saving, onSave, onCancel, label, placeholder, helper }: Readonly<SecretKeyEditorProps>) {
   const { t } = useTranslation(['settings', 'common'])
   return (
     <Stack spacing={1.5}>
       <TextField
-        label={t($ => $.mollie.label)}
+        label={label}
         fullWidth
         size="small"
         value={inputKey}
         onChange={onInputChange}
         type={showKey ? 'text' : 'password'}
-        placeholder={t($ => $.mollie.placeholder)}
+        placeholder={placeholder}
         error={!!error}
-        helperText={error || t($ => $.mollie.helper)}
+        helperText={error || helper}
         autoComplete="off"
         slotProps={{
           htmlInput: { spellCheck: false },
@@ -594,23 +600,49 @@ function MollieKeyEditor({ inputKey, onInputChange, showKey, onToggleShowKey, er
   )
 }
 
-export function MollieKeySection() {
+interface SecretKeySectionProps {
+  integration: IntegrationName
+  api: {
+    get: () => Promise<IntegrationSecretStatus>
+    set: (key: string) => Promise<IntegrationSecretStatus>
+    clear: () => Promise<IntegrationSecretStatus>
+  }
+  invalidCode: string
+  logoLight: string
+  logoDark: string
+  alt: string
+  copy: {
+    title: string
+    description: string
+    label: string
+    placeholder: string
+    helper: string
+    invalidFormat: string
+    saveFailed: string
+    replace: string
+    remove: string
+  }
+  mt?: number
+}
+
+function SecretKeySection({ integration, api, invalidCode, logoLight, logoDark, alt, copy, mt }: Readonly<SecretKeySectionProps>) {
   const { t } = useTranslation('settings')
   const { setIntegrationConfigured } = useProfile()
-  const [status, setStatus] = useState<MollieKeyStatus | null>(null)
+  const [status, setStatus] = useState<IntegrationSecretStatus | null>(null)
   const [editing, setEditing] = useState(false)
   const [inputKey, setInputKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { get, set, clear } = api
 
   useEffect(() => {
-    getMollieKey().then((s) => setStatus(s as unknown as MollieKeyStatus)).catch(() => {})
-  }, [])
+    get().then(setStatus).catch(() => {})
+  }, [get])
 
   useEffect(() => {
-    if (status !== null) setIntegrationConfigured('mollie', Boolean(status.isSet))
-  }, [setIntegrationConfigured, status])
+    if (status !== null) setIntegrationConfigured(integration, status.isSet)
+  }, [integration, setIntegrationConfigured, status])
 
   function startEditing() {
     setInputKey('')
@@ -630,14 +662,14 @@ export function MollieKeySection() {
     setSaving(true)
     setError(null)
     try {
-      const result = await setMollieKey(inputKey.trim())
-      setStatus(result as unknown as MollieKeyStatus)
+      const result = await set(inputKey.trim())
+      setStatus(result)
       setEditing(false)
       setInputKey('')
     } catch (err: unknown) {
-      setError(err instanceof Error && err.message === 'invalid_mollie_key'
-        ? t($ => $.mollie.invalidFormat)
-        : t($ => $.mollie.saveFailed))
+      setError(err instanceof Error && err.message === invalidCode
+        ? copy.invalidFormat
+        : copy.saveFailed)
     } finally {
       setSaving(false)
     }
@@ -646,8 +678,8 @@ export function MollieKeySection() {
   async function handleClear() {
     setSaving(true)
     try {
-      const result = await clearMollieKey()
-      setStatus(result as unknown as MollieKeyStatus)
+      const result = await clear()
+      setStatus(result)
       setEditing(false)
     } finally {
       setSaving(false)
@@ -656,24 +688,27 @@ export function MollieKeySection() {
 
   return (
     <IntegrationCard
-      logoLight="/share/mollie/Mollie-Logo-Black-2023.png"
-      logoDark="/share/mollie/Mollie-Logo-White-2023.png"
-      alt="Mollie"
-      title={t($ => $.mollie.title)}
-      description={t($ => $.mollie.description)}
-      configured={!!status?.isSet}
-      mt={3}
+      logoLight={logoLight}
+      logoDark={logoDark}
+      alt={alt}
+      title={copy.title}
+      description={copy.description}
+      configured={Boolean(status?.isSet)}
+      mt={mt}
     >
       {editing ? (
-        <MollieKeyEditor
+        <SecretKeyEditor
           inputKey={inputKey}
           onInputChange={(e) => { setInputKey(e.target.value); setError(null) }}
           showKey={showKey}
-          onToggleShowKey={() => setShowKey((v) => !v)}
+          onToggleShowKey={() => setShowKey((value) => !value)}
           error={error}
           saving={saving}
           onSave={handleSave}
           onCancel={cancelEditing}
+          label={copy.label}
+          placeholder={copy.placeholder}
+          helper={copy.helper}
         />
       ) : (
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
@@ -681,12 +716,12 @@ export function MollieKeySection() {
             <KeyStatusDisplay status={status} />
           </Box>
           <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
-            {status?.isSet ? t($ => $.mollie.replace) : t($ => $.integrations.configure)}
+            {status?.isSet ? copy.replace : t($ => $.integrations.configure)}
           </Button>
           {status?.isSet && (
-            <Tooltip title={t($ => $.mollie.remove)}>
+            <Tooltip title={copy.remove}>
               <span>
-                <IconButton size="small" color="error" onClick={handleClear} disabled={saving}>
+                <IconButton size="small" color="error" onClick={handleClear} disabled={saving} aria-label={copy.remove}>
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
               </span>
@@ -695,6 +730,58 @@ export function MollieKeySection() {
         </Stack>
       )}
     </IntegrationCard>
+  )
+}
+
+export function MollieKeySection() {
+  const { t } = useTranslation('settings')
+  return (
+    <SecretKeySection
+      integration="mollie"
+      api={{ get: getMollieKey, set: setMollieKey, clear: clearMollieKey }}
+      invalidCode="invalid_mollie_key"
+      logoLight="/share/mollie/Mollie-Logo-Black-2023.png"
+      logoDark="/share/mollie/Mollie-Logo-White-2023.png"
+      alt="Mollie"
+      copy={{
+        title: t($ => $.mollie.title),
+        description: t($ => $.mollie.description),
+        label: t($ => $.mollie.label),
+        placeholder: t($ => $.mollie.placeholder),
+        helper: t($ => $.mollie.helper),
+        invalidFormat: t($ => $.mollie.invalidFormat),
+        saveFailed: t($ => $.mollie.saveFailed),
+        replace: t($ => $.mollie.replace),
+        remove: t($ => $.mollie.remove),
+      }}
+      mt={2}
+    />
+  )
+}
+
+export function ResendKeySection() {
+  const { t } = useTranslation('settings')
+  return (
+    <SecretKeySection
+      integration="resend"
+      api={{ get: getResendKey, set: setResendKey, clear: clearResendKey }}
+      invalidCode="invalid_resend_key"
+      logoLight="/share/resend/resend-wordmark-light-256px.png"
+      logoDark="/share/resend/resend-wordmark-dark-256px.png"
+      alt="Resend"
+      copy={{
+        title: t($ => $.resend.title),
+        description: t($ => $.resend.description),
+        label: t($ => $.resend.label),
+        placeholder: t($ => $.resend.placeholder),
+        helper: t($ => $.resend.helper),
+        invalidFormat: t($ => $.resend.invalidFormat),
+        saveFailed: t($ => $.resend.saveFailed),
+        replace: t($ => $.resend.replace),
+        remove: t($ => $.resend.remove),
+      }}
+      mt={3}
+    />
   )
 }
 

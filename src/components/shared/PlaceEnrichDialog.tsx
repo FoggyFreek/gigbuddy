@@ -38,6 +38,10 @@ interface PlaceEnrichDialogProps {
   onApply: (suggestion: PlaceSuggestion) => Promise<void> | void
   onClose: () => void
   title?: string
+  /** Country the record already carries — narrows the lookup when known. */
+  country?: string | null
+  /** City the record already carries — narrows the lookup when known. */
+  city?: string | null
 }
 
 // Reusable "look up and fill the blanks" dialog: pick a candidate place, preview
@@ -47,7 +51,7 @@ interface PlaceEnrichDialogProps {
 // The preview is UX only. The server recomputes the fill set against the stored
 // row, so what it actually writes is authoritative.
 export default function PlaceEnrichDialog({
-  query, current, fields, onApply, onClose, title,
+  query, current, fields, onApply, onClose, title, country = null, city = null,
 }: Readonly<PlaceEnrichDialogProps>) {
   const { t } = useTranslation(['places', 'common'])
   const [candidates, setCandidates] = useState<PlaceSuggestion[]>([])
@@ -63,7 +67,7 @@ export default function PlaceEnrichDialog({
     setLoading(true)
     setFailed(false)
     setCandidates([])
-    searchPlaces(query, { sessionId })
+    searchPlaces(query, { country, city, sessionId })
       .then((items) => {
         if (!active) return
         setCandidates(items)
@@ -72,7 +76,7 @@ export default function PlaceEnrichDialog({
       .catch(() => { if (active) setFailed(true) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [query, sessionId])
+  }, [query, country, city, sessionId])
 
   const selected = candidates[selectedIndex] ?? null
 

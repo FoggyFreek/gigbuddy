@@ -6,5 +6,6 @@ export async function getIntegrationConfiguration(executor, tenantId) {
     shopify: Boolean(configured.shopify),
     bandsintown: Boolean(configured.bandsintown),
     mollie: Boolean(configured.mollie),
+    resend: Boolean(configured.resend),
   }
 }

@@ -2,11 +2,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/_client.ts', () => ({ request: vi.fn() }))
 
-import { getPlaceDetails } from '../api/places.ts'
+import { getPlaceDetails, searchPlaces } from '../api/places.ts'
 import { request } from '../api/_client.ts'
 
 beforeEach(() => {
   request.mockReset()
+})
+
+describe('searchPlaces', () => {
+  it('forwards a known country and city so the provider can narrow the results', async () => {
+    request.mockResolvedValue({ items: [] })
+
+    await searchPlaces('Paradiso', { country: 'NL', city: 'Amsterdam' })
+
+    const url = new URL(request.mock.calls[0][0], 'https://example.test')
+    expect(url.searchParams.get('q')).toBe('Paradiso')
+    expect(url.searchParams.get('country')).toBe('NL')
+    expect(url.searchParams.get('city')).toBe('Amsterdam')
+  })
+
+  it('omits blank narrowing fields', async () => {
+    request.mockResolvedValue({ items: [] })
+
+    await searchPlaces('Paradiso', { country: '', city: null })
+
+    const url = new URL(request.mock.calls[0][0], 'https://example.test')
+    expect(url.searchParams.has('country')).toBe(false)
+    expect(url.searchParams.has('city')).toBe(false)
+  })
 })
 
 describe('getPlaceDetails', () => {

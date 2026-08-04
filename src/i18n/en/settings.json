@@ -201,12 +201,23 @@
     }
   },
   "mollie": {
-    "title": "Mollie API key",
+    "title": "Send payment links through Mollie",
     "description": "Used to create payment links via Mollie. The key is stored securely and never shown in full after saving.",
     "label": "Mollie API key",
     "placeholder": "live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     "helper": "Paste your live or test key from the Mollie dashboard.",
     "invalidFormat": "Invalid key format. Keys must start with live_ or test_ followed by at least 25 alphanumeric characters.",
+    "saveFailed": "Failed to save key. Please try again.",
+    "replace": "Replace key",
+    "remove": "Remove key"
+  },
+  "resend": {
+    "title": "Send emails through Resend",
+    "description": "Connect Resend for email delivery from your own domain from GigBuddy. The key is stored securely and never shown in full after saving.",
+    "label": "Resend API key",
+    "placeholder": "re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "helper": "Use a sending-access key from Resend, restricted to your verified sending domain when possible.",
+    "invalidFormat": "Invalid key format. Resend API keys start with re_.",
     "saveFailed": "Failed to save key. Please try again.",
     "replace": "Replace key",
     "remove": "Remove key"

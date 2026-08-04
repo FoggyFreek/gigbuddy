@@ -34,6 +34,14 @@ export function isValidBandsintownAppId(value) {
   return typeof value === 'string' && BANDSINTOWN_APP_ID_RE.test(value.trim())
 }
 
+// Resend API keys are opaque tokens with a stable re_ prefix. Keep validation
+// permissive enough for future token alphabets while bounding stored input.
+export const RESEND_API_KEY_RE = /^re_\S{1,197}$/
+
+export function isValidResendApiKey(value) {
+  return typeof value === 'string' && RESEND_API_KEY_RE.test(value.trim())
+}
+
 // Shopify store domain, e.g. "yourband.myshopify.com" — the Admin REST API host.
 export const SHOPIFY_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i
 

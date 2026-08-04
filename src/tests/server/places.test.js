@@ -197,6 +197,55 @@ describe('GET /api/places/search', () => {
     })
   })
 
+  it('narrows the lookup with the record’s known country and city', async () => {
+    const fetchMock = stubFetch({ results: [] })
+
+    await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso', country: 'nl', city: 'Amsterdam',
+    })).expect(200)
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      query: 'Paradiso Amsterdam',
+      maxResults: 10,
+      filters: { types: ['poi'], countryCodesIso2: ['NL'] },
+    })
+  })
+
+  it('does not repeat a city the query already names', async () => {
+    const fetchMock = stubFetch({ results: [] })
+
+    await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso amsterdam', city: 'Amsterdam',
+    })).expect(200)
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).query).toBe('Paradiso amsterdam')
+  })
+
+  it('drops an incomplete country code instead of failing the lookup', async () => {
+    const fetchMock = stubFetch({ results: [] })
+
+    await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso', country: 'N', city: '   ',
+    })).expect(200)
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      query: 'Paradiso', maxResults: 10, filters: { types: ['poi'] },
+    })
+  })
+
+  it('keys the cache on the country and city so a narrowed query is not served a stale answer', async () => {
+    const fetchMock = stubFetch({ results: [PARADISO_SUGGESTION] })
+    await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })).expect(200)
+    await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso', country: 'BE',
+    })).expect(200)
+    await asUserA(request(app).get('/api/places/search').query({
+      q: 'Paradiso', country: 'BE', city: 'Gent',
+    })).expect(200)
+
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('sends a complete bias point longitude-first as origin and ranking preference', async () => {
     const fetchMock = stubFetch({ results: [] })
     await asUserA(request(app).get('/api/places/search').query({

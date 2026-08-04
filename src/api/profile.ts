@@ -109,6 +109,11 @@ export const setMollieKey = (key: string) =>
   api<IntegrationSecretStatus>('/mollie-key', { method: 'PUT', body: JSON.stringify({ key }) })
 export const clearMollieKey = () => api<IntegrationSecretStatus>('/mollie-key', { method: 'DELETE' })
 
+export const getResendKey = () => api<IntegrationSecretStatus>('/resend-key')
+export const setResendKey = (key: string) =>
+  api<IntegrationSecretStatus>('/resend-key', { method: 'PUT', body: JSON.stringify({ key }) })
+export const clearResendKey = () => api<IntegrationSecretStatus>('/resend-key', { method: 'DELETE' })
+
 interface ShopifyClientId {
   clientId?: string | null
 }

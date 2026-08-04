@@ -400,6 +400,8 @@ export default function VenueDetailPage() {
         query={form.name ?? ''}
         current={form as Record<string, unknown>}
         fields={enrichFields}
+        country={form.country ?? null}
+        city={form.city ?? null}
         onApply={handleEnrichApply}
         onClose={() => setEnriching(false)}
       />

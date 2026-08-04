@@ -37,8 +37,9 @@ const asUserA = (req) => as(seed.userA.id, seed.tenantA.id)(req)
 const asSuper = (req, tenantId = seed.tenantA.id) => as(seed.superUser.id, tenantId)(req)
 
 const CREDENTIAL_FIELDS = [
-  'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
-  'shopify_client_secret', 'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+  'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
+  'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+  'resend_api_key_encrypted', 'resend_api_key_changed_at',
 ]
 
 function expectNoCredentialFields(value) {
@@ -330,13 +331,12 @@ describe('/api/admin/tenants — super admin only', () => {
     expect(res.body).toEqual({ error: 'Invalid userId' })
   })
 
-  it('never returns plaintext or encrypted credential fields', async () => {
+  it('never returns encrypted credential fields', async () => {
     await pool.query(
       `INSERT INTO tenant_integrations (
-         mollie_api_key, shopify_client_secret,
          mollie_api_key_encrypted, shopify_client_secret_encrypted, tenant_id
-       ) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)`,
-      ['legacy-mollie', 'legacy-shopify', '{}', '{}', seed.tenantA.id],
+       ) VALUES ($1::jsonb, $2::jsonb, $3)`,
+      ['{}', '{}', seed.tenantA.id],
     )
     const list = await asSuper(request(app).get('/api/admin/tenants')).expect(200)
     const detail = await asSuper(request(app).get(`/api/admin/tenants/${seed.tenantA.id}`)).expect(200)

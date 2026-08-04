@@ -296,13 +296,11 @@ describe('/api/profile/bandsintown-key', () => {
     expect(put.body.isSet).toBe(true)
     expect(JSON.stringify(put.body)).not.toContain('js_www.example.com')
 
-    // Stored encrypted, plaintext column stays empty.
+    // Stored only as an envelope.
     const { rows: [row] } = await pool.query(
-      `SELECT bandsintown_app_id, bandsintown_app_id_encrypted
-         FROM tenant_integrations WHERE tenant_id = $1`,
+      `SELECT bandsintown_app_id_encrypted FROM tenant_integrations WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
-    expect(row.bandsintown_app_id).toBeNull()
     expect(row.bandsintown_app_id_encrypted).not.toBeNull()
 
     const del = await asUserA(request(app).delete('/api/profile/bandsintown-key'))

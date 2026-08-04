@@ -149,6 +149,27 @@ describe('PlaceSearchField', () => {
     ).toBeInTheDocument()
   })
 
+  it('passes an already-known country and city to the lookup', async () => {
+    const user = userEvent.setup()
+    render(wrap(<Harness country="NL" city="Amsterdam" />))
+
+    await user.type(screen.getByRole('combobox'), 'Paradiso')
+
+    await waitFor(() => expect(searchPlaces).toHaveBeenCalledWith(
+      'Paradiso', expect.objectContaining({ country: 'NL', city: 'Amsterdam' }),
+    ))
+  })
+
+  it('re-runs the lookup when the known city changes', async () => {
+    const { rerender } = render(wrap(<Harness initial="Paradiso" city="Amsterdam" />))
+
+    await waitFor(() => expect(searchPlaces).toHaveBeenCalledTimes(1))
+    rerender(wrap(<Harness initial="Paradiso" city="Utrecht" />))
+
+    await waitFor(() => expect(searchPlaces).toHaveBeenCalledTimes(2))
+    expect(searchPlaces.mock.calls[1][1]).toMatchObject({ city: 'Utrecht' })
+  })
+
   it('does not search while disabled', async () => {
     render(wrap(<Harness initial="Paradiso" disabled />))
 

@@ -15,7 +15,7 @@
     "server:dev": "nodemon server/index.js",
     "server:debug": "nodemon --inspect-brk server/index.js",
     "migrate": "node server/db/migrate.js",
-    "migrate:integration-secrets": "node server/scripts/migrateIntegrationSecrets.js",
+    "rotate:integration-secrets": "node server/scripts/rotateIntegrationSecrets.js",
     "test": "vitest --exclude src/tests/server",
     "test:server": "vitest run --no-file-parallelism src/tests/server",
     "test:ui": "vitest --ui",
@@ -81,6 +81,7 @@
     "react-leaflet": "^5.0.0",
     "react-pdf": "^10.4.1",
     "react-router-dom": "^7.14.1",
+    "resend": "^6.18.1",
     "sharp": "^0.34.5",
     "web-push": "^3.6.7"
   },

@@ -8,7 +8,7 @@ import {
   getShopifyDomain,
 } from '../repositories/tenantIntegrationRepository.js'
 import { CREDENTIAL_TYPES } from '../security/integrationSecrets.js'
-import { loadIntegrationCredential } from './integrationCredentialService.js'
+import { loadCredentialOrError } from './integrationCredentialService.js'
 
 // Re-mint this many ms before the real expiry so an in-flight request never uses
 // an about-to-expire token.
@@ -43,13 +43,12 @@ export async function getAccessToken(executor, tenantId, fetchImpl = globalThis.
   ])
   if (!domain || !clientId) return shopifyError(400, 'shopify_not_configured')
 
-  let clientSecret
-  try {
-    clientSecret = await loadIntegrationCredential(executor, tenantId, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET)
-  } catch {
-    return shopifyError(503, 'shopify_credential_unavailable')
-  }
-  if (!clientSecret) return shopifyError(400, 'shopify_not_configured')
+  const secret = await loadCredentialOrError(executor, tenantId, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET, {
+    integration: 'shopify',
+    logEvent: 'shopify.credential_decryption_failed',
+  })
+  if (secret.error) return secret
+  const clientSecret = secret.value
 
   const url = `https://${domain}/admin/oauth/access_token`
   let res
