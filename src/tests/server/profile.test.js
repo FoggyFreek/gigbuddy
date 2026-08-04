@@ -5,7 +5,7 @@ import request from 'supertest'
 import { VAT_COUNTRY_CODES } from '../../../shared/vatRates.js'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
-let getAccessToken, resetShopifyTokenCacheForTests
+let getAccessToken, resetShopifyTokenCacheForTests, setIntegrationCredential
 let seed
 
 beforeAll(async () => {
@@ -17,6 +17,7 @@ beforeAll(async () => {
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
   ;({ getAccessToken, resetShopifyTokenCacheForTests } = await import('../../../server/services/shopifyTokenService.js'))
+  ;({ setIntegrationCredential } = await import('../../../server/services/integrationCredentialService.js'))
   await runMigrations()
 })
 
@@ -65,16 +66,25 @@ describe('GET /api/profile — integration configuration', () => {
   it('reports only fully configured tenant integrations', async () => {
     await pool.query(
       `INSERT INTO tenant_integrations
-         (tenant_id, bandsintown_app_id, bandsintown_artist_id, shopify_client_id, shopify_client_secret,
-           shopify_shop_domain, mollie_api_key, resend_api_key_encrypted)
-       VALUES ($1, 'bands-key', '12345', 'client-id', 'client-secret', 'alpha.myshopify.com', 'test_mollie', '{}'::jsonb)`,
+         (tenant_id, bandsintown_artist_id, shopify_client_id, shopify_shop_domain, resend_api_key_encrypted)
+       VALUES ($1, '12345', 'client-id', 'alpha.myshopify.com', '{}'::jsonb)`,
       [seed.tenantA.id],
     )
+    await setIntegrationCredential(pool, seed.tenantA.id, 'bandsintown_app_id', 'bands-key')
+    await setIntegrationCredential(pool, seed.tenantA.id, 'shopify_client_secret', 'client-secret')
+    await setIntegrationCredential(pool, seed.tenantA.id, 'mollie_api_key', 'test_mollie')
+
+    // Bandsintown app_id without an artist id cannot call the API → not configured.
     await pool.query(
-      // Bandsintown app_id without an artist id cannot call the API → not configured.
-      `INSERT INTO tenant_integrations
-         (tenant_id, bandsintown_app_id, shopify_client_id, mollie_api_key, mollie_api_key_retained_at)
-       VALUES ($1, 'bands-key', 'incomplete-client-id', 'retained-key', NOW())`,
+      `INSERT INTO tenant_integrations (tenant_id, shopify_client_id)
+       VALUES ($1, 'incomplete-client-id')`,
+      [seed.tenantB.id],
+    )
+    await setIntegrationCredential(pool, seed.tenantB.id, 'bandsintown_app_id', 'bands-key')
+    await setIntegrationCredential(pool, seed.tenantB.id, 'mollie_api_key', 'retained-key')
+    // Retained after a downgrade purge → reported absent.
+    await pool.query(
+      'UPDATE tenant_integrations SET mollie_api_key_retained_at = NOW() WHERE tenant_id = $1',
       [seed.tenantB.id],
     )
 
@@ -555,11 +565,9 @@ describe('Shopify credential management', () => {
     expect(res.headers['cache-control']).toBe('no-store')
 
     const { rows: [stored] } = await pool.query(
-      `SELECT shopify_client_secret, shopify_client_secret_encrypted
-         FROM tenant_integrations WHERE tenant_id = $1`,
+      `SELECT shopify_client_secret_encrypted FROM tenant_integrations WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
-    expect(stored.shopify_client_secret).toBeNull()
     expect(stored.shopify_client_secret_encrypted).toEqual(expect.objectContaining({
       v: 1,
       kid: process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID,
@@ -645,12 +653,11 @@ describe('Shopify credential management', () => {
     ['DELETE', 'shopify-domain', null],
   ])('invalidates cached tokens after %s /%s', async (method, path, body) => {
     await pool.query(
-      `INSERT INTO tenant_integrations (
-         shopify_client_id, shopify_client_secret,
-         shopify_client_secret_encrypted, shopify_shop_domain, tenant_id
-       ) VALUES ($1, $2, NULL, $3, $4)`,
-      ['a'.repeat(32), validSecret, 'test-band.myshopify.com', seed.tenantA.id],
+      `INSERT INTO tenant_integrations (shopify_client_id, shopify_shop_domain, tenant_id)
+       VALUES ($1, $2, $3)`,
+      ['a'.repeat(32), 'test-band.myshopify.com', seed.tenantA.id],
     )
+    await setIntegrationCredential(pool, seed.tenantA.id, 'shopify_client_secret', validSecret)
     const mint = vi.fn(async () => ({
       ok: true,
       json: async () => ({ access_token: 'short-lived-token', expires_in: 3600 }),

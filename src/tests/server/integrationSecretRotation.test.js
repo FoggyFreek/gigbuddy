@@ -3,13 +3,13 @@ import './_envSetup.js'
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 
 let pool, runMigrations, truncateAll, seedTwoTenants
-let migrateIntegrationSecrets, loadIntegrationCredential, setIntegrationCredential, CREDENTIAL_TYPES
+let rotateIntegrationSecrets, loadIntegrationCredential, setIntegrationCredential, CREDENTIAL_TYPES
 let seed
 
 beforeAll(async () => {
   const db = await import('./_db.js')
   ;({ pool, runMigrations, truncateAll, seedTwoTenants } = db)
-  ;({ migrateIntegrationSecrets } = await import('../../../server/scripts/migrateIntegrationSecrets.js'))
+  ;({ rotateIntegrationSecrets } = await import('../../../server/scripts/rotateIntegrationSecrets.js'))
   ;({ loadIntegrationCredential, setIntegrationCredential } = await import('../../../server/services/integrationCredentialService.js'))
   ;({ CREDENTIAL_TYPES } = await import('../../../server/security/integrationSecrets.js'))
   await runMigrations()
@@ -24,60 +24,54 @@ afterAll(async () => {
   await pool.end()
 })
 
-describe('integration credential migration', () => {
-  it('migrates legacy values, verifies them, nulls plaintext, and is idempotent', async () => {
-    await pool.query(
-      `INSERT INTO tenant_integrations (mollie_api_key, shopify_client_secret, tenant_id)
-       VALUES ($1, $2, $3)`,
-      ['test_legacy_mollie', 'legacy_shopify', seed.tenantA.id],
-    )
-
-    const check = await migrateIntegrationSecrets(pool)
-    expect(check).toMatchObject({ ok: true, counts: { migrationNeeded: 2, migrated: 0 } })
-
-    const applied = await migrateIntegrationSecrets(pool, { apply: true })
-    expect(applied).toMatchObject({ ok: true, counts: { migrated: 2, plaintextRemaining: 0 } })
-    const { rows: [row] } = await pool.query(
-      `SELECT mollie_api_key, shopify_client_secret, mollie_api_key_changed_at,
-              shopify_client_secret_changed_at
-         FROM tenant_integrations WHERE tenant_id = $1`,
-      [seed.tenantA.id],
-    )
-    expect(row.mollie_api_key).toBeNull()
-    expect(row.shopify_client_secret).toBeNull()
-    expect(row.mollie_api_key_changed_at).not.toBeNull()
-    expect(row.shopify_client_secret_changed_at).not.toBeNull()
+describe('integration credential storage', () => {
+  it('reads back only what the envelope holds — there is no plaintext fallback', async () => {
+    await setIntegrationCredential(pool, seed.tenantA.id, CREDENTIAL_TYPES.MOLLIE_API_KEY, 'test_encrypted_only')
     await expect(loadIntegrationCredential(pool, seed.tenantA.id, CREDENTIAL_TYPES.MOLLIE_API_KEY))
-      .resolves.toBe('test_legacy_mollie')
+      .resolves.toBe('test_encrypted_only')
 
-    const repeated = await migrateIntegrationSecrets(pool, { apply: true })
-    expect(repeated).toMatchObject({ ok: true, counts: { migrated: 0, reEncrypted: 0, plaintextRemaining: 0 } })
+    // Row present, envelope absent → absent credential, never a fallback value.
+    await pool.query(
+      `INSERT INTO tenant_integrations (tenant_id, shopify_client_id) VALUES ($1, 'client-id')`,
+      [seed.tenantB.id],
+    )
+    await expect(loadIntegrationCredential(pool, seed.tenantB.id, CREDENTIAL_TYPES.SHOPIFY_CLIENT_SECRET))
+      .resolves.toBeNull()
   })
 
-  it('detects mixed conflicts and corrupted envelopes without modifying rows', async () => {
+  it('fails closed when the stored envelope is corrupt', async () => {
     await pool.query(
-      `INSERT INTO tenant_integrations (
-         mollie_api_key, mollie_api_key_encrypted, shopify_client_secret_encrypted, tenant_id
-       ) VALUES ($1, $2::jsonb, $3::jsonb, $4)`,
-      ['legacy', '{}', '{}', seed.tenantA.id],
-    )
-    const result = await migrateIntegrationSecrets(pool, { apply: true })
-    expect(result).toMatchObject({ ok: false, counts: { conflicts: 1, corrupt: 1 } })
-    const { rows: [row] } = await pool.query(
-      'SELECT mollie_api_key FROM tenant_integrations WHERE tenant_id = $1',
-      [seed.tenantA.id],
-    )
-    expect(row.mollie_api_key).toBe('legacy')
-  })
-
-  it('fails closed when encrypted data is corrupt even if plaintext exists', async () => {
-    await pool.query(
-      `INSERT INTO tenant_integrations (mollie_api_key, mollie_api_key_encrypted, tenant_id)
-       VALUES ($1, $2::jsonb, $3)`,
-      ['must-not-fallback', '{}', seed.tenantA.id],
+      `INSERT INTO tenant_integrations (tenant_id, mollie_api_key_encrypted) VALUES ($1, $2::jsonb)`,
+      [seed.tenantA.id, '{}'],
     )
     await expect(loadIntegrationCredential(pool, seed.tenantA.id, CREDENTIAL_TYPES.MOLLIE_API_KEY))
       .rejects.toThrow()
+  })
+})
+
+describe('integration secret rotation', () => {
+  it('reports nothing to do when every envelope is on the active key', async () => {
+    await setIntegrationCredential(pool, seed.tenantA.id, CREDENTIAL_TYPES.MOLLIE_API_KEY, 'test_stable_value')
+
+    const check = await rotateIntegrationSecrets(pool)
+    expect(check).toMatchObject({ ok: true, counts: { encrypted: 1, reEncryptionNeeded: 0, corrupt: 0 } })
+
+    const applied = await rotateIntegrationSecrets(pool, { apply: true })
+    expect(applied).toMatchObject({ ok: true, counts: { reEncrypted: 0 } })
+  })
+
+  it('refuses to rotate when any envelope is corrupt, leaving rows untouched', async () => {
+    await pool.query(
+      `INSERT INTO tenant_integrations (tenant_id, mollie_api_key_encrypted) VALUES ($1, $2::jsonb)`,
+      [seed.tenantA.id, '{}'],
+    )
+    const result = await rotateIntegrationSecrets(pool, { apply: true })
+    expect(result).toMatchObject({ ok: false, counts: { corrupt: 1, reEncrypted: 0 } })
+    const { rows: [row] } = await pool.query(
+      'SELECT mollie_api_key_encrypted FROM tenant_integrations WHERE tenant_id = $1',
+      [seed.tenantA.id],
+    )
+    expect(row.mollie_api_key_encrypted).toEqual({})
   })
 
   it('re-encrypts valid envelopes to the active key without changing the credential timestamp', async () => {
@@ -95,7 +89,7 @@ describe('integration credential migration', () => {
       process.env.INTEGRATION_SECRETS_KEYS = JSON.stringify(keys)
       process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID = 'next'
 
-      const result = await migrateIntegrationSecrets(pool, { apply: true })
+      const result = await rotateIntegrationSecrets(pool, { apply: true })
       expect(result).toMatchObject({ ok: true, counts: { reEncrypted: 2 } })
       const { rows: [after] } = await pool.query(
         `SELECT mollie_api_key_encrypted, mollie_api_key_changed_at,

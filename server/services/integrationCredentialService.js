@@ -28,13 +28,8 @@ export async function loadRetainedIntegrationCredential(executor, tenantId, type
 }
 
 function decryptRecord(record, tenantId, type) {
-  if (record.encrypted_value !== null && record.legacy_value !== null) {
-    throw new Error('integration_secret_mixed_state')
-  }
-  if (record.encrypted_value !== null) {
-    return decryptIntegrationSecret(record.encrypted_value, tenantId, type)
-  }
-  return record.legacy_value || null
+  if (record.encrypted_value === null) return null
+  return decryptIntegrationSecret(record.encrypted_value, tenantId, type)
 }
 
 function statusPayload(row, isSet) {

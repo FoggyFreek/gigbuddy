@@ -6,6 +6,7 @@ import request from 'supertest'
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let importShopifyOrders, fetchRecentOrders, fetchOrdersByIds, resetShopifyTokenCacheForTests
 let syncShopifyPayouts, listManualShopifyPayouts, settleShopifyPayoutManually, commitImport, getImport
+let setIntegrationCredential
 let seed
 
 beforeAll(async () => {
@@ -23,6 +24,7 @@ beforeAll(async () => {
   ;({ resetShopifyTokenCacheForTests } = tokenMod)
   ;({ syncShopifyPayouts, listManualShopifyPayouts, settleShopifyPayoutManually } = payoutMod)
   ;({ commitImport, getImport } = bankMod)
+  ;({ setIntegrationCredential } = await import('../../../server/services/integrationCredentialService.js'))
   await runMigrations()
 })
 
@@ -146,11 +148,11 @@ function shopifyFetch({
 
 async function configureShopify(tenantId) {
   await pool.query(
-    `INSERT INTO tenant_integrations (
-       shopify_client_id, shopify_client_secret, shopify_shop_domain, tenant_id
-     ) VALUES ($1, $2, $3, $4)`,
-    ['a'.repeat(32), 'b'.repeat(32), 'test-band.myshopify.com', tenantId],
+    `INSERT INTO tenant_integrations (shopify_client_id, shopify_shop_domain, tenant_id)
+     VALUES ($1, $2, $3)`,
+    ['a'.repeat(32), 'test-band.myshopify.com', tenantId],
   )
+  await setIntegrationCredential(pool, tenantId, 'shopify_client_secret', 'b'.repeat(32))
 }
 
 async function createProduct() {

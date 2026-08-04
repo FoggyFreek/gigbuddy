@@ -62,7 +62,7 @@ vi.mock('../../../server/utils/sendPush.js', () => ({
   sendPushToUsers: mockSendPushToUsers,
 }))
 
-let app, pool, runMigrations, truncateAll, seedTwoTenants
+let app, pool, runMigrations, truncateAll, seedTwoTenants, setIntegrationCredential
 let seed
 
 beforeAll(async () => {
@@ -72,6 +72,7 @@ beforeAll(async () => {
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
+  ;({ setIntegrationCredential } = await import('../../../server/services/integrationCredentialService.js'))
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -85,11 +86,7 @@ beforeEach(async () => {
     `UPDATE tenants SET band_name = 'Alpha Band' WHERE id = $1`,
     [seed.tenantA.id],
   )
-  await pool.query(
-    `INSERT INTO tenant_integrations (tenant_id, mollie_api_key)
-     VALUES ($1, 'test_mollie_key_alpha')`,
-    [seed.tenantA.id],
-  )
+  await setIntegrationCredential(pool, seed.tenantA.id, 'mollie_api_key', 'test_mollie_key_alpha')
 
   // Give gig A a booking fee.
   await pool.query(
@@ -194,15 +191,6 @@ describe('mollieClient utilities', () => {
   it('formatMollieAmountFromCents throws for negative', () => {
     expect(() => utils.formatMollieAmountFromCents(-1)).toThrow()
   })
-
-  it('assertMollieConfigured throws with code mollie_key_missing when key absent', () => {
-    expect(() => utils.assertMollieConfigured({ mollie_api_key: null })).toThrow()
-    expect(() => utils.assertMollieConfigured({})).toThrow()
-  })
-
-  it('assertMollieConfigured does not throw when key is present', () => {
-    expect(() => utils.assertMollieConfigured({ mollie_api_key: 'test_abc' })).not.toThrow()
-  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -306,7 +294,7 @@ describe('POST /api/invoices/:id/payment-link', () => {
 
   it('returns 400 when tenant has no Mollie key', async () => {
     await pool.query(
-      'UPDATE tenant_integrations SET mollie_api_key = NULL WHERE tenant_id = $1',
+      'UPDATE tenant_integrations SET mollie_api_key_encrypted = NULL WHERE tenant_id = $1',
       [seed.tenantA.id],
     )
     const inv = await createInvoiceA()
@@ -688,20 +676,20 @@ describe('Webhook notifies tenant on paid transition', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/profile — Mollie key hardening', () => {
-  it('does not include plaintext or encrypted credential fields in profile response', async () => {
+  it('does not include encrypted credential fields in profile response', async () => {
     const res = await asUserA(request(app).get('/api/profile'))
     expect(res.status).toBe(200)
     for (const field of [
-      'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
-      'shopify_client_secret', 'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+      'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
+      'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
       'resend_api_key_encrypted', 'resend_api_key_changed_at',
     ]) expect(res.body).not.toHaveProperty(field)
   })
 
-  it('does not include mollie_api_key after PATCH', async () => {
+  it('does not include the Mollie credential after PATCH', async () => {
     const res = await asUserA(request(app).patch('/api/profile')).send({ band_name: 'New Name' })
     expect(res.status).toBe(200)
-    expect(res.body).not.toHaveProperty('mollie_api_key')
+    expect(res.body).not.toHaveProperty('mollie_api_key_encrypted')
   })
 })
 
@@ -710,21 +698,21 @@ describe('GET /api/profile — Mollie key hardening', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/profile/mollie-key', () => {
-  it('reports status without loading or previewing the legacy key', async () => {
+  it('reports status without previewing the stored key', async () => {
     const res = await asUserA(request(app).get('/api/profile/mollie-key'))
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ isSet: true, changedAt: null })
+    expect(res.body).toEqual({ isSet: true, changedAt: expect.any(String) })
     expect(res.headers['cache-control']).toBe('no-store')
   })
 
   it('reports isSet:false when no key is stored', async () => {
     await pool.query(
-      'UPDATE tenant_integrations SET mollie_api_key = NULL WHERE tenant_id = $1',
+      'UPDATE tenant_integrations SET mollie_api_key_encrypted = NULL WHERE tenant_id = $1',
       [seed.tenantA.id],
     )
     const res = await asUserA(request(app).get('/api/profile/mollie-key'))
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ isSet: false, changedAt: null })
+    expect(res.body).toEqual({ isSet: false, changedAt: expect.any(String) })
   })
 
   it('stores new keys encrypted and returns the new status contract', async () => {
@@ -732,11 +720,9 @@ describe('GET /api/profile/mollie-key', () => {
     const res = await asUserA(request(app).put('/api/profile/mollie-key').send({ key: value })).expect(200)
     expect(res.body).toEqual({ isSet: true, changedAt: expect.any(String) })
     const { rows: [stored] } = await pool.query(
-      `SELECT mollie_api_key, mollie_api_key_encrypted
-         FROM tenant_integrations WHERE tenant_id = $1`,
+      `SELECT mollie_api_key_encrypted FROM tenant_integrations WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
-    expect(stored.mollie_api_key).toBeNull()
     expect(stored.mollie_api_key_encrypted).toEqual(expect.objectContaining({
       v: 1,
       kid: process.env.INTEGRATION_SECRETS_ACTIVE_KEY_ID,
@@ -781,14 +767,14 @@ describe('public webhook endpoint authentication', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/invoices/:id — Mollie key hardening (review #1)', () => {
-  it('does not include plaintext or encrypted credentials in invoice detail response', async () => {
+  it('does not include encrypted credentials in invoice detail response', async () => {
     const inv = await createInvoiceA()
     const res = await asUserA(request(app).get(`/api/invoices/${inv.id}`))
     expect(res.status).toBe(200)
     expect(res.body.tenant).toBeDefined()
     for (const field of [
-      'mollie_api_key', 'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
-      'shopify_client_secret', 'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
+      'mollie_api_key_encrypted', 'mollie_api_key_changed_at',
+      'shopify_client_secret_encrypted', 'shopify_client_secret_changed_at',
       'resend_api_key_encrypted', 'resend_api_key_changed_at',
     ]) expect(res.body.tenant).not.toHaveProperty(field)
     // Verify the tenant object still contains expected display fields

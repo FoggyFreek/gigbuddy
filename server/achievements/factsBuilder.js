@@ -12,15 +12,12 @@ async function tenantFacts(db, tenantId) {
   const { rows } = await db.query(
     `SELECT t.band_name, t.bio, t.logo_path, t.logo_dark_path, t.avatar_path, t.banner_path,
             t.instagram_handle, t.facebook_handle, t.tiktok_handle, t.youtube_handle, t.spotify_handle,
-            (ti.bandsintown_app_id_encrypted IS NOT NULL OR
-              NULLIF(BTRIM(ti.bandsintown_app_id), '') IS NOT NULL) AS bandsintown_configured,
+            (ti.bandsintown_app_id_encrypted IS NOT NULL) AS bandsintown_configured,
             (NULLIF(BTRIM(ti.shopify_client_id), '') IS NOT NULL AND
-              (ti.shopify_client_secret_encrypted IS NOT NULL OR
-                NULLIF(BTRIM(ti.shopify_client_secret), '') IS NOT NULL) AND
+              ti.shopify_client_secret_encrypted IS NOT NULL AND
               NULLIF(BTRIM(ti.shopify_shop_domain), '') IS NOT NULL) AS shopify_configured,
             (ti.mollie_api_key_retained_at IS NULL AND
-              (ti.mollie_api_key_encrypted IS NOT NULL OR
-                NULLIF(BTRIM(ti.mollie_api_key), '') IS NOT NULL)) AS mollie_configured,
+              ti.mollie_api_key_encrypted IS NOT NULL) AS mollie_configured,
             t.created_at
        FROM tenants t
        LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id

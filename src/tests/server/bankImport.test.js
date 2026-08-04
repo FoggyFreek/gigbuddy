@@ -10,6 +10,7 @@ import { settlePurchase } from '../../../server/services/purchaseService.js'
 import { markInvoicePaid } from '../../../server/repositories/invoiceRepository.js'
 import { markPurchasePaid } from '../../../server/repositories/purchaseRepository.js'
 import { postShopifyPayoutSettlement } from '../../../server/services/ledgerService.js'
+import { setIntegrationCredential } from '../../../server/services/integrationCredentialService.js'
 
 // Stub MinIO (invoice PDF path is a no-op; we assert DB/ledger state).
 vi.mock('../../../server/utils/storage.js', () => ({
@@ -401,10 +402,7 @@ describe('bank-import parse + stage', () => {
 
 describe('bank-import commit', () => {
   async function configureMollie() {
-    await pool.query(
-      `INSERT INTO tenant_integrations (tenant_id, mollie_api_key) VALUES ($1, 'test_key')`,
-      [seed.tenantA.id],
-    )
+    await setIntegrationCredential(pool, seed.tenantA.id, 'mollie_api_key', 'test_key')
   }
 
   it('reconciles an open invoice on the booking date', async () => {

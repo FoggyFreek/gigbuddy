@@ -97,15 +97,12 @@ export async function fetchIntegrationConfiguration(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT
        (NULLIF(BTRIM(shopify_client_id), '') IS NOT NULL
-        AND (shopify_client_secret_encrypted IS NOT NULL
-          OR NULLIF(BTRIM(shopify_client_secret), '') IS NOT NULL)
+        AND shopify_client_secret_encrypted IS NOT NULL
         AND NULLIF(BTRIM(shopify_shop_domain), '') IS NOT NULL) AS shopify,
-       ((bandsintown_app_id_encrypted IS NOT NULL
-         OR NULLIF(BTRIM(bandsintown_app_id), '') IS NOT NULL)
+       (bandsintown_app_id_encrypted IS NOT NULL
         AND NULLIF(BTRIM(bandsintown_artist_id), '') IS NOT NULL) AS bandsintown,
        (mollie_api_key_retained_at IS NULL
-        AND (mollie_api_key_encrypted IS NOT NULL
-          OR NULLIF(BTRIM(mollie_api_key), '') IS NOT NULL)) AS mollie,
+        AND mollie_api_key_encrypted IS NOT NULL) AS mollie,
        (resend_api_key_encrypted IS NOT NULL) AS resend
        FROM tenant_integrations
       WHERE tenant_id = $1`,

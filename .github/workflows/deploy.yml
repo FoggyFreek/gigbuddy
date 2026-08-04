@@ -94,9 +94,12 @@ jobs:
             # live S3 store passes its read/write/delete probe. The named RustFS
             # data volume is intentionally retained for manual recovery.
             docker compose rm --stop --force rustfs rustfs_init rustfs_perms
-            docker compose run --rm app node server/scripts/migrateIntegrationSecrets.js --check
-            docker compose run --rm app node server/scripts/migrateIntegrationSecrets.js --apply
-            docker compose run --rm app node server/scripts/migrateIntegrationSecrets.js --check
+            # Re-encrypts credential envelopes under INTEGRATION_SECRETS_ACTIVE_KEY_ID
+            # after a key rotation. A no-op when the active key is unchanged; both
+            # checks fail the deploy (exit 2) if any envelope is unreadable.
+            docker compose run --rm app node server/scripts/rotateIntegrationSecrets.js --check
+            docker compose run --rm app node server/scripts/rotateIntegrationSecrets.js --apply
+            docker compose run --rm app node server/scripts/rotateIntegrationSecrets.js --check
   
   sonarqube:
     name: SonarQube

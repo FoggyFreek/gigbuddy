@@ -167,9 +167,9 @@ describe('integrations gates', () => {
 
 describe('integration secrets purge (entitlement durably lost)', () => {
   const CREDENTIAL_COLUMNS = [
-    'mollie_api_key', 'mollie_api_key_encrypted',
-    'bandsintown_app_id', 'bandsintown_app_id_encrypted',
-    'shopify_client_secret', 'shopify_client_secret_encrypted',
+    'mollie_api_key_encrypted',
+    'bandsintown_app_id_encrypted',
+    'shopify_client_secret_encrypted',
     'resend_api_key_encrypted',
     'shopify_client_id', 'shopify_shop_domain',
     'bandsintown_artist_name', 'bandsintown_artist_id',
