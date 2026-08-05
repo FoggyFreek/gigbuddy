@@ -17,6 +17,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import PremiumDiamond from '../PremiumDiamond.tsx'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
+import { useTenantKind } from '../../hooks/useTenantKind.ts'
 import { clearMollieKey, getMollieKey, setMollieKey, clearResendKey, getResendKey, setResendKey, clearBandsintownKey, getBandsintownKey, setBandsintownKey, clearBandsintownArtistId, getBandsintownArtistId, setBandsintownArtistId, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain } from '../../api/profile.ts'
 import type { IntegrationSecretStatus } from '../../api/profile.ts'
 import Divider from '@mui/material/Divider'
@@ -35,6 +36,10 @@ function shortenClientId(value: string): string {
 export default function IntegrationsSection() {
   const { t } = useTranslation('settings')
   const compact = useCompactLayout()
+  // Shopify backs the band's merch shop and Bandsintown lists a band's tour
+  // dates — neither has a personal-workspace counterpart. Mollie does: a solo
+  // artist takes payment on their own invoices exactly like a band.
+  const { isPersonal } = useTenantKind()
 
   return (
      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
@@ -46,8 +51,12 @@ export default function IntegrationsSection() {
       </Stack>
       <ResendKeySection />
       <MollieKeySection />
-      <ShopifyKeySection />
-      <BandsintownKeySection />
+      {!isPersonal && (
+        <>
+          <ShopifyKeySection />
+          <BandsintownKeySection />
+        </>
+      )}
     </Paper>
   )
 }

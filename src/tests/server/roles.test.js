@@ -42,8 +42,8 @@ async function createRoleUser({ email, role, tenantId, link = false }) {
     [`sub-${email}`, email, `Role ${role}`],
   )
   await pool.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-     VALUES ($1, $2, $3, 'approved', NOW())`,
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+     VALUES ($1, $2, $3, 'approved', NOW(), 'admin')`,
     [u[0].id, tenantId, role],
   )
   let bandMemberId = null

@@ -18,9 +18,18 @@
       "title": "Thema",
       "description": "Kies jouw favorite stijl. De accentkleur van je band blijft binnen elk thema gelden.",
       "variants": {
-        "default": { "label": "Standaard", "description": "Material 3-violet" },
-        "warm": { "label": "Warm", "description": "Zand- en aardetinten" },
-        "slate": { "label": "Leisteen", "description": "Koel blauwgrijs" }
+        "default": {
+          "label": "Standaard",
+          "description": "Material 3-violet"
+        },
+        "warm": {
+          "label": "Warm",
+          "description": "Zand- en aardetinten"
+        },
+        "slate": {
+          "label": "Leisteen",
+          "description": "Koel blauwgrijs"
+        }
       }
     },
     "push": {
@@ -44,6 +53,7 @@
         "invoicePaid": "Betaalde facturen",
         "taskAssigned": "Aan jou toegewezen taken",
         "inviteRedeemed": "Nieuwe leden in afwachting van goedkeuring",
+        "membershipRequested": "Muzikanten die zich willen aansluiten",
         "achievementUnlocked": "Behaalde prestaties"
       }
     },

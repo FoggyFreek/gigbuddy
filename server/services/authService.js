@@ -74,6 +74,7 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
       isSuperAdmin: !!user.is_super_admin,
       activeTenantId,
       activeTenantRole: activeMembership?.role ?? null,
+      activeTenantKind: activeMembership?.tenant_kind ?? null,
       permissions: activeMembership
         ? permissionsForRole(activeMembership.role, { isSuperAdmin: !!user.is_super_admin })
         : [],
@@ -89,8 +90,13 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
       dismissedTutorials,
       memberships: memberships.map((m) => ({
         tenantId: m.tenant_id,
+        // `tenantName` is the pre-rename key: emitted alongside `displayName`
+        // until every reader has moved over (see the kind-neutral vocabulary
+        // rule — band_name → display_name).
         tenantName: m.tenant_name,
+        displayName: m.display_name,
         tenantSlug: m.tenant_slug,
+        kind: m.tenant_kind,
         role: m.role,
         status: m.status,
       })),

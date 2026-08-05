@@ -38,10 +38,13 @@ export async function countApprovedMemberships(executor, tenantId) {
   return rows[0].count
 }
 
-// Active (non-archived) tenants a user owns — the band cap counter.
+// Active (non-archived) tenants a user owns — the band cap counter. A personal
+// workspace is not one of your bands, so it never counts (and an artist plan
+// with bands: 0 must not make the owner's own workspace a cap violation).
 export async function countActiveOwnedTenants(executor, userId) {
   const { rows } = await executor.query(
-    'SELECT COUNT(*)::int AS count FROM tenants WHERE owner_user_id = $1 AND archived_at IS NULL',
+    `SELECT COUNT(*)::int AS count FROM tenants
+      WHERE owner_user_id = $1 AND archived_at IS NULL AND kind = 'band'`,
     [userId],
   )
   return rows[0].count
@@ -56,7 +59,7 @@ export async function countActiveOwnedTenants(executor, userId) {
 // counts active tenants (archiving is the documented way to satisfy it).
 export async function listOwnedTenants(executor, userId) {
   const { rows } = await executor.query(
-    `SELECT id, band_name, archived_at FROM tenants
+    `SELECT id, band_name, kind, archived_at FROM tenants
       WHERE owner_user_id = $1
       ORDER BY id ASC`,
     [userId],

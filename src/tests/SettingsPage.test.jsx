@@ -20,6 +20,8 @@ vi.mock('../hooks/usePushNotifications.ts', () => ({
   usePushNotifications: () => ({ status: 'unsubscribed', subscribe: vi.fn(), unsubscribe: vi.fn() }),
 }))
 vi.mock('../api/profile.ts', () => ({
+  getProfile: vi.fn().mockResolvedValue({ join_policy: 'invite_only' }),
+  setJoinPolicy: vi.fn().mockResolvedValue({ join_policy: 'request' }),
   updateProfile: vi.fn().mockResolvedValue({}),
   getMollieKey: vi.fn().mockResolvedValue({ isSet: false }),
   getResendKey: vi.fn().mockResolvedValue({ isSet: false }),

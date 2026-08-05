@@ -33,7 +33,7 @@ import {
 import { deleteTenantObjects } from './storageService.js'
 import { enforceMemberCap } from './limitService.js'
 import { logger } from '../utils/logger.js'
-import { badRequest, conflict, notFound } from './serviceErrors.js'
+import { badRequest, conflict, notFound, tenantKindNotSupported } from './serviceErrors.js'
 
 // ---------- reads ----------
 
@@ -70,7 +70,7 @@ export async function createTenant(createdByUserId, body) {
     }
 
     const tenant = await insertTenant(client, {
-      slug, bandName: band_name, createdByUserId,
+      slug, displayName: band_name, createdByUserId,
     })
     await ensureTenantStatistics(client, tenant.id)
     await seedTenantAccounting(client, tenant.id)
@@ -153,7 +153,9 @@ export async function addAdmin(db, tenantId, body, actingUserId) {
   const userId = Number(body?.userId)
   if (!Number.isInteger(userId)) return badRequest('userId is required')
 
-  if (!(await fetchTenant(db, tenantId))) return notFound('Tenant not found')
+  const tenant = await fetchTenant(db, tenantId)
+  if (!tenant) return notFound('Tenant not found')
+  if (tenant.kind === 'personal') return tenantKindNotSupported(tenant.kind)
   if (!(await userExists(db, userId))) return notFound('User not found')
 
   return grantApprovedMembership(db, tenantId, userId, (client) =>
@@ -171,6 +173,9 @@ export async function addMembership(db, tenantId, body, actingUserId) {
   const tenant = await fetchTenantArchiveState(db, tenantId)
   if (!tenant) return notFound('Tenant not found')
   if (tenant.archived_at) return conflict('Tenant is archived')
+  // A personal workspace has exactly one member, its owner — not even a super
+  // admin adds a second person to someone's own books.
+  if (tenant.kind === 'personal') return tenantKindNotSupported(tenant.kind)
   if (!(await userExists(db, userId))) return notFound('User not found')
 
   return grantApprovedMembership(db, tenantId, userId, (client) =>

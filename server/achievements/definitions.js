@@ -4,6 +4,12 @@
 // - key:      stable snake_case id. It is persisted in tenant_achievements and
 //             doubles as the frontend i18n key (achievements.items.<key>) and
 //             icon-map key. NEVER rename a shipped key — only add new ones.
+// - kinds:    which tenant kinds can earn it. The catalogue is a FUNCTION of
+//             tenant kind, not a subset of the band list: there are band-only
+//             achievements, personal-only ones no band can ever earn, and a few
+//             that mean the same to either. Every shipped definition is
+//             explicitly ['band'] — a solo artist gets their own titles, since
+//             these are written in a band voice.
 // - category: one of CATEGORIES (drives page grouping and fallback icon).
 // - cheers:   integer 1–10, the achievement's worth.
 // - title:    canonical English title, used verbatim in the unlock
@@ -30,7 +36,12 @@ export const CATEGORIES = Object.freeze([
   'platform',
   'repertoire',
   'network',
+  // Personal-only territory: milestones a band has no equivalent for.
+  'artist',
 ])
+
+const BAND = Object.freeze(['band'])
+const PERSONAL = Object.freeze(['personal'])
 
 const PROFILE_PREREQ_KEYS = [
   'logo_a_go_go',
@@ -46,6 +57,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   // ---- profile ----
   {
     key: 'logo_a_go_go',
+    kinds: BAND,
     category: 'profile',
     cheers: 2,
     title: 'Logo A-Go-Go',
@@ -53,6 +65,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'now_were_photogenic',
+    kinds: BAND,
     category: 'profile',
     cheers: 1,
     title: 'Now We’re Photogenic',
@@ -60,6 +73,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'big_banner_energy',
+    kinds: BAND,
     category: 'profile',
     cheers: 1,
     title: 'Big Banner Energy',
@@ -67,6 +81,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'proper_band_honestly',
+    kinds: BAND,
     category: 'profile',
     cheers: 3,
     title: 'Proper Band, Honestly',
@@ -81,6 +96,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'three_chords_three_humans',
+    kinds: BAND,
     category: 'profile',
     cheers: 2,
     title: 'Three Chords, Three Humans',
@@ -88,6 +104,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'the_dep_list_deepens',
+    kinds: BAND,
     category: 'profile',
     cheers: 3,
     title: 'The Dep List Deepens',
@@ -95,6 +112,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'bring_your_own_bassist',
+    kinds: BAND,
     category: 'profile',
     cheers: 4,
     title: 'Bring Your Own Bassist',
@@ -105,6 +123,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
     // prerequisites so a single ordered evaluation pass unlocks it together
     // with the last prerequisite.
     key: 'fully_plugged_in',
+    kinds: BAND,
     category: 'profile',
     cheers: 8,
     title: 'Fully Plugged In',
@@ -114,6 +133,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   // ---- gigs & events ----
   {
     key: 'first_rehearsal_last_excuse',
+    kinds: BAND,
     category: 'gigs',
     cheers: 1,
     title: 'First Rehearsal, Last Excuse',
@@ -121,6 +141,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'calendar_rock',
+    kinds: BAND,
     category: 'gigs',
     cheers: 1,
     title: 'Calendar Rock',
@@ -128,6 +149,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'this_ones_actually_happening',
+    kinds: BAND,
     category: 'gigs',
     cheers: 2,
     title: 'This One’s Actually Happening',
@@ -135,6 +157,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'ten_gigs_no_cry',
+    kinds: BAND,
     category: 'gigs',
     cheers: 4,
     title: 'Ten Gigs, No Cry',
@@ -142,6 +165,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'fifty_shades_of_soundcheck',
+    kinds: BAND,
     category: 'gigs',
     cheers: 7,
     title: 'Fifty Shades of Soundcheck',
@@ -149,6 +173,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'tour_bus_not_included',
+    kinds: BAND,
     category: 'gigs',
     cheers: 10,
     title: 'Tour Bus Not Included',
@@ -156,6 +181,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'five_city_shuffle',
+    kinds: BAND,
     category: 'gigs',
     cheers: 4,
     title: 'Five-City Shuffle',
@@ -163,6 +189,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'the_van_has_opinions',
+    kinds: BAND,
     category: 'gigs',
     cheers: 8,
     title: 'The Van Has Opinions',
@@ -170,6 +197,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'international_noise_complaint',
+    kinds: BAND,
     category: 'gigs',
     cheers: 6,
     title: 'International Noise Complaint',
@@ -177,6 +205,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'took_this_band_to_town',
+    kinds: BAND,
     category: 'gigs',
     cheers: 3,
     title: 'Took This Band to Town',
@@ -186,6 +215,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   // ---- invoices ----
   {
     key: 'please_pay_the_piper',
+    kinds: BAND,
     category: 'invoices',
     cheers: 3,
     title: 'Please Pay the Piper',
@@ -193,6 +223,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'power_to_the_payments',
+    kinds: BAND,
     category: 'invoices',
     cheers: 3,
     title: 'Power to the Payments',
@@ -202,6 +233,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   // ---- purchase ----
   {
     key: 'gear_acquisition_syndrome',
+    kinds: BAND,
     category: 'purchase',
     cheers: 2,
     title: 'Gear Acquisition Syndrome',
@@ -211,6 +243,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   // ---- merchandise ----
   {
     key: 'shirts_before_hits',
+    kinds: BAND,
     category: 'merchandise',
     cheers: 2,
     title: 'Shirts Before Hits',
@@ -218,6 +251,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'box_set_behavior',
+    kinds: BAND,
     category: 'merchandise',
     cheers: 3,
     title: 'Box Set Behavior',
@@ -225,6 +259,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'cash_from_the_merch_pit',
+    kinds: BAND,
     category: 'merchandise',
     cheers: 4,
     title: 'Cash from the Merch Pit',
@@ -232,6 +267,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'sync_that_chop_shop',
+    kinds: BAND,
     category: 'merchandise',
     cheers: 3,
     title: 'Sync That Chop Shop',
@@ -241,6 +277,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   // ---- finance ----
   {
     key: 'black_ink_sabbath',
+    kinds: BAND,
     category: 'finance',
     cheers: 5,
     title: 'Black Ink Sabbath',
@@ -248,6 +285,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'the_blues_ledger',
+    kinds: BAND,
     category: 'finance',
     cheers: 2,
     title: 'The Blues Ledger',
@@ -257,6 +295,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   // ---- platform ----
   {
     key: 'welcome_to_the_giggle',
+    kinds: BAND,
     category: 'platform',
     cheers: 1,
     title: 'Welcome to the Giggle',
@@ -264,6 +303,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'one_month_still_tuning',
+    kinds: BAND,
     category: 'platform',
     cheers: 2,
     title: 'One Month, Still Tuning',
@@ -271,6 +311,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'still_standing_still_loud',
+    kinds: BAND,
     category: 'platform',
     cheers: 7,
     title: 'Still Standing, Still Loud',
@@ -280,6 +321,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   // ---- repertoire ----
   {
     key: 'five_songs_and_a_prayer',
+    kinds: BAND,
     category: 'repertoire',
     cheers: 2,
     title: 'Five Songs and a Prayer',
@@ -287,6 +329,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'setlist_match_fire',
+    kinds: BAND,
     category: 'repertoire',
     cheers: 3,
     title: 'Setlist, Match, Fire',
@@ -294,6 +337,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'my_personal_high_note',
+    kinds: BAND,
     category: 'repertoire',
     cheers: 1,
     title: 'My Personal High Note',
@@ -301,6 +345,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'judging_the_song_by_its_cover',
+    kinds: BAND,
     category: 'repertoire',
     cheers: 1,
     title: 'Judging the Song by Its Cover',
@@ -308,6 +353,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'linkin_spark',
+    kinds: BAND,
     category: 'repertoire',
     cheers: 1,
     title: 'Linkin’ Spark',
@@ -315,6 +361,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   },
   {
     key: 'now_with_actual_sound',
+    kinds: BAND,
     category: 'repertoire',
     cheers: 1,
     title: 'Now With Actual Sound',
@@ -324,10 +371,91 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
   // ---- network ----
   {
     key: 'fifty_people_who_might_answer',
+    kinds: BAND,
     category: 'network',
     cheers: 5,
     title: 'Fifty People Who Might Answer',
     test: (f) => f.network.contacts > 50,
+  },
+
+  // ---- artist workspace (personal only) ----
+  // New keys, not reused band ones: the shipped titles are written in a band
+  // voice ("Three Chords Three Humans"), and a solo artist needs their own.
+  {
+    key: 'a_stage_name_and_a_face',
+    kinds: PERSONAL,
+    category: 'artist',
+    cheers: 2,
+    title: 'A Stage Name And A Face',
+    test: (f) => f.profile.hasBandName && f.profile.hasAvatar,
+  },
+  {
+    key: 'presentable_on_paper',
+    kinds: PERSONAL,
+    category: 'artist',
+    cheers: 3,
+    title: 'Presentable On Paper',
+    test: (f) =>
+      f.profile.hasBandName &&
+      f.profile.hasBio &&
+      f.profile.hasAvatar &&
+      f.profile.socialsCount >= 1,
+  },
+  {
+    key: 'first_one_in_the_diary',
+    kinds: PERSONAL,
+    category: 'artist',
+    cheers: 2,
+    title: 'First One In The Diary',
+    test: (f) => f.gigs.nonOption >= 1,
+  },
+  {
+    key: 'twenty_five_nights_of_my_own',
+    kinds: PERSONAL,
+    category: 'artist',
+    cheers: 5,
+    title: 'Twenty-Five Nights Of My Own',
+    test: (f) => f.gigs.nonOption >= 25,
+  },
+  {
+    key: 'my_own_books_thanks',
+    kinds: PERSONAL,
+    category: 'artist',
+    cheers: 4,
+    title: 'My Own Books, Thanks',
+    test: (f) => f.invoices.sent >= 1 && f.purchases.booked >= 1,
+  },
+  {
+    key: 'invoice_number_one',
+    kinds: PERSONAL,
+    category: 'artist',
+    cheers: 3,
+    title: 'Invoice Number One',
+    test: (f) => f.invoices.sent >= 1,
+  },
+  {
+    key: 'a_month_in_the_black_solo',
+    kinds: PERSONAL,
+    category: 'artist',
+    cheers: 6,
+    title: 'A Month In The Black',
+    test: (f) => f.finance.hasProfitableMonth,
+  },
+  {
+    key: 'my_own_little_black_book',
+    kinds: PERSONAL,
+    category: 'artist',
+    cheers: 3,
+    title: 'My Own Little Black Book',
+    test: (f) => f.network.contacts >= 10,
+  },
+  {
+    key: 'songs_i_can_actually_play',
+    kinds: PERSONAL,
+    category: 'artist',
+    cheers: 3,
+    title: 'Songs I Can Actually Play',
+    test: (f) => f.repertoire.songs >= 10,
   },
 ])
 
@@ -335,4 +463,14 @@ const byKey = new Map(ACHIEVEMENT_DEFINITIONS.map((d) => [d.key, d]))
 
 export function getDefinition(key) {
   return byKey.get(key) ?? null
+}
+
+// The catalogue for a tenant kind. Filtering happens BEFORE evaluation, so a
+// band's definitions are never even tested in a personal workspace (and the
+// facts they need are never queried — see factsBuilder).
+//
+// Totals are only comparable WITHIN a kind: any "x of y unlocked" figure must
+// count against this list, never the union.
+export function definitionsForKind(kind) {
+  return ACHIEVEMENT_DEFINITIONS.filter((d) => d.kinds.includes(kind))
 }

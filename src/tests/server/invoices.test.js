@@ -868,8 +868,8 @@ describe('invoices — UBL/Peppol XML download', () => {
        VALUES ('sub-ubl-fa', 'ubl-fa@a.local', 'Finance Admin', 'approved', false) RETURNING id`,
     )
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'financial_admin', 'approved', NOW())`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       VALUES ($1, $2, 'financial_admin', 'approved', NOW(), 'admin')`,
       [u[0].id, seed.tenantA.id],
     )
     const created = await createInvoice()

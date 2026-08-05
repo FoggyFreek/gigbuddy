@@ -21,6 +21,7 @@ vi.mock('../api/billing.ts', async (importOriginal) => ({
 vi.mock('../api/tenants.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   createOwnedTenant: vi.fn(),
+  createPersonalTenant: vi.fn(),
   getTenantOnboardingStatus: vi.fn(),
   listOwnedTenants: vi.fn(),
 }))
@@ -34,7 +35,12 @@ vi.mock('../contexts/authContext.ts', () => ({
 
 import { acceptTerms, onboardingComplete } from '../api/auth.ts'
 import { getBillingState, subscribe, syncSubscription } from '../api/billing.ts'
-import { createOwnedTenant, getTenantOnboardingStatus, listOwnedTenants } from '../api/tenants.ts'
+import {
+  createOwnedTenant,
+  createPersonalTenant,
+  getTenantOnboardingStatus,
+  listOwnedTenants,
+} from '../api/tenants.ts'
 import { uploadLogo } from '../api/profile.ts'
 import { useAuth } from '../contexts/authContext.ts'
 
@@ -218,6 +224,73 @@ describe('OnboardingPage — confirm (paid path)', () => {
     // No purchase completed yet — the pointer must survive the Mollie hop.
     expect(onboardingComplete).not.toHaveBeenCalled()
     expect(uploadLogo).not.toHaveBeenCalled()
+  })
+})
+
+describe('OnboardingPage — what are you setting up?', () => {
+  it('offers both kinds to a user with no memberships', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await completeWelcomeStep(user)
+
+    const choices = await screen.findAllByRole('radio')
+    expect(choices.map((c) => c.textContent)).toEqual([
+      expect.stringContaining('A band'),
+      expect.stringContaining('My own artist workspace'),
+    ])
+    // A band by default, so the existing path is unchanged.
+    expect(await screen.findByLabelText('Band name')).toBeInTheDocument()
+  })
+
+  it('offers neither when onboarding is disabled, and points at the invite page', async () => {
+    getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: false })
+    wrap()
+
+    expect(await screen.findByText(/new tenant onboarding is currently disabled/i)).toBeInTheDocument()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /redeem your invite code/i })).toHaveAttribute(
+      'href', '/redeem-invite',
+    )
+  })
+
+  it('creates a personal workspace when that kind is chosen', async () => {
+    createPersonalTenant.mockResolvedValue({
+      id: 7, slug: 'alpha-user', kind: 'personal', display_name: 'Alpha User',
+    })
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user)
+    await user.click(await screen.findByRole('radio', { name: /my own artist workspace/i }))
+    await user.type(await screen.findByLabelText('Artist name'), 'Alpha User')
+    await user.click(await screen.findByLabelText('Accounting country'))
+    await user.click(await screen.findByRole('option', { name: 'Netherlands (NL)' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('button', { name: 'Create my workspace' }))
+
+    await waitFor(() => expect(createPersonalTenant).toHaveBeenCalledWith({
+      display_name: 'Alpha User', country_code: 'nl', onboarding: true,
+    }))
+    expect(createOwnedTenant).not.toHaveBeenCalled()
+    await waitFor(() => expect(auth.switchTenant).toHaveBeenCalledWith(7))
+  })
+
+  it('a resumed personal onboarding does not offer the band path again', async () => {
+    mockAuth({ onboardingTenantId: 7, termsVersion: TERMS_VERSION })
+    listOwnedTenants.mockResolvedValue([{
+      id: 7, slug: 'alpha-user', kind: 'personal', display_name: 'Alpha User',
+      accounting_country: 'nl', archived_at: null,
+    }])
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user, 'Bronze')
+    // The kind came from the resumed tenant — no choice, and personal copy.
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    const nameField = await screen.findByLabelText('Artist name')
+    expect(nameField).toHaveValue('Alpha User')
+    expect(nameField).toBeDisabled()
+    expect(screen.queryByLabelText('Band name')).not.toBeInTheDocument()
   })
 })
 

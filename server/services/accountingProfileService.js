@@ -69,12 +69,16 @@ function present(profile) {
 
 // Creates the profile for a brand-new tenant. Runs inside the caller's tenant
 // creation transaction: if this throws, the tenant itself rolls back.
-export async function createAccountingProfileForTenant(client, tenantId, countryCode) {
+//
+// `legalForm` is supplied only where creation already knows it — a personal
+// workspace is a sole trader by construction. A band's is left null for its
+// admin to state.
+export async function createAccountingProfileForTenant(client, tenantId, countryCode, { legalForm = null } = {}) {
   const inserted = await insertAccountingProfile(client, tenantId, {
     country_code: countryCode,
     base_currency: defaultBaseCurrency(countryCode),
     default_vat_rate: getStandardVatRate(countryCode),
-    legal_form: null,
+    legal_form: legalForm,
     profile_source: 'tenant_creation',
     profile_status: 'incomplete',
   })

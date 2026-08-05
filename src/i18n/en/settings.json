@@ -16,8 +16,10 @@
       "chartOfAccounts": "Chart of accounts",
       "defaultAccounts": "Accounting Settings",
       "financialProfile": "Financial profile",
-      "accountingProfile": "Accounting profile"
-    }
+      "accountingProfile": "Accounting profile",
+      "bands": "Bands"
+    },
+    "workspaceSettings": "Workspace settings"
   },
   "subscription": {
     "current": "Current plan",
@@ -60,7 +62,15 @@
     "errors": {
       "updateFailed": "Update failed",
       "deleteFailed": "Delete failed"
-    }
+    },
+    "source": {
+      "invite": "Redeemed an invite",
+      "request": "Asked to join",
+      "admin": "Added by an admin",
+      "owner": "Created this band",
+      "legacy": ""
+    },
+    "requestMessage": "Their message"
   },
   "invites": {
     "title": "Invites",
@@ -420,5 +430,51 @@
       "destinationOnlyNote": "The cross-border scheme applies to sales into the destination country only. It does not change the VAT returns you file at home.",
       "issuedUnaffected": "Invoices you have already sent keep the VAT treatment they were issued with, so correcting these dates is safe."
     }
+  },
+  "bands": {
+    "title": "Bands",
+    "intro": "The bands you play in. Each band keeps its own separate agenda and books — this workspace stays yours.",
+    "empty": "You are not in any band yet.",
+    "awaitingApproval": "Waiting for the band to approve you",
+    "joinTitle": "Join a band",
+    "joinHelp": "Paste the invite link a band admin sent you, or just the code from it.",
+    "codeLabel": "Invite link or code",
+    "join": "Join",
+    "joinPending": "Request sent. You'll get access once a band admin approves you.",
+    "errors": {
+      "noCode": "That doesn't contain an invite code.",
+      "joinFailed": "Could not join with that invite."
+    }
+  },
+  "directory": {
+    "title": "Find a band",
+    "help": "Some bands let musicians find them and ask to join. Search by name.",
+    "searchLabel": "Band name",
+    "searchHelp": "Type at least 3 characters.",
+    "noResults": "No bands found. Bands only appear here if they chose to be findable.",
+    "ask": "Ask to join",
+    "askTitle": "Ask to join {{band}}",
+    "askHelp": "Tell them who you are and what you play. The band's admins decide.",
+    "messageLabel": "Message (optional)",
+    "cancel": "Cancel",
+    "send": "Send request",
+    "openRequests": "Your open requests",
+    "withdraw": "Withdraw",
+    "already": {
+      "none": "",
+      "pending": "Request sent",
+      "approved": "You're in this band",
+      "rejected": "Not available"
+    },
+    "errors": {
+      "tooManyRequests": "You already have three open requests. Wait for an answer, or withdraw one first.",
+      "requestFailed": "Could not send that request.",
+      "withdrawFailed": "Could not withdraw that request."
+    }
+  },
+  "discoverability": {
+    "title": "Let musicians find us",
+    "help": "When this is on, musicians can find this band by name and ask to join. Their request lands here for you to approve or decline. Off by default.",
+    "toggle": "Findable in the band directory"
   }
 }

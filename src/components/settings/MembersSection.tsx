@@ -33,6 +33,7 @@ import { listMembers } from '../../api/bandMembers.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import { ASSIGNABLE_ROLES } from '../../auth/permissions.ts'
 import type { Member, Id } from '../../types/entities.ts'
+import type { MembershipSource } from '../../utils/membership.ts'
 
 const STATUS_COLOR: Record<string, 'warning' | 'success' | 'error'> = {
   pending: 'warning',
@@ -51,6 +52,43 @@ interface MembershipRow {
   role?: string
   is_super_admin?: boolean
   band_member_id?: Id | null
+  /** How this membership came to exist — 'legacy' predates the column. */
+  source?: MembershipSource
+  /**
+   * The requester's note, served only while the row is pending. Free text from
+   * a stranger the band hasn't accepted: rendered as PLAIN TEXT, never markup.
+   */
+  request_message?: string | null
+}
+
+// One line saying where a membership came from, so admins aren't left guessing
+// whether someone redeemed an invite or asked out of the blue. 'legacy' rows
+// (pre-column) say nothing rather than something invented.
+function ProvenanceLine({ r }: Readonly<{ r: MembershipRow }>) {
+  const { t } = useTranslation('settings')
+  if (!r.source || r.source === 'legacy') return null
+  return (
+    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+      {t($ => $.members.source[r.source!])}
+    </Typography>
+  )
+}
+
+// Shown on a PENDING row only (the server stops serving it once approved).
+function RequestMessage({ r }: Readonly<{ r: MembershipRow }>) {
+  const { t } = useTranslation('settings')
+  if (!r.request_message) return null
+  return (
+    <Box sx={{ mt: 0.5 }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+        {t($ => $.members.requestMessage)}
+      </Typography>
+      {/* Plain text on purpose: never HTML, never markdown. */}
+      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        {r.request_message}
+      </Typography>
+    </Box>
+  )
 }
 
 interface MemberRowActionsProps {
@@ -192,6 +230,8 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                     {r.is_super_admin && (
                       <Chip size="small" label={t($ => $.members.superChip)} color="primary" sx={{ ml: 1 }} />
                     )}
+                    <ProvenanceLine r={r} />
+                    <RequestMessage r={r} />
                   </TableCell>
                   <TableCell>{r.email}</TableCell>
                   <TableCell>
@@ -270,6 +310,8 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {r.email}
                     </Typography>
+                    <ProvenanceLine r={r} />
+                    <RequestMessage r={r} />
                   </Box>
                   <Chip label={status ? t($ => $.members.status[status]) : ''} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
                 </Stack>

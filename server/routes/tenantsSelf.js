@@ -8,6 +8,7 @@ import { requireCurrentTerms } from '../middleware/auth.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
   createOwnedTenant,
+  createPersonalTenant,
   listOwnedTenants,
   archiveOwnedTenant,
   unarchiveOwnedTenant,
@@ -21,6 +22,14 @@ router.post('/', requireCurrentTerms, async (req, res) => {
   if (result.error) return sendError(res, result.error)
   auditLog(req, result.audit.action, result.audit.details)
   res.status(201).json(result.tenant)
+})
+
+// Idempotent: an existing workspace comes back 200, a fresh one 201.
+router.post('/personal', requireCurrentTerms, async (req, res) => {
+  const result = await createPersonalTenant(pool, req.user, req.body)
+  if (result.error) return sendError(res, result.error)
+  if (result.audit) auditLog(req, result.audit.action, result.audit.details)
+  res.status(result.created ? 201 : 200).json(result.tenant)
 })
 
 router.get('/onboarding-status', async (_req, res) => {

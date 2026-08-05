@@ -78,5 +78,12 @@
       "venues": "Venues",
       "transaction": "Transaction"
     }
+  },
+  "userMenu": {
+    "me": "Me",
+    "switchBand": "Switch band",
+    "createPersonalWorkspace": "Create my artist workspace",
+    "admin": "admin",
+    "logout": "Log out"
   }
 }

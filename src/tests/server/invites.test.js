@@ -256,8 +256,8 @@ describe('/api/invites/redeem', () => {
     // A plain contributor in tenant A must NOT be notified (no members.manage).
     const contrib = await createOutsider({ email: 'contrib@test.local', name: 'Contrib' })
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
       [contrib.id, seed.tenantA.id],
     )
 
@@ -327,5 +327,68 @@ describe('/api/invites/redeem', () => {
       [invite.id],
     )
     expect(inv[0].used_at).toBeNull()
+  })
+})
+
+// An artist who owns a personal workspace joins bands from inside it: the
+// redeem route is mounted with loadUser only (no resolveTenantId), so the
+// active tenant is irrelevant. This guards that mount staying user-level.
+describe('/api/invites/redeem — from a personal workspace', () => {
+  async function createPersonalWorkspace(userId) {
+    const { rows: [tenant] } = await pool.query(
+      `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
+       VALUES ($1, 'Artist', 'Artist', 'personal', $2, $2) RETURNING *`,
+      [`artist-${Math.random().toString(36).slice(2, 8)}`, userId],
+    )
+    await pool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       VALUES ($1, $2, 'tenant_admin', 'approved', NOW(), 'admin')`,
+      [userId, tenant.id],
+    )
+    return tenant
+  }
+
+  it('creates a pending membership in the target band while the workspace is active', async () => {
+    const artist = await createOutsider({ email: 'artist@test.local', name: 'Artist' })
+    const workspace = await createPersonalWorkspace(artist.id)
+    const { rows: [invite] } = await pool.query(
+      `INSERT INTO tenant_invites (code, tenant_id, role, created_by_user_id)
+       VALUES ($1, $2, 'contributor', $3) RETURNING *`,
+      [`code-${Math.random().toString(36).slice(2)}`, seed.tenantA.id, seed.userA.id],
+    )
+
+    const res = await as(artist.id, workspace.id)(
+      request(app).post('/api/invites/redeem').send({ code: invite.code }),
+    ).expect(201)
+
+    expect(res.body.tenant.id).toBe(seed.tenantA.id)
+    expect(res.body.status).toBe('pending')
+
+    // The workspace membership is untouched — joining a band never changes it.
+    const { rows } = await pool.query(
+      'SELECT tenant_id, status FROM memberships WHERE user_id = $1 ORDER BY tenant_id',
+      [artist.id],
+    )
+    expect(rows).toEqual(expect.arrayContaining([
+      { tenant_id: workspace.id, status: 'approved' },
+      { tenant_id: seed.tenantA.id, status: 'pending' },
+    ]))
+  })
+
+  it('cannot be used to invite anyone INTO a personal workspace', async () => {
+    const artist = await createOutsider({ email: 'artist2@test.local', name: 'Artist2' })
+    const workspace = await createPersonalWorkspace(artist.id)
+
+    // The owner is tenant_admin, so members.manage passes — the kind gate is
+    // what refuses, and it must refuse before any invite row is written.
+    const res = await as(artist.id, workspace.id)(
+      request(app).post('/api/invites').send({ role: 'contributor' }),
+    ).expect(403)
+    expect(res.body.code).toBe('tenant_kind_not_supported')
+
+    const { rows } = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM tenant_invites WHERE tenant_id = $1', [workspace.id],
+    )
+    expect(rows[0].count).toBe(0)
   })
 })

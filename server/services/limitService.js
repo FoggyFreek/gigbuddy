@@ -7,6 +7,8 @@
 // a hit cap, or null when the write may proceed.
 import { resolveTenantEntitlements, resolveUserLimits } from './entitlementService.js'
 import { LIMITS, isUnlimited } from '../auth/entitlements.js'
+import { MAX_OPEN_JOIN_REQUESTS } from '../domain/membership.js'
+import { countOpenJoinRequests } from '../repositories/bandDirectoryRepository.js'
 import {
   lockTenantForCapCheck,
   lockUserForCapCheck,
@@ -51,6 +53,33 @@ export async function enforceBandCap(client, userId) {
   const count = await countActiveOwnedTenants(client, userId)
   if (count >= limit) {
     return limitReached('Band limit reached for the current plan', 'band_limit_reached', limit)
+  }
+  return null
+}
+
+// Outstanding join requests: how many bands an artist may be waiting on at
+// once. Unlike its neighbours above this cap is NOT plan-derived — it reads no
+// entitlements, and its code sits outside the `*_limit_reached` family so the
+// billing UI never offers an upgrade as the way out. Approval, rejection and
+// withdrawal all free a slot.
+//
+// Same lock-then-count-then-insert discipline as enforceBandCap: without the
+// user-row lock two parallel requests each count 1 and both slip through.
+export async function enforceJoinRequestCap(client, userId) {
+  await lockUserForCapCheck(client, userId)
+
+  const count = await countOpenJoinRequests(client, userId)
+  if (count >= MAX_OPEN_JOIN_REQUESTS) {
+    return {
+      error: {
+        status: 409,
+        body: {
+          error: 'You already have the maximum number of open join requests',
+          code: 'join_request_limit',
+          limit: MAX_OPEN_JOIN_REQUESTS,
+        },
+      },
+    }
   }
   return null
 }

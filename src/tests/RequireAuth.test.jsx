@@ -82,6 +82,27 @@ describe('RequireAuth', () => {
     expect(screen.getByText('pending')).toBeInTheDocument()
   })
 
+  // The redirect is keyed on "no approved membership", not on "has a pending
+  // one". An artist who owns a workspace and just asked to join a band must
+  // stay in their workspace, not be parked on /pending.
+  it('keeps a personal-workspace owner in the app while a band request is pending', () => {
+    useAuth.mockReturnValue({
+      user: {
+        id: 1,
+        status: 'approved',
+        isSuperAdmin: false,
+        termsVersion: TERMS_VERSION,
+        memberships: [
+          { tenantId: 3, kind: 'personal', status: 'approved', role: 'tenant_admin' },
+          { tenantId: 1, kind: 'band', status: 'pending', role: 'member' },
+        ],
+      },
+    })
+    setup('/')
+    expect(screen.getByText('home')).toBeInTheDocument()
+    expect(screen.queryByText('pending')).not.toBeInTheDocument()
+  })
+
   it('renders the app for users with at least one approved membership', () => {
     useAuth.mockReturnValue({
       user: {

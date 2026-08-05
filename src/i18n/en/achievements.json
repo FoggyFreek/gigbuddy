@@ -15,7 +15,8 @@
     "finance": "Finance",
     "platform": "Platform",
     "repertoire": "Repertoire",
-    "network": "Network"
+    "network": "Network",
+    "artist": "Artist"
   },
   "items": {
     "logo_a_go_go": {
@@ -165,6 +166,42 @@
     "fifty_people_who_might_answer": {
       "title": "Fifty People Who Might Answer",
       "description": "Have more than 50 contacts."
+    },
+    "a_stage_name_and_a_face": {
+      "title": "A Stage Name And A Face",
+      "description": "Set your artist name and your profile picture."
+    },
+    "presentable_on_paper": {
+      "title": "Presentable On Paper",
+      "description": "Name, bio, picture and at least one social link — you look like someone worth booking."
+    },
+    "first_one_in_the_diary": {
+      "title": "First One In The Diary",
+      "description": "Log your first confirmed gig of your own."
+    },
+    "twenty_five_nights_of_my_own": {
+      "title": "Twenty-Five Nights Of My Own",
+      "description": "Twenty-five gigs booked under your own name."
+    },
+    "my_own_books_thanks": {
+      "title": "My Own Books, Thanks",
+      "description": "Send an invoice and book a purchase — both sides of your own ledger."
+    },
+    "invoice_number_one": {
+      "title": "Invoice Number One",
+      "description": "Send your first invoice, to a venue, an organiser or a band."
+    },
+    "a_month_in_the_black_solo": {
+      "title": "A Month In The Black",
+      "description": "Finish a calendar month with more coming in than going out."
+    },
+    "my_own_little_black_book": {
+      "title": "My Own Little Black Book",
+      "description": "Ten contacts of your own."
+    },
+    "songs_i_can_actually_play": {
+      "title": "Songs I Can Actually Play",
+      "description": "Ten songs in your own repertoire."
     }
   }
 }

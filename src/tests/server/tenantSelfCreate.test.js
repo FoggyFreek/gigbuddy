@@ -167,6 +167,164 @@ describe('POST /api/tenants (self-service creation)', () => {
   })
 })
 
+describe('POST /api/tenants/personal (artist workspace)', () => {
+  const personalBody = (overrides = {}) => ({ country_code: 'nl', ...overrides })
+
+  // In the caller's own workspace, x-test-tenant-id must point at it.
+  const inWorkspace = (req, tenantId) =>
+    req.set('x-test-user-id', String(seed.userA.id)).set('x-test-tenant-id', String(tenantId))
+
+  it('creates a single-member sole-trader workspace named after the user', async () => {
+    const res = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+    expect(res.body.kind).toBe('personal')
+    expect(res.body.display_name).toBe('Alpha User')
+    expect(res.body.owner_user_id).toBe(seed.userA.id)
+
+    const { rows: memberships } = await pool.query(
+      'SELECT user_id, role, status FROM memberships WHERE tenant_id = $1', [res.body.id],
+    )
+    expect(memberships).toEqual([
+      { user_id: seed.userA.id, role: 'tenant_admin', status: 'approved' },
+    ])
+
+    const { rows: [accounts] } = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM chart_of_accounts WHERE tenant_id = $1', [res.body.id],
+    )
+    expect(accounts.count).toBeGreaterThan(0)
+  })
+
+  it('records the accounting profile as a sole trader in the requested country', async () => {
+    const res = await asUserA(request(app).post('/api/tenants/personal')
+      .send(personalBody({ country_code: 'de' }))).expect(201)
+
+    const { rows: [profile] } = await pool.query(
+      'SELECT * FROM tenant_accounting_profiles WHERE tenant_id = $1', [res.body.id],
+    )
+    expect(profile).toMatchObject({
+      country_code: 'de',
+      legal_form: 'sole_trader',
+      profile_source: 'tenant_creation',
+    })
+  })
+
+  it('is idempotent: a second attempt returns the first workspace', async () => {
+    const first = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+    // A different country on the retry must not create (or move) anything.
+    const second = await asUserA(request(app).post('/api/tenants/personal')
+      .send(personalBody({ country_code: 'fr' }))).expect(200)
+    expect(second.body.id).toBe(first.body.id)
+
+    const { rows: [count] } = await pool.query(
+      "SELECT COUNT(*)::int AS count FROM tenants WHERE kind = 'personal'",
+    )
+    expect(count.count).toBe(1)
+  })
+
+  it('two concurrent creates still yield exactly one workspace', async () => {
+    const [a, b] = await Promise.all([
+      asUserA(request(app).post('/api/tenants/personal').send(personalBody())),
+      asUserA(request(app).post('/api/tenants/personal').send(personalBody())),
+    ])
+    expect([a.status, b.status].every((s) => s === 200 || s === 201)).toBe(true)
+    expect(a.body.id).toBe(b.body.id)
+  })
+
+  it('does not count toward the band cap', async () => {
+    // Bronze fallback allows one band. The workspace must not consume it…
+    await asUserA(request(app).post('/api/tenants/personal').send(personalBody())).expect(201)
+    await asUserA(request(app).post('/api/tenants').send(createBody('still-allowed'))).expect(201)
+    // …and the band cap still bites afterwards.
+    const res = await asUserA(request(app).post('/api/tenants').send(createBody('one-too-many')))
+      .expect(409)
+    expect(res.body.code).toBe('band_limit_reached')
+  })
+
+  it('is creatable on a bands: 0 artist plan while band creation is refused', async () => {
+    await billing.createSubscription({ userId: seed.userA.id, planSlug: 'artist_gold' })
+    await asUserA(request(app).post('/api/tenants/personal').send(personalBody())).expect(201)
+    const res = await asUserA(request(app).post('/api/tenants').send(createBody('no-bands')))
+      .expect(409)
+    expect(res.body.code).toBe('band_limit_reached')
+    expect(res.body.limit).toBe(0)
+  })
+
+  it('requires an accounting country', async () => {
+    const res = await asUserA(request(app).post('/api/tenants/personal').send({})).expect(400)
+    expect(res.body.error).toBe('country_code_required')
+  })
+
+  it('403s with tenant_onboarding_disabled when the platform switch is off', async () => {
+    await asSuper(
+      request(app).patch('/api/admin/platform-settings/tenant-onboarding')
+        .send({ tenantOnboardingEnabled: false }),
+    ).expect(200)
+
+    const res = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(403)
+    expect(res.body.code).toBe('tenant_onboarding_disabled')
+
+    const { rows: [count] } = await pool.query(
+      "SELECT COUNT(*)::int AS count FROM tenants WHERE kind = 'personal'",
+    )
+    expect(count.count).toBe(0)
+  })
+
+  it('rejects band-only surfaces inside the workspace', async () => {
+    const ws = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+
+    const invite = await inWorkspace(request(app).post('/api/invites'), ws.body.id)
+      .send({ role: 'member' }).expect(403)
+    expect(invite.body.code).toBe('tenant_kind_not_supported')
+
+    await inWorkspace(request(app).get('/api/band-members'), ws.body.id).expect(403)
+    await inWorkspace(request(app).get('/api/setlists'), ws.body.id).expect(403)
+    await inWorkspace(
+      request(app).patch(`/api/users/${seed.userB.id}/membership`), ws.body.id,
+    ).send({ status: 'approved' }).expect(403)
+
+    // Planning and the books are exactly the point of the workspace.
+    await inWorkspace(request(app).get('/api/gigs'), ws.body.id).expect(200)
+  })
+
+  it('refuses even a super admin adding a second member', async () => {
+    const ws = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+
+    const res = await asSuper(
+      request(app).post(`/api/admin/tenants/${ws.body.id}/memberships`)
+        .send({ userId: seed.userB.id, role: 'contributor' }),
+    ).expect(403)
+    expect(res.body.code).toBe('tenant_kind_not_supported')
+
+    await asSuper(
+      request(app).post(`/api/admin/tenants/${ws.body.id}/admins`).send({ userId: seed.userB.id }),
+    ).expect(403)
+  })
+
+  it('keeps the workspace invisible to everyone but its owner', async () => {
+    const ws = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+
+    // No membership exists for anyone else, so the tenant can't be activated…
+    const { rows } = await pool.query(
+      'SELECT user_id FROM memberships WHERE tenant_id = $1', [ws.body.id],
+    )
+    expect(rows.map((r) => r.user_id)).toEqual([seed.userA.id])
+
+    // …and asking for it as the active tenant is refused, not served.
+    await request(app).get('/api/gigs')
+      .set('x-test-user-id', String(seed.userB.id))
+      .set('x-test-tenant-id', String(ws.body.id))
+      .expect(403)
+
+    // Owner-scoped management stays 404 for a non-owner (existence not leaked).
+    await asUserB(request(app).post(`/api/tenants/${ws.body.id}/archive`)).expect(404)
+  })
+})
+
 describe('tenant onboarding platform setting', () => {
   it('defaults to enabled', async () => {
     const res = await asUserA(request(app).get('/api/tenants/onboarding-status')).expect(200)

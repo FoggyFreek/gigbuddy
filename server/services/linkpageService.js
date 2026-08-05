@@ -71,9 +71,12 @@ export async function buildExport(db, slug) {
   return {
     export: {
       entitlements,
+      // Wire keys `band` / `name` are the link-page app's external contract and
+      // stay put whatever the tenant's kind is — a solo artist's page reads the
+      // same shape. Only the source column follows the internal rename.
       band: {
         slug: tenant.slug,
-        name: nullable(tenant.band_name),
+        name: nullable(tenant.display_name),
         // Wire key stays `bio` (the linkpage app reads it under that name); the
         // source is the 150-char short bio, not the long-form profile bio.
         bio: nullable(tenant.short_bio),

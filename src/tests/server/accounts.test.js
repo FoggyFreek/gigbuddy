@@ -44,7 +44,7 @@ async function seedMemberUser() {
     `INSERT INTO users (google_sub, email, name, status) VALUES ('sub-mem', 'mem@test.local', 'Member', 'approved') RETURNING *`,
   )
   await pool.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at) VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source) VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
     [u.id, seed.tenantA.id],
   )
   return u
@@ -374,7 +374,7 @@ describe('accounts — admin gating', () => {
       `INSERT INTO users (google_sub, email, name, status) VALUES ('sub-fa', 'fa@test.local', 'FinAdmin', 'approved') RETURNING *`,
     )
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at) VALUES ($1, $2, 'financial_admin', 'approved', NOW())`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source) VALUES ($1, $2, 'financial_admin', 'approved', NOW(), 'admin')`,
       [u.id, seed.tenantA.id],
     )
     await request(app).get('/api/accounts')

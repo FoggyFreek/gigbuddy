@@ -15,7 +15,8 @@
     "finance": "Financiën",
     "platform": "Platform",
     "repertoire": "Repertoire",
-    "network": "Netwerk"
+    "network": "Netwerk",
+    "artist": "Artiest"
   },
   "items": {
     "logo_a_go_go": {
@@ -165,6 +166,42 @@
     "fifty_people_who_might_answer": {
       "title": "Fifty People Who Might Answer",
       "description": "Heb meer dan 50 contacten."
+    },
+    "a_stage_name_and_a_face": {
+      "title": "Een Artiestennaam En Een Gezicht",
+      "description": "Stel je artiestennaam en je profielfoto in."
+    },
+    "presentable_on_paper": {
+      "title": "Toonbaar Op Papier",
+      "description": "Naam, bio, foto en minstens één sociale link — je ziet eruit als iemand die geboekt wordt."
+    },
+    "first_one_in_the_diary": {
+      "title": "De Eerste In De Agenda",
+      "description": "Zet je eerste eigen bevestigde optreden in de agenda."
+    },
+    "twenty_five_nights_of_my_own": {
+      "title": "Vijfentwintig Eigen Avonden",
+      "description": "Vijfentwintig optredens op je eigen naam."
+    },
+    "my_own_books_thanks": {
+      "title": "Mijn Eigen Boekhouding",
+      "description": "Verstuur een factuur en boek een inkoop — beide kanten van je eigen grootboek."
+    },
+    "invoice_number_one": {
+      "title": "Factuur Nummer Eén",
+      "description": "Verstuur je eerste factuur, aan een locatie, organisator of band."
+    },
+    "a_month_in_the_black_solo": {
+      "title": "Een Maand In De Plus",
+      "description": "Sluit een kalendermaand af met meer inkomsten dan uitgaven."
+    },
+    "my_own_little_black_book": {
+      "title": "Mijn Eigen Adresboekje",
+      "description": "Tien eigen contacten."
+    },
+    "songs_i_can_actually_play": {
+      "title": "Nummers Die Ik Echt Kan Spelen",
+      "description": "Tien nummers in je eigen repertoire."
     }
   }
 }

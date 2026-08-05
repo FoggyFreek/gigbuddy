@@ -16,8 +16,10 @@
       "chartOfAccounts": "Grootboekschema",
       "defaultAccounts": "Boekhoudinstellingen",
       "financialProfile": "Financieel profiel",
-      "accountingProfile": "Boekhoudprofiel"
-    }
+      "accountingProfile": "Boekhoudprofiel",
+      "bands": "Bands"
+    },
+    "workspaceSettings": "Werkruimte-instellingen"
   },
   "subscription": {
     "current": "Huidig abonnement",
@@ -60,7 +62,15 @@
     "errors": {
       "updateFailed": "Bijwerken mislukt",
       "deleteFailed": "Verwijderen mislukt"
-    }
+    },
+    "source": {
+      "invite": "Uitnodiging ingewisseld",
+      "request": "Heeft zich aangemeld",
+      "admin": "Toegevoegd door een beheerder",
+      "owner": "Heeft deze band aangemaakt",
+      "legacy": ""
+    },
+    "requestMessage": "Hun bericht"
   },
   "invites": {
     "title": "Uitnodigingen",
@@ -420,5 +430,51 @@
       "destinationOnlyNote": "De grensoverschrijdende regeling geldt alleen voor verkopen naar het land van bestemming. Het verandert niets aan de btw-aangifte die je in eigen land doet.",
       "issuedUnaffected": "Facturen die je al hebt verstuurd houden de btw-behandeling waarmee ze zijn uitgereikt, dus deze data corrigeren is veilig."
     }
+  },
+  "bands": {
+    "title": "Bands",
+    "intro": "De bands waarin je speelt. Elke band houdt een eigen agenda en boekhouding — deze werkruimte blijft van jou.",
+    "empty": "Je zit nog niet in een band.",
+    "awaitingApproval": "Wacht op goedkeuring door de band",
+    "joinTitle": "Bij een band aansluiten",
+    "joinHelp": "Plak de uitnodigingslink die een bandbeheerder je stuurde, of alleen de code daaruit.",
+    "codeLabel": "Uitnodigingslink of code",
+    "join": "Aansluiten",
+    "joinPending": "Verzoek verstuurd. Je krijgt toegang zodra een bandbeheerder je goedkeurt.",
+    "errors": {
+      "noCode": "Daar staat geen uitnodigingscode in.",
+      "joinFailed": "Aansluiten met deze uitnodiging is niet gelukt."
+    }
+  },
+  "directory": {
+    "title": "Een band zoeken",
+    "help": "Sommige bands laten muzikanten hen vinden en zich aanmelden. Zoek op naam.",
+    "searchLabel": "Bandnaam",
+    "searchHelp": "Typ minstens 3 tekens.",
+    "noResults": "Geen bands gevonden. Bands verschijnen hier alleen als ze zelf vindbaar willen zijn.",
+    "ask": "Aanmelden",
+    "askTitle": "Aanmelden bij {{band}}",
+    "askHelp": "Vertel wie je bent en wat je speelt. De beheerders van de band beslissen.",
+    "messageLabel": "Bericht (optioneel)",
+    "cancel": "Annuleren",
+    "send": "Verzoek versturen",
+    "openRequests": "Je openstaande verzoeken",
+    "withdraw": "Intrekken",
+    "already": {
+      "none": "",
+      "pending": "Verzoek verstuurd",
+      "approved": "Je zit in deze band",
+      "rejected": "Niet beschikbaar"
+    },
+    "errors": {
+      "tooManyRequests": "Je hebt al drie openstaande verzoeken. Wacht op antwoord of trek er eerst één in.",
+      "requestFailed": "Het verzoek kon niet worden verstuurd.",
+      "withdrawFailed": "Het verzoek kon niet worden ingetrokken."
+    }
+  },
+  "discoverability": {
+    "title": "Laat muzikanten ons vinden",
+    "help": "Als dit aanstaat, kunnen muzikanten deze band op naam vinden en zich aanmelden. Hun verzoek komt hier binnen om goed te keuren of af te wijzen. Standaard uit.",
+    "toggle": "Vindbaar in de bandengids"
   }
 }

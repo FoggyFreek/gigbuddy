@@ -10,6 +10,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
+import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import { normalizeIsoDate, toIsoDate } from '../utils/availabilityUtils.ts'
 import {
   getDayHeaders,
@@ -43,6 +44,8 @@ interface AvailabilityCalendarProps {
   onMonthJump: (year: number, month: number) => void
   onExport?: () => void
   onSubscribe?: () => void
+  /** Plan lacks calendar sync: the affordance stays visible as a diamond upsell. */
+  subscribeLocked?: boolean
 }
 
 export default function AvailabilityCalendar({
@@ -66,6 +69,7 @@ export default function AvailabilityCalendar({
   onMonthJump,
   onExport,
   onSubscribe,
+  subscribeLocked = false,
 }: Readonly<AvailabilityCalendarProps>) {
   const { t, i18n } = useTranslation('availability')
   const dayHeaders = useMemo(() => getDayHeaders(i18n.resolvedLanguage ?? 'en'), [i18n.resolvedLanguage])
@@ -154,9 +158,11 @@ export default function AvailabilityCalendar({
         </Box>
 
         {onSubscribe && (
-          <Tooltip title={t($ => $.subscribe.tooltip)}>
+          <Tooltip title={subscribeLocked ? t($ => $.subscribe.locked) : t($ => $.subscribe.tooltip)}>
             <IconButton size="small" onClick={onSubscribe} aria-label={t($ => $.subscribe.aria)}>
-              <CloudSyncOutlinedIcon fontSize="small" />
+              {subscribeLocked
+                ? <DiamondOutlined fontSize="small" color="secondary" />
+                : <CloudSyncOutlinedIcon fontSize="small" />}
             </IconButton>
           </Tooltip>
         )}

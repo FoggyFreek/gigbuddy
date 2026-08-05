@@ -31,6 +31,7 @@ import authRouter from './auth.js'
 import usersRouter from './users.js'
 import tenantsRouter from './tenants.js'
 import tenantsSelfRouter from './tenantsSelf.js'
+import bandDirectoryRouter from './bandDirectory.js'
 import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
@@ -55,6 +56,7 @@ import { loadUser, requireApproved, requireCurrentTerms } from '../middleware/au
 import {
   resolveTenantId,
   requireTenantMember,
+  requireTenantKind,
   requireSuperAdmin,
 } from '../middleware/tenant.js'
 import { requirePermission } from '../middleware/permissions.js'
@@ -119,6 +121,20 @@ const publicWebhookLimiter = rateLimit({
   skip: () => isTest,
 })
 
+// The band directory answers questions about tenants the caller has no
+// membership in. The outstanding-request cap governs how many requests may be
+// OPEN; this limiter governs how fast someone may knock — and bounds scraping
+// of the directory itself.
+const bandDirectoryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
+  skip: () => isTest,
+})
+
 // Place lookup hits a metered third-party API once per debounced keystroke, so
 // the blanket apiLimiter (1000) is far too loose to bound the upstream bill.
 const placeSearchLimiter = rateLimit({
@@ -169,10 +185,18 @@ const integrations = requireEntitlement(FEATURES.INTEGRATIONS)
 // the matrix stays the single source of truth (see auth/permissions.js).
 const membersManage = [...tenantMember, requirePermission(PERMISSIONS.MEMBERS_MANAGE)]
 const tenantManage = [...tenantMember, requirePermission(PERMISSIONS.TENANT_MANAGE)]
+// Surfaces that only exist for a band. A personal workspace is a single
+// musician: it has no roster to invite people onto, no setlists, no merch and
+// no band promotion. The frontend hides these (NAV_GROUPS `kinds`); this is the
+// authoritative gate.
+const bandOnly = requireTenantKind('band')
 
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 // Self-service owned tenants: user-level (no active-tenant resolution).
 router.use('/tenants', requireApproved, tenantsSelfRouter)
+// Band directory: user-level too — an artist searches and asks to join from
+// inside their own workspace, with no membership in the target band.
+router.use('/band-directory', currentTermsUser, bandDirectoryLimiter, bandDirectoryRouter)
 // User-level billing (subscription owner acts regardless of active tenant).
 router.use('/billing', requireApproved, billingRouter)
 router.use('/admin/tenants', superAdmin, tenantsRouter)
@@ -182,16 +206,16 @@ router.use('/admin/plans', superAdmin, adminPlansRouter)
 router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
 router.use('/admin/storage', superAdmin, adminStorageRouter)
-router.use('/invites', membersManage, invitesAdminRouter)
-router.use('/users', membersManage, usersRouter)
+router.use('/invites', membersManage, bandOnly, invitesAdminRouter)
+router.use('/users', membersManage, bandOnly, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)
 router.use('/gigs', tenantMember, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
 router.use('/places', tenantMember, placeSearchLimiter, placesRouter)
-router.use('/bandsintown', tenantMember, integrations, bandsintownRouter)
+router.use('/bandsintown', tenantMember, bandOnly, integrations, bandsintownRouter)
 router.use('/tasks', tenantMember, tasksRouter)
 router.use('/profile', tenantMember, profileRouter)
-router.use('/band-members', tenantMember, bandMembersRouter)
+router.use('/band-members', tenantMember, bandOnly, bandMembersRouter)
 router.use('/availability', tenantMember, availabilityRouter)
 router.use('/rehearsals', tenantMember, rehearsalsRouter)
 router.use('/achievements', tenantMember, achievementsRouter)
@@ -200,14 +224,14 @@ router.use('/email-templates', tenantMember, emailTemplatesRouter)
 router.use('/venues', tenantMember, venuesRouter)
 router.use('/contacts', tenantMember, contactsRouter)
 router.use('/songs', tenantMember, songsRouter)
-router.use('/setlists', tenantMember, setlistsRouter)
+router.use('/setlists', tenantMember, bandOnly, setlistsRouter)
 router.use('/invoices', financeView, invoicesRouter)
 // Purchases is mixed: contributors create + view their own purchases
 // (purchase.create); the full register and payments are finance-gated inside.
 // Purchases are finance data (they post to the ledger), so writes fall under
 // the finance entitlement too.
 router.use('/purchases', tenantMember, financeWrites, purchasesRouter)
-router.use('/merch', financeView, merchRouter)
+router.use('/merch', financeView, bandOnly, merchRouter)
 router.use('/accounts', financeView, accountsRouter)
 router.use('/accounting-profile', financeView, accountingProfileRouter)
 router.use('/journal', financeView, journalRouter)

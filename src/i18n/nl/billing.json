@@ -28,7 +28,8 @@
     "chordpro": "Akkoordenschema's",
     "customization": "Eigen huisstijl",
     "public_promotion": "Publieke promotie",
-    "linkpage": "Link- & releasepagina's"
+    "linkpage": "Link- & releasepagina's",
+    "calendar_sync": "Agenda-synchronisatie"
   },
   "limits": {
     "storage_mb": "Opslag (MB)",

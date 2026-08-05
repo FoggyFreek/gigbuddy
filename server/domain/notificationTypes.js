@@ -12,6 +12,7 @@ export const NOTIFICATION_TYPES = Object.freeze([
   'invoice-paid',
   'task-assigned',
   'invite-redeemed',
+  'membership-requested',
   'achievement-unlocked',
 ])
 

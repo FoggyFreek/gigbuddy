@@ -78,5 +78,12 @@
       "venues": "Locaties",
       "transaction": "Transactie"
     }
+  },
+  "userMenu": {
+    "me": "Ik",
+    "switchBand": "Wissel van band",
+    "createPersonalWorkspace": "Mijn artiestenwerkruimte aanmaken",
+    "admin": "beheerder",
+    "logout": "Uitloggen"
   }
 }

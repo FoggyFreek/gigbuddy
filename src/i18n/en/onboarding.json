@@ -1,7 +1,6 @@
 {
   "steps": {
     "welcome": "Welcome",
-    "band": "Your band",
     "summary": "Summary"
   },
   "nextStep": "Next",
@@ -28,33 +27,18 @@
     "agree": "I have read and agree to the Terms & Conditions",
     "accept": "Accept and continue"
   },
-  "band": {
-    "title": "Set up your band",
-    "nameLabel": "Band name",
-    "nameRequired": "Enter your band name to continue.",
-    "logoLabel": "Band logo (optional)",
-    "uploadLogo": "Upload logo",
-    "removeLogo": "Remove",
-    "slugPreview": "Your band's web address name: {{slug}}",
-    "slugCaveat": "If this name is taken, a number is added automatically (e.g. {{slug}}-2).",
-    "countryLabel": "Accounting country",
-    "countryHelper": "Where this band keeps its books. This sets the VAT rules, chart of accounts and reporting rules, and cannot be changed later."
-  },
   "summary": {
     "title": "Almost there",
     "plan": "Plan",
     "interval": "Billing",
     "monthly": "Monthly",
     "yearly": "Yearly",
-    "band": "Band",
     "slug": "Web address name",
     "logo": "Logo",
     "noLogo": "No logo",
     "paymentNote": "You'll choose your payment method on our payment provider's secure page. A one-time €0.01 verification charge starts your trial.",
     "freeNote": "The free plan needs no payment details.",
-    "confirmPaid": "Continue to payment",
-    "confirmFree": "Create my band",
-    "resumeNote": "Your band \"{{name}}\" was already created — we'll pick up where you left off."
+    "confirmPaid": "Continue to payment"
   },
   "checkout": {
     "processing": "Confirming your payment…",
@@ -68,5 +52,50 @@
     "bandCapNoPointer": "You already own a band, so onboarding isn't needed. You can manage plans in Settings.",
     "logoUploadFailed": "The logo could not be uploaded — you can add it later under Profile.",
     "generic": "Something went wrong. Please try again."
+  },
+  "workspace": {
+    "band": {
+      "step": "Your band",
+      "title": "Set up your band",
+      "nameLabel": "Band name",
+      "nameRequired": "Enter your band name to continue.",
+      "logoLabel": "Band logo (optional)",
+      "uploadLogo": "Upload logo",
+      "removeLogo": "Remove",
+      "slugPreview": "Your band's web address name: {{slug}}",
+      "slugCaveat": "If this name is taken, a number is added automatically (e.g. {{slug}}-2).",
+      "countryLabel": "Accounting country",
+      "countryHelper": "Where this band keeps its books. This sets the VAT rules, chart of accounts and reporting rules, and cannot be changed later.",
+      "summaryLabel": "Band",
+      "confirmFree": "Create my band",
+      "resumeNote": "Your band \"{{name}}\" was already created — we’ll pick up where you left off."
+    },
+    "personal": {
+      "step": "Your workspace",
+      "title": "Set up your artist workspace",
+      "nameLabel": "Artist name",
+      "nameRequired": "Enter your artist name to continue.",
+      "logoLabel": "Photo (optional)",
+      "uploadLogo": "Upload photo",
+      "removeLogo": "Remove",
+      "slugPreview": "Your web address name: {{slug}}",
+      "slugCaveat": "If this name is taken, a number is added automatically (e.g. {{slug}}-2).",
+      "countryLabel": "Accounting country",
+      "countryHelper": "Where you keep your own books. This sets the VAT rules, chart of accounts and reporting rules, and cannot be changed later.",
+      "summaryLabel": "Workspace",
+      "confirmFree": "Create my workspace",
+      "resumeNote": "Your workspace \"{{name}}\" was already created — we’ll pick up where you left off."
+    }
+  },
+  "kindChoice": {
+    "title": "What are you setting up?",
+    "band": {
+      "label": "A band",
+      "help": "A shared workspace for a group: agenda, roster, repertoire and the band’s books."
+    },
+    "personal": {
+      "label": "My own artist workspace",
+      "help": "Your own agenda, contacts and books, as the musician. You can join bands later."
+    }
   }
 }

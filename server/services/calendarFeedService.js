@@ -139,10 +139,11 @@ export async function buildFeed(pool, token) {
 
   const tenantId = ctx.tenant_id
 
-  // Feed access follows the integrations entitlement; 404 (like every other
-  // failure here) so neither token validity nor plan state is leaked.
+  // Feed access follows the calendar_sync entitlement; 404 (like every other
+  // failure here) so neither token validity nor plan state is leaked. Nothing
+  // is purged when the feature goes away — this gate is what stops serving.
   const resolved = await resolveTenantEntitlements(pool, tenantId)
-  if (resolved && !resolved.entitlements.features[FEATURES.INTEGRATIONS]) return notFound
+  if (resolved && !resolved.entitlements.features[FEATURES.CALENDAR_SYNC]) return notFound
   const base = appBase()
 
   const [gigs, rehearsals, bandEvents] = await Promise.all([

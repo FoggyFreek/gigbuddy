@@ -235,7 +235,7 @@ describe('linkpage handoff', () => {
       `INSERT INTO users (google_sub, email, name, status) VALUES ('sub-c', 'c@test.local', 'Contrib', 'approved') RETURNING id`,
     )
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at) VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source) VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
       [contributor.id, seed.tenantA.id],
     )
     const asContributor = (req) =>

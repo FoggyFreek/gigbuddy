@@ -2,6 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
+import { requireTenantKind } from '../middleware/tenant.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireEntitlement, hasEntitledFeature } from '../middleware/entitlements.js'
 import { FEATURES } from '../auth/entitlements.js'
@@ -10,6 +11,7 @@ import { requireParam, sendError } from './routeHelpers.js'
 import {
   getProfile,
   patchProfile,
+  setJoinPolicy,
   createLink,
   patchLink,
   deleteLink,
@@ -85,6 +87,19 @@ router.get('/', async (req, res) => {
   if (result.error) return sendError(res, result.error)
   res.json(result.profile)
 })
+
+// Discoverability in the band directory. Gated on tenant.manage (not the
+// planning.write that governs the rest of this router) and on kind: only a
+// band can be found and asked to join.
+router.patch('/join-policy',
+  requirePermission(PERMISSIONS.TENANT_MANAGE),
+  requireTenantKind('band'),
+  async (req, res) => {
+    const result = await setJoinPolicy(pool, req.tenantId, req.body)
+    if (result.error) return sendError(res, result.error)
+    auditLog(req, result.audit.action, result.audit.details)
+    res.json(result.profile)
+  })
 
 // Update tenant profile (partial)
 router.patch('/', writeProfile, async (req, res) => {

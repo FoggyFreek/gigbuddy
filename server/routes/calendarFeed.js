@@ -18,8 +18,8 @@ router.get('/', async (req, res) => {
 })
 
 // Create or rotate the feed token; rotating invalidates the previous URL.
-// Minting new bearer tokens requires the integrations feature.
-router.post('/regenerate', requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
+// Minting new bearer tokens requires the calendar sync feature.
+router.post('/regenerate', requireEntitlement(FEATURES.CALENDAR_SYNC), async (req, res) => {
   res.json(await regenerateFeed(pool, req.user.id, req.tenantId))
 })
 

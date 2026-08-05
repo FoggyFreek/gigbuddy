@@ -96,8 +96,8 @@ WITH
     RETURNING id, email
   ),
   m AS (
-    INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-    SELECT u.id, t.id, 'tenant_admin', 'approved', NOW()
+    INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+    SELECT u.id, t.id, 'tenant_admin', 'approved', NOW(), 'owner'
     FROM u, t
     WHERE (u.email = 'a@test.local'  AND t.slug = 'alpha')
        OR (u.email = 'b@test.local'  AND t.slug = 'beta')

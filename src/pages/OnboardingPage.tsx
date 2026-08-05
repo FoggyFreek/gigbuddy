@@ -23,12 +23,19 @@ import {
   type BillingInterval,
   type SubscriptionPlan,
 } from '../api/billing.ts'
-import { createOwnedTenant, getTenantOnboardingStatus, listOwnedTenants } from '../api/tenants.ts'
+import {
+  createOwnedTenant,
+  createPersonalTenant,
+  getTenantOnboardingStatus,
+  listOwnedTenants,
+} from '../api/tenants.ts'
 import { uploadLogo } from '../api/profile.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import type { Tenant } from '../types/entities.ts'
+import type { TenantKind } from '../utils/businessRegistry.ts'
 import WelcomeStep from '../components/onboarding/WelcomeStep.tsx'
 import BandStep from '../components/onboarding/BandStep.tsx'
+import WorkspaceKindChoice from '../components/onboarding/WorkspaceKindChoice.tsx'
 import SummaryStep from '../components/onboarding/SummaryStep.tsx'
 import TermsDialog from '../components/onboarding/TermsDialog.tsx'
 
@@ -113,6 +120,8 @@ function CheckoutReturn() {
 
 interface StepContentProps {
   activeStep: number
+  kind: TenantKind
+  onKindChange: (kind: TenantKind) => void
   ready: boolean
   loadError: boolean
   plans: SubscriptionPlan[]
@@ -135,7 +144,8 @@ interface StepContentProps {
 
 // The active wizard step (or the loading spinner before the wizard is ready).
 function StepContent({
-  activeStep, ready, loadError, plans, interval, onIntervalChange, selectedPlanId, onSelectPlan,
+  activeStep, kind, onKindChange, ready, loadError, plans, interval, onIntervalChange,
+  selectedPlanId, onSelectPlan,
   selectedPlan, termsAgreed, onTermsAgreedChange, onOpenTerms, bandName, onBandNameChange,
   countryCode, onCountryCodeChange, onboardingTenant, logo, onLogoFileChange,
 }: Readonly<StepContentProps>) {
@@ -163,26 +173,35 @@ function StepContent({
   }
   if (activeStep === 1) {
     return (
-      <BandStep
-        bandName={bandName}
-        onBandNameChange={onBandNameChange}
-        countryCode={countryCode}
-        onCountryCodeChange={onCountryCodeChange}
-        resumedSlug={onboardingTenant?.slug ?? null}
-        logoFile={logo?.file ?? null}
-        logoPreviewUrl={logo?.previewUrl ?? null}
-        onLogoFileChange={onLogoFileChange}
-      />
+      <Stack spacing={3}>
+        {/* The kind is fixed once the tenant exists — a resumed onboarding
+            continues the kind it started, read off the resumed tenant. */}
+        {onboardingTenant === null && (
+          <WorkspaceKindChoice value={kind} onChange={onKindChange} />
+        )}
+        <BandStep
+          kind={kind}
+          bandName={bandName}
+          onBandNameChange={onBandNameChange}
+          countryCode={countryCode}
+          onCountryCodeChange={onCountryCodeChange}
+          resumedSlug={onboardingTenant?.slug ?? null}
+          logoFile={logo?.file ?? null}
+          logoPreviewUrl={logo?.previewUrl ?? null}
+          onLogoFileChange={onLogoFileChange}
+        />
+      </Stack>
     )
   }
   if (!selectedPlan) return null
   return (
     <SummaryStep
+      kind={kind}
       plan={selectedPlan}
       interval={interval}
       bandName={bandName}
       resumedSlug={onboardingTenant?.slug ?? null}
-      resumedBandName={onboardingTenant?.band_name ?? null}
+      resumedBandName={onboardingTenant?.display_name ?? onboardingTenant?.band_name ?? null}
       logoFileName={logo?.file.name ?? null}
     />
   )
@@ -190,6 +209,7 @@ function StepContent({
 
 interface WizardControlsProps {
   activeStep: number
+  kind: TenantKind
   busy: boolean
   termsAgreed: boolean
   bandName: string
@@ -202,7 +222,7 @@ interface WizardControlsProps {
 }
 
 // Back/next row: per-step next label, gating, and dispatch.
-function WizardControls({ activeStep, busy, termsAgreed, bandName, countryCode, selectedPlan, onBack, onWelcomeNext, onGoSummary, onConfirm }: Readonly<WizardControlsProps>) {
+function WizardControls({ activeStep, kind, busy, termsAgreed, bandName, countryCode, selectedPlan, onBack, onWelcomeNext, onGoSummary, onConfirm }: Readonly<WizardControlsProps>) {
   const { t } = useTranslation(['onboarding', 'common'])
   const paidSelected = Boolean(selectedPlan && !selectedPlan.is_fallback)
 
@@ -220,7 +240,7 @@ function WizardControls({ activeStep, busy, termsAgreed, bandName, countryCode, 
   const nextLabel = [
     paidSelected ? t($ => $.welcome.startTrial) : t($ => $.welcome.startFree),
     t($ => $.nextStep),
-    paidSelected ? t($ => $.summary.confirmPaid) : t($ => $.summary.confirmFree),
+    paidSelected ? t($ => $.summary.confirmPaid) : t($ => $.workspace[kind].confirmFree),
   ][Math.min(activeStep, 2)]
 
   return (
@@ -251,6 +271,9 @@ export default function OnboardingPage() {
   const [termsAgreed, setTermsAgreed] = useState(false)
   const [termsOpen, setTermsOpen] = useState(false)
   const [bandName, setBandName] = useState('')
+  // Which sort of tenant this flow creates. A band by default; the choice is
+  // offered on step 1 and is fixed once the tenant exists.
+  const [kind, setKind] = useState<TenantKind>('band')
   // No default: the accounting country must be chosen, not inherited.
   const [countryCode, setCountryCode] = useState('')
   // File + its preview object URL, created/revoked in the change handler so
@@ -295,8 +318,9 @@ export default function OnboardingPage() {
           const resumed = owned.find((o) => o.id === onboardingTenantId && !o.archived_at)
           if (resumed) {
             setOnboardingTenant(resumed)
-            setBandName(resumed.band_name ?? '')
+            setBandName(resumed.display_name ?? resumed.band_name ?? '')
             setCountryCode(resumed.accounting_country ?? '')
+            setKind(resumed.kind ?? 'band')
           }
           setResumeChecked(true)
         })
@@ -321,7 +345,7 @@ export default function OnboardingPage() {
 
   const stepLabels = [
     t($ => $.steps.welcome),
-    t($ => $.steps.band),
+    t($ => $.workspace[kind].step),
     t($ => $.steps.summary),
   ]
 
@@ -347,9 +371,15 @@ export default function OnboardingPage() {
   const ensureOnboardingTenant = useCallback(async (): Promise<Tenant | null> => {
     if (onboardingTenant) return onboardingTenant
     try {
-      const tenant = await createOwnedTenant({
-        band_name: bandName.trim(), country_code: countryCode, onboarding: true,
-      })
+      // Both kinds create an owned tenant with the same resume pointer; only
+      // the service call differs. Personal creation is idempotent server-side.
+      const tenant = kind === 'personal'
+        ? await createPersonalTenant({
+          display_name: bandName.trim(), country_code: countryCode, onboarding: true,
+        })
+        : await createOwnedTenant({
+          band_name: bandName.trim(), country_code: countryCode, onboarding: true,
+        })
       setOnboardingTenant(tenant)
       return tenant
     } catch (err) {
@@ -367,7 +397,7 @@ export default function OnboardingPage() {
       }
       throw err
     }
-  }, [onboardingTenant, bandName, countryCode])
+  }, [onboardingTenant, kind, bandName, countryCode])
 
   const handleConfirm = useCallback(async () => {
     if (!selectedPlan) return
@@ -413,6 +443,8 @@ export default function OnboardingPage() {
     <>
       <StepContent
         activeStep={activeStep}
+        kind={kind}
+        onKindChange={setKind}
         ready={ready}
         loadError={loadError}
         plans={sortedPlans}
@@ -438,6 +470,7 @@ export default function OnboardingPage() {
       {ready && (
         <WizardControls
           activeStep={activeStep}
+          kind={kind}
           busy={busy}
           termsAgreed={termsAgreed}
           bandName={bandName}

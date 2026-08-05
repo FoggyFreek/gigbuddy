@@ -28,6 +28,7 @@ export function slugFromBandName(name) {
 
 export const PATCHABLE = [
   'slug',
+  'display_name',
   'band_name',
   'bio',
   'short_bio',
@@ -50,6 +51,9 @@ export function buildTenantUpdateFields(body) {
     if (key === 'slug' && !validSlug(body.slug)) {
       return { error: 'Invalid slug' }
     }
+    // The two name columns are one fact (tenantRepository mirrors the write),
+    // so a payload carrying both must not assign the column twice.
+    if (key === 'band_name' && 'display_name' in body) continue
     fields.push(`${key} = $${idx++}`)
     values.push(body[key])
   }

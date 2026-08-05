@@ -28,7 +28,8 @@
     "chordpro": "Chord charts",
     "customization": "Custom branding",
     "public_promotion": "Public promotion",
-    "linkpage": "Link & release pages"
+    "linkpage": "Link & release pages",
+    "calendar_sync": "Calendar sync"
   },
   "limits": {
     "storage_mb": "Storage (MB)",

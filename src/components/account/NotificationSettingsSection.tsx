@@ -18,7 +18,7 @@ type TypeLabelKey =
   | 'gigNew' | 'gigConfirmed' | 'gigImport'
   | 'rehearsalNew' | 'rehearsalConfirmed'
   | 'optionMemberUnavailable' | 'optionAllResponded'
-  | 'invoicePaid' | 'taskAssigned' | 'inviteRedeemed'
+  | 'invoicePaid' | 'taskAssigned' | 'inviteRedeemed' | 'membershipRequested'
   | 'achievementUnlocked'
 
 const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
@@ -32,6 +32,7 @@ const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'invoice-paid': 'invoicePaid',
   'task-assigned': 'taskAssigned',
   'invite-redeemed': 'inviteRedeemed',
+  'membership-requested': 'membershipRequested',
   'achievement-unlocked': 'achievementUnlocked',
 }
 

@@ -56,8 +56,8 @@ async function createPendingUser({ email, name = 'Pending', tenantId, status = '
     [`sub-${email}`, email, name],
   )
   await pool.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status)
-     VALUES ($1, $2, 'contributor', $3)`,
+    `INSERT INTO memberships (user_id, tenant_id, role, status, source)
+     VALUES ($1, $2, 'contributor', $3, 'admin')`,
     [u[0].id, tenantId, status],
   )
   return u[0]
@@ -135,8 +135,8 @@ describe('/api/users — tenant-scoped membership ops', () => {
   it('tenant_admin cannot approve a pending tenant_admin membership', async () => {
     const u = await createUser({ email: 'pending-admin@test.local' })
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status)
-       VALUES ($1, $2, 'tenant_admin', 'pending')`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, source)
+       VALUES ($1, $2, 'tenant_admin', 'pending', 'admin')`,
       [u.id, seed.tenantA.id],
     )
     await asUserA(
@@ -152,8 +152,8 @@ describe('/api/users — tenant-scoped membership ops', () => {
   it('super admin can approve a pending tenant_admin membership', async () => {
     const u = await createUser({ email: 'pending-admin@test.local' })
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status)
-       VALUES ($1, $2, 'tenant_admin', 'pending')`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, source)
+       VALUES ($1, $2, 'tenant_admin', 'pending', 'admin')`,
       [u.id, seed.tenantA.id],
     )
     const res = await asSuper(
@@ -188,8 +188,8 @@ describe('/api/users — tenant-scoped membership ops', () => {
   it('DELETE /:userId removes membership only in active tenant', async () => {
     // Give userA a second membership in tenant B for this test (super admin grants it)
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
       [seed.userA.id, seed.tenantB.id],
     )
     // Super admin removes userA's membership in tenant B (acting in tenant B)
@@ -531,8 +531,8 @@ describe('Archived tenants', () => {
     // Give userA a membership in tenant B too so we can verify the active
     // tenant falls back to a non-archived membership when the active one is archived.
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
       [seed.userA.id, seed.tenantB.id],
     )
     await archiveA()

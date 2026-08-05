@@ -363,7 +363,10 @@ async function computeDowngradeBlockers(executor, userId, targetLimits, { lock =
   const tenants = await listOwnedTenants(executor, userId)
 
   const bandsLimit = targetLimits[LIMITS.BANDS]
-  const activeCount = tenants.filter((t) => !t.archived_at).length
+  // Personal workspaces are outside the band cap (see countActiveOwnedTenants),
+  // so a downgrade never demands you archive yourself. Their per-tenant member
+  // and storage limits are still checked below.
+  const activeCount = tenants.filter((t) => !t.archived_at && t.kind === 'band').length
   if (bandsLimit !== null && activeCount > bandsLimit) {
     blockers.push({ tenantId: null, tenantName: null, limit: LIMITS.BANDS, current: activeCount, target: bandsLimit })
   }

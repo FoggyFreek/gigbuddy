@@ -8,7 +8,7 @@ const router = Router()
 // unlocked_at | null }. Evaluation (and unlock persistence) happens lazily
 // inside the service on every read.
 router.get('/', async (req, res) => {
-  res.json(await listAchievements(pool, req.tenantId))
+  res.json(await listAchievements(pool, req.tenantId, req.tenantKind))
 })
 
 export default router

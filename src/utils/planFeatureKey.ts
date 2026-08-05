@@ -11,6 +11,7 @@ const PLAN_FEATURE_KEYS = {
   customization: 'customization',
   public_promotion: 'public_promotion',
   linkpage: 'linkpage',
+  calendar_sync: 'calendar_sync',
 } as const
 
 export type PlanFeatureKey = keyof typeof PLAN_FEATURE_KEYS

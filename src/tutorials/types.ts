@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { Permission } from '../auth/permissions.ts'
 import type { Feature } from '../auth/entitlements.ts'
+import type { TenantKind } from '../utils/businessRegistry.ts'
 
 // Synchronous signals a tutorial's `eligible` predicate reads. All are derivable
 // from already-loaded state (permissions, plan, route) so eligibility is cheap.
@@ -27,6 +28,9 @@ export interface TutorialCardProps {
 export interface TutorialDef {
   // Stable slug persisted in user_tutorial_dismissals — NEVER rename a shipped key.
   key: string
+  // Tenant kinds this tutorial speaks to; omitted = both. A tutorial written in
+  // a band voice must never select in a personal workspace, and vice versa.
+  kinds?: readonly TenantKind[]
   // Synchronous gate from already-loaded state. Return false to skip entirely.
   // Omitted = always eligible.
   eligible?: (ctx: TutorialContext) => boolean

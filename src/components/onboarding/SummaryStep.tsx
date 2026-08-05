@@ -6,8 +6,11 @@ import type { BillingInterval, SubscriptionPlan } from '../../api/billing.ts'
 import { priceForInterval } from '../../api/billing.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { slugFromBandName } from '../../utils/slugify.ts'
+import type { TenantKind } from '../../utils/businessRegistry.ts'
 
 interface SummaryStepProps {
+  /** Which sort of tenant this flow is creating — selects the copy. */
+  kind: TenantKind
   plan: SubscriptionPlan
   interval: BillingInterval
   bandName: string
@@ -18,6 +21,7 @@ interface SummaryStepProps {
 }
 
 export default function SummaryStep({
+  kind,
   plan,
   interval,
   bandName,
@@ -56,7 +60,7 @@ export default function SummaryStep({
       <Typography variant="h6">{t($ => $.summary.title)}</Typography>
 
       {resumedBandName !== null && (
-        <Alert severity="info">{t($ => $.summary.resumeNote, { name: resumedBandName })}</Alert>
+        <Alert severity="info">{t($ => $.workspace[kind].resumeNote, { name: resumedBandName })}</Alert>
       )}
 
       <Stack spacing={1}>
@@ -65,14 +69,14 @@ export default function SummaryStep({
           t($ => $.summary.interval),
           interval === 'year' ? t($ => $.summary.yearly) : t($ => $.summary.monthly),
         )}
-        {row(t($ => $.summary.band), bandName)}
+        {row(t($ => $.workspace[kind].summaryLabel), bandName)}
         {row(t($ => $.summary.slug), slug)}
         {row(t($ => $.summary.logo), logoFileName ?? t($ => $.summary.noLogo))}
       </Stack>
 
       {resumedSlug === null && (
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {t($ => $.band.slugCaveat, { slug })}
+          {t($ => $.workspace[kind].slugCaveat, { slug })}
         </Typography>
       )}
 

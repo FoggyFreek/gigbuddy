@@ -1,11 +1,15 @@
 import { createContext, useContext } from 'react'
 import type { Id } from '../types/entities.ts'
+import type { TenantKind } from '../utils/businessRegistry.ts'
 import type { UserEntitlements } from '../auth/entitlements.ts'
 
 export interface UserMembership {
   tenantId?: Id
+  /** Pre-rename alias of `displayName`; both are emitted until every reader moves. */
   tenantName?: string
+  displayName?: string
   tenantSlug?: string
+  kind?: TenantKind
   role?: string
   status?: string
 }
@@ -20,6 +24,8 @@ export interface User {
   isSuperAdmin?: boolean
   activeTenantId?: Id | null
   activeTenantRole?: string | null
+  /** Kind of the active tenant, so the UI can branch without a second fetch. */
+  activeTenantKind?: TenantKind | null
   /** Permission keys for the active tenant, sent by /auth/me (see src/auth/permissions.ts). */
   permissions?: string[]
   bandMemberId?: Id | null

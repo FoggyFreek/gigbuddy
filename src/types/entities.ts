@@ -9,6 +9,8 @@
 // - `Id` is a number from Postgres, sometimes a string from the client.
 import type { PurchaseImportWarningCode } from '../utils/purchaseImportWarnings.ts'
 import type { BandMemberRole } from '../utils/bandMemberRoles.ts'
+import type { TenantKind } from '../utils/businessRegistry.ts'
+import type { JoinPolicy } from '../utils/membership.ts'
 
 export type Id = number | string
 
@@ -137,7 +139,16 @@ export interface Slot {
 export interface Tenant {
   id?: Id
   slug?: string
+  /** 'band' | 'personal' — a personal workspace is one musician's own tenant. */
+  kind?: TenantKind
+  /**
+   * Pre-rename alias of `display_name`. Both are emitted while readers migrate;
+   * the repository keeps them in sync, so either is safe to read.
+   */
   band_name?: string
+  display_name?: string
+  /** 'invite_only' (default) | 'request' — whether the band is findable. */
+  join_policy?: JoinPolicy
   /** Long-form band bio, shown inside the app. */
   bio?: string | null
   /** 150-char blurb; the only bio text shipped to the public link page. */
@@ -192,6 +203,7 @@ export type NotificationType =
   | 'invoice-paid'
   | 'task-assigned'
   | 'invite-redeemed'
+  | 'membership-requested'
   | 'achievement-unlocked'
 
 export interface AppNotification {
@@ -1253,6 +1265,7 @@ export type AchievementCategory =
   | 'platform'
   | 'repertoire'
   | 'network'
+  | 'artist'
 
 // Keys mirror server/achievements/definitions.js and double as the i18n keys
 // under achievements.items.<key>. Never rename a shipped key — only add.
@@ -1294,6 +1307,16 @@ export type AchievementKey =
   | 'linkin_spark'
   | 'now_with_actual_sound'
   | 'fifty_people_who_might_answer'
+  // Personal workspace only — a band can never earn these.
+  | 'a_stage_name_and_a_face'
+  | 'presentable_on_paper'
+  | 'first_one_in_the_diary'
+  | 'twenty_five_nights_of_my_own'
+  | 'my_own_books_thanks'
+  | 'invoice_number_one'
+  | 'a_month_in_the_black_solo'
+  | 'my_own_little_black_book'
+  | 'songs_i_can_actually_play'
 
 // GET /api/achievements row; unlocked_at is null while the goal is unmet.
 export interface Achievement {

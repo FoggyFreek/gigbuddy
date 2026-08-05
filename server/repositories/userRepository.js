@@ -7,6 +7,10 @@ const MEMBERSHIP_COLUMNS = `m.id              AS membership_id,
         m.status,
         m.created_at      AS membership_created_at,
         m.approved_at,
+        m.source,
+        -- The requester's note is for deciding on a PENDING row. Once approved
+        -- it stops being shown (the row stays, it just isn't served any more).
+        CASE WHEN m.status = 'pending' THEN m.request_message END AS request_message,
         u.id               AS user_id,
         u.email,
         u.name,

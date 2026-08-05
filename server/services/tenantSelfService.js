@@ -17,14 +17,39 @@ import {
   insertTenantAdminMembership,
   listOwnedTenants as listOwnedTenantRows,
   fetchOwnedTenant,
+  fetchPersonalTenant,
   setTenantArchived,
 } from '../repositories/tenantRepository.js'
+import { lockUserForCapCheck } from '../repositories/limitRepository.js'
 import { setOnboardingTenant } from '../repositories/authRepository.js'
 import { enforceBandCap } from './limitService.js'
 import { isTenantOnboardingEnabled } from './platformSettingsService.js'
 import { badRequest, notFound } from './serviceErrors.js'
 
 const NOT_FOUND = notFound('Tenant not found')
+
+const BAND = 'band'
+const PERSONAL = 'personal'
+
+// One platform switch governs all self-service tenant creation, whichever kind.
+const ONBOARDING_DISABLED = {
+  error: {
+    status: 403,
+    body: {
+      error: 'Tenant onboarding is disabled',
+      code: 'tenant_onboarding_disabled',
+    },
+  },
+}
+
+// Fallback when the identity provider gave us no name — the owner renames it
+// from their profile like any other tenant.
+const PERSONAL_WORKSPACE_FALLBACK_NAME = 'My workspace'
+
+function personalWorkspaceName(user, body) {
+  const requested = typeof body?.display_name === 'string' ? body.display_name.trim() : ''
+  return requested || String(user?.name ?? '').trim() || PERSONAL_WORKSPACE_FALLBACK_NAME
+}
 
 // How many "-2".."-N" suffixes to try for a generated slug before falling
 // back to a random suffix (a pathological hot name, still one insert).
@@ -33,9 +58,9 @@ const SLUG_SUFFIX_ATTEMPTS = 25
 // Inserts with a server-generated slug: base, base-2, base-3, … each via
 // ON CONFLICT DO NOTHING so a taken slug never raises 23505 (which would
 // abort the surrounding transaction). Returns the inserted tenant row.
-async function insertWithGeneratedSlug(client, bandName, userId) {
-  const base = slugFromBandName(bandName)
-  const attrs = { bandName, createdByUserId: userId, ownerUserId: userId }
+async function insertWithGeneratedSlug(client, displayName, userId, kind = BAND) {
+  const base = slugFromBandName(displayName)
+  const attrs = { displayName, kind, createdByUserId: userId, ownerUserId: userId }
   for (let n = 1; n <= SLUG_SUFFIX_ATTEMPTS; n++) {
     const candidate = n === 1 ? base : `${base}-${n}`
     const tenant = await insertTenantIfSlugFree(client, { ...attrs, slug: candidate })
@@ -61,17 +86,7 @@ export async function createOwnedTenant(db, userId, body) {
   }
   const country = parseTenantCountryCode(body)
   if (country.error) return badRequest(country.error)
-  if (!(await isTenantOnboardingEnabled(db))) {
-    return {
-      error: {
-        status: 403,
-        body: {
-          error: 'Tenant onboarding is disabled',
-          code: 'tenant_onboarding_disabled',
-        },
-      },
-    }
-  }
+  if (!(await isTenantOnboardingEnabled(db))) return ONBOARDING_DISABLED
 
   return withTransaction(async (client) => {
     const capError = await enforceBandCap(client, userId)
@@ -79,7 +94,7 @@ export async function createOwnedTenant(db, userId, body) {
 
     const tenant = hasSlug
       ? await insertTenant(client, {
-        slug, bandName: band_name, createdByUserId: userId, ownerUserId: userId,
+        slug, displayName: band_name, createdByUserId: userId, ownerUserId: userId,
       })
       : await insertWithGeneratedSlug(client, band_name, userId)
     if (!tenant) {
@@ -104,6 +119,59 @@ export async function createOwnedTenant(db, userId, body) {
     db,
     mapError: (err) => (err.code === '23505'
       ? { error: { status: 409, body: { error: 'Slug already in use' } } }
+      : null),
+  })
+}
+
+// The musician's own workspace: an ordinary tenant the UI presents as "me".
+// A sole trader by construction, one approved member (the owner), outside the
+// band cap. Idempotent — a caller who already owns one gets it back, so a
+// retried or resumed onboarding never creates a second.
+//
+// Takes the loaded user rather than an id: the workspace is named after them.
+export async function createPersonalTenant(db, user, body) {
+  const existing = await fetchPersonalTenant(db, user.id)
+  if (existing) return { tenant: existing, created: false }
+
+  const country = parseTenantCountryCode(body)
+  if (country.error) return badRequest(country.error)
+  if (!(await isTenantOnboardingEnabled(db))) return ONBOARDING_DISABLED
+
+  const displayName = personalWorkspaceName(user, body)
+
+  return withTransaction(async (client) => {
+    // Same user-row lock the band cap takes, here to serialize the
+    // fetch-then-insert idempotency check against a concurrent create. The
+    // partial unique index is the backstop, not the primary defense.
+    await lockUserForCapCheck(client, user.id)
+    const raced = await fetchPersonalTenant(client, user.id)
+    if (raced) abortTransaction({ tenant: raced, created: false })
+
+    const tenant = await insertWithGeneratedSlug(client, displayName, user.id, PERSONAL)
+    if (!tenant) {
+      abortTransaction({ error: { status: 409, body: { error: 'Slug already in use' } } })
+    }
+    await ensureTenantStatistics(client, tenant.id)
+    await seedTenantAccounting(client, tenant.id)
+    await createAccountingProfileForTenant(client, tenant.id, country.countryCode, {
+      legalForm: 'sole_trader',
+    })
+    await insertTenantAdminMembership(client, user.id, tenant.id, user.id)
+    if (body?.onboarding === true) {
+      await setOnboardingTenant(client, user.id, tenant.id)
+    }
+
+    return {
+      tenant,
+      created: true,
+      audit: { action: 'tenant.self_create_personal', details: { tenantId: tenant.id } },
+    }
+  }, {
+    db,
+    // tenants_one_personal_per_owner or the slug index — both mean someone else
+    // won the race the user-row lock is there to prevent.
+    mapError: (err) => (err.code === '23505'
+      ? { error: { status: 409, body: { error: 'Workspace already exists' } } }
       : null),
   })
 }

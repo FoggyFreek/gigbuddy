@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let clearAchievementCache
-let ACHIEVEMENT_DEFINITIONS, CATEGORIES
+let ACHIEVEMENT_DEFINITIONS, CATEGORIES, definitionsForKind
 let seed
 
 beforeAll(async () => {
@@ -22,6 +22,7 @@ beforeAll(async () => {
   clearAchievementCache = svcMod.clearAchievementCache
   ACHIEVEMENT_DEFINITIONS = defMod.ACHIEVEMENT_DEFINITIONS
   CATEGORIES = defMod.CATEGORIES
+  definitionsForKind = defMod.definitionsForKind
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -155,7 +156,8 @@ async function insertSong(tenantId, title, coverPath = null) {
 describe('GET /api/achievements', () => {
   it('returns every definition with shape and unlocks the baseline set for a fresh tenant', async () => {
     const list = await getAchievements()
-    expect(list).toHaveLength(ACHIEVEMENT_DEFINITIONS.length)
+    // A band's list is its own catalogue, not the union of both kinds'.
+    expect(list).toHaveLength(definitionsForKind('band').length)
     for (const a of list) {
       expect(a).toEqual({
         key: expect.any(String),
@@ -394,6 +396,8 @@ describe('achievement definitions registry', () => {
     expect(new Set(keys).size).toBe(keys.length)
     for (const d of ACHIEVEMENT_DEFINITIONS) {
       expect(CATEGORIES, d.key).toContain(d.category)
+      expect(Array.isArray(d.kinds) && d.kinds.length > 0, d.key).toBe(true)
+      for (const kind of d.kinds) expect(['band', 'personal'], d.key).toContain(kind)
       expect(Number.isInteger(d.cheers), d.key).toBe(true)
       expect(d.cheers, d.key).toBeGreaterThanOrEqual(1)
       expect(d.cheers, d.key).toBeLessThanOrEqual(10)
@@ -409,5 +413,80 @@ describe('achievement definitions registry', () => {
       expect(en.items[d.key]?.title, d.key).toBeTruthy()
       expect(en.items[d.key]?.description, d.key).toBeTruthy()
     }
+  })
+})
+
+// The catalogue is a function of tenant kind, not a subset of the band list.
+describe('achievements by tenant kind', () => {
+  async function createWorkspace(userId) {
+    const { rows: [tenant] } = await pool.query(
+      `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
+       VALUES ($1, 'Artist', 'Artist', 'personal', $2, $2) RETURNING *`,
+      [`artist-${Math.random().toString(36).slice(2, 8)}`, userId],
+    )
+    await pool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       VALUES ($1, $2, 'tenant_admin', 'approved', NOW(), 'owner')`,
+      [userId, tenant.id],
+    )
+    return tenant
+  }
+
+  const inWorkspace = (tenantId) => (req) =>
+    req.set('x-test-user-id', String(seed.userA.id)).set('x-test-tenant-id', String(tenantId))
+
+  it('serves a personal workspace only personal definitions', async () => {
+    const workspace = await createWorkspace(seed.userA.id)
+    const res = await inWorkspace(workspace.id)(request(app).get('/api/achievements')).expect(200)
+
+    const personalKeys = definitionsForKind('personal').map((d) => d.key)
+    expect(res.body.map((a) => a.key).sort()).toEqual([...personalKeys].sort())
+    // Not one band definition leaks in, not even as a locked row.
+    for (const d of definitionsForKind('band')) {
+      expect(res.body.find((a) => a.key === d.key), d.key).toBeUndefined()
+    }
+  })
+
+  it('never shows a personal definition in a band', async () => {
+    const list = await getAchievements()
+    for (const d of definitionsForKind('personal')) {
+      expect(list.find((a) => a.key === d.key), d.key).toBeUndefined()
+    }
+  })
+
+  it("counts the unlocked denominator against the kind's own catalogue", async () => {
+    const workspace = await createWorkspace(seed.userA.id)
+    const res = await inWorkspace(workspace.id)(request(app).get('/api/achievements')).expect(200)
+    expect(res.body).toHaveLength(definitionsForKind('personal').length)
+    expect(res.body.length).toBeLessThan(ACHIEVEMENT_DEFINITIONS.length)
+  })
+
+  it("unlocks a personal achievement from the workspace's own data", async () => {
+    const workspace = await createWorkspace(seed.userA.id)
+    await inWorkspace(workspace.id)(request(app).get('/api/achievements')).expect(200) // baseline
+
+    await pool.query(
+      `UPDATE tenants SET band_name = 'Artist', display_name = 'Artist', avatar_path = 'x' WHERE id = $1`,
+      [workspace.id],
+    )
+    clearAchievementCache()
+    const res = await inWorkspace(workspace.id)(request(app).get('/api/achievements')).expect(200)
+    expect(res.body.find((a) => a.key === 'a_stage_name_and_a_face').unlocked_at).not.toBeNull()
+  })
+
+  // Unlocks are sticky (UNIQUE (tenant_id, achievement_key)), so shrinking facts
+  // can never revoke one — evaluation is lazy and facts do shrink.
+  it('keeps a personal unlock after its facts shrink', async () => {
+    const workspace = await createWorkspace(seed.userA.id)
+    await pool.query(
+      `UPDATE tenants SET band_name = 'Artist', display_name = 'Artist', avatar_path = 'x' WHERE id = $1`,
+      [workspace.id],
+    )
+    await inWorkspace(workspace.id)(request(app).get('/api/achievements')).expect(200)
+
+    await pool.query(`UPDATE tenants SET avatar_path = NULL WHERE id = $1`, [workspace.id])
+    clearAchievementCache()
+    const res = await inWorkspace(workspace.id)(request(app).get('/api/achievements')).expect(200)
+    expect(res.body.find((a) => a.key === 'a_stage_name_and_a_face').unlocked_at).not.toBeNull()
   })
 })

@@ -21,6 +21,7 @@ export const DEFAULT_PLANS = Object.freeze([
         chordpro: false,
         public_promotion: false,
         linkpage: false,
+        calendar_sync: false,
       },
       limits: { storage_mb: 50, members: 5, bands: 1, linkpage_pages: 0, linkpage_stats_days: 30 },
     },
@@ -42,6 +43,7 @@ export const DEFAULT_PLANS = Object.freeze([
         chordpro: true,
         public_promotion: true,
         linkpage: true,
+        calendar_sync: true,
       },
       limits: { storage_mb: 150, members: null, bands: 3, linkpage_pages: 3, linkpage_stats_days: 30 },
     },
@@ -62,8 +64,36 @@ export const DEFAULT_PLANS = Object.freeze([
         chordpro: true,
         public_promotion: true,
         linkpage: true,
+        calendar_sync: true,
       },
       limits: { storage_mb: 500, members: null, bands: null, linkpage_pages: 30, linkpage_stats_days: 90 },
+    },
+  },
+  {
+    // Artist tier: everything on, but `bands: 0` — the subscriber gets their
+    // own personal workspace (excluded from the band cap) and plays in other
+    // people's bands, which run on their own owners' plans. The free artist
+    // tier is bronze; this is the only artist plan that needs a row.
+    slug: 'artist_gold',
+    name: 'Artist Gold',
+    monthly_price_cents: null,
+    yearly_price_cents: null,
+    is_fallback: false,
+    sort_order: 4,
+    entitlements: {
+      features: {
+        finance: true,
+        integrations: true,
+        customization: true,
+        song_files: true,
+        chordpro: true,
+        public_promotion: true,
+        linkpage: true,
+        calendar_sync: true,
+      },
+      // Storage and link pages sit below band gold; `members: 1` matches a
+      // workspace of one. Pricing-sheet knobs, not architecture.
+      limits: { storage_mb: 250, members: 1, bands: 0, linkpage_pages: 5, linkpage_stats_days: 90 },
     },
   },
 ])

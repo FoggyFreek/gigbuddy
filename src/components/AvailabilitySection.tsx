@@ -24,6 +24,8 @@ import MicIcon from '@mui/icons-material/Mic'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
 import GroupIcon from '@mui/icons-material/Group'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import { useEntitlements } from '../hooks/useEntitlements.ts'
+import { FEATURES } from '../auth/entitlements.ts'
 import AvailabilityCalendar from './AvailabilityCalendar.tsx'
 import { venueHeadline } from '../utils/venueDisplay.ts'
 import {
@@ -83,6 +85,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   const [createModal, setCreateModal] = useState<{ type: string; date: string } | null>(null)
   const [exportModal, setExportModal] = useState(false)
   const [calendarFeedOpen, setCalendarFeedOpen] = useState(false)
+  const canSyncCalendar = useEntitlements().has(FEATURES.CALENDAR_SYNC)
   const [exportOptions, setExportOptions] = useState({ gigs: true, rehearsals: true, bandEvents: true })
   const fabRef = useRef<HTMLButtonElement | null>(null)
   const escapedBasePath = basePath.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')
@@ -259,7 +262,11 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
         onNext={handleNext}
         onMonthJump={(y, m) => { setViewYear(y); setViewMonth(m) }}
         onExport={() => setExportModal(true)}
-        onSubscribe={() => setCalendarFeedOpen(true)}
+        onSubscribe={() => {
+          if (canSyncCalendar) setCalendarFeedOpen(true)
+          else navigate(`/upgrade/${FEATURES.CALENDAR_SYNC}`)
+        }}
+        subscribeLocked={!canSyncCalendar}
       />
 
       {isMobile && selectedDay && (

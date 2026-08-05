@@ -41,7 +41,11 @@ import ChartOfAccountsSection from '../components/settings/ChartOfAccountsSectio
 import AccountingSettingsSection from '../components/settings/AccountingSettingsSection.tsx'
 import AccountingProfileSection from '../components/settings/AccountingProfileSection.tsx'
 import FinancialProfileSection from '../components/settings/FinancialProfileSection.tsx'
+import BandsSection from '../components/settings/BandsSection.tsx'
+import DiscoverabilitySection from '../components/settings/DiscoverabilitySection.tsx'
 import InvitesSection from '../components/InvitesSection.tsx'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import type { TenantKind } from '../utils/businessRegistry.ts'
 
 // A single settings surface that merges the former per-user account settings,
 // members management, and tenant (band) settings. Desktop uses a master-detail
@@ -50,14 +54,14 @@ import InvitesSection from '../components/InvitesSection.tsx'
 // when the active tenant role grants the matching permission.
 type SectionId =
   | 'preferences' | 'billing' | 'connected-accounts'
-  | 'accent' | 'members' | 'storage'
+  | 'accent' | 'members' | 'bands' | 'storage'
   | 'integrations' | 'chart-of-accounts' | 'default-accounts'
   | 'financial-profile' | 'accounting-profile'
 
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.
 type ItemLabelKey =
-  | 'preferences' | 'billing' | 'connectedAccounts' | 'accent' | 'membersAndInvites'
+  | 'preferences' | 'billing' | 'connectedAccounts' | 'accent' | 'membersAndInvites' | 'bands'
   | 'storage' | 'integrations' | 'chartOfAccounts' | 'defaultAccounts'
   | 'financialProfile' | 'accountingProfile'
 
@@ -67,6 +71,8 @@ interface NavItemDef {
   icon: SvgIconComponent
   // Required tenant permission; undefined = available to every member.
   permission?: Permission
+  // Tenant kinds this section exists for; undefined = kind-neutral.
+  kinds?: readonly TenantKind[]
 }
 
 const ACCOUNT_ITEMS: NavItemDef[] = [
@@ -77,7 +83,10 @@ const ACCOUNT_ITEMS: NavItemDef[] = [
 
 const BAND_ITEMS: NavItemDef[] = [
   { id: 'accent', labelKey: 'accent', icon: PaletteOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
-  { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE },
+  // A workspace of one has no roster to manage and nobody to invite into it.
+  { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE, kinds: ['band'] },
+  // The personal counterpart: the bands I'm in, not the people in this band.
+  { id: 'bands', labelKey: 'bands', icon: GroupIcon, kinds: ['personal'] },
   { id: 'storage', labelKey: 'storage', icon: StorageIcon, permission: PERMISSIONS.TENANT_MANAGE },
   { id: 'integrations', labelKey: 'integrations', icon: ExtensionOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
 ]
@@ -99,8 +108,10 @@ export default function SettingsPage() {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const { can, isSuperAdmin } = usePermissions()
+  const { allowsKind, isPersonal } = useTenantKind()
 
-  const visible = (items: NavItemDef[]) => items.filter((i) => !i.permission || can(i.permission))
+  const visible = (items: NavItemDef[]) =>
+    items.filter((i) => (!i.permission || can(i.permission)) && allowsKind(i.kinds))
   const bandItems = visible(BAND_ITEMS)
   const financeItems = visible(FINANCE_ITEMS)
   const accessible = [...ACCOUNT_ITEMS, ...bandItems, ...financeItems]
@@ -130,10 +141,13 @@ export default function SettingsPage() {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <MembersSection />
             <InvitesSection canIssueAdmin={isSuperAdmin} />
+            <DiscoverabilitySection />
           </Box>
         )
       case 'storage':
         return <StorageUsageSection />
+      case 'bands':
+        return <BandsSection />
       case 'integrations':
         return <IntegrationsSection />
       case 'financial-profile':
@@ -187,7 +201,9 @@ export default function SettingsPage() {
         <ListSubheader disableSticky>{t($ => $.nav.accountSettings)}</ListSubheader>
         {ACCOUNT_ITEMS.map(renderNavItem)}
         {bandItems.length > 0 && [
-          <ListSubheader key="band-header" disableSticky>{t($ => $.nav.bandSettings)}</ListSubheader>,
+          <ListSubheader key="band-header" disableSticky>
+            {isPersonal ? t($ => $.nav.workspaceSettings) : t($ => $.nav.bandSettings)}
+          </ListSubheader>,
           ...bandItems.map(renderNavItem),
         ]}
         {financeItems.length > 0 && [

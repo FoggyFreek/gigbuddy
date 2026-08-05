@@ -18,9 +18,18 @@
       "title": "Theme",
       "description": "Choose your favorite theme. Your band's accent color still applies within each theme.",
       "variants": {
-        "default": { "label": "Default", "description": "Material 3 violet" },
-        "warm": { "label": "Warm", "description": "Sand & earth tones" },
-        "slate": { "label": "Slate", "description": "Cool blue-grey" }
+        "default": {
+          "label": "Default",
+          "description": "Material 3 violet"
+        },
+        "warm": {
+          "label": "Warm",
+          "description": "Sand & earth tones"
+        },
+        "slate": {
+          "label": "Slate",
+          "description": "Cool blue-grey"
+        }
       }
     },
     "push": {
@@ -44,6 +53,7 @@
         "invoicePaid": "Paid invoices",
         "taskAssigned": "Tasks assigned to you",
         "inviteRedeemed": "New members awaiting approval",
+        "membershipRequested": "Musicians asking to join",
         "achievementUnlocked": "Unlocked achievements"
       }
     },

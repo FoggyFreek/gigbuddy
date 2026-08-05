@@ -1,12 +1,14 @@
 import pool from '../db/index.js'
 import { loadUser } from './auth.js'
 import { setContextField } from '../utils/requestContextStore.js'
+import { tenantKindNotSupported } from '../services/serviceErrors.js'
 
 async function fetchMembership(userId, tenantId) {
   const { rows } = await pool.query(
     `SELECT m.*,
             t.slug AS tenant_slug,
             t.band_name AS tenant_name,
+            t.kind AS tenant_kind,
             t.archived_at AS tenant_archived_at,
             t.owner_user_id AS tenant_owner_user_id
      FROM memberships m
@@ -35,6 +37,7 @@ export async function resolveTenantId(req, res, next) {
       }
       req.tenantId = tenantId
       req.membership = membership
+      req.tenantKind = membership.tenant_kind
       // For the entitlement gates: null = ownerless tenant, enforcement skipped.
       req.tenantOwnerUserId = membership.tenant_owner_user_id ?? null
       setContextField('tenantId', tenantId)
@@ -43,6 +46,21 @@ export async function resolveTenantId(req, res, next) {
       next(e)
     }
   })
+}
+
+// Kind gate for surfaces only one sort of tenant has — a band's roster,
+// invites, setlists, merch and promotion have no meaning in a musician's
+// personal workspace. Mount after resolveTenantId, which sets req.tenantKind.
+//
+// 403, not 404: the caller is an approved member of this tenant and knows its
+// kind, so there is nothing to conceal — the structured code lets the SPA show
+// "not available here" instead of a generic error.
+export function requireTenantKind(...kinds) {
+  return (req, res, next) => {
+    if (kinds.includes(req.tenantKind)) return next()
+    const { status, body } = tenantKindNotSupported(req.tenantKind).error
+    res.status(status).json(body)
+  }
 }
 
 export function requireTenantMember(req, res, next) {

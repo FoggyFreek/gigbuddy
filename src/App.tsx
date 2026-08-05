@@ -4,7 +4,12 @@ import AppShell from './components/AppShell.tsx'
 import RequireAuth from './components/RequireAuth.tsx'
 import RequireSuperAdmin from './components/RequireSuperAdmin.tsx'
 import RequirePermission from './components/RequirePermission.tsx'
+import RequireTenantKind from './components/RequireTenantKind.tsx'
+import type { TenantKind } from './utils/businessRegistry.ts'
 import { PERMISSIONS } from './auth/permissions.ts'
+
+// Routes for surfaces only a band has (see the matching NAV_GROUPS `kinds`).
+const BAND_ONLY: readonly TenantKind[] = ['band']
 
 const AchievementsPage = lazy(() => import('./pages/AchievementsPage.tsx'))
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage.tsx'))
@@ -106,8 +111,12 @@ export default function App() {
             <Route path="/songs" element={<SongsPage />}>
               <Route path=":id" element={<SongDetailPage />} />
             </Route>
-            <Route path="/setlists" element={<SetlistsPage />} />
-            <Route path="/setlists/:id" element={<SetlistEditorPage />} />
+            {/* Band-only surfaces: a personal workspace has no roster to
+                schedule and no set to plan. */}
+            <Route element={<RequireTenantKind kinds={BAND_ONLY} />}>
+              <Route path="/setlists" element={<SetlistsPage />} />
+              <Route path="/setlists/:id" element={<SetlistEditorPage />} />
+            </Route>
             {/* Contributors+ (purchase.create) may add purchases for reimbursement. */}
             <Route element={<RequirePermission permission={PERMISSIONS.PURCHASE_CREATE} />}>
               <Route path="/purchases" element={<PurchasesPage />}>
@@ -124,8 +133,10 @@ export default function App() {
               <Route path="/invoices" element={<InvoicesPage />}>
                 <Route path=":id" element={<InvoiceDetailPage />} />
               </Route>
-              <Route path="/merch" element={<MerchPage />}>
-                <Route path=":id" element={<MerchandiseDetailsPage />} />
+              <Route element={<RequireTenantKind kinds={BAND_ONLY} />}>
+                <Route path="/merch" element={<MerchPage />}>
+                  <Route path=":id" element={<MerchandiseDetailsPage />} />
+                </Route>
               </Route>
               <Route path="/journal" element={<JournalPage />} />
               <Route path="/ledger" element={<LedgerEntriesPage />} />
@@ -137,10 +148,12 @@ export default function App() {
                 <Route path=":id" element={<VatReturnDetailPage />} />
               </Route>
             </Route>
-            <Route path="/availability" element={<AvailabilityPage />}>
-              <Route path="gigs/:id" element={<GigDetailPage />} />
-              <Route path="rehearsals/:id" element={<RehearsalDetailPage />} />
-              <Route path="events/:id" element={<BandEventDetailPage />} />
+            <Route element={<RequireTenantKind kinds={BAND_ONLY} />}>
+              <Route path="/availability" element={<AvailabilityPage />}>
+                <Route path="gigs/:id" element={<GigDetailPage />} />
+                <Route path="rehearsals/:id" element={<RehearsalDetailPage />} />
+                <Route path="events/:id" element={<BandEventDetailPage />} />
+              </Route>
             </Route>
             <Route path="/email-templates" element={<EmailTemplatesPage />} />
             <Route element={<RequireSuperAdmin />}>

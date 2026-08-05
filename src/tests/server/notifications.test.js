@@ -72,8 +72,8 @@ async function addUserInTenant(email, tenantId, role) {
     [email],
   )
   await pool.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-     VALUES ($1, $2, $3, 'approved', NOW())`,
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+     VALUES ($1, $2, $3, 'approved', NOW(), 'admin')`,
     [user.id, tenantId, role],
   )
   return user

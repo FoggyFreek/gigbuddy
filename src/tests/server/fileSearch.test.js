@@ -65,8 +65,8 @@ async function addContributor(tenantId, email) {
     [email],
   )
   await pool.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-     VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+     VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
     [u.id, tenantId],
   )
   return u.id
