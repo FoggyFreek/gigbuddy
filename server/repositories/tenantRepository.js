@@ -182,7 +182,7 @@ export async function updateJoinPolicy(executor, tenantId, joinPolicy) {
 }
 
 // Every tenant the user is an APPROVED member of and that is not archived —
-// the tenant set the cross-tenant hub reads through. Derived server-side from
+// the tenant set the cross-tenant artist agenda reads through. Derived server-side from
 // memberships: the client never names the tenants it wants.
 export async function listApprovedMemberTenants(executor, userId) {
   const { rows } = await executor.query(

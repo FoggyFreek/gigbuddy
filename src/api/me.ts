@@ -1,79 +1,29 @@
 import { request } from './_client.ts'
 import type { Id } from '../types/entities.ts'
 import type { TenantKind } from '../utils/businessRegistry.ts'
-import type {
-  LimitedCollectionWithCursorResponse,
-  ListCollectionCursor,
-  WindowedCollectionResponse,
-} from '../types/api.ts'
+import type { WindowedCollectionResponse } from '../types/api.ts'
 
-// The cross-tenant hub. Read-only by design, and the tenant set is always
-// derived server-side from approved memberships — none of these calls names a
-// tenant, and sending one changes nothing.
-
-/**
- * Where a band in the hub comes from: a gigbuddy tenant the musician is a
- * member of, or an external ensemble that exists only as a contact in their own
- * workspace. An external band has no tenant of its own — only the musician's
- * side of it exists — so its tenant-shaped fields are null.
- */
-export type MyBandSource = 'tenant' | 'contact'
-
-export interface MyBand {
-  source: MyBandSource
-  /** For a contact, the workspace the contact lives in. */
-  tenantId: Id
-  contactId: Id | null
-  displayName: string
-  slug: string | null
-  kind: TenantKind | null
-  role: string | null
-  logoPath: string | null
-}
-
+// The server derives the cross-tenant calendar from approved memberships;
+// callers never select which tenants are included.
 export type AgendaItemType = 'gig' | 'rehearsal' | 'band_event'
 
 export interface AgendaItem {
   type: AgendaItemType
   id: Id
   date: string
+  endDate: string
+  startTime: string | null
+  endTime: string | null
   title: string | null
+  description: string | null
+  location: string | null
   status: string | null
   tenantId: Id
   tenantName: string | null
   kind: TenantKind | null
 }
 
-export interface EarningsRow {
-  tenantId: Id
-  tenantName: string | null
-  kind: TenantKind | null
-  revenueCents: number
-  expenseCents: number
-  /** This band's own result. Deliberately never summed across bands. */
-  resultCents: number
-}
-
-export const listMyBands = () => request<{ items: MyBand[] }>('/api/me/bands')
-
 export const listMyAgenda = (range: { from: string; to: string }) =>
   request<WindowedCollectionResponse<AgendaItem>>(
     `/api/me/agenda?from=${range.from}&to=${range.to}`,
-  )
-
-export const listMyPastAgenda = (
-  params: { today: string; limit?: number; cursor?: ListCollectionCursor | null },
-) => {
-  const q = new URLSearchParams({ today: params.today })
-  if (params.limit !== undefined) q.set('limit', String(params.limit))
-  if (params.cursor) {
-    q.set('cursorDate', params.cursor.date)
-    q.set('cursorId', String(params.cursor.id))
-  }
-  return request<LimitedCollectionWithCursorResponse<AgendaItem>>(`/api/me/agenda/past?${q}`)
-}
-
-export const listMyEarnings = (range: { from: string; to: string }) =>
-  request<WindowedCollectionResponse<EarningsRow>>(
-    `/api/me/earnings?from=${range.from}&to=${range.to}`,
   )

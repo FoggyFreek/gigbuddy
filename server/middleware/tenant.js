@@ -50,11 +50,11 @@ export async function resolveTenantId(req, res, next) {
   })
 }
 
-// Sibling of resolveTenantId for the cross-tenant hub (/api/me/*), the one
-// place that deliberately departs from "every read is scoped by req.tenantId".
+// Sibling of resolveTenantId for the cross-tenant artist agenda, which
+// deliberately departs from "every read is scoped by req.tenantId".
 //
 // Three rules this middleware exists to enforce:
-//   1. it NEVER sets req.tenantId — hub reads can't be mistaken for scoped ones;
+//   1. it NEVER sets req.tenantId — aggregate reads can't be mistaken for scoped ones;
 //   2. the tenant set is derived server-side from approved, non-archived
 //      memberships, so a tenant id in a request body or query changes nothing;
 //   3. an empty set is a valid state (a user with no memberships gets empty
@@ -73,7 +73,6 @@ export async function resolveMemberTenantIds(req, res, next) {
         logoPath: r.logo_path,
         role: r.role,
       }))
-      req.memberTenantIds = req.memberTenants.map((t) => t.tenantId)
       next()
     } catch (e) {
       next(e)

@@ -19,7 +19,8 @@
     "availability": "Beschikbaarheid",
     "gig": "Optreden",
     "rehearsal": "Repetitie",
-    "bandEvent": "Bandevenement"
+    "bandEvent": "Bandevenement",
+    "artistEvent": "Persoonlijke afspraak"
   },
   "status": {
     "available": "Beschikbaar",
@@ -29,6 +30,8 @@
     "noEvents": "Geen evenementen.",
     "band": "Band",
     "bandWide": "Hele band",
+    "me": "Ik",
+    "myAvailability": "Mijn beschikbaarheid",
     "gigFallback": "Optreden",
     "rehearsalTooltip": "Repetitie — {{status}}",
     "rehearsalAbbrev": "Rep {{yes}}/{{total}}",

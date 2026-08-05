@@ -175,8 +175,9 @@ function RehearsalBar({ reh, theme, onRehearsalClick }: Readonly<RehearsalBarPro
   const statusLabel = reh.status
     ? t($ => $.status[reh.status as 'option' | 'planned'], { ns: 'rehearsals' })
     : ''
+  const calendarLabel = reh.calendar_description
   return (
-    <Tooltip title={[t($ => $.events.rehearsalTooltip, { status: statusLabel }), reh.location, t($ => $.events.votesYes, { yes, total })].filter(Boolean).join(' — ')}>
+    <Tooltip title={[calendarLabel ?? t($ => $.events.rehearsalTooltip, { status: statusLabel }), reh.location, t($ => $.events.votesYes, { yes, total })].filter(Boolean).join(' — ')}>
       <Box
         data-rehearsal-id={reh.id}
         onClick={(e) => { e.stopPropagation(); onRehearsalClick?.(reh) }}
@@ -197,7 +198,7 @@ function RehearsalBar({ reh, theme, onRehearsalClick }: Readonly<RehearsalBarPro
           </Box>
         )}
         <Box sx={{ fontSize: '0.7rem', lineHeight: 1.3, color: 'text.primary', fontWeight: 500, wordBreak: 'break-word' }}>
-          {t($ => $.events.rehearsalAbbrev, { yes, total })}
+          {calendarLabel ?? t($ => $.events.rehearsalAbbrev, { yes, total })}
         </Box>
       </Box>
     </Tooltip>
@@ -253,22 +254,27 @@ function SlotBar({ slot, members, theme, onSlotClick }: Readonly<SlotBarProps>) 
   const statusLabel = slot.status
     ? t($ => $.status[slot.status as 'available' | 'unavailable'])
     : null
+  const isDerivedBooking = slot.source === 'booking'
   // A redacted entry renders as a plain busy block with a "details hidden"
   // hint, so bandmates understand WHY they see nothing rather than assuming a
   // bug. The server already withheld the detail — there is nothing here to hide.
   const detail = slot.redacted
     ? t($ => $.projection.hidden)
-    : [slot.reason, slot.title, slot.tenantName].filter(Boolean).join(' — ')
+    : slot.description || [slot.reason, slot.title, slot.tenantName].filter(Boolean).join(' — ')
   return (
     <Tooltip title={[slot.band_member_id === null ? t($ => $.events.bandWide) : memberName, statusLabel, detail].filter(Boolean).join(' — ')}>
       <Box
         data-slot-id={slot.id}
-        onClick={(e) => { e.stopPropagation(); onSlotClick(slot) }}
+        aria-disabled={isDerivedBooking || undefined}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!isDerivedBooking) onSlotClick(slot)
+        }}
         sx={{
           ...SLOT_BAR_SX,
           bgcolor: color,
           color: getEventTextColor(theme, color),
-          cursor: 'pointer',
+          cursor: isDerivedBooking ? 'default' : 'pointer',
           backgroundImage: isUnavailable
             ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.35) 3px, rgba(0,0,0,0.35) 6px)'
             : 'none',

@@ -59,14 +59,27 @@ export async function listRehearsalsInRange(executor, tenantId, from, to) {
   return rows
 }
 
-// Cross-tenant hub read (/api/me). The id list comes from the caller's approved
-// memberships (resolveMemberTenantIds), never from the client.
-export async function listRehearsalsInRangeForMemberTenants(executor, tenantIds, from, to) {
+// Cross-tenant artist calendar read (/api/me/agenda). The id list comes from the caller's approved
+// memberships (resolveMemberTenantIds), never from the client. Within a band,
+// the caller must also be linked to a participant row.
+export async function listRehearsalsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
-    `SELECT * FROM rehearsals
-     WHERE tenant_id = ANY($1) AND proposed_date BETWEEN $2 AND $3
-     ORDER BY proposed_date ASC, id ASC`,
-    [tenantIds, from, to],
+    `SELECT r.* FROM rehearsals r
+       JOIN tenants t ON t.id = r.tenant_id
+      WHERE r.tenant_id = ANY($2) AND r.proposed_date BETWEEN $3 AND $4
+        AND (
+          t.kind = 'personal'
+          OR EXISTS (
+            SELECT 1
+              FROM rehearsal_participants rp
+              JOIN band_members bm
+                ON bm.id = rp.band_member_id AND bm.tenant_id = rp.tenant_id
+             WHERE rp.rehearsal_id = r.id AND rp.tenant_id = r.tenant_id
+               AND bm.user_id = $1
+          )
+        )
+      ORDER BY r.proposed_date ASC, r.id ASC`,
+    [userId, tenantIds, from, to],
   )
   return rows
 }

@@ -60,11 +60,11 @@ named capability, not compare `kind` inline.
    - Desired end-state: ensemble contacts/tags exist only in a personal
      workspace; the contacts and gigs domains themselves remain shared.
 
-7. My Bands projection
-   - Task: exclude the personal workspace from the band projection while still
-     loading its ensemble contacts.
-   - Desired end-state: the hub lists real band tenants plus external ensemble
-     contacts, never the artist's own workspace as a band.
+7. Bands settings
+   - Task: keep the artist's memberships and join flows in their personal
+     workspace settings.
+   - Desired end-state: bands are configured from settings; the artist's own
+     workspace is never presented as a band.
 
 8. Invite-only onboarding
    - Task: redirect users without a resume pointer when tenant creation is

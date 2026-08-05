@@ -118,6 +118,8 @@ export interface Rehearsal {
   proposed_date?: string
   status?: string
   location?: string
+  /** Optional calendar-only label, used when a rehearsal is shown outside its tenant. */
+  calendar_description?: string
   start_time?: string
   end_time?: string
   notes?: string
@@ -188,6 +190,8 @@ export interface Slot {
   redacted?: boolean
   /** A booking's title / band, present only when the owner allows it. */
   title?: string | null
+  /** Human-readable booking summary, including the band name when visible. */
+  description?: string | null
   tenantName?: string | null
   /** Provenance of a delegated write: who entered it, from which band. */
   createdByUserId?: Id | null

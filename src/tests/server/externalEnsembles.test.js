@@ -35,15 +35,6 @@ const asUser = (userId) => (req) =>
 const inTenant = (userId, tenantId) => (req) =>
   req.set('x-test-user-id', String(userId)).set('x-test-tenant-id', String(tenantId))
 
-async function createUser(email) {
-  const { rows } = await pool.query(
-    `INSERT INTO users (google_sub, email, name, status, is_super_admin)
-     VALUES ($1, $2, $3, 'approved', false) RETURNING *`,
-    [`sub-${email}`, email, email.split('@')[0]],
-  )
-  return rows[0]
-}
-
 async function createWorkspace(userId, slug = 'artist-ws') {
   const { rows: [ws] } = await pool.query(
     `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
@@ -66,55 +57,7 @@ async function addContact(tenantId, name, category = 'ensemble') {
   return rows[0]
 }
 
-// Not every band a musician plays in is a gigbuddy customer. Those exist only
-// as 'ensemble' contacts in the musician's OWN workspace — never as shell
-// tenants, which would consume the band cap and have no administrator.
-describe('GET /api/me/bands — external ensembles', () => {
-  it('unions real tenants and external ensembles, saying which is which', async () => {
-    const ws = await createWorkspace(seed.userA.id)
-    const ensemble = await addContact(ws.id, 'The Covers Band')
-
-    const res = await asUser(seed.userA.id)(request(app).get('/api/me/bands')).expect(200)
-    const byName = Object.fromEntries(res.body.items.map((b) => [b.displayName, b]))
-
-    expect(byName['Alpha Band']).toMatchObject({ source: 'tenant', kind: 'band', contactId: null })
-    expect(byName['Artist']).toBeUndefined()
-    // An external band has no tenant of its own — only the musician's side.
-    expect(byName['The Covers Band']).toMatchObject({
-      source: 'contact',
-      contactId: ensemble.id,
-      tenantId: ws.id,
-      kind: null,
-      role: null,
-      slug: null,
-    })
-  })
-
-  it('never lists another musician\'s ensembles', async () => {
-    const other = await createUser('other@test.local')
-    const theirWs = await createWorkspace(other.id, 'other-ws')
-    await addContact(theirWs.id, 'Their Band')
-    await createWorkspace(seed.userA.id)
-
-    const res = await asUser(seed.userA.id)(request(app).get('/api/me/bands')).expect(200)
-    expect(res.body.items.map((b) => b.displayName)).not.toContain('Their Band')
-  })
-
-  // A band's address book is the band's — it is not a roster of the bands its
-  // members play in, so ensembles there are never treated as the caller's.
-  it('ignores ensemble contacts that live in a band tenant', async () => {
-    await addContact(seed.tenantA.id, 'Band Address Book Entry')
-    const res = await asUser(seed.userA.id)(request(app).get('/api/me/bands')).expect(200)
-    expect(res.body.items.map((b) => b.displayName)).not.toContain('Band Address Book Entry')
-  })
-
-  it('does not mistake other contact categories for ensembles', async () => {
-    const ws = await createWorkspace(seed.userA.id)
-    await addContact(ws.id, 'A Booker', 'booker')
-    const res = await asUser(seed.userA.id)(request(app).get('/api/me/bands')).expect(200)
-    expect(res.body.items.map((b) => b.displayName)).not.toContain('A Booker')
-  })
-
+describe('external ensembles', () => {
   it('does not consume the band cap', async () => {
     const ws = await createWorkspace(seed.userA.id)
     for (const name of ['One', 'Two', 'Three']) await addContact(ws.id, name)

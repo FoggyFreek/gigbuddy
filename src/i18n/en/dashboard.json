@@ -58,48 +58,5 @@
     "cropTitle": "Crop memory photo",
     "uploadError": "Couldn't upload the image",
     "removeError": "Couldn't remove the image"
-  },
-  "hub": {
-    "title": "My hub",
-    "subtitle": "Everything you're booked for, across every band you play in — and your own workspace.",
-    "agenda": {
-      "title": "My agenda",
-      "empty": "Nothing booked this month.",
-      "pastToggle": "Show past",
-      "upcomingToggle": "Show this month",
-      "pastEmpty": "Nothing in the past yet.",
-      "loadMore": "Load more",
-      "prevMonth": "previous month",
-      "nextMonth": "next month",
-      "type": {
-        "gig": "Gig",
-        "rehearsal": "Rehearsal",
-        "band_event": "Event"
-      },
-      "untitled": "Untitled"
-    },
-    "earnings": {
-      "title": "Where my money comes from",
-      "help": "Each band keeps its own books, so these are separate figures — never a combined total.",
-      "empty": "No band shares its finances with you.",
-      "band": "Band",
-      "revenue": "Revenue",
-      "expenses": "Expenses",
-      "result": "Result"
-    },
-    "loadError": "Could not load your hub.",
-    "bands": {
-      "title": "My bands",
-      "add": "Add a band",
-      "addTitle": "Add a band",
-      "addHelp": "For a band that isn't on gigbuddy. It's kept in your own address book — no separate workspace, and it doesn't count toward your band limit.",
-      "nameLabel": "Band name",
-      "cancel": "Cancel",
-      "save": "Add",
-      "empty": "You're not in any band yet.",
-      "onGigbuddy": "On gigbuddy",
-      "external": "Not on gigbuddy",
-      "addFailed": "Could not add that band."
-    }
   }
 }

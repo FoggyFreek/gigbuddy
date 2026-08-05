@@ -30,7 +30,6 @@ import LibraryMusicTwoTone from '@mui/icons-material/LibraryMusicTwoTone'
 import AccountBalanceTwoTone from '@mui/icons-material/AccountBalanceTwoTone'
 import DashboardOutlined from '@mui/icons-material/DashboardOutlined'
 import PersonOutlined from '@mui/icons-material/PersonOutlined'
-import PersonPinOutlined from '@mui/icons-material/PersonPinOutlined'
 import QueryStatsOutlined from '@mui/icons-material/QueryStatsOutlined'
 import EventOutlined from '@mui/icons-material/EventOutlined'
 import CalendarMonthOutlined from '@mui/icons-material/CalendarMonthOutlined'
@@ -81,7 +80,7 @@ import type { Id } from '../types/entities.ts'
 // are hidden unless the active tenant role grants it.
 type NavGroupKey = 'overview' | 'planning' | 'repertoire' | 'network' | 'financial' | 'accounting'
 type NavItemKey =
-  | 'dashboard' | 'myHub' | 'financial' | 'profile' | 'availability' | 'gigs' | 'rehearsals'
+  | 'dashboard' | 'financial' | 'profile' | 'availability' | 'gigs' | 'rehearsals'
   | 'bandEvents' | 'tasks' | 'songs' | 'setlists' | 'contacts' | 'suppliers'
   | 'venues' | 'emailTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
   | 'journal' | 'ledger' | 'ledgerEntries' | 'vatReturns' | 'reports'
@@ -116,7 +115,6 @@ const NAV_GROUPS: NavGroupEntry[] = [
     icon: SpaceDashboardTwoTone,
     children: [
       { to: '/', i18nKey: 'dashboard', icon: DashboardOutlined },
-      { to: '/me', i18nKey: 'myHub', icon: PersonPinOutlined },
       { to: '/financial', i18nKey: 'financial', icon: QueryStatsOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
       { to: '/profile', i18nKey: 'profile', icon: PersonOutlined },
     ],
@@ -125,9 +123,9 @@ const NAV_GROUPS: NavGroupEntry[] = [
     key: 'planning',
     icon: EventNoteTwoTone,
     children: [
-      // Availability is a band-roster grid today; it becomes user-level (and so
-      // kind-neutral) with the personal availability calendar.
-      { to: '/availability', i18nKey: 'availability', icon: CalendarMonthOutlined, capability: TENANT_CAPABILITIES.BAND_AVAILABILITY },
+      // Both kinds have a calendar: bands see their roster grid, while a
+      // personal workspace weaves the artist's required bookings together.
+      { to: '/availability', i18nKey: 'availability', icon: CalendarMonthOutlined },
       { to: '/gigs', i18nKey: 'gigs', icon: EventOutlined },
       { to: '/rehearsals', i18nKey: 'rehearsals', icon: MusicNoteOutlined },
       { to: '/events', i18nKey: 'bandEvents', icon: EventNoteOutlined },

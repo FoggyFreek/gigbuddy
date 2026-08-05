@@ -173,47 +173,37 @@ export async function listPastGigs(executor, tenantId, today, limit, cursor = nu
   return rows
 }
 
-// ---- cross-tenant hub reads (/api/me) ----
+// ---- cross-tenant artist calendar read (/api/me/agenda) ----
 //
 // These are the ONLY gig queries not scoped to a single tenant. The id list is
 // resolved server-side from the caller's approved memberships
-// (resolveMemberTenantIds) — never taken from the client. An empty list is a
-// valid state and `= ANY('{}')` correctly matches nothing.
+// (resolveMemberTenantIds) — never taken from the client. Band-tenant rows are
+// further limited to events where the caller's linked roster member is a
+// participant; their personal workspace is intrinsically user-owned. An empty
+// tenant list is valid and `= ANY('{}')` correctly matches nothing.
 
-export async function listGigsInRangeForMemberTenants(executor, tenantIds, from, to) {
+export async function listGigsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
     `SELECT
        ${GIG_LIST_PROJECTION}
      FROM gigs g
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
-     WHERE g.tenant_id = ANY($1) AND g.event_date BETWEEN $2 AND $3
+     JOIN tenants calendar_tenant ON calendar_tenant.id = g.tenant_id
+     WHERE g.tenant_id = ANY($2) AND g.event_date BETWEEN $3 AND $4
+       AND (
+         calendar_tenant.kind = 'personal'
+         OR EXISTS (
+           SELECT 1
+             FROM gig_participants gp
+             JOIN band_members bm
+               ON bm.id = gp.band_member_id AND bm.tenant_id = gp.tenant_id
+            WHERE gp.gig_id = g.id AND gp.tenant_id = g.tenant_id
+              AND bm.user_id = $1
+         )
+       )
      ORDER BY g.event_date ASC, g.id ASC`,
-    [tenantIds, from, to],
-  )
-  return rows
-}
-
-// Most recent first, keyset-paginated on (event_date, id). `gigs.id` is a
-// global SERIAL primary key, so that tuple is a total order across tenants too.
-export async function listPastGigsForMemberTenants(executor, tenantIds, today, limit, cursor = null) {
-  const params = [tenantIds, today]
-  let cursorClause = ''
-  if (cursor) {
-    params.push(cursor.date, cursor.id)
-    cursorClause = `AND (g.event_date, g.id) < ($${params.length - 1}, $${params.length})`
-  }
-  params.push(limit)
-  const { rows } = await executor.query(
-    `SELECT
-       ${GIG_LIST_PROJECTION}
-     FROM gigs g
-     ${VENUE_JOIN}
-     ${FESTIVAL_JOIN}
-     WHERE g.tenant_id = ANY($1) AND g.event_date < $2 ${cursorClause}
-     ORDER BY g.event_date DESC, g.id DESC
-     LIMIT $${params.length}`,
-    params,
+    [userId, tenantIds, from, to],
   )
   return rows
 }

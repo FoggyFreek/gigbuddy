@@ -4,21 +4,6 @@
 
 // ---------- contacts ----------
 
-// Cross-tenant hub read (/api/me/bands): the bands a musician plays in that are
-// NOT gigbuddy customers. They exist only as 'ensemble' contacts in the
-// musician's own workspace — never as shell tenants, which would consume the
-// BANDS cap, show up in admin listings, and have no administrator.
-export async function listEnsembleContactsForTenants(executor, tenantIds) {
-  const { rows } = await executor.query(
-    `SELECT id, tenant_id, name
-       FROM contacts
-      WHERE tenant_id = ANY($1) AND category = 'ensemble'
-      ORDER BY lower(name) ASC, id ASC`,
-    [tenantIds],
-  )
-  return rows
-}
-
 export async function listContacts(executor, tenantId, { category, excludeCategory }) {
   const filters = ['tenant_id = $1']
   const values = [tenantId]

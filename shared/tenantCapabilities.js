@@ -12,6 +12,7 @@ export const TENANT_CAPABILITIES = Object.freeze({
   BAND_DISCOVERY: 'band_discovery',
   BAND_PROMOTION_INTEGRATIONS: 'band_promotion_integrations',
   EXTERNAL_ENSEMBLES: 'external_ensembles',
+  ARTIST_CALENDAR: 'artist_calendar',
 })
 
 export const TENANT_CAPABILITY_KEYS = Object.freeze(Object.values(TENANT_CAPABILITIES))
@@ -28,6 +29,7 @@ const CAPABILITIES_BY_KIND = Object.freeze({
   ]),
   personal: new Set([
     TENANT_CAPABILITIES.EXTERNAL_ENSEMBLES,
+    TENANT_CAPABILITIES.ARTIST_CALENDAR,
   ]),
 })
 

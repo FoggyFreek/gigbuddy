@@ -1,0 +1,141 @@
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { ThemeProvider } from '@mui/material/styles'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import ArtistCalendarSection from '../components/ArtistCalendarSection.tsx'
+import { AuthContext } from '../contexts/authContext.ts'
+import theme from '../theme.ts'
+import { listMyAgenda } from '../api/me.ts'
+import {
+  createMyAvailability,
+  deleteMyAvailability,
+  listMyAvailability,
+  updateMyAvailability,
+} from '../api/userAvailability.ts'
+
+vi.mock('../api/me.ts', () => ({ listMyAgenda: vi.fn() }))
+vi.mock('../api/userAvailability.ts', () => ({
+  createMyAvailability: vi.fn(),
+  deleteMyAvailability: vi.fn(),
+  listMyAvailability: vi.fn(),
+  updateMyAvailability: vi.fn(),
+}))
+
+const USER = { id: 1, activeTenantId: 7, activeTenantKind: 'personal' }
+let switchTenant
+
+function wrap() {
+  switchTenant = vi.fn().mockResolvedValue({})
+  return render(
+    <ThemeProvider theme={theme}>
+      <MemoryRouter initialEntries={['/availability']}>
+        <AuthContext.Provider value={{
+          user: USER,
+          setUser: vi.fn(),
+          logout: vi.fn(),
+          switchTenant,
+          refreshUser: vi.fn(),
+        }}>
+          <Routes>
+            <Route path="/availability" element={<ArtistCalendarSection />} />
+            <Route path="/events/:id" element={<div>other event detail</div>} />
+          </Routes>
+        </AuthContext.Provider>
+      </MemoryRouter>
+    </ThemeProvider>,
+  )
+}
+
+const agendaItem = (over = {}) => ({
+  type: 'band_event',
+  id: 42,
+  date: '2026-08-12',
+  endDate: '2026-08-12',
+  startTime: null,
+  endTime: null,
+  title: 'Photo shoot',
+  description: 'Photo shoot — Other Band',
+  location: 'Studio',
+  status: null,
+  tenantId: 2,
+  tenantName: 'Other Band',
+  kind: 'band',
+  ...over,
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  listMyAgenda.mockResolvedValue({ items: [agendaItem()], meta: { from: '', to: '', returned: 1 } })
+  listMyAvailability.mockResolvedValue({
+    items: [{
+      id: 9,
+      start_date: '2026-08-14',
+      end_date: '2026-08-14',
+      status: 'unavailable',
+      reason: 'Holiday',
+      created_by_user_id: 1,
+      created_in_tenant_id: null,
+    }],
+    meta: { from: '', to: '', returned: 1 },
+  })
+  createMyAvailability.mockResolvedValue({})
+  updateMyAvailability.mockResolvedValue({})
+  deleteMyAvailability.mockResolvedValue(undefined)
+})
+
+describe('ArtistCalendarSection', () => {
+  it('renders required bookings with the band name and opens them in their tenant', async () => {
+    const user = userEvent.setup()
+    listMyAgenda.mockResolvedValue({
+      items: [
+        agendaItem(),
+        agendaItem({
+          type: 'rehearsal',
+          id: 43,
+          date: '2026-08-13',
+          title: 'Rehearsal',
+          description: 'Rehearsal — Other Band',
+        }),
+      ],
+      meta: { from: '', to: '', returned: 2 },
+    })
+    wrap()
+
+    await screen.findByText('Photo shoot — Other Band')
+    expect(screen.getByText('Rehearsal — Other Band')).toBeInTheDocument()
+    await user.click(screen.getByText('Photo shoot — Other Band'))
+
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(2))
+    expect(await screen.findByText('other event detail')).toBeInTheDocument()
+  })
+
+  it('edits and removes the artist\'s own availability from the calendar', async () => {
+    const user = userEvent.setup()
+    const { container } = wrap()
+    await waitFor(() => expect(container.querySelector('[data-slot-id="9"]')).not.toBeNull())
+    const slot = container.querySelector('[data-slot-id="9"]')
+    await user.click(slot)
+
+    expect(screen.getByRole('heading', { name: 'Edit slot' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(deleteMyAvailability).toHaveBeenCalledWith(9))
+  })
+
+  it('creates user-owned availability without a band member id', async () => {
+    const user = userEvent.setup()
+    const { container } = wrap()
+    await waitFor(() => expect(listMyAgenda).toHaveBeenCalled())
+
+    await user.click(container.querySelector('[data-date="2026-08-20"]'))
+    await user.click(await screen.findByText('Availability'))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => expect(createMyAvailability).toHaveBeenCalledWith(expect.objectContaining({
+      start_date: '2026-08-20',
+      end_date: '2026-08-20',
+      status: 'unavailable',
+    })))
+    expect(createMyAvailability.mock.calls[0][0]).not.toHaveProperty('band_member_id')
+  })
+})

@@ -239,14 +239,29 @@ describe('what a band sees of a linked member\'s availability', () => {
 })
 
 describe('bookings in other bands project as busy', () => {
-  async function bookedElsewhere() {
-    await addMembership(seed.userA.id, seed.tenantB.id)
+  async function linkUserToTenant(userId, tenantId, name = 'Visiting Artist') {
+    await addMembership(userId, tenantId)
     await addMembership(seed.userB.id, seed.tenantA.id)
-    await pool.query(
+    return addBandMember(tenantId, name, userId)
+  }
+
+  async function addRequiredGig(tenantId, memberId, title = 'Secret Other Show') {
+    const { rows: [gig] } = await pool.query(
       `INSERT INTO gigs (tenant_id, event_description, event_date, status)
-       VALUES ($1, 'Secret Other Show', '2099-07-15', 'confirmed')`,
-      [seed.tenantB.id],
+       VALUES ($1, $2, '2099-07-15', 'confirmed') RETURNING *`,
+      [tenantId, title],
     )
+    await pool.query(
+      `INSERT INTO gig_participants (tenant_id, gig_id, band_member_id)
+       VALUES ($1, $2, $3)`,
+      [tenantId, gig.id, memberId],
+    )
+    return gig
+  }
+
+  async function bookedElsewhere() {
+    const member = await linkUserToTenant(seed.userA.id, seed.tenantB.id)
+    await addRequiredGig(seed.tenantB.id, member.id)
   }
 
   it('shows opaque busy to another band while the cross-band flag is off', async () => {
@@ -266,8 +281,91 @@ describe('bookings in other bands project as busy', () => {
 
     const res = await bandGrid(seed.userB.id, seed.tenantA.id).expect(200)
     expect(res.body.find((s) => s.source === 'booking')).toMatchObject({
-      title: 'Secret Other Show', tenantName: 'Beta Band', redacted: false,
+      title: 'Secret Other Show',
+      tenantName: 'Beta Band',
+      description: 'Secret Other Show — Beta Band',
+      redacted: false,
     })
+  })
+
+  it.each([
+    ['rehearsal', 'Other band rehearsal'],
+    ['band_event', 'Other band event'],
+  ])('marks a required member unavailable because of another band %s', async (kind, title) => {
+    const member = await linkUserToTenant(seed.userA.id, seed.tenantB.id)
+    let eventId
+    if (kind === 'rehearsal') {
+      const { rows: [event] } = await pool.query(
+        `INSERT INTO rehearsals (tenant_id, proposed_date, location, status)
+         VALUES ($1, '2099-07-16', $2, 'planned') RETURNING *`,
+        [seed.tenantB.id, title],
+      )
+      eventId = event.id
+      await pool.query(
+        `INSERT INTO rehearsal_participants (tenant_id, rehearsal_id, band_member_id, vote)
+         VALUES ($1, $2, $3, 'yes')`,
+        [seed.tenantB.id, eventId, member.id],
+      )
+    } else {
+      const { rows: [event] } = await pool.query(
+        `INSERT INTO band_events (tenant_id, title, start_date, end_date)
+         VALUES ($1, $2, '2099-07-16', '2099-07-17') RETURNING *`,
+        [seed.tenantB.id, title],
+      )
+      eventId = event.id
+      await pool.query(
+        `INSERT INTO band_event_participants (tenant_id, band_event_id, band_member_id)
+         VALUES ($1, $2, $3)`,
+        [seed.tenantB.id, eventId, member.id],
+      )
+    }
+    await asUser(seed.userA.id)(request(app).patch('/api/me/availability/settings')
+      .send({ cross_band_gig_detail_visible: true })).expect(200)
+
+    const res = await bandGrid(seed.userB.id, seed.tenantA.id).expect(200)
+    expect(res.body.find((slot) => slot.bookingType === kind)).toMatchObject({
+      source: 'booking',
+      title,
+      tenantName: 'Beta Band',
+      description: `${title} — Beta Band`,
+      redacted: false,
+    })
+  })
+
+  it('marks an artist unavailable because of their own personal-workspace event', async () => {
+    const { rows: [personal] } = await pool.query(
+      `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
+       VALUES ('artist-calendar', 'Alpha Artist', 'Alpha Artist', 'personal', $1, $1) RETURNING *`,
+      [seed.userA.id],
+    )
+    await addMembership(seed.userA.id, personal.id, 'tenant_admin')
+    await addMembership(seed.userB.id, seed.tenantA.id)
+    await pool.query(
+      `INSERT INTO band_events (tenant_id, title, start_date, end_date)
+       VALUES ($1, 'Private artist appointment', '2099-07-18', '2099-07-18')`,
+      [personal.id],
+    )
+    await asUser(seed.userA.id)(request(app).patch('/api/me/availability/settings')
+      .send({ cross_band_gig_detail_visible: true })).expect(200)
+
+    const res = await bandGrid(seed.userB.id, seed.tenantA.id).expect(200)
+    expect(res.body.find((slot) => slot.bookingType === 'band_event')).toMatchObject({
+      title: 'Private artist appointment',
+      tenantName: 'Alpha Artist',
+      description: 'Private artist appointment — Alpha Artist',
+    })
+  })
+
+  it('does not derive availability from an event where the artist is not required', async () => {
+    await linkUserToTenant(seed.userA.id, seed.tenantB.id)
+    await pool.query(
+      `INSERT INTO gigs (tenant_id, event_description, event_date, status)
+       VALUES ($1, 'Not my show', '2099-07-15', 'confirmed')`,
+      [seed.tenantB.id],
+    )
+
+    const res = await bandGrid(seed.userB.id, seed.tenantA.id).expect(200)
+    expect(res.body.find((slot) => slot.source === 'booking')).toBeUndefined()
   })
 
   // A booking in THIS band is this band's own data — the viewer can already see
@@ -283,6 +381,20 @@ describe('bookings in other bands project as busy', () => {
 
     const res = await bandGrid(seed.userB.id, seed.tenantA.id).expect(200)
     expect(res.body.find((s) => s.source === 'booking')).toBeUndefined()
+  })
+
+  it('does not let a derived booking be patched or deleted as an availability slot', async () => {
+    await bookedElsewhere()
+    const grid = await bandGrid(seed.userA.id, seed.tenantA.id).expect(200)
+    const booking = grid.body.find((slot) => slot.source === 'booking')
+    expect(booking.id).toMatch(/^gig-/)
+
+    await inTenant(seed.userA.id, seed.tenantA.id)(
+      request(app).patch(`/api/availability/${booking.id}`).send({ status: 'available' }),
+    ).expect(400)
+    await inTenant(seed.userA.id, seed.tenantA.id)(
+      request(app).delete(`/api/availability/${booking.id}`),
+    ).expect(400)
   })
 })
 
@@ -314,6 +426,28 @@ describe('who may write a linked member\'s availability', () => {
       'SELECT COUNT(*)::int AS count FROM user_availability_slots WHERE user_id = $1', [reader.id],
     )
     expect(rows[0].count).toBe(1)
+  })
+
+  it('lets the artist create in one band calendar and remove from another', async () => {
+    await addMembership(seed.userA.id, seed.tenantB.id, 'reader')
+    const memberInB = await addBandMember(seed.tenantB.id, 'Alpha Member in Beta', seed.userA.id)
+    const created = await inTenant(seed.userA.id, seed.tenantB.id)(
+      request(app).post('/api/availability').send(slotBody(memberInB.id)),
+    ).expect(201)
+
+    const visibleInA = await bandGrid(seed.userA.id, seed.tenantA.id).expect(200)
+    expect(visibleInA.body).toContainEqual(expect.objectContaining({
+      id: created.body.id,
+      source: 'slot',
+      status: 'unavailable',
+    }))
+
+    await inTenant(seed.userA.id, seed.tenantA.id)(
+      request(app).delete(`/api/availability/${created.body.id}`),
+    ).expect(204)
+    expect((await asUser(seed.userA.id)(
+      request(app).get('/api/me/availability').query(RANGE),
+    ).expect(200)).body.items).toEqual([])
   })
 
   it('refuses a contributor writing another member without delegation', async () => {

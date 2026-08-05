@@ -20,6 +20,8 @@ interface AvailabilitySlotDialogProps {
   onSave: (data: Partial<Slot>) => Promise<void>
   onDelete: (id: Id) => Promise<void>
   onClose: () => void
+  /** User-owned calendar: the slot always belongs to the signed-in artist. */
+  personal?: boolean
 }
 
 interface SlotForm {
@@ -30,7 +32,7 @@ interface SlotForm {
   reason: string
 }
 
-export default function AvailabilitySlotDialog({ open, slot, members, onSave, onDelete, onClose }: Readonly<AvailabilitySlotDialogProps>) {
+export default function AvailabilitySlotDialog({ open, slot, members, onSave, onDelete, onClose, personal = false }: Readonly<AvailabilitySlotDialogProps>) {
   const isEdit = !!slot?.id
   const [form, setForm] = useState<SlotForm>(() => slot ? {
     band_member_id: slot.band_member_id ?? null,
@@ -66,8 +68,8 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
     onSave({
-      // band_member_id null means "whole band" slot.
-      band_member_id: form.band_member_id ?? null,
+      // Omitted for a user-owned slot; null means "whole band" only in band mode.
+      ...(personal ? {} : { band_member_id: form.band_member_id ?? null }),
       start_date: form.start_date,
       end_date: form.end_date,
       status: form.status,
@@ -80,19 +82,21 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
       <DialogTitle>{isEdit ? 'Edit slot' : 'Add availability slot'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            select
-            label="Member"
-            value={form.band_member_id === null ? '' : String(form.band_member_id)}
-            onChange={(e) => set('band_member_id', e.target.value === '' ? null : Number(e.target.value))}
-            fullWidth
-            size="small"
-          >
-            <MenuItem value="">Whole band</MenuItem>
-            {members.map((m) => (
-              <MenuItem key={String(m.id)} value={String(m.id)}>{m.name}</MenuItem>
-            ))}
-          </TextField>
+          {!personal && (
+            <TextField
+              select
+              label="Member"
+              value={form.band_member_id === null ? '' : String(form.band_member_id)}
+              onChange={(e) => set('band_member_id', e.target.value === '' ? null : Number(e.target.value))}
+              fullWidth
+              size="small"
+            >
+              <MenuItem value="">Whole band</MenuItem>
+              {members.map((m) => (
+                <MenuItem key={String(m.id)} value={String(m.id)}>{m.name}</MenuItem>
+              ))}
+            </TextField>
+          )}
 
           <DateEntryField
             label="Start date"

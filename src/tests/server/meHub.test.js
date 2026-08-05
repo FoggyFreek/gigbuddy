@@ -26,7 +26,7 @@ afterAll(async () => {
   await pool.end()
 })
 
-// The hub needs no active tenant, so every request here deliberately sends
+// The cross-tenant agenda needs no active tenant, so requests deliberately send
 // `x-test-tenant-id: null` — proving the reads never depend on one.
 const asUser = (userId) => (req) =>
   req.set('x-test-user-id', String(userId)).set('x-test-tenant-id', 'null')
@@ -46,6 +46,16 @@ async function addMembership(userId, tenantId, { role = 'contributor', status = 
      VALUES ($1, $2, $3, $4, CASE WHEN $4 = 'approved' THEN NOW() END, 'admin')`,
     [userId, tenantId, role, status],
   )
+  if (status === 'approved') {
+    await pool.query(
+      `INSERT INTO band_members (tenant_id, name, position, sort_order, user_id)
+       SELECT $2, u.name, 'lead', 100, u.id
+         FROM users u JOIN tenants t ON t.id = $2
+        WHERE u.id = $1 AND t.kind = 'band'
+       ON CONFLICT (user_id, tenant_id) WHERE user_id IS NOT NULL DO NOTHING`,
+      [userId, tenantId],
+    )
+  }
 }
 
 async function addGig(tenantId, { date, name = 'Show', status = 'confirmed' }) {
@@ -54,7 +64,13 @@ async function addGig(tenantId, { date, name = 'Show', status = 'confirmed' }) {
      VALUES ($1, $2, $3, $4) RETURNING *`,
     [tenantId, name, date, status],
   )
-  return rows[0]
+  const gig = rows[0]
+  await pool.query(
+    `INSERT INTO gig_participants (tenant_id, gig_id, band_member_id)
+     SELECT $1, $2, id FROM band_members WHERE tenant_id = $1 AND position = 'lead'`,
+    [tenantId, gig.id],
+  )
+  return gig
 }
 
 // A rehearsal's human label is its location — there is no title column.
@@ -63,7 +79,13 @@ async function addRehearsal(tenantId, { date, title = 'Rehearsal' }) {
     `INSERT INTO rehearsals (tenant_id, location, proposed_date) VALUES ($1, $2, $3) RETURNING *`,
     [tenantId, title, date],
   )
-  return rows[0]
+  const rehearsal = rows[0]
+  await pool.query(
+    `INSERT INTO rehearsal_participants (tenant_id, rehearsal_id, band_member_id, vote)
+     SELECT $1, $2, id, 'yes' FROM band_members WHERE tenant_id = $1 AND position = 'lead'`,
+    [tenantId, rehearsal.id],
+  )
+  return rehearsal
 }
 
 async function addBandEvent(tenantId, { start, end, title = 'Event' }) {
@@ -71,58 +93,21 @@ async function addBandEvent(tenantId, { start, end, title = 'Event' }) {
     `INSERT INTO band_events (tenant_id, title, start_date, end_date) VALUES ($1, $2, $3, $4) RETURNING *`,
     [tenantId, title, start, end],
   )
-  return rows[0]
+  const event = rows[0]
+  await pool.query(
+    `INSERT INTO band_event_participants (tenant_id, band_event_id, band_member_id)
+     SELECT $1, $2, id FROM band_members WHERE tenant_id = $1 AND position = 'lead'`,
+    [tenantId, event.id],
+  )
+  return event
 }
 
 const WINDOW = { from: '2099-07-01', to: '2099-07-31' }
 const agenda = (userId, q = WINDOW) =>
   asUser(userId)(request(app).get('/api/me/agenda').query(q))
 
-describe('GET /api/me/bands', () => {
-  it('lists exactly the caller\'s approved, non-archived memberships', async () => {
-    const res = await asUser(seed.userA.id)(request(app).get('/api/me/bands')).expect(200)
-    expect(res.body.items.map((b) => b.tenantId)).toEqual([seed.tenantA.id])
-    expect(res.body.items[0]).toMatchObject({ source: 'tenant', kind: 'band', role: 'tenant_admin' })
-  })
-
-  it('is an empty list — not a 403 — for a user with no memberships', async () => {
-    const outsider = await createUser('nobody@test.local')
-    const res = await asUser(outsider.id)(request(app).get('/api/me/bands')).expect(200)
-    expect(res.body.items).toEqual([])
-  })
-
-  it('omits pending and rejected memberships', async () => {
-    const artist = await createUser('artist@test.local')
-    await addMembership(artist.id, seed.tenantA.id, { status: 'pending' })
-    await addMembership(artist.id, seed.tenantB.id, { status: 'rejected' })
-
-    const res = await asUser(artist.id)(request(app).get('/api/me/bands')).expect(200)
-    expect(res.body.items).toEqual([])
-  })
-
-  it('omits archived tenants', async () => {
-    await pool.query('UPDATE tenants SET archived_at = NOW() WHERE id = $1', [seed.tenantA.id])
-    const res = await asUser(seed.userA.id)(request(app).get('/api/me/bands')).expect(200)
-    expect(res.body.items).toEqual([])
-  })
-
-  it('does not present the caller\'s personal workspace as one of their bands', async () => {
-    const { rows: [ws] } = await pool.query(
-      `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
-       VALUES ('artist-ws', 'Alpha User', 'Alpha User', 'personal', $1, $1) RETURNING *`,
-      [seed.userA.id],
-    )
-    await addMembership(seed.userA.id, ws.id, { role: 'tenant_admin' })
-
-    const res = await asUser(seed.userA.id)(request(app).get('/api/me/bands')).expect(200)
-    expect(res.body.items).toHaveLength(1)
-    expect(res.body.items[0]).toMatchObject({ tenantId: seed.tenantA.id, kind: 'band' })
-    expect(res.body.items.map((b) => b.tenantId)).not.toContain(ws.id)
-  })
-})
-
 describe('GET /api/me/agenda', () => {
-  it('merges gigs, rehearsals and events across every member tenant, in date order', async () => {
+  it('merges gigs, rehearsals and events where the artist is required, in date order', async () => {
     const artist = await createUser('artist@test.local')
     await addMembership(artist.id, seed.tenantA.id)
     await addMembership(artist.id, seed.tenantB.id)
@@ -138,6 +123,47 @@ describe('GET /api/me/agenda', () => {
       ['2099-07-20', 'band_event', 'A Event'],
     ])
     expect(res.body.meta).toMatchObject({ from: WINDOW.from, to: WINDOW.to, returned: 3 })
+  })
+
+  it('omits a band event when the artist is a member but not a required participant', async () => {
+    const artist = await createUser('artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id)
+    const event = await addBandEvent(seed.tenantA.id, {
+      start: '2099-07-20', end: '2099-07-20', title: 'Not required',
+    })
+    const { rows: [member] } = await pool.query(
+      'SELECT id FROM band_members WHERE tenant_id = $1 AND user_id = $2',
+      [seed.tenantA.id, artist.id],
+    )
+    await pool.query(
+      `DELETE FROM band_event_participants
+        WHERE tenant_id = $1 AND band_event_id = $2 AND band_member_id = $3`,
+      [seed.tenantA.id, event.id, member.id],
+    )
+
+    expect((await agenda(artist.id).expect(200)).body.items).toEqual([])
+  })
+
+  it('includes the artist\'s own personal-workspace event without a participant row', async () => {
+    const { rows: [workspace] } = await pool.query(
+      `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
+       VALUES ('artist-agenda', 'Alpha Artist', 'Alpha Artist', 'personal', $1, $1) RETURNING *`,
+      [seed.userA.id],
+    )
+    await addMembership(seed.userA.id, workspace.id, { role: 'tenant_admin' })
+    await addBandEvent(workspace.id, {
+      start: '2099-07-22', end: '2099-07-23', title: 'Artist appointment',
+    })
+
+    const res = await agenda(seed.userA.id).expect(200)
+    expect(res.body.items).toContainEqual(expect.objectContaining({
+      type: 'band_event',
+      title: 'Artist appointment',
+      description: 'Artist appointment — Alpha Artist',
+      tenantId: workspace.id,
+      tenantName: 'Alpha Artist',
+      endDate: '2099-07-23',
+    }))
   })
 
   it('labels every item with the band it belongs to', async () => {
@@ -161,7 +187,7 @@ describe('GET /api/me/agenda', () => {
   it('drops a tenant\'s rows while the membership is only pending', async () => {
     const artist = await createUser('artist@test.local')
     await addMembership(artist.id, seed.tenantA.id, { status: 'pending' })
-    await addGig(seed.tenantA.id, { date: '2099-07-10' })
+    const gig = await addGig(seed.tenantA.id, { date: '2099-07-10' })
 
     const pendingRes = await agenda(artist.id).expect(200)
     expect(pendingRes.body.items).toEqual([])
@@ -170,6 +196,16 @@ describe('GET /api/me/agenda', () => {
       `UPDATE memberships SET status = 'approved', approved_at = NOW()
         WHERE user_id = $1 AND tenant_id = $2`,
       [artist.id, seed.tenantA.id],
+    )
+    const { rows: [member] } = await pool.query(
+      `INSERT INTO band_members (tenant_id, name, position, sort_order, user_id)
+       VALUES ($1, 'Artist', 'lead', 100, $2) RETURNING *`,
+      [seed.tenantA.id, artist.id],
+    )
+    await pool.query(
+      `INSERT INTO gig_participants (tenant_id, gig_id, band_member_id)
+       VALUES ($1, $2, $3)`,
+      [seed.tenantA.id, gig.id, member.id],
     )
     const approvedRes = await agenda(artist.id).expect(200)
     expect(approvedRes.body.items).toHaveLength(1)
@@ -232,122 +268,13 @@ describe('GET /api/me/agenda', () => {
   })
 })
 
-describe('GET /api/me/agenda/past', () => {
-  // The fixture seeds a 2026 gig per tenant; every date here is later, so clear
-  // them and let each test own the whole feed it asserts on.
-  beforeEach(async () => { await pool.query('DELETE FROM gigs') })
-
-  const past = (userId, q = {}) =>
-    asUser(userId)(request(app).get('/api/me/agenda/past').query({ today: '2099-01-01', ...q }))
-
-  it('pages back through history across tenants without repeating or skipping', async () => {
-    const artist = await createUser('artist@test.local')
-    await addMembership(artist.id, seed.tenantA.id)
-    await addMembership(artist.id, seed.tenantB.id)
-
-    // Alternate tenants so a per-tenant bug would show up as a gap.
-    const expected = []
-    for (let i = 1; i <= 7; i++) {
-      const tenantId = i % 2 === 0 ? seed.tenantA.id : seed.tenantB.id
-      const date = `2098-0${i}-15`
-      await addGig(tenantId, { date, name: `Gig ${i}` })
-      expected.push(`Gig ${i}`)
-    }
-    expected.reverse() // most recent first
-
-    const seen = []
-    let cursor = null
-    for (let page = 0; page < 5; page++) {
-      const q = { limit: 3, ...(cursor ? { cursorDate: cursor.date, cursorId: cursor.id } : {}) }
-      const res = await past(artist.id, q).expect(200)
-      seen.push(...res.body.items.map((i) => i.title))
-      cursor = res.body.meta.nextCursor
-      if (!cursor) break
-    }
-
-    expect(seen).toEqual(expected)
-    expect(new Set(seen).size).toBe(seen.length) // no repeats
-    expect(cursor).toBeNull() // a short page ends the feed
-  })
-
-  it('never pages into a tenant the caller left', async () => {
-    const artist = await createUser('artist@test.local')
-    await addMembership(artist.id, seed.tenantA.id)
-    await addMembership(artist.id, seed.tenantB.id)
-    await addGig(seed.tenantA.id, { date: '2098-01-15', name: 'Kept' })
-    await addGig(seed.tenantB.id, { date: '2098-02-15', name: 'Lost' })
-
-    await pool.query('DELETE FROM memberships WHERE user_id = $1 AND tenant_id = $2',
-      [artist.id, seed.tenantB.id])
-
-    const res = await past(artist.id, { limit: 50 }).expect(200)
-    expect(res.body.items.map((i) => i.title)).toEqual(['Kept'])
-  })
-
-  it('400s on a malformed cursor or a missing today', async () => {
-    await asUser(seed.userA.id)(request(app).get('/api/me/agenda/past')).expect(400)
-    await past(seed.userA.id, { cursorDate: '2098-01-15' }).expect(400)
-    await past(seed.userA.id, { cursorDate: 'nope', cursorId: 1 }).expect(400)
-    await past(seed.userA.id, { limit: '0' }).expect(400)
-  })
-})
-
-describe('GET /api/me/earnings', () => {
-  const EARNINGS_WINDOW = { from: '2099-01-01', to: '2099-12-31' }
-  const earnings = (userId, q = EARNINGS_WINDOW) =>
-    asUser(userId)(request(app).get('/api/me/earnings').query(q))
-
-  it('reports per band and never sums across them', async () => {
-    const artist = await createUser('artist@test.local')
-    await addMembership(artist.id, seed.tenantA.id, { role: 'financial_admin' })
-    await addMembership(artist.id, seed.tenantB.id, { role: 'financial_admin' })
-
-    const res = await earnings(artist.id).expect(200)
-    const ids = res.body.items.map((r) => r.tenantId).sort()
-    expect(ids).toEqual([seed.tenantA.id, seed.tenantB.id].sort())
-    // Every row is one band's own figure; there is no combined total anywhere.
-    for (const row of res.body.items) {
-      expect(row).toHaveProperty('resultCents')
-      expect(row.resultCents).toBe(row.revenueCents - row.expenseCents)
-    }
-    expect(res.body).not.toHaveProperty('total')
-    expect(res.body.meta).not.toHaveProperty('total')
-  })
-
-  it('omits a band whose role denies finance.view to the caller', async () => {
-    const artist = await createUser('artist@test.local')
-    // reader has no finance.view; financial_admin does.
-    await addMembership(artist.id, seed.tenantA.id, { role: 'reader' })
-    await addMembership(artist.id, seed.tenantB.id, { role: 'financial_admin' })
-
-    const res = await earnings(artist.id).expect(200)
-    expect(res.body.items.map((r) => r.tenantId)).toEqual([seed.tenantB.id])
-  })
-
-  it('degrades rather than failing when every band denies finance', async () => {
-    const artist = await createUser('artist@test.local')
-    await addMembership(artist.id, seed.tenantA.id, { role: 'reader' })
-    const res = await earnings(artist.id).expect(200)
-    expect(res.body.items).toEqual([])
-  })
-
-  it('never reports a band the caller is not an approved member of', async () => {
-    const res = await earnings(seed.userA.id).expect(200)
-    expect(res.body.items.map((r) => r.tenantId)).toEqual([seed.tenantA.id])
-  })
-
-  it('400s on a malformed window', async () => {
-    await asUser(seed.userA.id)(request(app).get('/api/me/earnings')).expect(400)
-    await earnings(seed.userA.id, { from: '2099-12-31', to: '2099-01-01' }).expect(400)
-  })
-})
-
-describe('the hub tier', () => {
+describe('the cross-tenant agenda tier', () => {
   it('rejects unauthenticated callers', async () => {
-    await request(app).get('/api/me/bands').set('x-test-user-id', 'null').expect(401)
+    await request(app).get('/api/me/agenda').query(WINDOW)
+      .set('x-test-user-id', 'null').expect(401)
   })
 
-  // The hub must never leak a tenant scope into the request: a later handler
+  // The agenda must never leak a tenant scope into the request: a later handler
   // relying on req.tenantId would silently read the wrong tenant.
   it('does not set an active tenant as a side effect', async () => {
     const { resolveMemberTenantIds } = await import('../../../server/middleware/tenant.js')
@@ -356,7 +283,7 @@ describe('the hub tier', () => {
       resolveMemberTenantIds(req, { status: () => ({ json: reject }) }, (err) =>
         err ? reject(err) : resolve())
     })
-    expect(req.memberTenantIds).toEqual([seed.tenantA.id])
+    expect(req.memberTenants.map((tenant) => tenant.tenantId)).toEqual([seed.tenantA.id])
     expect(req.tenantId).toBeUndefined()
     expect(req.membership).toBeUndefined()
   })

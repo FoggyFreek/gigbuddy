@@ -186,6 +186,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   }
 
   function handleSlotClick(slot: Slot) {
+    if (slot.source === 'booking') return
     setDialog({ slot })
   }
 
@@ -345,8 +346,14 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
                   ? null
                   : members.find((m) => m.id === slot.band_member_id)
                 const name = slot.band_member_id === null ? t($ => $.events.band) : member?.name || ''
+                const isDerivedBooking = slot.source === 'booking'
                 return (
-                  <ListItemButton key={`s-${slot.id}`} onClick={() => handleSlotClick(slot)}>
+                  <ListItemButton
+                    key={`s-${slot.id}`}
+                    onClick={isDerivedBooking ? undefined : () => handleSlotClick(slot)}
+                    aria-disabled={isDerivedBooking || undefined}
+                    sx={isDerivedBooking ? { cursor: 'default' } : undefined}
+                  >
                     <Box
                       sx={{
                         width: 10,
@@ -359,7 +366,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
                     />
                     <ListItemText
                       primary={name}
-                      secondary={[slot.status, slot.reason].filter(Boolean).join(' — ')}
+                      secondary={[slot.status, slot.description || slot.reason].filter(Boolean).join(' — ')}
                     />
                   </ListItemButton>
                 )

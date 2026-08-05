@@ -27,7 +27,15 @@ export const SOURCE_SLOT = 'slot'
 export const SOURCE_BOOKING = 'booking'
 
 function redactedEntry(base) {
-  return { ...base, status: 'unavailable', reason: null, title: null, tenantName: null, redacted: true }
+  return {
+    ...base,
+    status: 'unavailable',
+    reason: null,
+    title: null,
+    description: null,
+    tenantName: null,
+    redacted: true,
+  }
 }
 
 // `viewer` is { userId, tenantId }: who is looking, and from which band's grid.
@@ -54,7 +62,7 @@ export function projectSlot(slot, owner, viewer) {
 
 export function projectBooking(booking, owner, viewer) {
   const base = {
-    id: `${booking.source}-${booking.tenant_id}-${booking.start_date}`,
+    id: `${booking.source}-${booking.source_id}`,
     source: SOURCE_BOOKING,
     bookingType: booking.source,
     userId: owner.userId,
@@ -68,6 +76,7 @@ export function projectBooking(booking, owner, viewer) {
     status: 'unavailable',
     reason: null,
     title: booking.title ?? null,
+    description: [booking.title, booking.tenant_name].filter(Boolean).join(' — ') || null,
     tenantName: booking.tenant_name ?? null,
     redacted: false,
   }

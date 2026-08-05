@@ -311,4 +311,25 @@ describe('AvailabilityCalendar', () => {
     const outside = container.querySelector('[data-date="2026-04-19"]')
     expect(outside.querySelector('[data-slot-id="99"]')).toBeNull()
   })
+
+  it('does not offer editing for a booking derived from another tenant', async () => {
+    const user = userEvent.setup()
+    const onSlotClick = vi.fn()
+    const slots = [{
+      id: 'band_event-42',
+      source: 'booking',
+      bookingType: 'band_event',
+      band_member_id: 1,
+      start_date: '2026-04-20',
+      end_date: '2026-04-20',
+      status: 'unavailable',
+      description: 'Photo shoot — Other Band',
+    }]
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ slots, onSlotClick })} />)
+    const booking = container.querySelector('[data-slot-id="band_event-42"]')
+
+    expect(booking).toHaveAttribute('aria-disabled', 'true')
+    await user.click(booking)
+    expect(onSlotClick).not.toHaveBeenCalled()
+  })
 })

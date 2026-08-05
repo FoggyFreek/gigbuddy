@@ -49,15 +49,28 @@ export async function listBandEventsInRange(executor, tenantId, from, to) {
   return rows
 }
 
-// Cross-tenant hub read (/api/me). Interval overlap, so a multi-day event that
+// Cross-tenant artist calendar read (/api/me/agenda). Interval overlap, so a multi-day event that
 // straddles a window bound still appears. Tenant ids come from the caller's
-// approved memberships, never from the client.
-export async function listBandEventsInRangeForMemberTenants(executor, tenantIds, from, to) {
+// approved memberships, never from the client; band events additionally need
+// a participant linked to the caller.
+export async function listBandEventsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
-    `SELECT * FROM band_events
-     WHERE tenant_id = ANY($1) AND start_date <= $3 AND end_date >= $2
-     ORDER BY start_date ASC, id ASC`,
-    [tenantIds, from, to],
+    `SELECT e.* FROM band_events e
+       JOIN tenants t ON t.id = e.tenant_id
+      WHERE e.tenant_id = ANY($2) AND e.start_date <= $4 AND e.end_date >= $3
+        AND (
+          t.kind = 'personal'
+          OR EXISTS (
+            SELECT 1
+              FROM band_event_participants bep
+              JOIN band_members bm
+                ON bm.id = bep.band_member_id AND bm.tenant_id = bep.tenant_id
+             WHERE bep.band_event_id = e.id AND bep.tenant_id = e.tenant_id
+               AND bm.user_id = $1
+          )
+        )
+      ORDER BY e.start_date ASC, e.id ASC`,
+    [userId, tenantIds, from, to],
   )
   return rows
 }

@@ -204,10 +204,10 @@ router.use('/tenants', requireApproved, tenantsSelfRouter)
 // Band directory: user-level too — an artist searches and asks to join from
 // inside their own workspace, with no membership in the target band.
 router.use('/band-directory', currentTermsUser, bandDirectoryLimiter, bandDirectoryRouter)
-// The cross-tenant hub. Its own tier: authenticated + terms + the member tenant
+// The cross-tenant artist agenda. Its own tier: authenticated + terms + the member tenant
 // set, and deliberately NO resolveTenantId — see resolveMemberTenantIds.
 // Availability is user-level, so it sits on the /me tier and resolves no
-// tenant at all — mounted before the hub router so `/me/availability` is not
+// tenant at all — mounted before the agenda router so `/me/availability` is not
 // swallowed by it.
 router.use('/me/availability', currentTermsUser, meAvailabilityRouter)
 router.use('/me', currentTermsUser, resolveMemberTenantIds, meRouter)

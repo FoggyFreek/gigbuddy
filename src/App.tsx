@@ -9,7 +9,6 @@ import { PERMISSIONS } from './auth/permissions.ts'
 import { TENANT_CAPABILITIES } from './auth/tenantCapabilities.ts'
 
 const AchievementsPage = lazy(() => import('./pages/AchievementsPage.tsx'))
-const MyHubPage = lazy(() => import('./pages/MyHubPage.tsx'))
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage.tsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.tsx'))
 const FinancialDashboardPage = lazy(() => import('./pages/FinancialDashboardPage.tsx'))
@@ -74,9 +73,6 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             {/* No sidebar nav entry — reached via the dashboard card's Show all. */}
             <Route path="/achievements" element={<AchievementsPage />} />
-            {/* Cross-tenant hub: read-only, spans every band the user is in,
-                so it carries no tenant-kind or permission gate of its own. */}
-            <Route path="/me" element={<MyHubPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             {/* Unified settings — reachable by every member; each section gates
                 its own content by role. Old /account and /members deep links
@@ -147,12 +143,10 @@ export default function App() {
                 <Route path=":id" element={<VatReturnDetailPage />} />
               </Route>
             </Route>
-            <Route element={<RequireTenantCapability capability={TENANT_CAPABILITIES.BAND_AVAILABILITY} />}>
-              <Route path="/availability" element={<AvailabilityPage />}>
-                <Route path="gigs/:id" element={<GigDetailPage />} />
-                <Route path="rehearsals/:id" element={<RehearsalDetailPage />} />
-                <Route path="events/:id" element={<BandEventDetailPage />} />
-              </Route>
+            <Route path="/availability" element={<AvailabilityPage />}>
+              <Route path="gigs/:id" element={<GigDetailPage />} />
+              <Route path="rehearsals/:id" element={<RehearsalDetailPage />} />
+              <Route path="events/:id" element={<BandEventDetailPage />} />
             </Route>
             <Route path="/email-templates" element={<EmailTemplatesPage />} />
             <Route element={<RequireSuperAdmin />}>

@@ -19,7 +19,8 @@
     "availability": "Availability",
     "gig": "Gig",
     "rehearsal": "Rehearsal",
-    "bandEvent": "Band Event"
+    "bandEvent": "Band Event",
+    "artistEvent": "Personal event"
   },
   "status": {
     "available": "Available",
@@ -29,6 +30,8 @@
     "noEvents": "No events.",
     "band": "Band",
     "bandWide": "Band-wide",
+    "me": "Me",
+    "myAvailability": "My availability",
     "gigFallback": "Gig",
     "rehearsalTooltip": "Rehearsal — {{status}}",
     "rehearsalAbbrev": "Reh {{yes}}/{{total}}",
