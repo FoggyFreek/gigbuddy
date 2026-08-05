@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -7,14 +7,18 @@ import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
+import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
+import Typography from '@mui/material/Typography'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
+import { getAvailabilitySpan } from '../api/availability.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import BandEventFields from './BandEventFields.tsx'
+import BandEventAvailabilitySection from './BandEventAvailabilitySection.tsx'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
-import type { Id, BandEvent } from '../types/entities.ts'
+import type { AvailabilitySummary, Id, BandEvent } from '../types/entities.ts'
 
 type BandEventDetail = BandEvent & { start_time?: string; end_time?: string; notes?: string }
 
@@ -46,6 +50,13 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
   )
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(mode === 'edit')
+  const [availabilityResult, setAvailabilityResult] = useState<{
+    from: string
+    to: string
+    data: AvailabilitySummary | null
+  } | null>(null)
+  const [confirmCreate, setConfirmCreate] = useState(false)
+  const availabilityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const saveFn = useCallback(
     async (patch: Partial<BandEventDetail>) => { await updateBandEvent(bandEventId!, patch as Partial<BandEventDetail>) },
@@ -71,6 +82,22 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       .finally(() => setLoading(false))
   }, [mode, bandEventId])
 
+  useEffect(() => {
+    if (mode !== 'create' || !form.start_date) return
+    const end = form.end_date || form.start_date
+    if (end < form.start_date) return
+
+    clearTimeout(availabilityTimerRef.current ?? undefined)
+    availabilityTimerRef.current = setTimeout(() => {
+      getAvailabilitySpan(form.start_date, end)
+        .then((data) => setAvailabilityResult({ from: form.start_date, to: end, data }))
+        .catch(() => setAvailabilityResult({ from: form.start_date, to: end, data: null }))
+    }, 300)
+    return () => {
+      if (availabilityTimerRef.current) clearTimeout(availabilityTimerRef.current)
+    }
+  }, [mode, form.start_date, form.end_date])
+
   function handleChange(field: string, value: string | boolean | null) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
@@ -80,12 +107,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
     }
   }
 
-  async function handleCreate() {
-    const errs: Record<string, string> = {}
-    if (!form.title.trim()) errs.title = t($ => $.form.required)
-    if (!form.start_date) errs.start_date = t($ => $.form.required)
-    if (form.end_date && form.end_date < form.start_date) errs.end_date = t($ => $.form.endDateError)
-    if (Object.keys(errs).length) { setErrors(errs); return }
+  async function doCreate() {
     await createBandEvent({
       title: form.title.trim(),
       start_date: form.start_date,
@@ -93,6 +115,26 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       ...({ start_time: form.start_time || null, end_time: form.end_time || null, location: form.location || null, notes: form.notes || null } as Partial<BandEventDetail>),
     } as Partial<BandEventDetail>)
     onClose()
+  }
+
+  const availabilityEnd = form.end_date || form.start_date
+  const availability = availabilityResult?.from === form.start_date && availabilityResult.to === availabilityEnd
+    ? availabilityResult.data
+    : null
+  const leadAvailability = (availability?.members ?? []).filter((member) => member.position === 'lead')
+  const unavailableLeads = leadAvailability.filter((member) => member.status === 'unavailable')
+
+  async function handleCreate() {
+    const errs: Record<string, string> = {}
+    if (!form.title.trim()) errs.title = t($ => $.form.required)
+    if (!form.start_date) errs.start_date = t($ => $.form.required)
+    if (form.end_date && form.end_date < form.start_date) errs.end_date = t($ => $.form.endDateError)
+    if (Object.keys(errs).length) { setErrors(errs); return }
+    if (unavailableLeads.length > 0) {
+      setConfirmCreate(true)
+      return
+    }
+    await doCreate()
   }
 
   async function handleClose() {
@@ -116,6 +158,18 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
               onChange={handleChange}
               errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
             />
+            {mode === 'create' && form.start_date && (
+              <Grid size={12}>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t($ => $.availability.title)}
+                </Typography>
+                <BandEventAvailabilitySection
+                  members={leadAvailability}
+                  days={availability?.days}
+                />
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
       )}
@@ -134,6 +188,30 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
           <Button variant="contained" onClick={handleClose}>{t($ => $.actions.close, { ns: 'common' })}</Button>
         )}
       </DialogActions>
+
+      <Dialog open={confirmCreate} onClose={() => setConfirmCreate(false)}>
+        <DialogTitle>{t($ => $.form.unavailableTitle)}</DialogTitle>
+        <DialogContent>
+          <Typography>
+            {t($ => $.form.unavailableBody, {
+              names: unavailableLeads.map((member) => member.name).join(', '),
+            })}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmCreate(false)}>{t($ => $.form.goBack)}</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => {
+              setConfirmCreate(false)
+              void doCreate()
+            }}
+          >
+            {t($ => $.form.createAnyway)}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   )
 }

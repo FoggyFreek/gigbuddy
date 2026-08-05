@@ -70,6 +70,21 @@ export async function fetchBandEvent(executor, eventId, tenantId) {
   return rows[0] || null
 }
 
+export async function loadBandEventParticipantIds(executor, eventIds, tenantId) {
+  const byEvent = new Map(eventIds.map((id) => [id, []]))
+  if (!eventIds.length) return byEvent
+
+  const { rows } = await executor.query(
+    `SELECT band_event_id, band_member_id
+       FROM band_event_participants
+      WHERE tenant_id = $1 AND band_event_id = ANY($2)
+      ORDER BY id ASC`,
+    [tenantId, eventIds],
+  )
+  for (const row of rows) byEvent.get(row.band_event_id)?.push(row.band_member_id)
+  return byEvent
+}
+
 export async function insertBandEvent(executor, tenantId, data) {
   const { rows } = await executor.query(
     `INSERT INTO band_events (tenant_id, title, start_date, end_date, start_time, end_time, location, notes)
@@ -87,6 +102,23 @@ export async function insertBandEvent(executor, tenantId, data) {
     ],
   )
   return rows[0]
+}
+
+export async function insertBandEventParticipant(executor, tenantId, eventId, memberId) {
+  await executor.query(
+    `INSERT INTO band_event_participants (tenant_id, band_event_id, band_member_id)
+     VALUES ($1, $2, $3)`,
+    [tenantId, eventId, memberId],
+  )
+}
+
+export async function deleteBandEventParticipant(executor, tenantId, eventId, memberId) {
+  const { rowCount } = await executor.query(
+    `DELETE FROM band_event_participants
+      WHERE tenant_id = $1 AND band_event_id = $2 AND band_member_id = $3`,
+    [tenantId, eventId, memberId],
+  )
+  return rowCount > 0
 }
 
 export async function updateBandEventFields(executor, tenantId, eventId, fields, values) {

@@ -125,12 +125,50 @@ export interface Rehearsal {
   songs?: RehearsalSong[]
 }
 
+/** 'available' | 'unavailable' | 'default' (nothing recorded). */
+export type AvailabilityStatus = 'available' | 'unavailable' | 'default'
+
+/**
+ * One member's availability for an event, derived server-side from the
+ * availability calendar (server/domain/availabilitySpan.js). Over a multi-day
+ * event the worst day decides. `reason` is null whenever the viewer may not see
+ * it — the redaction already happened, there is nothing to hide here.
+ */
+export interface MemberAvailability {
+  member_id?: Id
+  name?: string
+  color?: string | null
+  role?: string
+  position?: string
+  status?: AvailabilityStatus
+  reason?: string | null
+  /** Which slot decided it: 'band' | 'member' | 'default'. */
+  source?: string
+}
+
+/** One day of an event's span, for the detail breakdown. */
+export interface AvailabilityDay {
+  date: string
+  bandWide: { status?: AvailabilityStatus; reason?: string | null } | null
+  members: { member_id?: Id; status?: AvailabilityStatus; reason?: string | null; source?: string }[]
+}
+
+export interface AvailabilitySummary {
+  members: MemberAvailability[]
+  bandWide?: { status?: AvailabilityStatus; reason?: string | null } | null
+  days?: AvailabilityDay[]
+}
+
 export interface BandEvent {
   id?: Id
   title?: string
   start_date?: string
   end_date?: string
   location?: string
+  /** Absent in a personal workspace, which has no band roster. */
+  members_availability?: MemberAvailability[]
+  /** Detail read only — the list feeds carry the summary alone. */
+  availability_days?: AvailabilityDay[]
 }
 
 export interface Slot {

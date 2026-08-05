@@ -20,8 +20,13 @@ vi.mock('../api/bandEvents.ts', () => ({
   updateBandEvent: vi.fn().mockResolvedValue({}),
 }))
 
+vi.mock('../api/availability.ts', () => ({
+  getAvailabilitySpan: vi.fn().mockResolvedValue({ members: [], days: [] }),
+}))
+
 import BandEventFormModal from '../components/BandEventFormModal.tsx'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
+import { getAvailabilitySpan } from '../api/availability.ts'
 import theme from '../theme.ts'
 
 function wrap(ui) {
@@ -35,6 +40,8 @@ function wrap(ui) {
 describe('BandEventFormModal — create mode', () => {
   beforeEach(() => {
     createBandEvent.mockClear()
+    getAvailabilitySpan.mockReset()
+    getAvailabilitySpan.mockResolvedValue({ members: [], days: [] })
   })
 
   it('renders the add event dialog title', () => {
@@ -84,6 +91,30 @@ describe('BandEventFormModal — create mode', () => {
     wrap(<BandEventFormModal mode="create" onClose={onClose} />)
     await user.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onClose).toHaveBeenCalled()
+    expect(createBandEvent).not.toHaveBeenCalled()
+  })
+
+  it('checks lead availability across the event span before creation', async () => {
+    getAvailabilitySpan.mockResolvedValueOnce({
+      members: [
+        { member_id: 1, name: 'Ann Bell', position: 'lead', status: 'unavailable', reason: 'Holiday' },
+        { member_id: 2, name: 'Sam Kerr', position: 'optional', status: 'available', reason: null },
+      ],
+      days: [],
+    })
+    const user = userEvent.setup()
+    wrap(<BandEventFormModal mode="create" onClose={() => {}} />)
+
+    await user.type(screen.getByLabelText(/title/i), 'Photo shoot')
+    await user.type(screen.getByLabelText(/start date\s*\*?/i), '2099-09-01')
+    await user.type(screen.getByLabelText(/^end date/i), '2099-09-03')
+
+    await waitFor(() => expect(getAvailabilitySpan).toHaveBeenCalledWith('2099-09-01', '2099-09-03'))
+    expect(screen.getByText('Ann Bell')).toBeInTheDocument()
+    expect(screen.queryByText('Sam Kerr')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /add event/i }))
+    expect(await screen.findByText(/lead member unavailable/i)).toBeInTheDocument()
     expect(createBandEvent).not.toHaveBeenCalled()
   })
 })

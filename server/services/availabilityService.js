@@ -4,7 +4,6 @@
 import { validateSlot, buildSlotUpdateFields } from '../validators/availabilityValidators.js'
 import {
   listSlotsInRange,
-  listSlotsOnDate,
   listBandMembers,
   insertSlot,
   updateSlotFields,
@@ -17,6 +16,7 @@ import {
   fetchVisibilityForUsers,
 } from '../repositories/userAvailabilityRepository.js'
 import { projectSlot, projectBooking } from './availabilityProjection.js'
+import { summarizeSpan } from '../domain/availabilitySpan.js'
 import {
   assertMayWriteFor,
   loadSlotOwner,
@@ -26,6 +26,7 @@ import {
 } from './userAvailabilityService.js'
 import { bandMemberUserId } from '../repositories/bandMemberRepository.js'
 import { badRequest, forbidden, notFound } from './serviceErrors.js'
+import { parseDateRange } from '../validators/common.js'
 
 const NOT_FOUND = notFound('Not found')
 
@@ -38,17 +39,18 @@ const PLANNING_WRITE_REQUIRED = forbidden('Forbidden')
 //   - band-local slots, for members with no linked account (deps, CRM entries);
 //   - the linked members' own user-level slots and bookings, redacted per
 //     viewer by availabilityProjection.js before they ever leave the service.
-export async function listRange(db, tenantId, query, viewer = null) {
-  const { from, to } = query
-  if (!from || !to) return badRequest('from and to are required')
-
+//
+// This is the single SQL owner of "what does this band see on these days".
+// Everything derived from it — the grid, the single-date read, the per-event
+// summaries — goes through summarizeSpan (server/domain/availabilitySpan.js).
+export async function loadAvailabilityMatrix(db, tenantId, from, to, viewer = null) {
   const [bandLocal, members] = await Promise.all([
     listSlotsInRange(db, tenantId, from, to),
     listBandMembers(db, tenantId),
   ])
 
   const linked = members.filter((m) => m.user_id !== null)
-  if (linked.length === 0) return { slots: bandLocal }
+  if (linked.length === 0) return { members, slots: bandLocal }
 
   const userIds = [...new Set(linked.map((m) => m.user_id))]
   const [userSlots, bookings, visibility] = await Promise.all([
@@ -79,47 +81,36 @@ export async function listRange(db, tenantId, query, viewer = null) {
       band_member_id: memberIdByUser.get(owner.userId) ?? null,
       tenant_id: tenantId,
     }))
+    // A projected entry always belongs to a member — never let one fall through
+    // as band_member_id null, which the span rules read as band-wide.
+    .filter((entry) => entry.band_member_id !== null)
 
-  return { slots: [...bandLocal, ...projected] }
+  return { members, slots: [...bandLocal, ...projected] }
 }
 
-// Per-member availability for a single date: a band-wide slot wins over a
-// member-specific slot, which wins over the default. Linked members' entries
-// come from the same redacted union as listRange, so a reason the viewer may
-// not see never reaches this shape either.
+export async function listRange(db, tenantId, query, viewer = null) {
+  const { from, to } = query
+  if (!from || !to) return badRequest('from and to are required')
+
+  const { slots } = await loadAvailabilityMatrix(db, tenantId, from, to, viewer)
+  return { slots }
+}
+
+// Per-member availability for a single date — the span rules applied to a span
+// of one. Linked members' entries come from the same redacted union as
+// listRange, so a reason the viewer may not see never reaches this shape.
 export async function listOnDate(db, tenantId, date, viewer = null) {
-  const [members, bandLocal] = await Promise.all([
-    listBandMembers(db, tenantId),
-    listSlotsOnDate(db, tenantId, date),
-  ])
-  const union = await listRange(db, tenantId, { from: date, to: date }, viewer)
-  // Band-wide rows (band_member_id IS NULL) only ever exist band-locally.
-  const slots = [
-    ...bandLocal.filter((s) => s.band_member_id === null),
-    ...union.slots.filter((s) => s.band_member_id !== null),
-  ]
+  const matrix = await loadAvailabilityMatrix(db, tenantId, date, date, viewer)
+  const { members, days } = summarizeSpan(matrix, date, date)
+  return { members, bandWide: days[0]?.bandWide ?? null }
+}
 
-  const bandWide = slots.findLast((s) => s.band_member_id === null) ?? null
+export async function listSpan(db, tenantId, query, viewer = null) {
+  const range = parseDateRange(query)
+  if (!range) return badRequest('from and to must be valid ISO dates with from <= to')
 
-  const result = members.map((m) => {
-    const memberSlot = slots.findLast((s) => s.band_member_id === m.id)
-    const winner = bandWide ?? memberSlot
-    let source = 'default'
-    if (bandWide) source = 'band'
-    else if (memberSlot) source = 'member'
-    return {
-      member_id: m.id,
-      name: m.name,
-      color: m.color,
-      role: m.role,
-      position: m.position,
-      status: winner ? winner.status : 'default',
-      reason: winner?.reason ?? null,
-      source,
-    }
-  })
-
-  return { members: result, bandWide }
+  const matrix = await loadAvailabilityMatrix(db, tenantId, range.from, range.to, viewer)
+  return summarizeSpan(matrix, range.from, range.to)
 }
 
 // A write for a member who is LINKED to a user goes to that user's own

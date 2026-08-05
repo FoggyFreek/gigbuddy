@@ -76,7 +76,7 @@ async function unlockNewAchievements(db, tenantId, kind, definitions, unlockedAt
   if (!isBaselinePass) await notifyUnlocked(tenantId, inserted)
 }
 
-export async function listAchievements(db, tenantId, kind = 'band') {
+export async function listAchievements(db, tenantId, kind) {
   const cached = fullyUnlockedCache.get(tenantId)
   if (cached) return cached
 

@@ -20,6 +20,7 @@ const CATEGORY_ORDER: AchievementCategory[] = [
   'platform',
   'repertoire',
   'network',
+  'artist'
 ]
 
 interface CategorySection {

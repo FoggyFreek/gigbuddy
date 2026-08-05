@@ -4,6 +4,7 @@
     "colDate": "Date",
     "colTitle": "Title",
     "colTime": "Time",
+    "colAvailability": "Band",
     "colLocation": "Location",
     "shareEvent": "share event",
     "shareWhatsApp": "Share via WhatsApp",
@@ -31,7 +32,22 @@
     "notes": "Notes",
     "required": "Required",
     "endDateError": "Must be on or after start date",
-    "addEvent": "Add event"
+    "addEvent": "Add event",
+    "unavailableTitle": "Lead member unavailable",
+    "unavailableBody": "{{names}} cannot attend during this event. Add the event anyway?",
+    "goBack": "Go back",
+    "createAnyway": "Add anyway"
+  },
+  "availability": {
+    "title": "Availability",
+    "bandWide": "Whole band on {{date}}: {{status}}",
+    "available": "Available",
+    "unavailable": "Unavailable",
+    "unknown": "No answer",
+    "noMembers": "No band members have been added to this event.",
+    "addMember": "Add band member",
+    "addAction": "Add",
+    "removeMember": "Remove {{name}}"
   },
   "page": {
     "title": "Band event details",

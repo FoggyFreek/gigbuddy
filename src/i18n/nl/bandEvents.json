@@ -4,6 +4,7 @@
     "colDate": "Datum",
     "colTitle": "Titel",
     "colTime": "Tijd",
+    "colAvailability": "Band",
     "colLocation": "Locatie",
     "shareEvent": "evenement delen",
     "shareWhatsApp": "Delen via WhatsApp",
@@ -31,7 +32,22 @@
     "notes": "Notities",
     "required": "Verplicht",
     "endDateError": "Moet op of na de begindatum liggen",
-    "addEvent": "Evenement toevoegen"
+    "addEvent": "Evenement toevoegen",
+    "unavailableTitle": "Vast bandlid niet beschikbaar",
+    "unavailableBody": "{{names}} kan tijdens dit evenement niet. Het evenement toch toevoegen?",
+    "goBack": "Terug",
+    "createAnyway": "Toch toevoegen"
+  },
+  "availability": {
+    "title": "Beschikbaarheid",
+    "bandWide": "Hele band op {{date}}: {{status}}",
+    "available": "Beschikbaar",
+    "unavailable": "Niet beschikbaar",
+    "unknown": "Geen antwoord",
+    "noMembers": "Er zijn geen bandleden aan dit evenement toegevoegd.",
+    "addMember": "Bandlid toevoegen",
+    "addAction": "Toevoegen",
+    "removeMember": "{{name}} verwijderen"
   },
   "page": {
     "title": "Bandevenementdetails",

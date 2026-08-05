@@ -30,7 +30,7 @@ import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
 import MemberAvatarStack from './MemberAvatarStack.tsx'
 import GigStatusIcon from './GigStatusIcon.tsx'
 import { ALL_STATUSES } from '../utils/gigStatus.ts'
-import type { Gig, Member, Id } from '../types/entities.ts'
+import type { Gig, Member, MemberAvailability, Id } from '../types/entities.ts'
 
 const COLUMN_COUNT = 7
 // Search text is kept as component-local state so keystrokes never touch the
@@ -44,7 +44,7 @@ export type GigsTab = 'upcoming' | 'past'
 type GigStatusKey = 'option' | 'confirmed' | 'announced'
 
 type GigWithExtras = Gig & {
-  members_availability?: Member[]
+  members_availability?: MemberAvailability[]
   open_task_count?: number
 }
 

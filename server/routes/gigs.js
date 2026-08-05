@@ -4,7 +4,7 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/gigValidators.js'
-import { requireParam, sendError } from './routeHelpers.js'
+import { requireParam, sendError, viewerOf } from './routeHelpers.js'
 import { requireTenantCapabilityWhen } from '../middleware/tenant.js'
 import { TENANT_CAPABILITIES } from '../../shared/tenantCapabilities.js'
 import {
@@ -70,11 +70,11 @@ const externalEnsembleTag = requireTenantCapabilityWhen(
 
 // List all gigs with open task count and member availability
 router.get('/', async (req, res) => {
-  res.json(await listGigs(pool, req.tenantId))
+  res.json(await listGigs(pool, req.tenantId, viewerOf(req)))
 })
 
 router.get('/upcoming', async (req, res) => {
-  const result = await listUpcomingGigs(pool, req.tenantId, req.query)
+  const result = await listUpcomingGigs(pool, req.tenantId, req.query, viewerOf(req))
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })
@@ -82,14 +82,14 @@ router.get('/upcoming', async (req, res) => {
 // Past gigs, most recent first. Bounded + keyset-paginated (?cursorDate=&cursorId=)
 // for "load more" — see listPastGigs in gigService.js.
 router.get('/past', async (req, res) => {
-  const result = await listPastGigs(pool, req.tenantId, req.query)
+  const result = await listPastGigs(pool, req.tenantId, req.query, viewerOf(req))
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })
 
 // Calendar month read: gigs inside the inclusive ?from=&to= day window.
 router.get('/range', async (req, res) => {
-  const result = await listGigsInRange(pool, req.tenantId, req.query)
+  const result = await listGigsInRange(pool, req.tenantId, req.query, viewerOf(req))
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })

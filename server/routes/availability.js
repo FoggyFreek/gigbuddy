@@ -2,10 +2,11 @@ import { Router } from 'express'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS, hasPermission } from '../auth/permissions.js'
-import { requireParam, sendError } from './routeHelpers.js'
+import { requireParam, sendError, viewerOf } from './routeHelpers.js'
 import {
   listRange,
   listOnDate,
+  listSpan,
   createSlot,
   patchSlot,
   deleteSlot,
@@ -26,11 +27,6 @@ function actorOf(req) {
   }
 }
 
-// The viewer decides how much of each linked member's entry is revealed.
-function viewerOf(req) {
-  return { userId: req.user.id, tenantId: req.tenantId }
-}
-
 router.get('/', async (req, res) => {
   const result = await listRange(pool, req.tenantId, req.query, viewerOf(req))
   if (result.error) return sendError(res, result.error)
@@ -39,6 +35,12 @@ router.get('/', async (req, res) => {
 
 router.get('/on/:date', async (req, res) => {
   res.json(await listOnDate(pool, req.tenantId, req.params.date, viewerOf(req)))
+})
+
+router.get('/span', async (req, res) => {
+  const result = await listSpan(pool, req.tenantId, req.query, viewerOf(req))
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
 })
 
 // Gated on the SELF permission so a reader can record their own availability;

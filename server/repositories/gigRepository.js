@@ -336,25 +336,6 @@ export async function upcomingBandFeesByStatus(executor, tenantId) {
   return rows
 }
 
-export async function listBandMembers(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT * FROM band_members WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
-    [tenantId],
-  )
-  return rows
-}
-
-// Slots whose [start_date, end_date] range overlaps the [minDate, maxDate] window.
-export async function listAvailabilitySlotsOverlapping(executor, tenantId, minDate, maxDate) {
-  const { rows } = await executor.query(
-    `SELECT * FROM availability_slots
-     WHERE tenant_id = $1 AND start_date <= $2 AND end_date >= $3
-     ORDER BY created_at ASC`,
-    [tenantId, maxDate, minDate],
-  )
-  return rows
-}
-
 export async function listGigTasks(executor, gigId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM gig_tasks WHERE gig_id = $1 AND tenant_id = $2 ORDER BY created_at ASC',

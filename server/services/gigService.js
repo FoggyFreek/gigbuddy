@@ -12,6 +12,8 @@ import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
 import { createTask as createTaskService, patchTask as patchTaskService, removeTask as removeTaskService } from './taskService.js'
+import { loadAvailabilityMatrix } from './availabilityService.js'
+import { summarizeSpan } from '../domain/availabilitySpan.js'
 import {
   parseSearchLimit,
   toDateStr,
@@ -38,8 +40,6 @@ import {
   listPastGigs as listPastGigRows,
   listGigsInRange as listGigsInRangeRows,
   listGigMapData as listGigMapRows,
-  listBandMembers,
-  listAvailabilitySlotsOverlapping,
   listGigTasks,
   listGigAttachments,
   getLeadMemberIds,
@@ -187,63 +187,44 @@ async function withTasksAndParticipants(db, tenantId, gigId, gig) {
 
 // ---------- reads ----------
 
-// Lists all gigs with open task counts and per-member availability derived from
-// availability_slots (a band-wide slot wins over a member-specific one).
-export async function listGigs(db, tenantId) {
-  return enrichGigsWithAvailability(db, tenantId, await listGigsWithTaskCounts(db, tenantId))
+// Lists all gigs with open task counts and per-member availability.
+export async function listGigs(db, tenantId, viewer = null) {
+  return enrichGigsWithAvailability(db, tenantId, await listGigsWithTaskCounts(db, tenantId), viewer)
 }
 
-// Attaches members_availability to gig rows (band-wide slot wins over a
-// member-specific one). Shared by the full list and the windowed range read.
-async function enrichGigsWithAvailability(db, tenantId, gigs) {
+// Attaches members_availability to gig rows. A gig is a single day, so this is
+// the span rules (server/domain/availabilitySpan.js) applied to a span of one,
+// over the same redacted matrix the availability grid reads — a linked member
+// busy in another band shows up here too. One query for the whole batch.
+async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = null) {
   if (!gigs.length) return []
 
-  const members = await listBandMembers(db, tenantId)
-
   const dates = gigs.map((g) => toDateStr(g.event_date)).filter(Boolean)
+  if (!dates.length) return gigs.map((gig) => ({ ...gig, members_availability: [] }))
   const minDate = dates.reduce((a, b) => (a < b ? a : b))
   const maxDate = dates.reduce((a, b) => (a > b ? a : b))
 
-  const slots = await listAvailabilitySlotsOverlapping(db, tenantId, minDate, maxDate)
+  const matrix = await loadAvailabilityMatrix(db, tenantId, minDate, maxDate, viewer)
 
   return gigs.map((gig) => {
     const dateStr = toDateStr(gig.event_date)
     if (!dateStr) return { ...gig, members_availability: [] }
-
-    const gigSlots = slots.filter(
-      (s) => toDateStr(s.start_date) <= dateStr && toDateStr(s.end_date) >= dateStr,
-    )
-    const bandWide = gigSlots.findLast((s) => s.band_member_id === null) ?? null
-
-    const membersAvail = members.map((m) => {
-      const memberSlot = gigSlots.findLast((s) => s.band_member_id === m.id)
-      const winner = bandWide ?? memberSlot
-      return {
-        member_id: m.id,
-        name: m.name,
-        color: m.color,
-        position: m.position,
-        status: winner ? winner.status : 'default',
-        reason: winner?.reason ?? null,
-      }
-    })
-
-    return { ...gig, members_availability: membersAvail }
+    return { ...gig, members_availability: summarizeSpan(matrix, dateStr, dateStr).members }
   })
 }
 
-export async function listUpcomingGigs(db, tenantId, query = {}) {
+export async function listUpcomingGigs(db, tenantId, query = {}, viewer = null) {
   const today = parseLocalDate(query.today)
   if (today === null) return badRequest(INVALID_TODAY)
   const result = await limitedCollectionWithTotal(query.limit, (limit) => listUpcomingGigRows(db, tenantId, today, limit))
   if (result.error) return result
-  return { ...result, items: await enrichGigsWithAvailability(db, tenantId, result.items) }
+  return { ...result, items: await enrichGigsWithAvailability(db, tenantId, result.items, viewer) }
 }
 
 // Past gigs, most recent first, capped and keyset-paginated via
 // ?cursorDate=&cursorId= (never offset/page params) so "load more" can walk
 // arbitrarily deep history without re-scanning already-seen rows.
-export async function listPastGigs(db, tenantId, query = {}) {
+export async function listPastGigs(db, tenantId, query = {}, viewer = null) {
   const today = parseLocalDate(query.today)
   if (today === null) return badRequest(INVALID_TODAY)
   const parsedCursor = parseListCursor(query)
@@ -253,7 +234,7 @@ export async function listPastGigs(db, tenantId, query = {}) {
     listPastGigRows(db, tenantId, today, limit, parsedCursor.cursor))
   if (result.error) return result
 
-  const items = await enrichGigsWithAvailability(db, tenantId, result.items)
+  const items = await enrichGigsWithAvailability(db, tenantId, result.items, viewer)
   const last = items[items.length - 1]
   const nextCursor = last && items.length === result.meta.limit
     ? { date: toDateStr(last.event_date), id: last.id }
@@ -262,9 +243,9 @@ export async function listPastGigs(db, tenantId, query = {}) {
   return { items, meta: { ...result.meta, nextCursor } }
 }
 
-export async function listGigsInRange(db, tenantId, query = {}) {
+export async function listGigsInRange(db, tenantId, query = {}, viewer = null) {
   return windowedCollection(query, async (range) =>
-    enrichGigsWithAvailability(db, tenantId, await listGigsInRangeRows(db, tenantId, range.from, range.to)))
+    enrichGigsWithAvailability(db, tenantId, await listGigsInRangeRows(db, tenantId, range.from, range.to), viewer))
 }
 
 export async function listGigMapData(db, tenantId, query = {}) {

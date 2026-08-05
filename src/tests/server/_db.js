@@ -57,7 +57,7 @@ export async function truncateAll() {
     TRUNCATE
       gig_tag_links, gig_tags, gig_contacts, gig_participants, gig_tasks, gigs,
       rehearsal_participants, rehearsals,
-      band_events, availability_slots,
+      band_event_participants, band_events, availability_slots,
       band_members,
       profile_links,
       email_templates, venue_contacts, venues, contact_notes, contacts, share_photos,

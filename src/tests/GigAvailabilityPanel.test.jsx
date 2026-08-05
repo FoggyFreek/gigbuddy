@@ -67,7 +67,7 @@ describe('GigAvailabilityPanel', () => {
     await waitFor(() => expect(screen.getByText(/band-wide.*tour break/i)).toBeInTheDocument(), { timeout: 1000 })
   })
 
-  it('hides sub/optional members unless explicitly available', async () => {
+  it('shows only lead members while creating a gig', async () => {
     getAvailabilityOn.mockResolvedValueOnce({
       bandWide: null,
       members: [
@@ -81,6 +81,6 @@ describe('GigAvailabilityPanel', () => {
     await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument(), { timeout: 1000 })
     expect(screen.queryByText('Dave')).not.toBeInTheDocument()
     expect(screen.queryByText('Eve')).not.toBeInTheDocument()
-    expect(screen.getByText('Frank')).toBeInTheDocument()
+    expect(screen.queryByText('Frank')).not.toBeInTheDocument()
   })
 })

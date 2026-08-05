@@ -36,13 +36,35 @@ const EVENTS = [
   },
 ]
 
+const WITH_AVAILABILITY = [
+  {
+    ...EVENTS[0],
+    members_availability: [
+      { member_id: 1, name: 'Ann Bell', position: 'lead', status: 'unavailable', reason: 'Holiday' },
+      { member_id: 2, name: 'Rik Dane', position: 'lead', status: 'available', reason: null },
+    ],
+  },
+]
+
 describe('BandEventsTable', () => {
   it('renders column headers', () => {
     wrap(<BandEventsTable events={[]} onRowClick={() => {}} />)
     expect(screen.getByText('Date')).toBeInTheDocument()
     expect(screen.getByText('Title')).toBeInTheDocument()
     expect(screen.getByText('Time')).toBeInTheDocument()
+    expect(screen.getByText('Band')).toBeInTheDocument()
     expect(screen.getByText('Location')).toBeInTheDocument()
+  })
+
+  it('renders member availability as initial circles', () => {
+    wrap(<BandEventsTable events={WITH_AVAILABILITY} onRowClick={() => {}} />)
+    expect(screen.getByText('AB')).toBeInTheDocument()
+    expect(screen.getByText('RD')).toBeInTheDocument()
+  })
+
+  it('renders nothing in the availability cell when the workspace has no roster', () => {
+    wrap(<BandEventsTable events={EVENTS} onRowClick={() => {}} />)
+    expect(screen.queryByText('AB')).not.toBeInTheDocument()
   })
 
   it('shows the upcoming empty state by default', () => {
@@ -116,6 +138,11 @@ describe('BandEventsTable', () => {
     it('shows empty state when no events', () => {
       wrap(<BandEventsTable events={[]} onRowClick={() => {}} />)
       expect(screen.getByText(/No upcoming events/i)).toBeInTheDocument()
+    })
+
+    it('shows member availability on the card too', () => {
+      wrap(<BandEventsTable events={WITH_AVAILABILITY} onRowClick={() => {}} />)
+      expect(screen.getByText('AB')).toBeInTheDocument()
     })
   })
 })

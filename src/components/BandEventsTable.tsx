@@ -19,11 +19,12 @@ import Typography from '@mui/material/Typography'
 import ShareIcon from '@mui/icons-material/Share'
 import Tooltip from '@mui/material/Tooltip'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import MemberAvatarStack from './MemberAvatarStack.tsx'
 import type { BandEvent, Id } from '../types/entities.ts'
 
 type BandEventWithTime = BandEvent & { start_time?: string; end_time?: string }
 
-const COLUMN_COUNT = 5
+const COLUMN_COUNT = 6
 
 function formatDate(val: string | undefined) {
   if (!val) return '—'
@@ -110,9 +111,12 @@ function EventCard({ event, active, onClick, onShare }: Readonly<BandEventRowPro
           <ShareIcon fontSize="small" />
         </IconButton>
       </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+      <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: 'text.secondary' }}>
         {[event.title, event.location].filter(Boolean).join(' · ') || '—'}
       </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+        <MemberAvatarStack members={event.members_availability} />
+      </Box>
     </Box>
   )
 }
@@ -132,6 +136,9 @@ function DesktopRow({ event, active, onClick, onShare }: Readonly<BandEventRowPr
       <TableCell>{formatDateRange(event.start_date, event.end_date)}</TableCell>
       <TableCell>{event.title}</TableCell>
       <TableCell>{formatTimeRange(event.start_time, event.end_time)}</TableCell>
+      <TableCell>
+        <MemberAvatarStack members={event.members_availability} />
+      </TableCell>
       <TableCell>{event.location || '—'}</TableCell>
       <TableCell align="right" padding="none" sx={{ pr: 1 }}>
         <Tooltip title={t($ => $.table.shareWhatsApp)}>
@@ -156,6 +163,7 @@ function DesktopHead() {
         <TableCell>{t($ => $.table.colDate)}</TableCell>
         <TableCell>{t($ => $.table.colTitle)}</TableCell>
         <TableCell>{t($ => $.table.colTime)}</TableCell>
+        <TableCell>{t($ => $.table.colAvailability)}</TableCell>
         <TableCell>{t($ => $.table.colLocation)}</TableCell>
         <TableCell />
       </TableRow>

@@ -37,8 +37,10 @@ export function projectSlot(slot, owner, viewer) {
     id: slot.id,
     source: SOURCE_SLOT,
     userId: owner.userId,
-    startDate: slot.start_date,
-    endDate: slot.end_date,
+    // snake_case like the band-local rows they are unioned with: the grid and
+    // the span aggregation index both sources on the same two keys.
+    start_date: slot.start_date,
+    end_date: slot.end_date,
     // Provenance, so the musician can see "set by X (Band Y)" and revert it.
     createdByUserId: slot.created_by_user_id ?? null,
     createdInTenantId: slot.created_in_tenant_id ?? null,
@@ -56,8 +58,8 @@ export function projectBooking(booking, owner, viewer) {
     source: SOURCE_BOOKING,
     bookingType: booking.source,
     userId: owner.userId,
-    startDate: booking.start_date,
-    endDate: booking.end_date,
+    start_date: booking.start_date,
+    end_date: booking.end_date,
     createdByUserId: null,
     createdInTenantId: booking.tenant_id,
   }

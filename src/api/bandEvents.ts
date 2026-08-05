@@ -24,3 +24,10 @@ export const createBandEvent = (body: Partial<BandEvent>) =>
 export const updateBandEvent = (id: Id, body: Partial<BandEvent>) =>
   api<BandEvent>(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteBandEvent = (id: Id) => api<void>(`/${id}`, { method: 'DELETE' })
+export const addBandEventParticipant = (id: Id, bandMemberId: Id) =>
+  api<BandEvent>(`/${id}/participants`, {
+    method: 'POST',
+    body: JSON.stringify({ band_member_id: bandMemberId }),
+  })
+export const removeBandEventParticipant = (id: Id, bandMemberId: Id) =>
+  api<void>(`/${id}/participants/${bandMemberId}`, { method: 'DELETE' })

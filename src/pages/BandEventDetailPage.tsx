@@ -14,12 +14,20 @@ import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import { deleteBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
-import type { BandEvent } from '../types/entities.ts'
+import {
+  addBandEventParticipant,
+  deleteBandEvent,
+  getBandEvent,
+  removeBandEventParticipant,
+  updateBandEvent,
+} from '../api/bandEvents.ts'
+import { listMembers } from '../api/bandMembers.ts'
+import type { BandEvent, Id, Member } from '../types/entities.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import BandEventFields from '../components/BandEventFields.tsx'
+import BandEventAvailabilitySection from '../components/BandEventAvailabilitySection.tsx'
 import PastEventAlert from '../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { usePermissions } from '../hooks/usePermissions.ts'
@@ -67,6 +75,21 @@ export default function BandEventDetailPage() {
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Derived server-side from the event's date span, so it is reloaded whenever
+  // those dates change. Absent in a personal workspace.
+  const [availability, setAvailability] = useState<Pick<BandEvent, 'members_availability' | 'availability_days'>>({})
+  const [members, setMembers] = useState<Member[]>([])
+
+  const setEventAvailability = useCallback((event: BandEvent) => {
+    setAvailability({
+      members_availability: event.members_availability,
+      availability_days: event.availability_days,
+    })
+  }, [])
+
+  const refreshAvailability = useCallback(async () => {
+    setEventAvailability(await getBandEvent(bandEventId))
+  }, [bandEventId, setEventAvailability])
 
   const saveFn = useCallback(
     async (patch: Partial<BandEventForm>) => { await updateBandEvent(bandEventId, patch) },
@@ -78,6 +101,10 @@ export default function BandEventDetailPage() {
     (patch) => {
       if (typeof outletCtx.onBandEventUpdate === 'function') {
         outletCtx.onBandEventUpdate(bandEventId, patch)
+      }
+      // The span moved, so the worst-day summary no longer describes it.
+      if ('start_date' in patch || 'end_date' in patch) {
+        refreshAvailability().catch(() => {})
       }
     }
   )
@@ -96,10 +123,15 @@ export default function BandEventDetailPage() {
           location: detail.location || '',
           notes: detail.notes || '',
         })
+        setEventAvailability(detail)
       })
       .catch(() => onBandEventDetailLoadError?.())
       .finally(() => setLoading(false))
-  }, [bandEventId, onBandEventDetailLoaded, onBandEventDetailLoadError])
+  }, [bandEventId, onBandEventDetailLoaded, onBandEventDetailLoadError, setEventAvailability])
+
+  useEffect(() => {
+    listMembers().then(setMembers).catch(() => {})
+  }, [])
 
   function handleChange(field: string, value: string | boolean | null) {
     if (!canWritePlanning) return
@@ -114,6 +146,19 @@ export default function BandEventDetailPage() {
     if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
     else navigate(-1)
   }
+
+  async function handleAddMember(memberId: Id) {
+    const event = await addBandEventParticipant(bandEventId, memberId)
+    setEventAvailability(event)
+  }
+
+  async function handleRemoveMember(memberId: Id) {
+    await removeBandEventParticipant(bandEventId, memberId)
+    await refreshAvailability()
+  }
+
+  const selectedMemberIds = new Set(availability.members_availability?.map((member) => member.member_id))
+  const candidateMembers = members.filter((member) => member.id !== undefined && !selectedMemberIds.has(member.id))
 
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
@@ -150,6 +195,22 @@ export default function BandEventDetailPage() {
             readOnly={!canWritePlanning}
           />
         </Grid>
+      )}
+
+      {!loading && availability.members_availability && (
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            {t($ => $.availability.title)}
+          </Typography>
+          <BandEventAvailabilitySection
+            members={availability.members_availability}
+            days={availability.availability_days}
+            candidateMembers={candidateMembers}
+            canWrite={canWritePlanning}
+            onAddMember={handleAddMember}
+            onRemoveMember={handleRemoveMember}
+          />
+        </Box>
       )}
 
       {canWritePlanning && (

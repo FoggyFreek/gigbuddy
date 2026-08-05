@@ -37,12 +37,7 @@ function normalizePercent(key, raw) {
 export const GIG_TASK_PATCH_FIELDS = ['title', 'done', 'due_date', 'assigned_to']
 
 export { parseId, parseSearchLimit }
-
-export function toDateStr(val) {
-  if (!val) return null
-  if (val instanceof Date) return val.toISOString().slice(0, 10)
-  return String(val).slice(0, 10)
-}
+export { toDateStr } from '../utils/dateOnly.js'
 
 export function venueDisplay(v) {
   if (!v) return ''

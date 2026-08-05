@@ -8,33 +8,82 @@ import {
   listPastBandEvents as listPastBandEventRows,
   listBandEventsInRange as listBandEventsInRangeRows,
   fetchBandEvent,
+  loadBandEventParticipantIds,
   insertBandEvent,
+  insertBandEventParticipant,
+  deleteBandEventParticipant,
   updateBandEventFields,
   deleteBandEvent as deleteBandEventRow,
 } from '../repositories/bandEventRepository.js'
 import { parseListCursor, parseLocalDate } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
 import { limitedCollection, windowedCollection } from './limitedCollectionService.js'
+import { loadAvailabilityMatrix } from './availabilityService.js'
+import { summarizeSpan } from '../domain/availabilitySpan.js'
+import { toDateStr } from '../utils/dateOnly.js'
+import { TENANT_CAPABILITIES, tenantKindSupports } from '../../shared/tenantCapabilities.js'
+import { listBandMembers, bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
+import { withTransaction } from '../db/withTransaction.js'
 
 const NOT_FOUND = notFound('Not found')
 const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
 const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and valid'
 
-function dateStr(value) {
-  return value?.toISOString?.().slice(0, 10) ?? String(value).slice(0, 10)
+// ---------- availability ----------
+
+// A band event runs over a span, so a member is summarised by their WORST day
+// in it (see server/domain/availabilitySpan.js). The whole batch shares ONE
+// matrix query covering min(start) .. max(end); the per-event slicing is JS.
+//
+// Personal workspaces have no band availability at all, so they get the rows
+// untouched rather than an empty column.
+async function enrichEventsWithAvailability(db, tenantId, scope, events) {
+  const { tenantKind, viewer = null, withDays = false } = scope
+  if (!events.length) return events
+  if (!tenantKindSupports(tenantKind, TENANT_CAPABILITIES.BAND_AVAILABILITY)) return events
+
+  const starts = events.map((e) => toDateStr(e.start_date)).filter(Boolean)
+  if (!starts.length) return events
+  const ends = events.map((e) => toDateStr(e.end_date) ?? toDateStr(e.start_date)).filter(Boolean)
+  const from = starts.reduce((a, b) => (a < b ? a : b))
+  const to = ends.reduce((a, b) => (a > b ? a : b))
+
+  const [matrix, participantsByEvent] = await Promise.all([
+    loadAvailabilityMatrix(db, tenantId, from, to, viewer),
+    loadBandEventParticipantIds(db, events.map((event) => event.id), tenantId),
+  ])
+
+  return events.map((event) => {
+    const start = toDateStr(event.start_date)
+    const { members, days } = summarizeSpan(matrix, start, toDateStr(event.end_date) ?? start)
+    const selected = new Set(participantsByEvent.get(event.id) ?? [])
+    return {
+      ...event,
+      members_availability: members.filter((member) => selected.has(member.member_id)),
+      // The per-day breakdown is detail-only — list feeds stay lean.
+      ...(withDays ? {
+        availability_days: days.map((day) => ({
+          ...day,
+          members: day.members.filter((member) => selected.has(member.member_id)),
+        })),
+      } : {}),
+    }
+  })
 }
 
-export async function listEvents(db, tenantId) {
-  return listBandEvents(db, tenantId)
+export async function listEvents(db, tenantId, scope = {}) {
+  return enrichEventsWithAvailability(db, tenantId, scope, await listBandEvents(db, tenantId))
 }
 
-export async function listUpcomingEvents(db, tenantId, query = {}) {
+export async function listUpcomingEvents(db, tenantId, query = {}, scope = {}) {
   const today = parseLocalDate(query.today)
   if (today === null) return badRequest(INVALID_TODAY)
-  return limitedCollection(query.limit, (limit) => listUpcomingBandEventRows(db, tenantId, today, limit))
+  const result = await limitedCollection(query.limit, (limit) => listUpcomingBandEventRows(db, tenantId, today, limit))
+  if (result.error) return result
+  return { ...result, items: await enrichEventsWithAvailability(db, tenantId, scope, result.items) }
 }
 
-export async function listPastEvents(db, tenantId, query = {}) {
+export async function listPastEvents(db, tenantId, query = {}, scope = {}) {
   const today = parseLocalDate(query.today)
   if (today === null) return badRequest(INVALID_TODAY)
   const parsedCursor = parseListCursor(query)
@@ -46,35 +95,66 @@ export async function listPastEvents(db, tenantId, query = {}) {
 
   const last = result.items[result.items.length - 1]
   const nextCursor = last && result.items.length === result.meta.limit
-    ? { date: dateStr(last.end_date), id: last.id }
+    ? { date: toDateStr(last.end_date), id: last.id }
     : null
-  return { items: result.items, meta: { ...result.meta, nextCursor } }
+  const items = await enrichEventsWithAvailability(db, tenantId, scope, result.items)
+  return { items, meta: { ...result.meta, nextCursor } }
 }
 
+// Deliberately NOT enriched: this feed drives the calendar grid, which renders
+// the availability slots itself from /api/availability.
 export async function listEventsInRange(db, tenantId, query = {}) {
   return windowedCollection(query, (range) => listBandEventsInRangeRows(db, tenantId, range.from, range.to))
 }
 
-export async function getEvent(db, tenantId, eventId) {
+export async function getEvent(db, tenantId, eventId, scope = {}) {
   const event = await fetchBandEvent(db, eventId, tenantId)
   if (!event) return NOT_FOUND
-  return { event }
+  const [enriched] = await enrichEventsWithAvailability(db, tenantId, { ...scope, withDays: true }, [event])
+  return { event: enriched }
 }
 
 export async function createEvent(db, tenantId, body) {
   const { title, start_date, end_date, start_time, end_time, location, notes } = body
   if (!title || !start_date) return badRequest('title and start_date are required')
 
-  const event = await insertBandEvent(db, tenantId, {
-    title,
-    start_date,
-    end_date: end_date || start_date,
-    start_time: start_time || null,
-    end_time: end_time || null,
-    location: location || null,
-    notes: notes || null,
-  })
-  return { event }
+  return withTransaction(async (client) => {
+    const event = await insertBandEvent(client, tenantId, {
+      title,
+      start_date,
+      end_date: end_date || start_date,
+      start_time: start_time || null,
+      end_time: end_time || null,
+      location: location || null,
+      notes: notes || null,
+    })
+    const members = await listBandMembers(client, tenantId)
+    for (const member of members.filter((candidate) => candidate.position === 'lead')) {
+      await insertBandEventParticipant(client, tenantId, event.id, member.id)
+    }
+    return { event }
+  }, { db })
+}
+
+export async function addParticipant(db, tenantId, eventId, memberId, scope = {}) {
+  if (!(await fetchBandEvent(db, eventId, tenantId))) return NOT_FOUND
+  if (!(await bandMemberExistsInTenant(db, memberId, tenantId))) return NOT_FOUND
+
+  try {
+    await insertBandEventParticipant(db, tenantId, eventId, memberId)
+  } catch (err) {
+    if (err.code === '23505') {
+      return { error: { status: 409, body: { error: 'Already a participant' } } }
+    }
+    throw err
+  }
+
+  return getEvent(db, tenantId, eventId, scope)
+}
+
+export async function removeParticipant(db, tenantId, eventId, memberId) {
+  const removed = await deleteBandEventParticipant(db, tenantId, eventId, memberId)
+  return removed ? {} : NOT_FOUND
 }
 
 export async function patchEvent(db, tenantId, eventId, body) {

@@ -4,26 +4,9 @@ import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { getAvailabilityOn } from '../api/availability.ts'
-import type { Id } from '../types/entities.ts'
+import type { AvailabilitySummary } from '../types/entities.ts'
 
-// Local types for availability data shape
-interface AvailabilityMember {
-  member_id?: Id
-  name?: string
-  position?: string
-  status?: string
-  reason?: string
-}
-
-interface BandWide {
-  status?: string
-  reason?: string
-}
-
-export interface AvailabilityData {
-  members: AvailabilityMember[]
-  bandWide?: BandWide
-}
+export type AvailabilityData = AvailabilitySummary
 
 interface GigAvailabilityPanelProps {
   eventDate?: string
@@ -40,7 +23,7 @@ export default function GigAvailabilityPanel({ eventDate, onDataLoad }: Readonly
     clearTimeout(timerRef.current ?? undefined)
     timerRef.current = setTimeout(() => {
       getAvailabilityOn(eventDate)
-        .then((d) => { const data = d as unknown as AvailabilityData; setData(data); onDataLoad?.(data) })
+        .then((data) => { setData(data); onDataLoad?.(data) })
         .catch(() => { setData(null); onDataLoad?.(null) })
     }, 300)
 
@@ -51,9 +34,7 @@ export default function GigAvailabilityPanel({ eventDate, onDataLoad }: Readonly
 
   if (!eventDate || !data?.members?.length) return null
 
-  const visible = data.members.filter((m) =>
-    m.position === 'lead' || !m.position || m.status === 'available'
-  )
+  const visible = data.members.filter((m) => m.position === 'lead')
 
   if (!visible.length) return null
 

@@ -13,6 +13,14 @@ export const REHEARSAL_STATUS_COLORS: Record<string, string> = {
 
 export const BAND_EVENT_COLOR = 'warning.main'
 
+// Per-member availability, as rendered anywhere it is summarised: 'default'
+// means nothing was recorded, which is deliberately neutral rather than green.
+export const AVAILABILITY_STATUS_COLORS: Record<string, string> = {
+  available: 'success.main',
+  unavailable: 'error.main',
+  default: 'grey.500',
+}
+
 export function toIsoDate(date: Date): string {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')

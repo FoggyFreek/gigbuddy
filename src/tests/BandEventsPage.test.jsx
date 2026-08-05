@@ -22,6 +22,12 @@ vi.mock('../api/bandEvents.ts', () => ({
   createBandEvent: vi.fn().mockResolvedValue({ id: 99 }),
   updateBandEvent: vi.fn().mockResolvedValue({}),
   deleteBandEvent: vi.fn().mockResolvedValue({}),
+  addBandEventParticipant: vi.fn().mockResolvedValue({}),
+  removeBandEventParticipant: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../api/bandMembers.ts', () => ({
+  listMembers: vi.fn().mockResolvedValue([]),
 }))
 
 import BandEventsPage from '../pages/BandEventsPage.tsx'

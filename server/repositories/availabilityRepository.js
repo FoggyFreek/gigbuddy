@@ -13,17 +13,6 @@ export async function listSlotsInRange(executor, tenantId, from, to) {
   return rows
 }
 
-// Slots covering a single date.
-export async function listSlotsOnDate(executor, tenantId, date) {
-  const { rows } = await executor.query(
-    `SELECT * FROM availability_slots
-     WHERE tenant_id = $1 AND start_date <= $2 AND end_date >= $2
-     ORDER BY created_at ASC`,
-    [tenantId, date],
-  )
-  return rows
-}
-
 export async function listBandMembers(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM band_members WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',

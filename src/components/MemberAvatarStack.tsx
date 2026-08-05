@@ -3,6 +3,7 @@ import Box from '@mui/material/Box'
 import Tooltip from '@mui/material/Tooltip'
 import { darken, lighten } from '@mui/material/styles'
 import type { Theme } from '@mui/material/styles'
+import type { MemberAvailability } from '../types/entities.ts'
 
 function getInitials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
@@ -13,17 +14,8 @@ const STATUS_SX: Record<string, object> = {
   unavailable: { bgcolor: 'error.dark', opacity: 0.6 },
 }
 
-interface AvatarMember {
-  member_id?: number | string
-  name?: string
-  status?: string
-  position?: string
-  reason?: string
-  color?: string | null
-}
-
 interface MemberAvatarStackProps {
-  members?: AvatarMember[]
+  members?: MemberAvailability[]
 }
 
 export default function MemberAvatarStack({ members }: Readonly<MemberAvatarStackProps>) {
