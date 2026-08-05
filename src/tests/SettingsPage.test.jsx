@@ -56,8 +56,8 @@ const lockedEntitlements = {
   limits: { storage_mb: 100, members: 5, bands: 1 },
 }
 
-function wrap(route, { role = 'tenant_admin', entitlements = null } = {}) {
-  const user = { id: 1, isSuperAdmin: false, activeTenantRole: role, entitlements }
+function wrap(route, { role = 'tenant_admin', entitlements = null, activeTenantKind = 'band' } = {}) {
+  const user = { id: 1, isSuperAdmin: false, activeTenantRole: role, activeTenantKind, entitlements }
   return render(
     <AuthContext.Provider value={{ user, logout: vi.fn() }}>
       <ThemeProvider theme={theme}>
@@ -123,6 +123,12 @@ describe('SettingsPage — nav gating', () => {
     }
     expect(screen.queryByText('Band settings')).not.toBeInTheDocument()
     expect(screen.queryByText('Accent color')).not.toBeInTheDocument()
+  })
+
+  it('replaces roster management with the external-bands section in a personal workspace', async () => {
+    wrap('/settings', { activeTenantKind: 'personal' })
+    expect(await screen.findAllByText('Bands')).not.toHaveLength(0)
+    expect(screen.queryByText('Members and invites')).not.toBeInTheDocument()
   })
 })
 

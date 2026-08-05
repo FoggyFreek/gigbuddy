@@ -21,6 +21,8 @@ import { getBandsintownArtist } from '../../api/bandsintown.ts'
 import type { BandsintownArtistSocials } from '../../api/bandsintown.ts'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import { useProfile } from '../../contexts/profileContext.ts'
+import { useTenantKind } from '../../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../../auth/tenantCapabilities.ts'
 
 interface CopyButtonProps {
   copied?: boolean
@@ -190,7 +192,9 @@ interface ProfileSocialsTabProps {
 export default function ProfileSocialsTab({ form, editing, canEdit = true, onToggleEditing, onChange, copiedField, onCopy }: Readonly<ProfileSocialsTabProps>) {
   const { t } = useTranslation('common')
   const { isIntegrationConfigured } = useProfile()
-  const bandsintownConfigured = isIntegrationConfigured('bandsintown')
+  const { supports } = useTenantKind()
+  const hasBandPromotion = supports(TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS)
+  const bandsintownConfigured = hasBandPromotion && isIntegrationConfigured('bandsintown')
   return (
     <Box sx={{ p: 3 }}>
       {editing && bandsintownConfigured && (
@@ -198,7 +202,7 @@ export default function ProfileSocialsTab({ form, editing, canEdit = true, onTog
       )}
 
       <Grid container spacing={2}>
-        {SOCIALS.map((social) => {
+        {SOCIALS.filter((social) => !social.capability || supports(social.capability)).map((social) => {
           const handle = form[social.field as keyof ProfileForm] as string
           const copied = copiedField === social.field
           const onCopyThis = () => onCopy(social.field, `https://${social.prefix}${handle}`)

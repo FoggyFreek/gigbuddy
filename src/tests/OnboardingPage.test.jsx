@@ -161,14 +161,11 @@ describe('OnboardingPage — welcome step', () => {
     )
   })
 
-  it('shows an invite-only message when new tenant onboarding is disabled', async () => {
+  it('redirects to invite redemption when new tenant onboarding is disabled', async () => {
     getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: false })
     wrap()
 
-    expect(await screen.findByText(/new tenant onboarding is currently disabled/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /redeem your invite code/i })).toHaveAttribute(
-      'href', '/redeem-invite',
-    )
+    expect(await screen.findByText('redeem page')).toBeInTheDocument()
     expect(screen.queryByText('Silver')).not.toBeInTheDocument()
   })
 })
@@ -242,15 +239,12 @@ describe('OnboardingPage — what are you setting up?', () => {
     expect(await screen.findByLabelText('Band name')).toBeInTheDocument()
   })
 
-  it('offers neither when onboarding is disabled, and points at the invite page', async () => {
+  it('redirects before offering workspace kinds when onboarding is disabled', async () => {
     getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: false })
     wrap()
 
-    expect(await screen.findByText(/new tenant onboarding is currently disabled/i)).toBeInTheDocument()
+    expect(await screen.findByText('redeem page')).toBeInTheDocument()
     expect(screen.queryByRole('radio')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /redeem your invite code/i })).toHaveAttribute(
-      'href', '/redeem-invite',
-    )
   })
 
   it('creates a personal workspace when that kind is chosen', async () => {

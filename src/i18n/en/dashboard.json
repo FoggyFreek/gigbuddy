@@ -87,6 +87,19 @@
       "expenses": "Expenses",
       "result": "Result"
     },
-    "loadError": "Could not load your hub."
+    "loadError": "Could not load your hub.",
+    "bands": {
+      "title": "My bands",
+      "add": "Add a band",
+      "addTitle": "Add a band",
+      "addHelp": "For a band that isn't on gigbuddy. It's kept in your own address book — no separate workspace, and it doesn't count toward your band limit.",
+      "nameLabel": "Band name",
+      "cancel": "Cancel",
+      "save": "Add",
+      "empty": "You're not in any band yet.",
+      "onGigbuddy": "On gigbuddy",
+      "external": "Not on gigbuddy",
+      "addFailed": "Could not add that band."
+    }
   }
 }

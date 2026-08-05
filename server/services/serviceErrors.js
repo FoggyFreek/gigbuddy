@@ -22,8 +22,8 @@ export function conflict(message, details) {
 
 // A surface reached in a tenant of the wrong kind — a band roster in a
 // musician's personal workspace, say. 403, not 404: the caller is a member and
-// knows the kind, so nothing is concealed. Shared with the requireTenantKind
-// middleware so route gate and service guard speak one code.
+// knows the kind, so nothing is concealed. Route gates and service guards use
+// this same structured response.
 export function tenantKindNotSupported(kind) {
   return forbidden('This feature is not available in this workspace', {
     code: 'tenant_kind_not_supported',

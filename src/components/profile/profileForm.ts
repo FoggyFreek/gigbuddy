@@ -5,12 +5,14 @@ import YouTubeIcon from '@mui/icons-material/YouTube'
 import BandsintownIcon from '../icons/BandsintownIcon.tsx'
 import SpotifyIcon from '../icons/SpotifyIcon.tsx'
 import TikTokIcon from '../icons/TikTokIcon.tsx'
+import { TENANT_CAPABILITIES, type TenantCapability } from '../../auth/tenantCapabilities.ts'
 
 export interface SocialEntry {
   field: string
   label: string
   Icon: ComponentType<Record<string, unknown>>
   prefix: string
+  capability?: TenantCapability
 }
 
 export const SOCIALS: SocialEntry[] = [
@@ -19,8 +21,8 @@ export const SOCIALS: SocialEntry[] = [
   { field: 'tiktok_handle',           label: 'TikTok',                  Icon: TikTokIcon,       prefix: 'tiktok.com/@' },
   { field: 'youtube_handle',          label: 'YouTube',                 Icon: YouTubeIcon,      prefix: 'youtube.com/' },
   { field: 'spotify_handle',          label: 'Spotify',                 Icon: SpotifyIcon,      prefix: 'open.spotify.com/artist/' },
-  { field: 'bandsintown_artist_name', label: 'Bandsintown artist name', Icon: BandsintownIcon,  prefix: '' },
-  { field: 'bandsintown_artist_id',   label: 'Bandsintown artist ID',   Icon: BandsintownIcon,  prefix: 'bandsintown.com/a/' },
+  { field: 'bandsintown_artist_name', label: 'Bandsintown artist name', Icon: BandsintownIcon,  prefix: '', capability: TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS },
+  { field: 'bandsintown_artist_id',   label: 'Bandsintown artist ID',   Icon: BandsintownIcon,  prefix: 'bandsintown.com/a/', capability: TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS },
 ]
 
 /** The editable profile form shape. */

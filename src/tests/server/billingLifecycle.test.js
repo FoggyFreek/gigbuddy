@@ -5,7 +5,7 @@ import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 import { FakeProvider } from './_fakeProvider.js'
 
 let pool, runMigrations, truncateAll, seedTwoTenants
-let billingSvc, ingestion, providerFactory
+let billingSvc, ingestion, providerFactory, entitlementSvc
 let seed, fake
 
 beforeAll(async () => {
@@ -17,6 +17,7 @@ beforeAll(async () => {
   billingSvc = await import('../../../server/services/billingService.js')
   ingestion = await import('../../../server/services/paymentIngestionService.js')
   providerFactory = await import('../../../server/billing/paymentProvider/index.js')
+  entitlementSvc = await import('../../../server/services/entitlementService.js')
   await runMigrations()
 })
 
@@ -28,8 +29,8 @@ beforeEach(async () => {
   // Give silver + gold real prices so they are subscribable.
   await pool.query("UPDATE subscription_plans SET monthly_price_cents = 999, yearly_price_cents = 9999 WHERE slug = 'silver'")
   await pool.query("UPDATE subscription_plans SET monthly_price_cents = 1999, yearly_price_cents = 19999 WHERE slug = 'gold'")
-  const entMod = await import('../../../server/services/entitlementService.js')
-  entMod.clearEntitlementCaches()
+  await pool.query("UPDATE subscription_plans SET monthly_price_cents = 1499, yearly_price_cents = 14999 WHERE slug = 'artist_gold'")
+  entitlementSvc.clearEntitlementCaches()
   fake = new FakeProvider()
   providerFactory.setPaymentProviderForTests(fake)
 })
@@ -105,6 +106,32 @@ describe('subscribe', () => {
     const res = await billingSvc.subscribe(pool, userA(), { planId: await planId('gold'), interval: 'month' })
     expect(res.error.status).toBe(409)
     expect(res.error.body.code).toBe('already_subscribed')
+  })
+
+  it('rejects an initial artist subscription while the user owns an active band', async () => {
+    await pool.query('UPDATE tenants SET owner_user_id = $1 WHERE id = $2', [seed.userA.id, seed.tenantA.id])
+
+    const res = await billingSvc.subscribe(pool, userA(), {
+      planId: await planId('artist_gold'), interval: 'month',
+    })
+    expect(res.error.status).toBe(409)
+    expect(res.error.body.code).toBe('over_target_limit')
+    expect(res.error.body.blockers).toContainEqual(expect.objectContaining({
+      limit: 'bands', current: 1, target: 0,
+    }))
+    const { rows: [count] } = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM subscriptions WHERE user_id = $1', [seed.userA.id],
+    )
+    expect(count.count).toBe(0)
+  })
+
+  it('binds an artist checkout to bands: 0 before payment settles', async () => {
+    const res = await billingSvc.subscribe(pool, userA(), {
+      planId: await planId('artist_gold'), interval: 'month',
+    })
+    expect(res.error).toBeUndefined()
+    expect(await entitlementSvc.resolveUserLimits(pool, seed.userA.id))
+      .toMatchObject({ bands: 0 })
   })
 
   it('resumes an interrupted signup: re-subscribing the same plan recovers the checkout', async () => {

@@ -45,7 +45,7 @@ import BandsSection from '../components/settings/BandsSection.tsx'
 import DiscoverabilitySection from '../components/settings/DiscoverabilitySection.tsx'
 import InvitesSection from '../components/InvitesSection.tsx'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
-import type { TenantKind } from '../utils/businessRegistry.ts'
+import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabilities.ts'
 
 // A single settings surface that merges the former per-user account settings,
 // members management, and tenant (band) settings. Desktop uses a master-detail
@@ -71,8 +71,8 @@ interface NavItemDef {
   icon: SvgIconComponent
   // Required tenant permission; undefined = available to every member.
   permission?: Permission
-  // Tenant kinds this section exists for; undefined = kind-neutral.
-  kinds?: readonly TenantKind[]
+  // Named kind capability; undefined = kind-neutral.
+  capability?: TenantCapability
 }
 
 const ACCOUNT_ITEMS: NavItemDef[] = [
@@ -84,9 +84,9 @@ const ACCOUNT_ITEMS: NavItemDef[] = [
 const BAND_ITEMS: NavItemDef[] = [
   { id: 'accent', labelKey: 'accent', icon: PaletteOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
   // A workspace of one has no roster to manage and nobody to invite into it.
-  { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE, kinds: ['band'] },
+  { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE, capability: TENANT_CAPABILITIES.BAND_MEMBERSHIP_ADMIN },
   // The personal counterpart: the bands I'm in, not the people in this band.
-  { id: 'bands', labelKey: 'bands', icon: GroupIcon, kinds: ['personal'] },
+  { id: 'bands', labelKey: 'bands', icon: GroupIcon, capability: TENANT_CAPABILITIES.EXTERNAL_ENSEMBLES },
   { id: 'storage', labelKey: 'storage', icon: StorageIcon, permission: PERMISSIONS.TENANT_MANAGE },
   { id: 'integrations', labelKey: 'integrations', icon: ExtensionOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
 ]
@@ -108,10 +108,10 @@ export default function SettingsPage() {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const { can, isSuperAdmin } = usePermissions()
-  const { allowsKind, isPersonal } = useTenantKind()
+  const { supports, isPersonal } = useTenantKind()
 
   const visible = (items: NavItemDef[]) =>
-    items.filter((i) => (!i.permission || can(i.permission)) && allowsKind(i.kinds))
+    items.filter((i) => (!i.permission || can(i.permission)) && (!i.capability || supports(i.capability)))
   const bandItems = visible(BAND_ITEMS)
   const financeItems = visible(FINANCE_ITEMS)
   const accessible = [...ACCOUNT_ITEMS, ...bandItems, ...financeItems]

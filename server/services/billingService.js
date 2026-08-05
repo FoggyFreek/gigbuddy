@@ -106,25 +106,33 @@ export async function subscribe(db, user, body) {
   if (price === null) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
   if (price <= 0) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
 
-  const existing = await fetchLiveSubscriptionForUser(db, user.id)
-  if (existing) {
-    // An interrupted signup for THIS exact plan/interval left a pending_mandate
-    // row: the mandate checkout was created but the browser never returned (lost
-    // response), or the provider call errored before we could hand back a URL.
-    // Resume it instead of 409ing the user into the 24h stale-signup cleanup —
-    // createMandateCheckout is idempotent (it recovers the URL from the still-
-    // open payment, or re-issues one after a failed attempt). A DIFFERENT plan
-    // is a real conflict (one live subscription per user).
-    if (existing.status === 'pending_mandate' && existing.plan_id === planId && existing.billing_interval === interval) {
-      return startMandateCheckout(db, existing, user, redirect, existing.trial_ends_at !== null)
+  const targetEntitlements = mergeEntitlements(plan.entitlements, null)
+  const outcome = await withTransaction(async (client) => {
+    const existing = await fetchLiveSubscriptionForUpdate(client, user.id)
+    if (existing) {
+      if (existing.status === 'pending_mandate'
+        && existing.plan_id === planId
+        && existing.billing_interval === interval) {
+        return { sub: existing, trialEligible: existing.trial_ends_at !== null }
+      }
+      abortTransaction(conflict('You already have an active subscription', { code: 'already_subscribed' }))
     }
-    return conflict('You already have an active subscription', { code: 'already_subscribed' })
-  }
 
-  const trialEligible = !(await hasUsedTrial(db, user.id))
-  let sub
-  try {
-    sub = await insertSubscription(db, {
+    // Initial subscription is also a move to a target capacity. Check it under
+    // the tenant-creation lock so an artist plan (`bands: 0`) cannot coexist
+    // with an active owned band, including under concurrent requests.
+    const blockers = await computeDowngradeBlockers(
+      client, user.id, targetEntitlements.limits, { lock: true },
+    )
+    if (blockers.length > 0) {
+      abortTransaction(conflict('Current usage exceeds the target plan limits', {
+        code: 'over_target_limit',
+        blockers,
+      }))
+    }
+
+    const trialEligible = !(await hasUsedTrial(client, user.id))
+    const sub = await insertSubscription(client, {
       user_id: user.id,
       plan_id: planId,
       status: 'pending_mandate',
@@ -132,12 +140,15 @@ export async function subscribe(db, user, body) {
       price_cents: price,
       trial_ends_at: trialEligible ? trialEndFrom() : null,
     })
-  } catch (err) {
-    if (err.code === '23505') return conflict('You already have an active subscription', { code: 'already_subscribed' })
-    throw err
-  }
-
-  return startMandateCheckout(db, sub, user, redirect, trialEligible)
+    return { sub, trialEligible }
+  }, {
+    db,
+    mapError: (err) => (err.code === '23505'
+      ? conflict('You already have an active subscription', { code: 'already_subscribed' })
+      : null),
+  })
+  if (outcome.error) return outcome
+  return startMandateCheckout(db, outcome.sub, user, redirect, outcome.trialEligible)
 }
 
 // Create (or resume) the €0.01 mandate checkout for a committed pending_mandate

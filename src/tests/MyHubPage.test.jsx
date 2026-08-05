@@ -6,8 +6,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 import MyHubPage from '../pages/MyHubPage.tsx'
-import { listMyAgenda, listMyPastAgenda, listMyEarnings } from '../api/me.ts'
+import { listMyAgenda, listMyBands, listMyPastAgenda, listMyEarnings } from '../api/me.ts'
+import { createContact } from '../api/contacts.ts'
 
+vi.mock('../api/contacts.ts', () => ({ createContact: vi.fn() }))
 vi.mock('../api/me.ts', () => ({
   listMyBands: vi.fn(),
   listMyAgenda: vi.fn(),
@@ -15,7 +17,12 @@ vi.mock('../api/me.ts', () => ({
   listMyEarnings: vi.fn(),
 }))
 
-const USER = { id: 1, name: 'Alpha User', activeTenantId: 1 }
+const USER = {
+  id: 1,
+  name: 'Alpha User',
+  activeTenantId: 1,
+  memberships: [{ tenantId: 7, kind: 'personal', status: 'approved' }],
+}
 
 let switchTenant
 
@@ -54,6 +61,26 @@ beforeEach(() => {
   listMyAgenda.mockResolvedValue({ items: [], meta: { from: '', to: '', returned: 0 } })
   listMyPastAgenda.mockResolvedValue({ items: [], meta: { limit: 20, returned: 0, nextCursor: null } })
   listMyEarnings.mockResolvedValue({ items: [], meta: { from: '', to: '', returned: 0 } })
+  listMyBands.mockResolvedValue({ items: [] })
+  createContact.mockResolvedValue({ id: 12, name: 'Side Project', category: 'ensemble' })
+})
+
+describe('MyHubPage â€” external bands', () => {
+  it('switches to the personal workspace before creating the ensemble contact', async () => {
+    const user = userEvent.setup()
+    wrap()
+
+    await user.click(await screen.findByRole('button', { name: 'Add a band' }))
+    await user.type(screen.getByLabelText('Band name'), 'Side Project')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(createContact).toHaveBeenCalledWith({
+      name: 'Side Project', category: 'ensemble',
+    }))
+    expect(switchTenant.mock.invocationCallOrder[0])
+      .toBeLessThan(createContact.mock.invocationCallOrder[0])
+  })
 })
 
 describe('MyHubPage — agenda', () => {

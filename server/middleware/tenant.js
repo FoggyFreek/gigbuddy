@@ -3,6 +3,7 @@ import { loadUser } from './auth.js'
 import { setContextField } from '../utils/requestContextStore.js'
 import { tenantKindNotSupported } from '../services/serviceErrors.js'
 import { listApprovedMemberTenants } from '../repositories/tenantRepository.js'
+import { tenantKindSupports } from '../../shared/tenantCapabilities.js'
 
 async function fetchMembership(userId, tenantId) {
   const { rows } = await pool.query(
@@ -80,18 +81,35 @@ export async function resolveMemberTenantIds(req, res, next) {
   })
 }
 
-// Kind gate for surfaces only one sort of tenant has — a band's roster,
-// invites, setlists, merch and promotion have no meaning in a musician's
-// personal workspace. Mount after resolveTenantId, which sets req.tenantKind.
-//
 // 403, not 404: the caller is an approved member of this tenant and knows its
 // kind, so there is nothing to conceal — the structured code lets the SPA show
 // "not available here" instead of a generic error.
-export function requireTenantKind(...kinds) {
+// Authoritative applicability gate for kind-specific surfaces. Prefer this to
+// open-coded kind comparisons: the shared capability registry also drives the
+// frontend, so visibility and backend enforcement cannot drift.
+export function requireTenantCapability(capability) {
   return (req, res, next) => {
-    if (kinds.includes(req.tenantKind)) return next()
+    if (tenantKindSupports(req.tenantKind, capability)) return next()
     const { status, body } = tenantKindNotSupported(req.tenantKind).error
     res.status(status).json(body)
+  }
+}
+
+// Field-level variant for shared endpoints whose main resource applies to both
+// kinds but a small set of fields belongs to one capability.
+export function requireTenantCapabilityForBodyFields(capability, fields) {
+  return requireTenantCapabilityWhen(
+    capability,
+    (req) => fields.some((field) => Object.hasOwn(req.body ?? {}, field)),
+  )
+}
+
+// Predicate variant for shared resources whose applicability depends on a
+// value rather than merely the presence of a field.
+export function requireTenantCapabilityWhen(capability, applies) {
+  return (req, res, next) => {
+    if (!applies(req)) return next()
+    return requireTenantCapability(capability)(req, res, next)
   }
 }
 

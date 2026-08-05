@@ -27,6 +27,7 @@ import {
 import { listRehearsalsInRangeForMemberTenants } from '../repositories/rehearsalRepository.js'
 import { listBandEventsInRangeForMemberTenants } from '../repositories/bandEventRepository.js'
 import { resultTotalsByTenant } from '../repositories/ledgerRepository.js'
+import { listEnsembleContactsForTenants } from '../repositories/contactRepository.js'
 
 const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
 const INVALID_CURSOR = 'cursorDate and cursorId must be supplied together and be valid'
@@ -62,20 +63,44 @@ function agendaItem(type, row, date, title, byId) {
   }
 }
 
+// One list mixing the two kinds of band a musician plays in: real gigbuddy
+// tenants they're a member of, and external ensembles that exist only as
+// contacts in their own workspace. `source` is what tells them apart — an
+// external band has no tenant, no members and no data of its own; only the
+// musician's side of it exists.
 export async function listMyBands(db, memberTenants) {
-  // Phase 4 unions external ensembles (organisation contacts in the personal
-  // workspace) here; `source` is what tells the two apart.
-  return {
-    items: memberTenants.map((t) => ({
-      source: 'tenant',
-      tenantId: t.tenantId,
-      displayName: t.displayName,
-      slug: t.slug,
-      kind: t.kind,
-      role: t.role,
-      logoPath: t.logoPath,
-    })),
-  }
+  const tenants = memberTenants.filter((t) => t.kind === 'band').map((t) => ({
+    source: 'tenant',
+    tenantId: t.tenantId,
+    contactId: null,
+    displayName: t.displayName,
+    slug: t.slug,
+    kind: t.kind,
+    role: t.role,
+    logoPath: t.logoPath,
+  }))
+
+  // Ensembles are only ever kept in the musician's own workspace — a band's
+  // address book is the band's, not a roster of the bands its members play in.
+  const personalTenantIds = memberTenants
+    .filter((t) => t.kind === 'personal')
+    .map((t) => t.tenantId)
+
+  const ensembles = personalTenantIds.length === 0
+    ? []
+    : (await listEnsembleContactsForTenants(db, personalTenantIds)).map((c) => ({
+      source: 'contact',
+      // The workspace the contact lives in, so gigs for it can be found.
+      tenantId: c.tenant_id,
+      contactId: c.id,
+      displayName: c.name,
+      slug: null,
+      kind: null,
+      role: null,
+      logoPath: null,
+    }))
+
+  return { items: [...tenants, ...ensembles] }
 }
 
 export async function listMyAgenda(db, memberTenants, query = {}) {

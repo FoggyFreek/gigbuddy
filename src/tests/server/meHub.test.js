@@ -106,7 +106,7 @@ describe('GET /api/me/bands', () => {
     expect(res.body.items).toEqual([])
   })
 
-  it('includes the caller\'s personal workspace alongside their bands', async () => {
+  it('does not present the caller\'s personal workspace as one of their bands', async () => {
     const { rows: [ws] } = await pool.query(
       `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
        VALUES ('artist-ws', 'Alpha User', 'Alpha User', 'personal', $1, $1) RETURNING *`,
@@ -115,8 +115,9 @@ describe('GET /api/me/bands', () => {
     await addMembership(seed.userA.id, ws.id, { role: 'tenant_admin' })
 
     const res = await asUser(seed.userA.id)(request(app).get('/api/me/bands')).expect(200)
-    const kinds = Object.fromEntries(res.body.items.map((b) => [b.tenantId, b.kind]))
-    expect(kinds).toEqual({ [seed.tenantA.id]: 'band', [ws.id]: 'personal' })
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.items[0]).toMatchObject({ tenantId: seed.tenantA.id, kind: 'band' })
+    expect(res.body.items.map((b) => b.tenantId)).not.toContain(ws.id)
   })
 })
 

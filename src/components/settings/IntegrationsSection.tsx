@@ -23,6 +23,7 @@ import type { IntegrationSecretStatus } from '../../api/profile.ts'
 import Divider from '@mui/material/Divider'
 import { useProfile } from '../../contexts/profileContext.ts'
 import type { IntegrationName } from '../../utils/integrations.ts'
+import { TENANT_CAPABILITIES } from '../../auth/tenantCapabilities.ts'
 
 // Shopify client ids aren't secret but are long; collapse the middle so the
 // display value doesn't eat the card's horizontal space.
@@ -39,7 +40,8 @@ export default function IntegrationsSection() {
   // Shopify backs the band's merch shop and Bandsintown lists a band's tour
   // dates — neither has a personal-workspace counterpart. Mollie does: a solo
   // artist takes payment on their own invoices exactly like a band.
-  const { isPersonal } = useTenantKind()
+  const { supports } = useTenantKind()
+  const hasBandPromotion = supports(TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS)
 
   return (
      <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3 }}>
@@ -51,7 +53,7 @@ export default function IntegrationsSection() {
       </Stack>
       <ResendKeySection />
       <MollieKeySection />
-      {!isPersonal && (
+      {hasBandPromotion && (
         <>
           <ShopifyKeySection />
           <BandsintownKeySection />

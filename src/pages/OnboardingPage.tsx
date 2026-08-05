@@ -307,7 +307,13 @@ export default function OnboardingPage() {
     if (checkoutReturn || loadedRef.current) return
     loadedRef.current = true
     getTenantOnboardingStatus()
-      .then((status) => setTenantOnboardingEnabled(status.tenantOnboardingEnabled))
+      .then((status) => {
+        if (!status.tenantOnboardingEnabled && onboardingTenantId === null) {
+          navigate('/redeem-invite', { replace: true })
+          return
+        }
+        setTenantOnboardingEnabled(status.tenantOnboardingEnabled)
+      })
       .catch(() => setLoadError(true))
     getBillingState()
       .then((state) => setPlans(state.plans.filter((p) => p.is_active)))
@@ -391,13 +397,12 @@ export default function OnboardingPage() {
         return null
       }
       if (code === 'tenant_onboarding_disabled') {
-        setTenantOnboardingEnabled(false)
-        setActiveStep(0)
+        navigate('/redeem-invite', { replace: true })
         return null
       }
       throw err
     }
-  }, [onboardingTenant, kind, bandName, countryCode])
+  }, [onboardingTenant, kind, bandName, countryCode, navigate])
 
   const handleConfirm = useCallback(async () => {
     if (!selectedPlan) return

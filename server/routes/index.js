@@ -57,7 +57,7 @@ import { loadUser, requireApproved, requireCurrentTerms } from '../middleware/au
 import {
   resolveTenantId,
   requireTenantMember,
-  requireTenantKind,
+  requireTenantCapability,
   resolveMemberTenantIds,
   requireSuperAdmin,
 } from '../middleware/tenant.js'
@@ -65,6 +65,7 @@ import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireEntitlement, requireEntitlementForWrites } from '../middleware/entitlements.js'
 import { FEATURES } from '../auth/entitlements.js'
+import { TENANT_CAPABILITIES } from '../../shared/tenantCapabilities.js'
 import { csrf } from '../middleware/csrf.js'
 
 const router = Router()
@@ -187,11 +188,14 @@ const integrations = requireEntitlement(FEATURES.INTEGRATIONS)
 // the matrix stays the single source of truth (see auth/permissions.js).
 const membersManage = [...tenantMember, requirePermission(PERMISSIONS.MEMBERS_MANAGE)]
 const tenantManage = [...tenantMember, requirePermission(PERMISSIONS.TENANT_MANAGE)]
-// Surfaces that only exist for a band. A personal workspace is a single
-// musician: it has no roster to invite people onto, no setlists, no merch and
-// no band promotion. The frontend hides these (NAV_GROUPS `kinds`); this is the
-// authoritative gate.
-const bandOnly = requireTenantKind('band')
+// Kind-specific surfaces use the shared capability registry. These backend
+// gates are authoritative; the frontend consumes the same registry for UX.
+const bandMembershipAdmin = requireTenantCapability(TENANT_CAPABILITIES.BAND_MEMBERSHIP_ADMIN)
+const bandRoster = requireTenantCapability(TENANT_CAPABILITIES.BAND_ROSTER)
+const bandAvailability = requireTenantCapability(TENANT_CAPABILITIES.BAND_AVAILABILITY)
+const setlists = requireTenantCapability(TENANT_CAPABILITIES.SETLISTS)
+const merch = requireTenantCapability(TENANT_CAPABILITIES.MERCH)
+const bandPromotion = requireTenantCapability(TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS)
 
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 // Self-service owned tenants: user-level (no active-tenant resolution).
@@ -211,17 +215,17 @@ router.use('/admin/plans', superAdmin, adminPlansRouter)
 router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
 router.use('/admin/storage', superAdmin, adminStorageRouter)
-router.use('/invites', membersManage, bandOnly, invitesAdminRouter)
-router.use('/users', membersManage, bandOnly, usersRouter)
+router.use('/invites', membersManage, bandMembershipAdmin, invitesAdminRouter)
+router.use('/users', membersManage, bandMembershipAdmin, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)
 router.use('/gigs', tenantMember, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
 router.use('/places', tenantMember, placeSearchLimiter, placesRouter)
-router.use('/bandsintown', tenantMember, bandOnly, integrations, bandsintownRouter)
+router.use('/bandsintown', tenantMember, bandPromotion, integrations, bandsintownRouter)
 router.use('/tasks', tenantMember, tasksRouter)
 router.use('/profile', tenantMember, profileRouter)
-router.use('/band-members', tenantMember, bandOnly, bandMembersRouter)
-router.use('/availability', tenantMember, availabilityRouter)
+router.use('/band-members', tenantMember, bandRoster, bandMembersRouter)
+router.use('/availability', tenantMember, bandAvailability, availabilityRouter)
 router.use('/rehearsals', tenantMember, rehearsalsRouter)
 router.use('/achievements', tenantMember, achievementsRouter)
 router.use('/band-events', tenantMember, bandEventsRouter)
@@ -229,14 +233,14 @@ router.use('/email-templates', tenantMember, emailTemplatesRouter)
 router.use('/venues', tenantMember, venuesRouter)
 router.use('/contacts', tenantMember, contactsRouter)
 router.use('/songs', tenantMember, songsRouter)
-router.use('/setlists', tenantMember, bandOnly, setlistsRouter)
+router.use('/setlists', tenantMember, setlists, setlistsRouter)
 router.use('/invoices', financeView, invoicesRouter)
 // Purchases is mixed: contributors create + view their own purchases
 // (purchase.create); the full register and payments are finance-gated inside.
 // Purchases are finance data (they post to the ledger), so writes fall under
 // the finance entitlement too.
 router.use('/purchases', tenantMember, financeWrites, purchasesRouter)
-router.use('/merch', financeView, bandOnly, merchRouter)
+router.use('/merch', financeView, merch, merchRouter)
 router.use('/accounts', financeView, accountsRouter)
 router.use('/accounting-profile', financeView, accountingProfileRouter)
 router.use('/journal', financeView, journalRouter)

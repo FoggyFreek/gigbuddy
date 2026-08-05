@@ -11,16 +11,23 @@ import type {
 // derived server-side from approved memberships — none of these calls names a
 // tenant, and sending one changes nothing.
 
-/** Where a "band" in the hub comes from: a real tenant, or (phase 4) a contact. */
+/**
+ * Where a band in the hub comes from: a gigbuddy tenant the musician is a
+ * member of, or an external ensemble that exists only as a contact in their own
+ * workspace. An external band has no tenant of its own — only the musician's
+ * side of it exists — so its tenant-shaped fields are null.
+ */
 export type MyBandSource = 'tenant' | 'contact'
 
 export interface MyBand {
   source: MyBandSource
+  /** For a contact, the workspace the contact lives in. */
   tenantId: Id
+  contactId: Id | null
   displayName: string
-  slug: string
-  kind: TenantKind
-  role: string
+  slug: string | null
+  kind: TenantKind | null
+  role: string | null
   logoPath: string | null
 }
 

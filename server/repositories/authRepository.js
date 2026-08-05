@@ -117,8 +117,8 @@ export async function clearProviderSub(executor, userId, provider) {
 // tenant (id 1), preserving an existing approved_at.
 export async function upsertSeedAdminMembership(executor, userId) {
   await executor.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-     VALUES ($1, 1, 'tenant_admin', 'approved', NOW())
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+     VALUES ($1, 1, 'tenant_admin', 'approved', NOW(), 'owner')
      ON CONFLICT (user_id, tenant_id) DO UPDATE SET
        role = 'tenant_admin',
        status = 'approved',

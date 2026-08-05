@@ -25,6 +25,7 @@ import {
   MAX_GIG_TAGS,
   MAX_GIG_TAG_LENGTH,
 } from '../validators/gigValidators.js'
+import { ENSEMBLE_CATEGORY } from '../validators/contactValidators.js'
 import {
   assertVenueInTenant,
   gigExistsInTenant,
@@ -162,6 +163,19 @@ async function validateVenueAndFestivalForTenant(db, body, tenantId) {
     if (err.status === 400) return { error: err.message, status: 400 }
     throw err
   }
+}
+
+// The ensemble tag must point at an 'ensemble' contact in the SAME tenant. The
+// composite FK is the DB backstop for the tenant half; this rejects a contact
+// of the wrong category (and gives a 400 instead of a constraint violation).
+// Returns { error, status } or {}.
+async function validateEnsembleForTenant(db, body, tenantId) {
+  if (!('ensemble_contact_id' in body) || body.ensemble_contact_id === null) return {}
+  const contact = await getContactInTenant(db, body.ensemble_contact_id, tenantId)
+  if (!contact || contact.category !== ENSEMBLE_CATEGORY) {
+    return { error: 'Invalid ensemble_contact_id', status: 400 }
+  }
+  return {}
 }
 
 // Composes the single-gig response shape shared by participant mutations.
@@ -373,9 +387,14 @@ export async function createGig(tenantId, userId, body) {
     if (venueCheck.error) {
       abortTransaction({ error: { status: 400, body: { error: venueCheck.error } } })
     }
+    const ensembleCheck = await validateEnsembleForTenant(client, refs.body, tenantId)
+    if (ensembleCheck.error) {
+      abortTransaction({ error: { status: 400, body: { error: ensembleCheck.error } } })
+    }
 
     const gig = await insertGigWithRelations(client, tenantId, {
       event_date, event_description, venueId, festivalId,
+      ensembleContactId: refs.body.ensemble_contact_id ?? null,
       start_time: start_time || null, end_time: end_time || null, status: finalStatus,
       has_pa_system: !!has_pa_system, has_drumkit: !!has_drumkit, has_stage_lights: !!has_stage_lights,
     })
@@ -399,6 +418,9 @@ export async function patchGig(db, tenantId, gigId, body) {
 
   const venueCheck = await validateVenueAndFestivalForTenant(db, normalizedBody, tenantId)
   if (venueCheck.error) return { error: { status: venueCheck.status, body: { error: venueCheck.error } } }
+
+  const ensembleCheck = await validateEnsembleForTenant(db, normalizedBody, tenantId)
+  if (ensembleCheck.error) return { error: { status: ensembleCheck.status, body: { error: ensembleCheck.error } } }
 
   const built = buildGigUpdateFields(normalizedBody)
   if (built.error) return { error: { status: 400, body: { error: built.error } } }

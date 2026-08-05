@@ -87,6 +87,19 @@
       "expenses": "Kosten",
       "result": "Resultaat"
     },
-    "loadError": "Je overzicht kon niet worden geladen."
+    "loadError": "Je overzicht kon niet worden geladen.",
+    "bands": {
+      "title": "Mijn bands",
+      "add": "Band toevoegen",
+      "addTitle": "Band toevoegen",
+      "addHelp": "Voor een band die niet op gigbuddy zit. Deze blijft in je eigen adresboek — geen aparte werkruimte, en telt niet mee voor je bandlimiet.",
+      "nameLabel": "Bandnaam",
+      "cancel": "Annuleren",
+      "save": "Toevoegen",
+      "empty": "Je zit nog niet in een band.",
+      "onGigbuddy": "Op gigbuddy",
+      "external": "Niet op gigbuddy",
+      "addFailed": "De band kon niet worden toegevoegd."
+    }
   }
 }

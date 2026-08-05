@@ -197,12 +197,15 @@ export async function unarchiveOwnedTenant(db, userId, tenantId) {
   return withTransaction(async (client) => {
     // Cap first: enforceBandCap locks the user row, serializing this with any
     // concurrent create/unarchive by the same user.
-    const capError = await enforceBandCap(client, userId)
+    await lockUserForCapCheck(client, userId)
 
     const tenant = await fetchOwnedTenant(client, tenantId, userId)
     if (!tenant) abortTransaction(NOT_FOUND)
     if (!tenant.archived_at) abortTransaction({ tenant }) // already active — idempotent
-    if (capError) abortTransaction(capError)
+    if (tenant.kind === BAND) {
+      const capError = await enforceBandCap(client, userId)
+      if (capError) abortTransaction(capError)
+    }
 
     const unarchived = await setTenantArchived(client, tenantId, false)
     return {

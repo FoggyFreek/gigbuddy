@@ -11,7 +11,8 @@
     "booker": "Booker",
     "promotion": "Promotie",
     "network": "Netwerk",
-    "supplier": "Leverancier"
+    "supplier": "Leverancier",
+    "ensemble": "Band"
   },
   "fields": {
     "category": "Categorie",

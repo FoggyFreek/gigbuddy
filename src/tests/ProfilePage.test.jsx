@@ -78,6 +78,7 @@ function wrap(ui, { user, bandsintown = true } = {}) {
   const activeUser = user ?? {
     isSuperAdmin: false,
     activeTenantRole: 'contributor',
+    activeTenantKind: 'band',
     permissions: ['app.view', 'planning.write', 'purchase.create'],
   }
   return render(
@@ -233,6 +234,23 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
     const label = await screen.findByText(/Bandsintown artist name/i)
     expect(label.parentElement).toHaveTextContent('The Testers')
+  })
+
+  it('keeps the shared profile but omits band-only roster and promotion fields in a personal workspace', async () => {
+    wrap(<ProfilePage />, {
+      user: {
+        isSuperAdmin: false,
+        activeTenantRole: 'contributor',
+        activeTenantKind: 'personal',
+        permissions: ['app.view', 'planning.write', 'purchase.create'],
+      },
+    })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+
+    expect(screen.queryByText('Band members')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Bandsintown artist name/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Bandsintown artist ID/i)).not.toBeInTheDocument()
+    expect(screen.getAllByAltText('Profile logo')).not.toHaveLength(0)
   })
 
   it('keeps Bandsintown profile fields but hides the API fetch when the integration is not configured', async () => {

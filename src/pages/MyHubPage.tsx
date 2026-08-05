@@ -23,6 +23,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import { useAuth } from '../contexts/authContext.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import MyBandsCard from '../components/hub/MyBandsCard.tsx'
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { toIsoDate } from '../utils/availabilityUtils.ts'
 import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.tsx'
@@ -51,7 +52,14 @@ const ITEM_PATH: Record<AgendaItem['type'], string> = {
 export default function MyHubPage() {
   const { t, i18n } = useTranslation('dashboard')
   const navigate = useNavigate()
-  const { switchTenant } = useAuth()
+  const { user, switchTenant } = useAuth()
+
+  // External bands live in the musician's own workspace, so adding one is only
+  // offered when they have one.
+  const personalTenantId = useMemo(
+    () => user?.memberships?.find((m) => m.kind === 'personal' && m.status === 'approved')?.tenantId ?? null,
+    [user],
+  )
   const isCompact = useCompactLayout()
 
   const today = useMemo(() => new Date(), [])
@@ -148,6 +156,8 @@ export default function MyHubPage() {
       </Box>
 
       {failed && <Alert severity="error">{t($ => $.hub.loadError)}</Alert>}
+
+      <MyBandsCard personalTenantId={personalTenantId} />
 
       <Paper variant="outlined" sx={{ p: isCompact ? 1.5 : 3 }}>
         <Stack

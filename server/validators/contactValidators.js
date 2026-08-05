@@ -6,8 +6,12 @@ import {
   normalizeOptionalVatId,
 } from '../utils/businessIdentifiers.js'
 
+// 'ensemble' is a band that is not a gigbuddy customer — it exists only in the
+// musician's own address book. See migration 162_external_ensembles.sql.
+export const ENSEMBLE_CATEGORY = 'ensemble'
+
 export const VALID_CATEGORIES = new Set([
-  'press', 'radio & tv', 'booker', 'promotion', 'network', 'supplier',
+  'press', 'radio & tv', 'booker', 'promotion', 'network', 'supplier', ENSEMBLE_CATEGORY,
 ])
 
 export { parseId, parseSearchLimit }

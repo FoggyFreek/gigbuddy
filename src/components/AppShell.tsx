@@ -70,7 +70,7 @@ import SearchPanel from './appShell/SearchPanel.tsx'
 import SettingsMenu from './appShell/SettingsMenu.tsx'
 import UserMenu from './appShell/UserMenu.tsx'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
-import type { TenantKind } from '../utils/businessRegistry.ts'
+import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabilities.ts'
 import CreatePersonalWorkspaceDialog from './appShell/CreatePersonalWorkspaceDialog.tsx'
 import type { Id } from '../types/entities.ts'
 
@@ -95,10 +95,8 @@ interface NavChildEntry {
   // item stays VISIBLE but renders a diamond icon and links to the upsell page
   // (it is NOT hidden — that's what permission does). See project memory.
   feature?: Feature
-  // Tenant kinds this surface exists for. Absent = kind-neutral (the default).
-  // Hidden, not locked: a band roster is not something a personal workspace can
-  // upgrade its way into. requireTenantKind on the API is the real gate.
-  kinds?: readonly TenantKind[]
+  // Named kind capability. Absent means the surface is kind-neutral.
+  capability?: TenantCapability
 }
 
 interface NavGroupEntry {
@@ -111,10 +109,6 @@ const DRAWER_WIDTH = 240
 const COLLAPSED_DRAWER_WIDTH = 72
 // Caps page content width on large screens so it stays centered instead of stretching edge-to-edge.
 const CONTENT_MAX_WIDTH = 1400
-
-// Surfaces that only a band has. Named once so nav, settings and the tutorial
-// registry can't drift on what "band-only" means.
-const BAND_ONLY: readonly TenantKind[] = ['band']
 
 const NAV_GROUPS: NavGroupEntry[] = [
   {
@@ -133,7 +127,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
     children: [
       // Availability is a band-roster grid today; it becomes user-level (and so
       // kind-neutral) with the personal availability calendar.
-      { to: '/availability', i18nKey: 'availability', icon: CalendarMonthOutlined, kinds: BAND_ONLY },
+      { to: '/availability', i18nKey: 'availability', icon: CalendarMonthOutlined, capability: TENANT_CAPABILITIES.BAND_AVAILABILITY },
       { to: '/gigs', i18nKey: 'gigs', icon: EventOutlined },
       { to: '/rehearsals', i18nKey: 'rehearsals', icon: MusicNoteOutlined },
       { to: '/events', i18nKey: 'bandEvents', icon: EventNoteOutlined },
@@ -145,7 +139,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
     icon: LibraryMusicTwoTone,
     children: [
       { to: '/songs', i18nKey: 'songs', icon: LibraryMusicOutlined },
-      { to: '/setlists', i18nKey: 'setlists', icon: QueueMusicOutlined, kinds: BAND_ONLY },
+      { to: '/setlists', i18nKey: 'setlists', icon: QueueMusicOutlined, capability: TENANT_CAPABILITIES.SETLISTS },
     ],
   },
   {
@@ -164,7 +158,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
     children: [
       { to: '/invoices', i18nKey: 'invoices', icon: ReceiptLongOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
       { to: '/purchases', i18nKey: 'purchases', icon: ShoppingCartOutlined, permission: PERMISSIONS.PURCHASE_CREATE, feature: FEATURES.FINANCE },
-      { to: '/merch', i18nKey: 'merch', icon: SellOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE, kinds: BAND_ONLY },
+      { to: '/merch', i18nKey: 'merch', icon: SellOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE, capability: TENANT_CAPABILITIES.MERCH },
       { to: '/reimbursements', i18nKey: 'reimbursements', icon: VolunteerActivismOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
     ],
   },
@@ -211,7 +205,7 @@ export default function AppShell() {
   const isSuperAdmin = !!user?.isSuperAdmin
   const { can } = usePermissions()
   const { has, financeReadOnly, planSlug, locked, unenforced } = useEntitlements()
-  const { allowsKind } = useTenantKind()
+  const { supports } = useTenantKind()
 
   // Header logo reflects the active subscription tier; fallback-locked or
   // unenforced (ownerless) tenants keep the standard logo.
@@ -262,11 +256,11 @@ export default function AppShell() {
           icon: g.icon,
           label: t($ => $.groups[g.key]),
           children: g.children
-            .filter((c) => (!c.permission || can(c.permission)) && allowsKind(c.kinds))
+            .filter((c) => (!c.permission || can(c.permission)) && (!c.capability || supports(c.capability)))
             .map(toNavChild),
         }))
         .filter((g) => g.children.length > 0),
-    [can, allowsKind, toNavChild, t],
+    [can, supports, toNavChild, t],
   )
 
   // Single-open accordion: the group containing the active route auto-expands,

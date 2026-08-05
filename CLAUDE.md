@@ -85,6 +85,16 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 
 **Decoupled link-page app**: band link pages are served by a separate app living in its own repo (own package.json, own Postgres DB, own deploy). It talks to gigbuddy only over HTTP: `server/routes/publicLinkpage.js` (unauthenticated, shared-secret bearer) exposes a per-band content export and a signed image proxy; `server/routes/linkpage.js` mints short-lived editor handoff tokens for the "Edit link page" profile affordance. The shared HMAC secret is `LINKPAGE_SECRET`; `LINKPAGE_URL` is the link-page app's public origin. Entitlement gating (silver/gold, tenant-admin only) lives in `shared/entitlements.js` / `server/db/defaultPlans.js` as usual.
 
+## Tenant kinds — shared architecture, capability split
+
+`tenants.kind` is `band` or `personal`, but a personal workspace is still an ordinary tenant: it uses the same routes, services, repositories, tables, permissions and tenant isolation as a band. **Shared is the default** (profile, planning, contacts, finance, files, etc.); do not fork a domain into band/personal implementations just for wording or visibility.
+
+- Genuine differences are named capabilities in `shared/tenantCapabilities.js`, consumed by both backend and frontend. Prefer capability checks over scattered `kind === ...` comparisons.
+- Backend enforcement is authoritative: use `requireTenantCapability`, `requireTenantCapabilityForBodyFields`, or `requireTenantCapabilityWhen` from `server/middleware/tenant.js`. The field/predicate variants keep a shared endpoint shared when only one subtype is kind-specific.
+- Frontend uses `useTenantKind().supports(...)` and `RequireTenantCapability` to filter navigation, settings, fields and deep links; these are UX only.
+- A personal tenant is unique per owner and does not consume the subscription `bands` limit. External bands are `ensemble` contacts inside the personal tenant, never shell tenants. Only active owned `band` tenants count toward band capacity.
+- Before adding kind-specific behavior, read `docs/tenant-kind-architecture.md`; add a named capability and gates rather than a parallel feature stack.
+
 ## Multi-tenant isolation — the core invariant
 
 Multiple bands (tenants) share one instance with strict data isolation. This is the most important thing to preserve.

@@ -281,6 +281,11 @@ describe('POST /api/tenants/personal (artist workspace)', () => {
 
     await inWorkspace(request(app).get('/api/band-members'), ws.body.id).expect(403)
     await inWorkspace(request(app).get('/api/setlists'), ws.body.id).expect(403)
+    await inWorkspace(request(app).get('/api/profile/bandsintown-key'), ws.body.id).expect(403)
+    await inWorkspace(request(app).get('/api/profile/shopify-client-id'), ws.body.id).expect(403)
+    const profileField = await inWorkspace(request(app).patch('/api/profile'), ws.body.id)
+      .send({ bandsintown_artist_id: 'artist-123' }).expect(403)
+    expect(profileField.body.code).toBe('tenant_kind_not_supported')
     await inWorkspace(
       request(app).patch(`/api/users/${seed.userB.id}/membership`), ws.body.id,
     ).send({ status: 'approved' }).expect(403)
@@ -487,6 +492,18 @@ describe('archive / unarchive', () => {
     // Swapping the first back in would make 2 active → 409.
     const res = await asUserA(request(app).post(`/api/tenants/${ownedId}/unarchive`)).expect(409)
     expect(res.body.code).toBe('band_limit_reached')
+  })
+
+  it('unarchives a personal workspace even when the band allowance is full', async () => {
+    const workspace = await asUserA(
+      request(app).post('/api/tenants/personal').send({ country_code: 'nl' }),
+    ).expect(201)
+    await asUserA(request(app).post(`/api/tenants/${workspace.body.id}/archive`)).expect(200)
+
+    const restored = await asUserA(
+      request(app).post(`/api/tenants/${workspace.body.id}/unarchive`),
+    ).expect(200)
+    expect(restored.body).toMatchObject({ id: workspace.body.id, kind: 'personal', archived_at: null })
   })
 })
 

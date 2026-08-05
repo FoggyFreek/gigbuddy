@@ -151,6 +151,13 @@ async function resolveOwnerEntitlements(db, userId) {
     const fallback = await getFallbackPlan(db)
     planSlug = fallback.slug
     entitlements = mergeEntitlements(fallback.entitlements, null)
+    // Checkout grants no paid features, but the target capacity binds now.
+    if (sub?.status === 'pending_mandate' || sub?.status === 'pending_activation') {
+      entitlements.limits = applyLimitsSnapshot(
+        entitlements.limits,
+        sub.plan_entitlements?.limits ?? {},
+      )
+    }
   }
 
   return {
