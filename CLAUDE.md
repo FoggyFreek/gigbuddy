@@ -72,16 +72,18 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 | Concern | Start here |
 |---|---|
 | Frontend bootstrap / provider hierarchy | `src/main.tsx` |
-| Route tree + frontend access guards | `src/App.tsx` (`RequireAuth`/`RequirePermission`/`RequireEntitlement`/`RequireSuperAdmin`) |
+| Route tree + frontend access guards | `src/App.tsx` (`RequireAuth`/`RequirePermission`/`RequireEntitlement`/`RequireTenantCapability`/`RequireSuperAdmin`) |
 | App shell / navigation | `src/components/AppShell.tsx`, `src/components/appShell/` |
 | Backend bootstrap + middleware pipeline | `server/index.js` |
 | API composition, access tiers, rate limits, gates | `server/routes/index.js` |
 | DB connection / transactions | `server/db/index.js`, `server/db/withTransaction.js` |
 | Schema evolution | `server/db/migrate.js`, `server/db/migrations/` |
-| Rules shared by frontend & backend | `shared/` (`permissions.js`, `entitlements.js`, …) |
+| Rules shared by frontend & backend | `shared/` (`permissions.js`, `entitlements.js`, `tenantCapabilities.js`, …) |
 | Shared frontend entity types | `src/types/entities.ts`, `src/types/api.ts` |
+| Tenant-kind applicability | `shared/tenantCapabilities.js`, `docs/tenant-kind-architecture.md` |
+| Cross-tenant hub (`/api/me/*`) | `server/routes/me.js`, `server/services/meService.js`, `src/pages/MyHubPage.tsx` |
 
-**Domain navigation convention**: for any resource `foo`, look for `server/routes/foo.js` → `server/services/fooService.js` → `server/repositories/fooRepository.js` → `server/validators/fooValidators.js` → `src/api/foo.ts` → its page/components. Domains: planning (gigs, rehearsals, band events, availability, tasks), people/CRM (contacts, venues, band members, invites, tenants), music (songs, setlists, chordpro), finance (accounting profile + tax scheme enrolments, accounts, invoices, purchases, journal, ledger, reimbursements, VAT returns, reports), merch (+ Shopify import), promotion (Bandsintown, public calendars, share), admin, achievements, tutorials.
+**Domain navigation convention**: for any resource `foo`, look for `server/routes/foo.js` → `server/services/fooService.js` → `server/repositories/fooRepository.js` → `server/validators/fooValidators.js` → `src/api/foo.ts` → its page/components. Domains: planning (gigs, rehearsals, band events, availability, tasks), people/CRM (contacts, venues, band members, invites, tenants, band directory), music (songs, setlists, chordpro), finance (accounting profile + tax scheme enrolments, accounts, invoices, purchases, journal, ledger, reimbursements, VAT returns, reports), merch (+ Shopify import), promotion (Bandsintown, public calendars, share), admin, achievements, tutorials.
 
 **Decoupled link-page app**: band link pages are served by a separate app living in its own repo (own package.json, own Postgres DB, own deploy). It talks to gigbuddy only over HTTP: `server/routes/publicLinkpage.js` (unauthenticated, shared-secret bearer) exposes a per-band content export and a signed image proxy; `server/routes/linkpage.js` mints short-lived editor handoff tokens for the "Edit link page" profile affordance. The shared HMAC secret is `LINKPAGE_SECRET`; `LINKPAGE_URL` is the link-page app's public origin. Entitlement gating (silver/gold, tenant-admin only) lives in `shared/entitlements.js` / `server/db/defaultPlans.js` as usual.
 
@@ -93,7 +95,10 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 - Backend enforcement is authoritative: use `requireTenantCapability`, `requireTenantCapabilityForBodyFields`, or `requireTenantCapabilityWhen` from `server/middleware/tenant.js`. The field/predicate variants keep a shared endpoint shared when only one subtype is kind-specific.
 - Frontend uses `useTenantKind().supports(...)` and `RequireTenantCapability` to filter navigation, settings, fields and deep links; these are UX only.
 - A personal tenant is unique per owner and does not consume the subscription `bands` limit. External bands are `ensemble` contacts inside the personal tenant, never shell tenants. Only active owned `band` tenants count toward band capacity.
+- `tenants.display_name` is the kind-neutral name; `band_name` is a synced alias kept in step by `tenantRepository` (the single writer). Read either, and prefer kind-neutral vocabulary for anything both kinds have.
 - Before adding kind-specific behavior, read `docs/tenant-kind-architecture.md`; add a named capability and gates rather than a parallel feature stack.
+
+**Joining a band** is user-level, so it works from any active tenant. `/invites/redeem` takes a code (`loadUser` only, no tenant). `/band-directory` searches bands that opted in via `tenants.join_policy = 'request'` and files join requests: role is fixed server-side, a non-discoverable target 404s, a `rejected` membership stays rejected, and `enforceJoinRequestCap` (`server/domain/membership.js`) caps outstanding requests under the user-row lock — a cap no plan lifts, so its code sits outside the `*_limit_reached` family. `memberships.source` records provenance; every insert site names its own value (no SQL default).
 
 ## Multi-tenant isolation — the core invariant
 
@@ -106,13 +111,24 @@ Multiple bands (tenants) share one instance with strict data isolation. This is 
 - Privilege tiers: tenant admin (`role='tenant_admin'` or super admin) manages memberships/invites/logo; super admins (`users.is_super_admin`) manage globally but still need an approved membership to *use* a tenant's data. Role permissions have one source: `shared/permissions.js` (backend enforcement `server/middleware/permissions.js`, typed frontend wrapper `src/auth/permissions.ts`).
 - File keys use `tenants/<tenant_id>/<category>/<uuid>`; access is gated by an ownership lookup in the active tenant before streaming. All uploads go through storage quota enforcement (`server/services/storageService.js`).
 
+Two things sit deliberately outside tenant scoping: user-level availability (next section), and **the cross-tenant hub** (`/api/me/*`) — "everything I'm booked for" and "where my money comes from" across every band a user plays in. `resolveMemberTenantIds` (`server/middleware/tenant.js`) is a *sibling* of `resolveTenantId` — it derives the tenant set from approved, non-archived memberships and **never sets `req.tenantId`**. Rules: the client never names the tenants it wants (an id in a body or query changes nothing); the hub is read-only and posts to no ledger; a tenant the caller can't see is *absent*, never blanked; earnings are reported per tenant and **never summed** (a band's gig revenue and the musician's fee for it are the same money seen from two sides). Aggregate reads are `…ForMemberTenants` queries in the owning aggregate's repository — there is no separate hub repository.
+
+## Availability belongs to the user, not a tenant
+
+"Busy on 14 March" is a fact about the person, so slots live on `user_availability_slots` and each band reads a **redacted projection** of them.
+
+- `availability_slots` remains for `band_members` rows with `user_id IS NULL` (deps, CRM-only entries). The band-side read (`server/services/availabilityService.js`) is a union of both, still keyed on `band_member_id`, so `/api/availability` keeps its URLs and response shape.
+- **Redaction happens in `server/services/availabilityProjection.js`, before serialization** — the API never emits a reason or band name the viewer may not see, so the frontend has nothing to hide. `users.availability_detail_visible` governs slot reasons, `users.cross_band_gig_detail_visible` governs bookings in other bands; both default off. Bookings in the *viewing* band are not projected at all (its grid already renders them).
+- Writes: `availability.write.self` (granted to `READER`) covers your own; writing another member additionally needs `planning.write` **and** that member's `memberships.availability_managed_by_band` for this band, both checked against the *target's* row — denial is 403. Band-wide and unlinked-member slots stay behind `planning.write`. Delegated writes record `created_by_user_id` / `created_in_tenant_id`.
+- The musician's own calendar and the privacy/delegation settings are `/api/me/availability` (+ `/settings`), user-level and editable nowhere else.
+
 ## Backend foundations
 
 - **Layering: route → service → repository → PostgreSQL**, validators at the service boundary. Routes stay thin; SQL lives in repositories; transactions (`withTransaction`) in services; common errors in `server/services/serviceErrors.js`; domain constants in `server/domain/`. **Canonical example: the rehearsals stack** (`server/{routes,services,repositories,validators}/rehearsal*`). Load the **backend-layering** skill before adding or refactoring any backend resource.
 - **Collection reads are scoped.** Load the **collection-scoping** skill before adding or changing any endpoint that returns a list (bounded `?limit=` vs windowed `?from=&to=` contract, `{ items, meta }` envelope, interval semantics).
 - **Deep bounded feeds ("load more") use a keyset list cursor, never offset/page params.** `parseListCursor` (`server/validators/common.js`) parses `?cursorDate=&cursorId=`, keyed on the same `(date, id)` tuple the repository's `ORDER BY ... DESC, id DESC` tiebreaks on; the repository adds `AND (col, id) < ($cursorDate, $cursorId)`. Service builds `meta.nextCursor` (null once the page is short of `limit`); frontend type is `LimitedCollectionWithCursorResponse<T>` / `ListCollectionCursor` (`src/types/api.ts`). Reference implementation: `GET /gigs/past` (`listPastGigs` in `gigRepository.js` / `gigService.js` / `src/api/gigs.ts`).
 - **Shared primitives have one owner.** Before adding a repository query or normalization helper, search for an existing equivalent. Aggregate reads belong to the aggregate's repository; shared normalization belongs in `server/utils`. Never duplicate equivalent SQL or normalization logic.
-- Auth: OIDC protocol in `server/oidc.js`, flows in `server/routes/auth.js` → `authService.js`; user/terms middleware `server/middleware/auth.js`. Cold sign-in is **invite-only**: a new sign-in gets zero memberships → `/redeem-invite`; `ADMIN_EMAIL` bootstraps the super admin.
+- Auth: OIDC protocol in `server/oidc.js`, flows in `server/routes/auth.js` → `authService.js`; user/terms middleware `server/middleware/auth.js`. A sign-in with zero memberships goes to `/onboarding`, where the user sets up a band or their own artist workspace; with `isTenantOnboardingEnabled` off it redirects to `/redeem-invite` instead. `ADMIN_EMAIL` bootstraps the super admin.
 - CSRF (`server/middleware/csrf.js`): synchronizer token, mounted on `/api`; the SPA picks it up from the `X-CSRF-Token` header on the `/auth/me` bootstrap. OIDC redirect GETs and **`/push/resubscribe`** are deliberately exempt.
 - Logging (`server/utils/logger.js`): structured JSON lines, `docker logs` is the only sink. **`fields.err` is auto-redacted to name/code/status — never `.message`/`.stack`, in any environment; this is deliberate (secrets leak via messages), don't reintroduce it.** Other fields must be whitelisted in `CONTEXT_KEYS` and primitive. Request correlation is automatic via AsyncLocalStorage (`server/middleware/requestContext.js`) — no `req` threading; the ALS value wins over caller-passed fields. `server/utils/auditLog.js` is a separate security audit trail — don't conflate or reshape it.
 
@@ -122,7 +138,7 @@ Multiple bands (tenants) share one instance with strict data isolation. This is 
 - No Redux/React Query — state is React contexts + hooks + component state. Central contexts live in `src/contexts/` (auth/tenant switching, profile, theming, toasts).
 - **All HTTP goes through `src/api/_client.ts`** (CSRF header, error normalization, 401 events); each resource gets a thin typed `src/api/<resource>.ts` wrapper. Page components never embed `/api/...` paths.
 - Frontend guards and entitlement gating are **UX only** — backend middleware is authoritative.
-- Key hooks: `usePermissions`, `useEntitlements`, `useDebouncedSave` (600 ms debounce, `flush()` on modal close), `useTenantQuerySync`.
+- Key hooks: `usePermissions`, `useEntitlements`, `useTenantKind` (`.supports(capability)`), `useDebouncedSave` (600 ms debounce, `flush()` on modal close), `useTenantQuerySync`.
 - **Compact/mobile layout**: use `useCompactLayout()` (`src/hooks/useCompactLayout.ts`) for compact-vs-desktop structure decisions (table→card, stacked controls); it also honors `CompactLayoutContext` (forced by `SplitView`). Don't add new direct `useMediaQuery(breakpoints.down('sm'))` checks; name the boolean `isCompact`.
 - Types: reuse `src/types/entities.ts` / `src/types/api.ts` instead of redeclaring shapes. Fields that carry `null` in API payloads are typed `T | null`, not just `T?` — don't switch a call site to `undefined` (that changes the JSON). Components declare a `Props` interface, no `prop-types`. Type MUI icon props as `SvgIconComponent`. Imports use explicit extensions; `vi.mock` paths must match the `.ts`/`.tsx` source.
 - **MUI v9** (Material 3 theme). Theme mode branching uses `useThemeMode()` from `src/contexts/themeModeContext.ts`, not `useTheme().palette.mode`. Money in tables renders via `<MoneyCells cents={…}/>` + `<MoneyHeaderCells/>` (`src/components/shared/MoneyCells.tsx`) — each emits **two** `<TableCell>`s, account for that in `colSpan`; compact card views use `formatEur` directly.
@@ -154,11 +170,13 @@ The financial core is an **immutable double-entry ledger** (`ledger_transactions
 
 **Platform billing** (Mollie, user-level subscriptions; tenants inherit from `tenants.owner_user_id`): **load the subscription-billing skill** before touching plans, entitlements, limits, tenant ownership, the billing lifecycle, or gating UI. Hard rules: `shared/entitlements.js` is the single source of truth; **never call the payment provider inside a DB transaction**; never import a concrete adapter (use `getPaymentProvider()`); remote mutations go through the `billing_operations` outbox saga. Customer-invoice Mollie payments and platform subscription billing are separate flows.
 
+Plans are band tiers (`bronze` fallback, `silver`, `gold`) plus artist tiers, which are ordinary plans with `LIMITS.BANDS = 0` (`artist_gold`) — one subscription per user, no second dimension. A sideman on a cheap artist plan still plays in someone else's gold band, because a band's entitlements come from its *owner's* subscription. Target capacity is checked on first subscription as well as downgrade, so a `bands: 0` plan can't be selected while an owned band is active. Every plan carries a complete entitlements object; `FEATURES.CALENDAR_SYNC` gates the ICS feed independently of `integrations`. Keep `server/db/defaultPlans.js` and the seeding migration in step.
+
 ## Cross-cutting services
 
 - Storage: every image/file uses one configurable S3-compatible bucket (RustFS locally, private Backblaze B2 in production). The MinIO client lives in `server/utils/storage.js`; tenant keys, quotas, cleanup, and version-aware tenant purge live in `server/services/storageService.js`; encrypted integration credentials live in `server/security/integrationSecrets.js`.
 - Notifications `server/services/notificationService.js`; web push `server/services/pushService.js` + `public/sw.js`.
-- Achievements: single registry `server/achievements/definitions.js`, facts SQL in `factsBuilder.js`, evaluated lazily on read (no scheduler). **Never rename a shipped achievement key** (persisted, doubles as i18n/icon key).
+- Achievements: single registry `server/achievements/definitions.js`, facts SQL in `factsBuilder.js`, evaluated lazily on read (no scheduler). **Never rename a shipped achievement key** (persisted, doubles as i18n/icon key). The catalogue is a *function of tenant kind*, not a subset: each definition declares `kinds`, and filtering happens before evaluation so `factsBuilder` skips the fact groups that kind never needs. Totals are only comparable within a kind — count "x of y" against `definitionsForKind(kind)`, never the union.
 - Metrics `server/metrics.js`; Grafana Alloy config `observability/config.alloy`.
 
 ## Migrations
