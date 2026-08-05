@@ -140,6 +140,20 @@ export interface Slot {
   end_date?: string
   status?: string
   reason?: string | null
+  /**
+   * Projection fields, present only on entries derived from a member's
+   * user-level calendar (see server/services/availabilityProjection.js).
+   * Band-local slots for members without an account carry none of them.
+   */
+  source?: 'slot' | 'booking'
+  /** The viewer may not see this member's detail — show busy, not why. */
+  redacted?: boolean
+  /** A booking's title / band, present only when the owner allows it. */
+  title?: string | null
+  tenantName?: string | null
+  /** Provenance of a delegated write: who entered it, from which band. */
+  createdByUserId?: Id | null
+  createdInTenantId?: Id | null
 }
 
 export interface Tenant {

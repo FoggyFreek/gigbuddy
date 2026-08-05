@@ -33,6 +33,7 @@ import tenantsRouter from './tenants.js'
 import tenantsSelfRouter from './tenantsSelf.js'
 import bandDirectoryRouter from './bandDirectory.js'
 import meRouter from './me.js'
+import meAvailabilityRouter from './meAvailability.js'
 import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
@@ -205,6 +206,10 @@ router.use('/tenants', requireApproved, tenantsSelfRouter)
 router.use('/band-directory', currentTermsUser, bandDirectoryLimiter, bandDirectoryRouter)
 // The cross-tenant hub. Its own tier: authenticated + terms + the member tenant
 // set, and deliberately NO resolveTenantId — see resolveMemberTenantIds.
+// Availability is user-level, so it sits on the /me tier and resolves no
+// tenant at all — mounted before the hub router so `/me/availability` is not
+// swallowed by it.
+router.use('/me/availability', currentTermsUser, meAvailabilityRouter)
 router.use('/me', currentTermsUser, resolveMemberTenantIds, meRouter)
 // User-level billing (subscription owner acts regardless of active tenant).
 router.use('/billing', requireApproved, billingRouter)

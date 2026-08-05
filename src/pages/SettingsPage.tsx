@@ -17,6 +17,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import TuneIcon from '@mui/icons-material/Tune'
 import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined'
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
+import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined'
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined'
 import GroupIcon from '@mui/icons-material/Group'
 import StorageIcon from '@mui/icons-material/Storage'
@@ -42,6 +43,7 @@ import AccountingSettingsSection from '../components/settings/AccountingSettings
 import AccountingProfileSection from '../components/settings/AccountingProfileSection.tsx'
 import FinancialProfileSection from '../components/settings/FinancialProfileSection.tsx'
 import BandsSection from '../components/settings/BandsSection.tsx'
+import MyAvailabilitySection from '../components/settings/MyAvailabilitySection.tsx'
 import DiscoverabilitySection from '../components/settings/DiscoverabilitySection.tsx'
 import InvitesSection from '../components/InvitesSection.tsx'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
@@ -53,7 +55,7 @@ import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabi
 // with a back arrow. The nav is role-gated: band and finance items appear only
 // when the active tenant role grants the matching permission.
 type SectionId =
-  | 'preferences' | 'billing' | 'connected-accounts'
+  | 'preferences' | 'billing' | 'connected-accounts' | 'my-availability'
   | 'accent' | 'members' | 'bands' | 'storage'
   | 'integrations' | 'chart-of-accounts' | 'default-accounts'
   | 'financial-profile' | 'accounting-profile'
@@ -61,7 +63,7 @@ type SectionId =
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.
 type ItemLabelKey =
-  | 'preferences' | 'billing' | 'connectedAccounts' | 'accent' | 'membersAndInvites' | 'bands'
+  | 'preferences' | 'billing' | 'connectedAccounts' | 'myAvailability' | 'accent' | 'membersAndInvites' | 'bands'
   | 'storage' | 'integrations' | 'chartOfAccounts' | 'defaultAccounts'
   | 'financialProfile' | 'accountingProfile'
 
@@ -79,6 +81,9 @@ const ACCOUNT_ITEMS: NavItemDef[] = [
   { id: 'preferences', labelKey: 'preferences', icon: TuneIcon },
   { id: 'billing', labelKey: 'billing', icon: CreditCardOutlinedIcon },
   { id: 'connected-accounts', labelKey: 'connectedAccounts', icon: LinkOutlinedIcon },
+  // Availability belongs to the user, not a tenant, so its privacy and
+  // delegation controls sit with the account items — never under a band.
+  { id: 'my-availability', labelKey: 'myAvailability', icon: EventAvailableOutlinedIcon },
 ]
 
 const BAND_ITEMS: NavItemDef[] = [
@@ -134,6 +139,8 @@ export default function SettingsPage() {
         return <BillingSettingsSection />
       case 'connected-accounts':
         return <ConnectedAccountsSection />
+      case 'my-availability':
+        return <MyAvailabilitySection />
       case 'accent':
         return <AccentColorSection />
       case 'members':

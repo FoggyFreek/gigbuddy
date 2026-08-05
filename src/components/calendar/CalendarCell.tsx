@@ -253,8 +253,14 @@ function SlotBar({ slot, members, theme, onSlotClick }: Readonly<SlotBarProps>) 
   const statusLabel = slot.status
     ? t($ => $.status[slot.status as 'available' | 'unavailable'])
     : null
+  // A redacted entry renders as a plain busy block with a "details hidden"
+  // hint, so bandmates understand WHY they see nothing rather than assuming a
+  // bug. The server already withheld the detail — there is nothing here to hide.
+  const detail = slot.redacted
+    ? t($ => $.projection.hidden)
+    : [slot.reason, slot.title, slot.tenantName].filter(Boolean).join(' — ')
   return (
-    <Tooltip title={[slot.band_member_id === null ? t($ => $.events.bandWide) : memberName, statusLabel, slot.reason].filter(Boolean).join(' — ')}>
+    <Tooltip title={[slot.band_member_id === null ? t($ => $.events.bandWide) : memberName, statusLabel, detail].filter(Boolean).join(' — ')}>
       <Box
         data-slot-id={slot.id}
         onClick={(e) => { e.stopPropagation(); onSlotClick(slot) }}

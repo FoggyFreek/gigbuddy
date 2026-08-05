@@ -19,6 +19,12 @@ vi.mock('../api/notifications.ts', () => ({
 vi.mock('../hooks/usePushNotifications.ts', () => ({
   usePushNotifications: () => ({ status: 'unsubscribed', subscribe: vi.fn(), unsubscribe: vi.fn() }),
 }))
+vi.mock('../api/userAvailability.ts', () => ({
+  getAvailabilitySettings: vi.fn().mockResolvedValue({
+    availabilityDetailVisible: false, crossBandGigDetailVisible: false, delegations: [],
+  }),
+  updateAvailabilitySettings: vi.fn(),
+}))
 vi.mock('../api/profile.ts', () => ({
   getProfile: vi.fn().mockResolvedValue({ join_policy: 'invite_only' }),
   setJoinPolicy: vi.fn().mockResolvedValue({ join_policy: 'request' }),

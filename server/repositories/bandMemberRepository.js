@@ -22,6 +22,17 @@ export async function bandMemberExistsInTenant(executor, memberId, tenantId) {
   return rowCount > 0
 }
 
+// The account a roster row is linked to, or null for a dep/CRM-only member.
+// This is the bridge availability writes use to decide whether a slot belongs
+// to a person (user-level) or to this band alone.
+export async function bandMemberUserId(executor, memberId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT user_id FROM band_members WHERE id = $1 AND tenant_id = $2',
+    [memberId, tenantId],
+  )
+  return rows[0]?.user_id ?? null
+}
+
 export async function nextSortOrder(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM band_members WHERE tenant_id = $1',
