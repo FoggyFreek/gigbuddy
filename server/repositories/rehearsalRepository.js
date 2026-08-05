@@ -59,6 +59,18 @@ export async function listRehearsalsInRange(executor, tenantId, from, to) {
   return rows
 }
 
+// Cross-tenant hub read (/api/me). The id list comes from the caller's approved
+// memberships (resolveMemberTenantIds), never from the client.
+export async function listRehearsalsInRangeForMemberTenants(executor, tenantIds, from, to) {
+  const { rows } = await executor.query(
+    `SELECT * FROM rehearsals
+     WHERE tenant_id = ANY($1) AND proposed_date BETWEEN $2 AND $3
+     ORDER BY proposed_date ASC, id ASC`,
+    [tenantIds, from, to],
+  )
+  return rows
+}
+
 export async function fetchRehearsal(executor, rehearsalId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM rehearsals WHERE id = $1 AND tenant_id = $2',

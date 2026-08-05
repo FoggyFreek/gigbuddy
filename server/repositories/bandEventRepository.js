@@ -49,6 +49,19 @@ export async function listBandEventsInRange(executor, tenantId, from, to) {
   return rows
 }
 
+// Cross-tenant hub read (/api/me). Interval overlap, so a multi-day event that
+// straddles a window bound still appears. Tenant ids come from the caller's
+// approved memberships, never from the client.
+export async function listBandEventsInRangeForMemberTenants(executor, tenantIds, from, to) {
+  const { rows } = await executor.query(
+    `SELECT * FROM band_events
+     WHERE tenant_id = ANY($1) AND start_date <= $3 AND end_date >= $2
+     ORDER BY start_date ASC, id ASC`,
+    [tenantIds, from, to],
+  )
+  return rows
+}
+
 export async function fetchBandEvent(executor, eventId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM band_events WHERE id = $1 AND tenant_id = $2',

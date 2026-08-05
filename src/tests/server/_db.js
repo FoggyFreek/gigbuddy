@@ -81,10 +81,10 @@ export async function truncateAll() {
 const SEED_SQL = `
 WITH
   t AS (
-    INSERT INTO tenants (slug, band_name, address_street, address_postal_code, address_city, tax_id)
+    INSERT INTO tenants (slug, band_name, display_name, address_street, address_postal_code, address_city, tax_id)
     VALUES
-      ('alpha', 'Alpha Band', 'Alpha Street 1', '1000 AA', 'Amsterdam', 'NL123456789B01'),
-      ('beta',  'Beta Band',  'Beta Street 2',  '2000 BB', 'Rotterdam', 'NL123456789B02')
+      ('alpha', 'Alpha Band', 'Alpha Band', 'Alpha Street 1', '1000 AA', 'Amsterdam', 'NL123456789B01'),
+      ('beta',  'Beta Band',  'Beta Band',  'Beta Street 2',  '2000 BB', 'Rotterdam', 'NL123456789B02')
     RETURNING id, slug
   ),
   u AS (

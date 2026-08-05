@@ -181,6 +181,24 @@ export async function updateJoinPolicy(executor, tenantId, joinPolicy) {
   return rows[0] || null
 }
 
+// Every tenant the user is an APPROVED member of and that is not archived —
+// the tenant set the cross-tenant hub reads through. Derived server-side from
+// memberships: the client never names the tenants it wants.
+export async function listApprovedMemberTenants(executor, userId) {
+  const { rows } = await executor.query(
+    `SELECT t.id, t.kind, t.slug, t.display_name, t.logo_path, m.role
+       FROM memberships m
+       JOIN tenants t ON t.id = m.tenant_id
+      WHERE m.user_id = $1
+        AND m.status = 'approved'
+        AND t.archived_at IS NULL
+        AND t.deletion_status IS NULL
+      ORDER BY t.kind DESC, t.display_name ASC, t.id ASC`,
+    [userId],
+  )
+  return rows
+}
+
 export async function fetchMembershipStatus(executor, userId, tenantId) {
   const { rows } = await executor.query(
     'SELECT status FROM memberships WHERE user_id = $1 AND tenant_id = $2',

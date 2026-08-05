@@ -32,6 +32,7 @@ import usersRouter from './users.js'
 import tenantsRouter from './tenants.js'
 import tenantsSelfRouter from './tenantsSelf.js'
 import bandDirectoryRouter from './bandDirectory.js'
+import meRouter from './me.js'
 import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
@@ -57,6 +58,7 @@ import {
   resolveTenantId,
   requireTenantMember,
   requireTenantKind,
+  resolveMemberTenantIds,
   requireSuperAdmin,
 } from '../middleware/tenant.js'
 import { requirePermission } from '../middleware/permissions.js'
@@ -197,6 +199,9 @@ router.use('/tenants', requireApproved, tenantsSelfRouter)
 // Band directory: user-level too — an artist searches and asks to join from
 // inside their own workspace, with no membership in the target band.
 router.use('/band-directory', currentTermsUser, bandDirectoryLimiter, bandDirectoryRouter)
+// The cross-tenant hub. Its own tier: authenticated + terms + the member tenant
+// set, and deliberately NO resolveTenantId — see resolveMemberTenantIds.
+router.use('/me', currentTermsUser, resolveMemberTenantIds, meRouter)
 // User-level billing (subscription owner acts regardless of active tenant).
 router.use('/billing', requireApproved, billingRouter)
 router.use('/admin/tenants', superAdmin, tenantsRouter)

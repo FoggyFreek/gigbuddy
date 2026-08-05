@@ -173,6 +173,51 @@ export async function listPastGigs(executor, tenantId, today, limit, cursor = nu
   return rows
 }
 
+// ---- cross-tenant hub reads (/api/me) ----
+//
+// These are the ONLY gig queries not scoped to a single tenant. The id list is
+// resolved server-side from the caller's approved memberships
+// (resolveMemberTenantIds) — never taken from the client. An empty list is a
+// valid state and `= ANY('{}')` correctly matches nothing.
+
+export async function listGigsInRangeForMemberTenants(executor, tenantIds, from, to) {
+  const { rows } = await executor.query(
+    `SELECT
+       ${GIG_LIST_PROJECTION}
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = ANY($1) AND g.event_date BETWEEN $2 AND $3
+     ORDER BY g.event_date ASC, g.id ASC`,
+    [tenantIds, from, to],
+  )
+  return rows
+}
+
+// Most recent first, keyset-paginated on (event_date, id). `gigs.id` is a
+// global SERIAL primary key, so that tuple is a total order across tenants too.
+export async function listPastGigsForMemberTenants(executor, tenantIds, today, limit, cursor = null) {
+  const params = [tenantIds, today]
+  let cursorClause = ''
+  if (cursor) {
+    params.push(cursor.date, cursor.id)
+    cursorClause = `AND (g.event_date, g.id) < ($${params.length - 1}, $${params.length})`
+  }
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT
+       ${GIG_LIST_PROJECTION}
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = ANY($1) AND g.event_date < $2 ${cursorClause}
+     ORDER BY g.event_date DESC, g.id DESC
+     LIMIT $${params.length}`,
+    params,
+  )
+  return rows
+}
+
 export async function listGigsInRange(executor, tenantId, from, to) {
   const { rows } = await executor.query(
     `SELECT

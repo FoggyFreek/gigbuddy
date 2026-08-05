@@ -9,6 +9,7 @@
   },
   "items": {
     "dashboard": "Dashboard",
+    "myHub": "My hub",
     "financial": "Financial",
     "profile": "Profile",
     "availability": "Calendar",

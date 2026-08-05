@@ -12,6 +12,7 @@ import { PERMISSIONS } from './auth/permissions.ts'
 const BAND_ONLY: readonly TenantKind[] = ['band']
 
 const AchievementsPage = lazy(() => import('./pages/AchievementsPage.tsx'))
+const MyHubPage = lazy(() => import('./pages/MyHubPage.tsx'))
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage.tsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.tsx'))
 const FinancialDashboardPage = lazy(() => import('./pages/FinancialDashboardPage.tsx'))
@@ -76,6 +77,9 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             {/* No sidebar nav entry — reached via the dashboard card's Show all. */}
             <Route path="/achievements" element={<AchievementsPage />} />
+            {/* Cross-tenant hub: read-only, spans every band the user is in,
+                so it carries no tenant-kind or permission gate of its own. */}
+            <Route path="/me" element={<MyHubPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             {/* Unified settings — reachable by every member; each section gates
                 its own content by role. Old /account and /members deep links

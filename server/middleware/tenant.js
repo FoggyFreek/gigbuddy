@@ -2,6 +2,7 @@ import pool from '../db/index.js'
 import { loadUser } from './auth.js'
 import { setContextField } from '../utils/requestContextStore.js'
 import { tenantKindNotSupported } from '../services/serviceErrors.js'
+import { listApprovedMemberTenants } from '../repositories/tenantRepository.js'
 
 async function fetchMembership(userId, tenantId) {
   const { rows } = await pool.query(
@@ -41,6 +42,37 @@ export async function resolveTenantId(req, res, next) {
       // For the entitlement gates: null = ownerless tenant, enforcement skipped.
       req.tenantOwnerUserId = membership.tenant_owner_user_id ?? null
       setContextField('tenantId', tenantId)
+      next()
+    } catch (e) {
+      next(e)
+    }
+  })
+}
+
+// Sibling of resolveTenantId for the cross-tenant hub (/api/me/*), the one
+// place that deliberately departs from "every read is scoped by req.tenantId".
+//
+// Three rules this middleware exists to enforce:
+//   1. it NEVER sets req.tenantId — hub reads can't be mistaken for scoped ones;
+//   2. the tenant set is derived server-side from approved, non-archived
+//      memberships, so a tenant id in a request body or query changes nothing;
+//   3. an empty set is a valid state (a user with no memberships gets empty
+//      items, not a 403).
+export async function resolveMemberTenantIds(req, res, next) {
+  loadUser(req, res, async (err) => {
+    if (err) return next(err)
+    if (!req.user) return
+    try {
+      const rows = await listApprovedMemberTenants(pool, req.user.id)
+      req.memberTenants = rows.map((r) => ({
+        tenantId: r.id,
+        kind: r.kind,
+        displayName: r.display_name,
+        slug: r.slug,
+        logoPath: r.logo_path,
+        role: r.role,
+      }))
+      req.memberTenantIds = req.memberTenants.map((t) => t.tenantId)
       next()
     } catch (e) {
       next(e)

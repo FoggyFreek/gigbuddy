@@ -58,5 +58,35 @@
     "cropTitle": "Herinneringsfoto bijsnijden",
     "uploadError": "Kon de afbeelding niet uploaden",
     "removeError": "Kon de afbeelding niet verwijderen"
+  },
+  "hub": {
+    "title": "Mijn overzicht",
+    "subtitle": "Alles waarvoor je geboekt bent, in elke band waarin je speelt — en in je eigen werkruimte.",
+    "agenda": {
+      "title": "Mijn agenda",
+      "empty": "Deze maand staat er niets gepland.",
+      "pastToggle": "Verleden tonen",
+      "upcomingToggle": "Deze maand tonen",
+      "pastEmpty": "Nog niets in het verleden.",
+      "loadMore": "Meer laden",
+      "prevMonth": "vorige maand",
+      "nextMonth": "volgende maand",
+      "type": {
+        "gig": "Optreden",
+        "rehearsal": "Repetitie",
+        "band_event": "Evenement"
+      },
+      "untitled": "Zonder titel"
+    },
+    "earnings": {
+      "title": "Waar mijn geld vandaan komt",
+      "help": "Elke band voert een eigen boekhouding, dus dit zijn losse bedragen — nooit één opgeteld totaal.",
+      "empty": "Geen enkele band deelt de financiën met je.",
+      "band": "Band",
+      "revenue": "Omzet",
+      "expenses": "Kosten",
+      "result": "Resultaat"
+    },
+    "loadError": "Je overzicht kon niet worden geladen."
   }
 }
