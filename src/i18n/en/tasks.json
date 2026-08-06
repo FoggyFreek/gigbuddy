@@ -1,8 +1,12 @@
 {
   "title": "Tasks",
   "myTasks": "Assigned to me",
-  "showFinished": "Finished",
   "filters": "Filters",
+  "allStatuses": "All statuses",
+  "status": {
+    "open": "Open",
+    "finished": "Finished"
+  },
   "taskLimit": "Tasks shown",
   "maxTaskLimit": "Max. tasks shown",
   "newTask": "New task",

@@ -141,13 +141,14 @@ describe('TasksPage', () => {
 
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
     // No inline filter toggles; a single Filters button opens a menu instead.
-    expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument()
+    expect(screen.getByTestId('FilterListIcon')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Assigned to me' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Finished' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /filters/i }))
-    // The menu items carry the filter labels as plain text (no icons).
     expect(await screen.findByRole('menuitem', { name: 'Assigned to me' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'All statuses' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Open' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Finished' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Max. tasks shown' })).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'Tasks shown' })).not.toBeInTheDocument()
@@ -192,9 +193,46 @@ describe('TasksPage', () => {
 
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Assigned to me' })).toHaveStyle({ height: '31px' })
-    expect(screen.getByRole('button', { name: 'Finished' })).toHaveStyle({ height: '31px' })
     expect(screen.getByText('Assigned to me')).toBeInTheDocument()
-    expect(screen.getByText('Finished')).toBeInTheDocument()
+    // The status filter lives behind the filter icon menu, not an inline toggle.
+    expect(screen.queryByRole('button', { name: 'Finished' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('FilterListIcon')).toBeInTheDocument()
+  })
+
+  it('shows finished tasks once the status filter selects them in desktop view', async () => {
+    const user = userEvent.setup()
+    listTasks.mockResolvedValue(collection([
+      { ...TASKS[2], id: 30, title: 'Restring guitar', done: true },
+      TASKS[2],
+    ]))
+    wrap(<TasksPage />)
+
+    await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
+    expect(screen.queryByText('Restring guitar')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /filters/i }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Finished' }))
+
+    expect(screen.getByText('Restring guitar')).toBeInTheDocument()
+    expect(screen.getByText('Buy strings')).toBeInTheDocument()
+  })
+
+  it('hides open tasks when the status filter deselects them', async () => {
+    const user = userEvent.setup()
+    listTasks.mockResolvedValue(collection([
+      { ...TASKS[2], id: 30, title: 'Restring guitar', done: true },
+      TASKS[2],
+    ]))
+    wrap(<TasksPage />)
+
+    await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /filters/i }))
+    await user.click(await screen.findByRole('menuitem', { name: 'All statuses' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Open' }))
+
+    expect(screen.getByText('Restring guitar')).toBeInTheDocument()
+    expect(screen.queryByText('Buy strings')).not.toBeInTheDocument()
   })
 
   it('navigates to the gig tasks tab when the open-gig button is clicked', async () => {

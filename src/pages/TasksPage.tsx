@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Checkbox from '@mui/material/Checkbox'
 import CircularProgress from '@mui/material/CircularProgress'
+import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
 import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
@@ -12,10 +14,11 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import ToggleButton from '@mui/material/ToggleButton'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
-import FilterAltIcon from '@mui/icons-material/FilterAlt'
+import FilterListIcon from '@mui/icons-material/FilterList'
 import TasksTable from '../components/TasksTable.tsx'
 import TaskFormDialog from '../components/TaskFormDialog.tsx'
 import { useAuth } from '../contexts/authContext.ts'
@@ -30,6 +33,9 @@ import type { Id, Task } from '../types/entities.ts'
 const FILTER_SX = { height: 31 } as const
 const DEFAULT_TASK_LIST_LIMIT = 50
 const TASK_LIST_LIMIT_OPTIONS = [50, 100, 200, 500] as const
+const TASK_STATUSES = ['open', 'finished'] as const
+
+type TaskStatus = typeof TASK_STATUSES[number]
 
 const COMPACT_FILTER_SX = {
   ...FILTER_SX,
@@ -50,7 +56,8 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [myTasksOnly, setMyTasksOnly] = useState(false)
-  const [showFinished, setShowFinished] = useState(false)
+  // Finished tasks stay hidden by default; both statuses selected shows everything.
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<TaskStatus>>(() => new Set(['open']))
   const [taskLimit, setTaskLimit] = useState(DEFAULT_TASK_LIST_LIMIT)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
@@ -120,6 +127,26 @@ export default function TasksPage() {
     closeCompactMenus()
   }
 
+  function toggleStatus(status: TaskStatus) {
+    setSelectedStatuses((previous) => {
+      const next = new Set(previous)
+      if (next.has(status)) next.delete(status)
+      else next.add(status)
+      return next
+    })
+  }
+
+  function toggleAllStatuses() {
+    setSelectedStatuses((previous) =>
+      previous.size === TASK_STATUSES.length ? new Set() : new Set(TASK_STATUSES),
+    )
+  }
+
+  const showOpen = selectedStatuses.has('open')
+  const showFinished = selectedStatuses.has('finished')
+  const allStatusesSelected = selectedStatuses.size === TASK_STATUSES.length
+  const someStatusesSelected = selectedStatuses.size > 0 && !allStatusesSelected
+
   const memberTasks = tasks
     .filter((task) => isPersonal || !myTasksOnly || !user?.bandMemberId || task.assigned_to === user.bandMemberId)
   const gigsWithOpenTasks = new Set(
@@ -127,12 +154,28 @@ export default function TasksPage() {
       .filter((task) => !task.done && task.gig_id != null)
       .map((task) => String(task.gig_id)),
   )
-  const visibleTasks = memberTasks.filter(
-    (task) =>
-      showFinished
-      || !task.done
-      || (task.gig_id != null && gigsWithOpenTasks.has(String(task.gig_id))),
-  )
+  const visibleTasks = memberTasks.filter((task) => {
+    if (!task.done) return showOpen
+    if (showFinished) return true
+    // A finished task stays in view for context while its gig still has open ones.
+    return showOpen && task.gig_id != null && gigsWithOpenTasks.has(String(task.gig_id))
+  })
+
+  // Returned as a flat array so MUI's Menu keeps its keyboard navigation
+  // (a Fragment child would hide the items from it).
+  const statusMenuItems = () => [
+    <MenuItem key="all" dense onClick={toggleAllStatuses}>
+      <Checkbox size="small" checked={allStatusesSelected} indeterminate={someStatusesSelected} />
+      <ListItemText primary={t($ => $.allStatuses)} />
+    </MenuItem>,
+    <Divider key="all-divider" />,
+    ...TASK_STATUSES.map((status) => (
+      <MenuItem key={status} dense onClick={() => toggleStatus(status)}>
+        <Checkbox size="small" checked={selectedStatuses.has(status)} />
+        <ListItemText primary={t($ => $.status[status])} />
+      </MenuItem>
+    )),
+  ]
 
   return (
     <>
@@ -145,10 +188,10 @@ export default function TasksPage() {
             <IconButton
               aria-label={t($ => $.filters)}
               onClick={(e) => setFilterAnchor(e.currentTarget)}
-              color={myTasksOnly || showFinished ? 'primary' : 'default'}
+              color={myTasksOnly || someStatusesSelected ? 'primary' : 'default'}
               sx={COMPACT_FILTER_SX}
             >
-              <FilterAltIcon />
+              <FilterListIcon />
             </IconButton>
             <Menu
               anchorEl={filterAnchor}
@@ -156,13 +199,14 @@ export default function TasksPage() {
               onClose={closeCompactMenus}
             >
               {!isPersonal && user?.bandMemberId && (
-                <MenuItem selected={myTasksOnly} onClick={() => setMyTasksOnly((v) => !v)}>
-                  {t($ => $.myTasks)}
+                <MenuItem dense onClick={() => setMyTasksOnly((v) => !v)}>
+                  <Checkbox size="small" checked={myTasksOnly} />
+                  <ListItemText primary={t($ => $.myTasks)} />
                 </MenuItem>
               )}
-              <MenuItem selected={showFinished} onClick={() => setShowFinished((v) => !v)}>
-                {t($ => $.showFinished)}
-              </MenuItem>
+              {!isPersonal && user?.bandMemberId && <Divider />}
+              {statusMenuItems()}
+              <Divider />
               <MenuItem
                 aria-haspopup="menu"
                 aria-expanded={Boolean(taskLimitAnchor)}
@@ -203,15 +247,22 @@ export default function TasksPage() {
                 {t($ => $.myTasks)}
               </ToggleButton>
             )}
-            <ToggleButton
-              value="showFinished"
-              selected={showFinished}
-              onChange={() => setShowFinished((v) => !v)}
-              aria-label={t($ => $.showFinished)}
-              sx={FILTER_SX}
+            <Tooltip title={t($ => $.filters)}>
+              <IconButton
+                aria-label={t($ => $.filters)}
+                color={someStatusesSelected ? 'primary' : 'default'}
+                onClick={(e) => setFilterAnchor(e.currentTarget)}
+              >
+                <FilterListIcon />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={filterAnchor}
+              open={Boolean(filterAnchor)}
+              onClose={() => setFilterAnchor(null)}
             >
-              {t($ => $.showFinished)}
-            </ToggleButton>
+              {statusMenuItems()}
+            </Menu>
             <FormControl size="small" sx={{ minWidth: 120 }}>
               <InputLabel id="task-limit-label">{t($ => $.taskLimit)}</InputLabel>
               <Select

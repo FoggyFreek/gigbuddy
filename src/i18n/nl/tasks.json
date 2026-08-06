@@ -1,8 +1,12 @@
 {
   "title": "Taken",
   "myTasks": "Aan mij toegewezen",
-  "showFinished": "Voltooid",
   "filters": "Filters",
+  "allStatuses": "Alle statussen",
+  "status": {
+    "open": "Open",
+    "finished": "Voltooid"
+  },
   "taskLimit": "Getoonde taken",
   "maxTaskLimit": "Max. getoonde taken",
   "newTask": "Nieuwe taak",

@@ -53,15 +53,19 @@ Write or adjust the test first, watch it fail, then implement until it passes. T
 infisical run -- npm test                                   # frontend (vitest watch), excludes server tests
 infisical run -- npm test -- --run                          # frontend, single run
 infisical run -- npm test -- --run src/tests/Foo.test.jsx   # one file
-infisical run --env=test -- npm run test:server                        # FULL backend suite (~10 min!) — only when explicitly asked
-infisical run --env=test -- npx vitest run --no-file-parallelism src/tests/server/<file>.test.js   # targeted backend test — default
+infisical run --env=test -- npm run test:server                        # FULL backend suite — only when explicitly asked
+infisical run --env=test -- npx vitest run --config vitest.server.config.js src/tests/server/<file>.test.js   # targeted backend test — default
 ```
 
-**Backend tests are slow** (sequential, real Postgres). Run only the affected file(s) via `npx vitest` as shown. Note `npm run test:server -- <file>` does NOT narrow the run — the npm script already passes `src/tests/server` as a path, so appended file args are ignored and the full suite runs anyway.
+**Always pass `--config vitest.server.config.js` for backend runs.** That config owns the parallel-database harness (below); without it the run falls back to the single shared `${base}_test` database and cannot be parallelized. Note `npm run test:server -- <file>` does NOT narrow the run — the npm script already passes `src/tests/server` as a path, so appended file args are ignored and the full suite runs anyway.
 
 - **Frontend** tests (`src/tests/`, jsdom): all `src/api/*` modules are mocked with `vi.mock`. Components are wrapped in MUI `ThemeProvider` (+ `LocalizationProvider`/`MemoryRouter` as needed) via a local `wrap()` helper. Debounced-save tests use `vi.useFakeTimers()` + `vi.runAllTimersAsync()`.
 
-- **Backend** tests (`src/tests/server/`) run against a **real Postgres test database** whose name must end in `_test`. Resolution order is: `PGDATABASE_TEST`, then `PGDATABASE` itself when it already ends in `_test` (for dedicated test-only Infisical credentials), otherwise `${PGDATABASE}_test`. `_envSetup.js` must remain the first import, but safety does not depend on import order alone: every mutating `_db.js` helper requires its bootstrap marker and verifies PostgreSQL's actual `current_database()` exactly matches the expected `_test` database before migrations, truncation, or fixture inserts. Create the test DB manually once. `_app.js` builds a real Express app but `x-test-user-id`/`x-test-tenant-id` headers stand in for OIDC and CSRF is short-circuited. `_db.js` exposes `runMigrations`, `truncateAll`, `seedTwoTenants`.
+- **Backend** tests (`src/tests/server/`) run against a **real Postgres test database** whose name must end in `_test`. Resolution order is: `PGDATABASE_TEST`, then `PGDATABASE` itself when it already ends in `_test` (for dedicated test-only Infisical credentials), otherwise `${PGDATABASE}_test`. `_envSetup.js` must remain the first import, but safety does not depend on import order alone: every mutating `_db.js` helper requires its bootstrap marker and verifies PostgreSQL's actual `current_database()` exactly matches the expected `_test` database before migrations, truncation, or fixture inserts. `_app.js` builds a real Express app but `x-test-user-id`/`x-test-tenant-id` headers stand in for OIDC and CSRF is short-circuited. `_db.js` exposes `runMigrations`, `truncateAll`, `seedTwoTenants`.
+
+- **Parallel databases via a PostgreSQL template.** `_globalSetup.js` (wired by `vitest.server.config.js`) builds a schema-only `${base}_template_test` once, then each worker clones it — `CREATE DATABASE ... TEMPLATE` is a filesystem copy, so it costs O(bytes) not O(migrations). `_workerDatabase.js` (setupFile) does the clone **per worker**, not per file, so files still share a database within a worker and keep the `truncateAll()` + `seedTwoTenants()` rhythm. Naming stays `${base}_w<N>_test` so the `_test` suffix invariant holds.
+- The template is **reused across runs** and topped up incrementally, so adding a migration is free. Editing an already-applied migration in place needs `GIGBUDDY_TEST_FRESH_TEMPLATE=1` to force a rebuild. Stale worker clones are dropped at both setup and teardown.
+- Concurrency knobs: `GIGBUDDY_TEST_MAX_WORKERS` (default 8) and `PG_POOL_MAX` (default 5 in tests, read by `server/db/index.js`). Their product must stay under the server's `max_connections`.
 
 When you add backend behavior, add an isolation test that proves **tenant isolation holds** — a cross-tenant read/write must 404, not leak.
 

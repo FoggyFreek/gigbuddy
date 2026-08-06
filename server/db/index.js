@@ -9,8 +9,11 @@ const { Pool, types } = pg
 // the way back to the client.
 types.setTypeParser(1082, (val) => val)
 
-// pg reads PGHOST, PGDATABASE, PGUSER, PGPASSWORD, PGPORT automatically
-const pool = new Pool()
+// pg reads PGHOST, PGDATABASE, PGUSER, PGPASSWORD, PGPORT automatically.
+// PG_POOL_MAX caps connections per process (pg's own default is 10); the
+// parallel test workers set it so N pools stay under the server's max_connections.
+const poolMax = Number.parseInt(process.env.PG_POOL_MAX ?? '', 10)
+const pool = new Pool(poolMax > 0 ? { max: poolMax } : {})
 
 pool.on('error', (err) => {
   logger.error('postgres.unexpected_client_error', { err })
