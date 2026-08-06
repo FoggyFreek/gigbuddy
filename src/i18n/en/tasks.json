@@ -7,8 +7,6 @@
     "open": "Open",
     "finished": "Finished"
   },
-  "taskLimit": "Tasks shown",
-  "maxTaskLimit": "Max. tasks shown",
   "newTask": "New task",
   "empty": "No tasks yet.",
   "unassigned": "Unassigned",

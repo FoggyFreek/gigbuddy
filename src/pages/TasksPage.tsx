@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -7,17 +7,13 @@ import Checkbox from '@mui/material/Checkbox'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
-import FormControl from '@mui/material/FormControl'
-import InputLabel from '@mui/material/InputLabel'
 import ListItemText from '@mui/material/ListItemText'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
-import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import TasksTable from '../components/TasksTable.tsx'
 import TaskFormDialog from '../components/TaskFormDialog.tsx'
@@ -31,8 +27,7 @@ import { useCrossTenantNavigate } from '../hooks/useCrossTenantNavigate.ts'
 import type { Id, Task } from '../types/entities.ts'
 
 const FILTER_SX = { height: 31 } as const
-const DEFAULT_TASK_LIST_LIMIT = 50
-const TASK_LIST_LIMIT_OPTIONS = [50, 100, 200, 500] as const
+const TASK_LIST_LIMIT = 50
 const TASK_STATUSES = ['open', 'finished'] as const
 
 type TaskStatus = typeof TASK_STATUSES[number]
@@ -51,6 +46,7 @@ export default function TasksPage() {
   const { isPersonal } = useTenantKind()
   const openInTenant = useCrossTenantNavigate()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const isCompact = useCompactLayout()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,26 +54,24 @@ export default function TasksPage() {
   const [myTasksOnly, setMyTasksOnly] = useState(false)
   // Finished tasks stay hidden by default; both statuses selected shows everything.
   const [selectedStatuses, setSelectedStatuses] = useState<Set<TaskStatus>>(() => new Set(['open']))
-  const [taskLimit, setTaskLimit] = useState(DEFAULT_TASK_LIST_LIMIT)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
-  const [taskLimitAnchor, setTaskLimitAnchor] = useState<HTMLElement | null>(null)
 
   const load = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true)
       setError(null)
       const response = await (isPersonal
-        ? listMyTasks({ limit: taskLimit })
-        : listTasks({ limit: taskLimit }))
+        ? listMyTasks({ limit: TASK_LIST_LIMIT })
+        : listTasks({ limit: TASK_LIST_LIMIT }))
       setTasks(response.items)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [taskLimit, isPersonal])
+  }, [isPersonal])
 
   useEffect(() => { load() }, [load])
 
@@ -92,6 +86,24 @@ export default function TasksPage() {
     (task: Task) => !isPersonal || task.tenantId === user?.activeTenantId,
     [isPersonal, user?.activeTenantId],
   )
+
+  // Deep link from global search (?task=<id>): pop that task straight into the
+  // edit dialog once the list has loaded. The param is consumed immediately so
+  // closing the dialog doesn't reopen it, and a stale link just lands on the list.
+  const taskParam = searchParams.get('task')
+  useEffect(() => {
+    if (!taskParam || loading) return
+    const target = tasks.find((task) => String(task.id) === taskParam)
+    if (target && canWritePlanning && canEditTask(target)) {
+      setEditingTask(target)
+      setDialogOpen(true)
+    }
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params)
+      next.delete('task')
+      return next
+    }, { replace: true })
+  }, [taskParam, loading, tasks, canWritePlanning, canEditTask, setSearchParams])
 
   async function handleToggle(task: Task) {
     if (task.id === undefined) return
@@ -115,16 +127,6 @@ export default function TasksPage() {
   function openEdit(task: Task) {
     setEditingTask(task)
     setDialogOpen(true)
-  }
-
-  function closeCompactMenus() {
-    setTaskLimitAnchor(null)
-    setFilterAnchor(null)
-  }
-
-  function selectTaskLimit(limit: number) {
-    setTaskLimit(limit)
-    closeCompactMenus()
   }
 
   function toggleStatus(status: TaskStatus) {
@@ -196,7 +198,7 @@ export default function TasksPage() {
             <Menu
               anchorEl={filterAnchor}
               open={Boolean(filterAnchor)}
-              onClose={closeCompactMenus}
+              onClose={() => setFilterAnchor(null)}
             >
               {!isPersonal && user?.bandMemberId && (
                 <MenuItem dense onClick={() => setMyTasksOnly((v) => !v)}>
@@ -206,32 +208,6 @@ export default function TasksPage() {
               )}
               {!isPersonal && user?.bandMemberId && <Divider />}
               {statusMenuItems()}
-              <Divider />
-              <MenuItem
-                aria-haspopup="menu"
-                aria-expanded={Boolean(taskLimitAnchor)}
-                onClick={(e) => setTaskLimitAnchor(e.currentTarget)}
-              >
-                <ListItemText>{t($ => $.maxTaskLimit)}</ListItemText>
-                <ChevronRightIcon fontSize="small" />
-              </MenuItem>
-            </Menu>
-            <Menu
-              anchorEl={taskLimitAnchor}
-              open={Boolean(taskLimitAnchor)}
-              onClose={() => setTaskLimitAnchor(null)}
-              anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-            >
-              {TASK_LIST_LIMIT_OPTIONS.map((limit) => (
-                <MenuItem
-                  key={limit}
-                  selected={taskLimit === limit}
-                  onClick={() => selectTaskLimit(limit)}
-                >
-                  {limit}
-                </MenuItem>
-              ))}
             </Menu>
           </>
         ) : (
@@ -263,20 +239,6 @@ export default function TasksPage() {
             >
               {statusMenuItems()}
             </Menu>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel id="task-limit-label">{t($ => $.taskLimit)}</InputLabel>
-              <Select
-                labelId="task-limit-label"
-                value={taskLimit}
-                label={t($ => $.taskLimit)}
-                onChange={(e) => setTaskLimit(Number(e.target.value))}
-                sx={FILTER_SX}
-              >
-                {TASK_LIST_LIMIT_OPTIONS.map((limit) => (
-                  <MenuItem key={limit} value={limit}>{limit}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
           </>
         )}
         {canWritePlanning && (

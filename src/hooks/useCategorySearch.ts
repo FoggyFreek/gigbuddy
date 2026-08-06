@@ -8,11 +8,16 @@ import { searchPurchases } from '../api/purchases.ts'
 import { searchLedgerTransactions } from '../api/ledger.ts'
 import { searchFiles } from '../api/files.ts'
 import { searchVenues } from '../api/venues.ts'
+import { searchTasks } from '../api/tasks.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
 import type {
-  Gig, Contact, Song, Setlist, Invoice, Purchase, LedgerEntryRow, Venue,
+  Gig, Contact, Song, Setlist, Invoice, Purchase, LedgerEntryRow, Venue, Task,
 } from '../types/entities.ts'
+
+// A state marker on a result row. The searcher only names the state; SearchPanel
+// owns the icon and the translated label it renders for it.
+export type SearchResultMarker = 'finished'
 
 export interface SearchResultItem {
   id: string
@@ -20,6 +25,7 @@ export interface SearchResultItem {
   to: string
   sublabel?: string
   badge?: string
+  marker?: SearchResultMarker
 }
 
 export interface CategoryState {
@@ -153,6 +159,20 @@ async function searchFilesCategory(query: string): Promise<SearchResultItem[]> {
   }))
 }
 
+// A gig task opens the gig on its task tab (same destination the Tasks page uses
+// for its "open gig" affordance); a standalone task opens the Tasks page with
+// the task deep link, which pops it straight into the edit dialog.
+async function searchTasksCategory(query: string): Promise<SearchResultItem[]> {
+  const tasks = await searchTasks(query)
+  return tasks.map((task: Task) => ({
+    id: String(task.id),
+    label: task.title ?? '(untitled task)',
+    sublabel: joinDot(formatShortDate(task.due_date), task.event_description),
+    marker: task.done ? 'finished' : undefined,
+    to: task.gig_id != null ? `/gigs/${task.gig_id}?tab=tasks` : `/tasks?task=${task.id}`,
+  }))
+}
+
 type CategorySearcher = (query: string) => Promise<SearchResultItem[]>
 const SEARCHERS: Record<string, CategorySearcher> = {
   contacts: searchContactsCategory,
@@ -160,6 +180,7 @@ const SEARCHERS: Record<string, CategorySearcher> = {
   files: searchFilesCategory,
   invoices: searchInvoicesCategory,
   purchases: searchPurchasesCategory,
+  tasks: searchTasksCategory,
   songs: searchSongsCategory,
   setlists: searchSetlistsCategory,
   suppliers: searchSuppliersCategory,

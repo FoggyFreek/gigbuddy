@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/tasks.ts', () => ({
@@ -34,12 +34,17 @@ import { usePermissions } from '../hooks/usePermissions.ts'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
 import theme from '../theme.ts'
 
-function wrap(ui, { compact = false } = {}) {
+function LocationProbe() {
+  return <div data-testid="location-search">{useLocation().search}</div>
+}
+
+function wrap(ui, { compact = false, route = '/tasks' } = {}) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <ThemeProvider theme={theme}>
         <CompactLayoutContext.Provider value={compact}>
           {ui}
+          <LocationProbe />
         </CompactLayoutContext.Provider>
       </ThemeProvider>
     </MemoryRouter>,
@@ -150,31 +155,14 @@ describe('TasksPage', () => {
     expect(screen.getByRole('menuitem', { name: 'All statuses' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Open' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Finished' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'Max. tasks shown' })).toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: 'Tasks shown' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /tasks shown/i })).not.toBeInTheDocument()
   })
 
-  it('reloads with the selected task limit in desktop view', async () => {
-    const user = userEvent.setup()
+  it('always loads with the fixed task cap', async () => {
     wrap(<TasksPage />)
+
     await waitFor(() => expect(listTasks).toHaveBeenCalledWith({ limit: 50 }))
-
-    await user.click(screen.getByRole('combobox', { name: 'Tasks shown' }))
-    await user.click(await screen.findByRole('option', { name: '200' }))
-
-    await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith({ limit: 200 }))
-  })
-
-  it('reloads with the selected task limit from the compact menu', async () => {
-    const user = userEvent.setup()
-    wrap(<TasksPage />, { compact: true })
-    await waitFor(() => expect(listTasks).toHaveBeenCalledWith({ limit: 50 }))
-
-    await user.click(screen.getByRole('button', { name: /filters/i }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Max. tasks shown' }))
-    await user.click(await screen.findByRole('menuitem', { name: '500' }))
-
-    await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith({ limit: 500 }))
+    expect(screen.queryByRole('combobox', { name: /tasks shown/i })).not.toBeInTheDocument()
   })
 
   it('filters via the compact filter menu', async () => {
@@ -304,6 +292,31 @@ describe('TasksPage', () => {
     )
   })
 
+  describe('?task= deep link from global search', () => {
+    it('opens the linked task in the edit dialog and consumes the param', async () => {
+      wrap(<TasksPage />, { route: '/tasks?task=12' })
+
+      const titleField = await screen.findByLabelText(/title/i)
+      expect(titleField).toHaveValue('Buy strings')
+      // Consumed, so closing the dialog can't reopen it.
+      await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(''))
+    })
+
+    it('leaves other query params intact', async () => {
+      wrap(<TasksPage />, { route: '/tasks?task=12&foo=bar' })
+
+      await screen.findByLabelText(/title/i)
+      await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('?foo=bar'))
+    })
+
+    it('lands on the list without a dialog when the task is not in the loaded set', async () => {
+      wrap(<TasksPage />, { route: '/tasks?task=999' })
+
+      await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
+      expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument()
+    })
+  })
+
   describe('reader (no planning.write)', () => {
     beforeEach(() => {
       usePermissions.mockReturnValue({ canWritePlanning: false })
@@ -313,6 +326,12 @@ describe('TasksPage', () => {
       wrap(<TasksPage />)
       await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
       expect(screen.queryByRole('button', { name: /new task/i })).not.toBeInTheDocument()
+    })
+
+    it('ignores a ?task= deep link (the dialog is an edit affordance)', async () => {
+      wrap(<TasksPage />, { route: '/tasks?task=12' })
+      await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
+      expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument()
     })
 
     it('disables the checkbox for a task not assigned to the reader', async () => {

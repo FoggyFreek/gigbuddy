@@ -72,6 +72,23 @@ export async function listTasksAssignedToUserForMemberTenants(executor, userId, 
   }
 }
 
+// Global-search read: matches tasks on their description (the `title` column).
+// LEFT JOIN to gigs so standalone tasks are searchable too and gig-linked ones
+// carry the context the caller needs to deep-link into the gig's task tab.
+export async function searchTasks(executor, tenantId, like, limit) {
+  const { rows } = await executor.query(
+    `SELECT t.id, t.gig_id, t.title, t.done, t.due_date,
+            g.event_description, g.event_date
+       FROM gig_tasks t
+       LEFT JOIN gigs g ON g.id = t.gig_id AND g.tenant_id = t.tenant_id
+      WHERE t.tenant_id = $1 AND t.title ILIKE $2
+      ORDER BY t.done ASC, t.due_date ASC NULLS LAST, t.title ASC, t.id ASC
+      LIMIT $3`,
+    [tenantId, like, limit],
+  )
+  return rows
+}
+
 export async function findAssignedTaskTenantForMember(executor, userId, tenantIds, taskId) {
   const { rows } = await executor.query(
     `SELECT t.tenant_id, t.gig_id

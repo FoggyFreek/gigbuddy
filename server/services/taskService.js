@@ -5,6 +5,7 @@
 // there is a single task implementation.
 import {
   listTasks as listTaskRows,
+  searchTasks as searchTaskRows,
   getTaskById,
   insertTask,
   updateTaskFields,
@@ -20,6 +21,7 @@ import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { parseId, buildGigTaskUpdateFields } from '../validators/gigValidators.js'
 import {
   MAX_TASK_LIST_LIMIT,
+  parseSearchLimit,
   parseTaskAssigneeFilter,
   parseTaskDoneFilter,
 } from '../validators/taskValidators.js'
@@ -97,6 +99,15 @@ export async function listTasks(db, tenantId, userId, query = {}) {
 
   return limitedCollectionWithTotal(query.limit, (limit) =>
     listTaskRows(db, tenantId, { done, assigneeId, limit }), MAX_TASK_LIST_LIMIT)
+}
+
+// Global-search read: matches tasks on their description. Short queries (<3
+// chars) return nothing so we don't run a wildcard scan on every keystroke
+// (mirrors searchGigs).
+export async function searchTasks(db, tenantId, query = {}) {
+  const q = String(query.q ?? '').trim()
+  if (q.length < 3) return []
+  return searchTaskRows(db, tenantId, `%${q}%`, parseSearchLimit(query.limit))
 }
 
 // Creates a task. `title` is required. `gig_id` is optional — both absent and an

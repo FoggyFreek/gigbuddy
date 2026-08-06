@@ -15,6 +15,7 @@ vi.mock('../api/purchases.ts', () => ({ searchPurchases: vi.fn().mockResolvedVal
 vi.mock('../api/ledger.ts', () => ({ searchLedgerTransactions: vi.fn().mockResolvedValue([]) }))
 vi.mock('../api/files.ts', () => ({ searchFiles: vi.fn().mockResolvedValue([]) }))
 vi.mock('../api/venues.ts', () => ({ searchVenues: vi.fn().mockResolvedValue([]) }))
+vi.mock('../api/tasks.ts', () => ({ searchTasks: vi.fn().mockResolvedValue([]) }))
 // Default to a finance-capable user so every category is visible.
 vi.mock('../hooks/usePermissions.ts', () => ({ usePermissions: () => ({ can: () => true }) }))
 
@@ -22,13 +23,19 @@ import SearchPanel from '../components/appShell/SearchPanel.tsx'
 import { searchGigs } from '../api/gigs.ts'
 import { searchContacts } from '../api/contacts.ts'
 import { searchVenues } from '../api/venues.ts'
+import { searchTasks } from '../api/tasks.ts'
 
 const TENANT_ID = 1
 const STORAGE_KEY = `gigbuddy:recent-searches:${TENANT_ID}`
 
 function LocationProbe() {
-  const { pathname } = useLocation()
-  return <div data-testid="pathname">{pathname}</div>
+  const { pathname, search } = useLocation()
+  return (
+    <>
+      <div data-testid="pathname">{pathname}</div>
+      <div data-testid="search">{search}</div>
+    </>
+  )
 }
 
 // Mirrors how AppShell wires the panel: it owns the query, and onNavigate both
@@ -62,6 +69,7 @@ function Harness({ tenantId = TENANT_ID }) {
 
 const input = () => screen.getByLabelText('search-input')
 const pathname = () => screen.getByTestId('pathname').textContent
+const locationSearch = () => screen.getByTestId('search').textContent
 
 // Type into the controlled query input and let the debounce + search promises
 // resolve so results render.
@@ -80,6 +88,7 @@ describe('SearchPanel', () => {
     searchGigs.mockReset().mockResolvedValue([])
     searchContacts.mockReset().mockResolvedValue([])
     searchVenues.mockReset().mockResolvedValue([])
+    searchTasks.mockReset().mockResolvedValue([])
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -193,5 +202,57 @@ describe('SearchPanel', () => {
     fireEvent.click(screen.getByText('Alpha Fest'))
     await act(async () => { await vi.runAllTimersAsync() })
     expect(pathname()).toBe('/venues/8')
+  })
+
+  it('opens a gig task on the gig\'s task tab', async () => {
+    searchTasks.mockResolvedValue([
+      { id: 11, title: 'Rent a PA system', gig_id: 42, event_description: 'Alpha Gig', due_date: null },
+    ])
+    render(<Harness />)
+    fireEvent.click(screen.getByLabelText('add search category'))
+    fireEvent.click(screen.getByText('Tasks'))
+    await search('PA sys')
+
+    expect(searchTasks).toHaveBeenCalledWith('PA sys')
+    // The linked gig is the sublabel, so the result reads as a gig task.
+    expect(screen.getByText('Alpha Gig')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Rent a PA system'))
+    await act(async () => { await vi.runAllTimersAsync() })
+    expect(pathname()).toBe('/gigs/42')
+    expect(locationSearch()).toBe('?tab=tasks')
+  })
+
+  it('marks finished tasks with a checkmark and leaves open ones unmarked', async () => {
+    searchTasks.mockResolvedValue([
+      { id: 11, title: 'Mixdesk open', gig_id: null, event_description: null, due_date: null, done: false },
+      { id: 12, title: 'Mixdesk finished', gig_id: null, event_description: null, due_date: null, done: true },
+    ])
+    render(<Harness />)
+    fireEvent.click(screen.getByLabelText('add search category'))
+    fireEvent.click(screen.getByText('Tasks'))
+    await search('Mixdesk')
+
+    // Exactly one checkmark, and it sits on the finished row.
+    const checks = screen.getAllByTestId('CheckCircleOutlinedIcon')
+    expect(checks).toHaveLength(1)
+    expect(screen.getByText('Mixdesk finished').parentElement).toContainElement(checks[0])
+    // Announced, not colour-only.
+    expect(checks[0]).toContainElement(screen.getByTitle('Finished'))
+  })
+
+  it('opens a standalone task on the tasks page with the task deep link', async () => {
+    searchTasks.mockResolvedValue([
+      { id: 12, title: 'Renew insurance', gig_id: null, event_description: null, due_date: null },
+    ])
+    render(<Harness />)
+    fireEvent.click(screen.getByLabelText('add search category'))
+    fireEvent.click(screen.getByText('Tasks'))
+    await search('insurance')
+
+    fireEvent.click(screen.getByText('Renew insurance'))
+    await act(async () => { await vi.runAllTimersAsync() })
+    expect(pathname()).toBe('/tasks')
+    expect(locationSearch()).toBe('?task=12')
   })
 })

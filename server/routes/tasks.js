@@ -5,6 +5,7 @@ import { PERMISSIONS } from '../auth/permissions.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
   listTasks,
+  searchTasks,
   createTask,
   patchTask,
   removeTask,
@@ -16,6 +17,11 @@ router.get('/', async (req, res) => {
   const result = await listTasks(pool, req.tenantId, req.user.id, req.query)
   if (result.error) return sendError(res, result.error)
   res.json(result)
+})
+
+// Global search (min 3 chars): task description. Must precede /:id.
+router.get('/search', async (req, res) => {
+  res.json(await searchTasks(pool, req.tenantId, req.query))
 })
 
 router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {

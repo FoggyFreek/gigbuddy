@@ -66,9 +66,13 @@
     "noResults": "Geen resultaten",
     "removeRecentAria": "recente zoekopdracht verwijderen",
     "addCategoryAria": "zoekcategorie toevoegen",
+    "markers": {
+      "finished": "Voltooid"
+    },
     "categories": {
       "contacts": "Contacten",
       "gigs": "Optredens",
+      "tasks": "Taken",
       "files": "Bestanden",
       "invoices": "Facturen",
       "purchases": "Inkopen",

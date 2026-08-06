@@ -7,8 +7,6 @@
     "open": "Open",
     "finished": "Voltooid"
   },
-  "taskLimit": "Getoonde taken",
-  "maxTaskLimit": "Max. getoonde taken",
   "newTask": "Nieuwe taak",
   "empty": "Nog geen taken.",
   "unassigned": "Niet toegewezen",

@@ -66,9 +66,13 @@
     "noResults": "No results",
     "removeRecentAria": "remove recent search",
     "addCategoryAria": "add search category",
+    "markers": {
+      "finished": "Finished"
+    },
     "categories": {
       "contacts": "Contacts",
       "gigs": "Gigs",
+      "tasks": "Tasks",
       "files": "Files",
       "invoices": "Invoices",
       "purchases": "Purchases",
