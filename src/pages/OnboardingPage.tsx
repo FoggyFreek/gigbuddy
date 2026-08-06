@@ -33,9 +33,11 @@ import { uploadLogo } from '../api/profile.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import type { Tenant } from '../types/entities.ts'
 import type { TenantKind } from '../utils/businessRegistry.ts'
+import { ladderPlans } from '../utils/planLadder.ts'
+import { audienceForTenantKind, isPlanAudience } from '../auth/planAudiences.ts'
+import type { PlanAudience } from '../auth/planAudiences.ts'
 import WelcomeStep from '../components/onboarding/WelcomeStep.tsx'
 import BandStep from '../components/onboarding/BandStep.tsx'
-import WorkspaceKindChoice from '../components/onboarding/WorkspaceKindChoice.tsx'
 import SummaryStep from '../components/onboarding/SummaryStep.tsx'
 import TermsDialog from '../components/onboarding/TermsDialog.tsx'
 
@@ -48,13 +50,20 @@ type CheckoutPhase = 'processing' | 'success' | 'timeout'
 
 // Post-Mollie-checkout view: sync first (with webhooks disabled in local dev
 // nothing else flips the status), then poll until the subscription settles.
-function CheckoutReturn() {
+function CheckoutReturn({ audience }: Readonly<{ audience: PlanAudience | null }>) {
   const { t } = useTranslation('onboarding')
   const navigate = useNavigate()
   const { refreshUser } = useAuth()
   const [phase, setPhase] = useState<CheckoutPhase>('processing')
 
   useEffect(() => {
+    // Without a named product we cannot tell which subscription this checkout
+    // was for, and a settled one on the other ladder would read as success.
+    // Better to time out and let the webhook/scheduler finish the job.
+    if (audience === null) {
+      setPhase('timeout')
+      return undefined
+    }
     let cancelled = false
     const run = async () => {
       for (let attempt = 0; attempt < POLL_ATTEMPTS && !cancelled; attempt++) {
@@ -63,8 +72,8 @@ function CheckoutReturn() {
           // disabled locally, sync is the only thing that advances a payment
           // that settles after we started polling — reading local state alone
           // would loop on a stale pending row and always time out.
-          const { subscription } = await syncSubscription()
-          const status = subscription?.status
+          const { subscriptions } = await syncSubscription(audience)
+          const status = subscriptions[audience]?.status
           if (status && SETTLED_STATUSES.includes(status)) {
             // Best-effort: the user still enters the app if this fails. But it's
             // now requireCurrentTerms-gated, so a failure must not be invisible
@@ -160,6 +169,11 @@ function StepContent({
   if (activeStep === 0) {
     return (
       <WelcomeStep
+        kind={kind}
+        onKindChange={onKindChange}
+        // The kind is fixed once the tenant exists — a resumed onboarding
+        // continues the kind it started, read off the resumed tenant.
+        showKindChoice={onboardingTenant === null}
         plans={plans}
         interval={interval}
         onIntervalChange={onIntervalChange}
@@ -174,11 +188,6 @@ function StepContent({
   if (activeStep === 1) {
     return (
       <Stack spacing={3}>
-        {/* The kind is fixed once the tenant exists — a resumed onboarding
-            continues the kind it started, read off the resumed tenant. */}
-        {onboardingTenant === null && (
-          <WorkspaceKindChoice value={kind} onChange={onKindChange} />
-        )}
         <BandStep
           kind={kind}
           bandName={bandName}
@@ -262,6 +271,10 @@ export default function OnboardingPage() {
   const { user, switchTenant, refreshUser } = useAuth()
   const isCompact = useCompactLayout()
   const checkoutReturn = params.get('checkout') === 'return'
+  // Which product the checkout was for — the mandate redirect carries it, so
+  // polling watches that ladder alone.
+  const audienceParam = params.get('audience')
+  const checkoutAudience = isPlanAudience(audienceParam) ? audienceParam : null
 
   const [activeStep, setActiveStep] = useState(0)
   const [plans, setPlans] = useState<SubscriptionPlan[] | null>(null)
@@ -339,10 +352,20 @@ export default function OnboardingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutReturn])
 
+  // Only the ladder the chosen workspace kind is billed on: a band is priced on
+  // the band plans, an artist workspace on the artist plans, and there is no
+  // path between them.
   const sortedPlans = useMemo(
-    () => (plans ?? []).slice().sort((a, b) => a.sort_order - b.sort_order),
-    [plans],
+    () => ladderPlans(plans ?? [], audienceForTenantKind(kind), { activeOnly: true }),
+    [plans, kind],
   )
+
+  // Switching kind switches product, so a plan picked on the other ladder is no
+  // longer a valid choice.
+  const handleKindChange = useCallback((next: TenantKind) => {
+    setKind(next)
+    setSelectedPlanId(null)
+  }, [])
   // The wizard is interactive only once BOTH the plans and the resume-pointer
   // lookup have settled — otherwise a resume user could act on incomplete state.
   const ready = plans !== null && resumeChecked && tenantOnboardingEnabled !== null
@@ -449,7 +472,7 @@ export default function OnboardingPage() {
       <StepContent
         activeStep={activeStep}
         kind={kind}
-        onKindChange={setKind}
+        onKindChange={handleKindChange}
         ready={ready}
         loadError={loadError}
         plans={sortedPlans}
@@ -541,7 +564,7 @@ export default function OnboardingPage() {
         </Stack>
 
         {checkoutReturn ? (
-          <CheckoutReturn />
+          <CheckoutReturn audience={checkoutAudience} />
         ) : isCompact ? (
           // Compact: nest the active step's body + controls inside its
           // StepContent so the wizard doesn't stack three tall labels.

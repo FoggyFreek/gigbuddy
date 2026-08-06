@@ -38,11 +38,16 @@ named capability, not compare `kind` inline.
    - Desired end-state: both kinds reuse profile storage and editing; only a
      tenant with the corresponding capabilities sees members or Bandsintown.
 
-3. Initial subscription capacity
-   - Task: apply the same locked target-capacity check to first subscription as
-     to downgrade, and bind pending checkout numeric limits immediately.
-   - Desired end-state: `artist_gold` (`bands: 0`) cannot be selected while an
-     owned band is active, nor can a band be created during its checkout.
+3. Separate band and artist subscription products
+   - Task: split the plan catalog into two independent ladders (`plans.audience`,
+     `shared/planAudiences.js`) so a subscription is bound to its product for
+     life, and route each tenant's entitlements through the ladder its kind
+     selects.
+   - Desired end-state: a band tenant resolves the owner's band subscription and
+     a personal workspace their artist subscription; a user may hold one live
+     subscription of each at the same time; no upgrade or downgrade crosses the
+     boundary; the band cap reads the band ladder, so an artist plan's `bands: 0`
+     never constrains band ownership.
 
 4. Personal workspace lifecycle
    - Task: distinguish personal and band activation during unarchive.

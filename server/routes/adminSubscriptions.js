@@ -28,12 +28,16 @@ router.post('/complimentary', async (req, res) => {
   res.status(201).json(result.subscription)
 })
 
+// The body names the subscription: a user may hold a complimentary grant on
+// each ladder, so the user id alone no longer identifies one.
 router.post('/:userId/revoke-complimentary', async (req, res) => {
   const userId = Number(req.params.userId)
   if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'Invalid userId' })
-  const result = await revokeComplimentary(pool, userId)
+  const result = await revokeComplimentary(pool, userId, Number(req.body?.subscriptionId))
   if (result.error) return sendError(res, result.error)
-  auditLog(req, 'billing.complimentary_revoke', { targetUserId: userId })
+  auditLog(req, 'billing.complimentary_revoke', {
+    targetUserId: userId, subscriptionId: Number(req.body?.subscriptionId),
+  })
   res.json(result)
 })
 

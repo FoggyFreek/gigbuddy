@@ -7,6 +7,7 @@
 // a hit cap, or null when the write may proceed.
 import { resolveTenantEntitlements, resolveUserLimits } from './entitlementService.js'
 import { LIMITS, isUnlimited } from '../auth/entitlements.js'
+import { PLAN_AUDIENCES } from '../../shared/planAudiences.js'
 import { MAX_OPEN_JOIN_REQUESTS } from '../domain/membership.js'
 import { countOpenJoinRequests } from '../repositories/bandDirectoryRepository.js'
 import {
@@ -25,10 +26,13 @@ function limitReached(error, code, limit) {
 // against the plan's member limit — each is checked at its own insert/approval
 // point. `kind` selects which counter this write increases.
 export async function enforceMemberCap(client, tenantId, kind) {
-  const ownerUserId = await lockTenantForCapCheck(client, tenantId)
-  if (ownerUserId === undefined || ownerUserId === null) return null // missing or ownerless → no enforcement
+  const owner = await lockTenantForCapCheck(client, tenantId)
+  if (owner === undefined || owner.ownerUserId === null) return null // missing or ownerless → no enforcement
 
-  const resolved = await resolveTenantEntitlements(client, tenantId, { ownerUserId })
+  const resolved = await resolveTenantEntitlements(client, tenantId, {
+    ownerUserId: owner.ownerUserId,
+    tenantKind: owner.kind,
+  })
   const limit = resolved.entitlements.limits[LIMITS.MEMBERS]
   if (isUnlimited(limit)) return null
 
@@ -43,10 +47,14 @@ export async function enforceMemberCap(client, tenantId, kind) {
 
 // Band cap: how many active (non-archived) tenants a user may own. User-level
 // — every user has limits (fallback plan without a subscription).
+//
+// Reads the BAND ladder explicitly: how many bands you may own is a band-product
+// entitlement. An artist plan's `bands: 0` is vestigial and must never reach
+// here, or holding an artist subscription would forbid owning any band.
 export async function enforceBandCap(client, userId) {
   await lockUserForCapCheck(client, userId)
 
-  const limits = await resolveUserLimits(client, userId)
+  const limits = await resolveUserLimits(client, userId, PLAN_AUDIENCES.BAND)
   const limit = limits[LIMITS.BANDS]
   if (isUnlimited(limit)) return null
 

@@ -11,7 +11,8 @@
     "over_target_limit": "Het huidige gebruik overschrijdt de limieten van het gekozen abonnement. Verminder eerst het gebruik.",
     "confirmation_mismatch": "De bevestigingstekst kwam niet overeen.",
     "not_a_downgrade": "Het gekozen abonnement is geen downgrade.",
-    "generic": "Er is iets misgegaan."
+    "generic": "Er is iets misgegaan.",
+    "cross_audience_change": "Band- en artiestenabonnementen zijn aparte producten — je kunt een abonnement niet tussen beide verplaatsen."
   },
   "status": {
     "pending_mandate": "Wacht op betalingsbevestiging",
@@ -54,7 +55,8 @@
     "repairNeeded": "We ronden het instellen van je betalingsschema af. Je hoeft niets te doen.",
     "resume": "Abonnement hervatten",
     "cancel": "Abonnement opzeggen",
-    "sync": "Vernieuwen via betaalprovider"
+    "sync": "Vernieuwen via betaalprovider",
+    "noPersonalWorkspace": "Je hebt nog geen eigen artiestenwerkruimte. Maak er een aan via Instellingen en kies daarna een artiestenabonnement."
   },
   "plans": {
     "title": "Abonnementen",
@@ -69,7 +71,9 @@
     "upgrade": "Upgraden",
     "downgrade": "Downgraden",
     "switchToYearly": "Overstappen naar jaarlijks",
-    "switchToMonthly": "Overstappen naar maandelijks"
+    "switchToMonthly": "Overstappen naar maandelijks",
+    "bandLadderTitle": "Je bandabonnement",
+    "artistLadderTitle": "Je artiestenabonnement"
   },
   "toasts": {
     "paymentStarted": "Betaling gestart — je abonnement wordt bijgewerkt zodra de betaling is bevestigd.",

@@ -2,14 +2,16 @@
 // The lock functions take FOR UPDATE row locks so concurrent capacity-
 // increasing writes serialize on the same row and can't both pass a cap check.
 
-// Locks the tenant row and returns its owner, or undefined when the tenant
-// doesn't exist. (null = ownerless tenant — enforcement skipped.)
+// Locks the tenant row and returns { ownerUserId, kind }, or undefined when the
+// tenant doesn't exist. (ownerUserId null = ownerless tenant — enforcement
+// skipped.) The kind rides along so the caller can resolve entitlements without
+// a second read: it selects which of the owner's subscriptions governs.
 export async function lockTenantForCapCheck(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT owner_user_id FROM tenants WHERE id = $1 FOR UPDATE',
+    'SELECT owner_user_id, kind FROM tenants WHERE id = $1 FOR UPDATE',
     [tenantId],
   )
-  return rows.length ? rows[0].owner_user_id : undefined
+  return rows.length ? { ownerUserId: rows[0].owner_user_id, kind: rows[0].kind } : undefined
 }
 
 // Locks the user row (serializes that user's tenant create/unarchive).
@@ -50,19 +52,24 @@ export async function countActiveOwnedTenants(executor, userId) {
   return rows[0].count
 }
 
-// ALL tenants a user owns — archived included — id-ordered so multi-tenant
-// lock acquisition (downgrade precheck) is deterministic and can't deadlock.
+// Tenants a user owns — archived included — id-ordered so multi-tenant lock
+// acquisition (downgrade precheck) is deterministic and can't deadlock.
 // The downgrade blockers and the downgrade purge deliberately cover archived
 // tenants: an archived band can be unarchived later, so it must fit the
 // target plan's per-tenant limits and its gated data (and integration
 // secrets) is subject to the same purge promise. Only the band cap itself
 // counts active tenants (archiving is the documented way to satisfy it).
-export async function listOwnedTenants(executor, userId) {
+//
+// `kinds` scopes the result to one ladder's tenants (tenantKindsForAudience):
+// an artist downgrade must never inspect or purge a band, and vice versa. Null
+// means every kind.
+export async function listOwnedTenants(executor, userId, kinds = null) {
   const { rows } = await executor.query(
     `SELECT id, band_name, kind, archived_at FROM tenants
       WHERE owner_user_id = $1
+        AND ($2::text[] IS NULL OR kind = ANY($2))
       ORDER BY id ASC`,
-    [userId],
+    [userId, kinds],
   )
   return rows
 }

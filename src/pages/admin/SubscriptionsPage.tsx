@@ -111,10 +111,10 @@ export default function SubscriptionsPage() {
     }
   }
 
-  const handleRevoke = async (userId: number) => {
+  const handleRevoke = async (userId: number, subscriptionId: number) => {
     setBusy(true)
     try {
-      await revokeComplimentary(userId)
+      await revokeComplimentary(userId, subscriptionId)
       showToast?.('Complimentary subscription revoked.', 'success')
       refreshRows()
     } catch (e) {
@@ -223,7 +223,7 @@ export default function SubscriptionsPage() {
                   </TableCell>
                   <TableCell align="right">
                     {r.isComplimentary && (
-                      <Button size="small" color="error" disabled={busy} onClick={() => { void handleRevoke(r.userId) }}>
+                      <Button size="small" color="error" disabled={busy} onClick={() => { void handleRevoke(r.userId, r.id) }}>
                         Revoke
                       </Button>
                     )}

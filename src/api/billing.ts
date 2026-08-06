@@ -1,4 +1,5 @@
 import { request } from './_client.ts'
+import type { PlanAudience } from '../auth/planAudiences.ts'
 
 export type BillingInterval = 'month' | 'year'
 
@@ -12,11 +13,14 @@ export interface SubscriptionPlan {
   id: number
   slug: string
   name: string
+  /** Which product ladder this plan belongs to. Immutable after creation. */
+  audience: PlanAudience
   monthly_price_cents: number | null
   yearly_price_cents: number | null
   entitlements: SubscriptionPlanEntitlements
   is_active: boolean
   is_fallback: boolean
+  /** Ranks within an audience only — comparing across ladders is meaningless. */
   sort_order: number
 }
 
@@ -31,6 +35,7 @@ export interface Subscription {
   id: number
   planId: number
   planSlug: string
+  audience: PlanAudience
   status: string
   billingInterval: BillingInterval | null
   priceCents: number
@@ -66,9 +71,12 @@ export interface DowngradePreview {
 }
 
 export interface BillingState {
-  subscription: Subscription | null
-  /** Active (non-archived) tenants this user owns — 0 means they only participate in others' bands. */
-  ownedTenantCount: number
+  /** One live subscription per ladder; both may be present at once. */
+  subscriptions: Record<PlanAudience, Subscription | null>
+  /** Active (non-archived) bands this user owns — 0 means they only participate in others'. */
+  ownedBandCount: number
+  /** Whether the user has a personal workspace for an artist plan to govern. */
+  hasPersonalWorkspace: boolean
   plans: SubscriptionPlan[]
 }
 
@@ -100,14 +108,22 @@ export const downgradePreview = (planId: number, interval: BillingInterval) =>
     method: 'POST', body: JSON.stringify({ planId, interval }),
   })
 
-export const cancelSubscription = () =>
-  api<{ canceled?: boolean; atPeriodEnd?: boolean; alreadyScheduled?: boolean }>('/cancel', { method: 'POST' })
+// Cancel and resume name the product: with a live band AND artist subscription
+// possible, the server refuses to guess which one is meant.
+export const cancelSubscription = (audience: PlanAudience) =>
+  api<{ canceled?: boolean; atPeriodEnd?: boolean; alreadyScheduled?: boolean }>('/cancel', {
+    method: 'POST', body: JSON.stringify({ audience }),
+  })
 
-export const resumeSubscription = () =>
-  api<{ resumed: boolean }>('/resume', { method: 'POST' })
+export const resumeSubscription = (audience: PlanAudience) =>
+  api<{ resumed: boolean }>('/resume', { method: 'POST', body: JSON.stringify({ audience }) })
 
-export const syncSubscription = () =>
-  api<{ subscription: Subscription | null }>('/sync', { method: 'POST' })
+// Omitting the audience syncs both ladders. A checkout return passes the one it
+// started, so a settled subscription on the other cannot be read as this sale.
+export const syncSubscription = (audience?: PlanAudience) =>
+  api<{ subscriptions: Record<PlanAudience, Subscription | null> }>('/sync', {
+    method: 'POST', body: JSON.stringify(audience ? { audience } : {}),
+  })
 
 // The interval price a plan charges, or null when that interval is unavailable
 // (plan_not_priced). Mirrors server billingShared.priceForInterval.

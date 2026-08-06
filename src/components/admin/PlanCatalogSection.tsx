@@ -8,6 +8,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
 import FormControlLabel from '@mui/material/FormControlLabel'
+import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
@@ -25,6 +26,8 @@ import type { Feature, LimitKey } from '../../auth/entitlements.ts'
 import { createAdminPlan, updateAdminPlan, deleteAdminPlan } from '../../api/adminSubscriptions.ts'
 import type { AdminPlanInput } from '../../api/adminSubscriptions.ts'
 import type { SubscriptionPlan } from '../../api/billing.ts'
+import { PLAN_AUDIENCES, PLAN_AUDIENCE_KEYS } from '../../auth/planAudiences.ts'
+import type { PlanAudience } from '../../auth/planAudiences.ts'
 
 interface PlanCatalogSectionProps {
   plans: SubscriptionPlan[]
@@ -34,6 +37,7 @@ interface PlanCatalogSectionProps {
 interface PlanFormState {
   name: string
   slug: string
+  audience: PlanAudience
   monthlyEur: string
   yearlyEur: string
   isActive: boolean
@@ -85,7 +89,8 @@ function parseLimit(input: string): number | null | undefined {
 
 function emptyForm(): PlanFormState {
   return {
-    name: '', slug: '', monthlyEur: '', yearlyEur: '', isActive: true, sortOrder: '0',
+    name: '', slug: '', audience: PLAN_AUDIENCES.BAND,
+    monthlyEur: '', yearlyEur: '', isActive: true, sortOrder: '0',
     features: Object.fromEntries(FEATURE_KEYS.map((k) => [k, false])),
     limits: Object.fromEntries(LIMIT_KEYS.map((k) => [k, ''])),
   }
@@ -95,6 +100,7 @@ function formFromPlan(plan: SubscriptionPlan): PlanFormState {
   return {
     name: plan.name,
     slug: plan.slug,
+    audience: plan.audience,
     monthlyEur: centsToEurInput(plan.monthly_price_cents),
     yearlyEur: centsToEurInput(plan.yearly_price_cents),
     isActive: plan.is_active,
@@ -161,6 +167,7 @@ export default function PlanCatalogSection({ plans, onChanged }: Readonly<PlanCa
     return {
       slug: form.slug.trim(),
       name: form.name.trim(),
+      audience: form.audience,
       monthly_price_cents: monthly,
       yearly_price_cents: yearly,
       is_active: form.isActive,
@@ -179,10 +186,12 @@ export default function PlanCatalogSection({ plans, onChanged }: Readonly<PlanCa
         showToast?.('Plan created.', 'success')
       } else if (editing) {
         // The fallback plan's identity, pricing, and active state are immutable
-        // (the API 400s on them) — send only what may change.
+        // (the API 400s on them) — send only what may change. `audience` is
+        // never sent on update: it is create-only on any plan.
+        const { audience: _audience, ...updatable } = payload
         const body = editing.is_fallback
           ? { sort_order: payload.sort_order, entitlements: payload.entitlements }
-          : payload
+          : updatable
         await updateAdminPlan(editing.id, body)
         showToast?.('Plan updated.', 'success')
       }
@@ -223,6 +232,7 @@ export default function PlanCatalogSection({ plans, onChanged }: Readonly<PlanCa
             <TableRow>
               <TableCell>Name</TableCell>
               <TableCell>Slug</TableCell>
+              <TableCell>Ladder</TableCell>
               <TableCell align="right">Monthly</TableCell>
               <TableCell align="right">Yearly</TableCell>
               <TableCell>Features</TableCell>
@@ -242,6 +252,9 @@ export default function PlanCatalogSection({ plans, onChanged }: Readonly<PlanCa
                   </Stack>
                 </TableCell>
                 <TableCell>{plan.slug}</TableCell>
+                <TableCell>
+                  <Chip size="small" variant="outlined" label={plan.audience} />
+                </TableCell>
                 <TableCell align="right">
                   {plan.monthly_price_cents === null ? '—' : formatEur(plan.monthly_price_cents)}
                 </TableCell>
@@ -269,7 +282,7 @@ export default function PlanCatalogSection({ plans, onChanged }: Readonly<PlanCa
               </TableRow>
             ))}
             {plans.length === 0 && (
-              <TableRow><TableCell colSpan={8}>
+              <TableRow><TableCell colSpan={9}>
                 <Typography variant="body2" sx={{ color: 'text.secondary', py: 2, textAlign: 'center' }}>
                   No plans.
                 </Typography>
@@ -290,10 +303,24 @@ export default function PlanCatalogSection({ plans, onChanged }: Readonly<PlanCa
               />
               <TextField
                 size="small" fullWidth label="Slug" value={form.slug} disabled={isFallback}
-                helperText="Lowercase letters, digits, hyphens"
+                helperText="Lowercase letters, digits, hyphens, underscores"
                 onChange={(e) => setField('slug', e.target.value)}
               />
             </Stack>
+            {/* Create-only: subscriptions derive their audience from the plan,
+                so an existing plan can never change ladder. */}
+            <TextField
+              select size="small" fullWidth label="Ladder" value={form.audience}
+              disabled={editing !== 'new'}
+              helperText={editing === 'new'
+                ? 'Which product this plan belongs to. Cannot be changed later.'
+                : 'A plan cannot move between ladders.'}
+              onChange={(e) => setField('audience', e.target.value as PlanAudience)}
+            >
+              {PLAN_AUDIENCE_KEYS.map((a) => (
+                <MenuItem key={a} value={a}>{a}</MenuItem>
+              ))}
+            </TextField>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
                 size="small" fullWidth label="Monthly price (€)" value={form.monthlyEur} disabled={isFallback}

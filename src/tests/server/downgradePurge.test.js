@@ -389,7 +389,7 @@ describe('free-fallback (bronze) downgrade', () => {
     await billingSvc.downgrade(pool, userA(), {
       planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to bronze',
     })
-    const res = await billingSvc.resumeSubscription(pool, seed.userA.id)
+    const res = await billingSvc.resumeSubscription(pool, seed.userA.id, { audience: 'band' })
     expect(res.resumed).toBe(true)
     const row = await subRow(subId)
     expect(row.cancel_at_period_end).toBe(false)
@@ -575,7 +575,7 @@ describe('paid-lower downgrade', () => {
     let cancelRes
     fake.createSubscription = async (args) => {
       fake.createSubscription = realCreate
-      cancelRes = await billingSvc.cancelSubscription(pool, seed.userA.id)
+      cancelRes = await billingSvc.cancelSubscription(pool, seed.userA.id, { audience: 'band' })
       return realCreate(args)
     }
     const res = await billingSvc.downgrade(pool, userA(), {
@@ -620,7 +620,7 @@ describe('paid-lower downgrade', () => {
 
   it('user cancel while the downgrade is pending clears all downgrade state', async () => {
     const { subId } = await confirmPaidDowngrade()
-    const res = await billingSvc.cancelSubscription(pool, seed.userA.id)
+    const res = await billingSvc.cancelSubscription(pool, seed.userA.id, { audience: 'band' })
     expect(res.canceled).toBe(true)
     const row = await subRow(subId)
     expect(row.pending_change_kind).toBeNull()

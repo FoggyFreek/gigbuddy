@@ -25,6 +25,7 @@ import {
   buildPlanUpdateFields,
 } from '../validators/planValidators.js'
 import { badRequest, notFound } from './serviceErrors.js'
+import { PLAN_AUDIENCES, isPlanAudience } from '../../shared/planAudiences.js'
 
 const NOT_FOUND = notFound('Plan not found')
 
@@ -61,12 +62,18 @@ function validatePlanFields(body, plan) {
   if ('is_fallback' in body) {
     return badRequest('The fallback designation cannot be changed')
   }
+  // Create-only, like is_fallback: subscriptions.audience is derived from the
+  // plan, so moving a plan between ladders would desync every live row.
+  if (plan !== null && 'audience' in body) {
+    return badRequest('The plan audience cannot be changed')
+  }
   // Checked in insertion order; only fields present in `body` are validated.
   const checks = {
     slug: () => validateRenameField(
       isValidSlug(body.slug), isFallback,
-      'Invalid slug: use lowercase letters, digits, and hyphens',
+      'Invalid slug: use lowercase letters, digits, hyphens, and underscores',
     ),
+    audience: () => (isPlanAudience(body.audience) ? null : "audience must be 'band' or 'artist'"),
     name: () => validateRenameField(isValidName(body.name), isFallback, 'Name is required'),
     is_active: () => validateActiveField(body.is_active, isFallback),
     sort_order: () => (Number.isInteger(body.sort_order) ? null : 'sort_order must be an integer'),
@@ -95,6 +102,9 @@ export async function createPlan(db, body) {
   const plan = {
     slug: body.slug,
     name: body.name,
+    // Defaults to the band ladder, matching the column default a pre-split
+    // catalog row would have taken.
+    audience: body.audience ?? PLAN_AUDIENCES.BAND,
     monthly_price_cents: body.monthly_price_cents ?? null,
     yearly_price_cents: body.yearly_price_cents ?? null,
     entitlements: body.entitlements,

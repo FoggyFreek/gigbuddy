@@ -125,9 +125,13 @@ describe('shared/entitlements validateEntitlements', () => {
 })
 
 describe('seeded default plans', () => {
-  it('seeds the band tiers and the artist tier in sort order', async () => {
+  // Grouped by ladder, ranked within it: sort_order is per-audience now.
+  it('seeds both ladders, band first, ranked within each', async () => {
     const res = await asSuper(request(app).get('/api/admin/plans')).expect(200)
-    expect(res.body.map((p) => p.slug)).toEqual(['bronze', 'silver', 'gold', 'artist_gold'])
+    expect(res.body.map((p) => p.slug))
+      .toEqual(['bronze', 'silver', 'gold', 'artist_bronze', 'artist_gold'])
+    expect(res.body.map((p) => p.audience))
+      .toEqual(['band', 'band', 'band', 'artist', 'artist'])
   })
 
   it('artist_gold owns no band and does not advertise the band-only link page', async () => {

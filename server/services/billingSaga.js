@@ -88,7 +88,7 @@ export async function createMandateCheckout(db, sub, { email, name, amountCents,
       amountCents,
       description: 'GigBuddy mandate verification',
       idempotencyKey,
-      redirectUrl: billingRedirectUrl(redirect),
+      redirectUrl: billingRedirectUrl(redirect, sub.audience),
       webhookUrl: billingWebhookUrl(sub.id),
       metadata: billingMetadata(sub.id, 'mandate'),
     })

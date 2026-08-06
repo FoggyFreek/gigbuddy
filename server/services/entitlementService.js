@@ -18,13 +18,14 @@ import {
   LIMIT_KEYS,
   mergeEntitlements,
 } from '../auth/entitlements.js'
+import { PLAN_AUDIENCES, audienceForTenantKind } from '../../shared/planAudiences.js'
 import { fetchFallbackPlan } from '../repositories/planRepository.js'
 import {
   fetchLiveSubscriptionForUser,
   hasNonterminalRecurringPayment,
 } from '../repositories/subscriptionRepository.js'
 import {
-  fetchTenantOwner,
+  fetchTenantOwnership,
   tenantHasFinanceData,
 } from '../repositories/entitlementRepository.js'
 
@@ -40,31 +41,33 @@ const PAST_DUE_GRACE_MS = 14 * DAY_MS
 
 const CACHE_TTL_MS = 60 * 1000
 
-let fallbackPlanCache = null // { plan, expiresAt }
+const fallbackPlanCache = new Map() // audience → { plan, expiresAt }
 const financeDataCache = new Map() // tenantId → { value, expiresAt }
 
 // Call when plan rows change (plan admin CRUD) so fallback-lock entitlements
 // pick up edits within the same process immediately.
 export function invalidatePlanCache() {
-  fallbackPlanCache = null
+  fallbackPlanCache.clear()
 }
 
 // Test hook: reset all in-process caches.
 export function clearEntitlementCaches() {
-  fallbackPlanCache = null
+  fallbackPlanCache.clear()
   financeDataCache.clear()
 }
 
-async function getFallbackPlan(db) {
+async function getFallbackPlan(db, audience) {
   const now = Date.now()
-  if (fallbackPlanCache && fallbackPlanCache.expiresAt > now) return fallbackPlanCache.plan
-  const plan = await fetchFallbackPlan(db)
+  const cached = fallbackPlanCache.get(audience)
+  if (cached && cached.expiresAt > now) return cached.plan
+  const plan = await fetchFallbackPlan(db, audience)
   if (!plan) {
-    // Migration 100 seeds the fallback and the service/DB rules keep it —
-    // missing means the catalog is broken; fail loudly rather than guess.
-    throw new Error('No fallback subscription plan configured')
+    // Migration 166 seeds a fallback per ladder and the service/DB rules keep
+    // them — missing means the catalog is broken; fail loudly rather than guess
+    // (falling back to the other ladder would grant the wrong product).
+    throw new Error(`No fallback subscription plan configured for audience ${audience}`)
   }
-  fallbackPlanCache = { plan, expiresAt: now + CACHE_TTL_MS }
+  fallbackPlanCache.set(audience, { plan, expiresAt: now + CACHE_TTL_MS })
   return plan
 }
 
@@ -130,11 +133,12 @@ function applyLimitsSnapshot(limits, snapshot) {
   return result
 }
 
-// The owner-side view: the effective entitlements a user's own subscription
-// grants, independent of any tenant. Fallback entitlements when locked or
-// without a subscription; plan + overrides merged and snapshot-bound otherwise.
-async function resolveOwnerEntitlements(db, userId) {
-  const sub = await fetchLiveSubscriptionForUser(db, userId)
+// The owner-side view: the effective entitlements the user's subscription in
+// ONE audience grants, independent of any tenant. Fallback entitlements when
+// locked or without a subscription on that ladder; plan + overrides merged and
+// snapshot-bound otherwise.
+async function resolveOwnerEntitlements(db, userId, audience) {
+  const sub = await fetchLiveSubscriptionForUser(db, userId, audience)
   const unlocked = await isUnlocked(db, sub, Date.now())
 
   let planSlug
@@ -144,11 +148,16 @@ async function resolveOwnerEntitlements(db, userId) {
     entitlements = mergeEntitlements(sub.plan_entitlements, sub.entitlement_overrides)
     // A confirmed pending downgrade binds capacity growth immediately: numeric
     // limits become min(current, confirmed target) while features stay current.
+    //
+    // The snapshot stays in its own ladder only because this function is
+    // audience-scoped. An artist downgrade's snapshot carries `bands: 0`;
+    // collapsing this back to one per-user lookup would let it zero the owner's
+    // band cap. Guarded by the band-cap case in planAudiences.test.js.
     if (sub.pending_limits_snapshot) {
       entitlements.limits = applyLimitsSnapshot(entitlements.limits, sub.pending_limits_snapshot)
     }
   } else {
-    const fallback = await getFallbackPlan(db)
+    const fallback = await getFallbackPlan(db, audience)
     planSlug = fallback.slug
     entitlements = mergeEntitlements(fallback.entitlements, null)
     // Checkout grants no paid features, but the target capacity binds now.
@@ -172,16 +181,29 @@ async function resolveOwnerEntitlements(db, userId) {
 // caps (bands), where there is no tenant to resolve through. Every user has
 // limits (fallback plan when no subscription); only tenant-side enforcement
 // has the ownerless bypass.
-export async function resolveUserLimits(db, userId) {
-  const { entitlements } = await resolveOwnerEntitlements(db, userId)
+//
+// Defaults to the band ladder: the only user-level cap is the band cap, which
+// is a band-product entitlement. An artist plan's `bands` limit is vestigial
+// and must never be consulted here.
+export async function resolveUserLimits(db, userId, audience = PLAN_AUDIENCES.BAND) {
+  const { entitlements } = await resolveOwnerEntitlements(db, userId, audience)
   return entitlements.limits
 }
 
-export async function resolveTenantEntitlements(db, tenantId, { ownerUserId } = {}) {
-  const owner = ownerUserId === undefined ? await fetchTenantOwner(db, tenantId) : ownerUserId
+// `ownerUserId` / `tenantKind` are a fast path for callers already holding a
+// locked tenant row. Both or neither — a half-supplied pair falls back to the
+// read, because inventing the missing kind would resolve the wrong product.
+export async function resolveTenantEntitlements(db, tenantId, { ownerUserId, tenantKind } = {}) {
+  let owner = ownerUserId
+  let kind = tenantKind
+  if (owner === undefined || owner === null || kind === undefined || kind === null) {
+    const row = await fetchTenantOwnership(db, tenantId)
+    owner = row?.owner_user_id ?? null
+    kind = row?.kind ?? null
+  }
   if (owner === null) return null
 
-  const resolved = await resolveOwnerEntitlements(db, owner)
+  const resolved = await resolveOwnerEntitlements(db, owner, audienceForTenantKind(kind))
   const financeReadOnly =
     !resolved.entitlements.features[FEATURES.FINANCE] && (await hasFinanceDataCached(db, tenantId))
 

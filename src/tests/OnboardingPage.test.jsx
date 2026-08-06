@@ -46,16 +46,29 @@ import { useAuth } from '../contexts/authContext.ts'
 
 const PLANS = [
   {
-    id: 1, slug: 'bronze', name: 'Bronze',
+    id: 1, slug: 'bronze', name: 'Bronze', audience: 'band',
     monthly_price_cents: 0, yearly_price_cents: 0,
     entitlements: { features: {}, limits: { storage_mb: 50, members: 5, bands: 1 } },
-    is_active: true, is_fallback: true, sort_order: 0,
+    is_active: true, is_fallback: true, sort_order: 1,
   },
   {
-    id: 2, slug: 'silver', name: 'Silver',
+    id: 2, slug: 'silver', name: 'Silver', audience: 'band',
     monthly_price_cents: 999, yearly_price_cents: 9999,
     entitlements: { features: { integrations: true }, limits: { storage_mb: 150, members: 10, bands: 3 } },
-    is_active: true, is_fallback: false, sort_order: 1,
+    is_active: true, is_fallback: false, sort_order: 2,
+  },
+  // The artist ladder, offered when the personal workspace kind is chosen.
+  {
+    id: 3, slug: 'artist_bronze', name: 'Artist Bronze', audience: 'artist',
+    monthly_price_cents: 0, yearly_price_cents: 0,
+    entitlements: { features: {}, limits: { storage_mb: 50, members: 1, bands: 0 } },
+    is_active: true, is_fallback: true, sort_order: 1,
+  },
+  {
+    id: 4, slug: 'artist_gold', name: 'Artist Gold', audience: 'artist',
+    monthly_price_cents: 1499, yearly_price_cents: 14999,
+    entitlements: { features: { chordpro: true }, limits: { storage_mb: 250, members: 1, bands: 0 } },
+    is_active: true, is_fallback: false, sort_order: 2,
   },
 ]
 
@@ -97,7 +110,12 @@ function wrap(initialEntry = '/onboarding') {
 }
 
 // Walks step 1: select a plan by name, tick the terms box, click the CTA.
-async function completeWelcomeStep(user, planName = 'Bronze') {
+// The workspace kind lives on the welcome step because it decides WHICH plan
+// ladder is shown, so it must be chosen before a plan.
+async function completeWelcomeStep(user, planName = 'Bronze', { kind = null } = {}) {
+  if (kind) {
+    await user.click(await screen.findByRole('radio', { name: kind }))
+  }
   await screen.findByText(planName)
   await user.click(screen.getByText(planName))
   await user.click(screen.getByRole('checkbox'))
@@ -107,7 +125,7 @@ async function completeWelcomeStep(user, planName = 'Bronze') {
 beforeEach(() => {
   vi.clearAllMocks()
   mockAuth()
-  getBillingState.mockResolvedValue({ subscription: null, ownedTenantCount: 0, plans: PLANS })
+  getBillingState.mockResolvedValue({ subscriptions: { band: null, artist: null }, ownedBandCount: 0, hasPersonalWorkspace: false, plans: PLANS })
   getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })
   listOwnedTenants.mockResolvedValue([])
   acceptTerms.mockResolvedValue({ termsAcceptedAt: 'now', termsVersion: TERMS_VERSION })
@@ -225,10 +243,9 @@ describe('OnboardingPage — confirm (paid path)', () => {
 })
 
 describe('OnboardingPage — what are you setting up?', () => {
-  it('offers both kinds to a user with no memberships', async () => {
+  it('offers both kinds on the welcome step, before the plans', async () => {
     const user = userEvent.setup()
     wrap()
-    await completeWelcomeStep(user)
 
     const choices = await screen.findAllByRole('radio')
     expect(choices.map((c) => c.textContent)).toEqual([
@@ -236,7 +253,23 @@ describe('OnboardingPage — what are you setting up?', () => {
       expect.stringContaining('My own artist workspace'),
     ])
     // A band by default, so the existing path is unchanged.
+    expect(screen.getByText('Bronze')).toBeInTheDocument()
+    expect(screen.queryByText('Artist Bronze')).not.toBeInTheDocument()
+
+    await completeWelcomeStep(user)
     expect(await screen.findByLabelText('Band name')).toBeInTheDocument()
+  })
+
+  // Band and artist are separate products, so the grid must swap with the kind.
+  it('swaps the plan ladder when the artist workspace kind is chosen', async () => {
+    const user = userEvent.setup()
+    wrap()
+
+    await user.click(await screen.findByRole('radio', { name: /my own artist workspace/i }))
+
+    expect(await screen.findByText('Artist Bronze')).toBeInTheDocument()
+    expect(screen.getByText('Artist Gold')).toBeInTheDocument()
+    expect(screen.queryByText('Silver')).not.toBeInTheDocument()
   })
 
   it('redirects before offering workspace kinds when onboarding is disabled', async () => {
@@ -254,8 +287,7 @@ describe('OnboardingPage — what are you setting up?', () => {
     const user = userEvent.setup()
     wrap()
 
-    await completeWelcomeStep(user)
-    await user.click(await screen.findByRole('radio', { name: /my own artist workspace/i }))
+    await completeWelcomeStep(user, 'Artist Bronze', { kind: /my own artist workspace/i })
     await user.type(await screen.findByLabelText('Artist name'), 'Alpha User')
     await user.click(await screen.findByLabelText('Accounting country'))
     await user.click(await screen.findByRole('option', { name: 'Netherlands (NL)' }))
@@ -278,8 +310,9 @@ describe('OnboardingPage — what are you setting up?', () => {
     const user = userEvent.setup()
     wrap()
 
-    await completeWelcomeStep(user, 'Bronze')
-    // The kind came from the resumed tenant — no choice, and personal copy.
+    // The kind came from the resumed tenant — no choice offered, and the artist
+    // ladder is the only one shown.
+    await completeWelcomeStep(user, 'Artist Bronze')
     expect(screen.queryByRole('radio')).not.toBeInTheDocument()
     const nameField = await screen.findByLabelText('Artist name')
     expect(nameField).toHaveValue('Alpha User')
@@ -380,8 +413,8 @@ describe('OnboardingPage — checkout return', () => {
   it('settles on the sync result (re-ingested state), completes onboarding, offers the app', async () => {
     // Settlement comes from syncSubscription's returned status, not a passive
     // getBillingState read — the poll re-ingests each attempt.
-    syncSubscription.mockResolvedValue({ subscription: { status: 'trialing' } })
-    wrap('/onboarding?checkout=return')
+    syncSubscription.mockResolvedValue({ subscriptions: { band: { status: 'trialing' }, artist: null } })
+    wrap('/onboarding?checkout=return&audience=band')
 
     expect(await screen.findByText(/your subscription is active/i)).toBeInTheDocument()
     expect(syncSubscription).toHaveBeenCalled()
@@ -395,9 +428,9 @@ describe('OnboardingPage — checkout return', () => {
       // Pending on the first sync, settled on the next — proves the loop
       // re-ingests rather than syncing once up front.
       syncSubscription
-        .mockResolvedValueOnce({ subscription: { status: 'pending_mandate' } })
-        .mockResolvedValue({ subscription: { status: 'trialing' } })
-      wrap('/onboarding?checkout=return')
+        .mockResolvedValueOnce({ subscriptions: { band: { status: 'pending_mandate' }, artist: null } })
+        .mockResolvedValue({ subscriptions: { band: { status: 'trialing' }, artist: null } })
+      wrap('/onboarding?checkout=return&audience=band')
 
       await act(async () => { await vi.runAllTimersAsync() })
 

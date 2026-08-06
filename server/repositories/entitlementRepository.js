@@ -1,13 +1,15 @@
 // Data-access helpers for entitlement resolution.
 
-// Returns the tenant's owner user id, or null when the tenant has no owner
-// (legacy tenant — enforcement is skipped) or doesn't exist.
-export async function fetchTenantOwner(executor, tenantId) {
+// The tenant's owner and kind, or null when the tenant doesn't exist. Kind
+// selects which of the owner's two subscriptions governs this tenant, so it
+// travels with the owner rather than being looked up separately.
+// `owner_user_id` null = legacy ownerless tenant, enforcement skipped.
+export async function fetchTenantOwnership(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT owner_user_id FROM tenants WHERE id = $1',
+    'SELECT owner_user_id, kind FROM tenants WHERE id = $1',
     [tenantId],
   )
-  return rows[0]?.owner_user_id ?? null
+  return rows[0] ?? null
 }
 
 // Whether the tenant has any finance data (invoices, purchases, or posted

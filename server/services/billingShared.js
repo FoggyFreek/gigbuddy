@@ -33,9 +33,14 @@ function appUrl() {
 // Where the hosted checkout returns the browser. 'billing' is the settings
 // billing page (the old bare `/billing` was never a frontend route);
 // 'onboarding' resumes the onboarding stepper's processing state.
-export function billingRedirectUrl(target = 'billing') {
+//
+// The audience names which product was just bought. Without it the return page
+// polls "the" subscription and a user who already holds a settled subscription
+// on the OTHER ladder would see instant success for a payment still in flight.
+export function billingRedirectUrl(target = 'billing', audience = null) {
   const path = target === 'onboarding' ? '/onboarding' : '/settings/billing'
-  return `${appUrl()}${path}?checkout=return`
+  const suffix = audience ? `&audience=${encodeURIComponent(audience)}` : ''
+  return `${appUrl()}${path}?checkout=return${suffix}`
 }
 
 // Webhook URL carries the local subscription id as a routing hint only — status

@@ -92,10 +92,14 @@ describe('active subscriptions', () => {
     })
   })
 
+  // The artist ladder governs the PERSONAL workspace, so that is the tenant it
+  // must be resolved through — a band tenant reads the band ladder even when
+  // the same owner holds an artist subscription (see planAudiences.test.js).
   it('artist_gold grants every feature except the band-only link page', async () => {
-    const { tenantId, userId } = await ownTenantA()
+    const { userId } = await ownTenantA()
+    const personal = await billing.createPersonalTenant(userId)
     await billing.createSubscription({ userId, planSlug: 'artist_gold' })
-    const resolved = await resolve(tenantId)
+    const resolved = await resolve(personal.id)
     expect(resolved.locked).toBe(false)
     expect(resolved.planSlug).toBe('artist_gold')
     for (const key of FEATURE_KEYS) {
@@ -104,6 +108,17 @@ describe('active subscriptions', () => {
     expect(resolved.entitlements.limits).toEqual({
       storage_mb: 250, members: 1, bands: 0, linkpage_pages: 0, linkpage_stats_days: 30,
     })
+  })
+
+  it('a personal workspace without an artist subscription sits on the artist floor', async () => {
+    const { userId } = await ownTenantA()
+    const personal = await billing.createPersonalTenant(userId)
+    // A live BAND subscription must not reach across to the artist ladder.
+    await billing.createSubscription({ userId, planSlug: 'gold' })
+    const resolved = await resolve(personal.id)
+    expect(resolved.locked).toBe(true)
+    expect(resolved.planSlug).toBe('artist_bronze')
+    for (const key of FEATURE_KEYS) expect(resolved.entitlements.features[key]).toBe(false)
   })
 
   it('stays unlocked for 2 days past period end, then locks', async () => {

@@ -125,6 +125,8 @@ describe('PlanCatalogSection — create', () => {
     expect(api.createAdminPlan).toHaveBeenCalledWith({
       slug: 'platinum',
       name: 'Platinum',
+      // Defaults to the band ladder; the selector is create-only.
+      audience: 'band',
       monthly_price_cents: 1999,
       yearly_price_cents: null,
       is_active: true,

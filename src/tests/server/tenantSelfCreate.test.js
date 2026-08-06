@@ -241,13 +241,19 @@ describe('POST /api/tenants/personal (artist workspace)', () => {
     expect(res.body.code).toBe('band_limit_reached')
   })
 
-  it('is creatable on a bands: 0 artist plan while band creation is refused', async () => {
+  // An artist subscription says nothing about how many bands you may own: the
+  // band cap reads the BAND ladder, where this user is still on the free floor.
+  // artist_gold's `bands: 0` is vestigial.
+  it('an artist plan leaves the band allowance to the band ladder', async () => {
     await billing.createSubscription({ userId: seed.userA.id, planSlug: 'artist_gold' })
     await asUserA(request(app).post('/api/tenants/personal').send(personalBody())).expect(201)
-    const res = await asUserA(request(app).post('/api/tenants').send(createBody('no-bands')))
+    // Bronze (the band floor) still grants one band…
+    await asUserA(request(app).post('/api/tenants').send(createBody('still-allowed'))).expect(201)
+    // …and its cap, not the artist plan's, is what finally bites.
+    const res = await asUserA(request(app).post('/api/tenants').send(createBody('one-too-many')))
       .expect(409)
     expect(res.body.code).toBe('band_limit_reached')
-    expect(res.body.limit).toBe(0)
+    expect(res.body.limit).toBe(1)
   })
 
   it('requires an accounting country', async () => {

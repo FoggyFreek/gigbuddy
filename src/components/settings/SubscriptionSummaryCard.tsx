@@ -9,23 +9,21 @@ import Typography from '@mui/material/Typography'
 import { getBillingState } from '../../api/billing.ts'
 import type { BillingState } from '../../api/billing.ts'
 import { planLogoSrc } from '../../utils/planLogo.ts'
-
-// Subscription statuses with a label under billing:status. Unknown values fall
-// back to the raw status string.
-const STATUS_KEYS = {
-  pending_mandate: 'pending_mandate',
-  pending_activation: 'pending_activation',
-  trialing: 'trialing',
-  active: 'active',
-  past_due: 'past_due',
-  canceled: 'canceled',
-} as const
+import { ladderPlans } from '../../utils/planLadder.ts'
+import { audienceForTenantKind } from '../../auth/planAudiences.ts'
+import { useTenantKind } from '../../hooks/useTenantKind.ts'
+import { STATUS_KEYS } from '../account/subscriptionStatusKeys.ts'
 
 // Compact current-subscription banner shown atop the settings page. Reads the
 // billing state and links through to the full billing section.
+//
+// A user may hold a band AND an artist subscription, so this summarises the one
+// governing the ACTIVE tenant — the workspace they are actually looking at,
+// matching what useEntitlements() reports elsewhere in the shell.
 export default function SubscriptionSummaryCard() {
   const { t } = useTranslation(['settings', 'billing'])
   const navigate = useNavigate()
+  const { kind } = useTenantKind()
   const [state, setState] = useState<BillingState | null>(null)
 
   useEffect(() => {
@@ -34,8 +32,9 @@ export default function SubscriptionSummaryCard() {
 
   if (!state) return null
 
-  const sub = state.subscription ?? null
-  const plans = (state.plans ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
+  const audience = audienceForTenantKind(kind)
+  const sub = state.subscriptions?.[audience] ?? null
+  const plans = ladderPlans(state.plans ?? [], audience)
   const fallbackPlan = plans.find((p) => p.is_fallback) ?? null
   const currentPlan = sub ? plans.find((p) => p.id === sub.planId) ?? null : fallbackPlan
   const planName = currentPlan?.name ?? t($ => $.current.freePlanName, { ns: 'billing' })

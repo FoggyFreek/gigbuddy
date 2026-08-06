@@ -245,7 +245,7 @@ describe('complimentary (admin)', () => {
     expect(grant.subscription.status).toBe('active')
     expect(await notifCount(seed.userB.id, 'billing-complimentary-granted')).toBe(1)
 
-    const revoke = await adminSvc.revokeComplimentary(pool, seed.userB.id)
+    const revoke = await adminSvc.revokeComplimentary(pool, seed.userB.id, grant.subscription.id)
     expect(revoke.revoked).toBe(true)
     const { rows } = await pool.query(
       "SELECT status, cancel_reason FROM subscriptions WHERE user_id = $1", [seed.userB.id])

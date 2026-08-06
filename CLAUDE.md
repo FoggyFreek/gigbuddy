@@ -81,6 +81,7 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 | Rules shared by frontend & backend | `shared/` (`permissions.js`, `entitlements.js`, `tenantCapabilities.js`, …) |
 | Shared frontend entity types | `src/types/entities.ts`, `src/types/api.ts` |
 | Tenant-kind applicability | `shared/tenantCapabilities.js`, `docs/tenant-kind-architecture.md` |
+| Band vs artist plan products | `shared/planAudiences.js`, `server/services/entitlementService.js` |
 | Cross-tenant artist calendar (`/api/me/agenda`) | `server/routes/me.js`, `server/services/meService.js`, `src/components/ArtistCalendarSection.tsx` |
 
 **Domain navigation convention**: for any resource `foo`, look for `server/routes/foo.js` → `server/services/fooService.js` → `server/repositories/fooRepository.js` → `server/validators/fooValidators.js` → `src/api/foo.ts` → its page/components. Domains: planning (gigs, rehearsals, band events, availability, tasks), people/CRM (contacts, venues, band members, invites, tenants, band directory), music (songs, setlists, chordpro), finance (accounting profile + tax scheme enrolments, accounts, invoices, purchases, journal, ledger, reimbursements, VAT returns, reports), merch (+ Shopify import), promotion (Bandsintown, public calendars, share), admin, achievements, tutorials.
@@ -170,7 +171,15 @@ The financial core is an **immutable double-entry ledger** (`ledger_transactions
 
 **Platform billing** (Mollie, user-level subscriptions; tenants inherit from `tenants.owner_user_id`): **load the subscription-billing skill** before touching plans, entitlements, limits, tenant ownership, the billing lifecycle, or gating UI. Hard rules: `shared/entitlements.js` is the single source of truth; **never call the payment provider inside a DB transaction**; never import a concrete adapter (use `getPaymentProvider()`); remote mutations go through the `billing_operations` outbox saga. Customer-invoice Mollie payments and platform subscription billing are separate flows.
 
-Plans are band tiers (`bronze` fallback, `silver`, `gold`) plus artist tiers, which are ordinary plans with `LIMITS.BANDS = 0` (`artist_gold`) — one subscription per user, no second dimension. A sideman on a cheap artist plan still plays in someone else's gold band, because a band's entitlements come from its *owner's* subscription. Target capacity is checked on first subscription as well as downgrade, so a `bands: 0` plan can't be selected while an owned band is active. Every plan carries a complete entitlements object; `FEATURES.CALENDAR_SYNC` gates the ICS feed independently of `integrations`. Keep `server/db/defaultPlans.js` and the seeding migration in step.
+**Plans are two independent PRODUCTS**, not one ladder: `subscription_plans.audience` is `band` (`bronze` fallback, `silver`, `gold`) or `artist` (`artist_bronze` fallback, `artist_gold`). `shared/planAudiences.js` is the single registry, consumed by backend and frontend like `tenantCapabilities.js`.
+
+- **A user may hold one live subscription per audience at the same time** — `UNIQUE (user_id, audience) WHERE status <> 'canceled'`. A gold band customer can also hold artist_gold, bought or granted.
+- **A subscription is bound to its audience for life.** No upgrade or downgrade crosses the boundary; every entry point routes by the *target plan's* audience, so naming a plan on the other ladder is an ordinary 404 (`cross_audience_change` is an assert-level backstop). DB triggers refuse it for `audience`, `plan_id` and `pending_plan_id` alike — `subscriptions.audience` is derived on INSERT and immutable after.
+- **Tenant kind selects the governing ladder**: band tenant → owner's band subscription, personal workspace → their artist subscription. This lives entirely in `resolveOwnerEntitlements`/`resolveTenantEntitlements`, so the nine tenant-side consumers are unchanged — but callers using the `{ ownerUserId, tenantKind }` fast path must supply **both** (`audienceForTenantKind` throws on an unknown kind rather than defaulting).
+- `enforceBandCap` reads the **band** ladder. An artist plan's `bands: 0` is vestigial and never constrains band ownership. Downgrade blockers and the downgrade purge are scoped to `tenantKindsForAudience(...)`, so an artist downgrade never touches a band.
+- `sort_order` ranks **within** an audience only; the free fallback is per-ladder. Trials are once per product. Frontend: `src/utils/planLadder.ts` + `PlanLadderSection` render one ladder each; `SubscriptionSummaryCard` and the AppShell logo follow the *active tenant's* ladder.
+
+A sideman on a cheap artist plan still plays in someone else's gold band, because a band's entitlements come from its *owner's* subscription. Every plan carries a complete entitlements object; `FEATURES.CALENDAR_SYNC` gates the ICS feed independently of `integrations`. Keep `server/db/defaultPlans.js` and the seeding migration in step.
 
 ## Cross-cutting services
 

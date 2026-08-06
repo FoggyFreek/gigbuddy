@@ -15,6 +15,7 @@ const CONTEXT_KEYS = new Set([
   'tenants', 'encrypted', 'corrupt',
   'migrationNeeded', 'reEncryptionNeeded', 'rateMissing', 'ratesFilled',
   'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
+  'audience', 'pendingPlanSlug', 'pendingAudience', 'crossAudiencePending',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
   'achievementKey', 'shopifyResponseJson',
   // VAT scheme / issued-document snapshot audit counters. All server-computed
